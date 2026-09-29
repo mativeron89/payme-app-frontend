@@ -11,6 +11,90 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.0 — «¿Cómo dividen?» entra en una vista, y el nombre del restaurante se edita desde el ticket (2026-09-29)
+
+Orden AF-NOMBRE-EN-TICKET-CLAUDE-20260929 (sha256 057a6b6f…). Pedido 127 de Mati: «Vamos a sacar la burbuja de nombre del
+restaurante para que en la pantalla entre en una vista los tres tipos de división y ¿cuántos son en la mesa? y vamos a
+poner en el ticket un botón de edifición para poder modificar el nombre del restaruante.» Base `0.208.1` (`70114c0`).
+Sin cambios en el AB, pagos, el OCR ni el QR.
+
+1. **Sale la tarjeta «Nombre del restaurante (opcional)»** de «¿Cómo dividen?».
+2. **Las tres formas y «¿Cuántos son?» entran sin desplazar**, con el monto por persona, a **390×664** (lo que se ve en
+   Safari de un iPhone de 6,1" con sus barras, según la captura de Mati) y a **375×667** (iPhone SE). No se achicó
+   ninguna letra:
+   - **el monto por persona va al lado del selector**, no debajo. Debajo sumaba 70 px al elegir el número. Conserva su
+     tamaño. El selector queda fijo a la izquierda, así que cuando aparece el monto el «+» no se corre bajo el dedo;
+   - menos aire: el bloque «¿Cuántos son?» pasa de 16 a 12 px arriba y abajo, y su título de 12 a 8 px de separación;
+     las tarjetas de división, de 12 a 9 px (quedan de unos 58 px, sobre los 44 de toque); y 4 px menos arriba de la
+     lista;
+   - el subtítulo de cada forma va en una sola línea (en inglés o en pantallas angostas se recorta con «…»; el texto
+     entero sigue en el nombre accesible).
+   - **Medido, en px, como final del bloque contra el límite** (el borde de arriba de la barra y del círculo de
+     Continuar):
+
+     | tamaño | sin número | con número («c/u») | con número por consumo |
+     |---|---|---|---|
+     | 390×664 | 547 / 574 | 549 / 574 | 549 / 574 |
+     | 375×667 | 547 / 577 | 549 / 577 | 569 / 577 |
+     | 390×844 | 547 / 754 | 549 / 754 | 549 / 754 |
+     | 430×932 | 547 / 842 | 549 / 842 | 549 / 842 |
+
+     El más justo es 375×667 por consumo, con 8 px: «base de propina · c/u» ocupa dos líneas. Antes, sin número y a
+     375×667, terminaba en 654 con la tarjeta; con número, en 645 contra 577.
+3. **El lápiz en la hoja del ticket**, junto al nombre, con el `aria-label` «Editar el nombre del restaurante».
+   - Aparece con la MISMA condición que tenía la tarjeta: comercio sin identificar (ni QR ni OCR) y sin una apertura
+     congelada.
+   - Al tocarlo, el nombre pasa a un campo en el lugar, con el `maxLength` de 400 y el placeholder «Restaurante sin
+     identificar».
+   - «Guardar» o Enter confirman; «Cancelar» o Esc cancelan. Esc no cierra la hoja.
+   - Se edita un borrador: «Guardar» lo pasa a `restaurantLabel`, que es lo único que viaja, como antes.
+   - La hoja muestra el nombre guardado, y «Compartir la mesa» también. Vacío vuelve a «Restaurante sin identificar».
+4. **Los errores del nombre** van en la hoja, junto al campo: la validación local y el 409
+   `restaurant_label_not_allowed` del dueño. Si aparecen al tocar Continuar, también en la pantalla, con «Editar en el
+   ticket», que abre la hoja en el campo.
+5. **El 409 `restaurant_label_not_allowed` ya no deja la apertura trabada.**
+   - No está entre los 409 definitivos de `mutationRetry`, así que se tomaba como ambiguo: la apertura quedaba
+     congelada y el reintento mandaba el mismo nombre.
+   - El dueño (`routes/mesas.js`, `assertLabelAllowed`, medido en su `origin/main`) lo valida en una creación NUEVA y
+     antes de crear nada: antes del gate, y dentro de la transacción sin garantía, que se revierte. No queda mesa ni
+     hold.
+   - `CreateMesaFlow` lo trata aparte, como `guarantee_failed`: cierra el intento, así el reintento usa una clave
+     nueva, y el error va a la hoja y a la pantalla. `mutationRetry.ts` no cambia.
+- **Textos nuevos (es → en):**
+  - «Editar el nombre del restaurante» → «Edit the restaurant name»;
+  - «Editar en el ticket» → «Edit on the receipt»;
+  - «No podemos usar ese nombre para este restaurante. Déjalo vacío o cámbialo y prueba de nuevo.» → «We can't use that
+    name for this restaurant. Leave it empty or change it and try again.»
+  - El campo usa «Nombre del restaurante (opcional)» como nombre accesible, que ya existía.
+- **Tests existentes ajustados, porque fijaban la tarjeta vieja:**
+  - `e2e/pedidos-d96-d100.spec.ts`, describe D96:
+    - decía «una fila de menos de 80 px, alineada con las opciones y sin la leyenda»; ahora: no hay campo en la
+      pantalla, y en la hoja está el lápiz, sin la leyenda;
+    - «el error de validación se sigue mostrando», ahora en la hoja;
+    - «con el comercio leído, el campo no aparece»; ahora: ni campo ni lápiz.
+  - `e2e/ticket-sin-qr.spec.ts`:
+    - n179 afirmaba que no estaba la tarjeta, cosa que ahora pasaría siempre; ahora afirma que con el comercio leído
+      no hay lápiz;
+    - V07 escribía el nombre en la tarjeta; ahora usa el lápiz de la hoja, y lo demás no cambia.
+- **Pruebas nuevas:** `e2e/nombre-en-ticket.spec.ts`, 10 recorridos:
+  - la vista a 390×664, 375×667, 390×844 y 430×932, en los tres estados;
+  - el lápiz: editar, «Guardar», Enter, «Cancelar», Esc y vaciar;
+  - la validación en la hoja;
+  - la mesa creada con el nombre editado;
+  - sin lápiz con el comercio leído y con la apertura congelada;
+  - el 409 en la pantalla y en la hoja, y el arreglo al vaciar.
+  - Sobre `70114c0` estaban en rojo los que dependen del cambio. El control del comercio leído, en verde.
+- **Mutantes:** 10 plantados, 10 cazados. Se leyó qué test cae en cada uno:
+  - **vuelve la tarjeta** (el de la orden): caen la vista en los cuatro tamaños y dos de D96;
+  - **el lápiz con el comercio identificado** (el de la orden): caen el control nuevo, D96 y n179;
+  - **«Guardar» no cambia el nombre enviado** (el de la orden): caen el lápiz, «la mesa se crea con el nombre editado»
+    y V07;
+  - el lápiz con la apertura congelada: cae su control;
+  - Esc cierra la hoja, y «Cancelar» guarda: cae el test del lápiz;
+  - sin error en la pantalla, el 409 sin su rama y sin foco en el campo: cae el test del 409;
+  - el monto otra vez debajo del selector: cae la vista a 390×664 y 375×667, y NO a 390×844 ni 430×932, que es justo
+    donde el diseño viejo no entraba.
+
 ## 0.208.1 — El alta con Google en ventana emergente, ante un texto legal nuevo, pide marcar las casillas otra vez (2026-09-29)
 
 Orden AF-POPUP-GOOGLE-409-CLAUDE-20260929 (sha256 9050e553…). Decisión 120 de Mati. Es la observación del CIERRE de
