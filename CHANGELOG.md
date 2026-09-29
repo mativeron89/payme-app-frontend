@@ -11,6 +11,35 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.206.0 — La invitación a una mesa aparece como burbuja en Inicio (2026-09-28)
+
+Orden AF-INVITACION-INICIO-CLAUDE-20260928 (sha256 2b7e77db…). Decisión 109 de Mati: «la invitación a la mesa tiene
+que aparecer con una burbuja en el Inicio, no únicamente en notificaciones, tiene que ser más sencillo y ahí ahorramos
+un click». Supersede el «No se duplica: se saca» del 2026-08-05. Base `0.205.0` (`55800f9`). Sin cambios en el AB.
+
+1. **La burbuja.** En Inicio, apenas debajo de las pestañas y arriba de la mesa abierta, va la invitación pendiente más
+   nueva que admite entrar (`mesa_joinable: true`):
+   - quién invita («{nombre} te invitó a»), el restaurante y la mesa con su hora;
+   - el botón «Sumarme», a la derecha, como en Avisos.
+   - No va entre las pestañas y su tarjeta, porque esa tarjeta va enganchada a ellas.
+2. **«Sumarme»** acepta, avisa «Te sumaste a la mesa ✓» y entra a la mesa. Es la misma función que usa Avisos
+   (`aceptarInvitacion`, en `InvitacionEnInicio.tsx`); Avisos pasó a usarla sin cambiar lo que hace.
+   - Los errores, igual: con 410, «Esta mesa ya cerró.»; con otro, el genérico. En los dos casos se relee la lista.
+   - Mientras viaja, «Sumándote…» y sin segundo toque.
+3. **Con más de una:** la más nueva y la fila «+N invitaciones más», que lleva a Avisos. El «+N» cuenta sólo las otras
+   que admiten entrar.
+4. **Qué no aparece en Inicio:** la invitación a una mesa cerrada o sin verificar. Avisos la sigue mostrando apagada.
+   Sin invitaciones, o si no se pudieron leer, Inicio queda como estaba: no se dibuja nada.
+5. **«La más nueva»** es la primera en el orden del dueño (`ORDER BY i.created_at DESC`). El mock ahora ordena igual;
+   antes devolvía el orden en que se sembraban.
+6. **Estilo:** el de la burbuja de la mesa (`.mesa-card`, `.mesa-card-group` y `.mesa-more`), sin CSS nuevo.
+   - La app no tiene tema oscuro: con el sistema en oscuro, la captura sale idéntica byte por byte.
+- **Textos nuevos (es → en):** «+1 invitación más» → «+1 more invitation»; «+{0} invitaciones más» → «+{0} more
+  invitations».
+- **Mutantes:** 14 plantados, 14 cazados. Dos sobrevivían por tests que faltaban y se agregaron:
+  - la burbuja sin «Sumándote…»: se afirma con el reloj en pausa;
+  - Avisos sin releer la lista tras un error de aceptación: e2e de la mesa que cierra entre la lectura y el toque.
+
 ## 0.205.0 — La protección de seguridad de la app pasa a bloquear (2026-09-28)
 
 Orden AF-CSP-OBLIGATORIA-CLAUDE-20260928 (sha256 17c6e990…). Decisión 107, punto 4 (n186): «Sí, medir y bloquear
