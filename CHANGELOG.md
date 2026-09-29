@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.1 — El invitado que entra o se da de alta con Google cae en su mesa (2026-09-29)
+
+Orden AF-INVITACION-TRAS-GOOGLE-CLAUDE-20260929 (sha256 697b9275…). Defecto que Mati reportó en producción el 29/09:
+«Invité a una mesa a alguien que NO tenía cuenta. Hizo el proceso de alta de cuenta con GMAIL y cuando ingresó a su
+usuario, no estaba la cuenta a la cuál lo había invitado. Tuvo que salir y seleccionar nuevamente el invite de la cuenta
+para que le aparezca». Base `0.209.0` (`5663452`). Sin cambios en el AB, el `state` de Google, el 303, el alta por correo
+ni el TTL del token custodiado.
+
+1. **La causa** (diagnóstico del Bibliotecario, con las citas verificadas en esta base):
+   - el token de la invitación sigue custodiado en `sessionStorage`, pero su lector lo busca sólo con la ruta
+     `/mesa/CODE` (`tokenForMesa`);
+   - la vuelta de Google en la misma pestaña es un documento nuevo en la raíz (`/#google_signup=` o
+     `/#google_redirect=`), y el front la limpia a `/`;
+   - resultado: JoinMesaScreen no se monta, nadie hace accept-link y la persona termina en Inicio.
+   - Afecta al alta y al ingreso con Google en redirect. El correo no recarga la página y no se ve afectado.
+2. **El arreglo, sólo en el front:**
+   - `src/api/retornoTrasIngreso.ts` guarda en `sessionStorage` una marca `{code, savedAt}`, sin token ni dato personal.
+     Vence a los 30 minutos, se usa una sola vez y cualquier otra forma, incluso con una clave de más, se borra;
+   - la escribe JoinMesaScreen al elegir «Crear cuenta gratis» o «Ya tengo cuenta · Entrar»;
+   - al pasar de «sin sesión» a «con sesión» (`useInicioTrasIngreso`), si la ruta no es de mesa, la marca vale y la
+     invitación custodiada es de ESA misma mesa (`destinoTrasIngreso.mesaDeRetorno`), se consume la marca y se vuelve a
+     la mesa con `replaceRoute('mesa', code)`, en vez de ir a Inicio;
+   - App monta JoinMesaScreen con la sesión, **después de las puertas legal y del @**, y canjea;
+   - la marca se borra además al cerrar la custodia (canje hecho), en un rechazo terminal y al cerrar sesión.
+- **Fuera de alcance, declarado:**
+  - el navegador interno de una app (WhatsApp): si Google vuelve en otro contexto, el `sessionStorage` no viaja;
+  - riesgo residual, acotado: quien abre el link, elige «Crear cuenta» o «Entrar» y en menos de 30 minutos entra por
+    otro camino en la MISMA pestaña, con la custodia de esa misma mesa, termina en esa mesa. Hoy no hay forma de
+    distinguirlo, y el dueño decide la mesa por el token.
+- **Pruebas nuevas.** `e2e/invitacion-mesa-google-redirect.spec.ts`, con el 303 del mock y una recarga real, 9
+  recorridos:
+  - 🔴 (a) link → «Crear cuenta gratis» → casillas → Google → «¡Te sumaste a la mesa!» en `/mesa/CODE`, sin token en la
+    URL y con la custodia y la marca borradas;
+  - 🔴 (b) «Ya tengo cuenta · Entrar» → Google → primero la puerta legal → la mesa;
+  - 🔴 (e) la mesa cerró durante la ida a Google → «Esta mesa ya cerró»;
+  - (c) sin elegir, ingreso general con Google → Inicio;
+  - (c) la marca es de otra mesa que la custodiada → Inicio;
+  - (d) la marca vencida (31 min) → Inicio;
+  - (f), (g) y (h): la marca se borra al cerrar la custodia, en el rechazo terminal y al cerrar sesión.
+  - **Sobre `5663452`:** (a), (b) y (e) caen en el producto, porque terminan en Inicio. Los que necesitan la marca como
+    testigo, «(c) otra mesa», (d), (f), (g) y (h), caen en ese testigo. «(c) sin elegir» pasa.
+  - Unitarios: `retornoTrasIngreso.test.ts` (vencimiento, hora futura, formas inválidas, código raro y uso único) y
+    `mesaDeRetorno` en `destinoTrasIngreso.test.ts`.
+- **Mutantes:** 7 plantados, 7 cazados. Se leyó qué test cae en cada uno:
+  - **sin la marca** (de la orden): caen (a) y (b), y los que la usan como testigo;
+  - **sin exigir la misma mesa** (de la orden): caen «(c) otra mesa» y su unitario;
+  - **sin vencimiento** (de la orden): caen (d) y sus unitarios;
+  - sin uso único: cae su unitario;
+  - el canje, el rechazo terminal y el cierre de sesión que no borran la marca: caen (f), (g) y (h), uno cada uno.
+
 ## 0.209.0 — «¿Cómo dividen?» entra en una vista, y el nombre del restaurante se edita desde el ticket (2026-09-29)
 
 Orden AF-NOMBRE-EN-TICKET-CLAUDE-20260929 (sha256 057a6b6f…). Pedido 127 de Mati: «Vamos a sacar la burbuja de nombre del
