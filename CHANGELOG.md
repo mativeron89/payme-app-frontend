@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.208.1 — El alta con Google en ventana emergente, ante un texto legal nuevo, pide marcar las casillas otra vez (2026-09-29)
+
+Orden AF-POPUP-GOOGLE-409-CLAUDE-20260929 (sha256 9050e553…). Decisión 120 de Mati. Es la observación del CIERRE de
+0.207.1 y la misma clase que AF-01: el gesto de aceptar queda atado al par legal que se veía. Base `0.208.0` (`0a902b4`).
+Sin cambios en el AB, los textos legales, la CSP ni banderas. **Los tres caminos siguen dormidos en producción**, donde
+el alta con Google es en la misma pestaña: esto no los enciende.
+
+1. **La clase, enumerada.** `LoginScreen` tiene seis envíos de `legal_acceptance`. Con este arreglo, los seis tratan el
+   `409 legal_version_mismatch`:
+
+   | envío | antes | ahora |
+   |---|---|---|
+   | alta por correo (`onSubmit`) | lo trataba (0.207.1) | igual |
+   | contexto del alta redirect (`guardarContextoAlta`) | lo trata el canje | igual |
+   | «Crear mi cuenta» de la vuelta redirect (`onTerminarAlta` → `canjearAlta`) | lo trataba | igual |
+   | «Crear mi cuenta» con la credencial retenida (`onCrearConGoogle`) | **genérico, sin releer** | relee y avisa |
+   | botón de Google del paso (`purpose: 'register'`) | **genérico, sin releer** | relee y avisa |
+   | alta en un toque (`continuarConGoogle`) | **genérico, sin releer** | relee y avisa |
+
+2. **Qué pasaba en esos tres:** salía «No pudimos completar el ingreso» y el reintento mandaba otra vez el par viejo. El
+   alta quedaba trabada hasta recargar.
+3. **Ahora**, un solo helper (`textoLegalNuevo`) relee los textos (`legalAttempt`).
+   - Con el par nuevo, las casillas aparecen desmarcadas por el mismo `casillaVigente` de AF-01 y el botón de Google
+     queda inerte hasta marcarlas.
+   - Un segundo intento sobre el par nuevo entra.
+   - Un 503 con el mismo par deja las casillas como estaban.
+4. **El botón que nombra el aviso.** Después del 409, en los tres casos lo que queda en pantalla es «Continuar con
+   Google», porque la credencial es de un uso. En `onCrearConGoogle`, «Crear mi cuenta» desaparece. El aviso nombra ese
+   botón.
+- **Texto nuevo (es → en):** «Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar con Google».»
+  → «We updated the documents. Check the boxes again and tap «Continue with Google».». El inglés del botón es el de
+  «Continuar con Google», que ya existía.
+- **Pruebas nuevas.** `e2e/google-popup-409.spec.ts`, con 5 recorridos. Los 3 🔴 estaban rojos sobre `0a902b4`, los
+  tres en «el 409 relee los textos»; los 2 controles son verdes en los dos lados:
+  - 409 en «Crear mi cuenta» y el reintento con Google, que entra con el par nuevo;
+  - 409 por el botón de Google del paso: se llega con un 503 en «Crear mi cuenta», que suelta la credencial con el
+    mismo par;
+  - 409 en el alta en un toque, y el segundo toque entra;
+  - controles: un 503 con el mismo par en «Crear mi cuenta» y en el alta en un toque.
+  - «Entra» se mide con la sesión creada y no con Inicio: el alta social del mock no registra la aceptación (el dueño
+    sí), así que después aparece la puerta legal.
+- **Mutantes:** 6 plantados, 6 cazados. Se leyó qué test cae en cada uno:
+  - cada camino sin atender el 409 («Crear mi cuenta», el botón del paso, el un toque): cae SU 🔴, y sólo ése;
+  - avisar sin releer, y el aviso genérico: caen los tres 🔴;
+  - atender cualquier error como si fuera un texto nuevo (resetear siempre): caen los dos controles 503, y el 🔴 del
+    camino 2, que llega con un 503.
+
 ## 0.208.0 — Con la sesión iniciada, una pestaña vieja muestra «Hay una versión nueva · Actualizar» (2026-09-29)
 
 Orden AF-CARTEL-VERSION-NUEVA-CLAUDE-20260929 (sha256 3c62810b…). Decisión 125 de Mati: «Cartel para actualizar
