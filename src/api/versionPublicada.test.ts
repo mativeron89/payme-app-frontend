@@ -7,6 +7,7 @@ import {
   esMasNueva,
   leerVersionPublicada,
   recargarSiHayVersionNueva,
+  versionMasNueva,
 } from './versionPublicada';
 
 /**
@@ -173,5 +174,23 @@ describe('AF-VERSION-NUEVA · recargar una vez por versión publicada', () => {
     const olvidadizo = { getItem: vi.fn(() => null), setItem: vi.fn() };
     expect(recargarSiHayVersionNueva('0.202.0', '0.201.0', olvidadizo, recargar)).toBe(false);
     expect(recargar).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AF-CARTEL-VERSION-NUEVA · decisión 125 · con la sesión iniciada no se recarga:
+ * `useVersionNuevaPublicada` sólo dice si hay una versión más nueva, con esto.
+ */
+describe('AF-CARTEL-VERSION-NUEVA · versionMasNueva', () => {
+  it('más nueva: la devuelve', () => {
+    expect(versionMasNueva('0.208.0', '0.207.1')).toBe('0.208.0');
+    expect(versionMasNueva('1.0.0', '0.207.1')).toBe('1.0.0');
+  });
+
+  it('la misma, una anterior, sin respuesta o con forma rara: null', () => {
+    expect(versionMasNueva('0.207.1', '0.207.1')).toBeNull();
+    expect(versionMasNueva('0.207.0', '0.207.1')).toBeNull();
+    expect(versionMasNueva(null, '0.207.1')).toBeNull();
+    expect(versionMasNueva('0.208.0-rc.1', '0.207.1')).toBeNull();
   });
 });

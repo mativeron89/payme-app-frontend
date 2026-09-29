@@ -30,6 +30,7 @@ import { PuertaArroba, usePuertaArroba } from './components/PuertaArroba';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
+import { CartelVersionNueva } from './components/CartelVersionNueva';
 
 function Shell() {
   const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
@@ -369,6 +370,9 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <div className="app">
+          {/* AF-CARTEL-VERSION-NUEVA · decisión 125 · con sesión, arriba y en el
+              flujo: empuja la pantalla, no la tapa. */}
+          <CartelVersionNueva />
           <Shell />
         </div>
       </ToastProvider>

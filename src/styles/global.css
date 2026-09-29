@@ -8437,3 +8437,57 @@ h1.pay-title-lbl {
       splash-rendirse 1ms linear 12s forwards;
   }
 }
+
+/* ─── AF-CARTEL-VERSION-NUEVA · decisión 125 ─── */
+/* Con la sesión iniciada: «Hay una versión nueva · Actualizar». Primer hijo de
+   `.app` (columna flex de 100dvh): va arriba y EN EL FLUJO, así que empuja la
+   pantalla y no tapa ningún botón. Abajo no: `.fab` y `.cta-float` son fijos y
+   quedarían encima. Toma el `safe-area` de arriba para no quedar bajo la barra
+   de estado del iPhone (PWA); el encabezado de abajo conserva el suyo. */
+.cartel-version {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: calc(var(--sp-2) + env(safe-area-inset-top)) var(--sp-2) var(--sp-2) var(--sp-4);
+  background: var(--info-tint);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.cartel-version-texto {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.cartel-version-actualizar {
+  flex: none;
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--action);
+  color: var(--action-fg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cartel-version-cerrar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cartel-version-actualizar:focus-visible,
+.cartel-version-cerrar:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}

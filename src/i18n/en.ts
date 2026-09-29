@@ -65,7 +65,7 @@ export const EN: Record<string, string> = {
   ". No lo repetimos solos: si quieres pagar igual, toca el botón de abajo.": ". We won't repeat it on our own: if you still want to pay, tap the button below.",
   "Abierta": "Open",
   "Aceptar": "Accept",
-  "Actualizar": "Refresh",
+  "Actualizar": "Update",
   "Actualizar estado": "Refresh status",
   "Agrega al menos un consumo.": "Add at least one item.",
   "Agregar": "Add",
@@ -1064,4 +1064,8 @@ export const EN: Record<string, string> = {
   // AF-CORRECCIONES-AUDITORIA · AF-01 · el 409 de un par nuevo, con el botón de cada pantalla.
   "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar».": "We updated the documents. Check the boxes again and tap «Continue».",
   "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Registrarme».": "We updated the documents. Check the boxes again and tap «Sign up».",
+  // AF-CARTEL-VERSION-NUEVA · decisión 125 · el cartel con la sesión iniciada.
+  // «Actualizar» ya existía como "Refresh" (sólo en el botón dormido de invitado
+  // de MesaScreen); pasa a "Update", que es lo que pidió la orden.
+  "Hay una versión nueva": "A new version is available",
 };

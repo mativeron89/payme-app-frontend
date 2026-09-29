@@ -187,8 +187,15 @@ test.describe('AF-VERSION-NUEVA · en el ingreso', () => {
   });
 });
 
-test.describe('AF-VERSION-NUEVA · fuera del ingreso, ni siquiera revisa', () => {
-  test('🔴 en una mesa abierta: sin pedidos de versión y sin recarga, aunque vuelva a la pestaña', async ({ page }) => {
+/**
+ * AF-CARTEL-VERSION-NUEVA · decisión 125 · antes este describe era «fuera del
+ * ingreso, ni siquiera revisa» y el test de la mesa afirmaba CERO pedidos de
+ * versión. Con la sesión iniciada ahora se revisa en toda la app para mostrar
+ * el cartel «Hay una versión nueva · Actualizar» (`cartel-version-nueva.spec.ts`).
+ * Lo que el test protegía sigue igual: dentro de una mesa NO se recarga sola.
+ */
+test.describe('AF-VERSION-NUEVA · fuera del ingreso, nunca recarga sola', () => {
+  test('🔴 en una mesa abierta: revisa, muestra el cartel y NO recarga, aunque vuelva a la pestaña', async ({ page }) => {
     const pub = await preparar(page);
     await ingresar(page);
     await abrirMesaConLink(page);
@@ -196,8 +203,10 @@ test.describe('AF-VERSION-NUEVA · fuera del ingreso, ni siquiera revisa', () =>
     const antes = pub.pedidos;
     await salirYVolver(page);
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+    // Hubo revisión, y con eso el cartel: la persona decide cuándo recargar.
+    await expect.poll(() => pub.pedidos).toBeGreaterThan(antes);
+    await expect(page.getByText('Hay una versión nueva', { exact: true })).toBeVisible();
     await page.waitForTimeout(1_500);
-    expect(pub.pedidos).toBe(antes);
     expect(await cargas(page)).toBe(1);
     expect(await marca(page)).toBeNull();
   });

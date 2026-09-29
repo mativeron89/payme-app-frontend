@@ -20,9 +20,14 @@
  *
  * Qué pantallas pueden recargar lo decide quien llama: hoy, sólo el ingreso
  * montado desde `App` (ver `useRecargaPorVersionNueva`).
+ *
+ * AF-CARTEL-VERSION-NUEVA · decisión 125 de Mati («Cartel para actualizar»):
+ * con la sesión iniciada NO se recarga sola. Con las mismas revisiones se
+ * muestra un cartel y la persona decide (`useVersionNuevaPublicada`,
+ * `components/CartelVersionNueva.tsx`).
  */
 
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 declare const __APP_VERSION__: string;
 
@@ -111,20 +116,19 @@ export function almacenDeSesion(): Storage | null {
 }
 
 /**
- * Revisa al montar y al volver a la pestaña (`visibilitychange`, y `pageshow`
- * del bfcache). `sePuedeRecargar` se consulta al llegar la respuesta, no al
- * pedirla: si en ese rato la persona empezó a escribir, no se recarga.
+ * Las revisiones, UNA sola definición para el ingreso y para el cartel: al
+ * montar y al volver a la pestaña (`visibilitychange`, y `pageshow` del
+ * bfcache). `alLeer` es el de este render: se consulta al llegar la respuesta.
  */
-export function useRecargaPorVersionNueva(habilitada: boolean, sePuedeRecargar: () => boolean): void {
-  const seguro = useRef(sePuedeRecargar);
-  useLayoutEffect(() => { seguro.current = sePuedeRecargar; });
+function useRevisarVersion(habilitada: boolean, alLeer: (publicada: string | null) => void): void {
+  const leer = useRef(alLeer);
+  useLayoutEffect(() => { leer.current = alLeer; });
   useEffect(() => {
     if (!habilitada) return undefined;
     let vivo = true;
     const revisar = () => {
       void leerVersionPublicada().then((publicada) => {
-        if (!vivo || !seguro.current()) return;
-        recargarSiHayVersionNueva(publicada, VERSION_APP, almacenDeSesion(), () => window.location.reload());
+        if (vivo) leer.current(publicada);
       });
     };
     revisar();
@@ -138,4 +142,42 @@ export function useRecargaPorVersionNueva(habilitada: boolean, sePuedeRecargar: 
       window.removeEventListener('pageshow', alMostrar);
     };
   }, [habilitada]);
+}
+
+/**
+ * El ingreso: recarga sola. `sePuedeRecargar` se consulta al llegar la
+ * respuesta, no al pedirla: si en ese rato la persona empezó a escribir, no se
+ * recarga.
+ */
+export function useRecargaPorVersionNueva(habilitada: boolean, sePuedeRecargar: () => boolean): void {
+  useRevisarVersion(habilitada, (publicada) => {
+    if (!sePuedeRecargar()) return;
+    recargarSiHayVersionNueva(publicada, VERSION_APP, almacenDeSesion(), () => window.location.reload());
+  });
+}
+
+/** La publicada si es MÁS NUEVA que `actual`; si no, o sin respuesta, `null`. */
+export function versionMasNueva(publicada: string | null, actual: string): string | null {
+  return publicada !== null && esMasNueva(publicada, actual) ? publicada : null;
+}
+
+export interface RevisionDeVersion {
+  /** Revisiones terminadas. Cada una puede volver a mostrar un cartel cerrado. */
+  readonly n: number;
+  /** La publicada si es más nueva que este bundle; si no, `null`. */
+  readonly nueva: string | null;
+}
+
+/**
+ * 🔴 AF-CARTEL-VERSION-NUEVA · con la sesión iniciada: las mismas revisiones
+ * que el ingreso, pero NUNCA recarga. Sólo dice si hay una versión más nueva;
+ * recargar es un toque de la persona en el cartel (decisión 125).
+ */
+export function useVersionNuevaPublicada(habilitada: boolean): RevisionDeVersion {
+  const [revision, setRevision] = useState<RevisionDeVersion>({ n: 0, nueva: null });
+  useRevisarVersion(habilitada, (publicada) => {
+    const nueva = versionMasNueva(publicada, VERSION_APP);
+    setRevision((previa) => ({ n: previa.n + 1, nueva }));
+  });
+  return revision;
 }
