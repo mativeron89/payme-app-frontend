@@ -57,6 +57,7 @@ async function sinCortes(page: Page): Promise<void> {
 
 test.describe('AF-INVITACION-INICIO · la invitación en Inicio', () => {
   test('con una invitación: la burbuja arriba de la mesa y «Sumarme» entra directo', async ({ page }) => {
+    await page.clock.install();
     await ingresar(page);
     await expect(invitacion(page)).toBeVisible();
     await expect(invitacion(page).getByText('Sofía te invitó a', { exact: true })).toBeVisible();
@@ -70,9 +71,15 @@ test.describe('AF-INVITACION-INICIO · la invitación en Inicio', () => {
     await sinCortes(page);
     await capturar(page, 'invitacion-inicio-una');
 
+    // Con el reloj en pausa, el pedido queda en vuelo: «Sumándote…» y sin segundo toque.
+    const t0 = await page.evaluate(() => Date.now() + 5_000);
+    await page.clock.pauseAt(t0);
     await invitacion(page).getByRole('button', { name: 'Sumarme', exact: true }).click();
+    await expect(invitacion(page).getByRole('button', { name: 'Sumándote…', exact: true })).toBeDisabled();
+    await page.clock.runFor(1_000);
     await expect(page.getByText('Te sumaste a la mesa ✓')).toBeVisible();
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-4520$/);
+    await page.clock.resume();
     // Aceptada, ya no está pendiente: al volver a Inicio no hay burbuja.
     await page.goto('/');
     await yaLlegoLaLista(page);
@@ -153,5 +160,27 @@ test.describe('AF-INVITACION-INICIO · la invitación en Inicio', () => {
     await expect(page.getByText('Esta mesa ya cerró.', { exact: true })).toBeVisible();
     await expect(invitacion(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/\/mesa\//);
+  });
+
+  test('Avisos acepta con la MISMA función: con la mesa cerrada en el medio, avisa y la tarjeta se apaga', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/avisos');
+    const sumarme = page.getByRole('button', { name: 'Sumarme', exact: true });
+    await expect(sumarme).toBeVisible();
+    await page.evaluate(async () => {
+      const ruta = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ ruta) as {
+        state: { mesas: Array<{ code: string; status: string }> };
+        persist: () => void;
+      };
+      store.state.mesas.find((m) => m.code === 'PA-4520')!.status = 'settled';
+      store.persist();
+    });
+    await sumarme.click();
+    await expect(page.getByText('Esta mesa ya cerró.', { exact: true })).toBeVisible();
+    // Recargó: la tarjeta sigue, apagada, con su copy y sin «Sumarme».
+    await expect(page.getByText('Esta mesa ya cerró', { exact: true })).toBeVisible();
+    await expect(sumarme).toHaveCount(0);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
   });
 });
