@@ -64,16 +64,21 @@ async function preparar(page: Page, s: Seams = {}): Promise<void> {
         }
       }
     }).observe(document, { childList: true, subtree: true });
-    // Y cada vez que la ranura de Google queda releyendo la capability: inerte o no.
+    // Y cada vez que la ranura de Google ENTRA a releer la capability: inerte o no.
+    // Sólo la entrada (la clase antes no la tenía): otro cambio de clase mientras
+    // relee —`social-google-gated`, por ejemplo— no es otra relectura. Anotar
+    // cada mutación contaba renders, no relecturas, y daba [true, true] según el
+    // tiempo (medido: 3/20 y 4/20 antes de este cambio).
     new MutationObserver((cambios) => {
       for (const cambio of cambios) {
         const el = cambio.target as HTMLElement;
         if (!el.classList?.contains('social-google-releyendo')) continue;
+        if ((cambio.oldValue ?? '').split(/\s+/).includes('social-google-releyendo')) continue;
         const lista = JSON.parse(sessionStorage.getItem(`${clave}.releyendo`) ?? '[]') as boolean[];
         lista.push(el.hasAttribute('inert'));
         sessionStorage.setItem(`${clave}.releyendo`, JSON.stringify(lista));
       }
-    }).observe(document, { attributes: true, attributeFilter: ['class'], subtree: true });
+    }).observe(document, { attributes: true, attributeFilter: ['class'], attributeOldValue: true, subtree: true });
   }, REGISTRO);
 }
 
