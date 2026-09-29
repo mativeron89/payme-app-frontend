@@ -17,10 +17,21 @@ import base from '../../playwright.config';
 // Playwright resuelve el `cwd` del webServer relativo a ESTE archivo: Vite
 // tiene que arrancar en la raíz del repo, no en `scripts/sonda-header/`.
 const raiz = fileURLToPath(new URL('../../', import.meta.url));
+/**
+ * AF-02 (auditoría Codex) · la base tiene una LISTA de servidores desde n186:
+ * el mock y dos builds con CSP. La sonda sólo necesita el mock y lo elige por su
+ * url. Antes esparcía la lista como un objeto y el cast lo tapaba: quedaba sin
+ * `command` y no arrancaba. Test: `scripts/sonda-header-config.test.ts`.
+ */
+const MOCK = 'http://localhost:5176';
+const servidores = base.webServer === undefined ? []
+  : Array.isArray(base.webServer) ? base.webServer : [base.webServer];
+const mock = servidores.find((s) => s.url === MOCK);
+if (!mock) throw new Error(`sonda-header: la config base no tiene el servidor mock (${MOCK})`);
 export default defineConfig({
   ...base,
   testDir: '.',
-  webServer: { ...(base.webServer as Exclude<typeof base.webServer, undefined | unknown[]>), cwd: raiz },
+  webServer: { ...mock, cwd: raiz },
   reporter: [['list']],
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
