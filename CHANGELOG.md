@@ -23,6 +23,10 @@ la captura de 0.209.0 a 390×664, donde el título y el selector iban a la izqui
 3. **El «+» no se mueve bajo el dedo**, ni al cambiar N (1, 9, 12) ni en el primer toque. Así se logra:
    - el bloque del monto reserva su ancho con una copia invisible del monto más ancho posible, el de N = 1, que es el
      total, en la misma celda de grilla que el monto real;
+   - la copia va **con ceros** («$000.00» para «$840.00»): con números tabulares todos los dígitos miden lo mismo y el
+     ancho es idéntico. Con el total literal, `division-fusionada.spec.ts` encontró «$840.00» dos veces en el documento
+     y cayó en los gates locales antes del push. El total ya está arriba (§5 bis · F, «un dato, un lugar»), y una copia
+     invisible lo repetía igual;
    - el rótulo está en los dos estados, así que la caja mide lo mismo con o sin número y con cualquier N.
 4. **Sin número todavía, el lugar del monto no queda vacío:** un marcador apagado, «$—» en el tamaño del monto y en el
    gris del texto secundario, con su rótulo debajo, también en gris. Así el grupo se lee centrado desde el primer
@@ -45,13 +49,14 @@ la captura de 0.209.0 a 390×664, donde el título y el selector iban a la izqui
   - Sobre `61428e6`, con el spec final, caen las 6 del centrado en su primera aserción: el marcador «$—» no existe. La
     primera versión del spec, sin el marcador, las hacía caer en el título, con el centro en 93 contra 195. Las 4 del
     «+» pasan, porque la base tenía el selector fijo a la izquierda.
-- **Mutantes:** 6 plantados, 6 cazados. Se leyó qué test cae en cada uno:
+- **Mutantes:** 7 plantados, 7 cazados. Se leyó qué test cae en cada uno:
   - **la alineación vuelve a la izquierda** (el de la orden): caen las 6 del centrado;
   - sólo el grupo pegado a la izquierda: caen 5 de las 6. A 375 por consumo el rótulo llena la caja y queda igual;
   - sin la reserva de ancho: caen las del «+» de «Pagar el total». Por consumo el rótulo ya define el ancho;
   - sin el marcador: caen las 6 del centrado;
   - el monto alineado a la izquierda de su caja: caen las de «c/u» en los dos tamaños;
-  - el marcador en negro: caen las 6 del centrado, por el gris.
+  - el marcador en negro: caen las 6 del centrado, por el gris;
+  - la reserva con el total literal: caen las 2 de `division-fusionada` que exigen el total una sola vez.
 
 ## 0.209.1 — El invitado que entra o se da de alta con Google cae en su mesa (2026-09-29)
 
