@@ -4421,54 +4421,27 @@ body {
   padding-top: var(--sp-4);
 }
 
-/* Decisión 96 de Mati («Hace mucho más chica la burbuja del Nombre del
-   Restaurante»): UNA fila, título chico a la izquierda e input a la derecha,
-   con el borde, el radio y la sombra de las opciones de «¿Cómo dividen?» que
-   tiene debajo (`.division-options .div-card`). Antes era una tarjeta de tres
-   filas con la leyenda: 132.7 px de alto a 390 px. */
-.restaurant-label-card {
-  display: grid;
-  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
+/* AF-NOMBRE-EN-TICKET · pedido 127 de Mati: la tarjeta «Nombre del
+   restaurante (opcional)» salió de «¿Cómo dividen?» (antes decisión 96, una
+   fila de ~70 px). El nombre se edita en la hoja del ticket, junto al nombre:
+   `.tk-fold-name-row`, `.tk-nombre-*`. Si al tocar Continuar el nombre tiene
+   un error, se dice en la pantalla con «Editar en el ticket». */
+.nombre-error-pantalla {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: var(--sp-3);
-  row-gap: var(--sp-1);
-  margin-bottom: 10px;
-  padding: 10px 14px;
-  border: 2px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--sh-1);
-  /* El input lo hereda (`font: inherit`, más abajo): entra «Restaurante sin
-     identificar» sin recortarse al lado del título. */
-  font-size: var(--fs-sm);
+  gap: var(--sp-2);
 }
-
-.restaurant-label-title {
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.restaurant-label-error {
-  grid-column: 1 / -1;
-}
-
-.restaurant-label-card input {
-  width: 100%;
+.nombre-error-editar {
   min-height: var(--tap-min);
   padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid currentColor;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: inherit;
   font: inherit;
-}
-
-.restaurant-label-card input:focus-visible {
-  outline: 3px solid var(--action-2);
-  outline-offset: 2px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .mi-progress {
@@ -6883,6 +6856,64 @@ button.qc-circulo::after {
   font-size: var(--fs-h2);
   color: var(--text);
 }
+/* AF-NOMBRE-EN-TICKET · el nombre con su lápiz en una fila; el lápiz tiene
+   los 44 px de toque sin engordar la fila (margen negativo, como `.tk-pencil`). */
+.tk-fold-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.tk-fold-name-row .tk-fold-name {
+  flex: 1;
+  min-width: 0;
+}
+.tk-nombre-lapiz {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin: -10px -10px -10px 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tk-nombre-lapiz:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
+}
+.tk-nombre-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.tk-nombre-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  /* 16 px: por debajo, el iPhone agranda la pantalla al tocar el campo. */
+  font-size: 16px;
+}
+.tk-nombre-input:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
+}
+.tk-nombre-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.tk-nombre-error {
+  margin-top: var(--sp-1);
+}
 .tk-fold-addr {
   font-size: var(--fs-sm);
   color: var(--text-muted);
@@ -7791,7 +7822,9 @@ h1.pay-title-lbl {
 }
 
 .ticket-flow-scroll {
-  padding-top: var(--sp-4);
+  /* AF-NOMBRE-EN-TICKET · pedido 127: 12 y no 16, parte del alto que hace
+     entrar las tres formas y «¿Cuántos son?» a 390×664 y 375×667. */
+  padding-top: var(--sp-3);
 }
 
 .division-options {
@@ -7803,7 +7836,9 @@ h1.pay-title-lbl {
 .division-options .div-card {
   min-height: 0;
   margin-bottom: 0;
-  padding: 12px 14px;
+  /* AF-NOMBRE-EN-TICKET · 9 y no 12 arriba y abajo: ~58 px de alto, sobre los
+     44 de toque. La letra no cambia. */
+  padding: 9px 14px;
   border-width: 2px;
   border-color: var(--border);
   border-radius: var(--r-lg);
@@ -7840,11 +7875,17 @@ h1.pay-title-lbl {
 .division-options .div-sub {
   font-size: 13px;
   line-height: 1.2;
+  /* Una sola línea también en inglés o en pantallas angostas: el alto de la
+     tarjeta no puede crecer (el texto entero sigue en el nombre accesible). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .division-stepper {
   margin-top: 4px;
-  padding: var(--sp-4);
+  /* AF-NOMBRE-EN-TICKET · 12 arriba y abajo (antes 16). */
+  padding: var(--sp-3) var(--sp-4);
   border: 2px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -7858,9 +7899,32 @@ h1.pay-title-lbl {
 }
 
 .division-stepper-title {
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
   color: var(--warning);
-  text-align: center;
+  /* A la izquierda, como el selector de abajo. */
+  text-align: left;
+}
+
+/* AF-NOMBRE-EN-TICKET · pedido 127: el selector y el monto por persona en UNA
+   fila. Antes el monto (--fs-h1) y su rótulo iban debajo y sumaban 70 px al
+   elegir el número, y el bloque dejaba de entrar. El monto conserva su tamaño
+   (§1.4: es lo que la persona busca). El selector queda fijo a la izquierda:
+   cuando aparece el monto, el «+» no se mueve bajo el dedo. */
+.division-stepper-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 52px;
+}
+.division-stepper-monto {
+  min-width: 0;
+  text-align: right;
+}
+.division-stepper-monto .split-amt,
+.division-stepper-monto .split-amt-lbl {
+  margin-top: 0;
+  text-align: right;
 }
 
 .division-stepper .stepper {

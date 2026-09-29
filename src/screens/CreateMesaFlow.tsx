@@ -352,6 +352,19 @@ export function CreateMesaFlow() {
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   const [ocrMerchant, setOcrMerchant] = useState<OcrMerchant | undefined>();
   const [restaurantLabel, setRestaurantLabel] = useState('');
+  /**
+   * AF-NOMBRE-EN-TICKET · pedido 127 de Mati: el nombre se pone o se cambia
+   * desde la hoja del ticket, con un lápiz. Se edita un BORRADOR y «Guardar» lo
+   * pasa a `restaurantLabel`, que es lo único que viaja (como antes).
+   * `nombreRechazado`: el dueño contestó 409 `restaurant_label_not_allowed` al
+   * último nombre guardado. `nombreErrorEnPantalla`: el error apareció al tocar
+   * Continuar, así que también se dice en la pantalla, con «Editar en el ticket».
+   */
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [borradorNombre, setBorradorNombre] = useState('');
+  const [nombreRechazado, setNombreRechazado] = useState(false);
+  const [nombreErrorEnPantalla, setNombreErrorEnPantalla] = useState(false);
+  const campoNombreRef = useRef<HTMLInputElement | null>(null);
   const ticketFallbackRef = useRef<string | null>(null);
   const resolutionRef = useRef<{
     sessionId: string;
@@ -409,6 +422,9 @@ export function CreateMesaFlow() {
     resolutionRef.current = null;
     setOcrMerchant(undefined);
     setRestaurantLabel('');
+    setEditandoNombre(false);
+    setNombreRechazado(false);
+    setNombreErrorEnPantalla(false);
     if (!restaurantId) {
       setRestaurant(null);
       setRestaurantRecordOnly(false);
@@ -429,11 +445,31 @@ export function CreateMesaFlow() {
   const normalizedRestaurantLabel = restaurantLabelEligible && restaurantLabelValidation.ok
     ? restaurantLabelValidation.normalized
     : null;
-  const restaurantLabelError = restaurantLabelValidation.ok
+  const mensajeNombreInvalido = (v: typeof restaurantLabelValidation) => (v.ok
     ? null
-    : restaurantLabelValidation.reason === 'control_character'
+    : v.reason === 'control_character'
       ? t('El nombre no puede contener saltos de línea ni caracteres de control.')
-      : t('Usa un nombre de hasta 200 caracteres.');
+      : t('Usa un nombre de hasta 200 caracteres.'));
+  const restaurantLabelError = mensajeNombreInvalido(restaurantLabelValidation);
+  const validacionBorrador = validateRestaurantLabel(borradorNombre);
+  const errorBorrador = mensajeNombreInvalido(validacionBorrador);
+  const errorNombreRechazado = t('No podemos usar ese nombre para este restaurante. Déjalo vacío o cámbialo y prueba de nuevo.');
+  /** El error del nombre GUARDADO: la validación local o el 409 del dueño. */
+  const errorDelNombre = restaurantLabelEligible
+    ? restaurantLabelError ?? (nombreRechazado ? errorNombreRechazado : null)
+    : null;
+
+  function empezarEdicionNombre() {
+    setBorradorNombre(restaurantLabel);
+    setEditandoNombre(true);
+  }
+  function guardarNombre() {
+    if (!validateRestaurantLabel(borradorNombre).ok) return;
+    setRestaurantLabel(borradorNombre);
+    setNombreRechazado(false);
+    setNombreErrorEnPantalla(false);
+    setEditandoNombre(false);
+  }
 
   async function resolveTicketRestaurant(merchant = ocrMerchant) {
     if (restaurantIdRef.current) {
@@ -751,7 +787,8 @@ export function CreateMesaFlow() {
   useEffect(() => {
     if (!ticketAbierto && !ticketForcedOpen) return;
     const dialog = ticketRef.current;
-    (ticketForcedOpen ? dialog : ticketCloseRef.current)?.focus();
+    // AF-NOMBRE-EN-TICKET · abierta desde «Editar en el ticket», el foco va al campo.
+    (campoNombreRef.current ?? (ticketForcedOpen ? dialog : ticketCloseRef.current))?.focus();
     const keepFocusInside = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !ticketForcedOpen) {
         event.preventDefault();
@@ -950,7 +987,9 @@ export function CreateMesaFlow() {
       return;
     }
     if (restaurantLabelEligible && !restaurantLabelValidation.ok) {
-      setError(restaurantLabelError);
+      // AF-NOMBRE-EN-TICKET · el error va en la hoja y en la pantalla, con
+      // «Editar en el ticket»: el campo ya no está en esta pantalla.
+      setNombreErrorEnPantalla(true);
       finishTicketContinuation();
       return;
     }
@@ -1179,6 +1218,22 @@ export function CreateMesaFlow() {
       }
       if (code === 'monetary_family_reconciliation_required') {
         setError(t('La apertura pertenece a una sesión anterior. No la reenviamos ni iniciamos otra hasta reconciliarla.'));
+      } else if (code === 'restaurant_label_not_allowed') {
+        // AF-NOMBRE-EN-TICKET · el dueño rechaza el nombre en una creación
+        // NUEVA y antes de crear nada: sin mesa ni hold (AB `routes/mesas.js`,
+        // `assertLabelAllowed` antes del gate y dentro de la transacción sin
+        // garantía, que se revierte). No está entre los 409 definitivos de
+        // `mutationRetry`, así que sin esta rama la apertura quedaba congelada
+        // como ambigua y el reintento mandaba el mismo nombre: un callejón. Se
+        // cierra el intento para que el reintento, con otro nombre o sin él, use
+        // una clave nueva, y el error va a la hoja y a la pantalla.
+        if (intent && !definitivo) {
+          await completeMonetaryIntent(mesaScope, 'create_mesa', intent);
+          unfreezeMesa(intent);
+        }
+        setNombreRechazado(true);
+        setNombreErrorEnPantalla(true);
+        setStep('ticket');
       } else if (code === 'guarantee_failed') {
         if (intent) {
           await completeMonetaryIntent(mesaScope, 'create_mesa', intent);
@@ -1743,29 +1798,26 @@ export function CreateMesaFlow() {
             </div>
           )}
           {avisoApertura()}
-          {/* Decisión 96 de Mati: una fila compacta —título chico e input—, sin
-              la leyenda «Sólo identifica…». La condición de aparición no cambia:
-              `canLabelPrivateUnknownRestaurant` exige que ni el QR ni el OCR
-              hayan dado el comercio. El error de validación sigue. */}
-          {restaurantLabelEligible && (
-            <label className="restaurant-label-card">
-              <span className="restaurant-label-title">{t('Nombre del restaurante (opcional)')}</span>
-              <input
-                type="text"
-                value={restaurantLabel}
-                maxLength={400}
+          {/* AF-NOMBRE-EN-TICKET · pedido 127 de Mati: sale la tarjeta «Nombre del
+              restaurante (opcional)» para que las tres formas y «¿Cuántos son?»
+              entren en una vista. El nombre se pone desde la hoja del ticket
+              (lápiz junto al nombre). Si al tocar Continuar el nombre tiene un
+              error, se dice acá también, con el camino para arreglarlo. */}
+          {nombreErrorEnPantalla && errorDelNombre && (
+            <div className="form-error nombre-error-pantalla" role="alert">
+              <span>{errorDelNombre}</span>
+              <button
+                type="button"
+                className="nombre-error-editar"
                 disabled={!!frozen}
-                aria-invalid={restaurantLabelError ? true : undefined}
-                aria-describedby={restaurantLabelError ? 'restaurant-label-help' : undefined}
-                onChange={(event) => setRestaurantLabel(event.target.value)}
-                placeholder={t('Restaurante sin identificar')}
-              />
-              {restaurantLabelError && (
-                <span id="restaurant-label-help" className="form-error restaurant-label-error">
-                  {restaurantLabelError}
-                </span>
-              )}
-            </label>
+                onClick={() => {
+                  empezarEdicionNombre();
+                  setTicketAbierto(true);
+                }}
+              >
+                {t('Editar en el ticket')}
+              </button>
+            </div>
           )}
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
               con tres copias, agregar un estado visual a una y olvidarse de
@@ -1817,35 +1869,43 @@ export function CreateMesaFlow() {
             </div>
             {/* El nombre accesible y el rótulo visible comparten la misma
                 pregunta; consumo cuenta mesa, igual/total cuentan pagadores. */}
-            <div className="stepper" role="group" aria-label={preguntaStepper}>
-              <button
-                onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
-                aria-label={t('Un comensal menos')}
-              >
-                −
-              </button>
-              <div className="val" aria-live="polite">
-                {participants ?? '—'}
+            {/* AF-NOMBRE-EN-TICKET · pedido 127: el monto por persona va AL LADO
+                del selector, no debajo, para que las tres formas y este bloque
+                entren en una vista a 390×664 y 375×667. El selector queda fijo a
+                la izquierda: cuando aparece el monto no se corre bajo el dedo. */}
+            <div className="division-stepper-fila">
+              <div className="stepper" role="group" aria-label={preguntaStepper}>
+                <button
+                  onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
+                  aria-label={t('Un comensal menos')}
+                >
+                  −
+                </button>
+                <div className="val" aria-live="polite">
+                  {participants ?? '—'}
+                </div>
+                <button
+                  onClick={() => setParticipants(participants === null ? pisoComensales : Math.min(20, participants + 1))}
+                  aria-label={t('Un comensal más')}
+                >
+                  +
+                </button>
               </div>
-              <button
-                onClick={() => setParticipants(participants === null ? pisoComensales : Math.min(20, participants + 1))}
-                aria-label={t('Un comensal más')}
-              >
-                +
-              </button>
+              <div className="division-stepper-monto">
+                {participants !== null && (
+                  <>
+                    <div className="split-amt" aria-live="polite">
+                      {reparteElTotal(division)
+                        ? formatMXN(perSlot)
+                        : formatMXN(Math.round(total / participants))}
+                    </div>
+                    <div className="split-amt-lbl">
+                      {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-            {participants !== null && (
-              <>
-                <div className="split-amt" aria-live="polite">
-                  {reparteElTotal(division)
-                    ? formatMXN(perSlot)
-                    : formatMXN(Math.round(total / participants))}
-                </div>
-                <div className="split-amt-lbl">
-                  {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
-                </div>
-              </>
-            )}
           </div>
         </div>
         {ticketVisible && (
@@ -1891,7 +1951,70 @@ export function CreateMesaFlow() {
               <div className="ticket-sheet-scroll">
                 <div className="tk-fold-body">
                 <div className="tk-fold-restaurant">
-                  <div className="tk-fold-name">{restaurant?.name ?? t('Restaurante')}</div>
+                  {/* AF-NOMBRE-EN-TICKET · el lápiz aparece con la MISMA condición
+                      que tenía la tarjeta: comercio sin identificar (ni QR ni
+                      OCR) y sin una apertura congelada. */}
+                  {editandoNombre && restaurantLabelEligible && !frozen ? (
+                    <form
+                      className="tk-nombre-edit"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        guardarNombre();
+                      }}
+                    >
+                      <input
+                        ref={campoNombreRef}
+                        type="text"
+                        className="tk-nombre-input"
+                        aria-label={t('Nombre del restaurante (opcional)')}
+                        value={borradorNombre}
+                        maxLength={400}
+                        autoFocus
+                        placeholder={t('Restaurante sin identificar')}
+                        aria-invalid={errorBorrador ? true : undefined}
+                        aria-describedby={errorBorrador || nombreRechazado ? 'tk-nombre-error' : undefined}
+                        onChange={(event) => setBorradorNombre(event.target.value)}
+                        onKeyDown={(event) => {
+                          // Esc cancela la edición; no cierra la hoja.
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setEditandoNombre(false);
+                          }
+                        }}
+                      />
+                      {(errorBorrador ?? (nombreRechazado ? errorNombreRechazado : null)) && (
+                        <span id="tk-nombre-error" className="form-error tk-nombre-error">
+                          {errorBorrador ?? errorNombreRechazado}
+                        </span>
+                      )}
+                      <div className="tk-nombre-acciones">
+                        <button type="button" className="btn btn-ghost" onClick={() => setEditandoNombre(false)}>
+                          {t('Cancelar')}
+                        </button>
+                        <button type="submit" className="btn btn-navy" disabled={!validacionBorrador.ok}>
+                          {t('Guardar')}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="tk-fold-name-row">
+                      <div className="tk-fold-name">{normalizedRestaurantLabel || restaurant?.name || t('Restaurante')}</div>
+                      {restaurantLabelEligible && !frozen && (
+                        <button
+                          type="button"
+                          className="tk-nombre-lapiz"
+                          aria-label={t('Editar el nombre del restaurante')}
+                          onClick={empezarEdicionNombre}
+                        >
+                          <Icon name="pencil" size={18} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {!editandoNombre && errorDelNombre && (
+                    <div className="form-error tk-nombre-error">{errorDelNombre}</div>
+                  )}
                   {restaurant?.address && (
                     <div className="tk-fold-addr">
                       <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}

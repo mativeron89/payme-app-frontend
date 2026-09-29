@@ -23,49 +23,46 @@ async function hastaComoDividen(page: Page): Promise<void> {
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
-test.describe('D96 · «Nombre del restaurante» compacto y sin leyenda', () => {
-  test('sin comercio leído: el campo está, en una fila chica y sin la leyenda', async ({ page }) => {
+/**
+ * AF-NOMBRE-EN-TICKET · pedido 127 de Mati: la tarjeta compacta de D96 salió de
+ * «¿Cómo dividen?» y el nombre se edita desde la hoja del ticket, con un lápiz.
+ * Antes este describe fijaba la tarjeta: una fila de menos de 80 px, alineada
+ * con las opciones, sin la leyenda, con su error de validación y ausente con el
+ * comercio leído. Lo que D96 protegía (sin la leyenda, el error de validación y
+ * la misma condición de aparición) se sigue midiendo, ahora en la hoja. El
+ * recorrido completo del lápiz está en `nombre-en-ticket.spec.ts`.
+ */
+test.describe('D96 → pedido 127 · el nombre del restaurante se edita en el ticket', () => {
+  const lapiz = (page: Page) => page.getByRole('dialog', { name: /Ticket ·/ })
+    .getByRole('button', { name: 'Editar el nombre del restaurante' });
+
+  test('sin comercio leído: no hay campo en la pantalla; en la hoja, el lápiz y sin la leyenda', async ({ page }) => {
     await hastaComoDividen(page);
-    const campo = page.getByLabel('Nombre del restaurante (opcional)');
-    await expect(campo).toBeVisible();
+    await expect(page.locator('.restaurant-label-card')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ver el ticket' }).click();
+    await expect(lapiz(page)).toBeVisible();
     await expect(page.getByText(LEYENDA_NOMBRE, { exact: true })).toHaveCount(0);
-    const m = await page.locator('.restaurant-label-card').evaluate((card) => {
-      const titulo = card.querySelector('.restaurant-label-title')!.getBoundingClientRect();
-      const input = card.querySelector('input')!.getBoundingClientRect();
-      const opcion = document.querySelector('.division-options .div-card')!.getBoundingClientRect();
-      const c = card.getBoundingClientRect();
-      return {
-        alto: c.height,
-        // Una fila: el título y el input se solapan en vertical.
-        mismaFila: Math.min(titulo.bottom, input.bottom) - Math.max(titulo.top, input.top) > 0,
-        // Alineada con las opciones de división: mismos bordes.
-        izquierda: Math.abs(c.left - opcion.left),
-        derecha: Math.abs(c.right - opcion.right),
-      };
-    });
-    // Medido a 390 px en la base 83634db: 132.7 px (tarjeta con título, input y
-    // leyenda en tres filas). Una fila con el input de 44 px de toque queda por
-    // debajo de 80.
-    expect(m.alto, JSON.stringify(m)).toBeLessThan(80);
-    expect(m.mismaFila, JSON.stringify(m)).toBe(true);
-    expect(m.izquierda).toBeLessThanOrEqual(1);
-    expect(m.derecha).toBeLessThanOrEqual(1);
-    await capturar(page, 'd96-nombre-compacto');
+    await capturar(page, 'd96-nombre-en-ticket');
   });
 
-  test('el error de validación se sigue mostrando', async ({ page }) => {
+  test('el error de validación se sigue mostrando, ahora en la hoja', async ({ page }) => {
     await hastaComoDividen(page);
+    await page.getByRole('button', { name: 'Ver el ticket' }).click();
+    await lapiz(page).click();
     await page.getByLabel('Nombre del restaurante (opcional)').fill('x'.repeat(201));
     await expect(page.getByText('Usa un nombre de hasta 200 caracteres.', { exact: true })).toBeVisible();
   });
 
-  test('con el comercio leído por el OCR, el campo no aparece', async ({ page }) => {
+  test('con el comercio leído por el OCR, ni campo ni lápiz', async ({ page }) => {
     await configurarTicketSinQr(page);
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ver el ticket' }).click();
+    await expect(page.locator('.ticket-sheet .tk-fold-name')).toBeVisible();
+    await expect(lapiz(page)).toHaveCount(0);
   });
 });
 

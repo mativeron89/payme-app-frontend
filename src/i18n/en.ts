@@ -1071,4 +1071,8 @@ export const EN: Record<string, string> = {
   // AF-POPUP-GOOGLE-409 · el 409 de un par nuevo en el alta con Google en popup.
   // El inglés del botón es el de «Continuar con Google», que ya existe.
   "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar con Google».": "We updated the documents. Check the boxes again and tap «Continue with Google».",
+  // AF-NOMBRE-EN-TICKET · pedido 127 · el nombre del restaurante se edita desde el ticket.
+  "Editar el nombre del restaurante": "Edit the restaurant name",
+  "Editar en el ticket": "Edit on the receipt",
+  "No podemos usar ese nombre para este restaurante. Déjalo vacío o cámbialo y prueba de nuevo.": "We can't use that name for this restaurant. Leave it empty or change it and try again.",
 };

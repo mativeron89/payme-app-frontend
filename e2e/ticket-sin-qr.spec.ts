@@ -18,7 +18,14 @@ test.describe('n179 · ticket real sin QR', () => {
     await configurarTicketSinQr(page);
     await escanearSinQr(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
-    await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);
+    // AF-NOMBRE-EN-TICKET · antes se afirmaba que no estaba la tarjeta del
+    // nombre; la tarjeta ya no existe (pedido 127), así que eso pasaría siempre.
+    // Lo que protegía es la condición: con el comercio leído no hay lápiz.
+    await page.getByRole('button', { name: 'Ver el ticket' }).click();
+    const hoja = page.getByRole('dialog', { name: /Ticket ·/ });
+    await expect(hoja.locator('.tk-fold-name')).toBeVisible();
+    await expect(hoja.getByRole('button', { name: 'Editar el nombre del restaurante' })).toHaveCount(0);
+    await hoja.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
 
     const before = await estadoN179(page);
     expect(before.mesas).toHaveLength(0);
@@ -46,11 +53,18 @@ test.describe('n179 · ticket real sin QR', () => {
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect.poll(async () => (await estadoN179(page)).privateRestaurantIds.length).toBe(1);
 
-    const label = page.getByLabel('Nombre del restaurante (opcional)');
+    // AF-NOMBRE-EN-TICKET · pedido 127: el nombre se pone desde la hoja del
+    // ticket, con el lápiz (antes, en la tarjeta de «¿Cómo dividen?»).
+    await page.getByRole('button', { name: 'Ver el ticket' }).click();
+    const hoja = page.getByRole('dialog', { name: /Ticket ·/ });
+    await hoja.getByRole('button', { name: 'Editar el nombre del restaurante' }).click();
+    const label = hoja.getByLabel('Nombre del restaurante (opcional)');
     await expect(label).toBeVisible();
     await label.fill('  Cafe\u0301   del Centro  ');
     // Decisión 96 de Mati: el campo va sin la leyenda «Sólo identifica…».
     await expect(page.getByText('Sólo identifica esta mesa; no crea ni modifica un comercio.')).toHaveCount(0);
+    await hoja.getByRole('button', { name: 'Guardar', exact: true }).click();
+    await hoja.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
     await completarDivision(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
