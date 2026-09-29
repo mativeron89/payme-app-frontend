@@ -11,6 +11,57 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.207.0 — Un solo lápiz en Configuración para foto, nombre y @ (2026-09-29)
+
+Orden AF-LAPIZ-UNICO-CLAUDE-20260929 (sha256 0b64a617…). Decisión 110 de Mati: «dejar solo un lápiz que conglomere la
+foto, el nombre y el @. Hoy hay un botón para la foto, otro para el nombre y otro para el @». Base `0.206.0`
+(`c26a7c1`). Sin cambios en el AB.
+
+1. **El encabezado de Configuración** queda con la foto, el nombre y el @ debajo, y **un solo lápiz**: «Editar perfil».
+   Salen el botón de cámara, el lápiz del nombre, el del @ y el «Eliminar foto» suelto.
+2. **«Editar perfil»** junta los tres campos:
+   - la foto, centrada, con «Cambiar foto de perfil» y «Eliminar foto». La elegida se ve antes de guardar y no se sube
+     hasta «Guardar»;
+   - nombre y apellido;
+   - el @, con sus reglas de hoy: formato mientras se escribe, «Ese @ no está disponible.» y los 30 días. En espera,
+     se ve sin editar y dice «Puedes volver a cambiar tu @ desde el …» con la fecha del dueño.
+3. **«Guardar»** manda sólo lo que cambió, en orden (nombre, @, foto) y con los endpoints de siempre.
+   - Si una parte falla, el error queda en ESE campo y lo demás se guarda igual.
+   - Lo guardado pasa a ser lo actual: reintentar manda sólo lo que falló, sin volver a subir la foto.
+   - Lo escrito no se pierde.
+   - Con todo guardado, un solo aviso: «Perfil actualizado ✓». Antes había uno por parte.
+4. **«Cancelar»** no manda nada y deja todo como estaba.
+5. **Mientras guarda:** «Guardando…», todo deshabilitado, y un segundo envío no vuelve a guardar.
+   - Un doble toque común ya lo frena el botón deshabilitado.
+   - Dos envíos en la misma tarea, antes de que se dibuje el `disabled`, los frena una guarda por ref. Tiene su e2e.
+6. **Con la identidad de perfil apagada, el lápiz sigue** si hay @: el @ se puede cambiar igual. Lo que se apaga está
+   adentro, la foto y el nombre.
+7. **Los campos de nombre y apellido pasan a 16 px**, como el del @. Heredaban 11 px de la etiqueta, y por debajo de 16
+   el iPhone agranda la pantalla al tocarlos.
+- **Quién guarda cada parte:**
+  - nombre y foto, `ProfileIdentityEditor`, con las mismas épocas, la adopción y la relectura ante un 409 de antes;
+  - el @, `useArrobaDeConfiguracion`, que lee el @ una vez por pantalla;
+  - el formulario, `EditarPerfil.tsx`.
+- **Textos nuevos (es → en):** «Editar perfil» → «Edit profile»; «Perfil actualizado ✓» → «Profile updated ✓».
+- **Textos retirados** (ninguna pantalla los usa más; sus entradas EN se borraron): «Editar nombre», «Cambiar tu @»,
+  «Nuevo @usuario», «Nombre actualizado ✓», «Foto actualizada ✓», «Foto eliminada ✓», «Listo, tu @ ahora es @{0}.» y
+  «Eliminando…».
+- **Mutantes:** 14 plantados, 14 cazados.
+  - Qué cambió;
+  - el orden y que una falla no frene;
+  - el error en su campo;
+  - la guarda del doble envío;
+  - Cancelar;
+  - la foto que no se vuelve a subir;
+  - la fecha del dueño;
+  - el lápiz por el @;
+  - los campos apagados;
+  - 16 px;
+  - la vista previa;
+  - un lápiz de más.
+  - La guarda por ref no la caza el doble toque (`dblclick`), que ya frena el `disabled`; la caza el e2e de dos envíos
+    en la misma tarea.
+
 ## 0.206.0 — La invitación a una mesa aparece como burbuja en Inicio (2026-09-28)
 
 Orden AF-INVITACION-INICIO-CLAUDE-20260928 (sha256 2b7e77db…). Decisión 109 de Mati: «la invitación a la mesa tiene
