@@ -14,7 +14,9 @@ function assertLabelAllowed(restaurant, userId) {
   if (!restaurant || restaurant.created_by_user_id !== userId
       || !restaurant.private_identity_key?.startsWith('unknown:')
       || restaurant.rfc || restaurant.name !== 'Restaurante sin identificar') {
-    throw Object.assign(new Error('restaurant_label_not_allowed'), { status: 409 });
+    // v2.143.0 · AB05: con `code`; el manejador de server.js responde `error: err.code`.
+    throw Object.assign(new Error('restaurant_label_not_allowed'),
+      { status: 409, code: 'restaurant_label_not_allowed' });
   }
 }
 function displayRestaurantName(mesa, name, status) {

@@ -56,6 +56,7 @@ const logger = require('../utils/logger');
 const invitationAuthority = require('../services/invitationAuthority');
 const shortfallDetails = require('../services/shortfallDetails');
 const nativeWalletCapability = require('../services/nativeWalletCapability');
+const origenItems = require('../services/origenItems');   // v2.145.0 · decisión 141: origen por plato
 
 const informativeSelections = require('../services/informativeSelections');
 const usernameSvc = require('../services/username');
@@ -230,6 +231,7 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       guarantee_method, stripe_payment_method_id,   // v2.11 (parche §1/§2 · garantía)
       payment_method_id, save_payment_method,       // D4 (v2.16): tarjeta guardada
       idempotency_key,                              // B-06 §4.1 (v2.25): opcional
+      ocr_receipt,                                  // v2.145.0 · decisión 141: opcional
     } = req.body;
     // ORDEN 1A · la garantía por saldo sale del MVP. Va ACÁ, apenas leído el
     // body: más abajo ya se calcula el hash de idempotencia, se busca mesa
@@ -506,21 +508,36 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       ? VENTANA_SIN_GARANTIA_S
       : (Number(process.env.MESA_HOLD_SECONDS) || 1800)) * 1000);
 
+    // v2.145.0 · decisión 141: el origen de cada plato lo acredita el SERVIDOR con el recibo que
+    // él mismo firmó en el OCR. Sin recibo, o con uno inválido, todo es `manual`; un origen que
+    // mande el cliente no se lee (el schema lo descarta). El uso único se decide en la tx.
+    const reciboOcr = origenItems.verificarRecibo(ocr_receipt, { userId: req.user.id });
+    if (reciboOcr.status === 'rejected') {
+      logger.warn('ocr_receipt_rejected', { reason: reciboOcr.reason });
+    }
+
     const insertNewMesa = async () => {
       for (let codeAttempt = 0; codeAttempt < 25; codeAttempt++) {
         const code = generateMesaCode();
         try {
           return await pool.tx(async (client) => {
+            // Primero el lock del recibo (si hay uno válido): dos altas con el mismo recibo no lo
+            // consumen dos veces. Va antes de todo lo demás para fijar el orden de los locks.
+            const recibo = await origenItems.consumir(client, reciboOcr, req.user.id);
             if (sinGarantia) {
               const { rows: [restaurant] } = await client.query(
                 `SELECT created_by_user_id, name, rfc, private_identity_key FROM restaurants WHERE id=$1 AND
                   ((created_by_user_id IS NULL AND status='active') OR
                    (created_by_user_id=$2 AND status='unverified')) FOR SHARE`,
                 [restaurant_id, req.user.id]);
-              if (!restaurant) throw Object.assign(new Error('restaurant_not_found'), { status: 404 });
+              // v2.143.0 · AB05, por clase: estos throws salen al manejador de server.js, que
+              // responde `error: err.code`; sin code eran internal_error con su status correcto.
+              if (!restaurant) {
+                throw Object.assign(new Error('restaurant_not_found'), { status: 404, code: 'restaurant_not_found' });
+              }
               if (restaurant_label) mesaPresentation.assertLabelAllowed(restaurant, req.user.id);
               if (!restaurant.created_by_user_id && dineroHabilitado()) {
-                throw Object.assign(new Error('guarantee_required'), { status: 409 });
+                throw Object.assign(new Error('guarantee_required'), { status: 409, code: 'guarantee_required' });
               }
             }
             if (guarantee_method === 'card') {
@@ -594,13 +611,24 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
             // microsegundo y el orden quedaba al azar (el UUID desempataba).
             // Un microsegundo por posición: estrictamente creciente y
             // determinista, sin columna nueva.
+            const itemIds = [];
             for (const [posicion, it] of items.entries()) {
-              await client.query(
+              const { rows: [item] } = await client.query(
                 `INSERT INTO mesa_items (mesa_id, name, category, price_cents, quantity, created_at)
-                 VALUES ($1,$2,$3,$4,$5, NOW() + ($6::int * INTERVAL '1 microsecond'))`,
+                 VALUES ($1,$2,$3,$4,$5, NOW() + ($6::int * INTERVAL '1 microsecond'))
+                 RETURNING id`,
                 [m.id, it.name, it.category || 'other', it.price_cents, it.quantity, posicion]
               );
+              itemIds.push(item.id);
             }
+            // Origen por plato, en la MISMA tx que crea los platos. Se funde en metadata: no pisa
+            // `sin_garantia`, `original_participants` ni `restaurant_label`. No sale en respuestas.
+            await client.query(
+              `UPDATE mesas SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb WHERE id = $1`,
+              [m.id, JSON.stringify(origenItems.metadataDeOrigen({
+                recibo, origenes: origenItems.clasificar(items, recibo), itemIds,
+              }))]
+            );
             await client.query(
               `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
                VALUES ($1, $2, 'opener', 'active')`,

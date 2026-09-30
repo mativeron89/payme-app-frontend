@@ -26,6 +26,9 @@ const logger = require('../utils/logger');
 const {
   respuestaOcr, respuestaProveedorNoDisponible, errorOcr,
 } = require('../services/ocrResponseContract');
+// v2.145.0 · decisión 141: recibo firmado de lo que se leyó (emisión APAGADA hasta que el AF lo
+// tolere; ver services/origenItems.js). Se llama por el módulo para que el seam de tests alcance.
+const origenItems = require('../services/origenItems');
 
 const router = express.Router();
 
@@ -261,7 +264,8 @@ router.post('/', (req, res, next) => {
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
-        return res.json(respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion }));
+        return res.json(origenItems.conRecibo(
+          respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion }), req.user.id, { logger }));
       } catch (e) {
         if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
           const out = errorOcr(e.code);
@@ -289,11 +293,11 @@ router.post('/', (req, res, next) => {
     }
 
     const items = matching.parseTicket(mockTicketText());
-    res.json(respuestaOcr({
+    res.json(origenItems.conRecibo(respuestaOcr({
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-    }, { mock: true, contractVersion: req.ocrContractVersion }));
+    }, { mock: true, contractVersion: req.ocrContractVersion }), req.user.id, { logger }));
   } catch (err) {
     if (err.message === 'invalid_image_type') {
       const out = errorOcr('invalid_image_type');

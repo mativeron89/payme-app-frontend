@@ -379,6 +379,11 @@ const createMesa = z.object({
     price_cents: positiveCents,
     quantity: safeInt.min(1).max(32767).default(1),
   })).min(1).max(100),
+  // v2.145.0 · decisión 141: el recibo firmado del OCR (opaco). Opcional; sin él o inválido, el
+  // origen de cada plato es `manual`. El origen lo decide el servidor: un `origin` por ítem o un
+  // `item_origins` del cliente no llegan acá (el schema los descarta). Fuera del hash de
+  // idempotencia (PAYLOAD_KEYS.create_mesa). Tope = RECIBO_MAX_CHARS de services/origenItems.js.
+  ocr_receipt: z.string().max(16384).nullish(),
 }).refine(d => d.division_mode !== 'igual' || d.expected_participants !== undefined, {
   // 🔴 ACTA 2026-08-19 · «PAGAR EL TOTAL» ADMITE UNA PERSONA.
   // Etiqueta literal de Mati: «Una persona puede». Acá decía

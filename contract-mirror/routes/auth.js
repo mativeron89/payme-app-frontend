@@ -34,6 +34,7 @@ const signupInvitations = require('../services/signupInvitations');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
 const paymeSessions = require('../services/paymeSessions');
+const loginFailures = require('../services/loginFailures');
 
 const router = express.Router();
 const { validateBody } = schemas;
@@ -197,19 +198,26 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     const { email, password } = req.body;
     const normalized = normalizeEmail(email);
 
-    const { rows } = await pool.query(
-      `SELECT id, payme_id, email, first_name, last_name, password_hash, status
-         FROM users
-        WHERE email_normalized = $1 OR LOWER(TRIM(email)) = $1
-        LIMIT 2`,
-      [normalized]
-    );
-    // Dos filas legacy que colisionan al normalizar no pueden elegirse por el
-    // orden físico de pg. Se falla cerrado y la identidad requiere remediación.
-    const user = rows.length === 1 ? rows[0] : null;
-    // Exactamente una verificación bcrypt por request: no filtra existencia ni
-    // estado por timing. La suspensión sólo se revela tras acreditar el secreto.
-    const ok = await bcrypt.compare(password, user?.password_hash || DUMMY_PASSWORD_HASH);
+    // v2.144.0 · decisión 128: freno por cuenta (services/loginFailures.js). La búsqueda y el
+    // bcrypt corren siempre, con o sin freno; el freno responde lo mismo exista o no la cuenta.
+    const intento = await loginFailures.intentar(normalized, async () => {
+      const { rows } = await pool.query(
+        `SELECT id, payme_id, email, first_name, last_name, password_hash, status
+           FROM users
+          WHERE email_normalized = $1 OR LOWER(TRIM(email)) = $1
+          LIMIT 2`,
+        [normalized]
+      );
+      // Dos filas legacy que colisionan al normalizar no pueden elegirse por el
+      // orden físico de pg. Se falla cerrado y la identidad requiere remediación.
+      const candidato = rows.length === 1 ? rows[0] : null;
+      // Exactamente una verificación bcrypt por request: no filtra existencia ni
+      // estado por timing. La suspensión sólo se revela tras acreditar el secreto.
+      const coincide = await bcrypt.compare(password, candidato?.password_hash || DUMMY_PASSWORD_HASH);
+      return { user: candidato, ok: coincide };
+    });
+    if (intento.frenado) return res.status(429).json({ error: 'too_many_login_attempts' });
+    const { user, ok } = intento;
     if (!user || !ok) return res.status(401).json({ error: 'invalid_credentials' });
     if (user.status !== 'active') return res.status(403).json({ error: 'user_suspended' });
 
@@ -230,6 +238,7 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     if (login.kind === 'suspended') return res.status(403).json({ error: 'user_suspended' });
     const session = login.session;
     const accessToken = issueAccessToken({ userId: user.id, jti: session.jti });
+    await loginFailures.limpiar(normalized); // decisión 128: un login exitoso limpia el contador
 
     logger.audit('user_login', { user_id: user.id });
 

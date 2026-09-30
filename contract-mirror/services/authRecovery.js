@@ -13,6 +13,7 @@ const pool = require('../db/pool');
 const logger = require('../utils/logger');
 const { tokenHash, normalizeEmail } = require('../utils/tokens');
 const delivery = require('./authRecoveryDelivery');
+const loginFailures = require('./loginFailures');
 
 const FLAG = 'AUTH_RECOVERY_EMAIL_ENABLED';
 const TTL_SECONDS = 15 * 60;
@@ -194,10 +195,12 @@ async function completeRecovery(rawToken, newPassword) {
       [row.id]
     );
     if (consumed.rowCount !== 1) throw codedError('recovery_not_available', 403);
-    await client.query(
-      `UPDATE users SET password_hash=$2,status='active' WHERE id=$1`,
+    const { rows: [cambiada] } = await client.query(
+      `UPDATE users SET password_hash=$2,status='active' WHERE id=$1 RETURNING email`,
       [row.user_id, passwordHash]
     );
+    // v2.144.0 · decisión 128: el restablecimiento limpia el freno del login de ese correo.
+    if (cambiada?.email) await loginFailures.limpiar(normalizeEmail(cambiada.email), client);
     await client.query(
       `UPDATE account_auth_suspensions
           SET status='resolved',resolved_at=NOW(),updated_at=NOW()

@@ -6,6 +6,45 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-29** (orden `AF-ORIGEN-POR-PLATO-CLAUDE-20260929` · el
+  recibo de lectura del OCR viaja como `ocr_receipt` en el alta, decisión 141).
+- Commit exacto y procedencia del CONTENIDO:
+  **`70ee1bbcac5805bebde6f165892c8fb7078dee03`** (App Backend **v2.145.0**, commit A:
+  cada plato guarda de dónde salió, acreditado por el servidor; `receipt` en la
+  respuesta del OCR con la emisión apagada, `EMISION_RECIBO = false`, y
+  `ocr_receipt` opcional en `POST /api/mesas`).
+- Commit del que se tomó el inventario autoritativo:
+  **`a1c9c657044f9dcbcb35a418cd26386f463b668d`** (v2.145.0, commit B: regenera el
+  inventario sobre `70ee1bb`), publicado en `main`. No hay wire propio: la
+  referencia es `origin_receipt` en `contract/ocr-merchant-v2.json`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian ocho,
+medido con `git log 4cffc16..70ee1bb -- <archivo>` en el owner:
+
+| commit del owner | archivos |
+|---|---|
+| `70ee1bb` v2.145.0 · origen por plato | `contract/ocr-merchant-v2.json`, `routes/ocr.js`, `routes/mesas.js`, `schemas/index.js` |
+| `bd6474d` v2.144.0 · freno por cuenta en el login | `routes/auth.js`, `services/authRecovery.js` |
+| `f6f85da` v2.143.0 · auditoría Codex AB01–AB05 | `routes/mesas.js`, `services/mesaPresentation.js`, `services/externalIdentities.js` |
+
+El espejo se actualiza entero porque uno parcial rompe la paridad: el inventario
+nombra UN commit para los 121.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs. Desde el worktree el script no encuentra al owner por la ruta
+relativa: se corrió con `PAYME_APP_BACKEND_DIR` apuntando al repo real.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `70ee1bb` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `70ee1bb`** · exit 0 |
+| vigencia | medida contra el publicado **`a1c9c65`** (`origin/main` del owner) con `git diff --stat 70ee1bb origin/main`: cambia sólo `contract/mirror-inventory.json`, que no es una de las 121 rutas. **Ninguna cambió.** `--vigencia` dio exit 1 porque mira el HEAD local del owner, que está en `9c5a7b1` (v2.90.0): un checkout viejo, no la fuente publicada. |
+
+Como en los refresh anteriores, el inventario se toma del commit que lo CONTIENE
+(`a1c9c65`), no del que nombra (`70ee1bb`).
+
+### Refresh anterior · 2026-09-28 (AF-VINCULAR-GOOGLE · `4cffc16`)
 - Fecha del refresh: **2026-09-28** (orden `AF-VINCULAR-GOOGLE-CLAUDE-20260928` ·
   «Vincular Google» en la misma pestaña, decisión 107 punto 1).
 - Commit exacto y procedencia del CONTENIDO:

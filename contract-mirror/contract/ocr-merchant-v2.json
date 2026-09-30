@@ -21,5 +21,17 @@
   "manual_review": "nonrepresentable quantity/price or multiple documents: items=[], total_cents=0, warnings no_items_found/total_mismatch; single document total_detected preserved",
   "error": {
     "invalid_ocr_contract_version": 400
+  },
+  "origin_receipt": {
+    "since": "2.145.0",
+    "source": "services/origenItems.js",
+    "emission": "OFF in 2.145.0 (constant EMISION_RECIBO=false); a later AB commit turns it on after App Frontend tolerates the key",
+    "ocr_response_field": "receipt?: opaque string; only with 1..100 items; the client never parses it",
+    "create_mesa_field": "POST /api/mesas ocr_receipt?: string (<=16384) | null; optional; NOT part of the idempotency hash",
+    "ttl_seconds": 7200,
+    "single_use": "consumed by the mesa it creates; reused, expired, forged or another user's receipt => every item manual",
+    "server_decides_origin": "a per-item origin or item_origins sent by the client is dropped by the schema and never read",
+    "origins": ["ocr_mock", "ocr_mock_editado", "ocr_real", "ocr_real_editado", "manual"],
+    "published": "never; origins live in mesas.metadata and no response exposes them"
   }
 }

@@ -240,19 +240,53 @@ async function proveedoresVinculados(userId, db = pool) {
 /**
  * v2.141.0 · decisión 107, punto 2 · tope de contraseñas equivocadas POR CUENTA, 5 por hora,
  * COMPARTIDO entre los tres caminos que vinculan con contraseña: `/google/link`,
- * `/google/continue/link` y `/google/link/redirect/complete`. Suma los errores de la última
- * hora en las dos tablas de intentos (n187 ya lo hacía sólo para `continue`). Un acierto no
- * borra nada: el conteo baja recién cuando los errores salen de la ventana.
+ * `/google/continue/link` y `/google/link/redirect/complete`. Un acierto no borra nada: el
+ * conteo baja recién cuando los errores salen de la ventana.
+ *
+ * 🔴 v2.143.0 · AB03 (auditoría Codex, decisión 120): la hora se cuenta desde el FALLO. Hasta
+ * v2.142.2 se sumaba `failed_attempts` de los intentos creados en la última hora, así que un
+ * intento de T0 con 5 fallos en T+8 dejaba de contar en T+60, con los fallos de hace 52 min.
+ * Sin migración: cada fallo de cualquiera de los tres caminos deja una fila `directo` (sin
+ * identidad, ya consumida) fechada en el momento del fallo, y se cuentan ésas. La retención no
+ * cambia: el barrido borra toda fila de más de una hora, ahora contada desde el fallo.
+ *
+ * Transición: los fallos anteriores a v2.143.0 viven sólo en el contador de su intento, sin
+ * fila propia. Se siguen sumando como antes (por la creación del intento) los que no tienen su
+ * fila, así el contador no vuelve a cero al publicar y nada se cuenta dos veces. La fila de un
+ * fallo de intento lleva un hash determinístico (`hashDeFallo`), que es lo que permite saber
+ * cuáles ya la tienen. Pasada una hora del deploy, ese término vale 0.
  */
+const FALLO_PREFIJO = 'payme/fallo-de-vinculo/v1';
+const FALLOS_POR_INTENTO_MAX = 5;
+
+/** Hash de la fila de conteo del fallo `n` de un intento (el mismo cálculo existe en SQL abajo). */
+function hashDeFallo(origen, intentId, n) {
+  return tokenHash(`${FALLO_PREFIJO}/${origen}/${intentId}/${n}`);
+}
+
+/** Fallos de un intento que todavía no tienen su fila de conteo (sólo los previos a v2.143.0). */
+function fallosSinFilaSql(tabla, origen, filtro) {
+  return `COALESCE((SELECT SUM(GREATEST(i.failed_attempts - (
+             SELECT COUNT(*) FROM google_link_redirect_intents d
+              WHERE d.user_id = $1 AND d.canal = 'directo'
+                AND d.intent_hash IN (
+                  SELECT encode(sha256(convert_to($3::text || '/${origen}/' || i.id::text || '/' || g.n::text, 'UTF8')), 'hex')
+                    FROM generate_series(1, ${FALLOS_POR_INTENTO_MAX}) AS g(n))), 0))
+             FROM ${tabla} i
+            WHERE i.user_id = $1 AND i.failed_attempts > 0 ${filtro}
+              AND i.created_at > NOW() - make_interval(secs => $2)), 0)`;
+}
+
 async function fallosDeVinculo(client, userId) {
   const { rows: [r] } = await client.query(
     `SELECT
-       COALESCE((SELECT SUM(failed_attempts) FROM google_continue_link_intents
-                  WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)), 0)
-     + COALESCE((SELECT SUM(failed_attempts) FROM google_link_redirect_intents
-                  WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)), 0)
+       COALESCE((SELECT SUM(failed_attempts) FROM google_link_redirect_intents
+                  WHERE user_id=$1 AND canal='directo'
+                    AND created_at > NOW() - make_interval(secs => $2)), 0)
+     + ${fallosSinFilaSql('google_continue_link_intents', 'continue', '')}
+     + ${fallosSinFilaSql('google_link_redirect_intents', 'redirect', "AND i.canal = 'redirect'")}
        AS fallidos`,
-    [userId, LINK_ACCOUNT_WINDOW_SECONDS]
+    [userId, LINK_ACCOUNT_WINDOW_SECONDS, FALLO_PREFIJO]
   );
   return Number(r.fallidos);
 }
@@ -297,14 +331,28 @@ async function vincularEnTransaccion(client, { userId, evidence, consumir }) {
   return { linked: true, provider: evidence.provider, already_linked: true };
 }
 
-/** Contraseña equivocada en `/google/link`: una fila «directo», ya consumida, sin identidad. */
-async function registrarFalloDirecto(client, userId) {
+/** Una fila «directo»: ya consumida, sin identidad, fechada en el momento del fallo. */
+async function registrarFilaDeFallo(client, userId, intentHash) {
   await client.query(
     `INSERT INTO google_link_redirect_intents
        (intent_hash, user_id, canal, failed_attempts, expires_at, consumed_at)
-     VALUES ($1, $2, 'directo', 1, NOW(), NOW())`,
-    [tokenHash(randomBytes(32).toString('base64url')), userId]
+     VALUES ($1, $2, 'directo', 1, NOW(), NOW())
+     ON CONFLICT (intent_hash) DO NOTHING`,
+    [intentHash, userId]
   );
+}
+
+/** Contraseña equivocada en `/google/link`: una fila «directo», ya consumida, sin identidad. */
+async function registrarFalloDirecto(client, userId) {
+  await registrarFilaDeFallo(client, userId, tokenHash(randomBytes(32).toString('base64url')));
+}
+
+/**
+ * v2.143.0 · AB03 · contraseña equivocada sobre un intento (`continue` o `redirect`): además del
+ * contador del intento (que lo quema a los 5), su fila de conteo con la hora del fallo.
+ */
+async function registrarFalloDeIntento(client, { userId, origen, intentId, numero }) {
+  await registrarFilaDeFallo(client, userId, hashDeFallo(origen, intentId, numero));
 }
 
 /**
@@ -698,6 +746,9 @@ async function linkFromContinueIntent({ linkIntent, password }) {
             WHERE id=$1`,
           [intent.id, fallidos, LINK_INTENT_MAX_FAILED]
         );
+        await registrarFalloDeIntento(client, {
+          userId: user.id, origen: 'continue', intentId: intent.id, numero: fallidos,
+        });
         return {
           status: 403, body: { error: 'reauthentication_failed' }, outcome: 'failed',
         };
@@ -752,6 +803,7 @@ async function linkFromContinueIntent({ linkIntent, password }) {
 module.exports = {
   // v2.141.0 · vincular en la misma pestaña (services/googleLinkRedirect.js).
   fallosDeVinculo,
+  registrarFalloDeIntento,
   vincularEnTransaccion,
   demasiadosIntentos,
   // v2.138.0 · alta en la misma pestaña (services/googleRedirectSignup.js).
