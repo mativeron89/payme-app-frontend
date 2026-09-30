@@ -831,6 +831,13 @@ export interface CreateMesaRequest {
    * además de emitir eventos de facturación inexistente al dashboard.
    */
   idempotency_key: string;
+  /**
+   * AF-ORIGEN-POR-PLATO · decisión 141 · el `receipt` del último escaneo, tal
+   * cual lo mandó el OCR (`z.string().max(16384).nullish()` en el dueño). Con
+   * él el servidor decide el origen de cada plato; no entra en la identidad
+   * económica (`PAYLOAD_KEYS.create_mesa`). Sin escaneo no viaja.
+   */
+  ocr_receipt?: string;
 }
 
 /** POST /api/mesas → 201 (garantía A-1). */
@@ -1013,6 +1020,12 @@ export interface OcrResponse {
   total_detected_cents?: number;
   warnings: OcrWarning[];
   mock: boolean;
+  /**
+   * AF-ORIGEN-POR-PLATO · decisión 141 · el recibo firmado de esta lectura (App
+   * Backend 2.145.0). Opaco: el AF no lo interpreta, sólo lo devuelve como
+   * `ocr_receipt` en el alta. Ausente si el dueño no lo emitió.
+   */
+  receipt?: string;
 }
 
 // ─── Payment methods (routes/payment-methods.js) ───────────

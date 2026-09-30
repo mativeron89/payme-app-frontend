@@ -2330,8 +2330,49 @@ export async function mockReplaceInformativeSelection(
   return delay(informativeResponse(mesa));
 }
 
+/**
+ * AF-ORIGEN-POR-PLATO · decisión 141 · un recibo con la FORMA del dueño
+ * (`services/origenItems.js`@2.145.0): `or1.<cuerpo base64url>.<firma de 43>`,
+ * con el mismo tope de 1..100 ítems. El cuerpo firma cada ítem como el dueño,
+ * `[huella del nombre, precio UNITARIO, cantidad]`, con la huella calculada
+ * igual (NFC, espacios colapsados, minúsculas, sha256 en base64url). No lleva
+ * `sub` ni una firma verdadera: los dos salen de la clave del dueño, que el
+ * mock no tiene; la firma son bytes al azar y el mock del alta no la verifica.
+ * Cada lectura trae uno nuevo (`jti`).
+ */
+async function mockOcrReceipt(
+  items: ReadonlyArray<{ name: string; price_cents: number; quantity: number }>,
+): Promise<string | undefined> {
+  if (items.length < 1 || items.length > 100) return undefined;
+  const b64url = (bytes: Uint8Array) =>
+    btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const huella = async (name: string) => b64url(new Uint8Array(await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(name.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase()),
+  )));
+  const iat = Math.floor(Date.now() / 1000);
+  const payload = {
+    v: 1,
+    jti: b64url(crypto.getRandomValues(new Uint8Array(16))),
+    mode: 'mock',
+    iat,
+    exp: iat + 2 * 60 * 60,
+    items: await Promise.all(items.map(async (i) => [await huella(i.name), i.price_cents, i.quantity])),
+  };
+  const cuerpo = b64url(new TextEncoder().encode(JSON.stringify(payload)));
+  return `or1.${cuerpo}.${b64url(crypto.getRandomValues(new Uint8Array(32)))}`;
+}
+
 export async function mockScanTicket(): Promise<OcrResponse> {
-  // Mismo ticket que devuelve el mock del backend (routes/ocr.js).
+  // El ticket de LA PAROLACCIA del mock del backend (`routes/ocr.js`), con UNA
+  // diferencia a propósito: acá «Tiramisú» es un ítem de $70.00 con cantidad 2.
+  // El mock del backend imprime «Tiramisú x2 140.00» y su `parseTicket` no
+  // reconoce ese `x2` al final de la línea (su `QTY_REGEX` pide un espacio
+  // después del número): lo lee como UN ítem «Tiramisú x2» de $140.00 con
+  // cantidad 1 (medido en App Backend a1c9c657). Se conserva el ×2 porque es
+  // el caso real de Textract, que sí trae cantidad y precio unitario: ejercita
+  // la expansión en unidades del alta y el recibo que firma `[huella, 7000, 2]`.
+  // El total es $840.00 en los dos.
   const items = [
     { name: 'Tagliatelle Bolognese', category: 'italian' as const, price_cents: 19500, quantity: 1 },
     { name: 'Risotto ai Funghi', category: 'italian' as const, price_cents: 22000, quantity: 1 },
@@ -2370,6 +2411,7 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       mock: true,
     });
   }
+  const receipt = await mockOcrReceipt(items);
   if (mode === 'no_merchant') {
     return delay({
       contract_version: 2,
@@ -2377,6 +2419,7 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       total_cents: total,
       warnings: [],
       mock: true,
+      ...(receipt ? { receipt } : {}),
     });
   }
   return new Promise((resolve) =>
@@ -2387,6 +2430,7 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       total_cents: total,
       warnings: [],
       mock: true,
+      ...(receipt ? { receipt } : {}),
     }), 1200),
   );
 }
@@ -2442,6 +2486,14 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   }
   if (sum !== req.total_cents) {
     return fail(400, 'total_mismatch', { expected: sum, received: req.total_cents });
+  }
+  // AF-ORIGEN-POR-PLATO · la puerta del dueño: `ocr_receipt:
+  // z.string().max(16384).nullish()`. El origen de cada plato lo decide el
+  // servidor y no se publica: el mock sólo acepta la forma, no la firma.
+  const ocrReceipt: unknown = (req as { ocr_receipt?: unknown }).ocr_receipt;
+  if (ocrReceipt !== undefined && ocrReceipt !== null
+      && (typeof ocrReceipt !== 'string' || ocrReceipt.length > 16384)) {
+    return fail(400, 'validation_error');
   }
   const label = validateRestaurantLabel(req.restaurant_label ?? '');
   if (!label.ok) return fail(400, 'validation_error', { field: 'restaurant_label', reason: label.reason });

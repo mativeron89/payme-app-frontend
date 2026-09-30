@@ -351,6 +351,18 @@ export function CreateMesaFlow() {
   const [restaurantRecordOnly, setRestaurantRecordOnly] = useState(false);
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   const [ocrMerchant, setOcrMerchant] = useState<OcrMerchant | undefined>();
+  /**
+   * AF-ORIGEN-POR-PLATO · decisión 141 · el `receipt` del ÚLTIMO escaneo, tal
+   * cual llegó del OCR. Sólo en memoria de este flujo: no se guarda en
+   * storage ni en el journal (que guarda huellas). Viaja como `ocr_receipt` en
+   * el alta aunque la persona haya editado ítems: el servidor decide, plato por
+   * plato, qué salió del ticket. Sigue el mismo camino que `ocrMerchant`: cada
+   * lectura lo reemplaza, y se borra con una sesión nueva y al volver a la
+   * cámara, que es la única entrada a Escanear después de un ticket. Por eso
+   * «Cargarlo a mano», que sólo existe en Escanear, nunca encuentra un recibo
+   * viejo. No se muestra en ningún lado.
+   */
+  const ocrReceiptRef = useRef<string | null>(null);
   const [restaurantLabel, setRestaurantLabel] = useState('');
   /**
    * AF-NOMBRE-EN-TICKET · pedido 127 de Mati: el nombre se pone o se cambia
@@ -420,6 +432,7 @@ export function CreateMesaFlow() {
     // anterior. El mock y el owner aíslan por usuario; el front también.
     ticketFallbackRef.current = null;
     resolutionRef.current = null;
+    ocrReceiptRef.current = null;
     setOcrMerchant(undefined);
     setRestaurantLabel('');
     setEditandoNombre(false);
@@ -892,6 +905,8 @@ export function CreateMesaFlow() {
     setScanIssue(null);
     try {
       const r = await api.scanTicket(image, setUploadProgress);
+      // Cada lectura reemplaza el recibo, aunque venga sin él.
+      ocrReceiptRef.current = r.receipt ?? null;
       setOcrMerchant(r.merchant);
       // Resolver no crea la mesa. Sólo prepara la identidad privada/pública
       // para que el CTA posterior pueda abrirla sin QR.
@@ -1149,6 +1164,9 @@ export function CreateMesaFlow() {
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         ...(savedPmId && { payment_method_id: savedPmId }),
         ...(savingNewCard && { save_payment_method: true }),
+        // AF-ORIGEN-POR-PLATO · el recibo del último escaneo, si lo hubo. No
+        // entra en la identidad económica (`PAYLOAD_KEYS.create_mesa`).
+        ...(ocrReceiptRef.current !== null && { ocr_receipt: ocrReceiptRef.current }),
         // Cantidades EXPANDIDAS en unidades: "Tiramisú ×2" viaja como dos
         // ítems de $70 → cada unidad se elige/reserva por separado (pedido de
         // Mati). El total no cambia y el contrato ya lo acepta (quantity 1).
@@ -1435,6 +1453,7 @@ export function CreateMesaFlow() {
       // reintentos dentro de Scan conservan el UUID del intento actual.
       ticketFallbackRef.current = null;
       resolutionRef.current = null;
+      ocrReceiptRef.current = null;
       setOcrMerchant(undefined);
       setRestaurantLabel('');
       if (!restaurantId) {

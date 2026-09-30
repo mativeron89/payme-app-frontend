@@ -107,6 +107,60 @@ describe('OCR v2 · merchant cerrado y v1 compatible', () => {
   });
 });
 
+/**
+ * AF-ORIGEN-POR-PLATO · decisión 141, respuesta 2. App Backend 2.145.0 agrega a
+ * la respuesta del OCR un `receipt` que el alta devuelve como `ocr_receipt`
+ * (`contract-mirror/contract/ocr-merchant-v2.json`, `origin_receipt`):
+ * «opaque string; the client never parses it», y `POST /api/mesas` lo acepta
+ * como `z.string().max(16384).nullish()` (`contract-mirror/schemas/index.js`).
+ * El AF sólo mira que sea un string de 1 a 16384 caracteres; si no lo es, el
+ * escaneo sigue igual, sin recibo. Cualquier OTRA clave desconocida se rechaza.
+ */
+describe('OCR v2 · el recibo de lectura (`receipt`)', () => {
+  const v2 = {
+    contract_version: 2,
+    items: [{ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 }],
+    total_cents: 1000,
+    warnings: [],
+    mock: false,
+  };
+  const RECIBO = 'or1.eyJ2IjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+  it('🔴 acepta `receipt` y lo devuelve tal cual, sin tocar el resto', () => {
+    expect(ocrResponse({ ...v2, receipt: RECIBO })).toEqual({ ...v2, receipt: RECIBO });
+  });
+
+  it('🔴 el techo es el del dueño: 16384 caracteres entran', () => {
+    const largo = 'x'.repeat(16384);
+    expect(ocrResponse({ ...v2, receipt: largo }).receipt).toBe(largo);
+  });
+
+  it.each([
+    ['vacío', ''],
+    ['de 16385 caracteres', 'x'.repeat(16385)],
+    ['número', 7],
+    ['null', null],
+    ['array', [RECIBO]],
+    ['objeto', { value: RECIBO }],
+  ])('🔴 un `receipt` %s no rompe el escaneo: sale sin recibo', (_tipo, receipt) => {
+    const leido = ocrResponse({ ...v2, receipt });
+    expect(leido).toEqual(v2);
+    expect('receipt' in leido).toBe(false);
+  });
+
+  it('sin `receipt`, la respuesta no inventa uno', () => {
+    expect('receipt' in ocrResponse(v2)).toBe(false);
+  });
+
+  it.each([
+    ['otra clave sola', { ...v2, receipt_v2: RECIBO }],
+    ['otra clave junto al recibo', { ...v2, receipt: RECIBO, origin: 'ocr_real' }],
+    ['un origen por plato', { ...v2, receipt: RECIBO, item_origins: {} }],
+  ])('cualquier otra clave desconocida se sigue rechazando: %s', (_caso, value) => {
+    expect(() => ocrResponse(value)).toThrow('contract_response_invalid:ocr');
+  });
+});
+
 const method = {
   id: 'payment-method-id',
   stripe_payment_method_id: 'pm_contract',

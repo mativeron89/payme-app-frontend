@@ -308,7 +308,26 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
 ];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
 const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
-const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant'];
+const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt'];
+
+/**
+ * AF-ORIGEN-POR-PLATO · decisión 141 · techo del recibo, el del dueño:
+ * `RECIBO_MAX_CHARS` en `services/origenItems.js` y
+ * `ocr_receipt: z.string().max(16384)` en `contract-mirror/schemas/index.js`.
+ */
+const OCR_RECEIPT_MAX_CHARS = 16384;
+
+/**
+ * El recibo es opaco («the client never parses it»,
+ * `contract-mirror/contract/ocr-merchant-v2.json`): sólo se mira que sea un
+ * string de 1 a 16384 caracteres. Uno que no cumple no rompe la lectura del
+ * ticket; la respuesta sigue, sin recibo, y el alta sale sin `ocr_receipt`.
+ */
+function ocrReceipt(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= OCR_RECEIPT_MAX_CHARS
+    ? value
+    : undefined;
+}
 
 function safeNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -388,6 +407,8 @@ export function ocrResponse(value: unknown): OcrResponse {
     });
   }
 
+  const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
+
   return {
     ...(version2 ? { contract_version: 2 as const } : {}),
     ...(merchant ? { merchant } : {}),
@@ -398,6 +419,7 @@ export function ocrResponse(value: unknown): OcrResponse {
       : {}),
     warnings: [...body.warnings] as OcrWarning[],
     mock: body.mock,
+    ...(receipt !== undefined ? { receipt } : {}),
   };
 }
 

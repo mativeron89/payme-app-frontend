@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.4 — El alta de la mesa lleva el recibo de lectura del ticket (2026-09-29)
+
+Orden AF-ORIGEN-POR-PLATO-CLAUDE-20260929 (sha256 64349a1b…). Decisión 141, respuesta 2: «App Backend y App
+Frontend empiezan a marcar el origen de cada plato. No se ve para el usuario.» Es el paso consumidor, después del
+dueño: App Backend 2.145.0 (`70ee1bb` + inventario `a1c9c65`) firma un `receipt` en la respuesta del OCR, con la
+emisión apagada (`EMISION_RECIBO = false`), y lo verifica como `ocr_receipt` en `POST /api/mesas`. Base `0.209.3`
+(`6afe2a0`). **Nada visible cambia.**
+
+- **El decoder del OCR v2 acepta `receipt`.**
+  - Es opaco para el AF («the client never parses it», `origin_receipt` en `contract/ocr-merchant-v2.json`): sólo
+    se mira que sea un string de 1 a 16384 caracteres, el techo del dueño.
+  - Uno que no cumple no rompe la lectura: sale sin recibo.
+  - Cualquier otra clave desconocida se sigue rechazando.
+  - Antes, una respuesta con `receipt` daba `ContractResponseError` y la pantalla decía «No pudimos leer el ticket».
+- **El alta lleva el recibo del último escaneo como `ocr_receipt`** (`CreateMesaFlow.tsx`).
+  - Vive sólo en memoria del flujo (un `ref`), no en storage. El journal monetario guarda huellas, no el request.
+  - Viaja aunque la persona haya editado ítems: el servidor decide, plato por plato, qué salió del ticket.
+  - Cada lectura lo reemplaza; se borra al volver a la cámara y con una sesión nueva, como `ocrMerchant`. Cargar a
+    mano no manda nada.
+  - No entra en la identidad económica: `PAYLOAD_KEYS.create_mesa` es una lista cerrada, igual que en el dueño.
+- **El mock** emite un `receipt` con la forma del dueño, `or1.<cuerpo>.<firma de 43>`, sólo con 1 a 100 ítems, y
+  firma cada ítem como él: `[huella del nombre, precio UNITARIO, cantidad]`. No lleva `sub` ni una firma verdadera,
+  porque salen de la clave del dueño. El mock del alta acepta `ocr_receipt` con la puerta del dueño
+  (`z.string().max(16384).nullish()`) y devuelve 400 si no cumple.
+  - Se corrigió el comentario del ticket del mock, que decía ser «el mismo» que el del backend y no lo era: el del
+    backend imprime «Tiramisú x2 140.00» y su `parseTicket` lo lee como UN ítem de $140.00 con cantidad 1. Medido
+    corriendo su `matching.js` de `a1c9c65`: es la única diferencia, y las categorías coinciden. Se conserva el ×2
+    porque es el caso real de Textract.
+- **El espejo pasa de `4cffc16` (v2.141.0) a `70ee1bb` (v2.145.0)**, en un commit aparte: 121 archivos, cambian 8.
+  Se actualiza entero, porque uno parcial rompe la paridad. Detalle en `contract-mirror/README.md`.
+- 🔴 **Hallazgo para App Backend, avisado antes de encender la emisión.** El alta expande «Tiramisú ×2» en dos ítems
+  con cantidad 1, y el recibo firma `[huella, 7000, 2]`. El `clasificar()` de `70ee1bb` compara nombre, precio y
+  cantidad, así que un plato ×2 que nadie tocó quedaría como «1 editado + 1 manual». El AF manda el recibo tal cual
+  y no cambia la expansión. El Bibliotecario le ordenó a AB que cuente las unidades contra la cantidad y que el
+  recibo vaya sólo en v2.
+- **Pruebas nuevas:**
+  - `src/api/contractResponses.test.ts`: 12. Sobre `6afe2a0` caen 8: el recibo válido, el techo y los 6 inválidos,
+    todos con `ContractResponseError`. Pasan las 3 de «otra clave», porque eso ya se rechazaba, y la de «sin
+    recibo».
+  - `src/api/mock/mockOrigenPorPlato.test.ts`: 11, a través del decoder de verdad.
+  - `e2e/origen-por-plato.spec.ts`: 5. Espían `api.scanTicket` y `api.createMesa` sin cambiar lo que hacen. Sobre
+    `6afe2a0` caen las 3 que esperan el recibo y pasan las 2 de carga a mano. Con el decoder de `6afe2a0` y el mock
+    nuevo, el escaneo cae en «No pudimos leer el ticket».
+- **Mutantes:** 8 plantados, 8 cazados. Se leyó qué test cae en cada uno:
+  - **acepta cualquier clave desconocida** (de la orden): las 3 de «otra clave» y la de la allowlist de v2;
+  - **no manda el recibo** (de la orden): las 3 e2e que lo esperan;
+  - **lo manda sin escanear** (de la orden): las 2 de carga a mano;
+  - **no lo borra al volver a la cámara:** «escanear, volver y cargar a mano»;
+  - **un recibo inválido rompe el escaneo:** las 6 de inválidos, la de «sin recibo» y la de v1/v2;
+  - **sin el techo de 16384:** la de 16385;
+  - **el mock firma el total de la línea:** la de Tiramisú 7000 × 2;
+  - **el mock del alta no valida `ocr_receipt`:** las 3 de 400.
+- **Sin prueba, declarado:** el borrado del recibo con una sesión nueva. Sigue a `ocrMerchant` en el mismo efecto
+  (`session.principal_id`), y ningún e2e cambia de sesión con el flujo montado. Si pasara, el dueño igual rechaza
+  un recibo de otro usuario (`other_user`) y el plato queda `manual`.
+
 ## 0.209.3 — El login dice cuándo la cuenta está frenada (2026-09-29)
 
 Orden AF-TEXTO-FRENO-LOGIN-CLAUDE-20260929 (sha256 694eabcc…). Decisión 128 de Mati: después de 5 contraseñas
