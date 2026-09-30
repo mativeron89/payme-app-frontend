@@ -6,6 +6,18 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Corrección OCR opt-in · 2026-09-30 (vigente local, no publicado)
+
+Orden CODEX-AUDIT-FIX-20260930. Contenido owner
+`b4d5d4e2ffae39a55420cbd81e5ff60a9fff61ef` (AB 2.145.3), inventario autoritativo
+en `da5ab905182b88189f3042bd6d2b0c738c46b3e3`, 121 archivos sin cambiar población.
+El recibo sólo se emite con `contract_version=2&receipt_version=1`; clientes
+anteriores reciben v2 base sin claves nuevas. AF solicita esa extensión y sigue
+aceptando respuestas sin recibo, sin recarga automática ni persistencia del recibo.
+Las referencias siguientes son antecedentes, no estado actual del espejo.
+
+### Refresh anterior · 2026-09-29
+
 - Fecha del refresh: **2026-09-29** (orden `AF-ORIGEN-POR-PLATO-CLAUDE-20260929` · el
   recibo de lectura del OCR viaja como `ocr_receipt` en el alta, decisión 141).
 - Commit exacto y procedencia del CONTENIDO:

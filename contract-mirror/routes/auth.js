@@ -200,8 +200,8 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
 
     // v2.144.0 · decisión 128: freno por cuenta (services/loginFailures.js). La búsqueda y el
     // bcrypt corren siempre, con o sin freno; el freno responde lo mismo exista o no la cuenta.
-    const intento = await loginFailures.intentar(normalized, async () => {
-      const { rows } = await pool.query(
+    const intento = await loginFailures.intentar(normalized, async (client) => {
+      const { rows } = await client.query(
         `SELECT id, payme_id, email, first_name, last_name, password_hash, status
            FROM users
           WHERE email_normalized = $1 OR LOWER(TRIM(email)) = $1

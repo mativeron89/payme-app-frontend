@@ -124,6 +124,18 @@ afterEach(() => {
 });
 
 describe('G-29 · transporte dedicado del upload OCR', () => {
+  it.each([undefined, 'or1.recibo-sintetico'])('negocia el recibo y acepta respuesta compatible %s', async (receipt) => {
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    const xhr = FakeXmlHttpRequest.instances[0];
+    const url = new URL(xhr.url, 'http://localhost');
+    expect(url.searchParams.getAll('contract_version')).toEqual(['2']);
+    expect(url.searchParams.getAll('receipt_version')).toEqual(['1']);
+    const response = receipt === undefined ? ticket() : { ...ticket(), receipt };
+    xhr.finish(200, response);
+    await expect(pending).resolves.toEqual(response);
+    expect(FakeXmlHttpRequest.instances).toHaveLength(1);
+  });
+
   it('usa XHR sólo para /ocr, conserva bearer/timeout y publica progreso real', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -135,7 +147,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const xhr = FakeXmlHttpRequest.instances[0];
     expect(xhr).toBeDefined();
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2$/);
+    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2&receipt_version=1$/);
     expect(xhr.body).toBe(form);
     expect(xhr.timeout).toBe(OCR_TIMEOUT_MS);
     expect(xhr.responseType).toBe('json');
@@ -217,6 +229,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     await vi.waitFor(() => expect(FakeXmlHttpRequest.instances).toHaveLength(2));
 
     const retry = FakeXmlHttpRequest.instances[1];
+    expect(retry.url).toBe(first.url);
     expect(progress).toHaveBeenLastCalledWith({ loadedBytes: 0, totalBytes: null });
     expect(retry.body).toBeInstanceOf(FormData);
     expect(retry.headers.get('Authorization')).toBe('Bearer a-next');

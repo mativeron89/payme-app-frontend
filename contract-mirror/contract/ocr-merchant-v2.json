@@ -25,7 +25,7 @@
   "origin_receipt": {
     "since": "2.145.0",
     "source": "services/origenItems.js",
-    "emission": "OFF in 2.145.0 (constant EMISION_RECIBO=false); a later AB commit turns it on after App Frontend tolerates the key",
+    "emission": "ON since 2.145.2; since 2.145.3 HTTP requires contract_version=2 AND receipt_version=1 (exact scalar strings). Missing, unknown or duplicate receipt_version returns the unchanged base contract without receipt; v1 never emits receipt.",
     "ocr_response_field": "receipt?: opaque string; only with 1..100 items; the client never parses it",
     "create_mesa_field": "POST /api/mesas ocr_receipt?: string (<=16384) | null; optional; NOT part of the idempotency hash",
     "ttl_seconds": 7200,

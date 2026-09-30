@@ -197,6 +197,10 @@ router.post('/', (req, res, next) => {
     return res.status(out.status).json(out.body);
   }
   req.ocrContractVersion = version === '2' ? 2 : 1;
+  // Un AF viejo puede seguir abierto después de un deploy y su decoder v2 es cerrado.
+  // Sólo quien solicita la extensión exacta recibe claves nuevas; valores desconocidos o
+  // repetidos conservan el contrato base. La capacidad no acredita origen: el recibo sí.
+  req.ocrReceiptRequested = req.ocrContractVersion === 2 && req.query.receipt_version === '1';
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -264,8 +268,9 @@ router.post('/', (req, res, next) => {
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
-        return res.json(origenItems.conRecibo(
-          respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion }), req.user.id, { logger }));
+        const respuesta = respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion });
+        return res.json(req.ocrReceiptRequested
+          ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
       } catch (e) {
         if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
           const out = errorOcr(e.code);
@@ -293,11 +298,13 @@ router.post('/', (req, res, next) => {
     }
 
     const items = matching.parseTicket(mockTicketText());
-    res.json(origenItems.conRecibo(respuestaOcr({
+    const respuesta = respuestaOcr({
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-    }, { mock: true, contractVersion: req.ocrContractVersion }), req.user.id, { logger }));
+    }, { mock: true, contractVersion: req.ocrContractVersion });
+    res.json(req.ocrReceiptRequested
+      ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {
     if (err.message === 'invalid_image_type') {
       const out = errorOcr('invalid_image_type');
