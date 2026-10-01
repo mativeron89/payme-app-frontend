@@ -6,6 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Aclaración de publicación y delta del login · P4, 2026-10-01 UTC
+
+El contenido continúa fijado en AB
+`b4d5d4e2ffae39a55420cbd81e5ff60a9fff61ef` y el inventario se tomó de
+`da5ab905182b88189f3042bd6d2b0c738c46b3e3`: sha256 del inventario
+`1a6be142fa988cb7c7f94acfaaa24fab0c2ebcf65ea7b0c082da07c545e990f4`.
+La medición P4 comparó los 121 destinos con ese inventario y con los objetos
+del commit fuente: 121/121 byte-idénticos, población sin altas ni bajas respecto
+del espejo anterior de AF `1f9cd45d4ed4dcf3876a502d8e4937bb6e117a9f`.
+El delta exacto de esa población es `contract/ocr-merchant-v2.json`,
+`routes/ocr.js` y `routes/auth.js`.
+
+La nota «vigente local, no publicado» siguiente conserva el estado al redactarse.
+El espejo ya fue integrado en AF `d29d3ef8e949d56e911d694db401373add193d2e`
+y publicado en `main`. Lo acredita
+`ops/bibliotecario-claude-20260917/LIVE_VERIFICADO_APP_AF_FIXES_CODEX_D29D3EF8_20260930.md`
+(sha256 `66844f1c6e71e0ad780b3413ca470a91864ea253dc48376489ad936852e4e191`):
+CI `36725446070` SUCCESS, intento 1; Vercel
+`dpl_mfSFrjpEqHNBog7oJCZ2n9svyehV` READY / production, alias `app.paymemx.com`,
+con ese mismo SHA. La aceptación CEO
+`ops/codex-operacion-20261001/ACEPTACION_CEO.md` (sha256
+`2f76973068a54e927eb06921fe3cb25c97aca1f49f3153928126db73225d7216`)
+corroboró el deployment. Es evidencia de publicación, no de OCR real ni de prueba
+física de Mati.
+
+En `routes/auth.js`, el commit owner
+`b4d5d4e2ffae39a55420cbd81e5ff60a9fff61ef` cambió el callback de
+`loginFailures.intentar(normalized, async () => …)` por `async (client) => …` y
+la consulta de login de `pool.query` a `client.query`. Es el mismo cliente de
+la transacción del freno; el cambio ya estaba espejado en `d29d3ef8` y faltaba
+registrarlo aquí. Esta entrega sólo completa la procedencia: no renueva el
+inventario ni modifica ningún archivo espejado.
+
 ### Corrección OCR opt-in · 2026-09-30 (vigente local, no publicado)
 
 Orden CODEX-AUDIT-FIX-20260930. Contenido owner

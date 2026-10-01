@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.5 — Compatibilidad OCR opt-in, integrada y publicada (2026-09-30)
+
+Integrada en `d29d3ef8e949d56e911d694db401373add193d2e`, sobre
+`1f9cd45d4ed4dcf3876a502d8e4937bb6e117a9f`. La solicitud OCR v2 negocia
+`receipt_version=1` según el contrato AB 2.145.3; conserva la respuesta sin
+recibo como fallback, el recibo en memoria y el transporte autenticado con un
+refresh acotado. El espejo mantiene los 121 archivos del inventario owner,
+incluido el ajuste de `routes/auth.js` que usa el cliente de la transacción del
+freno de login.
+
+La evidencia original sigue en `docs/CORRECCIONES_CODEX_20260930.md` (sha256
+`73a424776b2b21d05ff44b163a9ea9a3f4518a4b1c2ed89643e8245c1ace62f5`)
+y en `CHANGELOG_v0.209.5.md`, que se conserva como registro del candidato local.
+Sus afirmaciones «sin push/deploy» describen ese momento; esta entrada agrega el
+resultado posterior sin reescribirlas.
+
+Publicación acreditada por
+`ops/bibliotecario-claude-20260917/LIVE_VERIFICADO_APP_AF_FIXES_CODEX_D29D3EF8_20260930.md`
+(sha256 `66844f1c6e71e0ad780b3413ca470a91864ea253dc48376489ad936852e4e191`):
+`main` en el SHA anterior, CI `36725446070` SUCCESS en intento 1 y Vercel
+`dpl_mfSFrjpEqHNBog7oJCZ2n9svyehV` READY / production, alias `app.paymemx.com`,
+con ese mismo `githubCommitSha`. El registro declara 3159 unit PASS y 674
+Playwright PASS del cierre original; esa evidencia no pertenece a la corrida
+documental P4. La aceptación CEO en
+`ops/codex-operacion-20261001/ACEPTACION_CEO.md` (sha256
+`2f76973068a54e927eb06921fe3cb25c97aca1f49f3153928126db73225d7216`)
+corroboró el mismo deployment. No acredita OCR real ni prueba física de Mati.
+
 ## 0.209.4 — El alta de la mesa lleva el recibo de lectura del ticket (2026-09-29)
 
 Orden AF-ORIGEN-POR-PLATO-CLAUDE-20260929 (sha256 64349a1b…). Decisión 141, respuesta 2: «App Backend y App
