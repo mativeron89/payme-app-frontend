@@ -40,6 +40,35 @@ describe('esMesaAbierta — espeja el filtro de GET /mesas/open', () => {
   });
 });
 
+describe('D158 · agrupado/franja personal, dinero y orden intactos', () => {
+  it('mismo historial cambia grupo visible sin cambiar mesa, sumas ni IDs', () => {
+    const mesas = mesasCerradas([pago('uno', { date: '2026-01-01T04:30:00Z' })]);
+    const original = JSON.stringify(mesas);
+    const mx = agruparPorMes(mesas, 'es-MX', 'America/Mexico_City');
+    const madrid = agruparPorMes(mesas, 'en-US', 'Europe/Madrid');
+    expect(mx[0]!.key).toBe('2025-12');
+    expect(madrid[0]!.key).toBe('2026-01');
+    expect(mx[0]!.mesas).toEqual(madrid[0]!.mesas);
+    expect(JSON.stringify(mesas)).toBe(original);
+  });
+  it('franja personal corresponde a la zona, no a una categoría agregada AB', () => {
+    expect(franjaDe('2026-01-01T12:30:00Z', 'America/Mexico_City')).toBe('manana');
+    expect(franjaDe('2026-01-01T12:30:00Z', 'Europe/Madrid')).toBe('mediodia');
+  });
+  it('sinIntl no hay franja inventada, grupo neutral UTC identificado', () => {
+    expect(franjaDe('2026-01-01T12:30:00Z', null)).toBeNull();
+    const grupos = agruparPorMes(mesasCerradas([pago('uno', { date: '2026-01-01T04:30:00Z' })]), 'es-MX', null);
+    expect(grupos[0]).toMatchObject({ key: '2026-01', label: '2026-01 (UTC)' });
+  });
+  it('fecha civil/imposible conserva mesa sin fecha, no la borra', () => {
+    const mesas = mesasCerradas([pago('uno', { date: '2026-02-30T04:30:00Z' })]);
+    const grupos = agruparPorMes(mesas, 'es-MX', 'America/Mexico_City');
+    expect(grupos[0]!.key).toBe('sin-fecha');
+    expect(grupos[0]!.mesas).toHaveLength(1);
+    expect(franjaDe('2026-01-01', 'Europe/Madrid')).toBeNull();
+  });
+});
+
 describe('agruparPorMesa', () => {
   it('suma MIS pagos de la misma mesa — pagar varias partes está ratificado', () => {
     const g = agruparPorMesa([

@@ -44,6 +44,42 @@
  * marcadas «ES corregido» en el documento de Diseño.
  */
 export const EN: Record<string, string> = {
+  // D165 · Ubicación real, Turno3/2a; sin datos/personas/clave demo.
+  "Ubicación": "Location",
+  "Cambia sólo cómo ves fechas y horas.": "Changes only how you see dates and times.",
+  "Cerrar Ubicación": "Close Location",
+  "Huso horario": "Time zone",
+  "Volver a Ubicación": "Back to Location",
+  "Huso horario · {0}": "Time zone · {0}",
+  "Sólo en este navegador": "Only in this browser",
+  "Aplicar": "Apply",
+  // D158 · traducciones de la preferencia personal local, sin cambiar el idioma.
+  'País': 'Country',
+  'México': 'Mexico',
+  'Colombia': 'Colombia',
+  'Perú': 'Peru',
+  'Argentina': 'Argentina',
+  'Chile': 'Chile',
+  'España': 'Spain',
+  'Estados Unidos': 'United States',
+  'Fecha no disponible': 'Date unavailable',
+  'Fechas en ISO UTC: este navegador no pudo aplicar una zona horaria.': 'Dates in UTC ISO format: this browser could not apply a time zone.',
+  'Fallback UTC: este navegador no admite la zona inicial de México.': 'UTC fallback: this browser does not support the initial Mexico time zone.',
+  'Fechas mostradas en {0}; no indican la zona original.': 'Dates displayed in {0}; this is not the original time zone.',
+  'La preferencia guardada no es válida. Usamos la configuración inicial sin borrar el dato anterior.': 'The saved preference is invalid. We use the initial setting without deleting the previous value.',
+  'La zona guardada o inicial no es compatible con este navegador. Se aplica el fallback indicado.': 'The saved or initial time zone is not supported by this browser. The indicated fallback applies.',
+  'No pudimos leer la preferencia local. Puedes elegir una zona temporal sin bloquear el ingreso.': 'We could not read the local preference. You can choose a temporary time zone without blocking sign-in.',
+  'La selección se aplica temporalmente, pero no se pudo confirmar el guardado. Al recargar puede perderse o volver el valor anterior.': 'The selection applies temporarily, but saving could not be confirmed. Reloading may lose it or restore the previous value.',
+  'Restablecimos esta vista, pero no pudimos confirmar el borrado de la preferencia. Al recargar puede volver el valor anterior.': 'We reset this view, but could not confirm removal of the preference. Reloading may restore the previous value.',
+  'Guardado sólo en este navegador.': 'Saved only in this browser.',
+  'México y Ciudad de México son la configuración inicial.': 'Mexico and Mexico City are the initial setting.',
+  'Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.': 'Only in this browser: it does not sync across devices or accounts. If you share the browser, another person will inherit this selection.',
+  'El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.': 'Private mode or clearing local data may lose the selection. We do not detect your location or change currency, language, or commercial availability.',
+  'Elige una ciudad / zona horaria': 'Choose a city / time zone',
+  'No compatible con este navegador': 'Not supported by this browser',
+  'Este país tiene varias zonas: elige una antes de aplicar.': 'This country has several time zones: choose one before applying.',
+  'Restablecer país y zona': 'Reset country and time zone',
+  'Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.': 'Initial release: 7 countries and 62 catalog time zones. Other countries are unavailable; time zones your browser does not support are disabled.',
   /**
    * 🔴 CARTEL DE TARJETA DE PRUEBA · copy de DINERO, ratificada por Mati el
    * 2026-08-11 y su inglés verificado por el Bibliotecario contra tres

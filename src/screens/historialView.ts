@@ -1,4 +1,5 @@
 import type { HistoryEntry, MesaStatus } from '../api/types';
+import { personalDateParts, personalMonth } from '../utils/personalDates';
 
 /**
  * Vista pura de Historial — `SPEC_APP.md` §1.10: la entrada "Mesas" de la barra
@@ -114,11 +115,12 @@ export const FRANJA_LABEL: Record<Franja, string> = {
   noche: 'Noche',
 };
 
-/** `null` si la fecha no parsea: la fila muestra la fecha cruda y cero franja. */
-export function franjaDe(iso: string): Franja | null {
+/** D158: zona explícita o compatibilidad histórica; inválido/sinIntl → sin franja. */
+export function franjaDe(iso: string, zone?: string | null): Franja | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const h = d.getHours();
+  const h = zone === undefined ? d.getHours() : personalDateParts(iso, zone)?.hour;
+  if (h === undefined) return null;
   if (h >= 6 && h < 12) return 'manana';
   if (h >= 12 && h < 16) return 'mediodia';
   if (h >= 16 && h < 20) return 'tarde';
@@ -165,7 +167,7 @@ export async function traerHistorialCompleto(
 // ─── Agrupado por mes ──────────────────────────────────────
 
 export interface MesDeHistorial {
-  /** `YYYY-MM` local, o `sin-fecha`. Estable: sirve de `key` de React. */
+  /** `YYYY-MM` de presentación (UTC neutral si falta Intl), o `sin-fecha`. */
   key: string;
   /** "agosto de 2026". La MAYÚSCULA la pone el CSS, no este archivo. */
   label: string;
@@ -175,15 +177,21 @@ export interface MesDeHistorial {
 const SIN_FECHA = 'sin-fecha';
 
 /**
- * Mes LOCAL, no UTC — la decisión está argumentada entera en `pagosView.ts` y
- * acá se hereda: una cena del 31 de julio a las 20:00 en México se guarda como
- * 1 de agosto en UTC, y agruparla bajo "agosto" le discutiría al comensal una
- * fecha que él vivió. Una mesa con fecha ilegible no se descarta: va al grupo
- * "Sin fecha" — es plata que salió de la cuenta de alguien.
+ * D158: mes personal en la zona elegida, consistente con la fecha de fila.
+ * No atribuye a esa zona el evento histórico. Sin Intl, el grupo declara UTC;
+ * una fecha ilegible no elimina la mesa y va a "Sin fecha". Omitir el argumento
+ * conserva compatibilidad del agrupado local anterior, sin modificar pagosView.
  */
-export function agruparPorMes(mesas: readonly HistorialMesa[], locale = 'es-MX'): MesDeHistorial[] {
+export function agruparPorMes(mesas: readonly HistorialMesa[], locale = 'es-MX', zone?: string | null): MesDeHistorial[] {
   const grupos = new Map<string, MesDeHistorial>();
   for (const m of mesas) {
+    if (zone !== undefined) {
+      const { key, label } = personalMonth(m.date, locale, zone);
+      const existente = grupos.get(key);
+      if (existente) existente.mesas.push(m);
+      else grupos.set(key, { key, label, mesas: [m] });
+      continue;
+    }
     const d = new Date(m.date);
     const valida = !Number.isNaN(d.getTime());
     const key = valida

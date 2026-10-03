@@ -31,6 +31,7 @@ import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 import { CartelVersionNueva } from './components/CartelVersionNueva';
+import { RegionProvider } from './preferences/RegionProvider';
 
 function Shell() {
   const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
@@ -367,15 +368,17 @@ function Shell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <div className="app">
-          {/* AF-CARTEL-VERSION-NUEVA · decisión 125 · con sesión, arriba y en el
-              flujo: empuja la pantalla, no la tapa. */}
-          <CartelVersionNueva />
-          <Shell />
-        </div>
-      </ToastProvider>
-    </AuthProvider>
+    <RegionProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <div className="app">
+            {/* AF-CARTEL-VERSION-NUEVA · decisión 125 · con sesión, arriba y en el
+                flujo: empuja la pantalla, no la tapa. */}
+            <CartelVersionNueva />
+            <Shell />
+          </div>
+        </ToastProvider>
+      </AuthProvider>
+    </RegionProvider>
   );
 }

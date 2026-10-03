@@ -347,7 +347,7 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'Pago de mesa', 'Pagos registrados', 'Propina (al mesero)', 'Propina enviada', 'Propina recibida',
   'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.',
   'Puede ser la conexión. Prueba de nuevo.', 'Pídele a quien te invitó que te comparta uno nuevo.',
-  'Si tocas pagar de nuevo, cubres la parte de otro comensal.', 'Sin fecha',
+  'Si tocas pagar de nuevo, cubres la parte de otro comensal.',
   'Sumándote a la mesa…', 'Súmate a la mesa {0} en PayMe: {1}',
   'Todavía no podemos confirmar el cierre ni una entrega al restaurante.',
   'Todavía no podemos confirmar el resultado de la garantía.', 'Total',

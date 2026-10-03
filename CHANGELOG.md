@@ -11,6 +11,52 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.0 — País y zona horaria personales, preparación local (2026-10-01)
+
+Continuación D166 (2026-10-03): los cuatro perfiles de formato personal
+reutilizan plantillas Intl mediante una LRU lazy de ocho entradas por
+perfil/locale/zona. No almacena fechas, resultados ni «hoy»; cambiar el
+constructor invalida la caché y conserva los fallbacks. Aserciones de
+reutilización, expulsión, cambio de instante e import sin Intl dentro de los
+casos existentes. No acredita resolver el renderer ni publicar; validación
+completa, CI y verificación servida siguen pendientes.
+
+Adopción local D165 (2026-10-02): diseño Turno3/2a entregado por Mati,
+fila Ubicación debajo de Idioma en Configuración y panel inferior con listas
+sucesivas País/Huso horario, Aplicar, cierre que descarta y confirmación1,6s
+sólo tras guardado comprobado. Modal nativo/foco/Escape/velo/scroll/safe-area,
+targets44/48/52px y movimiento reducido; CSS local y fuentes/assets originales.
+Las62ciudades quedan individuales y guardan exactamente suIANA: NO agrupación
+por desfaseUTC ni sustitución por primera ciudad. Se conservan resetOWN,
+avisos de preferencia temporal y navegador/origen compartido. Preparación
+de fuentes y pruebas; NO validado/publicado ni auditoría previa porD164.
+
+Decisión de Mati 158 («158)a)») y orden AF-D158-PAIS-ZONA-20261001:
+configuración manual de presentación en el navegador, no ubicación, residencia
+ni país comercial. Catálogo finito de 7 países / 62 pares país-IANA, con las zonas
+no admitidas por el navegador deshabilitadas. México / Ciudad de México es el
+inicio explícito; los países multizona requieren elegir antes de aplicar.
+
+La única clave nueva, `payme.app.region.v1`, guarda sólo `{country,timeZone}`
+al aplicar y comprobar la lectura exacta. Un fallo se informa como temporal;
+datos corruptos o no soportados no se sobrescriben automáticamente. Restablecer
+borra sólo esa clave y comprueba su ausencia. La selección se hereda en un
+navegador compartido, sin sincronización por cuenta/dispositivo ni garantías
+en modo privado o tras borrar datos locales.
+
+Mesas usa la zona para día calendario (Hoy/Ayer), fecha, franja y agrupación
+mensual personal. Tus restaurantes la usa para día/hora de cada visita. No se
+modifican instantes, orden, importes, IDs, períodos compartidos de estadísticas,
+idioma, moneda, pagos, identidad, contratos ni el espejo de backend. Los avisos
+distinguen zona de presentación de zona histórica original. Si Intl no admite
+CDMX se indica UTC; si no puede formatear, se muestra ISO neutral. Fechas sin
+zona explícita, civiles o imposibles no se reinterpretan como instantes válidos.
+
+Se preparan pruebas focales sintéticas y 12 escenarios Playwright mock. Esta
+entrada no acredita su ejecución ni publicación: por el orden de recursos,
+pruebas, typechecks, builds, revisión, commit, push y deploy están pendientes
+de sus grants/gates. El cierre visible sigue requiriendo la prueba de Mati.
+
 ## 0.209.5 — Compatibilidad OCR opt-in, integrada y publicada (2026-09-30)
 
 Integrada en `d29d3ef8e949d56e911d694db401373add193d2e`, sobre

@@ -17,3 +17,23 @@ describe('AF-29 · partesDeFecha («Sáb 12/09» · «21:40»)', () => {
     expect(partesDeFecha('')).toBeNull();
   });
 });
+
+describe('D158 · visitas, zona personal explícita sin cambiar estadísticas', () => {
+  it('MX conserva formato24h y día del instante leído en CDMX', () => {
+    expect(partesDeFecha('2026-01-01T04:30:00Z', 'America/Mexico_City'))
+      .toEqual({ diaSemana: 3, diaMes: '31/12', hora: '22:30' });
+  });
+  it('Madrid presenta el mismo instante en otro día, no otra visita', () => {
+    expect(partesDeFecha('2026-01-01T04:30:00Z', 'Europe/Madrid'))
+      .toEqual({ diaSemana: 4, diaMes: '01/01', hora: '05:30' });
+  });
+  it('sinIntl/zone no inventa día de semana: ISO neutral visible', () => {
+    expect(partesDeFecha('2026-01-01T04:30:00Z', null))
+      .toEqual({ diaSemana: null, diaMes: '2026-01-01T04:30:00.000Z', hora: '' });
+  });
+  it('date-only/naive/imposible no se atribuyen a una zona original', () => {
+    for (const iso of ['2026-01-01', '2026-01-01T04:30:00', '2026-02-30T04:30:00Z']) {
+      expect(partesDeFecha(iso, 'Europe/Madrid')).toBeNull();
+    }
+  });
+});

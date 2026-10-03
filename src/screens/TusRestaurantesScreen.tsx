@@ -16,6 +16,8 @@ import { lugaresYVisitas, nombreDeCocina, visitasTexto } from '../utils/textosDe
 import { usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
+import { useRegion } from '../preferences/RegionProvider';
+import { personalZoneCaption } from '../utils/personalDates';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -47,6 +49,7 @@ type Estado =
 
 export function TusRestaurantesScreen() {
   const { t } = useIdioma();
+  const { presentationZone } = useRegion();
   const { session } = useAuth();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -109,6 +112,7 @@ export function TusRestaurantesScreen() {
       )}
 
       <div className="scroll" style={{ paddingLeft: 10, paddingRight: 10, paddingTop: 16 }}>
+        <p className="caption">{personalZoneCaption(presentationZone, t)}</p>
         {estado.tipo === 'cargando' ? (
           <div aria-busy="true" aria-label={t('Cargando tus restaurantes')}>
             <div className="stat-hero sk">
@@ -165,7 +169,7 @@ export function TusRestaurantesScreen() {
                       {r.visits.map((v) => {
                         const clave = `${r.id}:${v.code}`;
                         const abiertaV = visitaAbierta === clave;
-                        const f = partesDeFecha(v.createdAt);
+                        const f = partesDeFecha(v.createdAt, presentationZone);
                         const modo = modalidadDeVisita(v.divisionMode, t);
                         return (
                           <div key={v.code} className="rest-visita">
@@ -176,7 +180,7 @@ export function TusRestaurantesScreen() {
                               onClick={() => setVisitaAbierta((a) => (a === clave ? null : clave))}
                             >
                               <span className="rest-visita-cuando">
-                                <span className="rest-visita-fecha">{f ? `${dias[f.diaSemana]} ${f.diaMes}` : '—'}</span>
+                                <span className="rest-visita-fecha">{f ? (f.diaSemana === null ? f.diaMes : `${dias[f.diaSemana]} ${f.diaMes}`) : t('Fecha no disponible')}</span>
                                 {modo && <span className="rest-visita-modo">{modo}</span>}
                               </span>
                               <span className="rest-visita-hora">{f ? f.hora : ''}</span>

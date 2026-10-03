@@ -15,6 +15,7 @@ import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { CuentasConectadas } from './CuentasConectadas';
+import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -150,6 +151,7 @@ export function MasScreen() {
             </div>
             <SelectorIdioma />
           </div>
+          <RegionSettingsPanel />
           {/* AF2 · LEGAL-3.0.0 / decisiones 33-37 · Configuración › Notificaciones:
               qué avisos llegan también por correo. Mati pidió «una nueva ventana»:
               página propia (`#/notificaciones`), no una sección acá. */}

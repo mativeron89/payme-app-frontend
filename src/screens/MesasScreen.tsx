@@ -12,6 +12,8 @@ import { Icon, type IconName } from '../components/Icon';
 import { bpsLabel } from './mesaItemsView';
 import type { TuMesa } from '../api/misMesas';
 import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
+import { useRegion } from '../preferences/RegionProvider';
+import { personalDateLabel, personalZoneCaption } from '../utils/personalDates';
 import {
   agruparPorMes,
   FRANJA_LABEL,
@@ -38,13 +40,8 @@ const FRANJA_ICON: Record<Franja, IconName> = {
   noche: 'moon',
 };
 
-function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]) => string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const diffDays = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60_000));
-  if (diffDays === 0) return t('Hoy');
-  if (diffDays === 1) return t('Ayer');
-  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]) => string, zone: string | null): string {
+  return personalDateLabel(iso, locale, zone, t);
 }
 
 /**
@@ -93,6 +90,7 @@ function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): st
 }
 
 export function MesasScreen() {
+  const { presentationZone } = useRegion();
   const { t, locale } = useIdioma();
   const { session } = useAuth();
   const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
@@ -182,7 +180,7 @@ export function MesasScreen() {
   }, []);
 
   const cerradas = pagos ? mesasCerradas(pagos) : null;
-  const grupos = cerradas ? agruparPorMes(cerradas, locale) : [];
+  const grupos = cerradas ? agruparPorMes(cerradas, locale, presentationZone) : [];
   const tusMesas = misMesas ? misMesas.filter((m) => !tuMesaEnCurso(m.status)) : null;
   /** El vacío «Todavía no cerraste…» sólo si NINGUNA de las dos listas tiene nada. */
   const sinTusMesas = tusMesas !== null && tusMesas.length === 0 && !falloMesas && cursorMesas === null;
@@ -221,7 +219,7 @@ export function MesasScreen() {
             <div className="hist-main">
               <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
               <div className="hist-meta">
-                {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t)}{' · '}</>}
+                {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t, presentationZone)}{' · '}</>}
                 {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
               </div>
               {eleccion && <div className="hist-meta">{eleccion}</div>}
@@ -292,6 +290,7 @@ export function MesasScreen() {
       </div>
 
       <div className="scroll history-scroll">
+        <p className="caption">{personalZoneCaption(presentationZone, t)}</p>
 
         {seccionTusMesas}
 
@@ -329,10 +328,10 @@ export function MesasScreen() {
         ) : (
           <>
             {grupos.map((g) => (
-              <section key={g.key} aria-label={g.label}>
-                <h2 className="mes-sticky">{g.label}</h2>
+              <section key={g.key} aria-label={g.label === 'Sin fecha' ? t('Sin fecha') : g.label}>
+                <h2 className="mes-sticky">{g.label === 'Sin fecha' ? t('Sin fecha') : g.label}</h2>
                 {g.mesas.map((m) => {
-                  const franja = franjaDe(m.date);
+                  const franja = franjaDe(m.date, presentationZone);
                   const on = abierta === m.mesa_code;
                   const detalle = detalles[m.mesa_code];
                   return (
@@ -349,7 +348,7 @@ export function MesasScreen() {
                         <div className="hist-main">
                           <div className="hist-rest">{m.restaurant}</div>
                           <div className="hist-meta">
-                            {fechaDeFila(m.date, locale, t)}
+                            {fechaDeFila(m.date, locale, t, presentationZone)}
                             {franja && (
                               <>
                                 {' · '}

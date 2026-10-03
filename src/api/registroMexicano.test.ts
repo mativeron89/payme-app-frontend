@@ -142,6 +142,8 @@ const ESPANOL_LEGITIMO = new Set([
   'automático', 'teléfono', 'búsqueda', 'cámara', 'país', 'atención', 'posición',
   // Nombres propios del seed.
   'nicolás', 'josé', 'maría',
+  // D158/D165 · Bogotá es un nombre propio, no un imperativo voseante.
+  'bogotá',
   // AF-29 · la abreviatura de miércoles en «Mié 16/09» (2b, «Tus restaurantes»).
   'mié',
   // Pretéritos de primera persona (aparecen en prosa de tests).
@@ -149,6 +151,8 @@ const ESPANOL_LEGITIMO = new Set([
   // AF2 · futuro de tercera persona del texto aprobado de la puerta (decisión
   // 46): «se mostrará a tus amigos». No es voseo.
   'mostrará',
+  // D158/D165 · «otra persona heredará» es futuro de tercera persona.
+  'heredará',
 ]);
 
 /**
@@ -265,6 +269,11 @@ describe('el producto habla español mexicano', () => {
     const bueno = 'Toca lo que consumiste. Ya está más que listo; después revisa la sección y continúa aquí. '
       + 'Tienes 3 días, el número es válido y el código también. Nicolás pagó $80 en el café.';
     expect(vosesEn(bueno), 'marcó español correcto').toEqual([]);
+    // Colisiones medidas por el censo D165; las formas voseantes cercanas
+    // siguen detectadas, sin exentar raíces ni cambiar el patrón.
+    expect(vosesEn('Bogotá: otra persona heredará esta selección.')).toEqual([]);
+    expect(vosesEn('Heredá')).toEqual(['Heredá']);
+    expect(vosesEn('Heredás')).toEqual(['Heredás']);
   });
 
   it('🔴 el copy convertido de verdad pasa la guarda', () => {
