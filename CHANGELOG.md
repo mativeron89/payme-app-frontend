@@ -30,7 +30,9 @@ moneda, legal, idioma, cuenta o backend; sin dependencias ni scripts nuevos.
 Validación focal local: 163 unitarias, cuatro tipos y build mock; 40 recorridos
 de navegador iniciales más 11 relevantes tras corregir el borrador Manual
 vacío. No sustituye el CI completo oficial del PR, pendiente de publicación
-y verificación servida. 0.210.3 está publicada; prueba visible física de Mati
+y verificación servida. El CI222 inicial falló por una traducción de la
+configuración inicial anterior que quedó huérfana; se retira esa entrada
+obsoleta, sin alterar el censo ni su prueba. 0.210.3 está publicada; prueba visible física de Mati
 y n289 siguen abiertas. No Textract.
 
 ## 0.210.3 — Regresiones de invitación copiada y arranque PWA (2026-10-03)

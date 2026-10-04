@@ -78,7 +78,6 @@ export const EN: Record<string, string> = {
   'La selección se aplica temporalmente, pero no se pudo confirmar el guardado. Al recargar puede perderse o volver el valor anterior.': 'The selection applies temporarily, but saving could not be confirmed. Reloading may lose it or restore the previous value.',
   'Restablecimos esta vista, pero no pudimos confirmar el borrado de la preferencia. Al recargar puede volver el valor anterior.': 'We reset this view, but could not confirm removal of the preference. Reloading may restore the previous value.',
   'Guardado sólo en este navegador.': 'Saved only in this browser.',
-  'México y Ciudad de México son la configuración inicial.': 'Mexico and Mexico City are the initial setting.',
   'Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.': 'Only in this browser: it does not sync across devices or accounts. If you share the browser, another person will inherit this selection.',
   'El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.': 'Private mode or clearing local data may lose the selection. We do not detect your location or change currency, language, or commercial availability.',
   'Elige un huso horario': 'Choose a time zone',
