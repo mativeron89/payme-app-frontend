@@ -712,9 +712,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /**
    * AF-32 · las fotos de quienes se sumaron (dueño v2.110.0). Una
    * `FotosDeParticipantes` por mesa: pide sólo con `has_avatar`, una vez por
-   * persona y sin reintentos, y al desmontar o cambiar de mesa REVOCA cada
-   * `blob:`. La sesión se lee por ref para no recrear —y re-pedir— en cada
-   * render.
+   * persona y sin reintentos. E173-3 · decisión 175: la foto queda en el caché
+   * en memoria de la sesión; volver a la mesa la muestra al instante y
+   * desmontar ya no revoca. La sesión se lee por ref para no recrear —y
+   * re-pedir— en cada render.
    */
   const sesionRef = useRef(session);
   sesionRef.current = session;
@@ -722,11 +723,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [, setVersionFotos] = useState(0);
   useEffect(() => {
     const fotos = new FotosDeParticipantes(
-      async (participantId) => {
-        const s = sesionRef.current;
-        if (!s) throw new Error('sin_sesion');
-        return (await api.getParticipantAvatar(code, participantId, s)).blob;
-      },
+      code,
+      () => sesionRef.current,
+      async (participantId, s) => (await api.getParticipantAvatar(code, participantId, s)).blob,
       () => setVersionFotos((v) => v + 1),
     );
     fotosRef.current = fotos;

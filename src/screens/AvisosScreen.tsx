@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { AppNotification } from '../api/types';
@@ -7,7 +8,17 @@ import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
-import { useToast } from '../components/ui';
+import { Avatar, useToast } from '../components/ui';
+import { useFotoEnMemoria } from '../components/useFotoEnMemoria';
+import { PREFIJO_INVITADOR, claveInvitador, fotosEnMemoria } from '../api/fotosEnMemoria';
+import { currentSamePrincipalSession } from '../api/profileIdentity';
+import { isCurrentSession, loadSession } from '../api/storage';
+import {
+  idDelTituloDeAviso,
+  idsConFotoDelInvitador,
+  pideFotoDelInvitador,
+  sinLaNotificacion,
+} from '../api/borrarNotificaciones';
 import { extractApiError } from '../api/errors';
 import {
   copyAdmision,
@@ -36,7 +47,12 @@ import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
  *    parte de la identidad de la pantalla. E174-1 · decisión 174 de Mati
  *    («tiene que estar arriba de todo, no abajo»): es la PRIMERA fila del
  *    contenido, antes de las invitaciones; hasta 0.210.4 iba al final de la
- *    lista. Esa fila es la que va a sumar «Borrar todas» (E174-2).
+ *    lista. E174-2 suma ahí «Borrar todas», con confirmación.
+ *  - **E174-2 · cada notificación se borra con su ícono de papelera**, sin
+ *    confirmación: es una fila. «Borrar todas» sí confirma, en una hoja.
+ *  - **E174-3 · la foto de quien invita** en `invitation_received`, sólo con
+ *    `payload.has_inviter_avatar === true`. Mientras carga, o con 404, las
+ *    iniciales. Vive en el caché en memoria de la sesión (decisión 175).
  *  - **Tarjeta de título `Notificaciones`**, separada de la sección homónima
  *    que agrupa el inbox debajo de las invitaciones.
  *  - **La tarjeta de invitación deja de ser `card` blanca**: fondo `--teal-l` y
@@ -120,6 +136,91 @@ function AvisoPrincipal({
 }
 
 /**
+ * E174-3 · la foto de quien invita, por el id de la notificación (dueño
+ * v2.148.0). Se monta sólo con la pista `has_inviter_avatar === true`. Cada
+ * entrada a Avisos la revalida en segundo plano; la guardada se ve al instante.
+ */
+function FotoDelInvitador({ notificationId, nombre }: { notificationId: string; nombre: string }) {
+  const { session } = useAuth();
+  const clave = claveInvitador(notificationId);
+  const url = useFotoEnMemoria(session, clave);
+  const sesionRef = useRef(session);
+  sesionRef.current = session;
+  const familyId = session?.family_id ?? null;
+  const principalId = session?.principal_id ?? null;
+  useEffect(() => {
+    const origen = sesionRef.current;
+    if (!origen) return;
+    const expected = currentSamePrincipalSession(origen, loadSession());
+    if (!expected || !isCurrentSession(expected)) return;
+    void fotosEnMemoria.cargar(
+      expected, clave, async () => (await api.getInviterAvatar(notificationId, expected)).blob,
+    );
+  }, [notificationId, clave, familyId, principalId]);
+  return url
+    ? <img className="aviso-invitador-foto" src={url} alt="" aria-hidden="true" />
+    : <Avatar name={nombre} size={32} />;
+}
+
+/**
+ * E174-2 · la confirmación de «Borrar todas». Misma hoja que «¿Cerrar la
+ * mesa?»: dice qué pasa antes de pasar, y el botón se apaga mientras viaja.
+ * Escape o tocar afuera vuelven sin borrar.
+ */
+function HojaBorrarTodas({
+  onConfirmar,
+  onVolver,
+  borrando,
+  hayInvitaciones,
+}: {
+  onConfirmar: () => void;
+  onVolver: () => void;
+  borrando: boolean;
+  hayInvitaciones: boolean;
+}) {
+  const { t } = useIdioma();
+  const volver = useRef<HTMLButtonElement | null>(null);
+  const alVolver = useRef(onVolver);
+  alVolver.current = onVolver;
+  useEffect(() => {
+    volver.current?.focus();
+    const alTeclado = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') alVolver.current();
+    };
+    document.addEventListener('keydown', alTeclado);
+    return () => document.removeEventListener('keydown', alTeclado);
+  }, []);
+  return createPortal(
+    <div className="sheet-overlay" onClick={onVolver}>
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('¿Borrar todas las notificaciones?')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-head">
+          <span className="sheet-title">{t('¿Borrar todas las notificaciones?')}</span>
+          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onVolver}>✕</button>
+        </div>
+        <ul className="cerrar-mesa-lista">
+          <li>{t('Se borran todas, también las que ya leíste.')}</li>
+          <li>{t('No se pueden recuperar.')}</li>
+          {hayInvitaciones && <li>{t('Las invitaciones de arriba no se borran.')}</li>}
+        </ul>
+        <div className="cerrar-mesa-acciones">
+          <button ref={volver} type="button" className="btn btn-ghost" onClick={onVolver}>{t('Volver')}</button>
+          <button type="button" className="btn btn-navy" onClick={onConfirmar} disabled={borrando}>
+            {borrando ? t('Borrando…') : t('Sí, borrar todas')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * Una carrera 404 no es éxito. Sólo autoriza continuar si un GET propio
  * posterior confirma que ESA fila ya está leída y conserva el mismo destino.
  */
@@ -145,9 +246,28 @@ export function AvisosScreen() {
   // dejaba entrar a mesas muertas (y reventaba la pantalla con una fila mala).
   const [invitations, setInvitations] = useState<InvitacionMostrable[]>([]);
   const [openingNotificationId, setOpeningNotificationId] = useState<string | null>(null);
+  const [borrandoId, setBorrandoId] = useState<string | null>(null);
+  const [confirmarBorrarTodas, setConfirmarBorrarTodas] = useState(false);
+  const [borrandoTodas, setBorrandoTodas] = useState(false);
+  const botonBorrarTodas = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * E174-3 · al traer la lista, salen de memoria las fotos de invitadores de
+   * notificaciones que ya no están o que no traen la pista.
+   */
+  function podarFotosDeInvitadores(lista: readonly AppNotification[]) {
+    const actual = loadSession();
+    if (!actual) return;
+    fotosEnMemoria.podar(actual, PREFIJO_INVITADOR, idsConFotoDelInvitador(lista));
+  }
 
   function load() {
-    api.getNotifications().then((r) => setNotifs(r.notifications)).catch(() => setNotifs([]));
+    api.getNotifications()
+      .then((r) => {
+        podarFotosDeInvitadores(r.notifications);
+        setNotifs(r.notifications);
+      })
+      .catch(() => setNotifs([]));
     api
       .getPendingInvitations()
       .then((r) => setInvitations(invitacionesMostrables(r.invitations)))
@@ -166,6 +286,43 @@ export function AvisosScreen() {
       load();
     } catch {
       toast(t('No se pudo marcar como leído'));
+    }
+  }
+
+  /**
+   * E174-2 · borrar una, sin confirmación. Un 404 dice que ya no estaba (otra
+   * sesión la borró): se recarga la lista en vez de avisar un error.
+   */
+  async function borrarUna(notification: AppNotification) {
+    if (borrandoId !== null || borrandoTodas) return;
+    setBorrandoId(notification.id);
+    try {
+      await api.deleteNotification(notification.id);
+      setNotifs((current) => (current ? sinLaNotificacion(current, notification.id) : current));
+      const actual = loadSession();
+      if (actual) fotosEnMemoria.retirar(actual, claveInvitador(notification.id));
+    } catch (err) {
+      if (extractApiError(err).status === 404) load();
+      else toast(t('No se pudo borrar la notificación'));
+    } finally {
+      setBorrandoId(null);
+    }
+  }
+
+  /** E174-2 · «Borrar todas», ya confirmado en la hoja. */
+  async function borrarTodas() {
+    if (borrandoTodas) return;
+    setBorrandoTodas(true);
+    try {
+      await api.deleteAllNotifications();
+      setConfirmarBorrarTodas(false);
+      setNotifs([]);
+      podarFotosDeInvitadores([]);
+      load();
+    } catch {
+      toast(t('No se pudieron borrar las notificaciones'));
+    } finally {
+      setBorrandoTodas(false);
     }
   }
 
@@ -212,6 +369,7 @@ export function AvisosScreen() {
   }
 
   const hasUnread = notifs?.some((n) => !n.read_at) ?? false;
+  const hayNotificaciones = (notifs?.length ?? 0) > 0;
 
   return (
     <div className="screen has-appbar">
@@ -220,11 +378,24 @@ export function AvisosScreen() {
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
       <div className="scroll flow-scroll avisos-scroll">
-        {hasUnread && (
+        {(hasUnread || hayNotificaciones) && (
           <div className="avisos-actions">
-            <button type="button" className="linkbtn" onClick={markAll}>
-              {t('Marcar leídos')}
-            </button>
+            {hasUnread && (
+              <button type="button" className="linkbtn" onClick={markAll}>
+                {t('Marcar leídos')}
+              </button>
+            )}
+            {hayNotificaciones && (
+              <button
+                ref={botonBorrarTodas}
+                type="button"
+                className="linkbtn"
+                onClick={() => setConfirmarBorrarTodas(true)}
+                disabled={borrandoTodas}
+              >
+                {t('Borrar todas')}
+              </button>
+            )}
           </div>
         )}
         {invitations.length > 0 && (
@@ -321,35 +492,50 @@ export function AvisosScreen() {
             const invitationSuffix = inviterName && n.body.startsWith(`${inviterName} `)
               ? n.body.slice(inviterName.length)
               : null;
+            const tituloId = idDelTituloDeAviso(n.id);
             return (
               <div
                 key={n.id}
                 className={`card card-p aviso-row${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
               >
-                {/* AF-34 · `mesa_expired` con código: tocarlo lleva a esa mesa, que
-                    muestra su cierre. Sin código, la fila queda quieta. El texto
-                    es el `body` del dueño tal cual, como el resto de los avisos. */}
-                <AvisoPrincipal
-                  destino={destino}
-                  onOpen={destino === null ? undefined : () => openNotification(n, destino)}
-                  disabled={openingNotificationId !== null}
-                >
-                  <span
-                    className={`aviso-dot ${sinLeer ? '' : 'off'}`}
-                    aria-hidden={sinLeer ? undefined : 'true'}
-                    aria-label={sinLeer ? t('Sin leer') : undefined}
-                    role={sinLeer ? 'img' : undefined}
-                  />
-                  <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
-                      {invitationSuffix !== null ? (
-                        <><strong>{inviterName}</strong>{invitationSuffix}</>
-                      ) : n.body}
+                <div className="aviso-row-top">
+                  {/* AF-34 · `mesa_expired` con código: tocarlo lleva a esa mesa, que
+                      muestra su cierre. Sin código, la fila queda quieta. El texto
+                      es el `body` del dueño tal cual, como el resto de los avisos. */}
+                  <AvisoPrincipal
+                    destino={destino}
+                    onOpen={destino === null ? undefined : () => openNotification(n, destino)}
+                    disabled={openingNotificationId !== null}
+                  >
+                    <span
+                      className={`aviso-dot ${sinLeer ? '' : 'off'}`}
+                      aria-hidden={sinLeer ? undefined : 'true'}
+                      aria-label={sinLeer ? t('Sin leer') : undefined}
+                      role={sinLeer ? 'img' : undefined}
+                    />
+                    {pideFotoDelInvitador(n) && inviterName
+                      ? <FotoDelInvitador notificationId={n.id} nombre={inviterName} />
+                      : <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div id={tituloId} className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
+                        {invitationSuffix !== null ? (
+                          <><strong>{inviterName}</strong>{invitationSuffix}</>
+                        ) : n.body}
+                      </div>
+                      <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                     </div>
-                    <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
-                  </div>
-                </AvisoPrincipal>
+                  </AvisoPrincipal>
+                  <button
+                    type="button"
+                    className="aviso-borrar"
+                    aria-label={t('Borrar notificación')}
+                    aria-describedby={tituloId}
+                    onClick={() => borrarUna(n)}
+                    disabled={borrandoId !== null || borrandoTodas}
+                  >
+                    <Icon name="trash" size={18} />
+                  </button>
+                </div>
                 {shortfallCapability.enabled && session && shortfallDisclosure && (
                   <ShortfallDisclosure session={session} disclosure={shortfallDisclosure} />
                 )}
@@ -358,6 +544,19 @@ export function AvisosScreen() {
           })}
         </div>
       </div>
+      {confirmarBorrarTodas && (
+        <HojaBorrarTodas
+          onConfirmar={borrarTodas}
+          onVolver={() => {
+            if (borrandoTodas) return;
+            setConfirmarBorrarTodas(false);
+            // El foco vuelve a donde estaba: el lector no queda en el vacío.
+            requestAnimationFrame(() => botonBorrarTodas.current?.focus());
+          }}
+          borrando={borrandoTodas}
+          hayInvitaciones={invitations.length > 0}
+        />
+      )}
       {/* Ningún ítem activo: ninguna de las cinco posiciones es "Avisos". */}
       <AppBottomBar active={null} />
     </div>

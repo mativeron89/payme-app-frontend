@@ -11,6 +11,86 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.211.0 — Fotos en memoria, borrar notificaciones y la foto de quien invita (2026-10-04)
+
+Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decisiones 173, 174 y 175 de Mati. Base
+`0.210.5` (`f357857`). Consume App Backend **v2.148.0** (`91aacdd`, servido): contrato
+`docs/CONTRATO_E173_E174_FOTOS_Y_NOTIFICACIONES.md`.
+
+- **E173-3 · decisión 175 · las fotos, en memoria mientras dure la sesión.** Mati eligió «Sí, guardar en memoria
+  (Recomendada)». El diagnóstico de App Backend: el servidor responde en decenas de ms; lo lento era repetir los viajes
+  en cada entrada porque la foto no quedaba guardada.
+  - `src/api/fotosEnMemoria.ts`: un `Map` de `blob:` en memoria, nada más. Ni localStorage, ni sessionStorage, ni
+    IndexedDB, ni Cache API; las respuestas siguen `private, no-store`.
+  - **Dueño = la sesión** (familia + principal). Cerrar sesión, otra cuenta o una sesión vencida la vacían y revocan
+    todo, también desde otra pestaña (`AuthProvider` engancha `vigilarFotosConLaSesion`). Si ese aviso no llegara, la
+    primera carga de otra cuenta la vacía igual. Un refresh de tokens no la toca. Una respuesta que llega después de
+    cerrar sesión se descarta.
+  - **Revalidar no borra lo que se ve.** Se muestra la guardada y se pide en segundo plano: mismos bytes, nada cambia;
+    bytes nuevos, se reemplaza. **Sólo un 404 la retira.** Un error de red o un 5xx no la sacan.
+  - Un `blob:` se revoca sólo al salir de la memoria (reemplazo, retiro, poda, tope de 400 o cierre de sesión), nunca
+    al desmontar.
+  - **Amigos** (y «compartir mesa», el mismo componente): la foto de quien sigue en la lista se ve al instante y se
+    revalida con cada carga de la lista. Al llegar la lista salen las de quienes ya no están o tienen
+    `has_avatar: false`.
+  - **Configuración:** la foto propia por revisión. Con la misma revisión no se vuelve a pedir; al subir o quitar,
+    sale la anterior.
+  - **Fotos de participantes** (AF-32, mismo mecanismo): clave por mesa y participante. Volver a la mesa la muestra al
+    instante; `dispose` ya no revoca. Siguen el pedido único por entrada y sin reintentos.
+- **E173-3 · `has_avatar` en `GET /friends`.** La foto de un amigo se pide sólo con `has_avatar: true`. Con `false` no
+  se pide y se retira la guardada. Sin la clave (dueño anterior) se pide como antes. El 404 se sigue tolerando con
+  iniciales. El mock la publica con el mismo predicado que su ruta de foto.
+- **E174-2 · borrar notificaciones** (decisión 174, «Una por una y todas»).
+  - Cada fila tiene su papelera: botón con nombre «Borrar notificación» y la fila como descripción para el lector,
+    accesible por teclado. Borra sin confirmar, con `DELETE /notifications/{id}`. Un 404 (ya la había borrado otra
+    sesión) relee la lista sin mostrar error.
+  - «Borrar todas», junto a «Marcar leídos», abre una hoja de confirmación (foco en «Volver»; Escape o tocar afuera
+    vuelven sin borrar; el foco regresa al botón). Confirmar llama `DELETE /notifications`, que responde
+    `{ deleted_count }`. Si falla, lo dice y la hoja queda abierta. Las invitaciones de arriba no se borran, y la hoja
+    lo dice cuando las hay.
+  - El contador de no leídas de Inicio lo da el dueño: después de borrar, Inicio lo relee y queda en cero.
+- **E174-3 · la foto de quien invita.** En `invitation_received` con `payload.has_inviter_avatar === true` se pide
+  `GET /notifications/{id}/inviter-avatar`, con la misma política que la foto de un amigo (`private, no-store`,
+  `Vary: Authorization`, sin ETag). Mientras carga, o con 404, las iniciales. Sin la pista (notificaciones anteriores a
+  v2.148.0) o en `false`, el ícono de siempre y ningún pedido. Usa la memoria de fotos; borrar la notificación la saca.
+  La tarjeta «Te invitaron» de arriba y la burbuja de Inicio siguen con el ícono del restaurante: vienen de
+  `GET /invitations`, no de una notificación.
+- **Pruebas nuevas:**
+  - `src/api/fotosEnMemoria.test.ts` (21):
+    - con los mismos bytes no crea ni revoca nada; mientras revalida se ve la guardada;
+    - bytes nuevos reemplazan y revocan la vieja; un 404 la retira; un 500, un error de red o una respuesta inválida
+      no la retiran;
+    - dos pedidos simultáneos viajan una vez;
+    - cerrar sesión u otra cuenta vacían y revocan todo, también sin el aviso de sesión; un refresh de tokens no;
+    - una respuesta que llega tarde se descarta;
+    - poda, `podarFotosDeAmigos`, retiro, tope de 400 y avisos a los suscriptores;
+    - que el módulo no nombre ningún almacenamiento del navegador.
+  - `src/api/borrarNotificaciones.test.ts` (19): `{ deleted_count }` estricto, la pista exactamente `true`, las rutas
+    de la fachada contra el código espejado del dueño, y el mock (borra una y todas, el contador baja, la foto del
+    invitador decide por sí misma con una sesión vigente de verdad y un control positivo).
+  - `src/api/fotosDeParticipantes.test.ts` (7, reescrito): `dispose` ya no revoca, volver muestra al instante y
+    revalida, 404 y `has_avatar: false` retiran, por mesa, y cerrar sesión revoca.
+  - `e2e/fotos-en-memoria.spec.ts` (8), `e2e/avisos-borrar.spec.ts` (7) y `e2e/avisos-foto-invitador.spec.ts` (6).
+    Espían la fachada en la página y cuelgan la revalidación, para que lo que se ve no pueda venir de ella. Una
+    URL `blob:` revocada se reconoce porque `fetch` ya no la puede leer.
+  - Cambiados: `ProfileIdentityEditor.test.tsx` (la revocación al desmontar pasa a ser de la memoria),
+    `mockArrobaEnListas.test.ts` (`has_avatar` en las claves de la lista de amigos) y
+    `avisos-marcar-leidos-arriba.spec.ts` (la fila queda con «Borrar todas»).
+  - **Rojo sobre `f357857`:** de los 21 e2e de entonces cayeron 18. Los de borrar e invitador cayeron porque la
+    fachada no tenía los métodos. Los de memoria cayeron por la causa buscada: María pedida con `has_avatar: false`,
+    la URL revocada al salir de Amigos y la foto propia vuelta a pedir. Pasaron 3 que son red de regresión: el 404,
+    el «sólo memoria» y la fila de «Marcar leídos». Dos pruebas que dependían del doble efecto de StrictMode se
+    reescribieron para afirmar la intención, no la cuenta. Las dos e2e agregadas después (borrar con 404 y quitar
+    un amigo) las acreditan los mutantes N3 y F11.
+  - **Mutantes: 23 plantados, 23 cazados**, con los archivos restaurados por sha256. F6 (reemplazar aunque los bytes
+    sean iguales) lo cazaba sólo la unitaria; la e2e se endureció para esperar la revalidación entera y ahora
+    también lo caza.
+- **Espejo del contrato, en un commit aparte** (adenda de alcance del Bibliotecario IV, 22:26:44Z): inventario del dueño en
+  `91aacdd` adoptado con `--adoptar-inventario`, byte-idéntico, contenido en `673156d`. 121 archivos, cambian cinco
+  (`routes/friends.js`, `routes/notifications.js`, `services/invitationAuthority.js`, `services/notifications.js`,
+  `services/profileIdentity.js`). `--paridad` verde, 121/121.
+- **Lo que no se probó acá:** el backend real, y un iPhone. Lo visible lo cierra la prueba de Mati (D63).
+
 ## 0.210.5 — Sin «Fechas mostradas…», la barra de abajo en la app de inicio y «Marcar leídos» arriba (2026-10-04)
 
 Orden AF-E173-1-2-LEYENDA-Y-BARRA-20261004 (sha256 36715eff…), decisión 173 de Mati tras probar en su iPhone, con

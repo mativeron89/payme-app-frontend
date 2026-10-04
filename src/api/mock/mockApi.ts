@@ -3770,7 +3770,7 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
   })();
   if (costura !== 'mesa_vencida') return [];
   const mesa = findMesa('PA-1099');
-  return [
+  return ([
     {
       id: 'aviso-mesa-vencida-1',
       type: 'mesa_expired',
@@ -3793,7 +3793,7 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
       read_at: '2026-09-18T10:00:00.000Z',
       created_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
     },
-  ];
+  ] satisfies NotificationsResponse['notifications']).filter((notification) => !avisosDeCosturaBorrados.has(notification.id));
 }
 
 export async function mockUnreadCount(): Promise<{ unread_count: number }> {
@@ -3823,6 +3823,54 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
   const now = new Date().toISOString();
   state.notifications = state.notifications.map((n) => ({ ...n, read_at: n.read_at ?? now }));
   return delay(undefined);
+}
+
+/* E174-2 · los avisos sintéticos de la costura también se pueden borrar, sin
+   tocar el seed persistido. */
+const avisosDeCosturaBorrados = new Set<string>();
+
+/** DELETE /notifications/:id (dueño v2.148.0): sólo una fila propia; si no, 404. */
+export async function mockDeleteNotification(id: string): Promise<void> {
+  const index = state.notifications.findIndex((notification) => notification.id === id);
+  if (index >= 0) {
+    state.notifications = state.notifications.filter((_, i) => i !== index);
+    persist();
+  } else if (avisosDeMesaVencidaMock().some((notification) => notification.id === id)) {
+    avisosDeCosturaBorrados.add(id);
+  } else {
+    return fail(404, 'notification_not_found');
+  }
+  return delay(undefined);
+}
+
+/** DELETE /notifications (dueño v2.148.0): todas las propias, `{ deleted_count }`. */
+export async function mockDeleteAllNotifications(): Promise<Record<string, unknown>> {
+  const sinteticos = avisosDeMesaVencidaMock();
+  const count = state.notifications.length + sinteticos.length;
+  for (const notification of sinteticos) avisosDeCosturaBorrados.add(notification.id);
+  state.notifications = [];
+  persist();
+  return delay({ deleted_count: count });
+}
+
+/**
+ * GET /notifications/:id/inviter-avatar (dueño v2.148.0). La ruta decide por
+ * sí misma —la pista del payload no autoriza—: foto sólo si la notificación es
+ * propia, es `invitation_received` y quien invita está entre los del mock con
+ * foto visible. Cualquier otra cosa, el mismo 404.
+ */
+export async function mockInviterAvatar(
+  notificationId: string,
+  expectedSession: StoredSession,
+): Promise<PrivateAvatarBlob> {
+  requireCurrentMockSession(expectedSession);
+  const notification = state.notifications.find((candidate) => candidate.id === notificationId);
+  const inviter = notification?.type === 'invitation_received' ? notification.payload?.inviter_payme_id : null;
+  if (typeof inviter !== 'string' || !MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(inviter)) {
+    throw new MockApiError(404, 'avatar_not_found');
+  }
+  const bytes = Uint8Array.from(atob(MOCK_JPEG_BASE64), (char) => char.charCodeAt(0));
+  return delay({ blob: new Blob([bytes], { type: 'image/jpeg' }) });
 }
 
 /**
@@ -4458,10 +4506,13 @@ export async function mockStatsEvolution(): Promise<unknown> {
 export async function mockFriends(): Promise<FriendsResponse> {
   // C3: el contrato de amigos ya no lleva `email`. Se proyecta explícitamente
   // para que el mock no pueda filtrarlo por descuido.
+  // E173-3 · dueño v2.148.0: `has_avatar` es `true` si y sólo si la foto de
+  // ese amigo respondería 200 (`mockFriendAvatar`), con el mismo predicado.
   return delay({
     friends: state.friends.map(({ email: _email, ...persona }) => ({
       ...persona,
       ...arrobaEnListaMock(persona.payme_id),
+      has_avatar: MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(persona.payme_id),
     })),
   });
 }

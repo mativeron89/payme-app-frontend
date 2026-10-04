@@ -110,10 +110,16 @@ describe('ProfileIdentityEditor · superficie DARK y lifecycle privado', () => {
     expect(source).toContain('adoptProfileMutationUser(');
   });
 
-  it('revoca ObjectURL al fallar la imagen y al desmontar', () => {
+  /**
+   * E173-3 · decisión 175: la foto propia vive en la memoria de fotos de la
+   * sesión, por revisión. Hasta 0.210.5 se revocaba al desmontar; ahora la
+   * revoca esa memoria al reemplazarla, retirarla o cerrar sesión.
+   */
+  it('🔴 al fallar la imagen la retira de la memoria de fotos (que la revoca); al desmontar ya no revoca', () => {
     expect(source).toContain('onError={handleAvatarError}');
-    expect(source).toContain('avatarLease.current?.clear()');
-    expect(source).toContain('avatarLease.current?.dispose()');
+    expect(source).toContain('fotosEnMemoria.retirar(session, clavePropia(avatarRevision))');
+    expect(source).not.toContain('AvatarObjectUrlLease');
+    expect(source).not.toMatch(/revokeObjectURL|\.dispose\(\)/);
   });
 });
 

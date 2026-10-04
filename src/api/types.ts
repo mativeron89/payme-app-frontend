@@ -1193,6 +1193,14 @@ export interface Friend {
   username?: string | null;
   /** Solo en GET /friends: `responded_at` de la amistad, o `created_at`. */
   added_at?: string;
+  /**
+   * E173-3 · App Backend v2.148.0, sólo en `GET /friends`: `true` si y sólo si
+   * `GET /friends/{id}/avatar` respondería 200 a quien pide la lista. Con
+   * `false` la foto no se pide. Ausente con un dueño anterior: se pide, como
+   * antes. Igual se tolera el 404: el estado puede cambiar entre la lista y la
+   * foto.
+   */
+  has_avatar?: boolean;
 }
 
 export interface FriendsResponse {

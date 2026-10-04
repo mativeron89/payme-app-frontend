@@ -8,6 +8,8 @@ import { fold } from '../utils/format';
 import { useToast } from './ui';
 import { Icon } from './Icon';
 import { FriendAvatar } from './FriendAvatar';
+import { podarFotosDeAmigos } from '../api/fotosEnMemoria';
+import { loadSession } from '../api/storage';
 import { ArrobaDebajo } from './ArrobaDebajo';
 import { arrobaCoincide, useUsernameCapability } from '../api/username';
 
@@ -49,6 +51,8 @@ interface Invitable {
   full_name: string;
   /** AF-USERNAME-D104 · lo que se ve debajo del nombre, vía `ArrobaDebajo`. */
   username?: string | null;
+  /** E173-3 · sólo en la lista de amigos (`GET /friends`, dueño v2.148.0). */
+  has_avatar?: boolean;
 }
 
 export function InviteFriends({ code }: { code: string }) {
@@ -83,9 +87,12 @@ export function InviteFriends({ code }: { code: string }) {
   useEffect(() => {
     let alive = true;
     setFailed(false);
+    const expected = loadSession();
     Promise.all([api.getFriends(), api.getGroups()])
       .then(([f, g]) => {
         if (!alive) return;
+        // E173-3 · decisión 175: la misma poda que en Amigos.
+        if (expected) podarFotosDeAmigos(expected, f.friends);
         setFriends(f.friends);
         setGroups(g.groups);
       })
@@ -105,6 +112,13 @@ export function InviteFriends({ code }: { code: string }) {
       : friends;
     return pool.slice(0, 6);
   }, [friends, q, arrobaHabilitada]);
+
+  /**
+   * E173-3 · `has_avatar` viene sólo en la lista de amigos. Un integrante de
+   * grupo que también es amigo usa el de esa lista; si no está, se pide como
+   * antes y se tolera el 404.
+   */
+  const fotoDeAmigo = useMemo(() => new Map(friends.map((f) => [f.id, f.has_avatar])), [friends]);
 
   const shownGroups = useMemo(() => {
     const needle = fold(q.trim());
@@ -201,7 +215,13 @@ export function InviteFriends({ code }: { code: string }) {
             2026-08-21): el color por hash no lo elegía nadie y metía un sexto
             color sin token en la única pantalla donde §5 bis · F declara que
             hay uno solo. */}
-        <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={tick} variant="marca" />
+        <FriendAvatar
+          friendId={f.id}
+          name={f.full_name}
+          refreshToken={tick}
+          hasAvatar={f.has_avatar ?? fotoDeAmigo.get(f.id)}
+          variant="marca"
+        />
         <div className="fr-name">
           <div className="n">{f.full_name}</div>
           <ArrobaDebajo username={f.username} />

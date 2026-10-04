@@ -16,6 +16,7 @@ import {
 } from '../api/facebookAuthFlow';
 import { clearSignupInvitation } from '../api/signupInvitation';
 import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
+import { vigilarFotosConLaSesion } from '../api/fotosEnMemoria';
 import type { GoogleRegisterRequest, RegisterRequest, User } from '../api/types';
 import type {
   GoogleContinueLinkRequest,
@@ -155,6 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => subscribeSession(() => setSession(loadSession())), []);
+
+  // E173-3 · decisión 175: las fotos en memoria se vacían al cerrar sesión,
+  // cambiar de cuenta o vencer la sesión (también desde otra pestaña).
+  useEffect(() => vigilarFotosConLaSesion(), []);
 
   // G-02 (v2.20): una sesión persistida ANTES de que login devolviera `user`
   // no tiene identidad — se hidrata una sola vez con GET /account/me. Si

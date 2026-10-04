@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  AvatarObjectUrlLease,
   adoptProfileMutationUser,
   currentSamePrincipalSession,
   mergeProfileIdentityIntoCurrentUser,
@@ -9,6 +8,7 @@ import {
   validateAvatarInput,
 } from '../api/profileIdentity';
 import { isCurrentSession, loadSession, type StoredSession } from '../api/storage';
+import { PREFIJO_PROPIA, clavePropia, fotosEnMemoria } from '../api/fotosEnMemoria';
 import type { User } from '../api/types';
 import { extractApiError } from '../api/errors';
 import { useIdioma } from '../i18n/idioma';
@@ -17,6 +17,7 @@ import { ArrobaEnConfiguracion, useArrobaDeConfiguracion } from './ArrobaEnConfi
 import { EditarPerfil, type ResultadoParte } from './EditarPerfil';
 import { Icon } from './Icon';
 import { Avatar, useToast } from './ui';
+import { useFotoEnMemoria } from './useFotoEnMemoria';
 
 interface ProfileIdentityEditorProps {
   session: StoredSession;
@@ -32,7 +33,6 @@ export function ProfileIdentityEditor({
   const { t } = useIdioma();
   const toast = useToast();
   const user = session.user;
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   /** AF-LAPIZ-UNICO · decisión 110 · «Editar perfil» abierto (el único lápiz). */
   const [editando, setEditando] = useState(false);
   const arroba = useArrobaDeConfiguracion(session);
@@ -42,15 +42,23 @@ export function ProfileIdentityEditor({
    * aceptar el paquete legal y el dueño deja de leer la fecha. La edad nunca se
    * calculó acá y sigue sin calcularse.
    */
-  const avatarLease = useRef<AvatarObjectUrlLease | null>(null);
-  const avatarEpoch = useRef(new RequestEpoch());
   const profileEpoch = useRef(new RequestEpoch());
   const mutationEpoch = useRef(new RequestEpoch());
-  if (!avatarLease.current) avatarLease.current = new AvatarObjectUrlLease();
 
   const familyId = session.family_id;
   const principalId = session.principal_id;
   const avatarRevision = user?.avatar?.revision ?? null;
+  /**
+   * E173-3 · decisión 175: la foto propia vive en el caché en memoria de la
+   * sesión, por revisión. Con la misma revisión no se vuelve a pedir; al
+   * cambiar (subir o quitar), sale la anterior.
+   */
+  const avatarUrl = useFotoEnMemoria(
+    enabled ? session : null,
+    avatarRevision ? clavePropia(avatarRevision) : null,
+  );
+  const revisionRef = useRef(avatarRevision);
+  revisionRef.current = avatarRevision;
   const fullName = user ? `${user.first_name} ${user.last_name}` : t('PayMe');
 
   const refreshProfileAfterMutation = useCallback(async (
@@ -86,26 +94,23 @@ export function ProfileIdentityEditor({
   }, [enabled, familyId, principalId, adoptUser]);
 
   useEffect(() => {
-    const lease = avatarLease.current;
-    if (!lease) return;
-    const epoch = avatarEpoch.current.next();
-    lease.clear();
-    setAvatarUrl(null);
-    if (!enabled || !avatarRevision) return;
-    const expected = session;
-    api.getProfileAvatar(expected).then(({ blob }) => {
-      const current = currentSamePrincipalSession(expected, loadSession());
-      if (!avatarEpoch.current.isCurrent(epoch) || !current || !isCurrentSession(current)) return;
-      setAvatarUrl(lease.replace(blob));
-    }).catch(() => undefined);
-    return () => { avatarEpoch.current.next(); };
+    if (!enabled) return;
+    const expected = currentSamePrincipalSession(session, loadSession());
+    if (!expected || !isCurrentSession(expected)) return;
+    const conservar = () => new Set(revisionRef.current ? [revisionRef.current] : []);
+    fotosEnMemoria.podar(expected, PREFIJO_PROPIA, conservar());
+    if (!avatarRevision) return;
+    const clave = clavePropia(avatarRevision);
+    if (fotosEnMemoria.tiene(expected, clave)) return;
+    // `GET /account/me/avatar` no lleva revisión: si mientras viajaba la
+    // revisión cambió, lo que llegó no es de la vigente y se poda.
+    void fotosEnMemoria.cargar(expected, clave, async () => (await api.getProfileAvatar(expected)).blob)
+      .then(() => fotosEnMemoria.podar(expected, PREFIJO_PROPIA, conservar()));
   }, [enabled, avatarRevision, familyId, principalId]);
 
   useEffect(() => () => {
     profileEpoch.current.next();
-    avatarEpoch.current.next();
     mutationEpoch.current.next();
-    avatarLease.current?.dispose();
   }, []);
 
   /**
@@ -151,7 +156,6 @@ export function ProfileIdentityEditor({
     const expectedRevision = user.avatar?.revision ?? null;
     const epoch = mutationEpoch.current.next();
     profileEpoch.current.next();
-    avatarEpoch.current.next();
     try {
       const response = await api.putProfileAvatar(image, expectedRevision, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
@@ -176,7 +180,6 @@ export function ProfileIdentityEditor({
     const expected = session;
     const epoch = mutationEpoch.current.next();
     profileEpoch.current.next();
-    avatarEpoch.current.next();
     try {
       await api.deleteProfileAvatar(revision, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
@@ -184,8 +187,7 @@ export function ProfileIdentityEditor({
         (current) => current.user ? { ...current.user, avatar: null } : null,
         { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
       )) return { ok: false, error: t('No pudimos eliminar tu foto.') };
-      avatarLease.current?.clear();
-      setAvatarUrl(null);
+      fotosEnMemoria.podar(expected, PREFIJO_PROPIA, new Set());
       return { ok: true };
     } catch (error) {
       if (extractApiError(error).status === 409) {
@@ -196,10 +198,11 @@ export function ProfileIdentityEditor({
     }
   }, [adoptUser, refreshProfileAfterMutation, session, t, user]);
 
+  // Bytes que el navegador no pudo dibujar: salen del caché y quedan las
+  // iniciales, sin volver a pedirlos con la misma revisión.
   const handleAvatarError = useCallback(() => {
-    avatarLease.current?.clear();
-    setAvatarUrl(null);
-  }, []);
+    if (avatarRevision) fotosEnMemoria.retirar(session, clavePropia(avatarRevision));
+  }, [avatarRevision, session]);
 
   // El único lápiz edita lo que se pueda: nombre y foto con la capability del
   // dueño, y el @ si hay uno (en espera también: el formulario dice desde cuándo).

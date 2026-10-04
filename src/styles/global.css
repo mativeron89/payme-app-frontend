@@ -3749,6 +3749,8 @@ body {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  /* E174-2 · «Marcar leídos» y «Borrar todas», lado a lado. */
+  gap: var(--sp-4);
   min-height: var(--tap-min);
   padding: 0 var(--sp-4);
 }
@@ -3868,6 +3870,56 @@ body {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
+}
+
+/* E174-2 · la fila y su papelera, lado a lado. La papelera es hermana y no
+   hija de la fila principal: ésta puede ser un <button>, y un botón no va
+   dentro de otro. */
+.aviso-row-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.aviso-row-top > .aviso-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.aviso-borrar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin: calc((18px - var(--tap-min)) / 2) calc((18px - var(--tap-min)) / 2) 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.aviso-borrar:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -4px;
+}
+
+.aviso-borrar:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* E174-3 · la foto de quien invita, del tamaño de las iniciales que reemplaza. */
+.aviso-invitador-foto {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-l);
 }
 
 /* AF-34 · el aviso `mesa_expired` con código es un botón que lleva a la mesa:

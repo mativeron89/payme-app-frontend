@@ -47,6 +47,7 @@ import {
   type FriendAvatarNoticeState,
 } from './friendAvatarNotice';
 import { decodeNotificationPreferences } from './notificationPreferences';
+import { decodeBorradoDeNotificaciones } from './borrarNotificaciones';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { decodePlatos, type PlatosDelPeriodo } from './platos';
 import { decodeEvolucion, type Evolucion } from './evolucion';
@@ -441,6 +442,19 @@ export interface Api {
   getUnreadCount(): Promise<{ unread_count: number }>;
   markNotificationRead(id: string): Promise<void>;
   markAllNotificationsRead(): Promise<void>;
+  /**
+   * E174-2 · decisión 174 · `DELETE /notifications/{id}` → `{ deleted: true }`.
+   * 404 `notification_not_found` si no existe o no es tuya.
+   */
+  deleteNotification(id: string): Promise<void>;
+  /** E174-2 · App Backend v2.148.0 · `DELETE /notifications` → `{ deleted_count }`, también 0. */
+  deleteAllNotifications(): Promise<{ deleted_count: number }>;
+  /**
+   * E174-3 · App Backend v2.148.0 · la foto de quien invita, por el id de TU
+   * notificación `invitation_received`. Se pide sólo con
+   * `payload.has_inviter_avatar === true`. Cualquier denegación es el mismo 404.
+   */
+  getInviterAvatar(notificationId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   getPendingInvitations(): Promise<PendingInvitationsResponse>;
   acceptInvitation(id: string): Promise<{ accepted: boolean }>;
   /**
@@ -953,6 +967,21 @@ const realApi: Api = {
   markAllNotificationsRead: async () => {
     await httpRequest('PATCH', '/notifications/read-all');
   },
+  deleteNotification: async (id) => {
+    const response = await httpRequest<unknown>('DELETE', `/notifications/${encodeURIComponent(id)}`);
+    if (typeof response !== 'object' || response === null || Array.isArray(response)
+        || Object.keys(response).length !== 1 || !('deleted' in response) || response.deleted !== true) {
+      throw new Error('notification_delete_response_malformed');
+    }
+  },
+  deleteAllNotifications: async () => decodeBorradoDeNotificaciones(
+    await httpRequest<unknown>('DELETE', '/notifications'),
+  ),
+  // Misma política que la foto de una amistad: `Vary: Authorization`, sin ETag.
+  getInviterAvatar: (notificationId, expectedSession) => httpPrivateAvatarRequest(
+    `/notifications/${encodeURIComponent(notificationId)}/inviter-avatar`, expectedSession, 15_000,
+    { requireAuthorizationVary: true, forbidEtag: true },
+  ),
   getPendingInvitations: () => httpRequest<PendingInvitationsResponse>('GET', '/invitations'),
   // Decodificado como su puerta hermana `accept-link`: un 2xx malformado no
   // acredita la inscripción (ver `acceptInvitationResponse`).
@@ -1235,6 +1264,9 @@ const mockApi: Api = {
   getUnreadCount: () => mock.mockUnreadCount(),
   markNotificationRead: (id) => mock.mockMarkNotificationRead(id),
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
+  deleteNotification: (id) => mock.mockDeleteNotification(id),
+  deleteAllNotifications: async () => decodeBorradoDeNotificaciones(await mock.mockDeleteAllNotifications()),
+  getInviterAvatar: (notificationId, expectedSession) => mock.mockInviterAvatar(notificationId, expectedSession),
   getPendingInvitations: () => mock.mockPendingInvitations(),
   acceptInvitation: async (id) => acceptInvitationResponse(await mock.mockAcceptInvitation(id)),
   acceptInvitationLink: async (token) =>

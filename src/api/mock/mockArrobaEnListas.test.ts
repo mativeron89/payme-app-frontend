@@ -46,7 +46,7 @@ const claves = (filas: Array<Record<string, unknown>>) => filas.map((f) => Objec
 describe('AF-USERNAME-D104 · mock de las listas con el @', () => {
   it('AB nuevo: cada persona trae `username`, con `null` para quien no eligió uno', async () => {
     const { amigos, entrantes, grupo, participantes } = await listas();
-    for (const k of claves(amigos)) expect(k).toBe('added_at,first_name,full_name,id,last_name,payme_id,username');
+    for (const k of claves(amigos)) expect(k).toBe('added_at,first_name,full_name,has_avatar,id,last_name,payme_id,username');
     for (const k of claves(entrantes)) expect(k).toBe('first_name,full_name,id,last_name,payme_id,username');
     for (const k of claves(grupo)) expect(k).toBe('first_name,id,last_name,payme_id,username');
     for (const k of claves(participantes)) {
@@ -64,7 +64,7 @@ describe('AF-USERNAME-D104 · mock de las listas con el @', () => {
   ])('%s: las claves de siempre, sin `username`', async (_l, clave, valor) => {
     almacen.set(clave, valor);
     const { amigos, entrantes, grupo, participantes } = await listas();
-    for (const k of claves(amigos)) expect(k).toBe('added_at,first_name,full_name,id,last_name,payme_id');
+    for (const k of claves(amigos)) expect(k).toBe('added_at,first_name,full_name,has_avatar,id,last_name,payme_id');
     for (const k of claves(entrantes)) expect(k).toBe('first_name,full_name,id,last_name,payme_id');
     for (const k of claves(grupo)) expect(k).toBe('first_name,id,last_name,payme_id');
     for (const k of claves(participantes)) expect(k).toBe('first_name,has_avatar,last_name,participant_id,payme_id');

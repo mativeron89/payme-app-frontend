@@ -6,13 +6,13 @@ import { ingresar } from './_app';
  * como leídos" tiene que estar arriba de todo, no abajo».
  *
  * Hasta 0.210.4 la fila iba DESPUÉS de toda la lista; ahora es la primera del
- * contenido, antes de las invitaciones y de las notificaciones. Es la fila que
- * va a sumar «Borrar todas» (E174-2, con su backend): eso no entra acá.
+ * contenido, antes de las invitaciones y de las notificaciones. Desde E174-2
+ * la misma fila suma «Borrar todas» (`avisos-borrar.spec.ts`).
  *
  * La cuenta del mock no trae notificaciones SIN LEER (sólo una invitación y un
  * aviso leído), y la fila sólo aparece si hay alguna. Se suma una por la
  * fachada, en el mismo documento: la navegación por hash no recarga el módulo.
- * Desaparece cuando se marca todo como leído, como en el dueño.
+ * El botón desaparece cuando se marca todo como leído, como en el dueño.
  */
 async function conUnaSinLeer(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -70,7 +70,7 @@ test.describe('E174-1 · «Marcar leídos» arriba de todo', () => {
     expect(orden.filaTop, JSON.stringify(orden)).toBeLessThan(orden.primeraFilaDeLista);
   });
 
-  test('el botón sigue marcando todo como leído, y la fila se va cuando no queda nada sin leer', async ({ page }) => {
+  test('el botón sigue marcando todo como leído, y se va cuando no queda nada sin leer', async ({ page }) => {
     await ingresar(page);
     await conUnaSinLeer(page);
     await page.goto('/#/avisos');
@@ -79,5 +79,7 @@ test.describe('E174-1 · «Marcar leídos» arriba de todo', () => {
     await boton.click();
     await expect(boton).toHaveCount(0);
     await expect(page.getByRole('img', { name: 'Sin leer' })).toHaveCount(0);
+    // E174-2: la fila queda, con «Borrar todas», mientras haya notificaciones.
+    await expect(page.locator('.avisos-actions').getByRole('button', { name: 'Borrar todas', exact: true })).toBeVisible();
   });
 });

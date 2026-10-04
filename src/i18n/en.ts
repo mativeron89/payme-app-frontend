@@ -1117,4 +1117,15 @@ export const EN: Record<string, string> = {
   "Editar el nombre del restaurante": "Edit the restaurant name",
   "Editar en el ticket": "Edit on the receipt",
   "No podemos usar ese nombre para este restaurante. Déjalo vacío o cámbialo y prueba de nuevo.": "We can't use that name for this restaurant. Leave it empty or change it and try again.",
+  // AF-E173-3-E174 · decisión 174 · borrar notificaciones, una o todas.
+  "Borrar todas": "Delete all",
+  "Borrar notificación": "Delete notification",
+  "No se pudo borrar la notificación": "Couldn't delete the notification",
+  "No se pudieron borrar las notificaciones": "Couldn't delete the notifications",
+  "¿Borrar todas las notificaciones?": "Delete all notifications?",
+  "Se borran todas, también las que ya leíste.": "All of them are deleted, including the ones you've read.",
+  "No se pueden recuperar.": "They can't be recovered.",
+  "Las invitaciones de arriba no se borran.": "The invitations above aren't deleted.",
+  "Sí, borrar todas": "Yes, delete all",
+  "Borrando…": "Deleting…",
 };

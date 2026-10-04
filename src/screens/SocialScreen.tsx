@@ -21,6 +21,7 @@ import {
 } from './friendRequestsView';
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 import { FriendAvatar } from '../components/FriendAvatar';
+import { podarFotosDeAmigos } from '../api/fotosEnMemoria';
 import { BuscarPorArroba } from '../components/BuscarPorArroba';
 import { arrobaCoincide, useUsernameCapability } from '../api/username';
 import { ArrobaDebajo } from '../components/ArrobaDebajo';
@@ -127,13 +128,18 @@ export function SocialScreen() {
 
   const loadFriends = useCallback(() => {
     if (!session || !isCurrentSession(session)) return;
-    // Revoca los blobs visibles antes de revalidar la relación y los permisos.
+    // E173-3 · decisión 175: cada carga de la lista revalida las fotos en
+    // segundo plano. Las guardadas en memoria se siguen viendo mientras tanto;
+    // un 404 las retira. Al llegar la lista, salen las de quienes ya no están
+    // o tienen `has_avatar: false`.
     setFriendsRevision((value) => value + 1);
     const expected = session;
     const epoch = friendsEpoch.current.next();
     api.getFriends()
       .then((r) => {
-        if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends(r.friends);
+        if (!friendsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
+        podarFotosDeAmigos(expected, r.friends);
+        setFriends(r.friends);
       })
       .catch(() => {
         if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends([]);
@@ -490,7 +496,7 @@ export function SocialScreen() {
               )}
               {amigosVisibles?.map((f) => (
                 <div key={f.id} className="friend-row" style={{ cursor: 'default' }}>
-                  <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} />
+                  <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} hasAvatar={f.has_avatar} />
                   <div className="fr-name">
                     <div className="n">{f.full_name}</div>
                     <ArrobaDebajo username={f.username} />
