@@ -11,6 +11,16 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.2 — Detalles de Ubicación según referencia nueva (2026-10-03)
+
+D169 R2: chevrones locales sin eje en País/Huso, tarjeta más cercana al
+subtítulo, bordes más suaves y padding inferior que conserva el safe-area.
+La apertura por toque/ratón no hereda el marco de foco programático; el
+teclado y la tecnología asistiva conservan foco visible, trap y restauración.
+No cambia selección, persistencia ni cálculo UTC/IANA/DST. Sin dependencias,
+scripts, backend ni reloj compartido. Publicación PR/CI/servido pendiente;
+0.210.1 está publicada técnicamente, con aceptación visual de Mati pendiente.
+
 ## 0.210.1 — Ubicación compacta y grupos UTC (2026-10-03)
 
 Entrega D169: panel principal reducido a país, huso y Aplicar; ayuda y reset

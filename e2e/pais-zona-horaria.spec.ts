@@ -63,6 +63,65 @@ async function elegir(page: Page, code: CountryCode, zone?: string): Promise<voi
 }
 
 test.describe('D169 · Ubicación y fechas personales locales', () => {
+  for (const input of ['touch', 'mouse', 'keyboard'] as const) {
+    test('R2 abrir/reabrir con ' + input + ': foco correcto, teclado visible y trap intacto', async ({ page }) => {
+      await preparar(page); await page.keyboard.press('Escape');
+      const trigger = page.getByRole('button', { name: 'Ubicación', exact: true });
+      const sheet = panel(page).locator('.region-settings-sheet');
+      const openWithInput = async () => {
+        if (input === 'touch') await trigger.tap();
+        else if (input === 'mouse') await trigger.click();
+        else { await trigger.focus(); await page.keyboard.press('Enter'); }
+        await expect(panel(page)).toBeVisible();
+        await expect(countryRow(page)).toBeFocused();
+        await expect(sheet).toHaveAttribute('data-region-input', input === 'keyboard' ? 'keyboard' : 'pointer');
+        await expect(countryRow(page)).toHaveCSS('outline-style', input === 'keyboard' ? 'solid' : 'none');
+      };
+      await openWithInput();
+      await expect(panel(page).locator('[data-region-chevron]')).toHaveCount(2);
+      await expect(panel(page).locator('[data-region-chevron] path').first()).toHaveAttribute('d', 'm9 5 7 7-7 7');
+      await page.keyboard.press('Tab'); await expect(zoneRow(page)).toBeFocused();
+      await expect(zoneRow(page)).toHaveCSS('outline-style', 'solid');
+      await expect(zoneRow(page)).toHaveCSS('outline-width', '3px');
+      await page.keyboard.press('Shift+Tab'); await expect(countryRow(page)).toBeFocused();
+      await page.keyboard.press('Enter');
+      const back = panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true });
+      await expect(back).toBeFocused(); await expect(back).toHaveCSS('outline-style', 'solid');
+      await page.keyboard.press('Shift+Tab');
+      expect(await panel(page).evaluate((el) => el.contains(document.activeElement))).toBe(true);
+      await page.keyboard.press('Escape'); await expect(panel(page)).toBeHidden();
+      await expect(trigger).toBeFocused(); expect(await stored(page)).toBeNull();
+      await openWithInput(); await apply(page).focus(); await page.keyboard.press('Enter');
+      await expect(panel(page)).toBeHidden(); await expect(trigger).toBeFocused();
+      expect(await stored(page)).toBe('{"country":"MX","timeZone":"America/Mexico_City"}');
+      await openWithInput(); await expect(zoneRow(page)).toContainText('UTC−6');
+    });
+  }
+
+  test('R2 detalle normalizado: gap compacto, borde suave y safe-area a320px', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 }); await preparar(page);
+    const sheet = panel(page).locator('.region-settings-sheet');
+    const measure = () => sheet.evaluate((el) => {
+      const description = el.querySelector('.region-settings-heading p')!;
+      const fields = el.querySelector('.region-settings-fields')!;
+      const footer = el.querySelector('.region-settings-footer')!;
+      return { gap: fields.getBoundingClientRect().top - description.getBoundingClientRect().bottom,
+        margin: getComputedStyle(description).marginTop, border: getComputedStyle(fields).borderTopColor,
+        bottom: getComputedStyle(footer).paddingBottom, width: el.getBoundingClientRect().width,
+        overflow: el.scrollWidth > el.clientWidth };
+    });
+    const ordinary = await measure();
+    expect(ordinary).toEqual({ gap: 10, margin: '0px', border: 'rgb(216, 225, 237)', bottom: '16px', width: 320, overflow: false });
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: 34 } });
+      await expect(panel(page).locator('.region-settings-footer')).toHaveCSS('padding-bottom', '50px');
+      expect((await sheet.boundingBox())!.y).toBeGreaterThanOrEqual(64);
+      expect((await apply(page).boundingBox())!.height).toBeGreaterThanOrEqual(48);
+      expect((await measure()).overflow).toBe(false);
+    } finally { await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: {} }); await cdp.detach(); }
+  });
+
   test('fila debajoIdioma; panel compacto y ayuda/reset fuera del modal', async ({ page }) => {
     await preparar(page);
     await expect(countryRow(page)).toContainText('México');

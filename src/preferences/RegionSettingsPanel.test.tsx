@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { draftForCountry, RegionLocalManagement, RegionSettingsPanel, regionNoticeText } from './RegionSettingsPanel';
+import { draftForCountry, RegionLocalManagement, RegionRowChevron, RegionSettingsPanel, regionNoticeText, regionOpeningInput } from './RegionSettingsPanel';
 import { REGION_COUNTRIES, zoneLabel } from './regionCatalog';
 import { DEFAULT_REGION, defaultRegionState, saveRegion } from './regionPreference';
 
@@ -50,6 +50,19 @@ describe('D165 · borrador exacto de Ubicación, sin efectos de almacenamiento',
 });
 
 describe('D169 · gestión local fuera del panel de selección', () => {
+  it('R2 distingue teclado/tecnología asistiva de click/toque sin quitar el foco', () => {
+    expect(regionOpeningInput(0)).toBe('keyboard');
+    expect(regionOpeningInput(1)).toBe('pointer');
+    expect(regionOpeningInput(2)).toBe('pointer');
+  });
+  it('R2 usa un chevrón decorativo local sin eje ni otro tab stop', () => {
+    const html = renderToStaticMarkup(<RegionRowChevron />);
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('d="m9 5 7 7-7 7"');
+    expect((html.match(/<path /g) ?? []).length).toBe(1);
+    expect(html).not.toContain('<line');
+    expect(html).not.toContain('tabindex');
+  });
   it('la fila cerrada no monta ayuda, reset ni un reloj global', () => {
     const html = renderToStaticMarkup(<RegionSettingsPanel />);
     expect(html).toContain('Ubicación');

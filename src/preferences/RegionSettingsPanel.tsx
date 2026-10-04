@@ -11,6 +11,20 @@ import './regionSettingsPanel.css';
 
 export interface RegionDraft { readonly country: CountryCode; readonly timeZone: string }
 
+/** El click de teclado/tecnología asistiva no tiene contador de puntero. */
+export function regionOpeningInput(detail: number): 'keyboard' | 'pointer' {
+  return detail === 0 ? 'keyboard' : 'pointer';
+}
+
+/** Chevrón local: no cambia las flechas de navegación del resto de la app. */
+export function RegionRowChevron() {
+  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+    data-region-chevron="">
+    <path d="m9 5 7 7-7 7" />
+  </svg>;
+}
+
 /** Reseleccionar el mismo país no destruye la ciudad elegida. Un país NUEVO
  * multizona exige elegir explícitamente; nunca toma el primer IANA del grupo. */
 export function draftForCountry(current: RegionDraft, code: CountryCode): RegionDraft {
@@ -37,7 +51,7 @@ export function regionNoticeText(region: RegionState, t: Translate): string {
 export function RegionSettingsPanel() {
   const { t } = useIdioma();
   const region = useRegion();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<false | 'keyboard' | 'pointer'>(false);
   const [confirmation, setConfirmation] = useState(0);
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -48,7 +62,9 @@ export function RegionSettingsPanel() {
   const close = () => { setOpen(false); trigger.current?.focus(); };
   return <>
     <button ref={trigger} type="button" className="list-row region-settings-trigger"
-      aria-haspopup="dialog" aria-expanded={open} onClick={() => { setConfirmation(0); setOpen(true); }}>
+      aria-haspopup="dialog" aria-expanded={Boolean(open)} onClick={(event) => {
+        setConfirmation(0); setOpen(regionOpeningInput(event.detail));
+      }}>
       <Icon name="pin" size={18} />
       <span className="region-settings-trigger-label">{t('Ubicación')}</span>
       <Icon name="arrow-right" size={16} />
@@ -58,7 +74,7 @@ export function RegionSettingsPanel() {
     {region.notice !== null && <p className="region-settings-warning" role="status" aria-live="polite">
       {regionNoticeText(region, t)}
     </p>}
-    {open && <RegionSheet onClose={close} onApplied={(result) => {
+    {open && <RegionSheet openingInput={open} onClose={close} onApplied={(result) => {
       close();
       if (result.persistence === 'saved' && result.notice === null) setConfirmation((n) => n + 1);
     }} />}
@@ -70,13 +86,14 @@ export function RegionSettingsPanel() {
   </>;
 }
 
-function RegionSheet({ onClose, onApplied }: {
-  onClose: () => void; onApplied: (result: RegionState) => void;
+function RegionSheet({ openingInput, onClose, onApplied }: {
+  openingInput: 'keyboard' | 'pointer'; onClose: () => void; onApplied: (result: RegionState) => void;
 }) {
   const { t, idioma } = useIdioma();
   const region = useRegion();
   const [draft, setDraft] = useState<RegionDraft>(() => ({ ...region.preference }));
   const [view, setView] = useState<'main' | 'country' | 'zone'>('main');
+  const [input, setInput] = useState(openingInput);
   const [instant, setInstant] = useState(() => new Date());
   const dialog = useRef<HTMLDialogElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -132,7 +149,10 @@ function RegionSheet({ onClose, onApplied }: {
     aria-labelledby={id + '-title'} aria-describedby={id + '-description'}
     onCancel={(event) => { event.preventDefault(); dismiss(); }}
     onClick={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
-    <section className="region-settings-sheet" data-region-view={view}>
+    {/* showModal/focus pueden heredar :focus-visible de un campo anterior.
+        La modalidad se limita a este panel; no se quita ni mueve el foco. */}
+    <section className="region-settings-sheet" data-region-view={view} data-region-input={input}
+      onPointerDownCapture={() => setInput('pointer')} onKeyDownCapture={() => setInput('keyboard')}>
       <header className="region-settings-header">
         <span className="region-settings-handle" aria-hidden="true" />
         <div className="region-settings-heading">
@@ -149,13 +169,13 @@ function RegionSheet({ onClose, onApplied }: {
         {view === 'main' ? <div className="region-settings-fields">
           <button ref={countryButton} type="button" className="region-settings-field" onClick={() => setView('country')}>
             <span>{t('País')}</span><span className="region-settings-value">{names[draft.country]}</span>
-            <Icon name="arrow-right" size={18} />
+            <RegionRowChevron />
           </button>
           <button type="button" className="region-settings-field" onClick={() => setView('zone')}>
             <span>{t('Huso horario')}</span>
             <span className="region-settings-value">{draftDisplay ? utcOffsetLabel(draftDisplay.offsetMinutes)
               : draft.timeZone ? t('No compatible con este navegador') : t('Elige un huso horario')}</span>
-            <Icon name="arrow-right" size={18} />
+            <RegionRowChevron />
           </button>
         </div> : <>
           <button ref={back} type="button" className="region-settings-back" onClick={() => setView('main')}
