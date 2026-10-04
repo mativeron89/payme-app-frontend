@@ -47,6 +47,10 @@ test.describe('Historial (§1.10)', () => {
       // Oráculos explícitos e independientes: no usan reloj/zona del runner ni
       // el formateador de producto para calcular lo que esperan de la pantalla.
       await page.clock.setFixedTime(new Date(fixture.instant));
+      // D171: estos dos oráculos históricos son Manual MX explícito; un
+      // navegador nuevo ahora sigue la zona del dispositivo, no México implícito.
+      await page.addInitScript(() => localStorage.setItem('payme.app.region.v1',
+        JSON.stringify({ country: 'MX', timeZone: 'America/Mexico_City' })));
       await ingresar(page);
       await page.goto('/#/mesas');
 
@@ -70,6 +74,39 @@ test.describe('Historial (§1.10)', () => {
       // La ausencia es el spec: la mesa abierta vive en Inicio y esta pantalla
       // no tiene sección de abiertas.
       await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
+    });
+  }
+
+  for (const device of [
+    { zone: 'UTC', firstMonth: 'octubre de 2026' },
+    { zone: 'America/Mexico_City', firstMonth: 'septiembre de 2026' },
+  ]) {
+    test.describe('D171 · Automático nativo en ' + device.zone, () => {
+      test.use({ timezoneId: device.zone });
+      for (const fixture of [
+        { instant: '2026-10-04T01:00:00Z', month: device.firstMonth },
+        { instant: '2026-10-04T07:00:00Z', month: 'octubre de 2026' },
+      ]) {
+        test('agrupa el seed en ' + fixture.month + ' para ' + fixture.instant, async ({ page }) => {
+          // Seed hace3d: 01Oct01Z es octubre en UTC y septiembre en CDMX;
+          // 01Oct07Z es octubre en ambas. Oráculos literales, no de producto.
+          await page.clock.setFixedTime(new Date(fixture.instant));
+          await ingresar(page); await page.goto('/#/mesas');
+          expect(await page.evaluate(() => new Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(device.zone);
+          await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+          await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
+          await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
+          await expect(page.getByRole('heading', { name: fixture.month, exact: true })).toBeVisible();
+          await expect(page.getByRole('region', { name: fixture.month, exact: true })
+            .getByRole('button', { name: /\$224\.25/ })).toBeVisible();
+          await expect(page.getByText('$224.25')).toBeVisible();
+          await expect(page.getByText('$418.00')).toBeVisible();
+          await expect(page.getByText('$156.50')).toBeVisible();
+          await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
+          // El default automático no escribe una selección ni congela la zona.
+          expect(await page.evaluate(() => localStorage.getItem('payme.app.region.v1'))).toBeNull();
+        });
+      }
     });
   }
 

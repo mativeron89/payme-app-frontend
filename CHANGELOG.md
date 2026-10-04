@@ -32,7 +32,13 @@ de navegador iniciales más 11 relevantes tras corregir el borrador Manual
 vacío. No sustituye el CI completo oficial del PR, pendiente de publicación
 y verificación servida. El CI222 inicial falló por una traducción de la
 configuración inicial anterior que quedó huérfana; se retira esa entrada
-obsoleta, sin alterar el censo ni su prueba. 0.210.3 está publicada; prueba visible física de Mati
+obsoleta, sin alterar el censo ni su prueba. CI223 pasó unitarios/tipos/build
+y falló un oráculo mensual de Historial que suponía México implícito: se
+declara Manual MX en sus dos vectores previos, conservando aserciones, y se
+añaden cuatro vectores Automático UTC/CDMX con instantes/meses explícitos.
+Los 20 recorridos focales de Historial/Ubicación y los tipos E2E pasaron.
+Los fallos previos permanecen registrados, sin rerun manual ni publicación
+en main rojo. 0.210.3 está publicada; prueba visible física de Mati
 y n289 siguen abiertas. No Textract.
 
 ## 0.210.3 — Regresiones de invitación copiada y arranque PWA (2026-10-03)
