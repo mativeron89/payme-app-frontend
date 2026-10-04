@@ -4,12 +4,12 @@ import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
 import { useRegion } from './RegionProvider';
 import { REGION_COUNTRIES, zoneLabel, type CountryCode } from './regionCatalog';
-import { parseRegion, type RegionState } from './regionPreference';
+import { parseRegion, type RegionPreference, type RegionState } from './regionPreference';
 import { groupTimeZones, timeZoneDisplay, utcOffsetLabel, zoneForGroup } from './timezoneDisplay';
 import { personalZoneCaption } from '../utils/personalDates';
 import './regionSettingsPanel.css';
 
-export interface RegionDraft { readonly country: CountryCode; readonly timeZone: string }
+export type RegionDraft = RegionPreference;
 
 /** El click de teclado/tecnología asistiva no tiene contador de puntero. */
 export function regionOpeningInput(detail: number): 'keyboard' | 'pointer' {
@@ -29,6 +29,7 @@ export function RegionRowChevron() {
  * multizona exige elegir explícitamente; nunca toma el primer IANA del grupo. */
 export function draftForCountry(current: RegionDraft, code: CountryCode): RegionDraft {
   const country = REGION_COUNTRIES.find((c) => c.code === code)!;
+  if (current.mode === 'automatic') return current.country === code ? current : { ...current, country: code };
   return current.country === code ? current
     : { country: code, timeZone: country.zones.length === 1 ? country.zones[0]! : '' };
 }
@@ -38,11 +39,12 @@ export function regionNoticeText(region: RegionState, t: Translate): string {
   switch (region.notice) {
     case 'corrupt': return t('La preferencia guardada no es válida. Usamos la configuración inicial sin borrar el dato anterior.');
     case 'unsupported': return t('La zona guardada o inicial no es compatible con este navegador. Se aplica el fallback indicado.');
+    case 'device-unavailable': return t('Zona del dispositivo no disponible; usamos la última zona válida o Ciudad de México.');
     case 'storage-unavailable': return t('No pudimos leer la preferencia local. Puedes elegir una zona temporal sin bloquear el ingreso.');
     case 'not-saved': return t('La selección se aplica temporalmente, pero no se pudo confirmar el guardado. Al recargar puede perderse o volver el valor anterior.');
     case 'not-reset': return t('Restablecimos esta vista, pero no pudimos confirmar el borrado de la preferencia. Al recargar puede volver el valor anterior.');
     default: return region.persistence === 'saved' ? t('Guardado sólo en este navegador.')
-      : t('México y Ciudad de México son la configuración inicial.');
+      : t('México es el país inicial; el huso horario sigue la zona del dispositivo.');
   }
 }
 
@@ -63,7 +65,7 @@ export function RegionSettingsPanel() {
   return <>
     <button ref={trigger} type="button" className="list-row region-settings-trigger"
       aria-haspopup="dialog" aria-expanded={Boolean(open)} onClick={(event) => {
-        setConfirmation(0); setOpen(regionOpeningInput(event.detail));
+        region.refreshDevice(); setConfirmation(0); setOpen(regionOpeningInput(event.detail));
       }}>
       <Icon name="pin" size={18} />
       <span className="region-settings-trigger-label">{t('Ubicación')}</span>
@@ -109,8 +111,12 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
     CL: t('Chile'), ES: t('España'), US: t('Estados Unidos'),
   };
   const candidate = parseRegion(draft);
-  const canApply = candidate !== null && region.supportedZones.has(draft.timeZone);
-  const draftDisplay = draft.timeZone ? timeZoneDisplay(draft.timeZone, instant) : null;
+  const automatic = draft.mode === 'automatic';
+  const automaticZone = region.deviceZone ?? region.presentationZone;
+  const automaticDisplay = automaticZone ? timeZoneDisplay(automaticZone, instant) : null;
+  const effectiveZone = automatic ? automaticZone : draft.timeZone;
+  const canApply = candidate !== null && (automatic || region.supportedZones.has(draft.timeZone));
+  const draftDisplay = effectiveZone ? timeZoneDisplay(effectiveZone, instant) : null;
   const dismiss = () => { dialog.current?.close(); onClose(); };
   useEffect(() => {
     let timer: number | undefined;
@@ -173,7 +179,10 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
           </button>
           <button type="button" className="region-settings-field" onClick={() => setView('zone')}>
             <span>{t('Huso horario')}</span>
-            <span className="region-settings-value">{draftDisplay ? utcOffsetLabel(draftDisplay.offsetMinutes)
+            <span className="region-settings-value">{automatic ? <>
+              <strong className="region-settings-auto-value">{t('Automático')}{draftDisplay && <> · {utcOffsetLabel(draftDisplay.offsetMinutes)}</>}</strong>
+              <small className="region-settings-auto-zone">{effectiveZone ?? t('No compatible con este navegador')}</small>
+            </> : draftDisplay ? utcOffsetLabel(draftDisplay.offsetMinutes)
               : draft.timeZone ? t('No compatible con este navegador') : t('Elige un huso horario')}</span>
             <RegionRowChevron />
           </button>
@@ -189,9 +198,20 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
               onClick={() => selectCountry(c.code)}>
               <span>{names[c.code]}</span>{draft.country === c.code && <Icon name="check" size={18} />}
             </button>) : <>
+              <button type="button" className="region-settings-option" aria-pressed={automatic}
+                onClick={() => setDraft({ ...draft, timeZone: draft.timeZone || region.preference.timeZone, mode: 'automatic' })}>
+                <span>{t('Automático: zona del dispositivo')}<small>{automaticZone ?? t('No compatible con este navegador')}
+                  {automaticDisplay && <> · {utcOffsetLabel(automaticDisplay.offsetMinutes)}</>}</small></span>
+                {automatic && <Icon name="check" size={18} />}
+              </button>
+              <button type="button" className="region-settings-option" aria-pressed={!automatic}
+                onClick={() => setDraft({ country: draft.country,
+                  timeZone: country.zones.includes(draft.timeZone) ? draft.timeZone : country.zones.length === 1 ? country.zones[0]! : '' })}>
+                <span>{t('Manual')}</span>{!automatic && <Icon name="check" size={18} />}
+              </button>
               {groups.map((group) => {
                 const cities = group.zones.map((zone) => zoneLabel(zone, idioma));
-                const selected = group.zones.includes(draft.timeZone);
+                const selected = !automatic && group.zones.includes(draft.timeZone);
                 return <button type="button" key={group.offsetMinutes}
                   className="region-settings-option region-settings-zone-option"
                   aria-pressed={selected} data-region-offset={group.offsetMinutes}
@@ -214,12 +234,13 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
             </>}
           </div>
         </>}
-        {country.zones.length > 1 && !draft.timeZone && <p className="region-settings-sr-only" role="status">
+        {!automatic && country.zones.length > 1 && !draft.timeZone && <p className="region-settings-sr-only" role="status">
           {t('Este país tiene varias zonas: elige una antes de aplicar.')}
         </p>}
         {region.notice !== null && <p className="region-settings-help" role="status" aria-live="polite" aria-atomic="true">
           {regionNoticeText(region, t)}
-          {region.notice === 'unsupported' && <> {personalZoneCaption(region.presentationZone, t)}</>}
+          {(region.notice === 'unsupported' || region.presentationZone === 'UTC' || region.presentationZone === null)
+            && <> {personalZoneCaption(region.presentationZone, t)}</>}
         </p>}
       </div>
       <footer className="region-settings-footer">
@@ -248,6 +269,7 @@ export function RegionLocalManagement() {
     <p>{caption}</p>
     <p>{t('Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
     <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
+    <p>{t('Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.')}</p>
     <p>{t('Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.')}</p>
     <button type="button" className="region-settings-reset" onClick={() => region.reset()}>{t('Restablecer país y zona')}</button>
   </details>;

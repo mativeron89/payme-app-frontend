@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { REGION_COUNTRIES, zoneLabel } from './regionCatalog';
-import { DEFAULT_REGION, REGION_KEY, defaultRegionState, loadRegion, parseRegion, resetRegion, saveRegion, type RegionStorage } from './regionPreference';
+import { DEFAULT_REGION, DEFAULT_AUTOMATIC_REGION, REGION_KEY, defaultRegionState, loadRegion, parseRegion, readDeviceTimeZone, refreshAutomaticRegion, resetRegion, saveRegion, type RegionStorage } from './regionPreference';
 import { supportsTimeZone } from '../utils/personalDates';
+import { personalDateParts } from '../utils/personalDates';
+import { timeZoneDisplay } from './timezoneDisplay';
+import { countdownLong } from '../utils/format';
 
 class MemoryStorage implements RegionStorage {
   readonly values = new Map<string, string>();
@@ -53,7 +56,7 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     expect(saveRegion(value, storage, allSupported).notice).toBe('corrupt');
     expect(storage.operations).toEqual([]);
   });
-  it('sin dato usa México/CDMX y no escribe', () => {
+  it('sin dato usa país México y zona automática del dispositivo sin escribir', () => {
     const storage = new MemoryStorage();
     expect(loadRegion(storage, allSupported)).toEqual(defaultRegionState(null, allSupported));
     expect(storage.operations).toEqual(['get:' + REGION_KEY]);
@@ -94,7 +97,7 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     const storage = new MemoryStorage();
     const raw = '{"country":"CO","timeZone":"America/Tijuana"}';
     storage.values.set(REGION_KEY, raw);
-    expect(loadRegion(storage, allSupported).preference).toEqual(DEFAULT_REGION);
+    expect(loadRegion(storage, allSupported).preference).toEqual(DEFAULT_AUTOMATIC_REGION);
     expect(storage.values.get(REGION_KEY)).toBe(raw);
   });
   it('get inaccesible no bloquea y declara fallback', () => {
@@ -117,7 +120,7 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     const storage = new MemoryStorage();
     storage.setItem = () => undefined;
     expect(saveRegion(colombia, storage, allSupported).notice).toBe('not-saved');
-    expect(loadRegion(storage, allSupported).preference).toEqual(DEFAULT_REGION);
+    expect(loadRegion(storage, allSupported).preference).toEqual(DEFAULT_AUTOMATIC_REGION);
   });
   it('get después de set falla: no hay promesa de recarga', () => {
     const storage = new MemoryStorage();
@@ -128,7 +131,7 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     const storage = new MemoryStorage();
     saveRegion(colombia, storage, allSupported);
     storage.removeItem = () => { throw new Error('blocked'); };
-    expect(resetRegion(storage, allSupported)).toMatchObject({ preference: DEFAULT_REGION, notice: 'not-reset' });
+    expect(resetRegion(storage, allSupported)).toMatchObject({ preference: DEFAULT_AUTOMATIC_REGION, notice: 'not-reset' });
     expect(loadRegion(storage, allSupported).preference).toEqual(colombia);
   });
   it('remove silencioso no acredita borrado', () => {
@@ -147,13 +150,13 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     const storage = new MemoryStorage();
     storage.values.set(REGION_KEY, JSON.stringify(colombia));
     const result = loadRegion(storage, (zone) => zone !== colombia.timeZone);
-    expect(result).toMatchObject({ preference: DEFAULT_REGION, notice: 'unsupported' });
+    expect(result).toMatchObject({ preference: colombia, presentationZone: DEFAULT_REGION.timeZone, notice: 'unsupported' });
     expect(storage.values.get(REGION_KEY)).toBe(JSON.stringify(colombia));
   });
   it('CDMX no soportado: UTC efectivo explícito, no par MX/UTC guardado', () => {
     const storage = new MemoryStorage();
-    const state = loadRegion(storage, (zone) => zone === 'UTC');
-    expect(state).toMatchObject({ presentationZone: 'UTC', preference: DEFAULT_REGION, notice: 'unsupported' });
+    const state = loadRegion(storage, (zone) => zone === 'UTC', () => null);
+    expect(state).toMatchObject({ presentationZone: 'UTC', preference: DEFAULT_AUTOMATIC_REGION, notice: 'device-unavailable' });
     expect(parseRegion({ country: 'MX', timeZone: 'UTC' })).toBeNull();
     expect(storage.values.size).toBe(0);
   });
@@ -166,5 +169,97 @@ describe('D158 · sólo la preferencia propia, datos mínimos', () => {
     expect(loadRegion(storage, allSupported)).toMatchObject({ preference: colombia, persistence: 'saved', notice: null });
     expect(loadRegion(storage, allSupported).preference).toEqual(colombia);
     expect([...storage.values.keys()]).toEqual([REGION_KEY]);
+  });
+});
+
+describe('D171 · modo del dispositivo independiente del país y sin zona congelada', () => {
+  it.each(['America/Mexico_City', 'America/New_York', 'Asia/Tokyo', 'Asia/Kathmandu'])
+  ('navegador nuevo: México permanece manual y zona efectiva %s, sin escribir', (device) => {
+    const storage = new MemoryStorage();
+    const state = loadRegion(storage, supportsTimeZone, () => device);
+    expect(state).toMatchObject({ preference: DEFAULT_AUTOMATIC_REGION, presentationZone: device, notice: null });
+    expect(storage.operations).toEqual(['get:' + REGION_KEY]);
+    expect(storage.values.size).toBe(0);
+  });
+  it('legacy manual conserva bytes, IANA y modo ante lectura/refresh/recarga', () => {
+    const storage = new MemoryStorage();
+    const raw = ' { "country": "MX", "timeZone": "America/Matamoros" } ';
+    storage.values.set(REGION_KEY, raw);
+    const reader = vi.fn(() => 'Asia/Tokyo');
+    const state = loadRegion(storage, supportsTimeZone, reader);
+    expect(state.preference).toEqual({ country: 'MX', timeZone: 'America/Matamoros' });
+    expect(state.presentationZone).toBe('America/Matamoros');
+    expect(refreshAutomaticRegion(state, reader)).toBe(state);
+    expect(loadRegion(storage, supportsTimeZone, reader)).toEqual(state);
+    expect(reader).not.toHaveBeenCalled();
+    expect(storage.values.get(REGION_KEY)).toBe(raw);
+    expect(storage.operations.every((op) => op === 'get:' + REGION_KEY)).toBe(true);
+  });
+  it('Aplicar auto guarda elección/fallback manual, no Tokyo; recarga toma Madrid y foreground Kathmandu', () => {
+    const storage = new MemoryStorage();
+    storage.values.set('ajena', 'retain');
+    const choice = { ...colombia, mode: 'automatic' } as const;
+    const applied = saveRegion(choice, storage, supportsTimeZone, () => 'Asia/Tokyo');
+    expect(applied.presentationZone).toBe('Asia/Tokyo');
+    expect(JSON.parse(storage.values.get(REGION_KEY)!)).toEqual(choice);
+    const reloaded = loadRegion(storage, supportsTimeZone, () => 'Europe/Madrid');
+    expect(reloaded.presentationZone).toBe('Europe/Madrid');
+    storage.operations.length = 0;
+    const refreshed = refreshAutomaticRegion(reloaded, () => 'Asia/Kathmandu');
+    expect(refreshed.presentationZone).toBe('Asia/Kathmandu');
+    expect(refreshed.preference).toEqual(choice);
+    expect(storage.operations).toEqual([]);
+    expect(storage.values.get('ajena')).toBe('retain');
+  });
+  it.each(['', 'Invalid/Zone', '+05:00', 123, null, undefined])
+  ('dispositivo inválido %j usa último efectivo válido; frío usa fallback manual/CDMX', (invalid) => {
+    const state = saveRegion({ ...colombia, mode: 'automatic' }, new MemoryStorage(), supportsTimeZone, () => 'Asia/Tokyo');
+    const refreshed = refreshAutomaticRegion(state, () => invalid);
+    expect(refreshed).toMatchObject({ presentationZone: 'Asia/Tokyo', notice: 'device-unavailable' });
+    const storage = new MemoryStorage();
+    storage.values.set(REGION_KEY, JSON.stringify(state.preference));
+    expect(loadRegion(storage, supportsTimeZone, () => invalid).presentationZone).toBe('America/Bogota');
+    expect(loadRegion(new MemoryStorage(), supportsTimeZone, () => invalid).presentationZone).toBe('America/Mexico_City');
+  });
+  it('lector/Intl lanzan: no excepción, fallback previo o ISO neutral, y recuperación automática', () => {
+    const state = loadRegion(new MemoryStorage(), supportsTimeZone, () => 'Asia/Tokyo');
+    expect(refreshAutomaticRegion(state, () => { throw new Error('device'); }).presentationZone).toBe('Asia/Tokyo');
+    const broken = refreshAutomaticRegion(state, () => null, () => false);
+    expect(broken).toMatchObject({ presentationZone: null, notice: 'unsupported' });
+    expect(refreshAutomaticRegion(broken, () => 'Asia/Kathmandu').presentationZone).toBe('Asia/Kathmandu');
+    const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => { throw new Error('Intl unavailable'); });
+    try {
+      expect(readDeviceTimeZone()).toBeNull();
+      expect(loadRegion(null)).toMatchObject({ presentationZone: null, notice: 'storage-unavailable' });
+    } finally { spy.mockRestore(); }
+  });
+  it.each(['absent', 'get', 'set', 'silent-set'] as const)
+  ('storage %s: automático sigue en memoria sin afirmar guardado ni borrar otra clave', (failure) => {
+    const storage = new MemoryStorage();
+    storage.values.set('ajena', 'retain');
+    if (failure === 'get') storage.getItem = () => { throw new Error('get'); };
+    if (failure === 'set') storage.setItem = () => { throw new Error('quota'); };
+    if (failure === 'silent-set') storage.setItem = () => undefined;
+    const selected = saveRegion({ ...colombia, mode: 'automatic' }, failure === 'absent' ? null : storage,
+      supportsTimeZone, () => 'Asia/Tokyo');
+    expect(selected).toMatchObject({ presentationZone: 'Asia/Tokyo', persistence: 'temporary', notice: 'not-saved' });
+    expect(refreshAutomaticRegion(selected, () => 'Asia/Kathmandu')).toMatchObject({
+      presentationZone: 'Asia/Kathmandu', persistence: 'temporary', notice: 'not-saved',
+    });
+    expect(storage.values.get('ajena')).toBe('retain');
+  });
+  it('offset/DST se calcula por instante IANA y no altera el ISO ni countdown compartido', () => {
+    const winter = new Date('2026-01-15T12:30:00Z');
+    const summer = new Date('2026-07-15T12:30:00Z');
+    const state = loadRegion(new MemoryStorage(), supportsTimeZone, () => 'America/New_York');
+    expect(timeZoneDisplay(state.presentationZone!, winter)).toEqual({ offsetMinutes: -300, time: '07:30' });
+    expect(timeZoneDisplay(state.presentationZone!, summer)).toEqual({ offsetMinutes: -240, time: '08:30' });
+    const expiry = '2026-01-15T17:30:00Z';
+    const before = countdownLong(expiry, winter);
+    const changed = refreshAutomaticRegion(state, () => 'Asia/Kathmandu');
+    expect(personalDateParts(winter.toISOString(), changed.presentationZone)?.hour).toBe(18);
+    expect(winter.toISOString()).toBe('2026-01-15T12:30:00.000Z');
+    expect(countdownLong(expiry, winter)).toEqual(before);
+    expect(before).toEqual({ text: '5 h', urgent: false });
   });
 });

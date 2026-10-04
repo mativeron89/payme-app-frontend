@@ -53,6 +53,12 @@ export const EN: Record<string, string> = {
   "Huso horario · {0}": "Time zone · {0}",
   "Sólo en este navegador": "Only in this browser",
   "Aplicar": "Apply",
+  'Automático': 'Automatic',
+  'Automático: zona del dispositivo': 'Automatic: device time zone',
+  'Manual': 'Manual',
+  'Zona del dispositivo no disponible; usamos la última zona válida o Ciudad de México.': 'Device time zone unavailable; using the last valid time zone or Mexico City.',
+  'México es el país inicial; el huso horario sigue la zona del dispositivo.': 'Mexico is the initial country; the time zone follows the device.',
+  'Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.': 'Automatic uses the device time zone setting; it does not obtain your physical location.',
   // D158 · traducciones de la preferencia personal local, sin cambiar el idioma.
   'País': 'Country',
   'México': 'Mexico',

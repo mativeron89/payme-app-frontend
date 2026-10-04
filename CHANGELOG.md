@@ -11,6 +11,28 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.4 — Zona automática del dispositivo con alternativa manual (2026-10-04)
+
+D171: un navegador nuevo empieza en Automático, usando la zona de Intl; las
+preferencias manuales válidas ya guardadas conservan su zona y sus bytes al
+leer. País sigue manual e independiente, incluso si la zona automática está
+fuera de su catálogo. Aplicar guarda sólo la elección y el fallback manual,
+nunca congela como manual la zona detectada; cancelar descarta el borrador.
+
+La presentación se actualiza al iniciar, abrir Ubicación y regresar a primer
+plano, sin polling de detección. Fallos de dispositivo/Intl/storage mantienen
+un fallback estable o funcionamiento temporal/ISO neutral con aviso, sin
+borrar datos ajenos. El panel compacto y su foco por teclado se conservan;
+la nueva copia tiene traducción inglesa. No GPS, permisos, coordenadas ni
+red para localizar. No cambia UTC, vencimientos, períodos compartidos, país,
+moneda, legal, idioma, cuenta o backend; sin dependencias ni scripts nuevos.
+
+Validación focal local: 163 unitarias, cuatro tipos y build mock; 40 recorridos
+de navegador iniciales más 11 relevantes tras corregir el borrador Manual
+vacío. No sustituye el CI completo oficial del PR, pendiente de publicación
+y verificación servida. 0.210.3 está publicada; prueba visible física de Mati
+y n289 siguen abiertas. No Textract.
+
 ## 0.210.3 — Regresiones de invitación copiada y arranque PWA (2026-10-03)
 
 D170: cobertura nueva, sin cambios de producto. El recorrido navega el link

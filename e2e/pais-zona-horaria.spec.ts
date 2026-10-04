@@ -19,13 +19,56 @@ const zoneOption = (page: Page, zone: string) => panel(page).locator('button[dat
 const groupedOptions = (page: Page) => panel(page).locator('button[data-region-offset]');
 const stored = (page: Page) => page.evaluate((key) => localStorage.getItem(key), KEY);
 
-async function abrir(page: Page): Promise<void> {
+async function dispositivo(page: Page, zona: string): Promise<void> {
+  await page.addInitScript((initial) => {
+    let zone = initial, reads = 0;
+    Object.defineProperty(window, '__d171Device', { value: {
+      change: (next: string) => { zone = next; }, reads: () => reads,
+    } });
+    Intl.DateTimeFormat = new Proxy(Intl.DateTimeFormat, {
+      construct(target, args, newTarget) {
+        const instance = Reflect.construct(target, args, newTarget) as Intl.DateTimeFormat;
+        if (args.length !== 0) return instance;
+        reads++;
+        return new Proxy(instance, {
+          get(formatter, property) {
+            if (property === 'resolvedOptions') return () => ({ ...formatter.resolvedOptions(), timeZone: zone });
+            const value: unknown = Reflect.get(formatter, property, formatter);
+            return typeof value === 'function' ? value.bind(formatter) : value;
+          },
+        });
+      },
+    });
+  }, zona);
+}
+
+async function cambiarDispositivo(page: Page, zona: string, evento: 'pageshow' | 'visibilitychange'): Promise<void> {
+  await page.evaluate(({ zone, event }) => {
+    const device = (window as Window & { __d171Device?: { change: (zone: string) => void } }).__d171Device;
+    if (!device) throw new Error('dispositivo sintético no instalado');
+    device.change(zone);
+    if (event === 'visibilitychange') {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      document.dispatchEvent(new Event(event));
+    } else window.dispatchEvent(new Event(event));
+  }, { zone: zona, event: evento });
+}
+
+async function abrir(page: Page, automatic = false): Promise<void> {
   await page.getByRole('button', { name: 'Ubicación', exact: true }).click();
   await expect(panel(page)).toBeVisible();
+  // Los recorridos D169 siguen probando Manual explícito, sin persistir aquí.
+  if (!automatic && await zoneRow(page).locator('.region-settings-auto-value').count()) {
+    await zoneRow(page).click();
+    await panel(page).getByRole('button', { name: 'Manual', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+  }
 }
 async function preparar(page: Page, options: {
   raw?: string; failure?: 'get' | 'set' | 'silent-set' | 'remove' | 'silent-remove';
+  automatic?: boolean; deviceZone?: string;
 } = {}): Promise<void> {
+  await dispositivo(page, options.deviceZone ?? 'America/Mexico_City');
   await page.addInitScript(({ key, op }) => {
     localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
     if (op.raw !== undefined) localStorage.setItem(key, op.raw);
@@ -45,7 +88,7 @@ async function preparar(page: Page, options: {
       remove.call(this, name);
     };
   }, { key: KEY, op: options });
-  await ingresar(page); await page.goto('/#/mas'); await abrir(page);
+  await ingresar(page); await page.goto('/#/mas'); await abrir(page, options.automatic);
 }
 async function seleccionarPais(page: Page, code: CountryCode): Promise<void> {
   await countryRow(page).click();
@@ -93,7 +136,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
       await expect(trigger).toBeFocused(); expect(await stored(page)).toBeNull();
       await openWithInput(); await apply(page).focus(); await page.keyboard.press('Enter');
       await expect(panel(page)).toBeHidden(); await expect(trigger).toBeFocused();
-      expect(await stored(page)).toBe('{"country":"MX","timeZone":"America/Mexico_City"}');
+      expect(await stored(page)).toBe('{"country":"MX","timeZone":"America/Mexico_City","mode":"automatic"}');
       await openWithInput(); await expect(zoneRow(page)).toContainText('UTC−6');
     });
   }
@@ -240,8 +283,15 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await preparar(page); await zoneRow(page).click();
     const current = zoneOption(page, 'America/Mexico_City');
     await expect(current.locator('time')).toHaveText('06:30');
+    const deviceReads = () => page.evaluate(() => {
+      const device = (window as Window & { __d171Device?: { reads: () => number } }).__d171Device;
+      if (!device) throw new Error('lector sintético no instalado');
+      return device.reads();
+    });
+    const readsBefore = await deviceReads();
     await page.clock.runFor(61020);
     await expect(current.locator('time')).toHaveText('06:31');
+    expect(await deviceReads(), 'refrescar HH:mm no hace polling de zona del dispositivo').toBe(readsBefore);
     await expect(current).toHaveAttribute('aria-pressed', 'true');
     expect(await stored(page)).toBeNull();
     await page.keyboard.press('Escape');
@@ -421,5 +471,153 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     }, KEY);
     await page.goto('/privacy'); await expect(page.getByRole('heading').first()).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { regionStorageCalls: string[] }).regionStorageCalls)).toEqual([]);
+  });
+});
+
+test.describe('D171 · zona del dispositivo sin ubicación física ni zona automática congelada', () => {
+  for (const zone of ['America/Mexico_City', 'America/New_York', 'Asia/Tokyo']) {
+    test('nuevo navegador automático en ' + zone + ': país MX independiente, sin guardar al abrir', async ({ page }) => {
+      await preparar(page, { automatic: true, deviceZone: zone });
+      await expect(countryRow(page)).toContainText('México');
+      await expect(zoneRow(page)).toContainText('Automático');
+      await expect(zoneRow(page)).toContainText(zone);
+      expect(await stored(page)).toBeNull();
+      await zoneRow(page).click();
+      const automatic = panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ });
+      await expect(automatic).toHaveAttribute('aria-pressed', 'true');
+      await expect(automatic).toContainText(zone);
+    });
+  }
+
+  test('Automático habilita Apply después de un borrador Manual multizona vacío, sin congelar Tokyo', async ({ page }) => {
+    await preparar(page, { deviceZone: 'Asia/Tokyo' });
+    await seleccionarPais(page, 'US');
+    await expect(apply(page)).toBeDisabled();
+    await panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ }).click();
+    await expect(apply(page)).toBeEnabled();
+    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await expect(countryRow(page)).toContainText('Estados Unidos');
+    await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+    await apply(page).click();
+    expect(JSON.parse((await stored(page))!)).toEqual({ country: 'US', timeZone: 'America/Mexico_City', mode: 'automatic' });
+    await page.reload(); await abrir(page, true);
+    await expect(countryRow(page)).toContainText('Estados Unidos');
+    await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+  });
+
+  test('Apply/recarga preservan elección, no Tokyo; foreground actualiza a Kathmandu fuera país', async ({ page }) => {
+    await preparar(page, { automatic: true, deviceZone: 'Asia/Tokyo' });
+    await seleccionarPais(page, 'CO');
+    await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+    await apply(page).click();
+    const raw = (await stored(page))!;
+    expect(JSON.parse(raw)).toEqual({ country: 'CO', timeZone: 'America/Mexico_City', mode: 'automatic' });
+    await page.reload(); await abrir(page, true);
+    await expect(countryRow(page)).toContainText('Colombia');
+    await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+    await cambiarDispositivo(page, 'Asia/Kathmandu', 'visibilitychange');
+    await expect(zoneRow(page)).toContainText('Asia/Kathmandu');
+    await expect(zoneRow(page)).toContainText('UTC+5:45');
+    expect(await stored(page)).toBe(raw);
+    await cambiarDispositivo(page, 'America/New_York', 'pageshow');
+    await expect(zoneRow(page)).toContainText('America/New_York');
+    expect(await stored(page)).toBe(raw);
+    await page.keyboard.press('Escape');
+    await cambiarDispositivo(page, 'Asia/Tokyo', 'pageshow');
+    await abrir(page, true); await zoneRow(page).click();
+    await panel(page).getByRole('button', { name: 'Manual', exact: true }).click();
+    await zoneOption(page, 'America/Bogota').click(); await apply(page).click();
+    const manual = (await stored(page))!;
+    expect(JSON.parse(manual)).toEqual({ country: 'CO', timeZone: 'America/Bogota' });
+    await cambiarDispositivo(page, 'Asia/Kathmandu', 'pageshow');
+    await abrir(page, true); await expect(zoneRow(page)).toHaveText('Huso horarioUTC−5');
+    expect(await stored(page)).toBe(manual);
+  });
+
+  test('cancelar Automático y país conserva legacy manual byte por byte, incluso al recargar', async ({ page }) => {
+    const raw = ' { "country": "MX", "timeZone": "America/Matamoros" } ';
+    await preparar(page, { automatic: true, deviceZone: 'Asia/Tokyo', raw });
+    await expect(zoneRow(page)).not.toContainText('Automático');
+    await zoneRow(page).click();
+    const automatic = panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ });
+    await expect(automatic).toContainText('Asia/Tokyo');
+    await automatic.click();
+    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await seleccionarPais(page, 'CO');
+    await page.keyboard.press('Escape');
+    expect(await stored(page)).toBe(raw);
+    await cambiarDispositivo(page, 'Asia/Kathmandu', 'visibilitychange');
+    await abrir(page, true); await expect(countryRow(page)).toContainText('México');
+    await expect(zoneRow(page)).not.toContainText('Automático');
+    await page.reload(); await abrir(page, true);
+    expect(await stored(page)).toBe(raw);
+    await expect(zoneRow(page)).not.toContainText('Automático');
+  });
+
+  test('dispositivo inválido usa CDMX/último válido y se recupera; storage fallido no finge guardado', async ({ page }) => {
+    await preparar(page, { automatic: true, deviceZone: 'Invalid/Zone', failure: 'set' });
+    await expect(zoneRow(page)).toContainText('America/Mexico_City');
+    await expect(panel(page)).toContainText('última zona válida');
+    await cambiarDispositivo(page, 'Asia/Tokyo', 'pageshow');
+    await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+    await apply(page).click();
+    await expect(page.locator('.region-settings-warning')).toContainText('no se pudo confirmar el guardado');
+    expect(await stored(page)).toBeNull();
+    await cambiarDispositivo(page, 'Invalid/Zone', 'visibilitychange');
+    await abrir(page, true); await expect(zoneRow(page)).toContainText('Asia/Tokyo');
+    await expect(panel(page)).not.toContainText('Guardado sólo en este navegador.');
+  });
+
+  for (const width of [320, 390]) {
+    test('panel automático ' + width + 'px: sin GPS/red/permisos, toque limpio y teclado accesible', async ({ page, baseURL }) => {
+      const externas: string[] = [], errores: string[] = [];
+      page.on('pageerror', (error) => errores.push(error.message));
+      await page.route('**/*', (route) => {
+        if (new URL(route.request().url()).origin === new URL(baseURL!).origin) return route.continue();
+        externas.push(route.request().url()); return route.abort();
+      });
+      await page.addInitScript(() => {
+        const calls: string[] = [];
+        Object.defineProperty(window, '__d171LocationCalls', { value: calls });
+        Object.defineProperty(navigator, 'geolocation', { value: {
+          getCurrentPosition: () => { calls.push('GPS'); throw new Error('GPS fuera de alcance'); },
+          watchPosition: () => { calls.push('watch'); throw new Error('GPS fuera de alcance'); },
+        } });
+        const query = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = (descriptor) => {
+          if (descriptor.name === 'geolocation') { calls.push('permission'); throw new Error('permiso fuera de alcance'); }
+          return query(descriptor);
+        };
+      });
+      await page.setViewportSize({ width, height: 720 });
+      await preparar(page, { automatic: true, deviceZone: 'Asia/Kathmandu' });
+      const sheet = panel(page).locator('.region-settings-sheet');
+      await expect(countryRow(page)).toHaveCSS('outline-style', 'none');
+      expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await zoneRow(page).click();
+      const automatic = panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ });
+      await automatic.focus(); await page.keyboard.press('Space');
+      await expect(automatic).toHaveCSS('outline-style', 'solid');
+      expect((await automatic.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeFocused();
+      expect(await stored(page)).toBeNull();
+      expect(await page.evaluate(() => (window as Window & { __d171LocationCalls?: string[] }).__d171LocationCalls)).toEqual([]);
+      expect(externas).toEqual([]); expect(errores).toEqual([]);
+    });
+  }
+
+  test('inglés conserva Automático/Manual y elección local sin política nueva', async ({ page }) => {
+    await preparar(page, { automatic: true, deviceZone: 'Asia/Tokyo' });
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+    await page.reload(); await page.getByRole('button', { name: 'Location', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Location', exact: true });
+    await expect(dialog.getByRole('button', { name: /^Time zone / })).toContainText('Automatic');
+    await dialog.getByRole('button', { name: /^Time zone / }).click();
+    await expect(dialog.getByRole('button', { name: /^Automatic: device time zone/ })).toContainText('Asia/Tokyo');
+    await expect(dialog.getByRole('button', { name: 'Manual', exact: true })).toBeVisible();
+    expect(await stored(page)).toBeNull();
   });
 });

@@ -80,3 +80,20 @@ describe('D169 · gestión local fuera del panel de selección', () => {
     expect(html).not.toContain('<dialog');
   });
 });
+
+describe('D171 · borrador automático sin inferir país ni destruir Manual', () => {
+  it('país automático significa sólo zona: cambiar a CO conserva modo y fallback, no infiere ubicación', () => {
+    const before = { country: 'MX', timeZone: 'America/Matamoros', mode: 'automatic' } as const;
+    expect(draftForCountry(before, 'CO')).toEqual({ ...before, country: 'CO' });
+    expect(draftForCountry(before, 'MX')).toBe(before);
+    expect(before.country).toBe('MX');
+  });
+  it('fallo de zona explica fallback sin afirmar GPS ni guardado', () => {
+    const state = { ...defaultRegionState(), notice: 'device-unavailable' } as const;
+    expect(regionNoticeText(state, (s) => s)).toContain('última zona válida');
+    expect(regionNoticeText(state, (s) => s)).not.toContain('Guardado');
+    const html = renderToStaticMarkup(<RegionLocalManagement />);
+    expect(html).toContain('no obtiene tu ubicación física');
+    expect(html).toContain('no se sincroniza entre dispositivos ni cuentas');
+  });
+});
