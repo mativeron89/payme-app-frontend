@@ -54,8 +54,9 @@ export const REGION_COUNTRIES: readonly RegionCountry[] = [
   ] },
 ];
 
-/** D165: etiquetas del catálogo recibido; cada ciudad conserva SU IANA.
- * No agrupar por UTC de hoy: coincidir ahora no implica reglas iguales.
+/** Etiquetas del catálogo recibido; cada ciudad conserva SU IANA.
+ * D169 agrupa sólo la presentación por offset actual, nunca la persistencia:
+ * coincidir ahora no implica reglas iguales.
  * Nombres propios originales, con exónimos legibles en inglés donde procede.
  */
 const ZONE_LABELS: Readonly<Record<string, readonly [string, string]>> = {

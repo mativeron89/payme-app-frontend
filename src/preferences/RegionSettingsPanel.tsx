@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
 import { useRegion } from './RegionProvider';
 import { REGION_COUNTRIES, zoneLabel, type CountryCode } from './regionCatalog';
-import { DEFAULT_REGION, parseRegion, type RegionState } from './regionPreference';
+import { parseRegion, type RegionState } from './regionPreference';
+import { groupTimeZones, timeZoneDisplay, utcOffsetLabel, zoneForGroup } from './timezoneDisplay';
 import { personalZoneCaption } from '../utils/personalDates';
 import './regionSettingsPanel.css';
 
@@ -76,12 +77,15 @@ function RegionSheet({ onClose, onApplied }: {
   const region = useRegion();
   const [draft, setDraft] = useState<RegionDraft>(() => ({ ...region.preference }));
   const [view, setView] = useState<'main' | 'country' | 'zone'>('main');
+  const [instant, setInstant] = useState(() => new Date());
   const dialog = useRef<HTMLDialogElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const back = useRef<HTMLButtonElement>(null);
   const countryButton = useRef<HTMLButtonElement>(null);
   const id = useId();
   const country = REGION_COUNTRIES.find((c) => c.code === draft.country)!;
+  const { groups, unavailable } = useMemo(() => groupTimeZones(country.zones, instant,
+    (zone) => region.supportedZones.has(zone)), [country, instant, region.supportedZones]);
   // Literales traducibles, no claves de cuenta/backend ni dependencia nueva.
   const names: Record<CountryCode, string> = {
     MX: t('México'), CO: t('Colombia'), PE: t('Perú'), AR: t('Argentina'),
@@ -89,10 +93,25 @@ function RegionSheet({ onClose, onApplied }: {
   };
   const candidate = parseRegion(draft);
   const canApply = candidate !== null && region.supportedZones.has(draft.timeZone);
-  const caption = region.presentationZone === null || region.presentationZone === 'UTC'
-    ? personalZoneCaption(region.presentationZone, t)
-    : t('Fechas mostradas en {0}; no indican la zona original.', zoneLabel(region.presentationZone, idioma));
+  const draftDisplay = draft.timeZone ? timeZoneDisplay(draft.timeZone, instant) : null;
   const dismiss = () => { dialog.current?.close(); onClose(); };
+  useEffect(() => {
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      setInstant(new Date());
+      timer = window.setTimeout(refresh, 60000 - Date.now() % 60000 + 10);
+    };
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  }, []);
   useEffect(() => {
     const modal = dialog.current!;
     const overflow = document.body.style.overflow;
@@ -113,7 +132,7 @@ function RegionSheet({ onClose, onApplied }: {
     aria-labelledby={id + '-title'} aria-describedby={id + '-description'}
     onCancel={(event) => { event.preventDefault(); dismiss(); }}
     onClick={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
-    <section className="region-settings-sheet">
+    <section className="region-settings-sheet" data-region-view={view}>
       <header className="region-settings-header">
         <span className="region-settings-handle" aria-hidden="true" />
         <div className="region-settings-heading">
@@ -134,7 +153,8 @@ function RegionSheet({ onClose, onApplied }: {
           </button>
           <button type="button" className="region-settings-field" onClick={() => setView('zone')}>
             <span>{t('Huso horario')}</span>
-            <span className="region-settings-value">{draft.timeZone ? zoneLabel(draft.timeZone, idioma) : t('Elige una ciudad / zona horaria')}</span>
+            <span className="region-settings-value">{draftDisplay ? utcOffsetLabel(draftDisplay.offsetMinutes)
+              : draft.timeZone ? t('No compatible con este navegador') : t('Elige un huso horario')}</span>
             <Icon name="arrow-right" size={18} />
           </button>
         </div> : <>
@@ -148,28 +168,39 @@ function RegionSheet({ onClose, onApplied }: {
               className="region-settings-option" aria-pressed={draft.country === c.code}
               onClick={() => selectCountry(c.code)}>
               <span>{names[c.code]}</span>{draft.country === c.code && <Icon name="check" size={18} />}
-            </button>) : country.zones.map((zone) => {
-              const supported = region.supportedZones.has(zone);
-              return <button type="button" key={zone} className="region-settings-option"
-                disabled={!supported} aria-pressed={draft.timeZone === zone} data-region-zone={zone}
-                onClick={() => { setDraft({ country: draft.country, timeZone: zone }); setView('main'); }}>
-                <span>{zoneLabel(zone, idioma)}{!supported && <small>{t('No compatible con este navegador')}</small>}</span>
-                {draft.timeZone === zone && <Icon name="check" size={18} />}
-              </button>;
-            })}
+            </button>) : <>
+              {groups.map((group) => {
+                const cities = group.zones.map((zone) => zoneLabel(zone, idioma));
+                const selected = group.zones.includes(draft.timeZone);
+                return <button type="button" key={group.offsetMinutes}
+                  className="region-settings-option region-settings-zone-option"
+                  aria-pressed={selected} data-region-offset={group.offsetMinutes}
+                  data-region-zones={group.zones.join(' ')}
+                  onClick={() => setDraft({ country: draft.country, timeZone: zoneForGroup(group, draft.timeZone) })}>
+                  <span className="region-settings-zone-copy">
+                    <strong>{utcOffsetLabel(group.offsetMinutes)}</strong>
+                    <small title={cities.join(', ')}><span>{cities.slice(0, 3).join(', ')}</span>
+                      {cities.length > 3 && <span>{t('y {0} más', cities.length - 3)}</span>}
+                    </small>
+                  </span>
+                  <time dateTime={instant.toISOString()}>{group.time}</time>
+                  <span className="region-settings-zone-check" aria-hidden="true">{selected && <Icon name="check" size={16} />}</span>
+                </button>;
+              })}
+              {unavailable.map((zone) => <button type="button" key={zone}
+                className="region-settings-option" disabled data-region-zones={zone} aria-pressed={false}>
+                <span>{zoneLabel(zone, idioma)}<small>{t('No compatible con este navegador')}</small></span>
+              </button>)}
+            </>}
           </div>
         </>}
-        {country.zones.length > 1 && !draft.timeZone && <p className="region-settings-help" role="status">
+        {country.zones.length > 1 && !draft.timeZone && <p className="region-settings-sr-only" role="status">
           {t('Este país tiene varias zonas: elige una antes de aplicar.')}
         </p>}
-        <p className="region-settings-help" role="status" aria-live="polite" aria-atomic="true">{regionNoticeText(region, t)}</p>
-        <p className="region-settings-help">{caption}</p>
-        <details className="region-settings-local-help">
-          <summary>{t('Sólo en este navegador')}</summary>
-          <p>{t('Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
-          <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
-          <p>{t('Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.')}</p>
-        </details>
+        {region.notice !== null && <p className="region-settings-help" role="status" aria-live="polite" aria-atomic="true">
+          {regionNoticeText(region, t)}
+          {region.notice === 'unsupported' && <> {personalZoneCaption(region.presentationZone, t)}</>}
+        </p>}
       </div>
       <footer className="region-settings-footer">
         <button type="button" className="region-settings-apply" disabled={!canApply} onClick={() => {
@@ -179,10 +210,25 @@ function RegionSheet({ onClose, onApplied }: {
             onApplied(result);
           }
         }}>{t('Aplicar')}</button>
-        <button type="button" className="region-settings-reset" onClick={() => {
-          region.reset(); setDraft({ ...DEFAULT_REGION }); setView('main');
-        }}>{t('Restablecer país y zona')}</button>
       </footer>
     </section>
   </dialog>, document.body);
+}
+
+/** Gestión explícita fuera del selector: conserva el reset de nuestra única clave. */
+export function RegionLocalManagement() {
+  const { t, idioma } = useIdioma();
+  const region = useRegion();
+  const caption = region.presentationZone === null || region.presentationZone === 'UTC'
+    ? personalZoneCaption(region.presentationZone, t)
+    : t('Fechas mostradas en {0}; no indican la zona original.', zoneLabel(region.presentationZone, idioma));
+  return <details className="region-settings-local-help region-settings-management">
+    <summary>{t('Sólo en este navegador')}</summary>
+    <p>{regionNoticeText(region, t)}</p>
+    <p>{caption}</p>
+    <p>{t('Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
+    <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
+    <p>{t('Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.')}</p>
+    <button type="button" className="region-settings-reset" onClick={() => region.reset()}>{t('Restablecer país y zona')}</button>
+  </details>;
 }

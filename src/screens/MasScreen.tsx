@@ -15,7 +15,7 @@ import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { CuentasConectadas } from './CuentasConectadas';
-import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
+import { RegionLocalManagement, RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -207,6 +207,7 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
+        <RegionLocalManagement />
         {IS_MOCK && (
           <button
             className="btn btn-ghost config-reset"

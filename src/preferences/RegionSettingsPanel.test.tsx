@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { draftForCountry, regionNoticeText } from './RegionSettingsPanel';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { draftForCountry, RegionLocalManagement, RegionSettingsPanel, regionNoticeText } from './RegionSettingsPanel';
 import { REGION_COUNTRIES, zoneLabel } from './regionCatalog';
 import { DEFAULT_REGION, defaultRegionState, saveRegion } from './regionPreference';
 
@@ -45,5 +46,24 @@ describe('D165 · borrador exacto de Ubicación, sin efectos de almacenamiento',
   ('notice %s no desaparece ni promete guardado', (notice) => {
     const text = regionNoticeText(defaultRegionState(notice, () => true), (s) => s);
     expect(text).not.toBe(''); expect(text).not.toContain('Guardado sólo');
+  });
+});
+
+describe('D169 · gestión local fuera del panel de selección', () => {
+  it('la fila cerrada no monta ayuda, reset ni un reloj global', () => {
+    const html = renderToStaticMarkup(<RegionSettingsPanel />);
+    expect(html).toContain('Ubicación');
+    expect(html).not.toContain('<dialog');
+    expect(html).not.toContain('Restablecer país y zona');
+    expect(html).not.toContain('Sólo en este navegador');
+  });
+  it('la gestión plegada conserva ayuda de privacidad y reset OWN', () => {
+    const html = renderToStaticMarkup(<RegionLocalManagement />);
+    expect(html).toContain('<details');
+    expect(html).not.toContain('<details open');
+    expect(html).toContain('Restablecer país y zona');
+    expect(html).toContain('otra persona heredará esta selección');
+    expect(html).toContain('7 países y 62 zonas');
+    expect(html).not.toContain('<dialog');
   });
 });

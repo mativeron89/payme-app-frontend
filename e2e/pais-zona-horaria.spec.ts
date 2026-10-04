@@ -1,15 +1,22 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { REGION_COUNTRIES, zoneLabel, type CountryCode } from '../src/preferences/regionCatalog';
+import { utcOffsetLabel } from '../src/preferences/timezoneDisplay';
 
-/** D158/D165 · mock sintético. Preparado estáticamente, NOT_RUN hasta D163. */
+/** D169 · mock sintético; agrupación visual sin sustituir los62 IANA persistidos. */
 const KEY = 'payme.app.region.v1';
 const panel = (page: Page) => page.getByRole('dialog', { name: 'Ubicación', exact: true });
 const apply = (page: Page) => panel(page).getByRole('button', { name: 'Aplicar', exact: true });
-const reset = (page: Page) => panel(page).getByRole('button', { name: 'Restablecer país y zona', exact: true });
+async function reset(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await page.locator('.region-settings-management summary').click();
+  await page.getByRole('button', { name: 'Restablecer país y zona', exact: true }).click();
+  await abrir(page);
+}
 const countryRow = (page: Page) => panel(page).getByRole('button', { name: /^País / });
 const zoneRow = (page: Page) => panel(page).getByRole('button', { name: /^Huso horario / });
-const zoneOption = (page: Page, zone: string) => panel(page).locator('button[data-region-zone="' + zone + '"]');
+const zoneOption = (page: Page, zone: string) => panel(page).locator('button[data-region-zones~="' + zone + '"]');
+const groupedOptions = (page: Page) => panel(page).locator('button[data-region-offset]');
 const stored = (page: Page) => page.evaluate((key) => localStorage.getItem(key), KEY);
 
 async function abrir(page: Page): Promise<void> {
@@ -55,50 +62,74 @@ async function elegir(page: Page, code: CountryCode, zone?: string): Promise<voi
   await apply(page).click(); await expect(panel(page)).toBeHidden();
 }
 
-test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
-  test('fila debajoIdioma y panel inicial con ayuda compacta de navegador compartido', async ({ page }) => {
+test.describe('D169 · Ubicación y fechas personales locales', () => {
+  test('fila debajoIdioma; panel compacto y ayuda/reset fuera del modal', async ({ page }) => {
     await preparar(page);
     await expect(countryRow(page)).toContainText('México');
-    await expect(zoneRow(page)).toContainText('Ciudad de México');
+    await expect(zoneRow(page)).toContainText('UTC−6');
     await expect(panel(page)).toContainText('Cambia sólo cómo ves fechas y horas.');
-    await panel(page).getByText('Sólo en este navegador', { exact: true }).click();
-    await expect(panel(page)).toContainText('7 países y 62 zonas');
-    await expect(panel(page)).toContainText('otra persona heredará esta selección');
-    await expect(panel(page)).toContainText('No detectamos tu ubicación');
+    await expect(panel(page)).not.toContainText('configuración inicial');
+    await expect(panel(page).locator('details')).toHaveCount(0);
+    await expect(panel(page).getByRole('button', { name: 'Restablecer país y zona' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.locator('.region-settings-management summary').click();
+    const help = page.locator('.region-settings-management');
+    await expect(help).toContainText('7 países y 62 zonas');
+    await expect(help).toContainText('otra persona heredará esta selección');
+    await expect(help).toContainText('No detectamos tu ubicación');
     expect(await stored(page)).toBeNull();
     expect(await page.locator('.region-settings-trigger').evaluate((row) =>
       row.previousElementSibling?.textContent?.includes('Idioma'))).toBe(true);
   });
 
-  test('multizona exige elegir ciudad exacta, teclado aplica y check desaparece1,6s', async ({ page }) => {
+  test('multizona exige elegir grupo UTC; guarda IANA, teclado aplica y check desaparece1,6s', async ({ page }) => {
     await preparar(page); await seleccionarPais(page, 'US');
     await expect(apply(page)).toBeDisabled();
     await expect(panel(page)).toContainText('elige una antes de aplicar');
-    await expect(panel(page).locator('[data-region-zone]')).toHaveCount(29);
+    const options = panel(page).locator('[data-region-zones]');
+    expect((await options.evaluateAll((rows) => rows.flatMap((row) => row.getAttribute('data-region-zones')!.split(' ')))).length).toBe(29);
+    const representative = (await zoneOption(page, 'America/Phoenix').getAttribute('data-region-zones'))!.split(' ')[0]!;
+    const offset = Number(await zoneOption(page, 'America/Phoenix').getAttribute('data-region-offset'));
     await zoneOption(page, 'America/Phoenix').click();
     await apply(page).focus(); await page.keyboard.press('Enter');
-    expect(JSON.parse((await stored(page))!)).toEqual({ country: 'US', timeZone: 'America/Phoenix' });
+    expect(JSON.parse((await stored(page))!)).toEqual({ country: 'US', timeZone: representative });
     await expect(page.locator('.region-settings-confirmation')).toBeVisible();
     await expect(page.locator('.region-settings-confirmation')).toBeHidden({ timeout: 2500 });
-    await abrir(page); await expect(zoneRow(page)).toContainText('Phoenix');
+    await abrir(page); await expect(zoneRow(page)).toContainText(utcOffsetLabel(offset));
   });
 
-  test('7países/62ciudades individuales contrastadas con Intl REAL, no simulación Juárez/Coyhaique', async ({ page }) => {
+  test('7países/62 IANA cubiertos exactamente una vez por grupos de offset Intl REAL', async ({ page }) => {
     await preparar(page);
     for (const country of REGION_COUNTRIES) {
       await countryRow(page).click();
       const group = panel(page).getByRole('group', { name: 'País', exact: true });
       await expect(group.getByRole('button')).toHaveCount(7);
       await group.getByRole('button', { name: country.label, exact: true }).click();
-      if (!(await panel(page).locator('[data-region-zone]').count())) await zoneRow(page).click();
-      await expect(panel(page).locator('[data-region-zone]')).toHaveCount(country.zones.length);
+      if (!(await panel(page).locator('[data-region-zones]').count())) await zoneRow(page).click();
+      const rows = panel(page).locator('[data-region-zones]');
+      const members = await rows.evaluateAll((buttons) => buttons.flatMap((row) => row.getAttribute('data-region-zones')!.split(' ')));
+      expect([...members].sort()).toEqual([...country.zones].sort());
+      expect(new Set(members).size).toBe(country.zones.length);
+      const offsets = await groupedOptions(page).evaluateAll((buttons) => buttons.map((row) => row.getAttribute('data-region-offset')));
+      expect(new Set(offsets).size).toBe(offsets.length);
       for (const zone of country.zones) {
         const supported = await page.evaluate((z) => {
           try { new Intl.DateTimeFormat('es', { timeZone: z }).format(0); return true; } catch { return false; }
         }, zone);
         const option = zoneOption(page, zone);
-        await expect(option).toContainText(zoneLabel(zone));
-        if (supported) await expect(option).toBeEnabled();
+        if (supported) {
+          await expect(option).toBeEnabled();
+          await expect(option.locator('small')).toHaveAttribute('title', new RegExp(zoneLabel(zone).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+          const instant = (await option.locator('time').getAttribute('datetime'))!;
+          const oracle = await page.evaluate(({ z, instant }) => {
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: z, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset' });
+            const parts = formatter.formatToParts(new Date(instant));
+            return { offset: parts.find((part) => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC').replace('-', '−'),
+              time: parts.find((part) => part.type === 'hour')!.value + ':' + parts.find((part) => part.type === 'minute')!.value };
+          }, { z: zone, instant });
+          await expect(option.locator('strong')).toHaveText(oracle.offset);
+          await expect(option.locator('time')).toHaveText(oracle.time);
+        }
         else { await expect(option).toBeDisabled(); await expect(option).toContainText('No compatible'); }
       }
       await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
@@ -106,16 +137,56 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
     expect(await stored(page)).toBeNull();
   });
 
-  test('CO/PE autoseleccionan; Argentina conserva12 IANA individuales', async ({ page }) => {
+  test('CO/PE autoseleccionan; Argentina agrupa12 IANA sin guardar offset', async ({ page }) => {
     await preparar(page); await seleccionarPais(page, 'CO');
-    await expect(zoneRow(page)).toContainText('Bogotá'); await apply(page).click();
+    await expect(zoneRow(page)).toContainText('UTC−5'); await apply(page).click();
     expect(await stored(page)).toBe('{"country":"CO","timeZone":"America/Bogota"}');
     await abrir(page); await elegir(page, 'PE');
     expect(JSON.parse((await stored(page))!)).toEqual({ country: 'PE', timeZone: 'America/Lima' });
     await abrir(page); await seleccionarPais(page, 'AR');
-    await expect(apply(page)).toBeDisabled(); await expect(panel(page).locator('[data-region-zone]')).toHaveCount(12);
+    await expect(apply(page)).toBeDisabled(); await expect(groupedOptions(page)).toHaveCount(1);
     await zoneOption(page, 'America/Argentina/Ushuaia').click(); await apply(page).click();
-    expect(JSON.parse((await stored(page))!)).toEqual({ country: 'AR', timeZone: 'America/Argentina/Ushuaia' });
+    expect(JSON.parse((await stored(page))!)).toEqual({ country: 'AR', timeZone: 'America/Argentina/Buenos_Aires' });
+  });
+
+  test('reseleccionar grupo conserva IANA no representante y sus reglas DST al cambiar instante', async ({ page }) => {
+    const raw = '{"country":"MX","timeZone":"America/Matamoros"}';
+    await page.clock.setFixedTime(new Date('2026-07-15T12:30:00Z'));
+    await preparar(page, { raw });
+    await expect(zoneRow(page)).toContainText('UTC−5');
+    await zoneRow(page).click();
+    const selected = zoneOption(page, 'America/Matamoros');
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(selected.locator('time')).toHaveText('07:30');
+    await selected.click(); await apply(page).click();
+    expect(await stored(page)).toBe(raw);
+    await page.clock.setFixedTime(new Date('2026-01-15T12:31:00Z'));
+    await abrir(page); await expect(zoneRow(page)).toContainText('UTC−6');
+    await zoneRow(page).click();
+    await expect(zoneOption(page, 'America/Matamoros').locator('time')).toHaveText('06:31');
+    await zoneOption(page, 'America/Matamoros').click(); await apply(page).click();
+    expect(await stored(page)).toBe(raw);
+  });
+
+  test('grupo único Argentina preserva Ushuaia ya guardada, no la sustituye por Buenos Aires', async ({ page }) => {
+    const raw = '{"country":"AR","timeZone":"America/Argentina/Ushuaia"}';
+    await preparar(page, { raw }); await zoneRow(page).click();
+    await expect(groupedOptions(page)).toHaveCount(1);
+    await zoneOption(page, 'America/Argentina/Ushuaia').click(); await apply(page).click();
+    expect(await stored(page)).toBe(raw);
+  });
+
+  test('hora del grupo se refresca al minuto sin persistir ni tocar la selección', async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-07-15T12:30:01Z') });
+    await preparar(page); await zoneRow(page).click();
+    const current = zoneOption(page, 'America/Mexico_City');
+    await expect(current.locator('time')).toHaveText('06:30');
+    await page.clock.runFor(61020);
+    await expect(current.locator('time')).toHaveText('06:31');
+    await expect(current).toHaveAttribute('aria-pressed', 'true');
+    expect(await stored(page)).toBeNull();
+    await page.keyboard.press('Escape');
+    await expect(panel(page)).toBeHidden();
   });
 
   for (const method of ['button', 'Escape', 'veil'] as const) {
@@ -127,7 +198,7 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
       await expect(panel(page)).toBeHidden(); expect(await stored(page)).toBeNull();
       await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeFocused();
       expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
-      await abrir(page); await expect(zoneRow(page)).toContainText('Ciudad de México');
+      await abrir(page); await expect(zoneRow(page)).toContainText('UTC−6');
     });
   }
 
@@ -143,8 +214,9 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
   test('reload conserva ciudad exacta; reset sóloOWN no afecta sesión ni otras claves', async ({ page }) => {
     await preparar(page); await page.evaluate(() => localStorage.setItem('synthetic.region.unrelated', 'retain'));
     await elegir(page, 'ES', 'Atlantic/Canary'); await page.reload(); await abrir(page);
-    await expect(countryRow(page)).toContainText('España'); await expect(zoneRow(page)).toContainText('Islas Canarias');
-    await reset(page).click(); await expect(zoneRow(page)).toContainText('Ciudad de México');
+    await expect(countryRow(page)).toContainText('España');
+    expect(JSON.parse((await stored(page))!).timeZone).toBe('Atlantic/Canary');
+    await reset(page); await expect(zoneRow(page)).toContainText('UTC−6');
     expect(await stored(page)).toBeNull();
     expect(await page.evaluate(() => localStorage.getItem('synthetic.region.unrelated'))).toBe('retain');
     await page.keyboard.press('Escape');
@@ -153,7 +225,7 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
 
   test('corrupto mantiene bytes anteriores y explica default', async ({ page }) => {
     await preparar(page, { raw: '{synthetic-corrupt' });
-    await expect(zoneRow(page)).toContainText('Ciudad de México');
+    await expect(zoneRow(page)).toContainText('UTC−6');
     await expect(panel(page)).toContainText('sin borrar el dato anterior');
     expect(await stored(page)).toBe('{synthetic-corrupt');
   });
@@ -162,7 +234,7 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
     const raw = '{"country":"CO","timeZone":"America/Bogota"}';
     await preparar(page, { raw }); await seleccionarPais(page, 'US');
     await zoneOption(page, 'America/Phoenix').click(); await page.keyboard.press('Escape');
-    expect(await stored(page)).toBe(raw); await abrir(page); await expect(zoneRow(page)).toContainText('Bogotá');
+    expect(await stored(page)).toBe(raw); await abrir(page); await expect(zoneRow(page)).toContainText('UTC−5');
   });
 
   test('fallback sintético sóloMX no se guarda como MX/UTC ni simula catálogo enproducto', async ({ page }) => {
@@ -188,16 +260,16 @@ test.describe('D158/D165 · Ubicación y fechas personales locales', () => {
       await preparar(page, { failure }); await elegir(page, 'CO');
       await expect(page.locator('.region-settings-warning')).toContainText('no se pudo confirmar el guardado');
       await expect(page.locator('.region-settings-confirmation')).toHaveCount(0);
-      await abrir(page); await expect(zoneRow(page)).toContainText('Bogotá');
+      await abrir(page); await expect(zoneRow(page)).toContainText('UTC−5');
       await expect(panel(page)).not.toContainText('Guardado sólo en este navegador.');
-      await page.reload(); await abrir(page); await expect(zoneRow(page)).toContainText('Ciudad de México');
+      await page.reload(); await abrir(page); await expect(zoneRow(page)).toContainText('UTC−6');
     });
   }
   for (const failure of ['remove', 'silent-remove'] as const) {
     test('reset ' + failure + ': avisa que puedevolver el valoranterior', async ({ page }) => {
       const raw = '{"country":"CO","timeZone":"America/Bogota"}';
-      await preparar(page, { raw, failure }); await reset(page).click();
-      await expect(zoneRow(page)).toContainText('Ciudad de México');
+      await preparar(page, { raw, failure }); await reset(page);
+      await expect(zoneRow(page)).toContainText('UTC−6');
       await expect(panel(page)).toContainText('no pudimos confirmar el borrado');
       expect(await stored(page)).toBe(raw);
     });

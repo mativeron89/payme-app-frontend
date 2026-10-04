@@ -395,6 +395,10 @@ describe('🔵 wallet NO se traduce · el riel está muerto', () => {
 });
 
 describe('`traducir()` · el contrato de la función', () => {
+  it('D169 · selector UTC y resumen de ciudades tienen inglés sin cambiar IANA', () => {
+    expect(traducir('Elige un huso horario', 'en')).toBe('Choose a time zone');
+    expect(traducir('y {0} más', 'en', 9)).toBe('and 9 more');
+  });
   it('en español es la IDENTIDAD: sin lookup, sin forma de romper', () => {
     expect(traducir('cualquier cosa', 'es')).toBe('cualquier cosa');
     expect(traducir('Mis tarjetas', 'es')).toBe('Mis tarjetas');

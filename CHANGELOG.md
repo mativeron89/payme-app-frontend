@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.1 — Ubicación compacta y grupos UTC (2026-10-03)
+
+Entrega D169: panel principal reducido a país, huso y Aplicar; ayuda y reset
+OWN fuera del modal, en gestión local plegada. El selector agrupa el catálogo
+por offset actual calculado con Intl/IANA y muestra la hora HH:mm de un mismo
+instante, refrescada al minuto y al volver al panel. Conserva la IANA guardada
+si pertenece al grupo elegido; un grupo distinto usa su primer representante
+válido del catálogo. No persiste offsets ni congela reglas estacionales.
+
+Se mantienen cancelación, foco, fallbacks, avisos de fallo y aislamiento de
+moneda/idioma/cuentas. Sin dependencias, cambios de almacenamiento, backend
+ni reloj compartido. Preparación de esta entrega: publicación por PR/CI y
+verificación servida pendientes. D167/0.210.0 ya fue publicado y verificado;
+las notas históricas siguientes conservan el estado que tenían al redactarse.
+
 ## 0.210.0 — País y zona horaria personales, preparación local (2026-10-01)
 
 Continuación D166 (2026-10-03): los cuatro perfiles de formato personal
