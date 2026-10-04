@@ -71,7 +71,6 @@ export const EN: Record<string, string> = {
   'Fecha no disponible': 'Date unavailable',
   'Fechas en ISO UTC: este navegador no pudo aplicar una zona horaria.': 'Dates in UTC ISO format: this browser could not apply a time zone.',
   'Fallback UTC: este navegador no admite la zona inicial de México.': 'UTC fallback: this browser does not support the initial Mexico time zone.',
-  'Fechas mostradas en {0}; no indican la zona original.': 'Dates displayed in {0}; this is not the original time zone.',
   'La preferencia guardada no es válida. Usamos la configuración inicial sin borrar el dato anterior.': 'The saved preference is invalid. We use the initial setting without deleting the previous value.',
   'La zona guardada o inicial no es compatible con este navegador. Se aplica el fallback indicado.': 'The saved or initial time zone is not supported by this browser. The indicated fallback applies.',
   'No pudimos leer la preferencia local. Puedes elegir una zona temporal sin bloquear el ingreso.': 'We could not read the local preference. You can choose a temporary time zone without blocking sign-in.',

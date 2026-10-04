@@ -140,8 +140,15 @@ export function personalMonth(iso: string, locale: string, zone: string | null):
   }
 }
 
-export function personalZoneCaption(zone: string | null, t: (text: string, ...args: unknown[]) => string): string {
+/**
+ * Aviso sobre la zona en que se muestran las fechas, o `null` si no hay nada
+ * que avisar. E173-1 · decisión 173 de Mati: «Quitar el mensaje de "Fechas
+ * mostradas.."». Con una zona aplicada no hay leyenda; quedan sólo los dos
+ * avisos de navegador degradado, que dicen otra cosa: que las fechas salen en
+ * UTC porque el navegador no pudo aplicar la zona.
+ */
+export function personalZoneCaption(zone: string | null, t: (text: string, ...args: unknown[]) => string): string | null {
   if (zone === null) return t('Fechas en ISO UTC: este navegador no pudo aplicar una zona horaria.');
   if (zone === 'UTC') return t('Fallback UTC: este navegador no admite la zona inicial de México.');
-  return t('Fechas mostradas en {0}; no indican la zona original.', zone);
+  return null;
 }

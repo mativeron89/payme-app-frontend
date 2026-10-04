@@ -93,6 +93,7 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
 }) {
   const { t, idioma } = useIdioma();
   const region = useRegion();
+  const zoneCaption = personalZoneCaption(region.presentationZone, t);
   const [draft, setDraft] = useState<RegionDraft>(() => ({ ...region.preference }));
   const [view, setView] = useState<'main' | 'country' | 'zone'>('main');
   const [input, setInput] = useState(openingInput);
@@ -239,8 +240,10 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
         </p>}
         {region.notice !== null && <p className="region-settings-help" role="status" aria-live="polite" aria-atomic="true">
           {regionNoticeText(region, t)}
-          {(region.notice === 'unsupported' || region.presentationZone === 'UTC' || region.presentationZone === null)
-            && <> {personalZoneCaption(region.presentationZone, t)}</>}
+          {/* E173-1 · decisión 173: sin «Fechas mostradas en …». Sólo queda el
+              aviso de navegador degradado (zona UTC o ninguna), que antes
+              también salía acá. */}
+          {zoneCaption && <> {zoneCaption}</>}
         </p>}
       </div>
       <footer className="region-settings-footer">
@@ -258,15 +261,15 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
 
 /** Gestión explícita fuera del selector: conserva el reset de nuestra única clave. */
 export function RegionLocalManagement() {
-  const { t, idioma } = useIdioma();
+  const { t } = useIdioma();
   const region = useRegion();
-  const caption = region.presentationZone === null || region.presentationZone === 'UTC'
-    ? personalZoneCaption(region.presentationZone, t)
-    : t('Fechas mostradas en {0}; no indican la zona original.', zoneLabel(region.presentationZone, idioma));
+  // E173-1 · decisión 173: sin la leyenda «Fechas mostradas en …»; sólo los
+  // avisos de navegador degradado.
+  const caption = personalZoneCaption(region.presentationZone, t);
   return <details className="region-settings-local-help region-settings-management">
     <summary>{t('Sólo en este navegador')}</summary>
     <p>{regionNoticeText(region, t)}</p>
-    <p>{caption}</p>
+    {caption && <p>{caption}</p>}
     <p>{t('Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
     <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
     <p>{t('Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.')}</p>

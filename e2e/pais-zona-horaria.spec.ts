@@ -423,7 +423,8 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await expect(card.locator('.rest-visita').first()).toContainText('Jue 01/01');
     await expect(card.locator('.rest-visita').first()).toContainText('05:30');
     await expect(page.locator('.stat-burbuja')).toHaveText(shared!);
-    await expect(page.getByText('Fechas mostradas en Europe/Madrid; no indican la zona original.', { exact: true })).toBeVisible();
+    // E173-1 · decisión 173: la leyenda «Fechas mostradas en …» ya no se muestra.
+    await expect(page.getByText(/Fechas mostradas en/)).toHaveCount(0);
   });
 
   test('otra sesiónmock hereda selección; inglés no cambia país/clave/payload', async ({ page }) => {

@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.5 — Sin «Fechas mostradas…» y la barra de abajo atada al borde (2026-10-04)
+
+Orden AF-E173-1-2-LEYENDA-Y-BARRA-20261004 (sha256 36715eff…), decisión 173 de Mati tras probar en su iPhone.
+Base `0.210.4` (`3a6368f`).
+
+- **E173-1 · sin la leyenda «Fechas mostradas en {zona}; no indican la zona original.»** Salía en Historial, en
+  Tus restaurantes y en «Sólo en este navegador» y el panel de Ubicación de Configuración. `personalZoneCaption`
+  devuelve `null` con una zona aplicada, y cada pantalla dibuja el párrafo sólo si hay texto. Se retiró la traducción
+  inglesa, que quedaba huérfana.
+  - Quedan los dos avisos de navegador degradado («Fallback UTC…» y «Fechas en ISO UTC…»): dicen otra cosa, que las
+    fechas salen en UTC porque el navegador no pudo aplicar la zona.
+  - No cambia cómo se calculan ni se guardan las fechas.
+- **E173-2 · la barra de abajo termina en el borde de la pantalla.** Mati: en la app agregada a inicio aparecía más
+  arriba al abrir hasta el primer scroll, y en Safari dejaba espacio en blanco debajo.
+  - **Hecho:** la barra (`.appbar-block`) es `position: absolute; bottom: 0` dentro de `.app`, y `.app` medía
+    `height: 100dvh`. La barra quedaba donde terminaba esa unidad, no en el borde de la pantalla.
+  - **Hipótesis, no medida en iPhone:** en iOS, `100dvh` no coincide con el área visible al arrancar la app de inicio
+    (se corrige con el primer scroll) ni en Safari con sus barras. Acá no hay simulador de iOS, y Chromium y WebKit de
+    escritorio no lo reproducen.
+  - **Arreglo:** `.app` se ata a los bordes del viewport, con `position: fixed` y `top`/`right`/`bottom`/`left` en 0,
+    sin unidades de viewport. Conserva los 480 px centrados en escritorio. Se quitó un `position: relative` al final
+    de la regla que habría ganado sobre el `fixed`.
+- **Pruebas nuevas:**
+  - `src/styles/shellViewport.test.ts` (3): `.app` fija con top/bottom 0 y sin alto en `vh`/`dvh`/`svh`/`lvh`, leyendo
+    el valor EFECTIVO de cada propiedad (la última declaración), y la barra anclada a su borde. Caen 2 sobre `3a6368f`.
+  - `e2e/barra-inferior-viewport.spec.ts` (5), en Chromium con `isMobile`: la barra termina en el borde del viewport y
+    lo que toca el borde inferior es la barra, en 390×664, 375×667, 390×844 y 430×932; y la sigue cuando el viewport
+    cambia de alto. Pasa también sobre `3a6368f`, porque Chromium no reproduce el defecto: es red de regresión.
+  - La orden sugería repetirlo con `display-mode: standalone` emulado. No se puede, medido: este Chromium ignora ese
+    rasgo en `Emulation.setEmulatedMedia`, y la app no tiene CSS que dependa de `display-mode`.
+  - `e2e/sin-leyenda-fechas.spec.ts` (3): Historial, Tus restaurantes y Configuración sin la leyenda, con zona
+    manual de México. Caen las 3 sobre `3a6368f`.
+  - Cambiados: `personalDates.test.ts` (la leyenda es `null`; los avisos degradados siguen) y
+    `pais-zona-horaria.spec.ts` (exigía la leyenda visible; ahora exige que no esté).
+- **Mutantes:** 6 plantados, 6 cazados.
+  - vuelve la leyenda: caen el unitario y los 3 e2e;
+  - Configuración arma su propia leyenda: cae su e2e;
+  - sin los avisos degradados: cae el unitario;
+  - `.app` vuelve a `100dvh`: caen las 2 guardas;
+  - vuelve el `position: relative` al final: cae la guarda del `fixed`;
+  - sin `bottom: 0`: caen la guarda y los 5 e2e de la barra.
+- **Lo visible lo cierra la prueba de Mati en el iPhone (D63),** en la app de inicio y en Safari.
+
 ## 0.210.4 — Zona automática del dispositivo con alternativa manual (2026-10-04)
 
 D171: un navegador nuevo empieza en Automático, usando la zona de Intl; las

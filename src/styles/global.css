@@ -330,16 +330,25 @@ body {
 
 .app {
   /* La altura de viewport vive acá, no en .screen: si ambas la tuvieran, la
-     banda de demo empujaría la página y se perdería al hacer scroll. */
-  min-height: 100dvh;
-  height: 100dvh;
+     banda de demo empujaría la página y se perdería al hacer scroll.
+     E173-2 · decisión 173: atada a los BORDES del viewport, no a una unidad.
+     Hasta 0.210.4 medía `height: 100dvh`, y la barra de abajo
+     (`.appbar-block`, `bottom: 0` de este contenedor) quedaba donde terminaba
+     esa unidad: en la app de inicio del iPhone, más arriba al abrir hasta el
+     primer scroll; en Safari, con espacio en blanco debajo. Con `fixed` y
+     `top`/`bottom` en 0 termina donde termina la pantalla visible. Lo vigila
+     `src/styles/shellViewport.test.ts`. */
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   overflow: hidden;
   max-width: 480px; /* en desktop se ve como columna de teléfono */
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--gray-l);
-  position: relative;
 }
 
 .screen {
@@ -1033,8 +1042,9 @@ body {
    habría sido invisible para cualquiera que leyera sólo el login. Las dos
    conservan su aspecto de hoy, intacto. */
 /* AF-LOGIN-D73 · (A) la pantalla de ingreso es SU PROPIO contenedor de
-   desplazamiento. Vive dentro de `.app`, que tiene `height: 100dvh` y
-   `overflow: hidden`; con `min-height: 100dvh` y sin scroll propio, lo que no
+   desplazamiento. Vive dentro de `.app`, que ocupa el alto del viewport
+   (`height: 100dvh` hasta 0.210.4; desde E173-2, `fixed` con top/bottom 0) y
+   tiene `overflow: hidden`; con `min-height: 100dvh` y sin scroll propio, lo que no
    entraba quedaba RECORTADO y el dedo no llegaba (medido en WebKit de iPhone:
    `.ingreso` 986 px dentro de un `.app` de 664 px, «Crea tu cuenta» a 890 px).
    Playwright no lo veía porque desplaza por código un `overflow: hidden`, cosa
@@ -8544,7 +8554,7 @@ h1.pay-title-lbl {
 
 /* ─── AF-CARTEL-VERSION-NUEVA · decisión 125 ─── */
 /* Con la sesión iniciada: «Hay una versión nueva · Actualizar». Primer hijo de
-   `.app` (columna flex de 100dvh): va arriba y EN EL FLUJO, así que empuja la
+   `.app` (columna flex del alto del viewport): va arriba y EN EL FLUJO, así que empuja la
    pantalla y no tapa ningún botón. Abajo no: `.fab` y `.cta-float` son fijos y
    quedarían encima. Toma el `safe-area` de arriba para no quedar bajo la barra
    de estado del iPhone (PWA); el encabezado de abajo conserva el suyo. */

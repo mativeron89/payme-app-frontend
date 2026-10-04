@@ -92,6 +92,8 @@ function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): st
 export function MesasScreen() {
   const { presentationZone } = useRegion();
   const { t, locale } = useIdioma();
+  // E173-1 · sin «Fechas mostradas en …»: sólo el aviso de navegador degradado.
+  const zoneCaption = personalZoneCaption(presentationZone, t);
   const { session } = useAuth();
   const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
   const [fallo, setFallo] = useState(false);
@@ -290,7 +292,7 @@ export function MesasScreen() {
       </div>
 
       <div className="scroll history-scroll">
-        <p className="caption">{personalZoneCaption(presentationZone, t)}</p>
+        {zoneCaption && <p className="caption">{zoneCaption}</p>}
 
         {seccionTusMesas}
 

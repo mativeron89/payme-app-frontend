@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
  * AF-LOGIN-D73 · (A) en Chrome de iPhone, al desplazarse, la tarjeta de ingreso
  * quedaba CORTADA: ni el botón de Google ni «Crea tu cuenta» (captura de Mati).
  *
- * `.app` tiene `height: 100dvh` y `overflow: hidden`, y `.ingreso` no era un
+ * `.app` ocupa el alto del viewport (`height: 100dvh` hasta 0.210.4) y tiene `overflow: hidden`, y `.ingreso` no era un
  * contenedor de desplazamiento: lo que no entraba se recortaba. Playwright no lo
  * veía porque `click()` desplaza por código hasta un `overflow: hidden`; un dedo
  * no puede. Este spec modela al dedo: sólo desplaza el documento y los

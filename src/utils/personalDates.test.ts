@@ -115,8 +115,11 @@ describe('D158 · instantes, no fechas civiles ni zona inventada', () => {
   });
   it('caption distingue elegido/fallbackUTC/ISO, sin zona histórica', () => {
     const translate = (text: string, ...args: unknown[]) => text.replace('{0}', String(args[0]));
-    expect(personalZoneCaption(mx, translate)).toContain(mx);
-    expect(personalZoneCaption(mx, translate)).toContain('no indican la zona original');
+    // E173-1 · decisión 173 de Mati: «Quitar el mensaje de "Fechas mostradas.."».
+    // Con una zona aplicada no hay leyenda; los dos avisos de navegador
+    // degradado (fallback UTC e ISO) son otro mensaje y se conservan.
+    expect(personalZoneCaption(mx, translate)).toBeNull();
+    expect(personalZoneCaption('Europe/Madrid', translate)).toBeNull();
     expect(personalZoneCaption('UTC', translate)).toContain('Fallback UTC');
     expect(personalZoneCaption(null, translate)).toContain('ISO UTC');
   });

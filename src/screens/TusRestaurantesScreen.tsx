@@ -50,6 +50,8 @@ type Estado =
 export function TusRestaurantesScreen() {
   const { t } = useIdioma();
   const { presentationZone } = useRegion();
+  // E173-1 · sin «Fechas mostradas en …»: sólo el aviso de navegador degradado.
+  const zoneCaption = personalZoneCaption(presentationZone, t);
   const { session } = useAuth();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -112,7 +114,7 @@ export function TusRestaurantesScreen() {
       )}
 
       <div className="scroll" style={{ paddingLeft: 10, paddingRight: 10, paddingTop: 16 }}>
-        <p className="caption">{personalZoneCaption(presentationZone, t)}</p>
+        {zoneCaption && <p className="caption">{zoneCaption}</p>}
         {estado.tipo === 'cargando' ? (
           <div aria-busy="true" aria-label={t('Cargando tus restaurantes')}>
             <div className="stat-hero sk">
