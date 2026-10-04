@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 /**
- * E173-2 · decisión 173 de Mati, con capturas de su iPhone:
- * - en la app agregada a inicio, «Ni bien abro […] la barra inferior queda
- *   desfasada más arriba, tengo que subir y bajar para que se ajuste»;
- * - en Safari, «la barra inferior no queda correctamente abajo dejando mucho
- *   espacio en blanco».
+ * E173-2 · decisión 173 de Mati, con capturas de su iPhone, las dos en la app
+ * agregada a inicio (en Safari la barra se ve bien):
+ * - «Ni bien abro […] la barra inferior queda desfasada más arriba, tengo que
+ *   subir y bajar para que se ajuste»;
+ * - «la barra inferior no queda correctamente abajo dejando mucho espacio en
+ *   blanco».
  *
  * La barra (`.appbar-block`) es `position: absolute; bottom: 0` dentro de
  * `.app`, así que queda donde termina `.app`. Hasta 0.210.4 `.app` medía
  * `height: 100dvh`: la barra quedaba atada a cómo el navegador calcula esa
  * unidad, no al borde de la pantalla. En iOS esa unidad puede no coincidir con
  * el área visible al arrancar la app de inicio (se corrige con el primer
- * scroll), y en Safari con sus barras. Ésa es la hipótesis: el emulador no la
- * reproduce, la prueba en el iPhone la hace Mati.
+ * scroll). Ésa es la hipótesis: el emulador no la reproduce, la prueba en el
+ * iPhone la hace Mati. Para el caso en que el viewport mismo arranca achicado,
+ * la corrección está en `src/viewportStandalone.ts`.
  *
  * El arreglo ata `.app` al borde del viewport (`position: fixed` con
  * `top`/`bottom` en 0), sin unidades de viewport. Esta guarda vigila ese
@@ -57,6 +59,21 @@ describe('E173-2 · la barra inferior queda en el borde de la pantalla', () => {
   it('🔴 `.app` no toma su alto de una unidad de viewport', () => {
     const app = regla('.app');
     expect(app).not.toMatch(/(?:^|[;\s])(?:min-|max-)?height:\s*[^;]*\b\d+(?:\.\d+)?(?:d|s|l)?vh\b/);
+  });
+
+  it('🔴 en la app de inicio de iOS el alto lo puede imponer `--app-alto-standalone`; si no, `auto`', () => {
+    expect(efectivo(regla('.app'), 'height')).toBe('var(--app-alto-standalone, auto)');
+  });
+
+  it('la sonda del inset superior lo toma de `env(safe-area-inset-top)`', () => {
+    expect(efectivo(regla('.viewport-sonda'), 'padding-top')).toBe('env(safe-area-inset-top)');
+    expect(efectivo(regla('.viewport-sonda'), 'visibility')).toBe('hidden');
+  });
+
+  it('🔴 captura 6 · el inset de abajo reemplaza los 8 px de la barra, no se suma', () => {
+    const barra = regla('.appbar');
+    expect(efectivo(barra, 'height')).toBe('calc(56px + max(8px, env(safe-area-inset-bottom)))');
+    expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) max(8px, env(safe-area-inset-bottom))');
   });
 
   it('la barra sigue anclada al borde inferior de `.app`', () => {

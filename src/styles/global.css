@@ -334,21 +334,41 @@ body {
      E173-2 · decisión 173: atada a los BORDES del viewport, no a una unidad.
      Hasta 0.210.4 medía `height: 100dvh`, y la barra de abajo
      (`.appbar-block`, `bottom: 0` de este contenedor) quedaba donde terminaba
-     esa unidad: en la app de inicio del iPhone, más arriba al abrir hasta el
-     primer scroll; en Safari, con espacio en blanco debajo. Con `fixed` y
+     esa unidad: en la app de inicio del iPhone, más arriba al abrir y con
+     espacio debajo hasta el primer scroll. Con `fixed` y
      `top`/`bottom` en 0 termina donde termina la pantalla visible. Lo vigila
-     `src/styles/shellViewport.test.ts`. */
+     `src/styles/shellViewport.test.ts`.
+     En la app de inicio de iOS eso solo puede no alcanzar: WebKit arranca con
+     el viewport achicado en el inset superior y `bottom: 0` también queda
+     corto. Para ese caso `src/viewportStandalone.ts` pone
+     `--app-alto-standalone` con el alto de la pantalla, y con `top` fijo un
+     alto explícito manda sobre `bottom`. Sin la variable, `auto`: lo deciden
+     `top` y `bottom`. */
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
+  height: var(--app-alto-standalone, auto);
   overflow: hidden;
   max-width: 480px; /* en desktop se ve como columna de teléfono */
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--gray-l);
+}
+
+/* E173-2 · sonda de `src/viewportStandalone.ts`: el inset superior se lee
+   resuelto de su `padding-top`. Sólo existe en la app de inicio de iOS. */
+.viewport-sonda {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  padding-top: env(safe-area-inset-top);
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .screen {
@@ -2717,8 +2737,13 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: end;
-  height: calc(64px + env(safe-area-inset-bottom));
-  padding: 8px var(--sp-2) calc(8px + env(safe-area-inset-bottom));
+  /* E173-2 · decisión 173 (captura 6, app de inicio): con el indicador de inicio
+     (inset 34) la barra sumaba 8 px de padding ENCIMA del inset, y los íconos
+     quedaban con ~52 pt de blanco debajo. Ahora el inset reemplaza a esos 8 px
+     en vez de sumarse: los íconos bajan 8 px y siguen fuera de la zona del
+     indicador. En Safari, con inset 0, la barra no cambia: 64 px y 8 px. */
+  height: calc(56px + max(8px, env(safe-area-inset-bottom)));
+  padding: 8px var(--sp-2) max(8px, env(safe-area-inset-bottom));
 }
 
 .appbar-item,

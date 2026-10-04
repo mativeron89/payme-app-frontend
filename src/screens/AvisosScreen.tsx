@@ -33,7 +33,10 @@ import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
  *    primera fila y la navegación explícita en la segunda. La campana queda
  *    presente pero no es interactiva dentro de su propio destino (`bellHere`).
  *  - **"Marcar leídos" baja del encabezado**: es una acción sobre la lista, no
- *    parte de la identidad de la pantalla.
+ *    parte de la identidad de la pantalla. E174-1 · decisión 174 de Mati
+ *    («tiene que estar arriba de todo, no abajo»): es la PRIMERA fila del
+ *    contenido, antes de las invitaciones; hasta 0.210.4 iba al final de la
+ *    lista. Esa fila es la que va a sumar «Borrar todas» (E174-2).
  *  - **Tarjeta de título `Notificaciones`**, separada de la sección homónima
  *    que agrupa el inbox debajo de las invitaciones.
  *  - **La tarjeta de invitación deja de ser `card` blanca**: fondo `--teal-l` y
@@ -217,6 +220,13 @@ export function AvisosScreen() {
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
       <div className="scroll flow-scroll avisos-scroll">
+        {hasUnread && (
+          <div className="avisos-actions">
+            <button type="button" className="linkbtn" onClick={markAll}>
+              {t('Marcar leídos')}
+            </button>
+          </div>
+        )}
         {invitations.length > 0 && (
           <>
             <h2 className="sectlabel">{t('Te invitaron')}</h2>
@@ -347,13 +357,6 @@ export function AvisosScreen() {
             );
           })}
         </div>
-        {hasUnread && (
-          <div className="avisos-actions">
-            <button type="button" className="linkbtn" onClick={markAll}>
-              {t('Marcar leídos')}
-            </button>
-          </div>
-        )}
       </div>
       {/* Ningún ítem activo: ninguna de las cinco posiciones es "Avisos". */}
       <AppBottomBar active={null} />

@@ -11,10 +11,11 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.210.5 — Sin «Fechas mostradas…» y la barra de abajo atada al borde (2026-10-04)
+## 0.210.5 — Sin «Fechas mostradas…», la barra de abajo en la app de inicio y «Marcar leídos» arriba (2026-10-04)
 
-Orden AF-E173-1-2-LEYENDA-Y-BARRA-20261004 (sha256 36715eff…), decisión 173 de Mati tras probar en su iPhone.
-Base `0.210.4` (`3a6368f`).
+Orden AF-E173-1-2-LEYENDA-Y-BARRA-20261004 (sha256 36715eff…), decisión 173 de Mati tras probar en su iPhone, con
+dos enmiendas del lease: E174-1 (decisión 174) y la corrección de E173-2 (los dos síntomas de la barra son en la app
+agregada a inicio, no en Safari). Base `0.210.4` (`3a6368f`).
 
 - **E173-1 · sin la leyenda «Fechas mostradas en {zona}; no indican la zona original.»** Salía en Historial, en
   Tus restaurantes y en «Sólo en este navegador» y el panel de Ubicación de Configuración. `personalZoneCaption`
@@ -23,36 +24,64 @@ Base `0.210.4` (`3a6368f`).
   - Quedan los dos avisos de navegador degradado («Fallback UTC…» y «Fechas en ISO UTC…»): dicen otra cosa, que las
     fechas salen en UTC porque el navegador no pudo aplicar la zona.
   - No cambia cómo se calculan ni se guardan las fechas.
-- **E173-2 · la barra de abajo termina en el borde de la pantalla.** Mati: en la app agregada a inicio aparecía más
-  arriba al abrir hasta el primer scroll, y en Safari dejaba espacio en blanco debajo.
-  - **Hecho:** la barra (`.appbar-block`) es `position: absolute; bottom: 0` dentro de `.app`, y `.app` medía
-    `height: 100dvh`. La barra quedaba donde terminaba esa unidad, no en el borde de la pantalla.
-  - **Hipótesis, no medida en iPhone:** en iOS, `100dvh` no coincide con el área visible al arrancar la app de inicio
-    (se corrige con el primer scroll) ni en Safari con sus barras. Acá no hay simulador de iOS, y Chromium y WebKit de
-    escritorio no lo reproducen.
-  - **Arreglo:** `.app` se ata a los bordes del viewport, con `position: fixed` y `top`/`right`/`bottom`/`left` en 0,
-    sin unidades de viewport. Conserva los 480 px centrados en escritorio. Se quitó un `position: relative` al final
-    de la regla que habría ganado sobre el `fixed`.
+- **E173-2 · la barra de abajo en la app agregada a inicio.**
+  - **Medido en las capturas** (`ops/…/referencias-e173/`, por filas de píxeles, ≈1,72 px/pt):
+    - captura 5, recién abierta: `.app` termina ~57 pt antes del borde, con una franja gris debajo; es casi el inset
+      superior (la barra de estado);
+    - captura 6: la barra toca el borde, pero quedan ~52 pt de blanco debajo de los íconos (8 px de padding + 34 del
+      indicador de inicio + el del ítem);
+    - captura 2, Safari: ~62 pt y sin la zona del indicador; se ve bien.
+  - **Causa documentada, no medida en iPhone:** en las apps de inicio con `viewport-fit=cover`, WebKit arranca con el
+    viewport achicado en el inset superior (`innerHeight`, `visualViewport` y `100dvh` juntos) y se corrige al primer
+    scroll. `position: fixed; bottom: 0` también queda corto (WebKit 237961). Acá no hay simulador de iOS, y ni Chromium
+    ni WebKit de escritorio lo reproducen.
+  - **Arreglo, en tres partes:**
+    1. `.app` deja de medir `height: 100dvh` y se ata a los bordes: `position: fixed` con top/right/bottom/left 0,
+       conservando los 480 px centrados. Se quitó un `position: relative` al final de la regla, que habría ganado.
+    2. `src/viewportStandalone.ts`: sólo en la app de inicio de iOS (`navigator.standalone === true`), y sólo si el
+       faltante entre el alto real de la pantalla y `innerHeight` coincide (±4 px) con el inset superior medido, pone
+       `--app-alto-standalone` con el alto de la pantalla. `.app` lo usa como `height`, y con `top` fijo eso manda
+       sobre `bottom`. Se retira cuando WebKit se corrige (resize, pageshow, visibilitychange, orientación o
+       visualViewport). El inset se lee de una sonda con `padding-top: env(safe-area-inset-top)`. Se arma en
+       `main.tsx` antes del primer render.
+    3. Captura 6: la barra deja de sumar 8 px al inset de abajo. Antes era `padding-bottom: 8px + inset`; ahora es
+       `max(8px, inset)`, con el alto acorde. En Safari, con inset 0, no cambia nada (64 px). En la app de inicio
+       los íconos bajan 8 px y siguen fuera de la zona del indicador.
+- **E174-1 · «Marcar leídos» arriba de todo en Notificaciones.** La fila era la última, después de la lista; ahora
+  es la primera del contenido, antes de las invitaciones. Esa misma fila va a sumar «Borrar todas» (E174-2, que
+  necesita backend). El borrado y la foto de quien invita no entran acá.
 - **Pruebas nuevas:**
-  - `src/styles/shellViewport.test.ts` (3): `.app` fija con top/bottom 0 y sin alto en `vh`/`dvh`/`svh`/`lvh`, leyendo
-    el valor EFECTIVO de cada propiedad (la última declaración), y la barra anclada a su borde. Caen 2 sobre `3a6368f`.
-  - `e2e/barra-inferior-viewport.spec.ts` (5), en Chromium con `isMobile`: la barra termina en el borde del viewport y
-    lo que toca el borde inferior es la barra, en 390×664, 375×667, 390×844 y 430×932; y la sigue cuando el viewport
-    cambia de alto. Pasa también sobre `3a6368f`, porque Chromium no reproduce el defecto: es red de regresión.
-  - La orden sugería repetirlo con `display-mode: standalone` emulado. No se puede, medido: este Chromium ignora ese
-    rasgo en `Emulation.setEmulatedMedia`, y la app no tiene CSS que dependa de `display-mode`.
+  - `src/styles/shellViewport.test.ts` (6): `.app` fija con top/bottom 0, sin alto en unidades de viewport y con
+    `height: var(--app-alto-standalone, auto)`, leyendo el valor EFECTIVO (la última declaración); la sonda; la
+    barra con `max(8px, inset)` y anclada a `.app`. Sobre `3a6368f` caen 5.
+  - `src/viewportStandalone.test.ts` (8): cuándo corrige. Corrige en la app de inicio con el viewport achicado en el
+    inset (393×852 y 430×932), con tolerancia de ±4 px. No corrige con el viewport sano, en Safari, sin inset, en una
+    ventana de iPad achicada a propósito, ni con medidas sin sentido. En horizontal usa el lado corto.
+  - `e2e/barra-inferior-viewport.spec.ts` (8), en Chromium con `isMobile`:
+    - en 390×664, 375×667, 390×844 y 430×932, la barra termina en el borde y lo que toca el borde es la barra; y la
+      sigue cuando el viewport cambia de alto. Pasan también sobre `3a6368f`: Chromium no tiene el defecto, así que
+      son red de regresión;
+    - **app de inicio, SIMULADA:** `display-mode: standalone` no se puede emular (medido: Chromium ignora el rasgo en
+      `Emulation.setEmulatedMedia`). Se simulan las señales que iOS le da al código: `navigator.standalone`, pantalla
+      de 390×844, viewport achicado a 785 e inset de 59 inyectado en la medida de la sonda. La barra llega a 844, y la
+      corrección se retira cuando el viewport vuelve a 844. Cae sobre `3a6368f`. Controles: Safari con el mismo
+      viewport corto no corrige, ni una ventana de 700 en la app de inicio.
+    - No acredita que el iPhone se comporte así.
   - `e2e/sin-leyenda-fechas.spec.ts` (3): Historial, Tus restaurantes y Configuración sin la leyenda, con zona
     manual de México. Caen las 3 sobre `3a6368f`.
+  - `e2e/avisos-marcar-leidos-arriba.spec.ts` (2): la fila es la primera del contenido (sobre `3a6368f` estaba en
+    y=664, después de una lista que arrancaba en 219), y el botón sigue marcando todo. La cuenta del mock no trae
+    avisos sin leer, así que se suma uno por la fachada.
   - Cambiados: `personalDates.test.ts` (la leyenda es `null`; los avisos degradados siguen) y
     `pais-zona-horaria.spec.ts` (exigía la leyenda visible; ahora exige que no esté).
-- **Mutantes:** 6 plantados, 6 cazados.
-  - vuelve la leyenda: caen el unitario y los 3 e2e;
-  - Configuración arma su propia leyenda: cae su e2e;
-  - sin los avisos degradados: cae el unitario;
-  - `.app` vuelve a `100dvh`: caen las 2 guardas;
-  - vuelve el `position: relative` al final: cae la guarda del `fixed`;
-  - sin `bottom: 0`: caen la guarda y los 5 e2e de la barra.
-- **Lo visible lo cierra la prueba de Mati en el iPhone (D63),** en la app de inicio y en Safari.
+- **Mutantes:** 13 plantados, 13 cazados.
+  - vuelve la leyenda; Configuración arma su propia leyenda; sin los avisos degradados;
+  - `.app` vuelve a `100dvh`; vuelve el `position: relative` final; sin `bottom: 0`; sin la variable de alto;
+  - `main.tsx` no llama la corrección; corrige también en Safari; sin exigir que el faltante sea el inset; la
+    corrección no se retira;
+  - la barra vuelve a sumar 8 px al inset;
+  - «Marcar leídos» vuelve abajo.
+- **Lo visible lo cierra la prueba de Mati (D63),** en la app de inicio y en Safari, sobre todo al abrirla.
 
 ## 0.210.4 — Zona automática del dispositivo con alternativa manual (2026-10-04)
 

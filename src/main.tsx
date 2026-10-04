@@ -54,7 +54,7 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, viewport] = await Promise.all([
     import('./api/googleVincularRedirect'),
     import('./api/googleRedirect'),
     import('./api/googleAltaRedirect'),
@@ -63,6 +63,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./api/signupInvitation'),
     import('./i18n/idioma'),
     import('./App'),
+    import('./viewportStandalone'),
   ]);
   const { capturarVueltaVincular } = googleVincular;
   const { capturarVueltaGoogleRedirect } = googleRedirect;
@@ -97,6 +98,11 @@ async function arrancarPrivada(): Promise<void> {
 
   const el = document.getElementById('root');
   if (!el) throw new Error('No existe #root');
+
+  // E173-2 · en la app de inicio de iOS, el alto de `.app` si WebKit arranca con
+  // el viewport achicado en el inset superior. Antes del primer render, para no
+  // mostrar un frame con la barra corrida. Fuera de esa app no hace nada.
+  viewport.ajustarViewportStandalone();
 
   /**
    * 🔴 `IdiomaProvider` envuelve TODO, y va acá y no dentro de `App`.
