@@ -54,9 +54,17 @@ agregada a inicio, no en Safari). Base `0.210.4` (`3a6368f`).
   - `src/styles/shellViewport.test.ts` (6): `.app` fija con top/bottom 0, sin alto en unidades de viewport y con
     `height: var(--app-alto-standalone, auto)`, leyendo el valor EFECTIVO (la última declaración); la sonda; la
     barra con `max(8px, inset)` y anclada a `.app`. Sobre `3a6368f` caen 5.
-  - `src/viewportStandalone.test.ts` (8): cuándo corrige. Corrige en la app de inicio con el viewport achicado en el
-    inset (393×852 y 430×932), con tolerancia de ±4 px. No corrige con el viewport sano, en Safari, sin inset, en una
-    ventana de iPad achicada a propósito, ni con medidas sin sentido. En horizontal usa el lado corto.
+  - `src/viewportStandalone.test.ts` (13):
+    - la decisión (8): corrige en la app de inicio con el viewport achicado en el inset (393×852 y 430×932), con
+      tolerancia de ±4 px. No corrige con el viewport sano, en Safari, sin inset, en una ventana de iPad achicada a
+      propósito, ni con medidas sin sentido. En horizontal usa el lado corto;
+    - el cableado (5), con una ventana falsa que cuenta lo que se engancha:
+      - en Safari y en escritorio no engancha nada (ni listeners, ni sonda, ni variable, ni frame);
+      - en la app de inicio corrige al arrancar y se apaga sola cuando el viewport se recupera (resize,
+        visualViewport, pageshow, orientación);
+      - al volver a primer plano re-mide, y en segundo plano no;
+      - al soltarla no deja ni listeners, ni variable, ni sonda, ni frame pendiente. `main.tsx` no la suelta porque la
+        raíz de la app nunca se desmonta, pero la función de soltar está y se prueba.
   - `e2e/barra-inferior-viewport.spec.ts` (8), en Chromium con `isMobile`:
     - en 390×664, 375×667, 390×844 y 430×932, la barra termina en el borde y lo que toca el borde es la barra; y la
       sigue cuando el viewport cambia de alto. Pasan también sobre `3a6368f`: Chromium no tiene el defecto, así que
@@ -74,11 +82,13 @@ agregada a inicio, no en Safari). Base `0.210.4` (`3a6368f`).
     avisos sin leer, así que se suma uno por la fachada.
   - Cambiados: `personalDates.test.ts` (la leyenda es `null`; los avisos degradados siguen) y
     `pais-zona-horaria.spec.ts` (exigía la leyenda visible; ahora exige que no esté).
-- **Mutantes:** 13 plantados, 13 cazados.
+- **Mutantes:** 18 plantados, 18 cazados.
   - vuelve la leyenda; Configuración arma su propia leyenda; sin los avisos degradados;
   - `.app` vuelve a `100dvh`; vuelve el `position: relative` final; sin `bottom: 0`; sin la variable de alto;
   - `main.tsx` no llama la corrección; corrige también en Safari; sin exigir que el faltante sea el inset; la
     corrección no se retira;
+  - en el cableado: sin la salida fuera de la app de inicio; al soltar quedan el listener de visualViewport, la sonda
+    o el frame; re-mide en segundo plano;
   - la barra vuelve a sumar 8 px al inset;
   - «Marcar leídos» vuelve abajo.
 - **Lo visible lo cierra la prueba de Mati (D63),** en la app de inicio y en Safari, sobre todo al abrirla.
