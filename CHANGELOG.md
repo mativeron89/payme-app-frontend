@@ -82,9 +82,20 @@ Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decis
     el «sólo memoria» y la fila de «Marcar leídos». Dos pruebas que dependían del doble efecto de StrictMode se
     reescribieron para afirmar la intención, no la cuenta. Las dos e2e agregadas después (borrar con 404 y quitar
     un amigo) las acreditan los mutantes N3 y F11.
-  - **Mutantes: 23 plantados, 23 cazados**, con los archivos restaurados por sha256. F6 (reemplazar aunque los bytes
+  - **Mutantes: 25 plantados, 25 cazados**, con los archivos restaurados por sha256. F6 (reemplazar aunque los bytes
     sean iguales) lo cazaba sólo la unitaria; la e2e se endureció para esperar la revalidación entera y ahora
     también lo caza.
+  - **El CI del PR #11 dio rojo** sobre `9dae1b9` (run 37242181393, intento 1; 754 pasan, 1 falla): AF-32 de
+    `e2e/quienes-se-sumaron.spec.ts` afirmaba el invariante viejo, «al salir de la mesa el `blob:` se revoca».
+    Mi corrida e2e del área no incluía ese spec: lo elegí por nombres de clase, no por la propiedad (`blob:`,
+    revocación). Se reescribió para el contrato nuevo, sin aflojar el resguardo:
+    - al salir de la mesa NO se revoca: la URL sigue viva, la memoria no está vacía y, al volver, la foto tiene la
+      MISMA URL mientras se revalida;
+    - al cerrar sesión SÍ se revoca, la URL ya no se puede leer y la memoria queda en 0.
+    Lo cazan los mutantes P3 (salir de la mesa vacía la memoria) y S2 (sin vigilar la sesión). El censo de la clase
+    («revoca al desmontar o al salir») en `e2e/` y `src/` no encontró otra: `profileIdentity.test.ts` prueba la
+    clase `AvatarObjectUrlLease`, que siguen usando la foto de la búsqueda por @ y la vista previa de «Editar
+    perfil», y los `dispose` de `googleIdentity` y `googlePopupDiagnostico` son de otra cosa.
 - **Espejo del contrato, en un commit aparte** (adenda de alcance del Bibliotecario IV, 22:26:44Z): inventario del dueño en
   `91aacdd` adoptado con `--adoptar-inventario`, byte-idéntico, contenido en `673156d`. 121 archivos, cambian cinco
   (`routes/friends.js`, `routes/notifications.js`, `services/invitationAuthority.js`, `services/notifications.js`,

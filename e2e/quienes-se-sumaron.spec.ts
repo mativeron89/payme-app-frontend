@@ -170,14 +170,31 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await expect(page.getByText(/foto/i)).toHaveCount(0);
   });
 
-  test('🔴 AF-32 · al salir de la mesa, el `blob:` de la foto se REVOCA', async ({ page }) => {
-    // Espía de `URL.revokeObjectURL` antes de que cargue la app.
+  /**
+   * E173-3 · decisión 175 de Mati («Sí, guardar en memoria»): hasta 0.210.5 salir
+   * de la mesa revocaba el `blob:`. Ahora la foto queda en la memoria de fotos de
+   * la sesión y se revoca al cerrar sesión (o al salir de esa memoria). El
+   * resguardo no se relaja: se mueve al cierre de sesión, con aserción fuerte.
+   */
+  async function espiarRevocadas(page: Page): Promise<void> {
     await page.addInitScript(() => {
       const w = window as unknown as { __revocadas: string[] };
       w.__revocadas = [];
       const original = URL.revokeObjectURL.bind(URL);
       URL.revokeObjectURL = (url: string) => { w.__revocadas.push(url); original(url); };
     });
+  }
+  const revocadas = (page: Page) => page.evaluate(() => (window as unknown as { __revocadas: string[] }).__revocadas);
+  /** Una URL revocada ya no se puede leer. */
+  const blobVivo = (page: Page, url: string) => page.evaluate((u) => fetch(u).then((r) => r.ok, () => false), url);
+  const fotosEnMemoria = (page: Page) => page.evaluate(async () => {
+    const path = '/src/api/fotosEnMemoria.ts';
+    const mod = await import(/* @vite-ignore */ path) as { fotosEnMemoria: { tamano: number } };
+    return mod.fotosEnMemoria.tamano;
+  });
+
+  test('🔴 AF-32 · al salir de la mesa, el `blob:` NO se revoca y sigue en la memoria de la sesión', async ({ page }) => {
+    await espiarRevocadas(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     const foto = seccion(page).getByRole('img', { name: 'Foto de Luis Cárdenas' });
@@ -187,7 +204,35 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     // Sale de la mesa (se desmonta la pantalla, sin recargar la página).
     await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __revocadas: string[] }).__revocadas))
-      .toContain(src);
+    expect(await revocadas(page)).not.toContain(src);
+    expect(await blobVivo(page, src!)).toBe(true);
+    expect(await fotosEnMemoria(page)).toBeGreaterThan(0);
+
+    // Volver a la mesa muestra LA MISMA URL: viene de la memoria. Una foto pedida
+    // de nuevo sería otra URL; la revalidación con los mismos bytes no la cambia.
+    const antes = await pedidosDeFotos(page);
+    await irEnLaApp(page, '/mesa/PA-2847');
+    await expect(foto).toHaveAttribute('src', src!);
+    await expect.poll(() => pedidosDeFotos(page)).toBeGreaterThan(antes);
+    await expect(foto).toHaveAttribute('src', src!);
+    expect(await revocadas(page)).not.toContain(src);
+  });
+
+  test('🔴 AF-32 · al cerrar sesión, el `blob:` de la foto SÍ se revoca y la memoria queda vacía', async ({ page }) => {
+    await espiarRevocadas(page);
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+    const foto = seccion(page).getByRole('img', { name: 'Foto de Luis Cárdenas' });
+    await expect(foto).toBeVisible();
+    const src = await foto.getAttribute('src');
+    expect(src).toMatch(/^blob:/);
+    await irEnLaApp(page, '/mas');
+    expect(await revocadas(page)).not.toContain(src);
+
+    await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    await expect.poll(() => revocadas(page)).toContain(src);
+    expect(await blobVivo(page, src!)).toBe(false);
+    expect(await fotosEnMemoria(page)).toBe(0);
   });
 });
