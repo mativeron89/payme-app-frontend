@@ -24,6 +24,7 @@ const sharp = require('sharp');
 const pool = require('../db/pool');
 const consent = require('./consent');
 const friendAvatarNotice = require('./friendAvatarNotice');
+const legal = require('./legal');
 const { normalizarNombre } = require('../utils/profileNames');
 
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
@@ -287,35 +288,100 @@ async function obtenerAvatar(userId, db = pool) {
   };
 }
 
-/** U05: canal de amigos, sin reutilizar permiso de organizador ni URL pública.
- * Exige acuse explícito del titular para versión/hash vigentes, nunca del lector.
+/**
+ * U05 · la ÚNICA definición SQL de «la foto de <owner> se le muestra a <viewer>» (v2.148.0, E173).
+ * La usan la ruta de la foto (`obtenerAvatarDeAmigo`) y `has_avatar` de GET /api/friends
+ * (`amigosConFotoVisible`): por construcción no pueden discrepar. Exige, en cada lectura:
+ * las dos cuentas activas, el acuse del titular para la versión y el hash vigentes, la amistad
+ * aceptada en las dos direcciones y ningún bloqueo. Con el paquete 3.0.0 vigente, la mayoría es
+ * la declaración «18 o más» de la aceptación (`legalAcceptance.declaroMayoria`), acá como EXISTS.
+ * Sin el paquete, la edad se resuelve después con `consent.edadConocida` (fecha de nacimiento).
+ * `owner`, `viewer`, `version` y `hash` son expresiones SQL (una columna o un `$n`).
  */
-async function obtenerAvatarDeAmigo(viewerId, ownerId, db = pool) {
-  if (!profileIdentityRolloutEnabled() || viewerId === ownerId) return null;
-  if ((await consent.edadConocida(ownerId, db)) !== true) return null;
-  let notice;
-  try { notice = await friendAvatarNotice.current(db); } catch (err) {
+function condicionFotoDeAmigoSql({ owner, viewer, version, hash }) {
+  const mayoria = legal.PAQUETE_300_VIGENTE
+    ? `AND EXISTS (SELECT 1 FROM legal_acceptances la
+          WHERE la.user_id=${owner} AND la.declara_mayor_edad)`
+    : '';
+  return `EXISTS (SELECT 1 FROM users owner WHERE owner.id=${owner} AND owner.status='active')
+        AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id=${viewer} AND viewer.status='active')
+        AND EXISTS (SELECT 1 FROM friend_avatar_notice_acknowledgements ack
+          WHERE ack.user_id=${owner} AND ack.notice_version=${version} AND ack.notice_hash=${hash})
+        AND EXISTS (SELECT 1 FROM friendships f
+          WHERE f.user_id=${viewer} AND f.friend_user_id=${owner} AND f.status='accepted')
+        AND EXISTS (SELECT 1 FROM friendships f
+          WHERE f.user_id=${owner} AND f.friend_user_id=${viewer} AND f.status='accepted')
+        AND NOT EXISTS (SELECT 1 FROM friendships f
+          WHERE ((f.user_id=${viewer} AND f.friend_user_id=${owner})
+              OR (f.user_id=${owner} AND f.friend_user_id=${viewer})) AND f.status='blocked')
+        ${mayoria}`;
+}
+
+/** El aviso vigente para el camino de las fotos, o null si no hay (todo cierra). */
+async function avisoParaFotos(db) {
+  try {
+    return await friendAvatarNotice.vigenteLiviano(db);
+  } catch (err) {
     if (err.code === 'legal_text_unavailable') return null;
     throw err;
   }
-  // Foto, acuse del titular y relación se leen juntos en cada acceso.
+}
+
+/** U05: canal de amigos, sin reutilizar permiso de organizador ni URL pública.
+ * Exige acuse explícito del titular para versión/hash vigentes, nunca del lector.
+ * v2.148.0 · E173: misma regla, más liviana. El aviso sale de la memoria del proceso
+ * (`vigenteLiviano`) y, con el paquete 3.0.0, la mayoría va dentro de la consulta.
+ */
+async function obtenerAvatarDeAmigo(viewerId, ownerId, db = pool) {
+  if (!profileIdentityRolloutEnabled() || viewerId === ownerId) return null;
+  // Sin el paquete 3.0.0, la edad se mira antes que los bytes, como siempre.
+  if (!legal.PAQUETE_300_VIGENTE && (await consent.edadConocida(ownerId, db)) !== true) return null;
+  const notice = await avisoParaFotos(db);
+  if (!notice) return null;
+  // Foto, acuse del titular, relación y mayoría se leen juntos en cada acceso.
   const { rows: [avatar] } = await db.query(
     `SELECT a.mime_type, a.image_bytes
-       FROM user_avatars a JOIN users owner ON owner.id=a.user_id
-       JOIN users viewer ON viewer.id=$1
-      WHERE a.user_id=$2 AND owner.status='active' AND viewer.status='active'
-        AND EXISTS (SELECT 1 FROM friend_avatar_notice_acknowledgements ack
-          WHERE ack.user_id=a.user_id AND ack.notice_version=$3 AND ack.notice_hash=$4)
-        AND EXISTS (SELECT 1 FROM friendships f
-          WHERE f.user_id=$1 AND f.friend_user_id=$2 AND f.status='accepted')
-        AND EXISTS (SELECT 1 FROM friendships f
-          WHERE f.user_id=$2 AND f.friend_user_id=$1 AND f.status='accepted')
-        AND NOT EXISTS (SELECT 1 FROM friendships f
-          WHERE ((f.user_id=$1 AND f.friend_user_id=$2)
-              OR (f.user_id=$2 AND f.friend_user_id=$1)) AND f.status='blocked')`,
+       FROM user_avatars a
+      WHERE a.user_id=$2
+        AND ${condicionFotoDeAmigoSql({ owner: 'a.user_id', viewer: '$1', version: '$3', hash: '$4' })}`,
     [viewerId, ownerId, notice.version, notice.hash]
   );
   return avatar ? { mimeType: avatar.mime_type, bytes: avatar.image_bytes } : null;
+}
+
+/**
+ * v2.148.0 · E173 · `has_avatar` de GET /api/friends: el conjunto de ids, entre `ownerIds`, cuya
+ * foto la ruta le devolvería a `viewerId` (200). Mismo predicado, sin traer bytes.
+ */
+async function amigosConFotoVisible(viewerId, ownerIds, db = pool) {
+  const visibles = new Set();
+  if (!profileIdentityRolloutEnabled() || ownerIds.length === 0) return visibles;
+  const notice = await avisoParaFotos(db);
+  if (!notice) return visibles;
+  const { rows } = await db.query(
+    `SELECT a.user_id
+       FROM user_avatars a
+      WHERE a.user_id = ANY ($2::uuid[]) AND a.user_id <> $1
+        AND ${condicionFotoDeAmigoSql({ owner: 'a.user_id', viewer: '$1', version: '$3', hash: '$4' })}`,
+    [viewerId, ownerIds, notice.version, notice.hash]
+  );
+  for (const r of rows) {
+    if (!legal.PAQUETE_300_VIGENTE && (await consent.edadConocida(r.user_id, db)) !== true) continue;
+    visibles.add(r.user_id);
+  }
+  return visibles;
+}
+
+/**
+ * v2.148.0 · E174-3 · ¿la foto de esta cuenta se puede mostrar en las fotos de PERSONAS de una
+ * mesa (participantes, quien invita)? La regla n164 de `fotoVisibleAlOrganizador`
+ * (routes/mesas.js): la cuenta existe y no está eliminada, tiene foto, la identidad de perfil
+ * está encendida y es MAYOR DE EDAD CONOCIDA (`consent.edadConocida`); `null` o menor ⇒ no.
+ */
+async function fotoVisibleN164({ userId, status, tieneFoto }, db = pool) {
+  if (!userId || status === 'deleted' || !tieneFoto) return false;
+  if (!profileIdentityRolloutEnabled()) return false;
+  return (await consent.edadConocida(userId, db)) === true;
 }
 
 async function borrarAvatar(userId, expectedRevision) {
@@ -345,5 +411,8 @@ module.exports = {
   guardarAvatar,
   obtenerAvatar,
   obtenerAvatarDeAmigo,
+  amigosConFotoVisible,
+  condicionFotoDeAmigoSql,
+  fotoVisibleN164,
   borrarAvatar,
 };

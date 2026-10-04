@@ -152,4 +152,61 @@ async function unreadCount(user_id) {
   return rows[0].c;
 }
 
-module.exports = { create, createBulk, markRead, markAllRead, unreadCount, TYPES, WALLET_RAIL_TYPES };
+/**
+ * v2.148.0 · E174-2 · borra TODAS las notificaciones del usuario y devuelve cuántas. Sólo las
+ * suyas (`user_id`), como el borrado por id; la cola de correos queda con `notification_id`
+ * en NULL (FK `ON DELETE SET NULL`).
+ */
+async function borrarTodas(userId, db = pool) {
+  const { rowCount } = await db.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+  return rowCount;
+}
+
+/**
+ * v2.148.0 · E174-3 · la foto de quien invita, para una notificación `invitation_received` del
+ * propio usuario. Regla n164 de las fotos de personas de una mesa
+ * (`profileIdentity.fotoVisibleN164`). Toda denegación devuelve null, y la ruta la convierte en el
+ * mismo 404: notificación ajena o de otro tipo, invitación inexistente, cuenta eliminada, sin
+ * foto, menor o sin fecha conocida, identidad de perfil apagada. Resuelve al invitador por la
+ * invitación (`related_entity_id`), que ya viaja en la notificación: no expone ids nuevos.
+ */
+async function fotoDeQuienInvita(notificationId, userId, db = pool) {
+  const profileIdentity = require('./profileIdentity');
+  const { rows: [fila] } = await db.query(
+    `SELECT i.inviter_user_id AS user_id, u.status,
+            EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = i.inviter_user_id) AS tiene_foto
+       FROM notifications n
+       JOIN invitations i ON i.id = n.related_entity_id
+       LEFT JOIN users u ON u.id = i.inviter_user_id
+      WHERE n.id = $1 AND n.user_id = $2
+        AND n.type = 'invitation_received' AND n.related_entity_type = 'invitation'
+        AND i.inviter_user_id <> $2`,
+    [notificationId, userId]
+  );
+  if (!fila) return null;
+  const visible = await profileIdentity.fotoVisibleN164(
+    { userId: fila.user_id, status: fila.status, tieneFoto: fila.tiene_foto }, db);
+  if (!visible) return null;
+  const avatar = await profileIdentity.obtenerAvatar(fila.user_id, db);
+  return avatar ? { mimeType: avatar.mimeType, bytes: avatar.bytes } : null;
+}
+
+/**
+ * La pista `has_inviter_avatar` del payload, al crear la invitación: la misma regla, sin bytes.
+ * Es sólo una pista para no pedir en vano; la ruta vuelve a decidir en cada pedido.
+ */
+async function fotoDeInvitadorVisible(inviterId, db = pool) {
+  const profileIdentity = require('./profileIdentity');
+  const { rows: [u] } = await db.query(
+    `SELECT u.status, EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = u.id) AS tiene_foto
+       FROM users u WHERE u.id = $1`,
+    [inviterId]
+  );
+  if (!u) return false;
+  return profileIdentity.fotoVisibleN164({ userId: inviterId, status: u.status, tieneFoto: u.tiene_foto }, db);
+}
+
+module.exports = {
+  create, createBulk, markRead, markAllRead, unreadCount, borrarTodas, fotoDeQuienInvita,
+  fotoDeInvitadorVisible, TYPES, WALLET_RAIL_TYPES,
+};

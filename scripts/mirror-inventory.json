@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "b4d5d4e2ffae39a55420cbd81e5ff60a9fff61ef",
+  "commit": "673156d3a0907b5fc075c7bedd9d644f8290a47d",
   "total": 121,
   "archivos": [
     {
@@ -391,8 +391,8 @@
     {
       "origen": "routes/friends.js",
       "destino": "routes/friends.js",
-      "sha256": "65590c820220167f10c4a9930ea0fa6fbfdee052d03cdfa08b245a623bbd0382",
-      "bytes": 25937
+      "sha256": "bee251edae0d8f1bee8445e97fb53db3bc97f71f555af69875a0bd1ccf467fe6",
+      "bytes": 26370
     },
     {
       "origen": "routes/groups.js",
@@ -421,8 +421,8 @@
     {
       "origen": "routes/notifications.js",
       "destino": "routes/notifications.js",
-      "sha256": "b298a5ade0d5976a7a9871c68a7bfaa0192f549bdb3ffcb1d665982b4520411c",
-      "bytes": 3164
+      "sha256": "a1d9123f1c5788db7454faac39ce8f3675f47f42f8672527ddf583d552aaff8b",
+      "bytes": 4816
     },
     {
       "origen": "routes/ocr.js",
@@ -565,8 +565,8 @@
     {
       "origen": "services/invitationAuthority.js",
       "destino": "services/invitationAuthority.js",
-      "sha256": "1efebc126164be157ced09b3cfc950ee52c5cd222adcfaeee7011143f0ba53ca",
-      "bytes": 15230
+      "sha256": "09d62f69111660e5c60f69fe5f1f2af8a022a2688d3136b54826190682a53a6e",
+      "bytes": 15740
     },
     {
       "origen": "services/itemClaims.js",
@@ -607,8 +607,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "19e5ce2163fede5853ba3d47a22d545414e5d46722dded0e985b16a9c7917323",
-      "bytes": 6600
+      "sha256": "32ffa429be51376298f2a31f63d576b7e5611890e36c590ffcfeb35533a3e59a",
+      "bytes": 9275
     },
     {
       "origen": "services/ocrRail.js",
@@ -649,8 +649,8 @@
     {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
-      "sha256": "1508da6419da0cfd0db76d56cf28a14388bc7c376aa4f7cc4f47af34e91da26a",
-      "bytes": 13024
+      "sha256": "af1cefd6285df96035e79b95e01ea195af69e6f97b9db72f236914eaab37ce21",
+      "bytes": 16470
     },
     {
       "origen": "services/savedCards.js",

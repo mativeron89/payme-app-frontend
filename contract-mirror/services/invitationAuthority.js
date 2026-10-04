@@ -262,6 +262,11 @@ async function createOrReplay({
     });
 
     if (created && type === 'in_app') {
+      // v2.148.0 · E174-3 · pista para pedir la foto de quien invita (regla n164). Sólo una pista:
+      // la ruta GET /api/notifications/:id/inviter-avatar vuelve a decidir en cada pedido. En un
+      // savepoint propio: si falla, la invitación sigue y la pista queda en false.
+      const pista = await pool.withSavepoint(client, () => notifs.fotoDeInvitadorVisible(inviter.id, client));
+      const hasInviterAvatar = pista.ok && pista.value === true;
       await notifs.create({
         client,
         user_id: recipient.id,
@@ -271,6 +276,7 @@ async function createOrReplay({
           mesa_code: mesa.code,
           inviter_name: `${inviter.first_name} ${inviter.last_name}`,
           inviter_payme_id: inviter.payme_id,
+          has_inviter_avatar: hasInviterAvatar,
         },
         related_entity_type: 'invitation',
         related_entity_id: invitation.id,

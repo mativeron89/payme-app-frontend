@@ -6,6 +6,28 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Fotos y notificaciones · App Backend v2.148.0 · 2026-10-04
+
+Orden `AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004`, con la adenda de alcance del
+Bibliotecario IV del 2026-10-04T22:26:44Z (decisiones 173, 174 y 175 de Mati).
+
+- Contenido: owner **`673156d3a0907b5fc075c7bedd9d644f8290a47d`** (v2.148.0, E173/E174:
+  `has_avatar` en `GET /friends`, `DELETE /notifications` y
+  `GET /notifications/{id}/inviter-avatar`).
+- Inventario: el de `main` del owner en **`91aacdd9439aa116fea1533f357aee5d48e7a2cf`**
+  (`contract/mirror-inventory.json`, sha256
+  `d9d04960e4bd9bf3efc835e2a89175ca7cc89ed9e2f2546d664f1fbbb59c072a`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `673156d`; entre `673156d` y `91aacdd` sólo
+  cambian `CHANGELOG_v2.148.0.md`, el inventario y `tests/username-en-listas.test.js`, ninguno
+  espejado.
+- **121 archivos**, los mismos: no entra ni sale ninguno. Cambian cinco, todos por `673156d`
+  (medido con `git log b4d5d4e..673156d -- <archivo>` en el owner): `routes/friends.js`,
+  `routes/notifications.js`, `services/invitationAuthority.js`, `services/notifications.js` y
+  `services/profileIdentity.js`. Se copiaron con `git show 673156d:<origen>` y cada uno tiene el
+  sha256 que declara el inventario.
+- `--paridad`: espejo = inventario = fuente en `673156d`, 121/121. Desde el worktree se corrió
+  con `PAYME_APP_BACKEND_DIR` apuntando al repo real del owner.
+
 ### Aclaración de publicación y delta del login · P4, 2026-10-01 UTC
 
 El contenido continúa fijado en AB

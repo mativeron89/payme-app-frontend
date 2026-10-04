@@ -58,6 +58,41 @@ router.patch('/read-all', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * v2.148.0 · E174-2 · decisión 174 («Una por una y todas»): borra TODAS las notificaciones propias.
+ * Responde `{ deleted_count }`, también 0. Nunca toca las de otro usuario.
+ */
+router.delete('/', async (req, res, next) => {
+  try {
+    const count = await notifs.borrarTodas(req.user.id);
+    res.json({ deleted_count: count });
+  } catch (err) { next(err); }
+});
+
+/**
+ * v2.148.0 · E174-3 · decisión 174: la foto de quien te invitó, para TU notificación
+ * `invitation_received`. Mismas reglas que las fotos de participantes (n164): nunca la de un
+ * menor ni la de una cuenta sin fecha conocida. 🔴 No oracular: id inválido, notificación ajena
+ * o de otro tipo, invitación inexistente, cuenta eliminada, sin foto, menor o sin fecha responden
+ * EXACTAMENTE el mismo 404. Bytes privados: `private, no-store`, `Vary: Authorization`, sin ETag.
+ */
+const ID_NOTIFICACION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.get('/:id/inviter-avatar', async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.vary('Authorization');
+  res.setHeader('Access-Control-Expose-Headers', 'Vary, ETag');
+  const absent = () => res.status(404).type('application/json')
+    .end(JSON.stringify({ error: 'avatar_not_found' }));
+  try {
+    if (!ID_NOTIFICACION.test(req.params.id)) return absent();
+    const avatar = await notifs.fotoDeQuienInvita(req.params.id, req.user.id);
+    if (!avatar) return absent();
+    res.type(avatar.mimeType);
+    res.setHeader('Content-Length', String(avatar.bytes.length));
+    return res.end(avatar.bytes);
+  } catch (err) { return next(err); }
+});
+
 router.delete('/:id', async (req, res, next) => {
   try {
     const { rowCount } = await pool.query(

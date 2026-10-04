@@ -119,10 +119,15 @@ router.get('/', async (req, res, next) => {
         ORDER BY u.first_name ASC`,
       [req.user.id]
     );
+    // v2.148.0 · E173 · `has_avatar`: la ruta de la foto le respondería 200 a este lector. Mismo
+    // predicado (profileIdentity.condicionFotoDeAmigoSql); no revela más que esa ruta. Sólo en la
+    // lista: `persona()` lo comparten las solicitudes, cuyo contrato es de claves exactas.
+    const conFoto = await profileIdentity.amigosConFotoVisible(req.user.id, rows.map((f) => f.id));
     res.json({
       friends: rows.map((f) => ({
         ...persona(f),
         added_at: f.responded_at || f.created_at,
+        has_avatar: conFoto.has(f.id),
       })),
     });
   } catch (err) { next(err); }
