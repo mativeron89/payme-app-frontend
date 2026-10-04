@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.210.3 — Regresiones de invitación copiada y arranque PWA (2026-10-03)
+
+D170: cobertura nueva, sin cambios de producto. El recorrido navega el link
+realmente recibido por Copiar link, desde memoria aislada y sin sesión, hasta
+la misma mesa sintética sin garantía ni dinero. La regresión PWA comprueba el
+manifest enlazado por el index real, start_url/scope/standalone y dimensiones
+PNG reales, incluido el lanzador Apple. Conserva las aserciones anteriores.
+
+Versión y entrada por registro ordinario de entrega; sin dependencias, scripts,
+banderas productivas ni backend. Publicación PR/CI/servido pendiente. 0.210.2
+ya fue publicada y verificada técnicamente. La instalación física, las cinco
+horas de n98 y la aceptación visible de Mati siguen pendientes; n179 sólo
+incluye compartir el link, no OCR/Textract.
+
 ## 0.210.2 — Detalles de Ubicación según referencia nueva (2026-10-03)
 
 D169 R2: chevrones locales sin eje en País/Huso, tarjeta más cercana al

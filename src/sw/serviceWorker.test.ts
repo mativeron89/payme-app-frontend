@@ -17,6 +17,69 @@ const PLANTILLA = readFileSync(new URL('./serviceWorker.js', import.meta.url), '
 const ORIGEN = 'https://app.paymemx.com';
 const VERSION = '9.9.9';
 
+describe('D170 · contrato instalable de los archivos PWA reales', () => {
+  it('el index enlaza manifest e iconos válidos y permite arranque standalone y Apple sin tokens', () => {
+    const index = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const atributos = (tag: string) => Object.fromEntries(
+      [...tag.matchAll(/\b([\w-]+)\s*=\s*["']([^"']*)["']/g)].map((match) => [match[1], match[2]]),
+    );
+    const links = [...index.matchAll(/<link\b[^>]*>/gi)].map(([tag]) => atributos(tag));
+    const metas = [...index.matchAll(/<meta\b[^>]*>/gi)].map(([tag]) => atributos(tag));
+    const manifests = links.filter((link) => link.rel?.split(/\s+/).includes('manifest'));
+    expect(manifests).toHaveLength(1);
+    const archivoPublico = (ruta: string) => {
+      expect(ruta).toMatch(/^\/[\w./-]+$/);
+      expect(ruta.split('/')).not.toContain('..');
+      return new URL(`../../public${ruta}`, import.meta.url);
+    };
+    const manifest = JSON.parse(readFileSync(archivoPublico(manifests[0]!.href!), 'utf8')) as {
+      id: string; name: string; short_name: string; start_url: string; scope: string; display: string;
+      icons: Array<{ src: string; sizes: string; type: string; purpose: string }>;
+    };
+    expect(manifest.name).toBe('PayMe');
+    expect(manifest.short_name).toBe(manifest.name);
+    expect(manifest.display).toBe('standalone');
+    // Instalar/abrir no debe heredar invitaciones ni una ruta fuera de la app.
+    for (const ruta of [manifest.id, manifest.start_url, manifest.scope]) {
+      expect(ruta).toBe('/');
+      const url = new URL(ruta, ORIGEN);
+      expect(url.origin).toBe(ORIGEN);
+      expect(url.search).toBe('');
+      expect(url.hash).toBe('');
+    }
+    expect(Array.isArray(manifest.icons)).toBe(true);
+    expect(manifest.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sizes: '192x192', type: 'image/png', purpose: 'any' }),
+      expect.objectContaining({ sizes: '512x512', type: 'image/png', purpose: 'any' }),
+      expect.objectContaining({ sizes: '512x512', type: 'image/png', purpose: 'maskable' }),
+    ]));
+    const dimensionesPng = (ruta: string) => {
+      const png = readFileSync(archivoPublico(ruta));
+      expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(png.readUInt32BE(8)).toBe(13);
+      expect(png.subarray(12, 16).toString('ascii')).toBe('IHDR');
+      return `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`;
+    };
+    for (const icono of manifest.icons) {
+      expect(icono.type).toBe('image/png');
+      expect(dimensionesPng(icono.src)).toBe(icono.sizes);
+    }
+    const apple = links.filter((link) => link.rel?.split(/\s+/).includes('apple-touch-icon'));
+    expect(apple).toHaveLength(1);
+    expect(dimensionesPng(apple[0]!.href!)).toBe('180x180');
+    const meta = (nombre: string) => metas.filter((entry) => entry.name === nombre);
+    expect(meta('apple-mobile-web-app-capable')).toEqual([
+      expect.objectContaining({ content: 'yes' }),
+    ]);
+    expect(meta('apple-mobile-web-app-title')).toEqual([
+      expect.objectContaining({ content: manifest.short_name }),
+    ]);
+    expect(meta('apple-mobile-web-app-status-bar-style')).toEqual([
+      expect.objectContaining({ content: 'black-translucent' }),
+    ]);
+  });
+});
+
 interface RespuestaFalsa {
   readonly status: number;
   readonly type: string;

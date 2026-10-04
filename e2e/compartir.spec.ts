@@ -1,6 +1,84 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
 
+test('D170 · el link realmente copiado abre la misma mesa sin garantía, incluso sin sesión', async ({ page, baseURL }) => {
+  const origen = new URL(baseURL!).origin;
+  const salidasExternas: string[] = [];
+  const errores: string[] = [];
+  page.on('pageerror', (error) => errores.push(error.message));
+  await page.route('**/*', (route) => {
+    if (new URL(route.request().url()).origin === origen) return route.continue();
+    salidasExternas.push(route.request().url());
+    return route.abort();
+  });
+  await page.addInitScript(() => {
+    // Sólo memoria de esta página: no permisos ni portapapeles del SO.
+    const copias: string[] = [];
+    Object.defineProperty(window, '__d170Copias', { value: copias });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (texto: string) => { copias.push(texto); } },
+    });
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+    }
+  });
+
+  await ingresar(page);
+  const previas = await page.evaluate(() => {
+    const estado = JSON.parse(localStorage.getItem('payme_mock_state_v1')!) as {
+      mesas: Array<{ code: string }>;
+    };
+    return estado.mesas.map((mesa) => mesa.code);
+  });
+  const compartida = await abrirMesaConLink(page, { sinGarantia: true });
+  const nuevas = await page.evaluate((codigosPrevios) => {
+    const estado = JSON.parse(localStorage.getItem('payme_mock_state_v1')!) as {
+      mesas: Array<{ code: string; status: string; guarantee_method: string; guarantee_mode: boolean }>;
+    };
+    return estado.mesas.filter((mesa) => !codigosPrevios.includes(mesa.code));
+  }, previas);
+  // El oráculo es la mesa recién creada, no otra URL reconstruida por el test.
+  expect(nuevas).toHaveLength(1);
+  const creada = nuevas[0]!;
+  expect(creada).toMatchObject({
+    code: compartida.code, status: 'open', guarantee_method: 'none', guarantee_mode: false,
+  });
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Copiar link', exact: true }).click();
+  await expect(page.getByText('Link de invitación copiado ✓', { exact: true })).toBeVisible();
+  const copias = await page.evaluate(() => {
+    const capturadas = (window as Window & { __d170Copias?: string[] }).__d170Copias;
+    if (!capturadas) throw new Error('no se instaló el portapapeles aislado');
+    return capturadas;
+  });
+  expect(copias).toHaveLength(1);
+  const copiado = copias[0]!;
+  const destino = new URL(copiado);
+  expect(destino.origin).toBe(origen);
+  expect(destino.search).toBe('');
+  const [ruta, parametros] = destino.hash.slice(1).split('?');
+  expect(ruta).toBe(`/mesa/${creada.code}`);
+  expect(new URLSearchParams(parametros).get('t')).toBe(compartida.token);
+
+  await page.evaluate(() => localStorage.removeItem('payme_app_session__mock'));
+  await page.goto('about:blank');
+  // Se navega la cadena que recibió writeText, sin cortar ni rehacer el link.
+  await page.goto(copiado);
+  await expect(page.getByText('Te invitaron a una mesa', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill('invitado-d170@payme.test');
+  await page.getByLabel('Contraseña', { exact: true }).fill('sintetico-d170');
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(`${origen}/mesa/${creada.code}`);
+  expect(page.url()).not.toContain(compartida.token);
+  expect(salidasExternas, 'ninguna solicitud sale del servidor mock local').toEqual([]);
+  expect(errores, 'el recorrido no produce errores de página').toEqual([]);
+});
+
 /**
  * §1.7 · Compartir — lo que el rediseño **saca**, que es lo que hay que
  * defender.
