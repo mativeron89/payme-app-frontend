@@ -37,32 +37,41 @@ async function declararCorteYRecargar(page: import('@playwright/test').Page): Pr
 }
 
 test.describe('Historial (§1.10)', () => {
-  test('lista las cerradas del seed por mes, sin sección "Abiertas ahora"', async ({ page }) => {
-    await ingresar(page);
-    await page.goto('/#/mesas');
+  for (const fixture of [
+    { instant: '2026-10-04T01:00:00Z', month: 'septiembre de 2026' },
+    { instant: '2026-10-04T07:00:00Z', month: 'octubre de 2026' },
+  ]) {
+    test('lista las cerradas del seed por mes, sin sección "Abiertas ahora" · ' + fixture.month, async ({ page }) => {
+      // D169/CI215: reloj sólo de ESTE contexto, antes de crear el seed.
+      // Hace3d es01OctUTC/30SepMX en el primer vector,01OctMX en el segundo.
+      // Oráculos explícitos e independientes: no usan reloj/zona del runner ni
+      // el formateador de producto para calcular lo que esperan de la pantalla.
+      await page.clock.setFixedTime(new Date(fixture.instant));
+      await ingresar(page);
+      await page.goto('/#/mesas');
 
-    // El título de la PANTALLA es "Historial"; "Mesas" es la etiqueta de la
-    // barra, por espacio. El heading viejo "Mesas" murió con la TopBar.
-    await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
-    await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
+      // El título de la PANTALLA es "Historial"; "Mesas" es la etiqueta de la
+      // barra, por espacio. El heading viejo "Mesas" murió con la TopBar.
+      await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
+      await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
 
-    // El seed trae tres mesas completadas: hace 3, 9 y 16 días. Siempre caen
-    // en el mes corriente y/o el anterior, así que hay AL MENOS un encabezado
-    // de mes — se afirma el del mes de la mesa más nueva, que es determinista.
-    const mesReciente = new Date(Date.now() - 3 * 24 * 60 * 60_000)
-      .toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
-    await expect(page.getByRole('heading', { name: mesReciente })).toBeVisible();
+      // Se afirma el mes y la pertenencia de la mesa más nueva: las otras dos
+      // también son de septiembre y no deben enmascarar un agrupado UTC erróneo.
+      await expect(page.getByRole('heading', { name: fixture.month, exact: true })).toBeVisible();
+      await expect(page.getByRole('region', { name: fixture.month, exact: true })
+        .getByRole('button', { name: /\$224\.25/ })).toBeVisible();
 
-    // Los tres montos del seed, tabulares, uno por mesa.
-    await expect(page.getByText('$224.25')).toBeVisible();
-    await expect(page.getByText('$418.00')).toBeVisible();
-    await expect(page.getByText('$156.50')).toBeVisible();
+      // Los tres montos del seed, tabulares, uno por mesa.
+      await expect(page.getByText('$224.25')).toBeVisible();
+      await expect(page.getByText('$418.00')).toBeVisible();
+      await expect(page.getByText('$156.50')).toBeVisible();
 
-    // La ausencia es el spec: la mesa abierta vive en Inicio y esta pantalla
-    // no tiene sección de abiertas.
-    await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
-  });
+      // La ausencia es el spec: la mesa abierta vive en Inicio y esta pantalla
+      // no tiene sección de abiertas.
+      await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
+    });
+  }
 
   test('el acordeón despliega los consumos propios reales del pago (G-33)', async ({ page }) => {
     await ingresar(page);
