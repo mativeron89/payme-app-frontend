@@ -6,6 +6,22 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Foto de quien invita en las invitaciones · App Backend v2.149.0 · 2026-10-05
+
+Orden `AF-E174-3B-E177-INVITADOR-Y-CAMARA-20261005` (decisión 174, E174-3B).
+
+- Contenido: owner **`06fa6489089fda4ec4359cbda2ba211bc4a7becd`** (v2.149.0:
+  `has_inviter_avatar` en `GET /invitations` y `GET /invitations/{id}/inviter-avatar`).
+- Inventario: el de `main` del owner en **`a476ce154567a402fe8c9b0ed6d8fa50419342f4`**
+  (`contract/mirror-inventory.json`, sha256
+  `c3356111d9428ae0506b9e73e9f6a20434a4f94c96baa2fabc9aa4b2ecaa5ed8`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `06fa648`; entre `06fa648` y `a476ce1` sólo cambia el
+  inventario.
+- **121 archivos**, sin altas ni bajas. Cambian dos, los dos por `06fa648` (medido con
+  `git log 673156d..06fa648 -- <archivo>`): `routes/invitations.js` y `services/notifications.js`,
+  copiados con `git show 06fa648:<origen>` y con el sha256 que declara el inventario.
+- `--paridad`: espejo = inventario = fuente en `06fa648`, 121/121.
+
 ### Fotos y notificaciones · App Backend v2.148.0 · 2026-10-04
 
 Orden `AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004`, con la adenda de alcance del

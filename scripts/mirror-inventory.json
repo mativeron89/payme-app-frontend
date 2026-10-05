@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "673156d3a0907b5fc075c7bedd9d644f8290a47d",
+  "commit": "06fa6489089fda4ec4359cbda2ba211bc4a7becd",
   "total": 121,
   "archivos": [
     {
@@ -403,8 +403,8 @@
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "419098a44f8b6a88532ec28ae45c3d93a8ebfaad4882804f5ee1c1de436a5ceb",
-      "bytes": 14810
+      "sha256": "894ae56598dfd9dbbc666e5f991db95209a43587e21f3c6afd43d4939c4c132f",
+      "bytes": 17268
     },
     {
       "origen": "routes/mesas.js",
@@ -607,8 +607,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "32ffa429be51376298f2a31f63d576b7e5611890e36c590ffcfeb35533a3e59a",
-      "bytes": 9275
+      "sha256": "383b4f3788a0af57890f802910a78e89b9285a53b552c2bb3710544c4e1449fb",
+      "bytes": 10372
     },
     {
       "origen": "services/ocrRail.js",

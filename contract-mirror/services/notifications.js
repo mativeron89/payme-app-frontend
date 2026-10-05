@@ -171,7 +171,6 @@ async function borrarTodas(userId, db = pool) {
  * invitación (`related_entity_id`), que ya viaja en la notificación: no expone ids nuevos.
  */
 async function fotoDeQuienInvita(notificationId, userId, db = pool) {
-  const profileIdentity = require('./profileIdentity');
   const { rows: [fila] } = await db.query(
     `SELECT i.inviter_user_id AS user_id, u.status,
             EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = i.inviter_user_id) AS tiene_foto
@@ -183,7 +182,31 @@ async function fotoDeQuienInvita(notificationId, userId, db = pool) {
         AND i.inviter_user_id <> $2`,
     [notificationId, userId]
   );
+  return fotoDelInvitador(fila, db);
+}
+
+/**
+ * v2.149.0 · E174-3B · la misma foto, para una invitación cuyo destinatario es el propio usuario
+ * (la tarjeta «Te invitaron» y la burbuja de Inicio salen de GET /api/invitations). Mismas
+ * denegaciones y la misma función interna (`fotoDelInvitador`): invitación ajena o inexistente,
+ * de link (sin destinatario), cuenta eliminada, sin foto, menor o sin fecha.
+ */
+async function fotoDeQuienInvitaPorInvitacion(invitationId, userId, db = pool) {
+  const { rows: [fila] } = await db.query(
+    `SELECT i.inviter_user_id AS user_id, u.status,
+            EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = i.inviter_user_id) AS tiene_foto
+       FROM invitations i
+       LEFT JOIN users u ON u.id = i.inviter_user_id
+      WHERE i.id = $1 AND i.invited_user_id = $2 AND i.inviter_user_id <> $2`,
+    [invitationId, userId]
+  );
+  return fotoDelInvitador(fila, db);
+}
+
+/** La ÚNICA decisión de las dos rutas: regla n164 y, si pasa, los bytes. Sin fila, null. */
+async function fotoDelInvitador(fila, db) {
   if (!fila) return null;
+  const profileIdentity = require('./profileIdentity');
   const visible = await profileIdentity.fotoVisibleN164(
     { userId: fila.user_id, status: fila.status, tieneFoto: fila.tiene_foto }, db);
   if (!visible) return null;
@@ -208,5 +231,5 @@ async function fotoDeInvitadorVisible(inviterId, db = pool) {
 
 module.exports = {
   create, createBulk, markRead, markAllRead, unreadCount, borrarTodas, fotoDeQuienInvita,
-  fotoDeInvitadorVisible, TYPES, WALLET_RAIL_TYPES,
+  fotoDeQuienInvitaPorInvitacion, fotoDeInvitadorVisible, TYPES, WALLET_RAIL_TYPES,
 };

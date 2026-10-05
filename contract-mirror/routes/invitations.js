@@ -11,6 +11,8 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { uuidIdParam, validateParams } = require('../schemas');
 const invitationAuthority = require('../services/invitationAuthority');
+const notifs = require('../services/notifications');
+const profileIdentity = require('../services/profileIdentity');
 const stateMachine = require('../utils/stateMachine');
 const { displayRestaurantName } = require('../services/mesaPresentation');
 const logger = require('../utils/logger');
@@ -43,7 +45,10 @@ router.get('/', async (req, res, next) => {
               -- Enum cerrado de restaurants.category, NOT NULL en la base.
               r.category AS restaurant_category,
               u.first_name AS inviter_first_name, u.last_name AS inviter_last_name,
-              u.payme_id AS inviter_payme_id
+              u.payme_id AS inviter_payme_id,
+              -- v2.149.0 · E174-3B · sólo para has_inviter_avatar; se quitan abajo.
+              i.inviter_user_id AS foto_inviter_id, u.status AS foto_inviter_status,
+              EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = i.inviter_user_id) AS foto_tiene
          FROM invitations i
          JOIN mesas m       ON m.id = i.mesa_id
          JOIN restaurants r ON r.id = m.restaurant_id
@@ -54,19 +59,52 @@ router.get('/', async (req, res, next) => {
         ORDER BY i.created_at DESC`,
       [req.user.id]
     );
+    // v2.149.0 · E174-3B · `has_inviter_avatar`: GET /api/invitations/:id/inviter-avatar le
+    // respondería 200 a este usuario. La misma regla n164 (`profileIdentity.fotoVisibleN164`) que la
+    // ruta y que la pista de la notificación. El listado sólo trae invitaciones RECIBIDAS, así que
+    // la clave va siempre. El id del invitador no sale: es sólo para calcularla.
+    const conFoto = await Promise.all(rows.map((r) => profileIdentity.fotoVisibleN164(
+      { userId: r.foto_inviter_id, status: r.foto_inviter_status, tieneFoto: r.foto_tiene })));
     res.json({
       // AB-NOMBRE-RESTO (2026-09-25) · `restaurant_name` con la MISMA regla que
       // GET /mesas/:code (el nombre que se le puso a la mesa si el restaurante es
       // privado). Cambia el VALOR, no las claves: las dos columnas auxiliares no
       // salen en la respuesta.
-      invitations: rows.map(({ nombre_restaurant_status, nombre_restaurant_label, ...row }) => ({
+      invitations: rows.map(({
+        nombre_restaurant_status, nombre_restaurant_label, foto_inviter_id: _id, foto_inviter_status: _st,
+        foto_tiene: _tf, ...row
+      }, i) => ({
         ...row,
         restaurant_name: displayRestaurantName({ metadata: { restaurant_label: nombre_restaurant_label } },
           row.restaurant_name, nombre_restaurant_status),
         mesa_joinable: stateMachine.mesaViva(row.mesa_status),
+        has_inviter_avatar: conFoto[i],
       })),
     });
   } catch (err) { next(err); }
+});
+
+// ─── GET /:id/inviter-avatar · v2.149.0 · E174-3B (decisión 174) ───
+// La foto de quien te invitó, para una invitación cuyo destinatario sos vos. La MISMA función
+// interna que /api/notifications/:id/inviter-avatar (`notifs.fotoDelInvitador`, regla n164).
+// 🔴 No oracular: id inválido o inexistente, invitación ajena, de link (sin destinatario), cuenta
+// eliminada, sin foto, menor o sin fecha responden EXACTAMENTE el mismo 404. `private, no-store`,
+// `Vary: Authorization`, sin ETag. Un id mal formado es 404 y no 400: no se distingue el porqué.
+const ID_INVITACION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.get('/:id/inviter-avatar', async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.vary('Authorization');
+  res.setHeader('Access-Control-Expose-Headers', 'Vary, ETag');
+  const absent = () => res.status(404).type('application/json')
+    .end(JSON.stringify({ error: 'avatar_not_found' }));
+  try {
+    if (!ID_INVITACION.test(req.params.id)) return absent();
+    const avatar = await notifs.fotoDeQuienInvitaPorInvitacion(req.params.id, req.user.id);
+    if (!avatar) return absent();
+    res.type(avatar.mimeType);
+    res.setHeader('Content-Length', String(avatar.bytes.length));
+    return res.end(avatar.bytes);
+  } catch (err) { return next(err); }
 });
 
 // ─── POST /:id/accept ─────────────────────────────────────
