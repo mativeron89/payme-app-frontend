@@ -54,7 +54,7 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, instalar] = await Promise.all([
+  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, instalar, empujon] = await Promise.all([
     import('./api/googleVincularRedirect'),
     import('./api/googleRedirect'),
     import('./api/googleAltaRedirect'),
@@ -64,6 +64,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./i18n/idioma'),
     import('./App'),
     import('./instalar/agregarAInicio'),
+    import('./empujonDeArranque'),
   ]);
   const { capturarVueltaVincular } = googleVincular;
   const { capturarVueltaGoogleRedirect } = googleRedirect;
@@ -124,6 +125,11 @@ async function arrancarPrivada(): Promise<void> {
   // `render` ENCOLA el commit, no lo ejecuta: retirar en la línea siguiente
   // podría destapar un frame de blanco. El rAF corre después del primer paint.
   requestAnimationFrame(() => retirarSplash());
+
+  // D179 · en la app de inicio de iOS, el scroll de 1 px y vuelta que hace que
+  // WebKit acomode el viewport (y con él la barra de abajo). En Safari y en la
+  // computadora no hace nada. Ver `src/empujonDeArranque.ts`.
+  empujon.iniciarEmpujon();
 
   // APP-PWA-B2 · el service worker se registra SÓLO desde la app privada, nunca
   // desde las páginas públicas de cumplimiento: esas tienen prohibido dejar

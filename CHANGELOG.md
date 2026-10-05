@@ -11,6 +11,44 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.214.0 — La app de inicio de iOS se acomoda sola al abrir (2026-10-05)
+
+Orden AF-E179-BARRA-INFERIOR-ARRANQUE-20261005 (sha256 fc094d23…), decisión 179 de Mati (7438201e…), con el
+resultado de su prueba en D178 (71e3e657…). Base `0.213.0` (`f57e9d3`).
+
+- **Lo que pasa** (captura 8 de Mati, 0.212.0, app de inicio): al abrir, la barra de abajo queda subida, con una
+  franja vacía debajo, y se acomoda en cuanto se scrollea. Mati: «tiene que estar en el primer momento».
+- **Lo que hace 0.214.0:** el mismo scroll, solo y mínimo (`src/empujonDeArranque.ts`): 1 px y vuelta dos cuadros
+  después, al cargar, 700 ms más tarde (segundo intento), al volver de segundo plano y al restaurar la página
+  guardada. **Sólo con `navigator.standalone === true`** (la app de inicio de iOS): en Safari y en la computadora
+  no engancha nada.
+- **Qué scrollea, medido** (`movil`, 390×844, Inicio, Estadísticas y Configuración): el documento nunca (844/844:
+  `html`, `body` y `#root` miden 100 % y `.app` es `100dvh` con `overflow: hidden`); scrollea el `.scroll` de cada
+  pantalla. **Deducido, sin medir en el iPhone:** cuál de los dos dispara el recálculo de WebKit. Un dedo sobre una
+  pantalla corta hace rebotar el documento; sobre una larga, mueve el `.scroll`. Por eso el empujón mueve los dos:
+  el documento (alargando `html` 1 px mientras dura) y el `.scroll`, si tiene para dónde. Medido también: en el
+  primer intento (~110 ms) Inicio todavía no dibujó su `.scroll`; el segundo (~790 ms) lo encuentra.
+- **La garantía (peor caso = 0.212.0):** no toca el alto de `.app` ni de la barra (lo que en 0.210.5 la cortó),
+  sólo posiciones de scroll, y las devuelve a donde estaban, con el `min-height` que `html` tuviera. Si WebKit no
+  recalcula, todo queda como antes: la barra entera, subida, y se acomoda con el primer scroll. Nunca más de 1 px.
+  No empuja con un dedo apoyado ni mientras la persona scrollea (cortaría el impulso), ni dos veces a la vez.
+- El panel de diagnóstico (5 toques en el logo) queda igual.
+- **Pruebas:**
+  - `src/empujonDeArranque.test.ts` (19, con un `window` de prueba): la puerta (`standalone` estricto; Safari y
+    computadora sin listeners); el empujón y su vuelta; el `load`; el segundo intento; `pageshow` persistido sí y
+    primera carga no; volver sí e irse no; dedo apoyado, `touchcancel`, persona scrolleando y scrolls propios; sin
+    sumarse; devolver el scroll previo, un `.scroll` al fondo y un `min-height` con su prioridad; y soltar a mitad.
+  - `e2e/barra-arranque-ios.spec.ts` (4): con la app de inicio simulada, a 390×664 y 390×844, el documento se mueve
+    1 px y vuelve dos veces y el `.scroll` al menos una, `.app` mide el viewport durante el empujón y la barra
+    termina entera; en Safari del iPhone y en la computadora no se mueve nada.
+  - **Rojo sobre `f57e9d3`:** los dos de la app de inicio (nada se movía) y el unitario sin módulo. Los dos «no se
+    mueve nada» pasan ahí, como deben: su testigo positivo son los de la app de inicio.
+  - **Mutantes:** 23 cazados (`M1`–`M23`): la puerta, cada movimiento y su vuelta, el `min-height` y su prioridad,
+    las tres condiciones para no empujar, el segundo intento, `pageshow`, la visibilidad, `touchcancel`, volver en
+    el acto, soltar, el `load` y el enganche en `main.tsx`.
+- **Lo que no se probó acá:** Chromium no reproduce el viewport achicado de WebKit. Si el empujón lo acomoda lo dice
+  el iPhone de Mati (D63): abrir PayMe desde el ícono de inicio y ver la barra pegada abajo desde el primer momento.
+
 ## 0.213.0 — Estadísticas según Claude Design, y la guía «Agregar a inicio» (2026-10-05)
 
 Orden AF-E173-4-E176-ESTADISTICAS-Y-AGREGAR-A-INICIO-20261005 (sha256 a9808514…), que junta
