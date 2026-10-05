@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.216.0 — La barra de la app de inicio de iOS, con los números del iPhone (2026-10-05)
+
+Lease AF-E179, enmienda E179b (14:35:08Z), decisión 179 y el resultado de D180 (822ca233…): con 0.214.0 la barra
+«Sigue viéndose muy arriba». Base `0.215.0` (`4c54feb`).
+
+- **Los números REALES** (panel de diagnóstico en el iPhone de Mati, app de inicio, 0.214.0 recién abierta y sin
+  scrollear, captura 11, cb491f28…): `innerHeight`, `visualViewport` y `100dvh` 794; `clientHeight` y `100svh` 793;
+  **`100vh`, `100lvh`, `outerHeight` y la pantalla 852**; insets 59/34; `.app` 0–794 y la barra 704–794;
+  `standalone` true y `display-mode: standalone`. WebKit arranca con el viewport de layout corto (≈ 58 pt), pero
+  `100lvh` ya mide la pantalla. `.app` medía `100dvh` y la barra terminaba 58 pt antes del borde.
+- **El arreglo, sólo en la app de inicio de iOS:** `src/appDeInicio.ts` marca `<html>` con `app-de-inicio-ios` si
+  `navigator.standalone === true`, antes del primer render, y con esa clase toda la cadena `html → body → #root →
+  .app` mide `100lvh` (con `100vh` antes, para el iOS que no la tenga). Ningún eslabón termina en 793. En Safari no
+  hay clase: ahí `100vh` pondría la barra debajo de la barra del navegador. Android y la computadora, igual.
+- **Distinto de 0.210.5**, que cortó la barra en 793: aquella volvía `.app` `position: fixed` con el alto forzado
+  por JS, y WebKit recorta las capas fijas a su viewport corto. Ésta deja `.app` en el flujo (`relative`) y sólo
+  cambia la unidad. **Deducido, no medido acá:** que WebKit pinte el contenido del flujo hasta 852. Debajo de 794
+  hoy se ve el fondo gris de la página, que lo sugiere. Lo confirma el iPhone de Mati.
+- **Se retiró el empujón de 0.214.0** (`src/empujonDeArranque.ts`, su test y `e2e/barra-arranque-ios.spec.ts`).
+  Medido en el iPhone: la captura 11 se tomó más de un segundo después de abrir, con los dos empujones corridos, y
+  el viewport seguía en 794. Un scroll por código no hace recalcular a WebKit. Además movía el documento 1 px dos
+  cuadros y ya interfirió con dos tests (`diagnostico-pantalla` en el CI del #15, y el e2e nuevo de esta versión,
+  que leyó `html` en 795 a mitad de un empujón).
+- `e2e/diagnostico-pantalla.spec.ts` ya no espera al empujón. Su test de la corrección cuadro a cuadro pasa a mover
+  la página a mano, 1 px y de vuelta: el panel tiene que seguirla.
+- **Pruebas:**
+  - `src/appDeInicio.test.ts` (5): la clase sólo con `standalone === true`, y es la que nombra el CSS.
+  - `src/styles/shellViewport.test.ts` (+2): la cadena y `.app` en `100lvh` con su `100vh` antes; ni `fixed`, ni
+    `top`/`bottom`, ni `overflow` en la cadena; la regla base de Safari, intacta.
+  - `e2e/barra-app-de-inicio.spec.ts` (4): con los números de Mati simulados (393 × 794, pantalla 852, insets
+    59/34), la clase y html, body, #root y `.app` en `100lvh` contra una sonda, `.app` en el flujo y la barra
+    entera; la clase sigue en otra pantalla y al volver de segundo plano; en Safari del iPhone y en la computadora
+    no hay clase y `.app` mide `100dvh`. **Lo que no prueba:** en Chromium `100lvh` vale lo mismo que `100dvh`, así
+    que la barra termina en 794 con o sin el arreglo. La guarda de CSS es la que vigila la unidad.
+  - **Rojo sobre `4c54feb`:** los dos de la app de inicio y los unitarios. Los de Safari y la computadora pasan
+    ahí, como deben.
+  - **Mutantes:** 10 cazados (`B1`–`B10`): la clase en `main.tsx`, la puerta estricta, la clase en Safari, cada
+    eslabón y unidad de la cadena, el `100vh` de respaldo, volverla `fixed`, un `overflow` que recorte y el nombre
+    de la clase entre JS y CSS.
+- **Lo que no se probó acá:** el iPhone. Lo que tiene que ver Mati: abrir PayMe desde el ícono, con la sesión
+  iniciada, y la barra pegada abajo desde el primer momento. Si no, la captura del panel: `.app height` debería
+  decir 852.
+
 ## 0.215.0 — Notificaciones rediseñadas (2026-10-05)
 
 Decisión 178 de Mati (71e3e657…), sobre su captura 9 de 0.212.0: «Aparece pero está muy mal el diseño». Eligió que lo

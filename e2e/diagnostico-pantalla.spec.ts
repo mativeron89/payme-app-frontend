@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { SEGUNDO_INTENTO_MS } from '../src/empujonDeArranque';
 
 /**
  * E173-2 · el diagnóstico de pantalla: 5 toques en el logo de PayMe lo abren.
@@ -22,32 +21,8 @@ async function simularIos(page: Page): Promise<void> {
     Object.defineProperty(Navigator.prototype, 'standalone', { configurable: true, get: () => true });
     Object.defineProperty(Screen.prototype, 'height', { configurable: true, get: () => 844 });
     Object.defineProperty(Screen.prototype, 'width', { configurable: true, get: () => 390 });
-    // D179 · cuándo corrió el primer empujón de arranque (el primer scroll del
-    // documento): el ancla para saber que el segundo también pasó.
-    const w = window as unknown as { __primerEmpujon: number | null };
-    w.__primerEmpujon = null;
-    addEventListener('scroll', (e) => {
-      if (e.target === document && w.__primerEmpujon === null) w.__primerEmpujon = performance.now();
-    }, true);
   });
   await page.setViewportSize({ width: 390, height: 785 });
-}
-
-/**
- * D179 · con la app de inicio simulada corre el empujón de arranque: el
- * documento baja 1 px durante dos cuadros, al cargar y ~700 ms después. Si el
- * panel se abre y se lee dentro de esos dos cuadros, lee la barra 1 px más
- * arriba: «694 · 784 · 90» en el CI 37269618527 (flaky, pasó al reintentar), y
- * el mismo valor reproducido abriendo el panel a mitad de un empujón (ver el
- * test de abajo, que también muestra que el panel se corrige solo). Se abre
- * cuando los dos ya pasaron; las aserciones no cambian.
- */
-async function sinEmpujonEnCurso(page: Page): Promise<void> {
-  const primero = () => page.evaluate(() => (window as unknown as { __primerEmpujon: number | null }).__primerEmpujon);
-  await expect.poll(primero).not.toBeNull();
-  await expect.poll(async () => (await page.evaluate(() => performance.now())) - (await primero())!)
-    .toBeGreaterThan(SEGUNDO_INTENTO_MS + 300);
-  await expect.poll(() => page.evaluate(() => scrollY === 0 && document.documentElement.style.minHeight === '')).toBe(true);
 }
 
 const panel = (page: Page) => page.getByRole('dialog', { name: 'Diagnóstico de pantalla' });
@@ -79,7 +54,6 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
   test('🔴 muestra lo que informa el navegador: viewport, pantalla, insets, `.app`, la barra y el modo', async ({ page }) => {
     await simularIos(page);
     await ingresar(page);
-    await sinEmpujonEnCurso(page);
     await tocarLogo(page, 5);
     await expect(panel(page)).toBeVisible();
     expect(await valor(page, 'innerWidth × innerHeight')).toBe('390 × 785');
@@ -98,7 +72,6 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
   test('vuelve a medir solo cuando cambia el viewport', async ({ page }) => {
     await simularIos(page);
     await ingresar(page);
-    await sinEmpujonEnCurso(page);
     await tocarLogo(page, 5);
     await expect(panel(page)).toBeVisible();
     expect(await valor(page, 'innerWidth × innerHeight')).toBe('390 × 785');
@@ -107,37 +80,27 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
     await expect.poll(() => valor(page, '.appbar-block top · bottom · height')).toBe('754 · 844 · 90');
   });
 
-  test('D179 · abierto a mitad de un empujón, el panel ve la barra 1 px arriba y se corrige solo', async ({ page }) => {
+  test('vuelve a medir cuando la página se mueve: 1 px abajo y de vuelta', async ({ page }) => {
+    // En 0.214.0 el «empujón» de arranque movía el documento 1 px dos cuadros, y
+    // el panel abierto en esa ventana veía la barra 1 px arriba hasta el scroll
+    // siguiente (CI 37269618527). El empujón se retiró en 0.216.0; esto fija que
+    // el panel sigue lo que la página hace, sin quedarse con una medida vieja.
     await simularIos(page);
     await ingresar(page);
-    await sinEmpujonEnCurso(page);
-    await tocarLogo(page, 4);
-    // Un empujón (volver de segundo plano) y el quinto toque en su tercer cuadro,
-    // con el documento en 1 px. Se anota lo que muestra el panel cuadro a cuadro.
-    const traza = await page.evaluate(() => new Promise<{ y: number[]; panel: string[] }>((listo) => {
-      const leer = () => [...document.querySelectorAll('.diag-fila')]
-        .find((f) => f.querySelector('dt')?.textContent === '.appbar-block top · bottom · height')
-        ?.querySelector('dd')?.textContent ?? '';
-      const logoEl = document.querySelector('.hdr-mark-toques .hdr-mark') as HTMLElement;
-      const y: number[] = [];
-      const panel: string[] = [];
-      let cuadro = 0;
-      const paso = () => {
-        cuadro += 1;
-        if (cuadro === 3) logoEl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        y.push(scrollY);
-        panel.push(leer());
-        if (cuadro < 10) requestAnimationFrame(paso);
-        else listo({ y, panel });
-      };
-      document.dispatchEvent(new Event('visibilitychange'));
-      requestAnimationFrame(paso);
-    }));
-    // Testigo: el toque cayó con el documento en 1 px y el panel lo vio así…
-    expect(traza.y[2]).toBe(1);
-    expect(traza.panel).toContain('694 · 784 · 90');
-    // …y se corrigió solo cuando el empujón volvió, sin tocar nada.
-    expect(traza.panel.at(-1)).toBe('695 · 785 · 90');
+    await tocarLogo(page, 5);
+    await expect(panel(page)).toBeVisible();
+    const barra = () => valor(page, '.appbar-block top · bottom · height');
+    await expect.poll(barra).toBe('695 · 785 · 90');
+    await page.evaluate(() => {
+      document.documentElement.style.minHeight = 'calc(100% + 1px)';
+      window.scrollTo(0, 1);
+    });
+    await expect.poll(barra).toBe('694 · 784 · 90');
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.style.removeProperty('min-height');
+    });
+    await expect.poll(barra).toBe('695 · 785 · 90');
   });
 
   test('🔴 sólo lee: abrir, volver a medir, copiar y cerrar no hacen ningún pedido de red', async ({ page, context }) => {

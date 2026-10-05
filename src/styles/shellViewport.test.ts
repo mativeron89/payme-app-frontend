@@ -77,6 +77,32 @@ describe('E173-2 · la barra inferior nunca queda fuera de lo visible', () => {
     expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) max(8px, env(safe-area-inset-bottom))');
   });
 
+  it('🔴 D179 · E179b · en la app de inicio de iOS la cadena html → body → #root → `.app` mide 100lvh', () => {
+    // Números REALES del iPhone de Mati al abrir (captura 11): 100dvh 794 pero
+    // 100lvh 852, el alto de la pantalla. `100vh` va antes, para el iOS sin lvh.
+    const cadena = regla('html.app-de-inicio-ios,\nhtml.app-de-inicio-ios body,\nhtml.app-de-inicio-ios #root');
+    expect(efectivo(cadena, 'height')).toBe('100lvh');
+    expect(cadena).toMatch(/height:\s*100vh;[\s\S]*height:\s*100lvh;/);
+    const app = regla('html.app-de-inicio-ios .app');
+    expect(efectivo(app, 'height')).toBe('100lvh');
+    expect(efectivo(app, 'min-height')).toBe('100lvh');
+  });
+
+  it('🔴 E179b no repite 0.210.5: `.app` sigue en el flujo y ningún eslabón recorta', () => {
+    const cadena = regla('html.app-de-inicio-ios,\nhtml.app-de-inicio-ios body,\nhtml.app-de-inicio-ios #root');
+    const app = regla('html.app-de-inicio-ios .app');
+    for (const cuerpo of [cadena, app]) {
+      expect(efectivo(cuerpo, 'position')).toBeNull();
+      expect(efectivo(cuerpo, 'top')).toBeNull();
+      expect(efectivo(cuerpo, 'bottom')).toBeNull();
+    }
+    expect(efectivo(cadena, 'overflow')).toBeNull();
+    // La regla base de `.app` (Safari y todo lo demás) no cambia.
+    expect(efectivo(regla('.app'), 'position')).toBe('relative');
+    expect(efectivo(regla('html,\nbody,\n#root'), 'height')).toBe('100%');
+    expect(efectivo(regla('html,\nbody,\n#root'), 'overflow')).toBeNull();
+  });
+
   it('la barra sigue anclada al borde inferior de `.app`', () => {
     const barra = regla('.appbar-block');
     expect(efectivo(barra, 'position')).toBe('absolute');

@@ -356,6 +356,29 @@ body {
   position: relative;
 }
 
+/* D179 · E179b · la app de inicio de iOS (clase de `src/appDeInicio.ts`, sólo con
+   `navigator.standalone === true`). Números REALES del iPhone de Mati al abrir
+   (captura 11): innerHeight y `100dvh` 794, `clientHeight` 793, pero `100vh` y
+   `100lvh` ya 852, el alto de la pantalla. Con `100dvh`, `.app` y su barra
+   terminaban 58 pt antes del borde. Toda la cadena mide `100lvh` (con `100vh`
+   para el iOS que no la tenga), así ningún ancestro termina en 793. `.app` sigue
+   en el flujo: en 0.210.5 la volvimos `fixed` con alto forzado y WebKit recortó
+   la barra en 793. Safari no tiene la clase: ahí `100vh` taparía la barra con
+   la del navegador. */
+html.app-de-inicio-ios,
+html.app-de-inicio-ios body,
+html.app-de-inicio-ios #root {
+  height: 100vh;
+  height: 100lvh;
+}
+
+html.app-de-inicio-ios .app {
+  min-height: 100vh;
+  min-height: 100lvh;
+  height: 100vh;
+  height: 100lvh;
+}
+
 .screen {
   flex: 1;
   position: relative;
