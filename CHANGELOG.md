@@ -11,6 +11,46 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.215.0 — Notificaciones rediseñadas (2026-10-05)
+
+Decisión 178 de Mati (71e3e657…), sobre su captura 9 de 0.212.0: «Aparece pero está muy mal el diseño». Eligió que lo
+rediseñe App Frontend con el blueprint, y **aprueba las capturas antes de publicar**: esta versión no pasa a `main`
+sin ese OK. Lease AF-E179 con su segunda rama (`scope_amendments`, 05:16:03Z). Base `0.214.0` (`36151c5`).
+
+- **Arriba de todo, la fila de acciones** (D174 la pidió arriba):
+  - a la izquierda, cuántos faltan leer («2 sin leer») o «Todo leído», que le da ancla a la fila (antes «Borrar
+    todas» quedaba suelto a la derecha);
+  - a la derecha, con jerarquía: «Marcar leídos» es la principal (píldora teal con ✓) y «Borrar todas» la
+    secundaria (gris, sólo texto); las dos de 44 px; sin naranja, que ya está en el «+» de la barra;
+  - entran en una línea desde 346 px (medido: resumen 64, separación 8, acciones 241, más 16 de cada lado); en
+    320 px el resumen baja entero a su renglón, sin scroll horizontal.
+- **Los avisos en una sola tarjeta con separadores**, no una tarjeta por aviso: en la captura 9 la lista se leía
+  como bloques sueltos. Con invitaciones arriba, el rótulo «Avisos» separa las dos cosas.
+- **Cada aviso:** el ícono (o la foto de quien invita) en un círculo de 40 px, con el punto de no leído encima y
+  borde blanco, en vez de una columna propia; el texto sigue en 16 px (el sistema no baja de ahí), 600 si no se
+  leyó y 500 si ya; la papelera queda centrada en la fila, en gris, sin competir con el texto.
+- **La foto de quien invita**, en el aviso y en «Te invitaron», de 40 px.
+- **El vacío:** la campana en su círculo, «No tienes avisos.» y «Aquí aparecen tus invitaciones y los avisos de tus
+  mesas.».
+- La confirmación de «Borrar todas» queda igual (Volver con el foco, «Sí, borrar todas»).
+- Se sacaron dos cosas que no hacían nada: un singular aparte para «1 sin leer» («{0} sin leer» da lo mismo) y un
+  `nowrap` del resumen (con la fila que baja, nunca se parte).
+- **Pruebas:**
+  - `e2e/notificaciones-d178.spec.ts` (15): la fila de acciones y su jerarquía (colores y 44 px), «Todo leído»
+    después de marcar; una sola tarjeta con separadores; el círculo, el punto arriba a la derecha y la papelera
+    centrada; el peso de leído y no leído; la foto en el aviso y en «Te invitaron»; el «+» que no tapa el último
+    aviso (ya se cumplía sobre 0.214.0: queda como red); la confirmación; el vacío; una línea a 390, 375 y 360 px
+    y el resumen entero en 320; y las capturas.
+  - Los 98 tests e2e que ya tocaban esta pantalla siguen verdes sin cambios.
+  - **Rojo sobre `36151c5`:** 10 de los 15. Los 5 que pasan ahí: el «+», la confirmación y tres capturas de 320 px
+    que sólo esperan que la pantalla cargue.
+  - **Mutantes:** 14 cazados (`N1`, `N2`, `N4`–`N15`). `N3` y `N16` sobrevivían por código que no hacía nada: se
+    sacó. `N15` (la fila que no baja) sobrevivió dos veces: la primera porque nada fijaba que el resumen no se
+    partiera, la segunda porque comparaba la altura justo contra dos renglones; ahora el umbral es 1,5 renglones.
+- **Capturas para Mati** (390 y 320 px): con no leídas, sin no leídas, la invitación con foto, la confirmación de
+  «Borrar todas» y el vacío, más las de antes.
+- **Lo que no se probó acá:** un iPhone. Además de las capturas, lo cierra la prueba de Mati (D63).
+
 ## 0.214.0 — La app de inicio de iOS se acomoda sola al abrir (2026-10-05)
 
 Orden AF-E179-BARRA-INFERIOR-ARRANQUE-20261005 (sha256 fc094d23…), decisión 179 de Mati (7438201e…), con el

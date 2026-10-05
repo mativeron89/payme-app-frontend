@@ -355,6 +355,7 @@ export function AvisosScreen() {
   }
 
   const hasUnread = notifs?.some((n) => !n.read_at) ?? false;
+  const cuantasSinLeer = notifs?.reduce((cuenta, n) => cuenta + (n.read_at ? 0 : 1), 0) ?? 0;
   const hayNotificaciones = (notifs?.length ?? 0) > 0;
 
   return (
@@ -364,24 +365,34 @@ export function AvisosScreen() {
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
       <div className="scroll flow-scroll avisos-scroll">
+        {/* D178 · la fila de acciones, arriba de todo (D174): a la izquierda cuántas
+            faltan leer, que le da ancla a la fila; a la derecha «Marcar leídos»
+            como acción principal (teal) y «Borrar todas» como secundaria (gris).
+            Sin naranja: la barra de abajo ya tiene el suyo. */}
         {(hasUnread || hayNotificaciones) && (
           <div className="avisos-actions">
-            {hasUnread && (
-              <button type="button" className="linkbtn" onClick={markAll}>
-                {t('Marcar leídos')}
-              </button>
-            )}
-            {hayNotificaciones && (
-              <button
-                ref={botonBorrarTodas}
-                type="button"
-                className="linkbtn"
-                onClick={() => setConfirmarBorrarTodas(true)}
-                disabled={borrandoTodas}
-              >
-                {t('Borrar todas')}
-              </button>
-            )}
+            <span className="avisos-resumen">
+              {hasUnread ? t('{0} sin leer', cuantasSinLeer) : t('Todo leído')}
+            </span>
+            <span className="avisos-acciones-botones">
+              {hasUnread && (
+                <button type="button" className="avisos-accion avisos-accion--principal" onClick={markAll}>
+                  <Icon name="check" size={16} />
+                  {t('Marcar leídos')}
+                </button>
+              )}
+              {hayNotificaciones && (
+                <button
+                  ref={botonBorrarTodas}
+                  type="button"
+                  className="avisos-accion avisos-accion--secundaria"
+                  onClick={() => setConfirmarBorrarTodas(true)}
+                  disabled={borrandoTodas}
+                >
+                  {t('Borrar todas')}
+                </button>
+              )}
+            </span>
           </div>
         )}
         {invitations.length > 0 && (
@@ -417,7 +428,7 @@ export function AvisosScreen() {
                       clave={claveInvitadorDeInvitacion(inv.id)}
                       pedir={async (s) => (await api.getInvitationInviterAvatar(inv.id, s)).blob}
                       nombre={inv.invitadorCompleto ?? inv.invitador ?? ''}
-                      size={32}
+                      size={40}
                     />
                   ) : <IconoDeInvitacion categoria={inv.categoria} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -472,12 +483,17 @@ export function AvisosScreen() {
 
         {notifs === null && <div className="loading">{t('Cargando avisos…')}</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
-          <div className="empty aviso-empty">
-            <div className="emoji"><Icon name="bell" size={40} /></div>
-            {t('No tienes avisos.')}
+          <div className="aviso-empty">
+            <span className="aviso-empty-icono"><Icon name="bell" size={28} /></span>
+            <div className="aviso-empty-titulo">{t('No tienes avisos.')}</div>
+            <p className="aviso-empty-texto">{t('Aquí aparecen tus invitaciones y los avisos de tus mesas.')}</p>
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* D178 · con invitaciones arriba, los avisos llevan su rótulo: son otra cosa. */}
+        {invitations.length > 0 && hayNotificaciones && <h2 className="sectlabel">{t('Avisos')}</h2>}
+        {/* D178 · una sola tarjeta con separadores, no una tarjeta por aviso. */}
+        {hayNotificaciones && (
+        <div className="avisos-lista">
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
             const destino = mesaDelAviso(n);
@@ -492,7 +508,7 @@ export function AvisosScreen() {
             return (
               <div
                 key={n.id}
-                className={`card card-p aviso-row${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
+                className={`aviso-row${sinLeer ? ' aviso-row--sin-leer' : ''}${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
               >
                 <div className="aviso-row-top">
                   {/* AF-34 · `mesa_expired` con código: tocarlo lleva a esa mesa, que
@@ -503,23 +519,27 @@ export function AvisosScreen() {
                     onOpen={destino === null ? undefined : () => openNotification(n, destino)}
                     disabled={openingNotificationId !== null}
                   >
-                    <span
-                      className={`aviso-dot ${sinLeer ? '' : 'off'}`}
-                      aria-hidden={sinLeer ? undefined : 'true'}
-                      aria-label={sinLeer ? t('Sin leer') : undefined}
-                      role={sinLeer ? 'img' : undefined}
-                    />
-                    {pideFotoDelInvitador(n) && inviterName
-                      ? (
-                        <FotoDeQuienInvita
-                          clave={claveInvitador(n.id)}
-                          pedir={async (s) => (await api.getInviterAvatar(n.id, s)).blob}
-                          nombre={inviterName}
-                          size={32}
-                          className="aviso-invitador-foto"
-                        />
-                      )
-                      : <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />}
+                    {/* D178 · el ícono (o la foto de quien invita) en un círculo de
+                        40 px, con el punto de no leído encima. */}
+                    <span className="aviso-icono">
+                      {pideFotoDelInvitador(n) && inviterName
+                        ? (
+                          <FotoDeQuienInvita
+                            clave={claveInvitador(n.id)}
+                            pedir={async (s) => (await api.getInviterAvatar(n.id, s)).blob}
+                            nombre={inviterName}
+                            size={40}
+                            className="aviso-invitador-foto"
+                          />
+                        )
+                        : <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={20} />}
+                      <span
+                        className={`aviso-dot ${sinLeer ? '' : 'off'}`}
+                        aria-hidden={sinLeer ? undefined : 'true'}
+                        aria-label={sinLeer ? t('Sin leer') : undefined}
+                        role={sinLeer ? 'img' : undefined}
+                      />
+                    </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div id={tituloId} className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
                         {invitationSuffix !== null ? (
@@ -547,6 +567,7 @@ export function AvisosScreen() {
             );
           })}
         </div>
+        )}
       </div>
       {confirmarBorrarTodas && (
         <HojaBorrarTodas

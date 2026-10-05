@@ -3851,19 +3851,81 @@ body {
   cursor: default;
 }
 
-/* "Marcar leídos" en su propia fila, DEBAJO del encabezado. Alineado a la
-   derecha porque es una acción global sobre la lista que sigue. La fila existe
-   aunque no haya nada sin leer: si apareciera y desapareciera, la lista saltaría
-   hacia arriba justo cuando la persona termina de marcar. */
+/* "Marcar leídos" en su propia fila, DEBAJO del encabezado y arriba de todo
+   (D174). La fila existe mientras haya avisos, aunque no haya nada sin leer: si
+   apareciera y desapareciera, la lista saltaría hacia arriba justo cuando la
+   persona termina de marcar.
+   D178 · rediseño: a la izquierda cuántos faltan leer (el ancla de la fila; antes
+   «Borrar todas» quedaba suelto a la derecha); a la derecha las dos acciones con
+   jerarquía: «Marcar leídos» es la principal (píldora teal) y «Borrar todas» la
+   secundaria (gris, sólo texto). Sin naranja: la barra de abajo ya tiene el
+   suyo. Medido: el resumen (64 px), 8 de separación y las acciones (241 px)
+   entran en una línea desde 346 px de pantalla; en 320 el resumen baja solo a
+   su propia línea, sin scroll horizontal. */
 .avisos-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
-  /* E174-2 · «Marcar leídos» y «Borrar todas», lado a lado. */
-  gap: var(--sp-4);
+  gap: var(--sp-1) var(--sp-2);
   min-height: var(--tap-min);
-  padding: 0 var(--sp-4);
+  margin-bottom: var(--sp-3);
 }
+
+.avisos-resumen {
+  padding-left: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.avisos-acciones-botones {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: auto;
+}
+
+.avisos-accion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.avisos-accion:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.avisos-accion:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.avisos-accion--principal {
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.avisos-accion--secundaria {
+  padding: 0 var(--sp-2);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 
 /* M04 · la tarjeta montada y el contenido dejan de parecer una sola pieza. */
 .avisos-scroll {
@@ -3972,14 +4034,48 @@ body {
    pantalla no tenía NINGÚN encabezado para un lector de pantalla. El reset del
    margen del <h2> vive en la regla base de `.sectlabel`, no acá. */
 
+/* D178 · una sola tarjeta blanca con separadores, no una tarjeta por aviso:
+   en la captura 9 de Mati cada aviso era una tarjeta grande y la lista se leía
+   como bloques sueltos. */
+.avisos-lista {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
+}
+
 .aviso-row {
   display: block;
+  padding: var(--sp-3) var(--sp-1) var(--sp-3) var(--sp-4);
+}
+
+.aviso-row + .aviso-row {
+  border-top: 1px solid #f1f5f9;
 }
 
 .aviso-row-main {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--sp-3);
+}
+
+/* D178 · el ícono del aviso (o la foto de quien invita) en un círculo de 40 px,
+   con el punto de no leído encima. */
+.aviso-icono {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.aviso-row--guarantee .aviso-icono {
+  background: rgba(180, 70, 47, 0.12);
 }
 
 /* E174-2 · la fila y su papelera, lado a lado. La papelera es hermana y no
@@ -3987,8 +4083,8 @@ body {
    dentro de otro. */
 .aviso-row-top {
   display: flex;
-  align-items: flex-start;
-  gap: var(--sp-2);
+  align-items: center;
+  gap: var(--sp-1);
 }
 
 .aviso-row-top > .aviso-row-main {
@@ -4003,7 +4099,9 @@ body {
   justify-content: center;
   width: var(--tap-min);
   height: var(--tap-min);
-  margin: calc((18px - var(--tap-min)) / 2) calc((18px - var(--tap-min)) / 2) 0 0;
+  /* D178 · centrada en la fila, sin competir con el texto: antes iba arriba, a
+     la altura del título. */
+  margin: 0;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -4022,10 +4120,10 @@ body {
   opacity: 0.5;
 }
 
-/* E174-3 · la foto de quien invita, del tamaño de las iniciales que reemplaza. */
+/* E174-3 · la foto de quien invita, del tamaño del círculo del ícono (D178). */
 .aviso-invitador-foto {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   flex: none;
   border-radius: 50%;
   object-fit: cover;
@@ -4050,27 +4148,29 @@ body {
   background: #fbe7e3;
 }
 
-.aviso-row--guarantee .aviso-row-main > svg {
+.aviso-row--guarantee .aviso-icono {
   color: #b4462f;
 }
 
 /* El punto de no leído va en `--action` navy, no en `--action-2` teal. ACOMPAÑA:
-   la señal principal es el peso 700 del título, y por eso el punto no necesita
+   la señal principal es el peso del título, y por eso el punto no necesita
    competir por atención con nada. Naranja está descartado explícitamente — esta
-   pantalla ya muestra la barra con su círculo naranja. */
+   pantalla ya muestra la barra con su círculo naranja.
+   D178 · va encima del círculo del ícono, con un borde blanco, en vez de ocupar
+   una columna propia. */
 .aviso-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface);
   border-radius: var(--r-full);
   background: var(--action);
 }
 
-/* El leído conserva el hueco del punto: sin esto la lista se desalinea fila a
-   fila y el ojo pierde la columna. */
 .aviso-dot.off {
-  background: none;
+  display: none;
 }
 
 .aviso-title {
@@ -4082,7 +4182,7 @@ body {
 }
 
 .aviso-title.unread {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .aviso-title strong {
@@ -4184,10 +4284,43 @@ body {
 }
 
 /* Vacío REAL: sin borde. Si hubiera borde, habría algo que no estás viendo —
-   ésa es la diferencia con supresión y con desconocido (§5 del sistema). */
+   ésa es la diferencia con supresión y con desconocido (§5 del sistema).
+   D178 · centrado, con la campana en su círculo y qué va a aparecer acá. */
 .aviso-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+}
+
+.aviso-empty-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--sp-1);
+  border-radius: 50%;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.aviso-empty-titulo {
+  font-family: var(--font-display);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.aviso-empty-texto {
+  margin: 0;
+  max-width: 280px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-muted);
 }
 

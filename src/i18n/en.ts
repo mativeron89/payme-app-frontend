@@ -1152,4 +1152,7 @@ export const EN: Record<string, string> = {
   "Toca Compartir": "Tap Share",
   "Elige «Agregar a inicio»": "Choose «Add to Home Screen»",
   "Agregar a inicio": "Add to Home Screen",
+  // AF-E178 · D178 · el rediseño de Notificaciones.
+  "Todo leído": "All read",
+  "Aquí aparecen tus invitaciones y los avisos de tus mesas.": "Your invitations and table notifications show up here.",
 };
