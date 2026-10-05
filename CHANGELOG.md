@@ -11,6 +11,70 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.212.0 — «Nueva» abre la cámara directo, y la foto de quien invita en las invitaciones (2026-10-05)
+
+Orden AF-E174-3B-E177-INVITADOR-Y-CAMARA-20261005 (sha256 29a28911…), decisiones 174 y 177 de Mati, con la especificación
+`ORDEN_AF_E177_CAMARA_DIRECTA_20261004.md` (sha256 4460c14c…). Base `0.211.0` (`7c5e9d7`). Consume App Backend **v2.149.0**
+(`a476ce1`, servido).
+
+- **E174-3B · la foto de quien invita en «Te invitaron» y en la burbuja de Inicio.** Las dos salen de `GET /invitations`;
+  el dueño suma la pista `has_inviter_avatar` y `GET /invitations/{id}/inviter-avatar`, que decide en cada pedido
+  (404 no oracular, regla n164).
+  - `FotoDeQuienInvita`: un componente para la fila de la notificación (por id de notificación, como en 0.211.0), la
+    tarjeta y la burbuja (por id de invitación). Iniciales (nombre y apellido) mientras carga o con 404. Usa la memoria
+    de fotos de la sesión, con su propia clave por invitación, y poda al traer la lista.
+  - La tarjeta pone la foto en el lugar del ícono del restaurante sólo con la pista en `true`; sin ella, el ícono de
+    siempre y ningún pedido. La burbuja la pone a la izquierda de «X te invitó a»; la vista recibe la foto armada, y
+    sigue sin estado ni sesión.
+  - Espejo del contrato en un commit aparte: inventario del dueño en `a476ce1` adoptado con `--adoptar-inventario`,
+    byte-idéntico, contenido en `06fa648`. Cambian `routes/invitations.js` y `services/notifications.js`. `--paridad`
+    verde, 121/121.
+- **D177 · «Nueva» abre la cámara directo.** Mati: «hay que eliminar ese paso y que abra directamente la cámara,
+  luego, que abajo a la izquierda haya un ícono para el carrete».
+  - El paso 1 es la cámara trasera en vivo a pantalla completa (`getUserMedia`, `facingMode: ideal environment`, sin
+    audio), con el marco del ticket encima, «Volver» y el título arriba, y abajo la galería a la izquierda y el
+    disparador al centro (72 px). Ya no hay que tocar un botón para abrir la cámara.
+  - Disparar saca el cuadro del video a JPEG (lado largo hasta 2048 px, la mejor calidad de 0,9 a 0,5 que entra en
+    8 MB; evita el HEIC del iPhone). Pasa por el mismo `rechazoLocalDeImagen` y el mismo `runScan` que una foto
+    elegida.
+  - La galería es el mismo `<input type="file">` sin `capture` (decisión 91), con el `accept` del dueño.
+  - Sin cámara en vivo (permiso negado, sin cámara, sin soporte o error): el aviso «No pudimos abrir la cámara. Elige
+    una foto.» con «Elegir una foto». Nunca una pantalla muerta. La especificación decía «Elegí» (voseo); el producto
+    habla español mexicano y su guarda lo rechaza.
+  - La cámara se apaga (todas las pistas) al capturar, al salir del paso o de la pantalla y en segundo plano, y vuelve
+    a abrirse al volver al frente. `playsinline` y `muted` en el `<video>`.
+  - Los estados (subida con progreso, errores, «Reintentar», «Sacar otra foto», «Cargarlo a mano») van en un panel
+    sobre la cámara, con la misma copy; «Reintentar» y «Sacar otra foto» vuelven a la cámara en vivo, o a la galería
+    si no hay cámara. La foto sacada queda congelada mientras sube.
+  - El título «Escanea el ticket» y el nombre accesible «Capturar» del disparador se conservan: son el encabezado y el
+    botón de esta pantalla, no un paso aparte.
+  - Se retiró el CSS de la pantalla intermedia (`.scan-frame`, `.scan-frame-slot`, `.scan-glyph`, `.scan-title-card`,
+    `.scan-flow-scroll`, `.scan-hint`) y se sumó el ícono `image` de la galería.
+- **Pruebas:**
+  - `e2e/_camara.ts`: la cámara simulada (un `MediaStream` real desde un canvas con ruido, o `NotAllowedError`,
+    `NotFoundError` o sin `mediaDevices`), que cuenta pedidos y pistas vivas. `ingresar()` la instala CONCEDIDA, para
+    que la suite entera pase por la cámara de verdad; un test pide otro modo antes.
+  - `e2e/camara-directa.spec.ts` (9): abre directo con la trasera; el JPEG llega al OCR y la luz se apaga; «Volver»
+    apaga; segundo plano apaga y al volver reabre; la galería con la cámara abierta; «Reintentar» vuelve a la cámara;
+    y negada, sin cámara y sin soporte con el aviso y la galería funcionando.
+  - `src/camara/camaraTrasera.test.ts` (15): restricciones, contexto seguro, errores DOM, apagar todas las pistas,
+    tamaño y calidad dentro del tope.
+  - `e2e/invitador-en-invitaciones.spec.ts` (5) y `src/screens/fotoDeQuienInvitaEnInvitaciones.test.ts` (7): con la
+    pista, sin ella, 404, carga y memoria al volver; la pista estricta, la ruta contra el código espejado del dueño y el
+    mock que decide por sí mismo.
+  - Adaptados al nuevo paso 1, sin aflojar lo que fijaban: `af-correcciones-visuales-01`, `af-rediseno-12-chrome`,
+    `af-rediseno-12-censo-visual`, `escaneo-aviso-visible`, `reconciliacion-apertura` (la cámara no tiene campana: no
+    hay por dónde irse a Avisos; en los pasos siguientes sigue bloqueada), `guardar-tarjeta-default` (entra por su
+    propia alta: pide la cámara simulada), `ajustes10Visual.test` y `AppHeader.identity.test` (20 montajes de
+    cabecera: el paso 1 ya no la monta).
+  - **Rojo sobre el código anterior** (`7ada753`, con los helpers de hoy): los 9 de `camara-directa`, porque la cámara
+    nunca se pedía, al OCR no llegaba un JPEG y no había aviso.
+  - **Mutantes:** 11 cazados (`I1`–`I4`, `C1`–`C5`, `C7`, `C8`). `C1` (salir no apaga) sobrevivía porque apagar en la
+    rama «apagada» del efecto era redundante con su limpieza: se sacó lo redundante y el mutante va a la limpieza.
+- **Lo que no se probó acá:** un iPhone ni una cámara real. Lo visible lo cierra la prueba de Mati (D63): la cámara al
+  tocar «Nueva», en la app de inicio y en Safari; el permiso la primera vez; la galería (Fototeca, Archivos y Drive);
+  y la foto de quien invita en «Te invitaron» y en Inicio.
+
 ## 0.211.0 — Fotos en memoria, borrar notificaciones, la foto de quien invita y la barra de abajo nunca cortada (2026-10-04)
 
 Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decisiones 173, 174 y 175 de Mati. Base

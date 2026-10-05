@@ -29,6 +29,8 @@ const GLYPHS = {
   wallet: { d: ['M4 7.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10Z', 'M4 7.5A2 2 0 0 1 6 5.5h11', 'M16 13.5h4'] },
   receipt: { d: ['M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21V3Z', 'M9 8h6', 'M9 12h6', 'M9 16h4'] },
   camera: { d: ['M4 8h3.5l1.5-2.5h6L16.5 8H20a1 1 0 0 1 1 1v10H3V9a1 1 0 0 1 1-1Z', 'M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
+  // D177 · la galería de la cámara del ticket: un cuadro con montaña y sol.
+  image: { d: ['M4.5 5h15A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11A1.5 1.5 0 0 1 4.5 5Z', 'm3.5 16.5 5-5 4 4 2.5-2.5 5.5 5.5', 'M15.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z'] },
   /* Tres barras y el eje: es el acceso a Estadísticas (SPEC_APP.md §1.11). Se
      agregó acá en vez de reusar `arrow-up-right` porque esa flecha ya significa
      "transferencia saliente" en los movimientos, y un mismo glifo con dos

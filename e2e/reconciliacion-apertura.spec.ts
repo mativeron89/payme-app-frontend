@@ -80,7 +80,10 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // escanear y dividir para encontrar la salida. Ahora viajan juntos.
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
   await expect(page.getByText('Hay una apertura de una sesión anterior.')).toBeVisible();
-  await expectCampanaBloqueada(page);
+  // D177 · el paso 1 es la cámara a pantalla completa: no tiene campana, así
+  // que tampoco hay por dónde irse a Avisos con la apertura congelada. En los
+  // pasos siguientes la campana vuelve, bloqueada (abajo).
+  await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toHaveCount(0);
 
   // El diagnóstico: se pregunta por la clave, no se adivina por el listado.
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();

@@ -37,11 +37,17 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
     expect(css).toContain('border-bottom-color: var(--surface)');
   });
 
-  it('el marco usa proporción 4:3 y altura dinámica, no 400px fija', () => {
-    const regla = css.match(/\.scan-frame\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(regla).toContain('aspect-ratio: 4 / 3');
-    expect(regla).toContain('42dvh');
-    expect(regla).not.toContain('height: 400px');
+  /**
+   * D177 · el marco decorativo de 4:3 se fue con la pantalla intermedia. El de
+   * la cámara es el del ticket (3:4, vertical) y sigue sin una altura fija: se
+   * achica con el espacio que dejan la cabecera, los avisos y los controles.
+   */
+  it('el marco de la cámara usa proporción y altura máxima, no una altura fija', () => {
+    const regla = css.match(/\.camara-marco\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(regla).toContain('aspect-ratio: 3 / 4');
+    expect(regla).toContain('max-height: 100%');
+    expect(regla).not.toMatch(/(?:^|\s)height:\s*\d/);
+    expect(css).not.toMatch(/\n\.scan-frame\s*\{/);
   });
 
   it('Social refresca en foco/visibilidad y no promete pendiente en el recibo opaco', () => {

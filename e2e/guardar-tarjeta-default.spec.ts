@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { CORTE } from './_app';
+import { camaraSimulada } from './_camara';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -43,6 +44,8 @@ const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
  * garantiza, no paga, no toca tarjetas guardadas.
  */
 test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace desmarcado', async ({ page }) => {
+  // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GARANTIA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');
@@ -68,6 +71,8 @@ test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace
 test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async ({ page }) => {
   test.skip(CORTE.pagosCortados, MOTIVO);
   // Cuenta nueva invitada: nace sin tarjetas (el camino primerizo F&F real).
+  // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GUARDADA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');
@@ -122,6 +127,8 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración', async ({ page }) => {
   test.skip(CORTE.pagosCortados, MOTIVO);
   // Mismo recorrido primerizo invitado, checkbox intacto en las dos superficies.
+  // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_SIN_GUARDAR}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');

@@ -110,14 +110,22 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
   await acreditarPestanaMontada(page, 'Asociadas');
 });
 
-test('Escaneo conserva 20 px entre la burbuja y el marco', async ({ page }) => {
+/**
+ * D177 · la tarjeta de título y el marco decorativo de «Escanea el ticket» se
+ * fueron con la cámara en vivo. Lo que sigue valiendo es que nada se pise: la
+ * cabecera arriba, el marco en el medio y los controles abajo.
+ */
+test('Escaneo (cámara): la cabecera, el marco y los controles no se pisan', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  const title = page.locator('.scan-title-card');
-  const frame = page.locator('.scan-frame');
-  await expect(title).toHaveCSS('margin-bottom', '20px');
-  const [titleBox, frameBox] = await Promise.all([title.boundingBox(), frame.boundingBox()]);
-  expect((frameBox?.y ?? 0) - ((titleBox?.y ?? 0) + (titleBox?.height ?? 0))).toBeGreaterThanOrEqual(20);
+  await expect(page.getByRole('button', { name: 'Capturar', exact: true })).toBeEnabled();
+  const [arriba, marco, controles] = await Promise.all([
+    page.locator('.camara-arriba').boundingBox(),
+    page.locator('.camara-marco').boundingBox(),
+    page.locator('.camara-controles').boundingBox(),
+  ]);
+  expect(marco!.y).toBeGreaterThanOrEqual(arriba!.y + arriba!.height);
+  expect(marco!.y + marco!.height).toBeLessThanOrEqual(controles!.y);
 });
 
 test('División muestra un acceso al ticket compacto, centrado y sin subtítulo', async ({ page }) => {

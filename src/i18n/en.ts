@@ -1135,4 +1135,9 @@ export const EN: Record<string, string> = {
   "Copiar": "Copy",
   "Copiado": "Copied",
   "No se pudo copiar. Haz una captura de pantalla.": "Couldn't copy. Take a screenshot.",
+  // AF-E174-3B-E177 · D177 · «Nueva» abre la cámara directo, con la galería.
+  "Abriendo la cámara…": "Opening the camera…",
+  "No pudimos abrir la cámara. Elige una foto.": "We couldn't open the camera. Choose a photo.",
+  "Elegir una foto": "Choose a photo",
+  "Elegir una foto de la galería": "Choose a photo from your gallery",
 };

@@ -4,54 +4,40 @@ import { ingresar } from './_app';
 test.use({ viewport: { width: 375, height: 667 } });
 
 test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
+  /**
+   * D177 · el paso 1 dejó de tener el chrome compartido: es la cámara a pantalla
+   * completa. Lo que este test fijaba ahí —el shell que no scrollea, los
+   * tamaños táctiles y la campana navegable del flujo— se mide ahora en la
+   * cámara (shell y toques) y en el paso siguiente (la campana). Las medidas
+   * del chrome (cabecera 154, barra 64, círculo 56) las sigue fijando
+   * `af-rediseno-12-censo-visual` en las demás superficies.
+   */
   test('el shell exterior no scrollea y el flujo conserva geometría y campana navegable', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
 
-    const header = page.locator('.hdr-flow');
-    const titulo = page.locator('.title-card').first();
-    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
-
-    await expect(header).toBeVisible();
-    await expect(titulo).toBeVisible();
-    await expect(barra).toBeVisible();
-
-    const [headerBox, titleBox, fabBox, navBox, backBox, bellBox] = await Promise.all([
-      header.boundingBox(),
-      titulo.boundingBox(),
-      barra.locator('.appbar-fab').boundingBox(),
-      barra.boundingBox(),
-      header.getByRole('button', { name: 'Volver', exact: true }).boundingBox(),
-      header.getByRole('button', { name: 'Avisos', exact: true }).boundingBox(),
+    const disparador = page.getByRole('button', { name: 'Capturar', exact: true });
+    await expect(disparador).toBeEnabled();
+    const [volverBox, galeriaBox, disparadorBox, appBox, videoBox] = await Promise.all([
+      page.locator('.camara-arriba').getByRole('button', { name: 'Volver', exact: true }).boundingBox(),
+      page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
+      disparador.boundingBox(),
+      page.locator('.app').boundingBox(),
+      page.locator('.camara-video').boundingBox(),
     ]);
-    expect(headerBox?.height).toBe(154);
-    expect(titleBox?.y).toBe(112);
-    expect(titleBox?.height).toBeGreaterThanOrEqual(83);
-    expect(navBox?.height).toBe(64);
-    expect(fabBox?.width).toBe(56);
-    expect(fabBox?.height).toBe(56);
-    expect((navBox?.y ?? 0) - (fabBox?.y ?? 0)).toBe(26);
-    expect(backBox?.width).toBeGreaterThanOrEqual(44);
-    expect(backBox?.height).toBeGreaterThanOrEqual(44);
-    expect(bellBox?.width).toBeGreaterThanOrEqual(44);
-    expect(bellBox?.height).toBeGreaterThanOrEqual(44);
-    await expect(header).toHaveCSS('padding-left', '16px');
-    await expect(header).toHaveCSS('padding-right', '16px');
-    await expect(header.locator('.hdr-row-2')).toHaveCSS('margin-top', '10px');
-    await expect(header.locator('.hdr-back')).toHaveCSS('font-weight', '700');
-    await expect(titulo).toHaveCSS('padding-left', '18px');
-    await expect(titulo).toHaveCSS('padding-top', '16px');
-    await expect(titulo).toHaveCSS('justify-content', 'center');
-    await expect(barra.locator('..')).toHaveCSS('position', 'absolute');
-    await expect(barra.locator('..')).toHaveCSS('border-top-left-radius', '24px');
-    await expect(titulo).toContainText('Encuadra el ticket dentro del marco');
-    const scanBox = await page.locator('.scan-frame').boundingBox();
-    expect((scanBox?.width ?? 0) / (scanBox?.height ?? 1)).toBeCloseTo(4 / 3, 1);
-    expect((scanBox?.y ?? 0) + (scanBox?.height ?? 0)).toBeLessThan(fabBox?.y ?? Infinity);
-    await expect(page.locator('.scan-frame')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-    await expect(page.locator('.scan-frame-slot')).toHaveCSS('align-items', 'center');
+    expect(volverBox?.height).toBeGreaterThanOrEqual(44);
+    expect(galeriaBox?.width).toBeGreaterThanOrEqual(44);
+    expect(galeriaBox?.height).toBeGreaterThanOrEqual(44);
+    expect(disparadorBox?.width).toBeGreaterThanOrEqual(64);
+    expect(disparadorBox?.height).toBeGreaterThanOrEqual(64);
+    // La cámara llena la columna de la app, y los controles quedan adentro.
+    expect(videoBox).toEqual(appBox);
+    expect((disparadorBox?.y ?? 0) + (disparadorBox?.height ?? 0)).toBeLessThanOrEqual((appBox?.y ?? 0) + (appBox?.height ?? 0));
+    // Sin la barra de navegación ni la campana: es pantalla completa.
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toHaveCount(0);
     if (process.env.PAYME_E2E_CAPTURAS) {
-      await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/u06-scan-frame.png`, fullPage: true });
+      await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/u06-scan-camara.png`, fullPage: true });
     }
 
     const shell = await page.locator('.app').evaluate((node) => ({
@@ -60,6 +46,13 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     }));
     expect(shell.scrollHeight).toBe(shell.clientHeight);
 
+    // El paso siguiente conserva el chrome del flujo y su campana navegable.
+    await disparador.click();
+    const header = page.locator('.hdr-flow');
+    await expect(header).toBeVisible();
+    const bellBox = await header.getByRole('button', { name: 'Avisos', exact: true }).boundingBox();
+    expect(bellBox?.width).toBeGreaterThanOrEqual(44);
+    expect(bellBox?.height).toBeGreaterThanOrEqual(44);
     await header.getByRole('button', { name: 'Avisos', exact: true }).click();
     await expect(page).toHaveURL(/:\d+\/avisos$/);
   });

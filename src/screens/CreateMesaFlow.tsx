@@ -42,6 +42,8 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
+import { useCamaraTrasera } from '../camara/useCamaraTrasera';
+import { sinCamaraEnVivo } from '../camara/camaraTrasera';
 import { resolutionRequest } from '../api/restaurantResolution';
 import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
@@ -308,6 +310,16 @@ export function CreateMesaFlow() {
   const linkAttemptsRef = useRef<Map<string, string>>(new Map());
   const linkInFlightRef = useRef(createInFlightMutex());
   const fileInput = useRef<HTMLInputElement | null>(null);
+  /**
+   * D177 · la cámara en vivo del paso 1. Encendida mientras se está en el paso,
+   * sin una foto en pantalla y sin subir: al disparar (o al elegir de la
+   * galería) la foto queda congelada y la cámara se apaga, hasta que se pide
+   * otra.
+   */
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [captura, setCaptura] = useState<string | null>(null);
+  const camara = useCamaraTrasera(videoRef, step === 'scan' && captura === null && !scanning);
+  useEffect(() => () => { if (captura) URL.revokeObjectURL(captura); }, [captura]);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -856,17 +868,43 @@ export function CreateMesaFlow() {
   }
 
   /**
-   * Demo: el mock devuelve el ticket de ejemplo sin foto.
-   * Real: `POST /api/ocr` es multipart y valida los magic bytes de la imagen,
-   * así que hay que mandar una foto de verdad → se abre el selector del
-   * teléfono, con cámara y fototeca (decisión 91).
+   * D177 · «Reintentar» y «Sacar otra foto»: se va la foto congelada y el aviso,
+   * y vuelve la cámara en vivo. Sin cámara (permiso negado, sin cámara o sin
+   * soporte) se abre directo la galería.
    */
   function doScan() {
-    if (IS_MOCK) {
-      void runScan();
+    setScanIssue(null);
+    setCaptura(null);
+    if (sinCamaraEnVivo(camara.estado)) fileInput.current?.click();
+  }
+
+  /**
+   * Una foto, de la cámara o de la galería: queda en pantalla y, si pasa los
+   * límites de tamaño, va al OCR de siempre. El techo y el piso se miran ACÁ y
+   * no después de subir: con mala señal, mandar 12 MB para que el backend
+   * conteste 413 es un minuto perdido en la mesa. El adaptador conserva su
+   * guarda igual. n81 · el piso, si el dueño lo publica (`rechazoLocalDeImagen`).
+   */
+  function usarFoto(foto: Blob) {
+    setCaptura(URL.createObjectURL(foto));
+    const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
+    if (rechazo) {
+      setScanIssue(rechazo);
       return;
     }
-    fileInput.current?.click();
+    void runScan(foto);
+  }
+
+  /** D177 · el disparador: el cuadro del video, a JPEG, y sigue igual que una foto elegida. */
+  async function disparar() {
+    if (scanning || camara.estado !== 'lista') return;
+    const foto = await camara.capturar(MAX_TICKET_IMAGE_BYTES);
+    if (foto === 'sin_cuadro') return;
+    if (foto === 'muy_grande') {
+      setScanIssue('too_large');
+      return;
+    }
+    usarFoto(foto);
   }
 
   /**
@@ -1460,6 +1498,8 @@ export function CreateMesaFlow() {
         setRestaurant(null);
         setRestaurantRecordOnly(false);
       }
+      // D177 · vuelve la cámara en vivo, sin la foto anterior.
+      setCaptura(null);
       return setStep('scan');
     }
     if (step === 'garantia') return setStep('ticket');
@@ -1467,23 +1507,25 @@ export function CreateMesaFlow() {
     return navigate('home');
   }
 
-  // ─── Paso 1: scan ────────────────────────────────────────
+  // ─── Paso 1: scan · la cámara en vivo (D177) ─────────────
   /**
-   * SPEC_APP.md §1.6, aplicado. Lo que cambia y por qué:
+   * D177 · decisión 177 de Mati: «Nueva» abre la cámara directo, sin la
+   * pantalla intermedia en la que había que tocar «Capturar» para abrir el
+   * selector del sistema.
    *
-   *  - **La pantalla deja de ser navy entera.** Se probó así —la idea era
-   *    reforzar la metáfora de cámara— y Mati la rechazó: esqueleto estándar,
-   *    cabecera navy curva y fondo claro, igual que Ticket y División. El marco
-   *    oscuro queda como UNA TARJETA flotante adentro, no como el fondo.
-   *  - Cabecera de flujo de dos filas + tarjeta de título `--teal-l`, la misma
-   *    de las otras tres pantallas de armar mesa. Se estrena `Paso 1 de 5`, que
-   *    faltaba: era el único paso del flujo sin contador.
-   *  - CTA: la barra de cinco posiciones, sin ítem activo. El círculo lleva
-   *    **cámara y dice "Capturar"** — textual del spec: *"El texto del nav item
-   *    no es fijo en toda la app; lo fijo es el componente y su posición."*
-   *  - Los cuatro estados quedan separados y con salida propia: lista ·
-   *    subiendo · **no se pudo leer** (`--danger`, Reintentar + Cargarlo a
-   *    mano) · **foto muy grande** (`--warning`, con el límite en castellano).
+   *  - La cámara trasera en vivo a pantalla completa (`useCamaraTrasera`), con
+   *    el marco del ticket encima. El disparador (≥ 64 px) saca el cuadro a
+   *    JPEG —evita el HEIC del iPhone— y sigue el OCR de siempre.
+   *  - Abajo a la izquierda, la galería: el mismo `<input type="file">` SIN
+   *    `capture` de la decisión 91, que en iPhone ofrece Fototeca y Archivos
+   *    (y Drive, si está instalado). El selector de fotos no pide permiso: la
+   *    persona elige y la app no ve el resto del carrete.
+   *  - Sin cámara en vivo (permiso negado, sin cámara, sin soporte o error) se
+   *    muestra la galería con un aviso corto. Nunca una pantalla muerta.
+   *  - El título sigue siendo «Escanea el ticket»: es el encabezado de esta
+   *    pantalla, sobre la cámara, no un paso aparte.
+   *  - Los estados (subida con progreso, errores, «Sacar otra foto», «Cargarlo
+   *    a mano») van en un panel sobre la cámara, con la misma copy de siempre.
    *
    * **G-29 cerrado:** el multipart del OCR tiene un transporte XHR dedicado,
    * aislado del `fetch` de creación de mesa/pagos/refunds. Cuando el navegador
@@ -1494,35 +1536,63 @@ export function CreateMesaFlow() {
     const uploadPercentage = uploadProgress && uploadProgress.totalBytes !== null
       ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
       : null;
+    const sinVivo = sinCamaraEnVivo(camara.estado);
     return (
-      <div className="screen has-appbar">
-        <AppHeaderFlow
-          userName={fullName(session) ?? undefined}
-          onBack={back}
-          bellBlocked={!!frozen || reconciling || frozenRequiresReconciliation}
-        />
-        <div className="title-card scan-title-card">
+      <div className="screen camara">
+        {/* `playsinline` y `muted`: sin ellos iOS abre el video a pantalla completa
+            o no lo reproduce solo. Sin `src`: el stream lo pone el hook. */}
+        <video ref={videoRef} className="camara-video" playsInline muted autoPlay aria-hidden="true" />
+        {captura && (
+          <img
+            className="camara-captura"
+            src={captura}
+            alt=""
+            aria-hidden="true"
+            // Un HEIC elegido de la galería no se puede dibujar fuera de Safari:
+            // se oculta la vista previa, la foto igual se sube.
+            onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+          />
+        )}
+        <div className="camara-arriba">
+          <button type="button" className="camara-volver" onClick={back}>
+            <Icon name="arrow-left" size={20} />
+            {t('Volver')}
+          </button>
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
-          <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
-          <div className="title-card-sub" aria-live="polite" aria-atomic="true">
+          <h1 className="camara-titulo">{t('Escanea el ticket')}</h1>
+          <div className="camara-sub" aria-live="polite" aria-atomic="true">
             {scanning
               ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
-              : t('Encuadra el ticket dentro del marco')}
+              : camara.estado === 'abriendo'
+                ? t('Abriendo la cámara…')
+                : t('Encuadra el ticket dentro del marco')}
           </div>
         </div>
-        <div className="scroll flow-scroll scan-flow-scroll">
-          <div className="scan-frame-slot">
-            <div className="scan-frame" aria-busy={scanning || undefined}>
-              <div className="scan-corner tl" />
-              <div className="scan-corner tr" />
-              <div className="scan-corner bl" />
-              <div className="scan-corner br" />
-              {scanning && <div className="scan-line" />}
-              <div className="scan-glyph" aria-hidden="true">
-                <Icon name="receipt" size={44} />
+        <div className="camara-marco-slot">
+          <div className="camara-marco" aria-busy={scanning || undefined}>
+            <div className="scan-corner tl" />
+            <div className="scan-corner tr" />
+            <div className="scan-corner bl" />
+            <div className="scan-corner br" />
+            {scanning && <div className="scan-line" />}
+          </div>
+        </div>
+        <div className="camara-panel">
+          {sinVivo && !captura && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="camera" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('No pudimos abrir la cámara. Elige una foto.')}</div>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()}>
+                  {t('Elegir una foto')}
+                </button>
               </div>
             </div>
-          </div>
+          )}
           {scanning && uploadProgress && uploadProgress.totalBytes !== null && (
             <div className="scan-upload-progress">
               <progress
@@ -1543,158 +1613,166 @@ export function CreateMesaFlow() {
           {avisoApertura()}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
-          {(scanIssue === 'budget_exhausted' || scanIssue === 'budget_unavailable') && (
-            <div className="state-error" role="alert">
-              <div className="state-error-row">
-                <Icon name="x-circle" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
-                  <p className="state-error-body">
-                    {scanIssue === 'budget_exhausted'
-                      ? t('Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.')
-                      : t('El servicio de lectura no está disponible. Puedes cargar los consumos a mano.')}
-                  </p>
+            {(scanIssue === 'budget_exhausted' || scanIssue === 'budget_unavailable') && (
+              <div className="state-error" role="alert">
+                <div className="state-error-row">
+                  <Icon name="x-circle" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                    <p className="state-error-body">
+                      {scanIssue === 'budget_exhausted'
+                        ? t('Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.')
+                        : t('El servicio de lectura no está disponible. Puedes cargar los consumos a mano.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    {t('Cargarlo a mano')}
+                  </button>
                 </div>
               </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                  {t('Cargarlo a mano')}
-                </button>
-              </div>
-            </div>
-          )}
-          {scanIssue === 'ocr' && (
-            <div className="state-error" role="alert">
-              <div className="state-error-row">
-                <Icon name="x-circle" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
-                  <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
+            )}
+            {scanIssue === 'ocr' && (
+              <div className="state-error" role="alert">
+                <div className="state-error-row">
+                  <Icon name="x-circle" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                    <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
+                  </div>
+                </div>
+                {/* Las DOS salidas, al lado. Un OCR que falla no puede terminar
+                    el flujo: sin "Cargarlo a mano" la mesa queda sin abrir. */}
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Reintentar')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    {t('Cargarlo a mano')}
+                  </button>
                 </div>
               </div>
-              {/* Las DOS salidas, al lado. Un OCR que falla no puede terminar
-                  el flujo: sin "Cargarlo a mano" la mesa queda sin abrir. */}
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Reintentar')}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                  {t('Cargarlo a mano')}
-                </button>
-              </div>
-            </div>
-          )}
-          {scanIssue === 'no_items' && (
-            <div className="state-error" role="alert">
-              <div className="state-error-row">
-                <Icon name="x-circle" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
-                  <p className="state-error-body">
-                    {t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
-                  </p>
+            )}
+            {scanIssue === 'no_items' && (
+              <div className="state-error" role="alert">
+                <div className="state-error-row">
+                  <Icon name="x-circle" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                    <p className="state-error-body">
+                      {t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Reintentar')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    {t('Cargarlo a mano')}
+                  </button>
                 </div>
               </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Reintentar')}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                  {t('Cargarlo a mano')}
-                </button>
-              </div>
-            </div>
-          )}
-          {scanIssue === 'provider' && (
-            <div className="state-error" role="alert">
-              <div className="state-error-row">
-                <Icon name="x-circle" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
-                  <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
+            )}
+            {scanIssue === 'provider' && (
+              <div className="state-error" role="alert">
+                <div className="state-error-row">
+                  <Icon name="x-circle" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                    <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Reintentar')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    {t('Cargarlo a mano')}
+                  </button>
                 </div>
               </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Reintentar')}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                  {t('Cargarlo a mano')}
-                </button>
-              </div>
-            </div>
-          )}
-          {scanIssue === 'image_type' && (
-            <div className="state-warn" role="alert">
-              <div className="state-error-row">
-                <Icon name="warning" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+            )}
+            {scanIssue === 'image_type' && (
+              <div className="state-warn" role="alert">
+                <div className="state-error-row">
+                  <Icon name="warning" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                  </div>
+                </div>
+                {/* Sin el consejo falso de “más luz”: formato/bytes requieren
+                    otra imagen o carga manual. La copy nominal de formato queda
+                    para Diseño; estas dos salidas ya son exactas. */}
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Sacar otra foto')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    {t('Cargarlo a mano')}
+                  </button>
                 </div>
               </div>
-              {/* Sin el consejo falso de “más luz”: formato/bytes requieren
-                  otra imagen o carga manual. La copy nominal de formato queda
-                  para Diseño; estas dos salidas ya son exactas. */}
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Sacar otra foto')}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                  {t('Cargarlo a mano')}
-                </button>
-              </div>
-            </div>
-          )}
-          {scanIssue === 'too_large' && (
-            <div className="state-warn" role="alert">
-              <div className="state-error-row">
-                <Icon name="warning" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('La foto pesa más de 8 MB')}</div>
-                  <p className="state-error-body">{t('Prueba con menos calidad.')}</p>
+            )}
+            {scanIssue === 'too_large' && (
+              <div className="state-warn" role="alert">
+                <div className="state-error-row">
+                  <Icon name="warning" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('La foto pesa más de 8 MB')}</div>
+                    <p className="state-error-body">{t('Prueba con menos calidad.')}</p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Sacar otra foto')}
+                  </button>
                 </div>
               </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Sacar otra foto')}
-                </button>
-              </div>
-            </div>
-          )}
-          {/* n81 · decisión 67 de Mati. Texto propuesto por el dueño (tuteo),
-              en la lista de Mati para revisar; las dos oraciones, tal cual. */}
-          {scanIssue === 'too_small' && (
-            <div className="state-warn" role="alert">
-              <div className="state-error-row">
-                <Icon name="warning" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('La foto es demasiado pequeña para leer el ticket.')}</div>
-                  <p className="state-error-body">{t('Toma otra más cerca, con buena luz y sin recortarla.')}</p>
+            )}
+            {/* n81 · decisión 67 de Mati. Texto propuesto por el dueño (tuteo),
+                en la lista de Mati para revisar; las dos oraciones, tal cual. */}
+            {scanIssue === 'too_small' && (
+              <div className="state-warn" role="alert">
+                <div className="state-error-row">
+                  <Icon name="warning" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('La foto es demasiado pequeña para leer el ticket.')}</div>
+                    <p className="state-error-body">{t('Toma otra más cerca, con buena luz y sin recortarla.')}</p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Sacar otra foto')}
+                  </button>
                 </div>
               </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
-                  {t('Sacar otra foto')}
-                </button>
-              </div>
-            </div>
-          )}
-          {/* Real: abre el selector del teléfono, con cámara y fototeca. POST
-              /api/ocr es multipart y valida los magic bytes, así que necesita
-              una imagen de verdad.
-
-              AF-GALERIA · decisión 91 de Mati («Sí, las dos»): sin `capture`.
-              `capture="environment"` abría directo la cámara en iOS y Android y
-              no dejaba elegir una foto del carrete. Sin cartel de «ticket de
-              ejemplo»: la misma decisión lo descartó. */}
-            {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
-                Estaba hardcodeado con los cuatro formatos y Textract procesa
-                jpeg y png: un HEIC —el default del iPhone— se elegía, se subía
-                entero y moría en el proveedor. `readOcrRail` lo construye según
-                el modo publicado; el porqué del fallback vive en `api/ocrRail.ts`.
-
-                ⚠️ `accept` es una SUGERENCIA, no un gate: deja de invitarlo, no
-                lo impide. Convertir en el servidor es otra orden. */}
+            )}
+        </div>
+        <div className="camara-controles">
+          {/* AF-GALERIA · decisión 91 («Sí, las dos») y D177: la galería, abajo a
+              la izquierda. 🔴 El `accept` sale del DUEÑO del contrato, no de una
+              lista acá: Textract procesa jpeg y png, y un HEIC —el default del
+              iPhone— moría en el proveedor. `readOcrRail` lo construye según el
+              modo publicado. ⚠️ `accept` es una SUGERENCIA, no un gate. */}
+          <button
+            type="button"
+            className="camara-galeria"
+            onClick={() => fileInput.current?.click()}
+            disabled={scanning}
+            aria-label={t('Elegir una foto de la galería')}
+          >
+            <Icon name="image" size={24} />
+          </button>
+          <button
+            type="button"
+            className="camara-disparador"
+            onClick={() => { void disparar(); }}
+            disabled={scanning || camara.estado !== 'lista' || captura !== null}
+            aria-label={t('Capturar')}
+          />
+          <span className="camara-controles-espacio" aria-hidden="true" />
           <input
             ref={fileInput}
             type="file"
@@ -1704,23 +1782,11 @@ export function CreateMesaFlow() {
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              // El techo se mira ACÁ y no después de subir: con mala señal,
-              // mandar 12 MB para que el backend conteste 413 es un minuto
-              // perdido en la mesa. El adaptador conserva su guarda igual.
-              // n81 · y el piso, si el dueño lo publica (`rechazoLocalDeImagen`).
-              const rechazo = rechazoLocalDeImagen(file.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
-              if (rechazo) {
-                setScanIssue(rechazo);
-                return;
-              }
-              void runScan(file);
+              setScanIssue(null);
+              usarFoto(file);
             }}
           />
         </div>
-        <AppBottomBar
-          active={null}
-          center={{ label: t('Capturar'), icon: 'camera', onClick: doScan, disabled: scanning }}
-        />
       </div>
     );
   }

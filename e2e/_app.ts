@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { corteDePagosView } from '../src/api/releaseGates';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
+import { camaraSimulada } from './_camara';
 
 /**
  * ORDEN 5 · lo que toda corrida de navegador necesita saber de la app.
@@ -42,8 +43,15 @@ import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
  * cualquier "Nueva tarjeta" futura entraría en el mismo selector.
  */
 
-/** Cualquier email entra en el mock; la contraseña no se valida. */
+/**
+ * Cualquier email entra en el mock; la contraseña no se valida.
+ *
+ * D177 · instala la cámara simulada CONCEDIDA (`e2e/_camara.ts`): «Nueva» abre
+ * la cámara en vivo, y el Chromium de la suite no tiene cámara. Un test que
+ * quiere otro modo (negada, sin cámara, sin soporte) lo pide antes de esto.
+ */
 export async function ingresar(page: Page): Promise<void> {
+  await camaraSimulada(page);
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');

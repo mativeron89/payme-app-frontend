@@ -44,7 +44,8 @@ async function avisoSinTapar(page: Page, titulo: string): Promise<void> {
   await tituloEl.scrollIntoViewIfNeeded();
   const m = await tituloEl.evaluate((t) => {
     const avisoEl = t.closest('[role="alert"]')!;
-    const marco = document.querySelector('.scan-frame')!.getBoundingClientRect();
+    // D177 · el marco es el de la cámara; los avisos van en su panel.
+    const marco = document.querySelector('.camara-marco')!.getBoundingClientRect();
     const a = avisoEl.getBoundingClientRect();
     const r = t.getBoundingClientRect();
     const enPunto = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -73,12 +74,10 @@ test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enter
     await capturar(page, 'aviso-foto-chica');
     await avisoSinTapar(page, 'La foto es demasiado pequeña para leer el ticket.');
 
-    // «Sacar otra foto» también se alcanza sin que nada lo tape (la barra de
-    // abajo y su círculo incluidos). Se baja como un dedo, hasta el final: no
-    // con `scrollIntoView`, que alinea contra el borde del contenedor y ése
-    // corre DEBAJO de la barra fija (ver `.has-appbar .scroll`).
+    // «Sacar otra foto» también se alcanza sin que nada lo tape (los controles
+    // de la cámara incluidos). Se baja como un dedo, hasta el final del panel.
     const boton = aviso.getByRole('button', { name: 'Sacar otra foto' });
-    await page.locator('.scan-flow-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await page.locator('.camara-panel').evaluate((el) => { el.scrollTop = el.scrollHeight; });
     const tapadoPor = await boton.evaluate((b) => {
       const r = b.getBoundingClientRect();
       const p = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);

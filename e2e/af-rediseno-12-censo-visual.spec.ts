@@ -7,6 +7,29 @@ const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
+/** D177 · la cámara: llena la app, sin cabecera ni barra, con toques de tamaño táctil. */
+async function acreditarCamara(page: Page): Promise<void> {
+  const disparador = page.getByRole('button', { name: 'Capturar', exact: true });
+  await expect(disparador).toBeEnabled();
+  const [app, video, tiro, galeria] = await Promise.all([
+    page.locator('.app').boundingBox(),
+    page.locator('.camara-video').boundingBox(),
+    disparador.boundingBox(),
+    page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
+  ]);
+  expect(app?.width).toBe(390);
+  expect(app?.height).toBe(844);
+  expect(video).toEqual(app);
+  await expect(page.locator('.screen > .hdr')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
+  expect(tiro?.width).toBeGreaterThanOrEqual(64);
+  expect(galeria?.width).toBeGreaterThanOrEqual(44);
+  expect((tiro?.y ?? 0) + (tiro?.height ?? 0)).toBeLessThanOrEqual(844);
+  if (process.env.PAYME_E2E_CAPTURAS) {
+    await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/censo-03-scan-camara.png` });
+  }
+}
+
 async function acreditar(
   page: Page,
   nombre: string,
@@ -192,7 +215,9 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
-  await acreditar(page, '03-scan');
+  // D177 · el paso 1 es la cámara a pantalla completa, sin el chrome compartido
+  // que mide `acreditar`: se mide lo suyo.
+  await acreditarCamara(page);
   await page.getByRole('button', { name: 'Capturar', exact: true }).click();
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
   await acreditar(page, '04-division', true, {
