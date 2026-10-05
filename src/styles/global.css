@@ -2956,7 +2956,13 @@ body {
   flex: none;
   height: 34px;
   font-size: 25px;
-  /* E173-2 · los 5 toques del diagnóstico: sin el zoom por doble toque de iOS. */
+}
+
+/* E173-2 · el envoltorio de los 5 toques del diagnóstico (sólo en `AppHeader` y
+   `AppHeaderBack`): no cambia el layout y saca el zoom por doble toque de iOS. */
+.hdr-mark-toques {
+  display: inline-flex;
+  flex: none;
   touch-action: manipulation;
 }
 

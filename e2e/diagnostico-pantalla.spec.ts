@@ -26,7 +26,7 @@ async function simularIos(page: Page): Promise<void> {
 }
 
 const panel = (page: Page) => page.getByRole('dialog', { name: 'Diagnóstico de pantalla' });
-const logo = (page: Page) => page.locator('.hdr-mark').first();
+const logo = (page: Page) => page.locator('.hdr-mark-toques .hdr-mark').first();
 
 async function tocarLogo(page: Page, veces: number): Promise<void> {
   for (let i = 0; i < veces; i += 1) await logo(page).click();
@@ -102,8 +102,10 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
 
   test('se cierra con ✕ y con tocar afuera; el logo sigue sin ser un botón', async ({ page }) => {
     await ingresar(page);
-    await expect(page.locator('.hdr-mark').first()).not.toHaveAttribute('role', /.+/);
-    await expect(page.locator('.hdr-mark').first()).not.toHaveAttribute('tabindex', /.+/);
+    for (const el of [page.locator('.hdr-mark-toques').first(), logo(page)]) {
+      await expect(el).not.toHaveAttribute('role', /.+/);
+      await expect(el).not.toHaveAttribute('tabindex', /.+/);
+    }
     await tocarLogo(page, 5);
     await panel(page).getByRole('button', { name: 'Cerrar' }).click();
     await expect(panel(page)).toHaveCount(0);

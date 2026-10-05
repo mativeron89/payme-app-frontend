@@ -42,14 +42,14 @@ import { registrarToque } from '../utils/medirPantalla';
  *
  * `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy.
  */
-export function PayMeLogo({ size, onClick }: { size?: number; onClick?: () => void }) {
+export function PayMeLogo({ size }: { size?: number }) {
   /* El `size` (y el font-size en general) va en `.hdr-mark`, NO en el
      wordmark: el símbolo mide `1.2em` en CSS (regla de composición 283d88d),
      así que escalar el contenedor escala LOS DOS y la proporción no se puede
      romper por ajustar uno solo. El SVG no lleva width/height: los gobierna
      esa misma regla — un atributo acá sería una segunda copia del tamaño. */
   return (
-    <span className="hdr-mark" style={size ? { fontSize: size } : undefined} onClick={onClick}>
+    <span className="hdr-mark" style={size ? { fontSize: size } : undefined}>
       <svg className="hdr-symbol" viewBox="0 0 76 76" aria-hidden="true" focusable="false">
         <rect width="76" height="76" rx="21" fill="#0FB5C9" />
         <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B" />
@@ -62,13 +62,28 @@ export function PayMeLogo({ size, onClick }: { size?: number; onClick?: () => vo
   );
 }
 
+function HeaderIdentity({ userName }: { userName?: string }) {
+  return (
+    <span className="hdr-user-group">
+      <PayMeLogo />
+      {userName && <span className="hdr-user">{userName}</span>}
+    </span>
+  );
+}
+
 /**
  * E173-2 · 5 toques en el logo abren el diagnóstico de pantalla
  * (`DiagnosticoPantalla`). Oculto a propósito: es para medir el iPhone de Mati,
  * no una función de la app. El logo no pasa a ser un botón: no entra en el
  * orden de tabulación ni cambia lo que anuncia el lector.
+ *
+ * Sólo en las cabeceras de primer nivel y de subpantalla (`AppHeader`,
+ * `AppHeaderBack`), NUNCA en la de flujo (`AppHeaderFlow`): ésa es la de la
+ * pantalla de pago, y su censo (P36, `censoSuperficiesPago.test.ts`) no admite
+ * superficies interactivas sin enumerar. El diagnóstico no tiene nada que hacer
+ * en un cobro.
  */
-function HeaderIdentity({ userName }: { userName?: string }) {
+function HeaderIdentityConDiagnostico({ userName }: { userName?: string }) {
   const toques = useRef<number[]>([]);
   const [diagnostico, setDiagnostico] = useState(false);
   const alTocar = () => {
@@ -78,7 +93,11 @@ function HeaderIdentity({ userName }: { userName?: string }) {
   };
   return (
     <span className="hdr-user-group">
-      <PayMeLogo onClick={alTocar} />
+      {/* El toque va en un envoltorio y no en `PayMeLogo`, que sigue sin ser
+          interactivo en la cabecera de flujo. */}
+      <span className="hdr-mark-toques" onClick={alTocar}>
+        <PayMeLogo />
+      </span>
       {userName && <span className="hdr-user">{userName}</span>}
       {diagnostico && <DiagnosticoPantalla onCerrar={() => setDiagnostico(false)} />}
     </span>
@@ -133,7 +152,7 @@ export function AppHeader({
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''} ${alignChrome ? 'hdr-chrome-aligned' : ''}`}>
       <div className="hdr-row">
-        <HeaderIdentity userName={identidad} />
+        <HeaderIdentityConDiagnostico userName={identidad} />
         {bellHere ? (
           /* No es `<button>` a propósito: no hace nada. Un botón que no lleva a
              ningún lado es una promesa rota, y encima entra en el orden de
@@ -188,7 +207,7 @@ export function AppHeaderBack({
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
-        <HeaderIdentity userName={identidad} />
+        <HeaderIdentityConDiagnostico userName={identidad} />
         {bellHere ? (
           <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
             <Icon name="bell" size={22} />

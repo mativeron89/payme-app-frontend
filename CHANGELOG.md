@@ -58,8 +58,22 @@ Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decis
       (insets leídos tarde), D4 (Escape) y D5 (tocar afuera), todos cazados. D2 (sacar sólo el `resize` de `window`)
       sobrevive porque `visualViewport` también avisa: los dos quedan a propósito, porque no se sabe cuál dispara
       iOS en ese estado.
+  - **Dato de Mati sobre 0.210.5, literal:** «La barra NO se acomoda ni aunque scrollee, y la abri dsp de cerrarla
+    toda». En 0.210.4 sí se acomodaba al scrollear. Por eso `.app` vuelve EXACTAMENTE a la regla de 0.210.4
+    (`position: relative` y `100dvh`) y no a los bordes fijos de 0.210.5 sin la variable. La explicación es del
+    Bibliotecario IV y es una hipótesis, no un hecho medido: con `.app` fija no hay scroll del documento, y WebKit no
+    recibe lo que le hacía recalcular el viewport.
+  - **El censo de la pantalla de pago (P36) cazó el panel en la cabecera de flujo.** `HeaderIdentity` es compartida,
+    y la cabecera de la pantalla de pago (`AppHeaderFlow`) la usa. Cedió el código, no la lista del censo: los 5 toques
+    van sólo en `AppHeader` y `AppHeaderBack`, en un envoltorio (`.hdr-mark-toques`), y `PayMeLogo` sigue sin
+    `onClick`.
+  - **Corrida local completa sobre `946b49a`:** falló una vez `e2e/cartel-version-nueva.spec.ts` («a 390 px: Inicio y
+    una mesa»: se pidió la versión, pero el cartel no apareció en 10 s). Aislado dio 64 de 64, sin reintentos. El
+    trace se perdió: lo borró la corrida repetida, porque Playwright limpia `test-results/` y no lo copié antes. Queda
+    el log. El cartel no está en el alcance de este cambio, pero la causa no está explicada.
   - **Lo que sigue sin medirse:** el iPhone. Mati prueba en la app de inicio que la barra queda entera (en el peor
-    caso, subida) y, con los 5 toques, pasa los números del panel recién abierta y después del primer scroll.
+    caso, subida) y que se acomoda al scrollear. Con los 5 toques en el logo de Inicio, pasa los números del panel
+    recién abierta y después del primer scroll.
 - **E173-3 · decisión 175 · las fotos, en memoria mientras dure la sesión.** Mati eligió «Sí, guardar en memoria
   (Recomendada)». El diagnóstico de App Backend: el servidor responde en decenas de ms; lo lento era repetir los viajes
   en cada entrada porque la foto no quedaba guardada.
