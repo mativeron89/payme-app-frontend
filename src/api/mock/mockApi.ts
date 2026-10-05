@@ -3927,12 +3927,12 @@ export async function mockPendingInvitations(): Promise<PendingInvitationsRespon
         const status = mesa ? mesa.status : i.mesa_status;
         // AF-18 · G-31 · v2.93.0: la categoría del restaurante de la mesa.
         const categoria = camposAditivosMock() && mesa ? { restaurant_category: mesa.restaurant.category } : {};
-        // E174-3B · v2.149.0: con el mismo predicado que su ruta de foto.
-        const fotoDelInvitador = MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(i.inviter_payme_id);
-        return {
-          ...i, ...categoria, mesa_status: status, mesa_joinable: mesaViva(status),
-          has_inviter_avatar: fotoDelInvitador,
-        };
+        // E174-3B · v2.149.0: con el mismo predicado que su ruta de foto. Con la
+        // costura de un dueño anterior a los campos aditivos, tampoco viene.
+        const pista = camposAditivosMock()
+          ? { has_inviter_avatar: MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(i.inviter_payme_id) }
+          : {};
+        return { ...i, ...categoria, ...pista, mesa_status: status, mesa_joinable: mesaViva(status) };
       }),
   });
 }

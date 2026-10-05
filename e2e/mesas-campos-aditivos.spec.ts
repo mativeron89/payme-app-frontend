@@ -90,6 +90,16 @@ test('🔴 backend 2.92.0 (sin los campos): la burbuja es la de 0.168.0', async 
 
 test('G-31 · la invitación muestra el ícono de la cocina del restaurante', async ({ page }) => {
   await ingresar(page);
+  // E174-3B · con foto de quien invita, la tarjeta muestra la foto en el lugar
+  // del ícono (`invitador-en-invitaciones.spec.ts`). El ícono por cocina es el
+  // de una invitación SIN foto: la del seed pasa a ser de María, que no tiene.
+  await page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts';
+    const { state } = await import(/* @vite-ignore */ ruta) as {
+      state: { pendingInvitations: Array<{ inviter_payme_id: string }> };
+    };
+    for (const inv of state.pendingInvitations) inv.inviter_payme_id = 'payme_mx_maru';
+  });
   await page.goto('/#/avisos');
   const invitacion = page.locator('.inv-card').filter({ hasText: 'Hanzo Sushi' });
   await expect(invitacion).toBeVisible();

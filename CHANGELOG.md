@@ -67,6 +67,11 @@ Orden AF-E174-3B-E177-INVITADOR-Y-CAMARA-20261005 (sha256 29a28911…), decision
     hay por dónde irse a Avisos; en los pasos siguientes sigue bloqueada), `guardar-tarjeta-default` (entra por su
     propia alta: pide la cámara simulada), `ajustes10Visual.test` y `AppHeader.identity.test` (20 montajes de
     cabecera: el paso 1 ya no la monta).
+  - **La corrida completa local sobre `584c460` cazó dos tests de G-31** (`mesas-campos-aditivos`) que afirmaban el
+    ícono por cocina en la tarjeta «Te invitaron»: la invitación del mock es de Sofía, con foto, y la tarjeta mostraba
+    la foto. Se corrigieron dos cosas. El mock ya no manda la pista con la costura de un dueño anterior a los campos
+    aditivos, como haría ese dueño. Y el test del ícono por cocina usa una invitación de alguien sin foto. El censo de
+    la clase (tests que afirman el ícono de la tarjeta, `data-icono` e `.inv-card`) no encontró otros.
   - **Rojo sobre el código anterior** (`7ada753`, con los helpers de hoy): los 9 de `camara-directa`, porque la cámara
     nunca se pedía, al OCR no llegaba un JPEG y no había aviso.
   - **Mutantes:** 11 cazados (`I1`–`I4`, `C1`–`C5`, `C7`, `C8`). `C1` (salir no apaga) sobrevivía porque apagar en la
