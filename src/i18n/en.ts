@@ -45,11 +45,12 @@
  */
 export const EN: Record<string, string> = {
   // D165 · Ubicación real, Turno3/2a; sin datos/personas/clave demo.
-  "Ubicación": "Location",
+  // D186 · «Ubicación» pasa a llamarse «Zona horaria»: no usa la posición, sólo la zona del teléfono.
+  "Zona horaria": "Time zone",
   "Cambia sólo cómo ves fechas y horas.": "Changes only how you see dates and times.",
-  "Cerrar Ubicación": "Close Location",
+  "Cerrar zona horaria": "Close time zone",
   "Huso horario": "Time zone",
-  "Volver a Ubicación": "Back to Location",
+  "Volver a zona horaria": "Back to time zone",
   "Huso horario · {0}": "Time zone · {0}",
   "Aplicar": "Apply",
   'Automático': 'Automatic',

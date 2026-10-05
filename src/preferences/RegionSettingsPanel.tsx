@@ -68,7 +68,7 @@ export function RegionSettingsPanel() {
         region.refreshDevice(); setConfirmation(0); setOpen(regionOpeningInput(event.detail));
       }}>
       <Icon name="pin" size={18} />
-      <span className="region-settings-trigger-label">{t('Ubicación')}</span>
+      <span className="region-settings-trigger-label">{t('Zona horaria')}</span>
       <Icon name="arrow-right" size={16} />
     </button>
     {/* Las advertencias sobreviven al cierre: el fallo no se oculta detrás
@@ -164,10 +164,10 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
         <span className="region-settings-handle" aria-hidden="true" />
         <div className="region-settings-heading">
           <div>
-            <h2 id={id + '-title'}>{t('Ubicación')}</h2>
+            <h2 id={id + '-title'}>{t('Zona horaria')}</h2>
             <p id={id + '-description'}>{t('Cambia sólo cómo ves fechas y horas.')}</p>
           </div>
-          <button type="button" className="region-settings-close" aria-label={t('Cerrar Ubicación')} onClick={dismiss}>
+          <button type="button" className="region-settings-close" aria-label={t('Cerrar zona horaria')} onClick={dismiss}>
             <span aria-hidden="true">×</span>
           </button>
         </div>
@@ -189,7 +189,7 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
           </button>
         </div> : <>
           <button ref={back} type="button" className="region-settings-back" onClick={() => setView('main')}
-            aria-label={t('Volver a Ubicación')}>
+            aria-label={t('Volver a zona horaria')}>
             <span aria-hidden="true">‹</span>
             {view === 'country' ? t('País') : t('Huso horario · {0}', names[draft.country])}
           </button>

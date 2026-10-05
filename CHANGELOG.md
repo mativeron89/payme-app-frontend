@@ -37,6 +37,20 @@ punta del PR #16), para que después sea fast-forward.
     `RegionSettingsPanel.test`: el del bloque, reemplazado.
   - Rojo sobre `ce8d57c`: 2 e2e y 1 unit, los de D185. Mutantes: volver a montar el bloque, sólo el reset y sólo el
     aviso, los tres cazados.
+- **D186 · «Ubicación» pasa a llamarse «Zona horaria»** (decisión 186, sha256 17a12621…, enmienda del lease
+  17:17:59Z). Mati preguntó si no había que pedir permiso de ubicación; no hace falta porque no se usa la posición:
+  sólo la zona configurada del teléfono (`Intl`) o la elegida a mano. Eligió renombrar. Cambian la fila de
+  Configuración, el título del panel (que es su nombre accesible) y los nombres accesibles de cerrar y volver
+  («Cerrar zona horaria», «Volver a zona horaria»); en inglés, «Time zone», «Close time zone», «Back to time zone».
+  Sin cambio de funcionamiento: `src` no usa `navigator.geolocation` (grep vacío). En inglés el panel «Time zone»
+  tiene adentro la fila «Time zone» (es la traducción que ya tenía «Huso horario»); en español quedan «Zona horaria»
+  y, adentro, «País» y «Huso horario».
+  - `e2e/d181.spec.ts` (+1): la fila y el panel se llaman «Zona horaria», no queda «Ubicación» en pantalla y abrir el
+    panel no pide la posición (cero llamadas a `getCurrentPosition`/`watchPosition`). `pais-zona-horaria` y
+    `sin-leyenda-fechas` buscan los nombres nuevos (y los ingleses); `RegionSettingsPanel.test`, la fila sin
+    «Ubicación».
+  - Rojo sobre `899c388`: 42 e2e (todos los que abren el panel por su nombre) y 1 unit. Mutantes: «Ubicación» en la
+    fila, «Ubicación» en el título y pedir la posición al abrir, los tres cazados.
 - **E181-2 · montos sin «.00» si son enteros, en toda la app.** Un único formateador, `formatMXN`: «$840» si los
   centavos son 0 y «$840.50» si no (con miles, «$1,250»; negativos, «-$1»). Cambia la presentación: los centavos y
   la cuenta no se tocan.
@@ -97,7 +111,8 @@ punta del PR #16), para que después sea fast-forward.
   - `e2e/cartel-version-nueva.spec.ts` (+1): una revisión vieja retenida a propósito, la siguiente con la versión
     nueva y el cartel visible; al llegar la vieja (control positivo: la página la recibió), el cartel sigue.
   - Mutante: sin la guarda (`if (vivo)` a secas), rojo. `version-nueva.spec.ts` (el ingreso), 10/10.
-- **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin «Más sobre la ubicación» (ni la leyenda, ni el reset); montos sin «.00» en la mesa, Inicio,
+- **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin «Más sobre la ubicación» (ni la leyenda, ni el reset) y con «Zona
+  horaria» donde decía «Ubicación», sin que el iPhone pida permiso; montos sin «.00» en la mesa, Inicio,
   Estadísticas e Historial; los botones de la mesa; Inicio con dos o tres mesas abiertas; y «¿Cuántos pagan?» con
   el «+» quieto al cambiar el número.
 

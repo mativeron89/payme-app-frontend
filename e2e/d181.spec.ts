@@ -39,8 +39,8 @@ test.describe('D181', () => {
   test('1 · Configuración: sin «Sólo en este navegador» ni «Más sobre la ubicación» (D185)', async ({ page }) => {
     await ingresar(page);
     await irEnLaApp(page, '/mas');
-    // Control positivo: Configuración está dibujada, con la fila de Ubicación.
-    await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
+    // Control positivo: Configuración está dibujada, con la fila de Zona horaria (D186).
+    await expect(page.getByRole('button', { name: 'Zona horaria', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
     await expect(page.getByText(/Sólo en este navegador/)).toHaveCount(0);
     // D185 · sin el bloque, ni su aviso, ni su ayuda, ni el reset.
@@ -49,6 +49,29 @@ test.describe('D181', () => {
     await expect(page.getByText(/no se sincroniza entre dispositivos/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Restablecer país y zona' })).toHaveCount(0);
     await captura(page, `${page.viewportSize()!.width}-configuracion`);
+  });
+
+  test('D186 · «Ubicación» se llama «Zona horaria», sin pedir la posición', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { posiciones: number };
+      w.posiciones = 0;
+      const geo = navigator.geolocation;
+      if (geo) {
+        geo.getCurrentPosition = () => { w.posiciones += 1; };
+        geo.watchPosition = () => { w.posiciones += 1; return 0; };
+      }
+    });
+    await ingresar(page);
+    await irEnLaApp(page, '/mas');
+    const fila = page.getByRole('button', { name: 'Zona horaria', exact: true });
+    await expect(fila).toBeVisible();
+    await expect(page.getByText(/Ubicación/)).toHaveCount(0);
+    await fila.click();
+    const panel = page.getByRole('dialog', { name: 'Zona horaria', exact: true });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Cerrar zona horaria', exact: true })).toBeVisible();
+    await expect(page.getByText(/Ubicación/)).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { posiciones: number }).posiciones)).toBe(0);
   });
 
   test('4 · Inicio: una tarjeta por mesa, la que vence antes arriba, sin «+N» ni hoja', async ({ page }) => {
@@ -135,7 +158,7 @@ test.describe('D181 · a 320 px', () => {
     test(`captura a 320 px: ${nombre}`, async ({ page }) => {
       await ingresar(page);
       if (nombre === 'configuracion') await irEnLaApp(page, '/mas');
-      await expect(nombre === 'inicio' ? tarjetas(page).first() : page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
+      await expect(nombre === 'inicio' ? tarjetas(page).first() : page.getByRole('button', { name: 'Zona horaria', exact: true })).toBeVisible();
       if (nombre === 'inicio') await verLasMesas(page);
       await captura(page, `320-${nombre}`);
     });

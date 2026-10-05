@@ -44,8 +44,8 @@ test.describe('E173-1 · sin la leyenda «Fechas mostradas…»', () => {
     await preparar(page);
     await page.goto('/#/mas');
     // Control: Configuración está dibujada. (D185 sacó el bloque de ayuda donde
-    // vivía la leyenda; el panel de Ubicación lo mira `pais-zona-horaria`.)
-    await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
+    // vivía la leyenda; el panel de Zona horaria lo mira `pais-zona-horaria`.)
+    await expect(page.getByRole('button', { name: 'Zona horaria', exact: true })).toBeVisible();
     await expect(page.getByText(LEYENDA)).toHaveCount(0);
   });
 });

@@ -5,7 +5,7 @@ import { utcOffsetLabel } from '../src/preferences/timezoneDisplay';
 
 /** D169 · mock sintético; agrupación visual sin sustituir los62 IANA persistidos. */
 const KEY = 'payme.app.region.v1';
-const panel = (page: Page) => page.getByRole('dialog', { name: 'Ubicación', exact: true });
+const panel = (page: Page) => page.getByRole('dialog', { name: 'Zona horaria', exact: true });
 const apply = (page: Page) => panel(page).getByRole('button', { name: 'Aplicar', exact: true });
 const countryRow = (page: Page) => panel(page).getByRole('button', { name: /^País / });
 const zoneRow = (page: Page) => panel(page).getByRole('button', { name: /^Huso horario / });
@@ -49,13 +49,13 @@ async function cambiarDispositivo(page: Page, zona: string, evento: 'pageshow' |
 }
 
 async function abrir(page: Page, automatic = false): Promise<void> {
-  await page.getByRole('button', { name: 'Ubicación', exact: true }).click();
+  await page.getByRole('button', { name: 'Zona horaria', exact: true }).click();
   await expect(panel(page)).toBeVisible();
   // Los recorridos D169 siguen probando Manual explícito, sin persistir aquí.
   if (!automatic && await zoneRow(page).locator('.region-settings-auto-value').count()) {
     await zoneRow(page).click();
     await panel(page).getByRole('button', { name: 'Manual', exact: true }).click();
-    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true }).click();
   }
 }
 async function preparar(page: Page, options: {
@@ -103,7 +103,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
   for (const input of ['touch', 'mouse', 'keyboard'] as const) {
     test('R2 abrir/reabrir con ' + input + ': foco correcto, teclado visible y trap intacto', async ({ page }) => {
       await preparar(page); await page.keyboard.press('Escape');
-      const trigger = page.getByRole('button', { name: 'Ubicación', exact: true });
+      const trigger = page.getByRole('button', { name: 'Zona horaria', exact: true });
       const sheet = panel(page).locator('.region-settings-sheet');
       const openWithInput = async () => {
         if (input === 'touch') await trigger.tap();
@@ -122,7 +122,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
       await expect(zoneRow(page)).toHaveCSS('outline-width', '3px');
       await page.keyboard.press('Shift+Tab'); await expect(countryRow(page)).toBeFocused();
       await page.keyboard.press('Enter');
-      const back = panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true });
+      const back = panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true });
       await expect(back).toBeFocused(); await expect(back).toHaveCSS('outline-style', 'solid');
       await page.keyboard.press('Shift+Tab');
       expect(await panel(page).evaluate((el) => el.contains(document.activeElement))).toBe(true);
@@ -227,7 +227,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
         }
         else { await expect(option).toBeDisabled(); await expect(option).toContainText('No compatible'); }
       }
-      await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+      await panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true }).click();
     }
     expect(await stored(page)).toBeNull();
   });
@@ -294,11 +294,11 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
   for (const method of ['button', 'Escape', 'veil'] as const) {
     test('cancelar con ' + method + ' descarta borrador y restaura foco/scroll', async ({ page }) => {
       await preparar(page); await seleccionarPais(page, 'US'); await zoneOption(page, 'America/New_York').click();
-      if (method === 'button') await panel(page).getByRole('button', { name: 'Cerrar Ubicación', exact: true }).click();
+      if (method === 'button') await panel(page).getByRole('button', { name: 'Cerrar zona horaria', exact: true }).click();
       else if (method === 'Escape') await page.keyboard.press('Escape');
       else await panel(page).click({ position: { x: 4, y: 4 } });
       await expect(panel(page)).toBeHidden(); expect(await stored(page)).toBeNull();
-      await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Zona horaria', exact: true })).toBeFocused();
       expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
       await abrir(page); await expect(zoneRow(page)).toContainText('UTC−6');
     });
@@ -309,7 +309,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await page.keyboard.press('Shift+Tab');
     expect(await panel(page).evaluate((el) => el.contains(document.activeElement))).toBe(true);
     await seleccionarPais(page, 'US');
-    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true }).click();
     await expect(apply(page)).toBeDisabled(); expect(await stored(page)).toBeNull();
   });
 
@@ -418,8 +418,8 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await page.goto('/#/mas'); await abrir(page); await expect(countryRow(page)).toContainText('Colombia');
     await page.keyboard.press('Escape'); await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
-    await page.reload(); await page.getByRole('button', { name: 'Location', exact: true }).click();
-    const english = page.getByRole('dialog', { name: 'Location', exact: true });
+    await page.reload(); await page.getByRole('button', { name: 'Time zone', exact: true }).click();
+    const english = page.getByRole('dialog', { name: 'Time zone', exact: true });
     await english.getByRole('button', { name: /^Country / }).click();
     await english.getByRole('button', { name: 'Peru', exact: true }).click();
     await english.getByRole('button', { name: 'Apply', exact: true }).click();
@@ -478,7 +478,7 @@ test.describe('D171 · zona del dispositivo sin ubicación física ni zona autom
     await expect(apply(page)).toBeDisabled();
     await panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ }).click();
     await expect(apply(page)).toBeEnabled();
-    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true }).click();
     await expect(countryRow(page)).toContainText('Estados Unidos');
     await expect(zoneRow(page)).toContainText('Asia/Tokyo');
     await apply(page).click();
@@ -525,7 +525,7 @@ test.describe('D171 · zona del dispositivo sin ubicación física ni zona autom
     const automatic = panel(page).getByRole('button', { name: /^Automático: zona del dispositivo/ });
     await expect(automatic).toContainText('Asia/Tokyo');
     await automatic.click();
-    await panel(page).getByRole('button', { name: 'Volver a Ubicación', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Volver a zona horaria', exact: true }).click();
     await seleccionarPais(page, 'CO');
     await page.keyboard.press('Escape');
     expect(await stored(page)).toBe(raw);
@@ -584,7 +584,7 @@ test.describe('D171 · zona del dispositivo sin ubicación física ni zona autom
       expect((await automatic.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
       await page.keyboard.press('Escape');
-      await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Zona horaria', exact: true })).toBeFocused();
       expect(await stored(page)).toBeNull();
       expect(await page.evaluate(() => (window as Window & { __d171LocationCalls?: string[] }).__d171LocationCalls)).toEqual([]);
       expect(externas).toEqual([]); expect(errores).toEqual([]);
@@ -595,8 +595,8 @@ test.describe('D171 · zona del dispositivo sin ubicación física ni zona autom
     await preparar(page, { automatic: true, deviceZone: 'Asia/Tokyo' });
     await page.keyboard.press('Escape');
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
-    await page.reload(); await page.getByRole('button', { name: 'Location', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Location', exact: true });
+    await page.reload(); await page.getByRole('button', { name: 'Time zone', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Time zone', exact: true });
     await expect(dialog.getByRole('button', { name: /^Time zone / })).toContainText('Automatic');
     await dialog.getByRole('button', { name: /^Time zone / }).click();
     await expect(dialog.getByRole('button', { name: /^Automatic: device time zone/ })).toContainText('Asia/Tokyo');

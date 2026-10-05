@@ -66,7 +66,9 @@ describe('D169 · gestión local fuera del panel de selección', () => {
   });
   it('la fila cerrada no monta ayuda, reset ni un reloj global', () => {
     const html = renderToStaticMarkup(<RegionSettingsPanel />);
-    expect(html).toContain('Ubicación');
+    // D186 · la fila se llama «Zona horaria»; «Ubicación» no queda en ningún texto.
+    expect(html).toContain('Zona horaria');
+    expect(html).not.toContain('Ubicación');
     expect(html).not.toContain('<dialog');
     expect(html).not.toContain('Restablecer país y zona');
     expect(html).not.toContain('Sólo en este navegador');

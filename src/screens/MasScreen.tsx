@@ -246,7 +246,7 @@ export function MasScreen() {
 }
 
 /**
- * D176 · «Agregar a inicio» en Configuración, cerca de Ubicación. En Safari de
+ * D176 · «Agregar a inicio» en Configuración, cerca de Zona horaria (antes Ubicación, D186). En Safari de
  * iOS abre la misma guía del aviso; en Android/Chrome muestra el diálogo de
  * Chrome (`beforeinstallprompt`). Ya agregada, o sin ninguna de las dos vías,
  * la fila no está.
