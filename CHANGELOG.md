@@ -11,10 +11,12 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.216.0 — La barra de la app de inicio de iOS, con los números del iPhone (2026-10-05)
+## 0.216.0 — La app de inicio de iOS: la barra con los números del iPhone, y el teclado (2026-10-05)
 
-Lease AF-E179, enmienda E179b (14:35:08Z), decisión 179 y el resultado de D180 (822ca233…): con 0.214.0 la barra
-«Sigue viéndose muy arriba». Base `0.215.0` (`4c54feb`).
+Orden AF-E179B-BARRA-100VH-STANDALONE-20261005 (sha256 5ba8727c…), lease AF-E179B (14:35:57Z). Decisiones 179, 180
+(822ca233…: con 0.214.0 la barra «Sigue viéndose muy arriba») y 182 (25b60482…: «cuando selecciono el buscador en
+amigos, la burbuja se rompe»). Base `0.215.0` (`4c54feb`). El primer commit de esta versión (`95b78a7`) citaba la
+enmienda E179b del lease AF-E179, que era lo vigente al escribirlo; el Bibliotecario la pasó a este lease propio.
 
 - **Los números REALES** (panel de diagnóstico en el iPhone de Mati, app de inicio, 0.214.0 recién abierta y sin
   scrollear, captura 11, cb491f28…): `innerHeight`, `visualViewport` y `100dvh` 794; `clientHeight` y `100svh` 793;
@@ -34,6 +36,28 @@ Lease AF-E179, enmienda E179b (14:35:08Z), decisión 179 y el resultado de D180 
   el viewport seguía en 794. Un scroll por código no hace recalcular a WebKit. Además movía el documento 1 px dos
   cuadros y ya interfirió con dos tests (`diagnostico-pantalla` en el CI del #15, y el e2e nuevo de esta versión,
   que leyó `html` en 795 a mitad de un empujón).
+- **(b) El documento no se arrastra.** Con la cadena en 852 y el viewport corto en 793, el documento quedaría 59 px
+  más alto que la pantalla: arrastrable con el dedo, y un scroll más para que iOS corra la página al enfocar un
+  campo. Medido en el e2e simulado: un arrastre táctil lo movía. `html.app-de-inicio-ios { overflow: hidden }`:
+  nada de la app scrollea con el documento (todas las pantallas, el ingreso incluido, viven en `.app`, que recorta
+  y scrollea por dentro), y la caja de `html` mide 852, así que no recorta en 793. Body y #root, sin `overflow`.
+- **D182 · el teclado** (`src/tecladoAppDeInicio.ts`, sólo en la app de inicio de iOS). En la captura 15 la página
+  entera subió ≈ 58 pt (852 − 794) con el buscador de Amigos enfocado, que ya estaba por encima del teclado.
+  **No medido acá:** si iOS la sube con un scroll del documento o corriendo el visualViewport. Por eso:
+  - **mide:** con un campo de texto enfocado, guarda la lectura más corrida de cada foco (alto y `offsetTop` del
+    visualViewport, `scrollY`, top de `.app`, el campo por su rótulo, sin «@» y nunca su valor, y cuántas veces se
+    corrigió). Sólo en memoria. El panel de diagnóstico la muestra («teclado: …») junto con `html class`;
+  - **corrige lo que sabe corregir:** si el campo está en un contenedor que scrollea (el `.scroll` de la pantalla,
+    aunque no desborde) y el documento quedó corrido, lo vuelve a 0 y acerca el campo moviendo su contenedor.
+    Nunca con un dedo apoyado ni en el impulso de un arrastre (500 ms; el toque que enfoca no cuenta y lo
+    salteado se reintenta), y a lo sumo tres veces por foco: si iOS insiste, queda como hoy. Un campo sin
+    contenedor que scrollee no se toca. Si lo de iOS es correr el visualViewport con `scrollY` en 0, no hace nada
+    y el panel lo dice.
+  - **Censo de los campos con teclado** (pedido del Bibliotecario), con la clase puesta: medidos en el navegador,
+    el email y la contraseña del ingreso (`.ingreso`), el buscador de Amigos (`.scroll`), nombre, apellido y @ de
+    Configuración (`.scroll`) y «Buscar contactos para invitar» (`.share-flow-scroll`); leídos en el código, la
+    propina a mano (`.pay-flow-scroll`), consumo y precio del ticket (`.ticket-sheet-scroll`), y Recuperar y la
+    puerta del @ sin contenedor que scrollee (quedan como hoy). Ninguno está en algo fijo abajo.
 - `e2e/diagnostico-pantalla.spec.ts` ya no espera al empujón. Su test de la corrección cuadro a cuadro pasa a mover
   la página a mano, 1 px y de vuelta: el panel tiene que seguirla.
 - **Pruebas:**
@@ -45,14 +69,29 @@ Lease AF-E179, enmienda E179b (14:35:08Z), decisión 179 y el resultado de D180 
     entera; la clase sigue en otra pantalla y al volver de segundo plano; en Safari del iPhone y en la computadora
     no hay clase y `.app` mide `100dvh`. **Lo que no prueba:** en Chromium `100lvh` vale lo mismo que `100dvh`, así
     que la barra termina en 794 con o sin el arreglo. La guarda de CSS es la que vigila la unidad.
-  - **Rojo sobre `4c54feb`:** los dos de la app de inicio y los unitarios. Los de Safari y la computadora pasan
-    ahí, como deben.
-  - **Mutantes:** 10 cazados (`B1`–`B10`): la clase en `main.tsx`, la puerta estricta, la clase en Safari, cada
-    eslabón y unidad de la cadena, el `100vh` de respaldo, volverla `fixed`, un `overflow` que recorte y el nombre
-    de la clase entre JS y CSS.
-- **Lo que no se probó acá:** el iPhone. Lo que tiene que ver Mati: abrir PayMe desde el ícono, con la sesión
-  iniciada, y la barra pegada abajo desde el primer momento. Si no, la captura del panel: `.app height` debería
-  decir 852.
+  - `src/tecladoAppDeInicio.test.ts` (10): cuánto mover el contenedor (con el borde del teclado, sin pasarse por
+    arriba), el rótulo sin «@», y la puerta.
+  - `src/styles/shellViewport.test.ts` (+1): `overflow: hidden` sólo en `html` de la app de inicio.
+  - `e2e/teclado-app-de-inicio.spec.ts` (8), con el documento 59 px más alto simulado y el corrimiento de iOS
+    simulado como un scroll de 58 px después de enfocar: (b) un arrastre táctil no lo mueve, y sin la regla sí;
+    con el buscador de Amigos enfocado vuelve a 0, el encabezado a su lugar y el panel muestra lo que dejó «iOS»;
+    sin un campo de texto enfocado no toca nada; con el dedo apoyado no, y al soltar un toque sí, enseguida; en el
+    impulso de un arrastre espera y reintenta; si «iOS» insiste, tres veces y lo deja; un campo fuera de la vista
+    vuelve moviendo su contenedor; en Safari no hay corrección. 24/24 en tres repeticiones.
+  - **Rojo sobre `4c54feb`:** los de la app de inicio, los del teclado y los unitarios. Los de Safari, la
+    computadora y «sin un campo de texto» pasan ahí, como deben.
+  - **Mutantes:** 25 cazados. `B1`–`B10` para la barra: la clase en `main.tsx`, la puerta estricta, la clase en
+    Safari, cada eslabón y unidad de la cadena, el `100vh` de respaldo, volverla `fixed`, un `overflow` que recorte
+    y el nombre de la clase entre JS y CSS. `K1`–`K15` para el teclado y (b): volver a 0, el campo de texto, el
+    tope, el dedo, el toque contra el arrastre, el impulso, el reintento, mover el contenedor, el borde del
+    teclado, el `overflow` de html, el enganche, la lectura más corrida, el «@», la fila del panel y la puerta.
+    `K8` sobrevivía porque el test enfocaba el `input` de la foto (`file`, fuera del flujo): ahora enfoca el del @
+    y verifica antes que esté fuera de la vista.
+- **Lo que no se probó acá:** el iPhone (ni su teclado ni su viewport corto). Lo que tiene que ver Mati:
+  1. abrir PayMe desde el ícono, con la sesión iniciada: la barra pegada abajo desde el primer momento;
+  2. en Amigos, tocar el buscador: el encabezado no se mete bajo la barra de estado;
+  3. si algo falla, la captura del panel (5 toques en el logo, con el teclado ya cerrado): `.app height` debería
+     decir 852, `html class` `app-de-inicio-ios`, y las filas «teclado: …» dicen cómo lo movió iOS.
 
 ## 0.215.0 — Notificaciones rediseñadas (2026-10-05)
 

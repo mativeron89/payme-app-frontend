@@ -103,6 +103,16 @@ describe('E173-2 · la barra inferior nunca queda fuera de lo visible', () => {
     expect(efectivo(regla('html,\nbody,\n#root'), 'overflow')).toBeNull();
   });
 
+  it('🔴 E179b (b) · el documento no se arrastra: `overflow: hidden` sólo en `html` de la app de inicio', () => {
+    // Con la cadena en 852 y el viewport corto en 793, el documento quedaría
+    // arrastrable 59 px. La caja de `html` mide 852 (100lvh): no recorta en 793.
+    expect(efectivo(regla('html.app-de-inicio-ios'), 'overflow')).toBe('hidden');
+    const cadena = regla('html.app-de-inicio-ios,\nhtml.app-de-inicio-ios body,\nhtml.app-de-inicio-ios #root');
+    expect(efectivo(cadena, 'overflow')).toBeNull();
+    // Nadie más en la cadena recorta: ni body ni #root, en ninguna regla.
+    expect(sinComentarios(CSS)).not.toMatch(/html\.app-de-inicio-ios (body|#root)[^{]*\{[^}]*overflow/);
+  });
+
   it('la barra sigue anclada al borde inferior de `.app`', () => {
     const barra = regla('.appbar-block');
     expect(efectivo(barra, 'position')).toBe('absolute');

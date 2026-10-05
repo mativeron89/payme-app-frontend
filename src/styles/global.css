@@ -372,6 +372,16 @@ html.app-de-inicio-ios #root {
   height: 100lvh;
 }
 
+/* D179 · E179b (b) · con la cadena en 852 y el viewport corto en 793, el
+   documento quedaría arrastrable 59 px (medido en el e2e simulado). Nada de la
+   app scrollea con el documento —todas las pantallas, el ingreso incluido, viven
+   en `.app`, que recorta y scrollea por dentro—, así que el documento no se
+   mueve. La caja de `html` mide 852: esto no recorta en 793. Las páginas
+   públicas no tienen la clase. */
+html.app-de-inicio-ios {
+  overflow: hidden;
+}
+
 html.app-de-inicio-ios .app {
   min-height: 100vh;
   min-height: 100lvh;

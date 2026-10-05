@@ -1,4 +1,5 @@
 import { VERSION_APP } from '../api/versionPublicada';
+import { ultimoTeclado } from '../tecladoAppDeInicio';
 
 /**
  * E173-2 · el diagnóstico de pantalla (pedido del Bibliotecario IV tras la
@@ -84,6 +85,21 @@ export function medirPantalla(win: Window = window): FilaDiagnostico[] {
     ['scrollY', numero(win.scrollY)],
     ['html style (JS fix)', enLinea(doc.documentElement)],
     ['.app style', enLinea(app)],
+    // E179b · si la cadena de 100lvh está puesta (sólo la app de inicio de iOS).
+    ['html class', doc.documentElement.className || 'none'],
+    // D182 · la última vez que hubo un campo de texto enfocado: lo que dejó iOS
+    // al abrir el teclado, antes de corregir. Sólo en memoria.
+    ...filasDelTeclado(),
+  ];
+}
+
+function filasDelTeclado(): FilaDiagnostico[] {
+  const t = ultimoTeclado();
+  if (!t) return [['teclado (último)', '—']];
+  return [
+    ['teclado: visualViewport height · offsetTop', `${numero(t.altoVisible)} · ${numero(t.offsetTop)}`],
+    ['teclado: scrollY · .app top', `${numero(t.scrollY)} · ${numero(t.appTop)}`],
+    ['teclado: campo · reajustes', `${t.campo} · ${t.reajustes}`],
   ];
 }
 

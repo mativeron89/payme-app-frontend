@@ -54,7 +54,7 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, instalar, appDeInicio] = await Promise.all([
+  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, instalar, appDeInicio, teclado] = await Promise.all([
     import('./api/googleVincularRedirect'),
     import('./api/googleRedirect'),
     import('./api/googleAltaRedirect'),
@@ -65,6 +65,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./App'),
     import('./instalar/agregarAInicio'),
     import('./appDeInicio'),
+    import('./tecladoAppDeInicio'),
   ]);
   const { capturarVueltaVincular } = googleVincular;
   const { capturarVueltaGoogleRedirect } = googleRedirect;
@@ -105,6 +106,10 @@ async function arrancarPrivada(): Promise<void> {
   // .app mide 100lvh (el alto de la pantalla), antes del primer render para que
   // no salte. Ver `src/appDeInicio.ts`.
   appDeInicio.marcarAppDeInicio();
+  // D182 · con el teclado abierto en la app de inicio de iOS: mide y, si el
+  // documento quedó corrido con un campo enfocado, lo vuelve a 0 y mueve el
+  // contenedor del campo. Ver `src/tecladoAppDeInicio.ts`.
+  teclado.cuidarTeclado();
 
   const el = document.getElementById('root');
   if (!el) throw new Error('No existe #root');
