@@ -49,7 +49,16 @@ sin ese OK. Lease AF-E179 con su segunda rama (`scope_amendments`, 05:16:03Z). B
     partiera, la segunda porque comparaba la altura justo contra dos renglones; ahora el umbral es 1,5 renglones.
 - **Capturas para Mati** (390 y 320 px): con no leídas, sin no leídas, la invitación con foto, la confirmación de
   «Borrar todas» y el vacío, más las de antes.
-- **Lo que no se probó acá:** un iPhone. Además de las capturas, lo cierra la prueba de Mati (D63).
+- **El flaky del CI del PR #15** (run 37269618527, pasó al reintentar): `diagnostico-pantalla` leyó la barra en
+  «694 · 784 · 90» en vez de «695 · 785 · 90», 1 px arriba. **Causa, reproducida:** el empujón de arranque de 0.214.0
+  baja el documento 1 px durante dos cuadros (al cargar y ~700 ms después, con la app de inicio simulada); si el
+  panel se abre y se lee dentro de esos dos cuadros, ve la barra 1 px arriba, y dos cuadros después se corrige solo
+  (escucha el scroll). No es un defecto del panel ni del empujón: el test leía en el momento justo.
+  - Los dos tests con la app de inicio simulada esperan a que pasen los dos empujones antes de abrir el panel
+    (ancla: el primer scroll del documento, más 700 + 300 ms, y el documento quieto). Las aserciones no cambian.
+  - Test nuevo: abierto a mitad de un empujón, el panel ve «694 · 784 · 90» y se corrige solo. Sacarle al panel su
+    escucha del scroll lo deja en 694: el mutante cae.
+  - 20 repeticiones de los tres tests: 60/60.
 
 ## 0.214.0 — La app de inicio de iOS se acomoda sola al abrir (2026-10-05)
 
