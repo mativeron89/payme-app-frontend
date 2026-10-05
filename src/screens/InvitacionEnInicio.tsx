@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { useToast } from '../components/ui';
+import { FotoDeQuienInvita } from '../components/FotoDeQuienInvita';
+import { PREFIJO_INVITADOR_DE_INVITACION, claveInvitadorDeInvitacion, fotosEnMemoria } from '../api/fotosEnMemoria';
+import { loadSession } from '../api/storage';
 import { useIdioma } from '../i18n/idioma';
 import { navigate } from '../router';
 import { relTime } from '../utils/format';
-import { invitacionesMostrables, metaInvitacion, type InvitacionMostrable } from './invitacionAdmision';
+import { idsConFotoDeInvitacion, invitacionesMostrables, metaInvitacion, type InvitacionMostrable } from './invitacionAdmision';
 
 /**
  * AF-INVITACION-INICIO · decisión 109 de Mati · la invitación a una mesa vuelve
@@ -118,6 +121,7 @@ export function VistaInvitacionEnInicio({
   onSumarme,
   onVerMas,
   t,
+  foto,
 }: {
   readonly principal: InvitacionMostrable;
   readonly mas: number;
@@ -125,6 +129,11 @@ export function VistaInvitacionEnInicio({
   readonly onSumarme: () => void;
   readonly onVerMas: () => void;
   readonly t: Traductor;
+  /**
+   * E174-3B · la foto de quien invita, si el dueño dio la pista. Llega armada
+   * desde `InvitacionEnInicio`: la vista sigue sin estado y sin sesión.
+   */
+  readonly foto?: ReactNode;
 }) {
   const meta = metaInvitacion(principal, (iso) => relTime(iso, undefined, t), t);
   const tarjeta = (
@@ -132,9 +141,18 @@ export function VistaInvitacionEnInicio({
     // de mano de `.mesa-card`, que prometería que la burbuja entera se toca.
     <div className="mesa-card" style={{ cursor: 'auto' }} data-invitacion={principal.id}>
       <div className="mesa-top">
-        <span className="mesa-kicker">
-          {principal.invitador ? t('{0} te invitó a', principal.invitador) : t('Te invitaron a una mesa')}
-        </span>
+        {foto ? (
+          <span className="mesa-top-quien">
+            {foto}
+            <span className="mesa-kicker">
+              {principal.invitador ? t('{0} te invitó a', principal.invitador) : t('Te invitaron a una mesa')}
+            </span>
+          </span>
+        ) : (
+          <span className="mesa-kicker">
+            {principal.invitador ? t('{0} te invitó a', principal.invitador) : t('Te invitaron a una mesa')}
+          </span>
+        )}
       </div>
       {principal.restaurante && <div className="mesa-name">{principal.restaurante}</div>}
       {meta && <div className="mesa-meta">{meta}</div>}
@@ -165,7 +183,13 @@ export function InvitacionEnInicio() {
   const cargar = useCallback(() => {
     api
       .getPendingInvitations()
-      .then((r) => setLista(invitacionesMostrables(r.invitations)))
+      .then((r) => {
+        const mostrables = invitacionesMostrables(r.invitations);
+        // E174-3B · la misma poda que en Avisos.
+        const actual = loadSession();
+        if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
+        setLista(mostrables);
+      })
       .catch(() => undefined);
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
@@ -181,6 +205,14 @@ export function InvitacionEnInicio() {
         onSumarme={() => void aceptar(elegida.principal)}
         onVerMas={() => navigate('avisos')}
         t={t}
+        foto={elegida.principal.fotoDelInvitador ? (
+          <FotoDeQuienInvita
+            clave={claveInvitadorDeInvitacion(elegida.principal.id)}
+            pedir={async (s) => (await api.getInvitationInviterAvatar(elegida.principal.id, s)).blob}
+            nombre={elegida.principal.invitadorCompleto ?? elegida.principal.invitador ?? ''}
+            size={28}
+          />
+        ) : undefined}
       />
     </section>
   );

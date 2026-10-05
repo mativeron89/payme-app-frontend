@@ -3854,6 +3854,24 @@ export async function mockDeleteAllNotifications(): Promise<Record<string, unkno
 }
 
 /**
+ * GET /invitations/:id/inviter-avatar (dueño v2.149.0). Decide como la de la
+ * notificación: invitación pendiente PROPIA y quien invita con foto visible; si
+ * no, el mismo 404.
+ */
+export async function mockInvitationInviterAvatar(
+  invitationId: string,
+  expectedSession: StoredSession,
+): Promise<PrivateAvatarBlob> {
+  requireCurrentMockSession(expectedSession);
+  const invitacion = state.pendingInvitations.find((candidata) => candidata.id === invitationId);
+  if (!invitacion || !MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(invitacion.inviter_payme_id)) {
+    throw new MockApiError(404, 'avatar_not_found');
+  }
+  const bytes = Uint8Array.from(atob(MOCK_JPEG_BASE64), (char) => char.charCodeAt(0));
+  return delay({ blob: new Blob([bytes], { type: 'image/jpeg' }) });
+}
+
+/**
  * GET /notifications/:id/inviter-avatar (dueño v2.148.0). La ruta decide por
  * sí misma —la pista del payload no autoriza—: foto sólo si la notificación es
  * propia, es `invitation_received` y quien invita está entre los del mock con
@@ -3909,7 +3927,12 @@ export async function mockPendingInvitations(): Promise<PendingInvitationsRespon
         const status = mesa ? mesa.status : i.mesa_status;
         // AF-18 · G-31 · v2.93.0: la categoría del restaurante de la mesa.
         const categoria = camposAditivosMock() && mesa ? { restaurant_category: mesa.restaurant.category } : {};
-        return { ...i, ...categoria, mesa_status: status, mesa_joinable: mesaViva(status) };
+        // E174-3B · v2.149.0: con el mismo predicado que su ruta de foto.
+        const fotoDelInvitador = MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(i.inviter_payme_id);
+        return {
+          ...i, ...categoria, mesa_status: status, mesa_joinable: mesaViva(status),
+          has_inviter_avatar: fotoDelInvitador,
+        };
       }),
   });
 }

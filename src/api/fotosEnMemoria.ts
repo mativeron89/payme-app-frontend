@@ -248,6 +248,10 @@ export const claveParticipante = (mesaCode: string, participantId: string): stri
   `${prefijoParticipantes(mesaCode)}${participantId}`;
 export const PREFIJO_INVITADOR = 'invitador:';
 export const claveInvitador = (notificationId: string): string => `${PREFIJO_INVITADOR}${notificationId}`;
+/** E174-3B · la misma foto, pedida por el id de la INVITACIÓN (otra ruta, otra clave). */
+export const PREFIJO_INVITADOR_DE_INVITACION = 'invitacion-invitador:';
+export const claveInvitadorDeInvitacion = (invitationId: string): string =>
+  `${PREFIJO_INVITADOR_DE_INVITACION}${invitationId}`;
 
 /**
  * E173-3 · al traer la lista de amigos: se quedan sólo las fotos de quienes

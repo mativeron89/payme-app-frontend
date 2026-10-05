@@ -8,11 +8,16 @@ import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
-import { Avatar, useToast } from '../components/ui';
-import { useFotoEnMemoria } from '../components/useFotoEnMemoria';
-import { PREFIJO_INVITADOR, claveInvitador, fotosEnMemoria } from '../api/fotosEnMemoria';
-import { currentSamePrincipalSession } from '../api/profileIdentity';
-import { isCurrentSession, loadSession } from '../api/storage';
+import { useToast } from '../components/ui';
+import { FotoDeQuienInvita } from '../components/FotoDeQuienInvita';
+import {
+  PREFIJO_INVITADOR,
+  PREFIJO_INVITADOR_DE_INVITACION,
+  claveInvitador,
+  claveInvitadorDeInvitacion,
+  fotosEnMemoria,
+} from '../api/fotosEnMemoria';
+import { loadSession } from '../api/storage';
 import {
   idDelTituloDeAviso,
   idsConFotoDelInvitador,
@@ -23,6 +28,7 @@ import { extractApiError } from '../api/errors';
 import {
   copyAdmision,
   invitacionesMostrables,
+  idsConFotoDeInvitacion,
   metaInvitacion,
   type InvitacionMostrable,
 } from './invitacionAdmision';
@@ -136,33 +142,6 @@ function AvisoPrincipal({
 }
 
 /**
- * E174-3 · la foto de quien invita, por el id de la notificación (dueño
- * v2.148.0). Se monta sólo con la pista `has_inviter_avatar === true`. Cada
- * entrada a Avisos la revalida en segundo plano; la guardada se ve al instante.
- */
-function FotoDelInvitador({ notificationId, nombre }: { notificationId: string; nombre: string }) {
-  const { session } = useAuth();
-  const clave = claveInvitador(notificationId);
-  const url = useFotoEnMemoria(session, clave);
-  const sesionRef = useRef(session);
-  sesionRef.current = session;
-  const familyId = session?.family_id ?? null;
-  const principalId = session?.principal_id ?? null;
-  useEffect(() => {
-    const origen = sesionRef.current;
-    if (!origen) return;
-    const expected = currentSamePrincipalSession(origen, loadSession());
-    if (!expected || !isCurrentSession(expected)) return;
-    void fotosEnMemoria.cargar(
-      expected, clave, async () => (await api.getInviterAvatar(notificationId, expected)).blob,
-    );
-  }, [notificationId, clave, familyId, principalId]);
-  return url
-    ? <img className="aviso-invitador-foto" src={url} alt="" aria-hidden="true" />
-    : <Avatar name={nombre} size={32} />;
-}
-
-/**
  * E174-2 · la confirmación de «Borrar todas». Misma hoja que «¿Cerrar la
  * mesa?»: dice qué pasa antes de pasar, y el botón se apaga mientras viaja.
  * Escape o tocar afuera vuelven sin borrar.
@@ -270,7 +249,14 @@ export function AvisosScreen() {
       .catch(() => setNotifs([]));
     api
       .getPendingInvitations()
-      .then((r) => setInvitations(invitacionesMostrables(r.invitations)))
+      .then((r) => {
+        const mostrables = invitacionesMostrables(r.invitations);
+        // E174-3B · salen de memoria las fotos de invitaciones que ya no están
+        // o que no traen la pista.
+        const actual = loadSession();
+        if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
+        setInvitations(mostrables);
+      })
       .catch(() => undefined);
   }
   useEffect(load, []);
@@ -423,7 +409,17 @@ export function AvisosScreen() {
                       `dining`: a 26px los dos círculos de `dining` se leen como
                       una diana. El ícono de la fila de notificación sigue
                       siendo `dining` porque ahí habla del EVENTO. */}
-                  <IconoDeInvitacion categoria={inv.categoria} />
+                  {/* E174-3B · con la pista del dueño, la foto de quien invita
+                      (iniciales mientras carga o con 404) en el lugar del
+                      ícono del restaurante. Sin la pista, el ícono de siempre. */}
+                  {inv.fotoDelInvitador ? (
+                    <FotoDeQuienInvita
+                      clave={claveInvitadorDeInvitacion(inv.id)}
+                      pedir={async (s) => (await api.getInvitationInviterAvatar(inv.id, s)).blob}
+                      nombre={inv.invitadorCompleto ?? inv.invitador ?? ''}
+                      size={32}
+                    />
+                  ) : <IconoDeInvitacion categoria={inv.categoria} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* DOS líneas, nunca una sola larga: con nombres reales,
                         "Sofía te invitó a Hanzo Sushi" se parte donde cae.
@@ -514,7 +510,15 @@ export function AvisosScreen() {
                       role={sinLeer ? 'img' : undefined}
                     />
                     {pideFotoDelInvitador(n) && inviterName
-                      ? <FotoDelInvitador notificationId={n.id} nombre={inviterName} />
+                      ? (
+                        <FotoDeQuienInvita
+                          clave={claveInvitador(n.id)}
+                          pedir={async (s) => (await api.getInviterAvatar(n.id, s)).blob}
+                          nombre={inviterName}
+                          size={32}
+                          className="aviso-invitador-foto"
+                        />
+                      )
                       : <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div id={tituloId} className={`aviso-title ${sinLeer ? 'unread' : ''}`}>

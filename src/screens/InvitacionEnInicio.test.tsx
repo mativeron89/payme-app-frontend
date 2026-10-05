@@ -24,6 +24,8 @@ function inv(id: string, admision: AdmisionEstado, extra: Partial<InvitacionMost
     mesaCode: 'PA-4520',
     restaurante: 'Hanzo Sushi',
     invitador: 'Sofía',
+    invitadorCompleto: 'Sofía Fernández',
+    fotoDelInvitador: false,
     creada: null,
     admision,
     categoria: null,
@@ -121,6 +123,14 @@ describe('VistaInvitacionEnInicio · la burbuja', () => {
     // Una sola: sin la fila de «+N».
     expect(html).not.toContain('mesa-more');
     expect(html).not.toContain('mesa-card-group');
+  });
+
+  it('🔴 E174-3B · con la foto (slot), va a la izquierda de «X te invitó a»; sin ella, como siempre', () => {
+    const con = vista({ foto: <span className="foto-de-prueba" /> });
+    expect(con).toContain('<span class="mesa-top-quien"><span class="foto-de-prueba"></span><span class="mesa-kicker">Sofía te invitó a</span></span>');
+    const sin = vista();
+    expect(sin).not.toContain('mesa-top-quien');
+    expect(sin).toContain('<div class="mesa-top"><span class="mesa-kicker">Sofía te invitó a</span></div>');
   });
 
   it('sin quién invita, el genérico; sin restaurante, sin la línea', () => {

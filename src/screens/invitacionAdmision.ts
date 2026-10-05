@@ -46,6 +46,10 @@ export interface InvitacionMostrable {
   readonly mesaCode: string | null;
   readonly restaurante: string | null;
   readonly invitador: string | null;
+  /** E174-3B · nombre y apellido de quien invita, para las iniciales; `null` si no vino. */
+  readonly invitadorCompleto: string | null;
+  /** E174-3B · `has_inviter_avatar === true` (v2.149.0): se pide su foto. Ausente o raro, `false`. */
+  readonly fotoDelInvitador: boolean;
   readonly creada: string | null;
   readonly admision: AdmisionEstado;
   /**
@@ -62,6 +66,13 @@ function esObjeto(v: unknown): v is Record<string, unknown> {
 /** String no vacío, o `null`. Un `123` o un `{}` no se pintan en pantalla. */
 function textoODesconocido(v: unknown): string | null {
   return typeof v === 'string' && v.trim().length > 0 ? v : null;
+}
+
+/** Nombre y apellido juntos, con lo que haya; `null` si no hay ninguno. */
+function nombreCompleto(nombre: unknown, apellido: unknown): string | null {
+  const partes = [textoODesconocido(nombre), textoODesconocido(apellido)]
+    .flatMap((p) => (p === null ? [] : [p.trim()]));
+  return partes.length > 0 ? partes.join(' ') : null;
 }
 
 /**
@@ -96,12 +107,23 @@ export function invitacionesMostrables(raw: unknown): InvitacionMostrable[] {
       mesaCode: textoODesconocido(fila.mesa_code),
       restaurante: textoODesconocido(fila.restaurant_name),
       invitador: textoODesconocido(fila.inviter_first_name),
+      invitadorCompleto: nombreCompleto(fila.inviter_first_name, fila.inviter_last_name),
+      fotoDelInvitador: fila.has_inviter_avatar === true,
       creada: textoODesconocido(fila.created_at),
       admision: admisionDeInvitacion(fila),
       categoria: textoODesconocido(fila.restaurant_category),
     });
   }
   return salida;
+}
+
+/**
+ * E174-3B · las ids de las invitaciones cuya foto de invitador se pide. Vive acá
+ * y no en `AvisosScreen` por el mismo motivo que `metaInvitacion` (abajo): la
+ * pantalla no puede contener un `.filter(`.
+ */
+export function idsConFotoDeInvitacion(lista: readonly InvitacionMostrable[]): Set<string> {
+  return new Set(lista.filter((inv) => inv.fotoDelInvitador).map((inv) => inv.id));
 }
 
 /**

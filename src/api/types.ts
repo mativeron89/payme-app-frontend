@@ -1361,6 +1361,12 @@ export interface PendingInvitation {
   mesa_joinable: boolean;
   /** v2.45.0 · estado VIVO de la mesa, para el copy. */
   mesa_status: MesaStatus;
+  /**
+   * E174-3B · App Backend v2.149.0, siempre presente: `true` si y sólo si
+   * `GET /invitations/{id}/inviter-avatar` respondería 200 (regla n164). Se
+   * lee sólo como `=== true`; ausente (dueño anterior) es sin foto.
+   */
+  has_inviter_avatar?: boolean;
 }
 
 export interface PendingInvitationsResponse {

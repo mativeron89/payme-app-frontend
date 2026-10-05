@@ -455,6 +455,12 @@ export interface Api {
    * `payload.has_inviter_avatar === true`. Cualquier denegación es el mismo 404.
    */
   getInviterAvatar(notificationId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
+  /**
+   * E174-3B · App Backend v2.149.0 · la misma foto, por el id de la INVITACIÓN
+   * de `GET /invitations` (tarjeta «Te invitaron» y burbuja de Inicio). Se pide
+   * sólo con `has_inviter_avatar === true`; toda denegación es el mismo 404.
+   */
+  getInvitationInviterAvatar(invitationId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   getPendingInvitations(): Promise<PendingInvitationsResponse>;
   acceptInvitation(id: string): Promise<{ accepted: boolean }>;
   /**
@@ -982,6 +988,10 @@ const realApi: Api = {
     `/notifications/${encodeURIComponent(notificationId)}/inviter-avatar`, expectedSession, 15_000,
     { requireAuthorizationVary: true, forbidEtag: true },
   ),
+  getInvitationInviterAvatar: (invitationId, expectedSession) => httpPrivateAvatarRequest(
+    `/invitations/${encodeURIComponent(invitationId)}/inviter-avatar`, expectedSession, 15_000,
+    { requireAuthorizationVary: true, forbidEtag: true },
+  ),
   getPendingInvitations: () => httpRequest<PendingInvitationsResponse>('GET', '/invitations'),
   // Decodificado como su puerta hermana `accept-link`: un 2xx malformado no
   // acredita la inscripción (ver `acceptInvitationResponse`).
@@ -1267,6 +1277,8 @@ const mockApi: Api = {
   deleteNotification: (id) => mock.mockDeleteNotification(id),
   deleteAllNotifications: async () => decodeBorradoDeNotificaciones(await mock.mockDeleteAllNotifications()),
   getInviterAvatar: (notificationId, expectedSession) => mock.mockInviterAvatar(notificationId, expectedSession),
+  getInvitationInviterAvatar: (invitationId, expectedSession) =>
+    mock.mockInvitationInviterAvatar(invitationId, expectedSession),
   getPendingInvitations: () => mock.mockPendingInvitations(),
   acceptInvitation: async (id) => acceptInvitationResponse(await mock.mockAcceptInvitation(id)),
   acceptInvitationLink: async (token) =>

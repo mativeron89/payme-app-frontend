@@ -5291,6 +5291,21 @@ button.qc-circulo::after {
   gap: var(--sp-3);
 }
 
+/* E174-3B · la foto de quien invita, a la izquierda de «X te invitó a». */
+.mesa-top-quien {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.foto-quien-invita {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-l);
+}
+
 .mesa-kicker {
   font-family: var(--font-body);
   font-size: var(--fs-xs);
