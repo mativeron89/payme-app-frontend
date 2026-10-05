@@ -597,8 +597,12 @@ test.describe('D171 · zona del dispositivo sin ubicación física ni zona autom
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
     await page.reload(); await page.getByRole('button', { name: 'Time zone', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Time zone', exact: true });
-    await expect(dialog.getByRole('button', { name: /^Time zone / })).toContainText('Automatic');
-    await dialog.getByRole('button', { name: /^Time zone / }).click();
+    // El panel se llama «Time zone» y su fila, «Zone»: sin el nombre repetido adentro.
+    await expect(dialog.getByRole('button', { name: /^Time zone/ })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /^Zone / })).toContainText('Automatic');
+    await dialog.getByRole('button', { name: /^Zone / }).click();
+    await expect(dialog.locator('.region-settings-back')).toContainText('Zone · ');
+    await expect(dialog.locator('.region-settings-back')).not.toContainText('Time zone');
     await expect(dialog.getByRole('button', { name: /^Automatic: device time zone/ })).toContainText('Asia/Tokyo');
     await expect(dialog.getByRole('button', { name: 'Manual', exact: true })).toBeVisible();
     expect(await stored(page)).toBeNull();

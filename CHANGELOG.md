@@ -11,6 +11,27 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.1 — «Zona horaria» con un reloj, y la fila de adentro en inglés (2026-10-05)
+
+Decisión 189 de Mati (sha256 1c779f58…), tercera rama del lease AF-E179B (enmienda 18:13:52Z), sobre `514d52a`
+(la punta del #17), para que después sea fast-forward.
+
+- **D189 · el reloj.** La fila «Zona horaria» de Configuración tenía el pin de mapa, que hace pensar en tu posición;
+  ahora lleva el reloj (`clock`, que ya existía en `Icon`). Mati eligió «Reloj (Recomendada)»; descartó «Globo» y
+  «Dejar el pin». El pin sigue en la dirección del restaurante (`CreateMesaFlow`), que sí es un lugar.
+- **En inglés, la fila de adentro se llama «Zone».** Desde D186 el panel es «Time zone» y su fila «Huso horario» ya
+  se traducía igual: «Time zone» dentro de «Time zone». Pasa a «Zone» (y «Zone · {país}» en la vista de husos).
+  Cambio de copia pedido por el Bibliotecario, sin decisión de producto. En español no cambia nada: «Zona horaria»
+  y, adentro, «País» y «Huso horario».
+- **Pruebas:**
+  - `RegionSettingsPanel.test` (+1): la fila lleva el glifo del reloj y no el del pin, tomados del propio `Icon`.
+  - `e2e/pais-zona-horaria.spec.ts` («inglés conserva Automático/Manual»): la fila se busca como «Zone», ningún botón
+    del panel empieza con «Time zone», y el botón de volver dice «Zone · …».
+  - **Mutantes:** el pin de vuelta, «Huso horario» otra vez «Time zone» y «Huso horario · {0}» otra vez
+    «Time zone · {0}»: los tres cazados.
+- **Lo que no se probó acá:** el iPhone. Para Mati: el reloj en «Zona horaria» y, con la app en inglés, el panel
+  «Time zone» con la fila «Zone».
+
 ## 0.217.0 — Montos sin «.00», una tarjeta por mesa, los botones de la mesa y Configuración (2026-10-05)
 
 Orden AF-E181-CONFIG-DECIMALES-MESA-Y-VARIAS-MESAS-20261005 (sha256 4ebbdf59…), decisión 181 de Mati (956c9a1c…),

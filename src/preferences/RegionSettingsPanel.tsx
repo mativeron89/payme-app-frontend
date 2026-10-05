@@ -67,7 +67,8 @@ export function RegionSettingsPanel() {
       aria-haspopup="dialog" aria-expanded={Boolean(open)} onClick={(event) => {
         region.refreshDevice(); setConfirmation(0); setOpen(regionOpeningInput(event.detail));
       }}>
-      <Icon name="pin" size={18} />
+      {/* D189 · Mati eligió «Reloj (Recomendada)»: el pin hacía pensar en tu posición. */}
+      <Icon name="clock" size={18} />
       <span className="region-settings-trigger-label">{t('Zona horaria')}</span>
       <Icon name="arrow-right" size={16} />
     </button>

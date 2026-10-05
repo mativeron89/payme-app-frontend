@@ -49,9 +49,10 @@ export const EN: Record<string, string> = {
   "Zona horaria": "Time zone",
   "Cambia sólo cómo ves fechas y horas.": "Changes only how you see dates and times.",
   "Cerrar zona horaria": "Close time zone",
-  "Huso horario": "Time zone",
+  // El panel ya se llama «Time zone» (D186): la fila de adentro, «Zone».
+  "Huso horario": "Zone",
   "Volver a zona horaria": "Back to time zone",
-  "Huso horario · {0}": "Time zone · {0}",
+  "Huso horario · {0}": "Zone · {0}",
   "Aplicar": "Apply",
   'Automático': 'Automatic',
   'Automático: zona del dispositivo': 'Automatic: device time zone',

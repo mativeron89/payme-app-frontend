@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as Panel from './RegionSettingsPanel';
 import { draftForCountry, RegionRowChevron, RegionSettingsPanel, regionNoticeText, regionOpeningInput } from './RegionSettingsPanel';
+import { Icon } from '../components/Icon';
 import { REGION_COUNTRIES, zoneLabel } from './regionCatalog';
 import { DEFAULT_REGION, defaultRegionState, saveRegion } from './regionPreference';
 
@@ -63,6 +64,11 @@ describe('D169 · gestión local fuera del panel de selección', () => {
     expect((html.match(/<path /g) ?? []).length).toBe(1);
     expect(html).not.toContain('<line');
     expect(html).not.toContain('tabindex');
+  });
+  it('D189 · la fila «Zona horaria» lleva el reloj, no el pin', () => {
+    const html = renderToStaticMarkup(<RegionSettingsPanel />);
+    expect(html).toContain(renderToStaticMarkup(<Icon name="clock" size={18} />));
+    expect(html).not.toContain(renderToStaticMarkup(<Icon name="pin" size={18} />));
   });
   it('la fila cerrada no monta ayuda, reset ni un reloj global', () => {
     const html = renderToStaticMarkup(<RegionSettingsPanel />);
