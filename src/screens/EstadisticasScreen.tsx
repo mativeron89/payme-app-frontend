@@ -366,7 +366,9 @@ function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: C
   const { t } = useIdioma();
   const [abierto, setAbierto] = useState(false);
   const esConsumo = consumo.basis === 'consumption';
-  const vacio = consumo.totalCents <= 0 || consumo.categories.length === 0;
+  // `decodeConsumoDelMes` exige que las cocinas sumen el total y que ninguna
+  // venga en 0: sin cocinas es lo mismo que total 0. Una sola condición.
+  const vacio = consumo.categories.length === 0;
   const montos = consumo.categories.map((c) => c.amountCents);
   const pcts = porcentajesEnteros(montos);
   const porciones = vacio ? [] : porcionesDelAnillo(montos, GEOMETRIA_E173);

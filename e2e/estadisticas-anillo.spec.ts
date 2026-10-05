@@ -82,6 +82,13 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(fila(page, /^Tus restaurantes/)).not.toContainText(/visita|este mes|el mes pasado/);
     await expect(fila(page, /^Qué comes/)).toContainText(/ es lo más elegido · \d+ platos?$/);
     await expect(fila(page, /^Evolución/)).toContainText(/^EvoluciónPromedio mensual de los últimos 6 meses: \$[\d,]+\.\d{2}$/);
+
+    // Los platos de la fila son `distinctDishes`, el mismo número que «Qué comes»
+    // pone al centro de su anillo (no «distintos − 1», como decía «y N platos más»).
+    const platos = Number(/ · (\d+) platos?$/.exec((await fila(page, /^Qué comes/).textContent()) ?? '')?.[1]);
+    expect(platos).toBeGreaterThan(1);
+    await fila(page, /^Qué comes/).click();
+    await expect(page.locator('.stat-anillo-total')).toHaveText(String(platos));
   });
 
   test('con pagos es «gasto»', async ({ page }) => {
@@ -180,6 +187,11 @@ test.describe('E173-4 · las medidas de la especificación', () => {
 });
 
 test.describe('E173-4 · capturas para Mati', () => {
+  // Captura quieta: sin esto la flecha de «Detalle por cocina» sale a mitad de su giro de 0,2 s
+  // (la regla de `prefers-reduced-motion` lo apaga).
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
   for (const [ancho, alto] of [[390, 844], [320, 568]] as const) {
     test(`a ${ancho} px: septiembre con datos (y su detalle) y un mes vacío`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
@@ -192,6 +204,8 @@ test.describe('E173-4 · capturas para Mati', () => {
       await capturar(page, `e173-estadisticas-${ancho}-${MESES.anterior.toLowerCase()}`);
       await detalle(page).click();
       await expect(filas(page).first()).toBeVisible();
+      await page.locator('.est-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await expect(filas(page).last()).toBeInViewport();
       await capturar(page, `e173-estadisticas-${ancho}-${MESES.anterior.toLowerCase()}-detalle`);
     });
 
@@ -200,6 +214,11 @@ test.describe('E173-4 · capturas para Mati', () => {
       await preparar(page, { costura: 'vacio', sinDinero: true });
       await expect(page.locator('.est-total')).toHaveText('$0.00');
       await capturar(page, `e173-estadisticas-${ancho}-vacio`);
+      // La tarjeta del anillo vacío, al fondo: el scroll es de la pantalla, no de la
+      // página. Al fondo se ve también que el «+» no tapa la última tarjeta.
+      await page.locator('.est-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await expect(tarjeta(page).getByText('Todavía no registramos consumos este mes', { exact: true })).toBeInViewport();
+      await capturar(page, `e173-estadisticas-${ancho}-vacio-anillo`);
     });
   }
 });
