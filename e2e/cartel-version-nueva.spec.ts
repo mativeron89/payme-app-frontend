@@ -161,6 +161,53 @@ test.describe('AF-CARTEL-VERSION-NUEVA · con la sesión iniciada', () => {
   });
 });
 
+/*
+ * La respuesta de una revisión ANTERIOR que llega tarde no pisa a la última.
+ * Rojo de los gates de 0.217.0 (`a 1440 px`): la revisión del montaje fue al
+ * servidor (la misma versión), la de volver a la pestaña recibió la nueva al
+ * instante, y la del montaje llegó después y escondió el cartel. Acá la vieja
+ * se retiene a propósito, así que no depende de cuánto tarde el montaje.
+ */
+test('🔴 una respuesta vieja que llega tarde no esconde el cartel', async ({ page }) => {
+  let version: string | null = null;
+  let retener = false;
+  let retenidas = 0;
+  let soltar: () => void = () => {};
+  const suelta = new Promise<void>((r) => { soltar = r; });
+  await page.route('**/version.json', async (route) => {
+    if (version === null && retener) {
+      retenidas += 1;
+      await suelta;
+      return route.continue();
+    }
+    if (version === null) return route.continue();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
+      body: JSON.stringify({ version }),
+    });
+  });
+  await ingresar(page);
+  const respuestas = () => page.evaluate(() => performance.getEntriesByType('resource')
+    .filter((e) => e.name.endsWith('/version.json')).length);
+  await expect.poll(respuestas).toBeGreaterThan(0);
+  // Una revisión con la publicada de siempre, retenida en el camino.
+  retener = true;
+  await salirYVolver(page);
+  await expect.poll(() => retenidas).toBe(1);
+  // La siguiente revisión ve la nueva: aparece el cartel.
+  version = NUEVA;
+  await salirYVolver(page);
+  await expect(cartel(page)).toBeVisible();
+  // Llega la vieja (control positivo: la página la recibió) y el cartel sigue.
+  const antes = await respuestas();
+  soltar();
+  await expect.poll(respuestas).toBeGreaterThan(antes);
+  await page.waitForTimeout(500);
+  await expect(cartel(page)).toBeVisible();
+});
+
 test('control · el ingreso sigue recargando solo, y ahí no hay cartel', async ({ page }) => {
   const pub = await preparar(page);
   pub.version = NUEVA;

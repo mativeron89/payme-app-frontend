@@ -69,6 +69,18 @@ punta del PR #16), para que después sea fast-forward.
     dígitos), la leyenda y el aviso, la fila, la mitad y mitad, el centrado y el rojo de «Cerrar mesa», el texto
     corto y el nombre completo, una sola tarjeta, el orden, y el monto alineado. `D8` sobrevivía: con `width: 100%`
     los dos botones medían la fila entera; ahora se pide cada uno en su mitad y dentro.
+- **Corrección aparte (enmienda del lease, 16:36:18Z): el cartel «Hay una versión nueva» ya no lo esconde una
+  respuesta vieja.** Los gates sobre el merge con el #16 dieron un rojo en `cartel-version-nueva` («a 1440 px»).
+  Según la traza, la revisión del montaje fue al servidor (la misma versión), la de volver a la pestaña recibió la
+  nueva al instante, y la del montaje llegó después y la pisó. `useRevisarVersion` aplicaba la última RESPUESTA que
+  llega; ahora aplica sólo la de la última REVISIÓN pedida (un contador) y descarta las anteriores. Vale para el
+  ingreso y para el cartel. El defecto venía de 0.208.0 (`a81a0e7`): en la vida real, volver a la pestaña justo
+  cuando se publica podía esconder el cartel hasta la revisión siguiente.
+  - Sonda determinística antes del arreglo: con la respuesta del montaje retenida, el cartel aparecía y al soltarla
+    desaparecía.
+  - `e2e/cartel-version-nueva.spec.ts` (+1): una revisión vieja retenida a propósito, la siguiente con la versión
+    nueva y el cartel visible; al llegar la vieja (control positivo: la página la recibió), el cartel sigue.
+  - Mutante: sin la guarda (`if (vivo)` a secas), rojo. `version-nueva.spec.ts` (el ingreso), 10/10.
 - **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin la leyenda; montos sin «.00» en la mesa, Inicio,
   Estadísticas e Historial; los botones de la mesa; Inicio con dos o tres mesas abiertas; y «¿Cuántos pagan?» con
   el «+» quieto al cambiar el número.

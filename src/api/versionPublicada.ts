@@ -119,6 +119,11 @@ export function almacenDeSesion(): Storage | null {
  * Las revisiones, UNA sola definición para el ingreso y para el cartel: al
  * montar y al volver a la pestaña (`visibilitychange`, y `pageshow` del
  * bfcache). `alLeer` es el de este render: se consulta al llegar la respuesta.
+ *
+ * Manda la ÚLTIMA REVISIÓN PEDIDA, no la última respuesta que llega: la de una
+ * revisión anterior que llega tarde se descarta. Si no, al volver a la pestaña
+ * justo cuando se publica, la respuesta vieja del montaje pisaba a la nueva y
+ * escondía el cartel (rojo de `cartel-version-nueva` en los gates de 0.217.0).
  */
 function useRevisarVersion(habilitada: boolean, alLeer: (publicada: string | null) => void): void {
   const leer = useRef(alLeer);
@@ -126,9 +131,12 @@ function useRevisarVersion(habilitada: boolean, alLeer: (publicada: string | nul
   useEffect(() => {
     if (!habilitada) return undefined;
     let vivo = true;
+    let ultima = 0;
     const revisar = () => {
+      ultima += 1;
+      const esta = ultima;
       void leerVersionPublicada().then((publicada) => {
-        if (vivo) leer.current(publicada);
+        if (vivo && esta === ultima) leer.current(publicada);
       });
     };
     revisar();
