@@ -216,8 +216,9 @@ test('en la computadora (Chrome sin aviso de instalación): ni guía ni fila', a
   await expect(fila(page)).toHaveCount(0);
 });
 
+// Corren siempre (la guarda del corte no admite skips permanentes); la captura
+// sólo se guarda con PAYME_E2E_CAPTURAS.
 test.describe('capturas para Mati', () => {
-  test.skip(!process.env.PAYME_E2E_CAPTURAS, 'sólo con PAYME_E2E_CAPTURAS');
   test.use({ userAgent: IPHONE_SAFARI });
 
   test('la guía a 320 px', async ({ page }) => {
@@ -232,6 +233,7 @@ test.describe('capturas para Mati', () => {
     await ingresar(page);
     await configuracion(page);
     await fila(page).scrollIntoViewIfNeeded();
+    await expect(fila(page)).toBeVisible();
     await captura(page, 'configuracion-fila-390');
   });
 });

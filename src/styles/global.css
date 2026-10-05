@@ -6394,7 +6394,7 @@ button.qc-circulo::after {
   border: 0;
   border-radius: 22px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(15, 31, 61, 0.06);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
   text-align: left;
   cursor: pointer;
 }
@@ -8819,7 +8819,7 @@ h1.pay-title-lbl {
 /* §1 · la burbuja: el período a la izquierda, el total a la derecha. */
 .title-card.est-burbuja {
   padding: 16px 18px 16px 8px;
-  box-shadow: 0 4px 16px rgba(15, 31, 61, 0.1);
+  box-shadow: 0 4px 16px rgba(16, 30, 59, 0.1);
 }
 
 .est-total {
@@ -8855,7 +8855,7 @@ h1.pay-title-lbl {
   padding: 16px;
   border-radius: 22px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(15, 31, 61, 0.06);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
 }
 
 .est-cocinas-cabeza {

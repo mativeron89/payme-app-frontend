@@ -32,7 +32,8 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
   test('se abre desde Mis estadísticas, con el mismo total que 2a, y vuelve', async ({ page }) => {
     await preparar(page, { sinDinero: true });
     await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
-    await expect(acceso(page)).toContainText('3 lugares · 6 visitas este mes');
+    // E173-4 · el subtítulo de Claude Design: sólo los lugares.
+    await expect(acceso(page)).toContainText('3 lugares distintos');
     // Con el acceso nuevo, la sección vieja de barras no está.
     await expect(page.locator('.stat-rest')).toHaveCount(0);
     await acceso(page).click();
@@ -114,6 +115,11 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     // Testigo positivo: la sección vieja de barras.
     await expect(page.locator('.stat-rest').first()).toBeVisible();
     await expect(acceso(page)).toHaveCount(0);
+    // E173-4 · son barras de este mes: con otro período no van.
+    await page.getByRole('button', { name: /^Período: / }).click();
+    await page.getByRole('radio', { name: /^Mes pasado/ }).click();
+    await expect(page.locator('.est-total')).toHaveText('$1,320.00');
+    await expect(page.locator('.stat-rest')).toHaveCount(0);
   });
 
   for (const [costura, nombre] of [['error', 'error del servidor'], ['grande', '413 stats_month_too_large']] as const) {

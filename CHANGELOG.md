@@ -33,6 +33,9 @@ Estadísticas pedía «0.211.0», ya ocupada: va como 0.213.0.
     monto y %. Vacío: sólo la pista, «—» + «Sin consumo» y «Todavía no registramos consumos este mes» (en otro
     período, «No registramos consumos en este período.»). El `aria-label` del anillo nombra cada cocina con su %.
   - Cada dato una vez: la tarjeta «Plato más pedido» ya no va en esta pantalla; el plato está en «Qué comes».
+    Con un dueño anterior sin la pantalla de un acceso (404), queda la sección vieja de ese dato, como antes: las
+    barras de «Tus restaurantes» sin la fila de 2b, y «Plato más pedido» sin la fila de 2c. Son datos del mes: con
+    otro período no van.
   - El scroll deja abajo `calc(96px + max(8px, env(safe-area-inset-bottom)))`: 104 px en Safari, como pide la
     especificación, y en la app de inicio sigue la barra para que el «+» no tape la última tarjeta.
   - **Diferencia con el prototipo:** el selector lista meses; la app conserva los períodos que el dueño publica
@@ -68,8 +71,16 @@ Estadísticas pedía «0.211.0», ya ocupada: va como 0.213.0.
   - `e2e/estadisticas-anillo.spec.ts`, reescrito: burbuja, filas, centro y detalle; «gasto» con pagos; una cocina;
     siete cocinas; mes vacío; las dos costuras del dueño anterior; y las medidas a 390 y 320 px (burbuja de 83,
     total de 26 o 21, filas de 64, anillo de 168 y el «+» sin tapar la última tarjeta).
-  - Adaptados al diseño nuevo, sin aflojar lo que fijaban: `periodo-estadisticas`, `evolucion` y
-    `af-rediseno-12-censo-visual` (la burbuja de 2a mide ahora el padding de la especificación).
+  - Adaptados al diseño nuevo, sin aflojar lo que fijaban: `periodo-estadisticas`, `evolucion`,
+    `af-rediseno-12-censo-visual` (la burbuja de 2a mide ahora el padding de la especificación), `que-comes` y
+    `tus-restaurantes` (los subtítulos nuevos y el total de 2a en `.est-total`).
+  - **La corrida completa local sobre `c94f700` cazó cuatro cosas** que las corridas por área no habían visto:
+    `que-comes` y `tus-restaurantes` también entran por 2a y fijaban los textos viejos; con un dueño anterior
+    (404) el rediseño había perdido las barras de «Tus restaurantes» (las fija `tus-restaurantes`, y ahora también
+    «Plato más pedido» en `que-comes`); las sombras de la especificación usaban el navy viejo `rgba(15, 31, 61, …)`
+    y `coloresMigrados` lo rechaza (quedan en `rgba(16, 30, 59, …)`, el navy vigente); y las capturas de la guía
+    usaban `test.skip`, que la guarda del corte no admite: ahora corren siempre y sólo guardan la imagen con
+    `PAYME_E2E_CAPTURAS`.
   - `src/instalar/agregarAInicio.test.ts` (24): dónde se ofrece (iPhone, iPad, iPad como Mac, Mac, cinco navegadores
     de iOS que no son Safari, Android con y sin evento, ya agregada, `standalone` estricto), el
     `beforeinstallprompt` (captura, un solo uso, rechazo, `appinstalled`, desenganche) y la marca (guardada, valor
@@ -85,7 +96,8 @@ Estadísticas pedía «0.211.0», ya ocupada: va como 0.213.0.
     Android, la pantalla nueva de Estadísticas, sus medidas y los specs adaptados) y los dos archivos unitarios. Los
     13 que pasan ahí son ausencias («ni guía ni fila», sin sesión, la computadora) y specs sin cambios de
     Estadísticas: cada ausencia tiene su control positivo en el mismo spec y su mutante.
-  - **Mutantes:** 35 cazados. `G1`–`G8`, `G10`–`G22` para la guía; `E1`–`E11` para Estadísticas. Tres
+  - **Mutantes:** 42 cazados. `G1`–`G8`, `G10`–`G22` para la guía; `E1`–`E11`, `F1`–`F6` (las secciones viejas:
+    sin ellas, en otro período, con el acceso presente) y `S1` (la sombra) para Estadísticas. Tres
     sobrevivían en la primera corrida y se resolvieron en el producto: `G9` (el aviso sin exigir sesión) porque
     Inicio sólo existe con sesión, y `E9a`/`E9b` (vacío por total o por cocinas) porque el decoder exige que las
     cocinas sumen el total: los dos términos eran el mismo estado. Se sacó lo redundante y queda una sola

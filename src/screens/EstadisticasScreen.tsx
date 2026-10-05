@@ -125,9 +125,6 @@ export function EstadisticasScreen() {
   // porque "0 visitas con gasto" sería un dato incoherente del emisor, y ante
   // incoherencia preferimos mostrar los números y no tragarlos.
   const sinActividad = !!stats && !stats.month.visits && !stats.month.spent_cents;
-  // La barra de proporción se normaliza contra el más visitado, no contra el
-  // total: es una comparación entre restaurantes, no un porcentaje del gasto.
-  const topVisitas = stats?.top_restaurants[0]?.visits ?? 0;
   /**
    * AF-26 · etapa 1 del diseño 2a. Sólo con `consumption_month` VÁLIDO y con
    * algo en el mes: ausente (backend anterior), inválido o en cero ⇒ la
@@ -220,6 +217,13 @@ export function EstadisticasScreen() {
             )}
             {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
             <TarjetaPorCocina consumo={consumo} clave={efectiva} />
+            {/* Con un dueño anterior que no tiene la pantalla de un acceso, queda la
+                sección vieja de ese dato, como antes: cada dato una vez y ninguno se
+                pierde. Son datos del mes, así que sólo con este mes. */}
+            {!otroPeriodo && !accesoVisible && restaurantes.estado !== 'cargando' && stats.top_restaurants.length > 0 && (
+              <RestaurantesDelMes stats={stats} />
+            )}
+            {!otroPeriodo && platos.estado === 'no_disponible' && stats.top_dish && <PlatoMasPedido plato={stats.top_dish} />}
           </>
         ) : (
           <>
@@ -265,46 +269,12 @@ export function EstadisticasScreen() {
                 {/* La sección vieja (barras por pagos) queda SÓLO si el acceso nuevo
                     no está: con él, «Tus restaurantes» es la pantalla 2b. */}
                 {!accesoVisible && restaurantes.estado !== 'cargando' && stats.top_restaurants.length > 0 && (
-                  <>
-                    <h2 className="stat-sect">{t('Tus restaurantes')}</h2>
-                    <div className="card card-p">
-                      {stats.top_restaurants.map((r) => (
-                        <div key={r.name} className="stat-rest">
-                          <div className="stat-rest-top">
-                            <span className="stat-rest-name">{r.name}</span>
-                            {/* La barra NUNCA va sola: el número de visitas
-                                siempre en texto, al lado. */}
-                            <span className="stat-rest-visits">
-                              {entero(r.visits)} {r.visits === 1 ? t('visita') : t('visitas')}
-                            </span>
-                          </div>
-                          <div className="mesa-bar" aria-hidden="true">
-                            <span
-                              style={{
-                                width: `${topVisitas > 0 ? Math.round((r.visits / topVisitas) * 100) : 0}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
+                  <RestaurantesDelMes stats={stats} />
                 )}
 
                 {/* `null` → la tarjeta NO se pinta. Un "plato más pedido: —"
                     ocuparía lugar para no decir nada. */}
-                {stats.top_dish && (
-                  <>
-                    <h2 className="stat-sect">{t('Plato más pedido')}</h2>
-                    <div className="card card-p">
-                      <div className="stat-dish">{stats.top_dish.name}</div>
-                      <div className="stat-lbl">
-                        {entero(stats.top_dish.times)}{' '}
-                        {stats.top_dish.times === 1 ? t('vez') : t('veces')}
-                      </div>
-                    </div>
-                  </>
-                )}
+                {stats.top_dish && <PlatoMasPedido plato={stats.top_dish} />}
 
                 {cocina && (
                   <>
@@ -320,6 +290,57 @@ export function EstadisticasScreen() {
 
       <AppBottomBar active={null} />
     </div>
+  );
+}
+
+/**
+ * La sección vieja de «Tus restaurantes»: barras por pagos del mes. La barra se
+ * normaliza contra el más visitado, no contra el total: es una comparación entre
+ * restaurantes, no un porcentaje del gasto.
+ */
+function RestaurantesDelMes({ stats }: { stats: StatsResponse }) {
+  const { t } = useIdioma();
+  const topVisitas = stats.top_restaurants[0]?.visits ?? 0;
+  return (
+    <>
+      <h2 className="stat-sect">{t('Tus restaurantes')}</h2>
+      <div className="card card-p">
+        {stats.top_restaurants.map((r) => (
+          <div key={r.name} className="stat-rest">
+            <div className="stat-rest-top">
+              <span className="stat-rest-name">{r.name}</span>
+              {/* La barra NUNCA va sola: el número de visitas
+                  siempre en texto, al lado. */}
+              <span className="stat-rest-visits">
+                {entero(r.visits)} {r.visits === 1 ? t('visita') : t('visitas')}
+              </span>
+            </div>
+            <div className="mesa-bar" aria-hidden="true">
+              <span
+                style={{
+                  width: `${topVisitas > 0 ? Math.round((r.visits / topVisitas) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function PlatoMasPedido({ plato }: { plato: NonNullable<StatsResponse['top_dish']> }) {
+  const { t } = useIdioma();
+  return (
+    <>
+      <h2 className="stat-sect">{t('Plato más pedido')}</h2>
+      <div className="card card-p">
+        <div className="stat-dish">{plato.name}</div>
+        <div className="stat-lbl">
+          {entero(plato.times)} {plato.times === 1 ? t('vez') : t('veces')}
+        </div>
+      </div>
+    </>
   );
 }
 
