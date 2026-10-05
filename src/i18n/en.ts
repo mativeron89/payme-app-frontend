@@ -57,7 +57,6 @@ export const EN: Record<string, string> = {
   'Manual': 'Manual',
   'Zona del dispositivo no disponible; usamos la última zona válida o Ciudad de México.': 'Device time zone unavailable; using the last valid time zone or Mexico City.',
   'México es el país inicial; el huso horario sigue la zona del dispositivo.': 'Mexico is the initial country; the time zone follows the device.',
-  'Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.': 'Automatic uses the device time zone setting; it does not obtain your physical location.',
   // D158 · traducciones de la preferencia personal local, sin cambiar el idioma.
   'País': 'Country',
   'México': 'Mexico',
@@ -76,13 +75,10 @@ export const EN: Record<string, string> = {
   'La selección se aplica temporalmente, pero no se pudo confirmar el guardado. Al recargar puede perderse o volver el valor anterior.': 'The selection applies temporarily, but saving could not be confirmed. Reloading may lose it or restore the previous value.',
   'Restablecimos esta vista, pero no pudimos confirmar el borrado de la preferencia. Al recargar puede volver el valor anterior.': 'We reset this view, but could not confirm removal of the preference. Reloading may restore the previous value.',
   'Guardado sólo en este navegador.': 'Saved only in this browser.',
-  'El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.': 'Private mode or clearing local data may lose the selection. We do not detect your location or change currency, language, or commercial availability.',
   'Elige un huso horario': 'Choose a time zone',
   'y {0} más': 'and {0} more',
   'No compatible con este navegador': 'Not supported by this browser',
   'Este país tiene varias zonas: elige una antes de aplicar.': 'This country has several time zones: choose one before applying.',
-  'Restablecer país y zona': 'Reset country and time zone',
-  'Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.': 'Initial release: 7 countries and 62 catalog time zones. Other countries are unavailable; time zones your browser does not support are disabled.',
   /**
    * 🔴 CARTEL DE TARJETA DE PRUEBA · copy de DINERO, ratificada por Mati el
    * 2026-08-11 y su inglés verificado por el Bibliotecario contra tres
@@ -1149,8 +1145,6 @@ export const EN: Record<string, string> = {
   // AF-E178 · D178 · el rediseño de Notificaciones.
   "Todo leído": "All read",
   // AF-E181 · D181.
-  "Más sobre la ubicación": "More about location",
-  "La ubicación elegida no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.": "The chosen location doesn't sync across devices or accounts. If you share the browser, someone else will inherit this selection.",
   "Invitar amigos": "Invite friends",
   "Aquí aparecen tus invitaciones y los avisos de tus mesas.": "Your invitations and table notifications show up here.",
 };

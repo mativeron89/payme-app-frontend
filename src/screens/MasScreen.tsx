@@ -16,7 +16,7 @@ import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { CuentasConectadas } from './CuentasConectadas';
-import { RegionLocalManagement, RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
+import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 import { GuiaAgregarAInicio, usePlataformaDeInstalacion } from '../instalar/GuiaAgregarAInicio';
 import { pedirInstalacion } from '../instalar/agregarAInicio';
 
@@ -211,7 +211,6 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
-        <RegionLocalManagement />
         {IS_MOCK && (
           <button
             className="btn btn-ghost config-reset"

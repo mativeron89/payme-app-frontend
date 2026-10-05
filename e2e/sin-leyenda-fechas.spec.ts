@@ -43,10 +43,9 @@ test.describe('E173-1 · sin la leyenda «Fechas mostradas…»', () => {
   test('🔴 Configuración · «Sólo en este navegador»', async ({ page }) => {
     await preparar(page);
     await page.goto('/#/mas');
-    await page.locator('.region-settings-management summary').click();
-    const ayuda = page.locator('.region-settings-management');
-    // Control: el resto del texto de ayuda sigue ahí.
-    await expect(ayuda).toContainText('No detectamos tu ubicación');
-    await expect(ayuda).not.toContainText('Fechas mostradas en');
+    // Control: Configuración está dibujada. (D185 sacó el bloque de ayuda donde
+    // vivía la leyenda; el panel de Ubicación lo mira `pais-zona-horaria`.)
+    await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
+    await expect(page.getByText(LEYENDA)).toHaveCount(0);
   });
 });

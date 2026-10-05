@@ -22,6 +22,21 @@ punta del PR #16), para que después sea fast-forward.
   y el aviso de no sincronización de D158 sigue, sin la frase («La ubicación elegida no se sincroniza entre
   dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.»), con la ayuda y
   «Restablecer país y zona», que no tiene otro lugar.
+- **D185 · sin «Más sobre la ubicación»** (decisión 185, sha256 56c6d3d3…, enmienda del lease 17:14:05Z). Mati, sobre
+  las capturas de arriba: «Quita lo de "Más sobre la ubicación"». Se fue el bloque entero de Configuración: el aviso
+  de no sincronización (supersede en lo visible lo que quedaba de D158), la ayuda y «Restablecer país y zona». Lo
+  que NO se perdió: los avisos de falla (`regionNoticeText`: preferencia inválida, zona no compatible, zona del
+  dispositivo no disponible, no se pudo guardar) siguen en la fila de Ubicación y en el panel, y la leyenda de
+  navegador degradado también en el panel, Mesas y Tus restaurantes. «Automático» vuelve a la zona del
+  dispositivo. El `reset` del proveedor y `resetRegion` quedan sin entrada en la UI, con sus unitarios: no se
+  borraron.
+  - Tests: `d181.spec` (1) pide que Configuración esté dibujada y que no haya bloque, aviso, `<details>` ni reset;
+    `pais-zona-horaria` (la fila y el panel) igual, sin el reset; sus dos tests del reset (`remove`,
+    `silent-remove`) se fueron con el botón, y del de «reload conserva ciudad exacta» sólo salió el paso del reset;
+    `sin-leyenda-fechas` mira la leyenda en la pantalla, con la fila de Ubicación como control.
+    `RegionSettingsPanel.test`: el del bloque, reemplazado.
+  - Rojo sobre `ce8d57c`: 2 e2e y 1 unit, los de D185. Mutantes: volver a montar el bloque, sólo el reset y sólo el
+    aviso, los tres cazados.
 - **E181-2 · montos sin «.00» si son enteros, en toda la app.** Un único formateador, `formatMXN`: «$840» si los
   centavos son 0 y «$840.50» si no (con miles, «$1,250»; negativos, «-$1»). Cambia la presentación: los centavos y
   la cuenta no se tocan.
@@ -47,8 +62,9 @@ punta del PR #16), para que después sea fast-forward.
   antes arriba. Se fueron «+N mesa abierta más», la hoja «Tus otras mesas abiertas», `etiquetaMasMesas` y su CSS.
   La fila «+N» de las invitaciones (`InvitacionEnInicio`) no cambia: D181 habla de las mesas.
 - Traducciones: se retiraron «Sólo en este navegador», su aviso, «+1 mesa abierta más», «+{0} mesas abiertas más»,
-  «Tus otras mesas abiertas» y «Mesas abiertas» (quedaba huérfana); se sumaron «Más sobre la ubicación», el aviso
-  sin la frase e «Invitar amigos».
+  «Tus otras mesas abiertas» y «Mesas abiertas» (quedaba huérfana); se sumó «Invitar amigos». Por D185 se fueron
+  además las seis del bloque: «Más sobre la ubicación», el aviso, sus tres párrafos de ayuda y «Restablecer país y
+  zona».
 - **Pruebas:**
   - `src/utils/format.test.ts` (+3): enteros, centavos y negativos. `src/screens/reservaDelMonto.test.ts` (4).
     `RegionSettingsPanel.test` (+2): sin la leyenda y con el título nuevo.
@@ -81,7 +97,7 @@ punta del PR #16), para que después sea fast-forward.
   - `e2e/cartel-version-nueva.spec.ts` (+1): una revisión vieja retenida a propósito, la siguiente con la versión
     nueva y el cartel visible; al llegar la vieja (control positivo: la página la recibió), el cartel sigue.
   - Mutante: sin la guarda (`if (vivo)` a secas), rojo. `version-nueva.spec.ts` (el ingreso), 10/10.
-- **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin la leyenda; montos sin «.00» en la mesa, Inicio,
+- **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin «Más sobre la ubicación» (ni la leyenda, ni el reset); montos sin «.00» en la mesa, Inicio,
   Estadísticas e Historial; los botones de la mesa; Inicio con dos o tres mesas abiertas; y «¿Cuántos pagan?» con
   el «+» quieto al cambiar el número.
 

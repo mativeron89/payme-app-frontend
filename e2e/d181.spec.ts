@@ -36,17 +36,18 @@ async function mesaConSusBotones(page: Page): Promise<void> {
 }
 
 test.describe('D181', () => {
-  test('1 · Configuración: sin «Sólo en este navegador», con la ayuda y el reset', async ({ page }) => {
+  test('1 · Configuración: sin «Sólo en este navegador» ni «Más sobre la ubicación» (D185)', async ({ page }) => {
     await ingresar(page);
     await irEnLaApp(page, '/mas');
-    await expect(page.getByText('Más sobre la ubicación', { exact: true })).toBeVisible();
+    // Control positivo: Configuración está dibujada, con la fila de Ubicación.
+    await expect(page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
     await expect(page.getByText(/Sólo en este navegador/)).toHaveCount(0);
-    await page.locator('.region-settings-management summary').click();
-    const ayuda = page.locator('.region-settings-management');
-    await expect(ayuda).toContainText('no se sincroniza entre dispositivos ni cuentas');
-    await expect(ayuda).not.toContainText('Sólo en este navegador');
-    await expect(ayuda.getByRole('button', { name: 'Restablecer país y zona', exact: true })).toBeVisible();
-    await page.locator('.region-settings-management summary').click();
+    // D185 · sin el bloque, ni su aviso, ni su ayuda, ni el reset.
+    await expect(page.getByText('Más sobre la ubicación', { exact: true })).toHaveCount(0);
+    await expect(page.locator('main details, .app details')).toHaveCount(0);
+    await expect(page.getByText(/no se sincroniza entre dispositivos/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Restablecer país y zona' })).toHaveCount(0);
     await captura(page, `${page.viewportSize()!.width}-configuracion`);
   });
 
@@ -134,7 +135,7 @@ test.describe('D181 · a 320 px', () => {
     test(`captura a 320 px: ${nombre}`, async ({ page }) => {
       await ingresar(page);
       if (nombre === 'configuracion') await irEnLaApp(page, '/mas');
-      await expect(nombre === 'inicio' ? tarjetas(page).first() : page.getByText('Más sobre la ubicación', { exact: true })).toBeVisible();
+      await expect(nombre === 'inicio' ? tarjetas(page).first() : page.getByRole('button', { name: 'Ubicación', exact: true })).toBeVisible();
       if (nombre === 'inicio') await verLasMesas(page);
       await captura(page, `320-${nombre}`);
     });

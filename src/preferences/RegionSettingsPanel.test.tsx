@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { draftForCountry, RegionLocalManagement, RegionRowChevron, RegionSettingsPanel, regionNoticeText, regionOpeningInput } from './RegionSettingsPanel';
+import * as Panel from './RegionSettingsPanel';
+import { draftForCountry, RegionRowChevron, RegionSettingsPanel, regionNoticeText, regionOpeningInput } from './RegionSettingsPanel';
 import { REGION_COUNTRIES, zoneLabel } from './regionCatalog';
 import { DEFAULT_REGION, defaultRegionState, saveRegion } from './regionPreference';
 
@@ -70,17 +71,10 @@ describe('D169 · gestión local fuera del panel de selección', () => {
     expect(html).not.toContain('Restablecer país y zona');
     expect(html).not.toContain('Sólo en este navegador');
   });
-  it('la gestión plegada conserva ayuda de privacidad y reset OWN', () => {
-    const html = renderToStaticMarkup(<RegionLocalManagement />);
-    expect(html).toContain('<details');
-    expect(html).not.toContain('<details open');
-    expect(html).toContain('Restablecer país y zona');
-    expect(html).toContain('otra persona heredará esta selección');
-    expect(html).toContain('7 países y 62 zonas');
-    expect(html).not.toContain('<dialog');
-    // D181 · sin la leyenda «Sólo en este navegador», ni como título ni en el texto.
-    expect(html).not.toContain('Sólo en este navegador');
-    expect(html).toContain('Más sobre la ubicación');
+  it('D185 · sin el bloque «Más sobre la ubicación»: el módulo ya no lo exporta', () => {
+    // Que Configuración no lo monte lo mira `e2e/d181.spec.ts`.
+    expect(Object.keys(Panel)).not.toContain('RegionLocalManagement');
+    expect(Object.keys(Panel)).toContain('RegionSettingsPanel');
   });
 });
 
@@ -95,8 +89,5 @@ describe('D171 · borrador automático sin inferir país ni destruir Manual', ()
     const state = { ...defaultRegionState(), notice: 'device-unavailable' } as const;
     expect(regionNoticeText(state, (s) => s)).toContain('última zona válida');
     expect(regionNoticeText(state, (s) => s)).not.toContain('Guardado');
-    const html = renderToStaticMarkup(<RegionLocalManagement />);
-    expect(html).toContain('no obtiene tu ubicación física');
-    expect(html).toContain('no se sincroniza entre dispositivos ni cuentas');
   });
 });

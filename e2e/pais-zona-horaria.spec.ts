@@ -7,12 +7,6 @@ import { utcOffsetLabel } from '../src/preferences/timezoneDisplay';
 const KEY = 'payme.app.region.v1';
 const panel = (page: Page) => page.getByRole('dialog', { name: 'Ubicación', exact: true });
 const apply = (page: Page) => panel(page).getByRole('button', { name: 'Aplicar', exact: true });
-async function reset(page: Page): Promise<void> {
-  await page.keyboard.press('Escape');
-  await page.locator('.region-settings-management summary').click();
-  await page.getByRole('button', { name: 'Restablecer país y zona', exact: true }).click();
-  await abrir(page);
-}
 const countryRow = (page: Page) => panel(page).getByRole('button', { name: /^País / });
 const zoneRow = (page: Page) => panel(page).getByRole('button', { name: /^Huso horario / });
 const zoneOption = (page: Page, zone: string) => panel(page).locator('button[data-region-zones~="' + zone + '"]');
@@ -165,7 +159,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     } finally { await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: {} }); await cdp.detach(); }
   });
 
-  test('fila debajoIdioma; panel compacto y ayuda/reset fuera del modal', async ({ page }) => {
+  test('fila debajoIdioma; panel compacto, sin ayuda ni reset (D185)', async ({ page }) => {
     await preparar(page);
     await expect(countryRow(page)).toContainText('México');
     await expect(zoneRow(page)).toContainText('UTC−6');
@@ -174,11 +168,10 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await expect(panel(page).locator('details')).toHaveCount(0);
     await expect(panel(page).getByRole('button', { name: 'Restablecer país y zona' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await page.locator('.region-settings-management summary').click();
-    const help = page.locator('.region-settings-management');
-    await expect(help).toContainText('7 países y 62 zonas');
-    await expect(help).toContainText('otra persona heredará esta selección');
-    await expect(help).toContainText('No detectamos tu ubicación');
+    // D185 · Mati: «Quita lo de "Más sobre la ubicación"»: ni el bloque ni el reset, tampoco fuera del modal.
+    await expect(panel(page)).toHaveCount(0);
+    await expect(page.getByText('Más sobre la ubicación', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Restablecer país y zona' })).toHaveCount(0);
     expect(await stored(page)).toBeNull();
     expect(await page.locator('.region-settings-trigger').evaluate((row) =>
       row.previousElementSibling?.textContent?.includes('Idioma'))).toBe(true);
@@ -320,13 +313,11 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await expect(apply(page)).toBeDisabled(); expect(await stored(page)).toBeNull();
   });
 
-  test('reload conserva ciudad exacta; reset sóloOWN no afecta sesión ni otras claves', async ({ page }) => {
+  test('reload conserva ciudad exacta; elegir no afecta sesión ni otras claves', async ({ page }) => {
     await preparar(page); await page.evaluate(() => localStorage.setItem('synthetic.region.unrelated', 'retain'));
     await elegir(page, 'ES', 'Atlantic/Canary'); await page.reload(); await abrir(page);
     await expect(countryRow(page)).toContainText('España');
     expect(JSON.parse((await stored(page))!).timeZone).toBe('Atlantic/Canary');
-    await reset(page); await expect(zoneRow(page)).toContainText('UTC−6');
-    expect(await stored(page)).toBeNull();
     expect(await page.evaluate(() => localStorage.getItem('synthetic.region.unrelated'))).toBe('retain');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
@@ -372,15 +363,6 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
       await abrir(page); await expect(zoneRow(page)).toContainText('UTC−5');
       await expect(panel(page)).not.toContainText('Guardado sólo en este navegador.');
       await page.reload(); await abrir(page); await expect(zoneRow(page)).toContainText('UTC−6');
-    });
-  }
-  for (const failure of ['remove', 'silent-remove'] as const) {
-    test('reset ' + failure + ': avisa que puedevolver el valoranterior', async ({ page }) => {
-      const raw = '{"country":"CO","timeZone":"America/Bogota"}';
-      await preparar(page, { raw, failure }); await reset(page);
-      await expect(zoneRow(page)).toContainText('UTC−6');
-      await expect(panel(page)).toContainText('no pudimos confirmar el borrado');
-      expect(await stored(page)).toBe(raw);
     });
   }
 

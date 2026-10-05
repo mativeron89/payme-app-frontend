@@ -259,24 +259,7 @@ function RegionSheet({ openingInput, onClose, onApplied }: {
   </dialog>, document.body);
 }
 
-/** Gestión explícita fuera del selector: conserva el reset de nuestra única clave. */
-export function RegionLocalManagement() {
-  const { t } = useIdioma();
-  const region = useRegion();
-  // E173-1 · decisión 173: sin la leyenda «Fechas mostradas en …»; sólo los
-  // avisos de navegador degradado.
-  const caption = personalZoneCaption(region.presentationZone, t);
-  return <details className="region-settings-local-help region-settings-management">
-    {/* D181 · Mati: «quitar la leyenda de "Sólo en este navegador"». Supersede sólo
-        esa leyenda visible: el aviso de no sincronización de D158 sigue, sin ella,
-        y también la ayuda y «Restablecer país y zona», que no tiene otro lugar. */}
-    <summary>{t('Más sobre la ubicación')}</summary>
-    <p>{regionNoticeText(region, t)}</p>
-    {caption && <p>{caption}</p>}
-    <p>{t('La ubicación elegida no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
-    <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
-    <p>{t('Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.')}</p>
-    <p>{t('Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.')}</p>
-    <button type="button" className="region-settings-reset" onClick={() => region.reset()}>{t('Restablecer país y zona')}</button>
-  </details>;
-}
+/* D185 · Mati: «Quita lo de "Más sobre la ubicación"». Se fue el bloque plegado de
+ * Configuración (aviso, ayuda y «Restablecer país y zona»). Los avisos de falla siguen
+ * en la fila y en el panel; «Automático» vuelve a la zona del dispositivo. El `reset`
+ * del proveedor queda sin entrada en la UI. */

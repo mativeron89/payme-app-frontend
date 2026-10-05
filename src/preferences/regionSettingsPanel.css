@@ -55,19 +55,12 @@
 .region-settings-zone-option time { flex: none; color: var(--region-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .region-settings-zone-option > .region-settings-zone-check { flex: 0 0 20px; display: flex; justify-content: center; }
 .region-settings-dialog button:disabled { color: var(--region-muted); cursor: not-allowed; }
-.region-settings-help, .region-settings-local-help { margin: 12px 0 0; color: var(--region-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-.region-settings-local-help summary { min-height: 44px; display: flex; align-items: center; text-decoration: underline; cursor: pointer; }
-.region-settings-local-help p { margin: 8px 0; }
+.region-settings-help { margin: 12px 0 0; color: var(--region-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .region-settings-footer { flex: none; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid #e2e8f0; background: #fff; }
 .region-settings-apply { width: 100%; min-height: 48px; padding: 12px; border: 0; border-radius: 10px; background: var(--region-orange); font-size: 15px; font-weight: 700; }
 .region-settings-dialog .region-settings-apply { color: #fff; }
 .region-settings-apply:disabled { background: #e2e8f0; }
-.region-settings-reset { width: 100%; min-height: 44px; margin-top: 4px; padding: 8px; border: 0; background: transparent; text-decoration: underline; font-size: 13px; }
-.region-settings-management { margin: 16px 16px 0; color: var(--muted, #64748b); }
-.region-settings-management summary { list-style: none; }
-.region-settings-management .region-settings-reset { color: var(--navy, #101e3b); cursor: pointer; }
-.region-settings-management button:focus-visible { outline: 3px solid #101e3b; outline-offset: -3px; }
-.region-settings-sheet[data-region-input="keyboard"] button:focus, .region-settings-local-help summary:focus-visible, .region-settings-trigger:focus-visible { outline: 3px solid #101e3b; outline-offset: -3px; }
+.region-settings-sheet[data-region-input="keyboard"] button:focus, .region-settings-trigger:focus-visible { outline: 3px solid #101e3b; outline-offset: -3px; }
 .region-settings-sheet[data-region-input="pointer"] button:focus { outline: none; }
 @media (hover: hover) { .region-settings-field:hover, .region-settings-option:not(:disabled):hover { background: #f1f5f9; } }
 .region-settings-confirmation { position: fixed; z-index: 40; left: 50%; bottom: calc(104px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: #ff6b35; color: #101e3b; box-shadow: 0 4px 16px rgba(16, 30, 59, .14); pointer-events: none; animation: region-settings-check 1.6s ease both; }
