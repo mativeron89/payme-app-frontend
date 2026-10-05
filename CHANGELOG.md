@@ -135,11 +135,18 @@ enmienda E179b del lease AF-E179, que era lo vigente al escribirlo; el Bibliotec
     arriba), el rótulo sin «@», y la puerta.
   - `src/styles/shellViewport.test.ts` (+1): `overflow: hidden` sólo en `html` de la app de inicio.
   - `e2e/teclado-app-de-inicio.spec.ts` (8), con el documento 59 px más alto simulado y el corrimiento de iOS
-    simulado como un scroll de 58 px después de enfocar: (b) un arrastre táctil no lo mueve, y sin la regla sí;
+    simulado como un scroll de 58 px después de enfocar: (b) un scroll del usuario no lo mueve, y sin la regla sí;
     con el buscador de Amigos enfocado vuelve a 0, el encabezado a su lugar y el panel muestra lo que dejó «iOS»;
     sin un campo de texto enfocado no toca nada; con el dedo apoyado no, y al soltar un toque sí, enseguida; en el
     impulso de un arrastre espera y reintenta; si «iOS» insiste, tres veces y lo deja; un campo fuera de la vista
     vuelve moviendo su contenedor; en Safari no hay corrección. 24/24 en tres repeticiones.
+  - **Corrección tras el CI del PR (run 37332146088, rojo):** en el Chromium del CI (Linux, headless) el arrastre
+    táctil sintético (`Input.synthesizeScrollGesture`) no movía el documento ni sin la regla: el testigo dio 0 en
+    los tres intentos, y con ese gesto la aserción principal no probaba nada ahí. El test de (b) pasa a la rueda
+    (`page.mouse.wheel` sobre el encabezado), un scroll del usuario que la misma regla frena: comprueba antes que el
+    documento es scrolleable por programa, que la rueda llegó a la página (control positivo) y, sin la regla, que
+    la misma rueda sí lo mueve. Mutantes: sin el `overflow: hidden`, rojo (59); una rueda que no mueve, rojo en el
+    testigo. 24/24 en tres repeticiones, en la Mac. El arrastre con el dedo en el iPhone queda para Mati.
   - **Rojo sobre `4c54feb`:** los de la app de inicio, los del teclado y los unitarios. Los de Safari, la
     computadora y «sin un campo de texto» pasan ahí, como deben.
   - **Mutantes:** 25 cazados. `B1`–`B10` para la barra: la clase en `main.tsx`, la puerta estricta, la clase en

@@ -55,17 +55,41 @@ async function tocar(page: Page, ...tipos: Array<'touchstart' | 'touchmove' | 't
 test.describe('en la app de inicio de iOS (simulada)', () => {
   test.use({ userAgent: SAFARI_IPHONE });
 
-  test('🔴 (b) el documento más alto que el viewport no se arrastra con el dedo', async ({ page }) => {
+  /*
+   * El gesto: la rueda, no un arrastre táctil sintético. En el Chromium del CI
+   * (Linux, headless) `Input.synthesizeScrollGesture` táctil no movía el
+   * documento ni sin la regla (run 37332146088: el testigo dio 0), así que con
+   * él la aserción principal no probaba nada ahí. La rueda es un scroll del
+   * usuario que la misma regla frena y que se entrega por el mismo camino en
+   * todas las plataformas; el testigo lo comprueba en cada corrida. El arrastre
+   * con el dedo en el iPhone es la prueba de Mati.
+   */
+  test('🔴 (b) el documento más alto que el viewport no se mueve con un scroll del usuario', async ({ page }) => {
     await preparar(page, true);
-    const cdp = await page.context().newCDPSession(page);
-    const arrastrar = () => cdp.send('Input.synthesizeScrollGesture', {
-      x: 196, y: 400, yDistance: -200, gestureSourceType: 'touch', speed: 2000,
+    await page.evaluate(() => {
+      (window as unknown as { ruedas: number }).ruedas = 0;
+      window.addEventListener('wheel', () => { (window as unknown as { ruedas: number }).ruedas += 1; }, { passive: true });
     });
-    await arrastrar();
+    const ruedas = () => page.evaluate(() => (window as unknown as { ruedas: number }).ruedas);
+    // Sobre el encabezado, que no scrollea: el scroll que no consume encadena al documento.
+    const girar = async () => {
+      const antes = await ruedas();
+      await page.mouse.move(196, 30);
+      await page.mouse.wheel(0, 200);
+      // Control positivo: la rueda llegó a la página.
+      await expect.poll(ruedas).toBeGreaterThan(antes);
+    };
+    // El documento es scrolleable: por programa se mueve (la regla no frena eso).
+    await page.evaluate(() => window.scrollTo(0, 30));
+    expect(await scrollY(page)).toBe(30);
+    await page.evaluate(() => window.scrollTo(0, 0));
     expect(await scrollY(page)).toBe(0);
-    // Testigo: sin el `overflow: hidden` de html, el mismo gesto sí lo mueve.
+    await girar();
+    await page.waitForTimeout(500);
+    expect(await scrollY(page)).toBe(0);
+    // Testigo: sin el `overflow: hidden` de html, la misma rueda sí lo mueve.
     await page.addStyleTag({ content: 'html.app-de-inicio-ios { overflow: visible !important; }' });
-    await arrastrar();
+    await girar();
     await expect.poll(() => scrollY(page)).toBeGreaterThan(0);
   });
 
