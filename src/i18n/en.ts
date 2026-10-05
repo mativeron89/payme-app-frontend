@@ -1128,4 +1128,11 @@ export const EN: Record<string, string> = {
   "Las invitaciones de arriba no se borran.": "The invitations above aren't deleted.",
   "Sí, borrar todas": "Yes, delete all",
   "Borrando…": "Deleting…",
+  // AF-E173-3-E174 · E173-2 · el diagnóstico de pantalla (5 toques en el logo).
+  "Diagnóstico de pantalla": "Screen diagnostics",
+  "Sólo lectura: estos números no salen del teléfono.": "Read only: these numbers never leave the phone.",
+  "Volver a medir": "Measure again",
+  "Copiar": "Copy",
+  "Copiado": "Copied",
+  "No se pudo copiar. Haz una captura de pantalla.": "Couldn't copy. Take a screenshot.",
 };

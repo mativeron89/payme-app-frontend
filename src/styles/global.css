@@ -331,44 +331,29 @@ body {
 .app {
   /* La altura de viewport vive acá, no en .screen: si ambas la tuvieran, la
      banda de demo empujaría la página y se perdería al hacer scroll.
-     E173-2 · decisión 173: atada a los BORDES del viewport, no a una unidad.
-     Hasta 0.210.4 medía `height: 100dvh`, y la barra de abajo
-     (`.appbar-block`, `bottom: 0` de este contenedor) quedaba donde terminaba
-     esa unidad: en la app de inicio del iPhone, más arriba al abrir y con
-     espacio debajo hasta el primer scroll. Con `fixed` y
-     `top`/`bottom` en 0 termina donde termina la pantalla visible. Lo vigila
-     `src/styles/shellViewport.test.ts`.
-     En la app de inicio de iOS eso solo puede no alcanzar: WebKit arranca con
-     el viewport achicado en el inset superior y `bottom: 0` también queda
-     corto. Para ese caso `src/viewportStandalone.ts` pone
-     `--app-alto-standalone` con el alto de la pantalla, y con `top` fijo un
-     alto explícito manda sobre `bottom`. Sin la variable, `auto`: lo deciden
-     `top` y `bottom`. */
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: var(--app-alto-standalone, auto);
+     E173-2 · decisión 173 · la barra de abajo (`.appbar-block`, `bottom: 0` de
+     este contenedor) queda donde termina `.app`.
+     🔴 0.210.5 la estiró y en el iPhone de Mati CORTÓ la barra (captura 7, app
+     de inicio): con `fixed` y `src/viewportStandalone.ts` imponía el alto de
+     la pantalla (852 pt) cuando WebKit arrancaba con el viewport achicado en
+     el inset superior (793 pt). Medido en píxeles: la barra empezaba en 762
+     (852 − 90, su alto), pero la app se pinta sólo hasta 793, y lo de abajo
+     quedaba fuera. Dibujar más allá del viewport no sirve en ese estado.
+     0.211.0 vuelve a la regla de 0.210.4, la única medida en el iPhone: `.app`
+     mide el viewport que WebKit informa. Al abrir puede quedar subida, pero
+     ENTERA; se corrige con el primer scroll. Nunca cortada. Lo vigilan
+     `src/styles/shellViewport.test.ts` y `e2e/barra-inferior-viewport.spec.ts`.
+     Para medir el iPhone de verdad: 5 toques en el logo abren el diagnóstico
+     de pantalla (`src/components/DiagnosticoPantalla.tsx`). */
+  min-height: 100dvh;
+  height: 100dvh;
   overflow: hidden;
   max-width: 480px; /* en desktop se ve como columna de teléfono */
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--gray-l);
-}
-
-/* E173-2 · sonda de `src/viewportStandalone.ts`: el inset superior se lee
-   resuelto de su `padding-top`. Sólo existe en la app de inicio de iOS. */
-.viewport-sonda {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  padding-top: env(safe-area-inset-top);
-  visibility: hidden;
-  pointer-events: none;
+  position: relative;
 }
 
 .screen {
@@ -1063,7 +1048,7 @@ body {
    conservan su aspecto de hoy, intacto. */
 /* AF-LOGIN-D73 · (A) la pantalla de ingreso es SU PROPIO contenedor de
    desplazamiento. Vive dentro de `.app`, que ocupa el alto del viewport
-   (`height: 100dvh` hasta 0.210.4; desde E173-2, `fixed` con top/bottom 0) y
+   (`height: 100dvh`; 0.210.5 la ató con `fixed` y 0.211.0 volvió a `100dvh`) y
    tiene `overflow: hidden`; con `min-height: 100dvh` y sin scroll propio, lo que no
    entraba quedaba RECORTADO y el dedo no llegaba (medido en WebKit de iPhone:
    `.ingreso` 986 px dentro de un `.app` de 664 px, «Crea tu cuenta» a 890 px).
@@ -2971,6 +2956,40 @@ body {
   flex: none;
   height: 34px;
   font-size: 25px;
+  /* E173-2 · los 5 toques del diagnóstico: sin el zoom por doble toque de iOS. */
+  touch-action: manipulation;
+}
+
+/* E173-2 · diagnóstico de pantalla (5 toques en el logo). Sólo lectura. */
+.diag-nota {
+  margin: 0 0 var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.diag-lista {
+  margin: 0 0 var(--sp-4);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.diag-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.diag-fila dt {
+  color: var(--text-muted);
+}
+
+.diag-fila dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 /* Logo y nombre comparten una sola caja de 34px. Así el nombre se centra

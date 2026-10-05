@@ -11,12 +11,55 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.211.0 — Fotos en memoria, borrar notificaciones y la foto de quien invita (2026-10-04)
+## 0.211.0 — Fotos en memoria, borrar notificaciones, la foto de quien invita y la barra de abajo nunca cortada (2026-10-04)
 
 Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decisiones 173, 174 y 175 de Mati. Base
 `0.210.5` (`f357857`). Consume App Backend **v2.148.0** (`91aacdd`, servido): contrato
 `docs/CONTRATO_E173_E174_FOTOS_Y_NOTIFICACIONES.md`.
 
+- **🔴 E173-2 · REGRESIÓN de 0.210.5 en el iPhone de Mati: la barra de abajo quedaba CORTADA en la app de inicio.**
+  Captura 7 (`ops/…/referencias-e173/7-inicio-app-0.210.5-barra-cortada.png`, sha256 `1533bbdc…`), Inicio en la app
+  agregada a inicio, 1179×2556 a 3x (393×852 pt).
+  - **Medido en píxeles** (por el Bibliotecario IV y por mí, en dos columnas fuera de los íconos): la barra es blanca
+    de 762,0 a 793,0 pt, con su sombra arriba; de 793 a 852 hay gris de fondo (241,245,249). Se ven los íconos, no los
+    textos ni la zona del indicador.
+  - **Causa, deducida de esa medida y del CSS de 0.210.5:** en la app de inicio la barra mide
+    56 + max(8, 34) = 90 pt. Si empieza en 762, su base está en 852: `.app` medía el alto de la pantalla, el que
+    imponía la corrección en JS (`src/viewportStandalone.ts`) al ver `innerHeight` corto justo en el inset (59 pt).
+    Pero en ese estado WebKit pinta la app sólo hasta 793 (852 − 59): lo de abajo queda fuera. Que WebKit recorte en el
+    viewport achicado no está medido con herramientas en el iPhone: se deduce de que el layout llega a 852 y la
+    pintura termina en 793. En 0.210.4, sin la corrección, `.app` medía 793 y la barra estaba entera, aunque subida
+    (captura 5).
+  - **Arreglo:** se retira la corrección en JS (`src/viewportStandalone.ts`, su test, su llamada en `main.tsx` y la
+    sonda `.viewport-sonda`) y `.app` vuelve a la regla de 0.210.4, la única medida en el iPhone: `height: 100dvh`.
+    En el peor caso la barra queda subida y ENTERA, y se acomoda con el primer scroll; nunca cortada. Se conserva
+    el cambio de la captura 6 (`max(8px, inset)` en la barra).
+  - **Diagnóstico de pantalla, oculto:** 5 toques en el logo de PayMe (dentro de 3 s) abren un panel de sólo
+    lectura con `innerHeight`, `outerHeight`, `visualViewport` (alto, `offsetTop`, escala), `screen`,
+    `devicePixelRatio`, `100vh`/`svh`/`dvh`/`lvh` medidos, los cuatro `env(safe-area-inset-*)` medidos, el alto
+    calculado y la caja de `.app` y de la barra, `navigator.standalone`, `display-mode`, la orientación, `scrollY` y
+    cualquier estilo en línea de `<html>` o de `.app` (ahí escribía la corrección). Vuelve a medir solo cuando
+    cambia el viewport, y con «Volver a medir». «Copiar» lleva el texto al portapapeles. Sin red, sin
+    almacenamiento, sin la sesión ni datos personales. El logo no pasa a ser un botón.
+  - **Pruebas:**
+    - `e2e/barra-inferior-viewport.spec.ts`: la app de inicio se simula ahora con los insets REALES
+      (`Emulation.setSafeAreaInsetsOverride`; Chromium 151 los respeta en `env()`, medido con una sonda) más
+      `navigator.standalone` y la pantalla 390×844 con viewport 785. La regla: la barra y `.app` nunca pasan del
+      viewport visible, la barra toca el borde visible, y nadie impone un alto a `.app`. **Rojo sobre `8019d22` por
+      la causa del iPhone:** barra de 754 a 844 (= 844 − 90) con el viewport en 785 y la variable en `844px`.
+    - `src/styles/shellViewport.test.ts` (4): `.app` vuelve a `100dvh`; ningún archivo de `src/` impone un alto a
+      `.app`; la barra con `max(8px, inset)` y anclada abajo.
+    - `e2e/diagnostico-pantalla.spec.ts` (5) y `src/utils/medirPantalla.test.ts` (7): 4 toques no abren, el quinto
+      sí; los valores son los del navegador (390 × 785, 59 · 0 · 34 · 0, `true`, barra en 695 · 785 · 90); vuelve a
+      medir al cambiar el viewport; sin pedidos de red al abrir, medir, copiar y cerrar; cierra con ✕, Escape y
+      tocando afuera; el código del panel no nombra red, almacenamiento ni sesión. El e2e cazó un defecto mío antes
+      del commit: `getComputedStyle` es vivo y los insets se leían después de sacar la sonda.
+    - Mutantes nuevos: R1 (estirar `.app` por el inset), D1 (abrir con 4 toques), D2b (sin volver a medir), D3
+      (insets leídos tarde), D4 (Escape) y D5 (tocar afuera), todos cazados. D2 (sacar sólo el `resize` de `window`)
+      sobrevive porque `visualViewport` también avisa: los dos quedan a propósito, porque no se sabe cuál dispara
+      iOS en ese estado.
+  - **Lo que sigue sin medirse:** el iPhone. Mati prueba en la app de inicio que la barra queda entera (en el peor
+    caso, subida) y, con los 5 toques, pasa los números del panel recién abierta y después del primer scroll.
 - **E173-3 · decisión 175 · las fotos, en memoria mientras dure la sesión.** Mati eligió «Sí, guardar en memoria
   (Recomendada)». El diagnóstico de App Backend: el servidor responde en decenas de ms; lo lento era repetir los viajes
   en cada entrada porque la foto no quedaba guardada.
@@ -82,7 +125,7 @@ Orden AF-E173-3-E174-FOTOS-Y-NOTIFICACIONES-20261004 (sha256 0ee25824…), decis
     el «sólo memoria» y la fila de «Marcar leídos». Dos pruebas que dependían del doble efecto de StrictMode se
     reescribieron para afirmar la intención, no la cuenta. Las dos e2e agregadas después (borrar con 404 y quitar
     un amigo) las acreditan los mutantes N3 y F11.
-  - **Mutantes: 25 plantados, 25 cazados**, con los archivos restaurados por sha256. F6 (reemplazar aunque los bytes
+  - **Mutantes: 25 plantados, 25 cazados** (más los 7 de la regresión de la barra y el diagnóstico, arriba), con los archivos restaurados por sha256. F6 (reemplazar aunque los bytes
     sean iguales) lo cazaba sólo la unitaria; la e2e se endureció para esperar la revalidación entera y ahora
     también lo caza.
   - **El CI del PR #11 dio rojo** sobre `9dae1b9` (run 37242181393, intento 1; 754 pasan, 1 falla): AF-32 de

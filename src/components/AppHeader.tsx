@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { navigate } from '../router';
 import { useToast } from './ui';
 import { Icon, type IconName } from './Icon';
+import { DiagnosticoPantalla } from './DiagnosticoPantalla';
+import { registrarToque } from '../utils/medirPantalla';
 
 /**
  * Cabecera navy de borde curvo y pestañas en burbuja —
@@ -40,14 +42,14 @@ import { Icon, type IconName } from './Icon';
  *
  * `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy.
  */
-export function PayMeLogo({ size }: { size?: number }) {
+export function PayMeLogo({ size, onClick }: { size?: number; onClick?: () => void }) {
   /* El `size` (y el font-size en general) va en `.hdr-mark`, NO en el
      wordmark: el símbolo mide `1.2em` en CSS (regla de composición 283d88d),
      así que escalar el contenedor escala LOS DOS y la proporción no se puede
      romper por ajustar uno solo. El SVG no lleva width/height: los gobierna
      esa misma regla — un atributo acá sería una segunda copia del tamaño. */
   return (
-    <span className="hdr-mark" style={size ? { fontSize: size } : undefined}>
+    <span className="hdr-mark" style={size ? { fontSize: size } : undefined} onClick={onClick}>
       <svg className="hdr-symbol" viewBox="0 0 76 76" aria-hidden="true" focusable="false">
         <rect width="76" height="76" rx="21" fill="#0FB5C9" />
         <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B" />
@@ -60,11 +62,25 @@ export function PayMeLogo({ size }: { size?: number }) {
   );
 }
 
+/**
+ * E173-2 · 5 toques en el logo abren el diagnóstico de pantalla
+ * (`DiagnosticoPantalla`). Oculto a propósito: es para medir el iPhone de Mati,
+ * no una función de la app. El logo no pasa a ser un botón: no entra en el
+ * orden de tabulación ni cambia lo que anuncia el lector.
+ */
 function HeaderIdentity({ userName }: { userName?: string }) {
+  const toques = useRef<number[]>([]);
+  const [diagnostico, setDiagnostico] = useState(false);
+  const alTocar = () => {
+    const r = registrarToque(toques.current, performance.now());
+    toques.current = r.toques;
+    if (r.abrir) setDiagnostico(true);
+  };
   return (
     <span className="hdr-user-group">
-      <PayMeLogo />
+      <PayMeLogo onClick={alTocar} />
       {userName && <span className="hdr-user">{userName}</span>}
+      {diagnostico && <DiagnosticoPantalla onCerrar={() => setDiagnostico(false)} />}
     </span>
   );
 }

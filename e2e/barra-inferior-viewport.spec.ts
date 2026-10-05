@@ -89,80 +89,97 @@ test.describe('E173-2 · barra inferior en el borde', () => {
 });
 
 /**
- * E173-2 · la app agregada a inicio, SIMULADA. Las capturas 5 y 6 de Mati son en
- * modo standalone, no en Safari.
+ * E173-2 · la app agregada a inicio, SIMULADA, y la REGRESIÓN de 0.210.5.
  *
- * Chromium no puede ser la app de inicio de iOS: ignora `display-mode` en la
- * emulación (medido) y no tiene el defecto de WebKit. Lo que se simula son las
- * SEÑALES que iOS le da al código, para probar que la corrección se arma y se
- * desarma:
- * - `navigator.standalone === true`, que en iOS sólo existe en la app de inicio;
- * - `screen.width`/`screen.height` del iPhone (390×844);
- * - el viewport achicado en el inset superior (844 − 59 = 785), que es el defecto;
- * - el inset superior de 59 px, que se inyecta en la medida de la sonda: en
- *   Chromium `env(safe-area-inset-top)` vale 0.
- * No acredita que el iPhone se comporte así: eso lo prueba Mati.
+ * 0.210.5 agregó una corrección en JS: en la app de inicio, si `innerHeight` era
+ * más corto que la pantalla justo en el inset superior, estiraba `.app` hasta el
+ * alto de la pantalla. En el iPhone de Mati (captura 7) eso CORTÓ la barra:
+ * medido en píxeles, la barra empieza en 762 pt (= 852 − 90, su alto), es decir
+ * que `.app` medía 852, pero la app se pinta sólo hasta 793 (= 852 − 59) y lo de
+ * abajo queda fuera. 0.211.0 retira la corrección.
+ *
+ * Lo que se simula son las SEÑALES que iOS le da al código (Chromium no tiene el
+ * defecto de WebKit ni respeta `display-mode` en la emulación, medido):
+ * `navigator.standalone === true`, la pantalla del iPhone (390×844) y el viewport
+ * achicado en el inset (844 − 59 = 785). La regla que se fija, pase lo que pase
+ * con esas señales: **la barra nunca se dispone más allá del viewport visible**;
+ * a lo sumo queda subida, entera, como en 0.210.4. No acredita el iPhone: eso
+ * lo prueba Mati.
  */
 const ALTO_PANTALLA = 844;
 const INSET_SUPERIOR = 59;
 
+const INSET_INFERIOR = 34;
+
+/**
+ * Los insets son REALES: Chromium 151 acepta `Emulation.setSafeAreaInsetsOverride`
+ * y `env(safe-area-inset-*)` devuelve 59/34 (medido con una sonda). Así la
+ * corrección de 0.210.5 se habría armado con su propia sonda, sin trucos.
+ */
 async function simularIos(page: Page, opciones: { standalone: boolean }): Promise<void> {
-  await page.addInitScript(({ standalone, alto, inset }) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: {
+      top: INSET_SUPERIOR, topMax: INSET_SUPERIOR,
+      bottom: INSET_INFERIOR, bottomMax: INSET_INFERIOR,
+      left: 0, leftMax: 0, right: 0, rightMax: 0,
+    },
+  });
+  await page.addInitScript(({ standalone, alto }) => {
     if (standalone) Object.defineProperty(Navigator.prototype, 'standalone', { configurable: true, get: () => true });
     Object.defineProperty(Screen.prototype, 'height', { configurable: true, get: () => alto });
     Object.defineProperty(Screen.prototype, 'width', { configurable: true, get: () => 390 });
-    const original = window.getComputedStyle.bind(window);
-    window.getComputedStyle = ((el: Element, pseudo?: string | null) => {
-      const estilo = original(el, pseudo);
-      if (!(el instanceof HTMLElement) || !el.classList.contains('viewport-sonda')) return estilo;
-      return new Proxy(estilo, {
-        get: (target, prop) => (prop === 'paddingTop' ? `${inset}px` : Reflect.get(target, prop, target)),
-      });
-    }) as typeof window.getComputedStyle;
-  }, { standalone: opciones.standalone, alto: ALTO_PANTALLA, inset: INSET_SUPERIOR });
+  }, { standalone: opciones.standalone, alto: ALTO_PANTALLA });
 }
 
-const variableAlto = (page: Page) =>
-  page.evaluate(() => document.documentElement.style.getPropertyValue('--app-alto-standalone'));
+/** Testigo de la simulación: los insets llegan de verdad al CSS de la app. */
+async function insetsMedidos(page: Page): Promise<[string, string]> {
+  return page.evaluate(() => {
+    const s = document.createElement('div');
+    s.style.paddingTop = 'env(safe-area-inset-top)';
+    s.style.paddingBottom = 'env(safe-area-inset-bottom)';
+    document.body.appendChild(s);
+    const c = getComputedStyle(s);
+    const r: [string, string] = [c.paddingTop, c.paddingBottom];
+    s.remove();
+    return r;
+  });
+}
+
+async function enteraEnElViewport(page: Page): Promise<void> {
+  const m = await medir(page);
+  const extra = await page.evaluate(() => ({
+    barraTop: document.querySelector('.appbar-block')!.getBoundingClientRect().top,
+    varAlto: document.documentElement.style.getPropertyValue('--app-alto-standalone'),
+  }));
+  const d = JSON.stringify({ ...m, ...extra });
+  expect(m.barraBottom, `la barra no pasa del viewport visible · ${d}`).toBeLessThanOrEqual(m.alto + 1);
+  expect(m.appBottom, `.app no pasa del viewport visible · ${d}`).toBeLessThanOrEqual(m.alto + 1);
+  expect(extra.barraTop, `la barra empieza adentro · ${d}`).toBeGreaterThanOrEqual(0);
+  expect(m.alBorde, `lo que toca el borde visible es la barra · ${d}`).toEqual([true, true, true]);
+  expect(extra.varAlto, `nadie impone un alto a .app · ${d}`).toBe('');
+}
 
 test.describe('E173-2 · app de inicio de iOS, simulada', () => {
-  test('🔴 viewport achicado al abrir: la barra llega al alto real de la pantalla, y la corrección se va cuando WebKit se corrige', async ({ page }) => {
+  test('🔴 regresión de 0.210.5: con el viewport achicado al abrir, la barra queda ENTERA dentro de lo visible', async ({ page }) => {
     await simularIos(page, { standalone: true });
     await page.setViewportSize({ width: 390, height: ALTO_PANTALLA - INSET_SUPERIOR });
     await ingresar(page);
     await expect(page.locator('.appbar-block')).toBeVisible();
-    expect(await variableAlto(page)).toBe(`${ALTO_PANTALLA}px`);
-    const achicado = await medir(page);
-    expect(achicado.appBottom, JSON.stringify(achicado)).toBeCloseTo(ALTO_PANTALLA, 0);
-    expect(achicado.barraBottom, JSON.stringify(achicado)).toBeCloseTo(ALTO_PANTALLA, 0);
+    expect(await insetsMedidos(page)).toEqual([`${INSET_SUPERIOR}px`, `${INSET_INFERIOR}px`]);
+    await enteraEnElViewport(page);
 
-    // WebKit se corrige solo (en el iPhone, al primer scroll): el viewport vuelve
-    // al alto real y la corrección se retira.
+    // Cuando WebKit se corrige (en el iPhone, al primer scroll), la barra baja al borde.
     await page.setViewportSize({ width: 390, height: ALTO_PANTALLA });
-    await expect.poll(() => variableAlto(page)).toBe('');
-    const sano = await medir(page);
-    expect(sano.barraBottom, JSON.stringify(sano)).toBeCloseTo(ALTO_PANTALLA, 0);
-    expect(sano.alBorde, JSON.stringify(sano)).toEqual([true, true, true]);
+    await expect.poll(async () => (await medir(page)).barraBottom).toBeCloseTo(ALTO_PANTALLA, 0);
+    await enteraEnElViewport(page);
   });
 
-  test('Safari (sin navigator.standalone), mismo viewport corto: no corrige, la barra termina en el viewport', async ({ page }) => {
+  test('control · Safari (sin navigator.standalone), mismo viewport corto: la barra entera en el viewport', async ({ page }) => {
     await simularIos(page, { standalone: false });
     await page.setViewportSize({ width: 390, height: ALTO_PANTALLA - INSET_SUPERIOR });
     await ingresar(page);
     await expect(page.locator('.appbar-block')).toBeVisible();
-    expect(await variableAlto(page)).toBe('');
-    const m = await medir(page);
-    expect(m.barraBottom, JSON.stringify(m)).toBeCloseTo(ALTO_PANTALLA - INSET_SUPERIOR, 0);
-    expect(m.alBorde, JSON.stringify(m)).toEqual([true, true, true]);
-  });
-
-  test('app de inicio con una ventana más chica a propósito (el faltante no es el inset): no corrige', async ({ page }) => {
-    await simularIos(page, { standalone: true });
-    await page.setViewportSize({ width: 390, height: 700 });
-    await ingresar(page);
-    await expect(page.locator('.appbar-block')).toBeVisible();
-    expect(await variableAlto(page)).toBe('');
-    const m = await medir(page);
-    expect(m.barraBottom, JSON.stringify(m)).toBeCloseTo(700, 0);
+    await enteraEnElViewport(page);
   });
 });
