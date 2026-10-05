@@ -28,6 +28,7 @@ import {
 } from '../components/AppHeader';
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 import { InvitacionEnInicio } from './InvitacionEnInicio';
+import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -311,6 +312,8 @@ export function HomeScreen() {
             separa). Sin invitaciones no dibuja nada. */}
         <InvitacionEnInicio />
         <FriendAvatarNotice />
+        {/* D176 · la guía «Agregar a inicio», la primera vez y sólo en Safari de iOS. */}
+        <AvisoAgregarAInicio />
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}
         <section className="home-mesa" aria-label={t('Tu mesa abierta')}>

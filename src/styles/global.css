@@ -8990,3 +8990,84 @@ h1.pay-title-lbl {
   color: var(--navy);
   font-variant-numeric: tabular-nums;
 }
+
+/* ─── D176 · la guía «Agregar a inicio» ───────────────────────────────────
+   Navy y teal; el naranja, sólo en la acción («Entendido», `.btn-primary`).
+   Táctil de 44 px. */
+.guia-inicio-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.guia-inicio-intro {
+  margin: 0 0 var(--sp-3);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.guia-inicio-pasos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  list-style: none;
+}
+
+.guia-inicio-pasos li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--navy);
+}
+
+.guia-inicio-numero {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.guia-inicio-icono {
+  display: inline-flex;
+  color: var(--teal-txt);
+}
+
+.guia-inicio-entendido {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* La flecha hacia Compartir: abajo en el iPhone (la barra de Safari), arriba a
+   la derecha en el iPad. */
+.guia-inicio-flecha {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+}
+
+.guia-inicio-flecha.abajo {
+  margin: var(--sp-3) auto 0;
+  border-top: 12px solid var(--teal);
+}
+
+.guia-inicio-flecha.arriba {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: 28px;
+  border-bottom: 12px solid var(--teal);
+}

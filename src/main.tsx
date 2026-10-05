@@ -54,7 +54,7 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app, instalar] = await Promise.all([
     import('./api/googleVincularRedirect'),
     import('./api/googleRedirect'),
     import('./api/googleAltaRedirect'),
@@ -63,6 +63,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./api/signupInvitation'),
     import('./i18n/idioma'),
     import('./App'),
+    import('./instalar/agregarAInicio'),
   ]);
   const { capturarVueltaVincular } = googleVincular;
   const { capturarVueltaGoogleRedirect } = googleRedirect;
@@ -94,6 +95,10 @@ async function arrancarPrivada(): Promise<void> {
   // D-FF-1: custodiar y retirar el raw ANTES del primer frame, incluso si ya hay
   // sesión y `LoginScreen` nunca se monta. El listener queda antes que el router.
   bootstrapSignupInvitationCustody();
+
+  // D176 · Chrome avisa una sola vez por carga que se puede instalar
+  // (`beforeinstallprompt`): se escucha antes del primer render o se pierde.
+  instalar.capturarInstalacion();
 
   const el = document.getElementById('root');
   if (!el) throw new Error('No existe #root');

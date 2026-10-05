@@ -1146,4 +1146,10 @@ export const EN: Record<string, string> = {
   "Sin visitas en {0}": "No visits in {0}",
   "lugares distintos": "different places",
   "los últimos 3 meses": "the last 3 months",
+  // AF-E173-4-E176 · D176 · la guía «Agregar a inicio».
+  "Agrega PayMe a tu inicio": "Add PayMe to your Home Screen",
+  "Abre PayMe desde tu pantalla de inicio, como una app.": "Open PayMe from your Home Screen, like an app.",
+  "Toca Compartir": "Tap Share",
+  "Elige «Agregar a inicio»": "Choose «Add to Home Screen»",
+  "Agregar a inicio": "Add to Home Screen",
 };

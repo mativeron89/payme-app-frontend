@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { IS_MOCK } from '../api';
 import { SelectorIdioma } from '../components/SelectorIdioma';
 import { useIdioma } from '../i18n/idioma';
@@ -16,6 +17,8 @@ import { useProfileIdentityCapability } from '../api/privateFeatures';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { CuentasConectadas } from './CuentasConectadas';
 import { RegionLocalManagement, RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
+import { GuiaAgregarAInicio, usePlataformaDeInstalacion } from '../instalar/GuiaAgregarAInicio';
+import { pedirInstalacion } from '../instalar/agregarAInicio';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -152,6 +155,7 @@ export function MasScreen() {
             <SelectorIdioma />
           </div>
           <RegionSettingsPanel />
+          <FilaAgregarAInicio />
           {/* AF2 · LEGAL-3.0.0 / decisiones 33-37 · Configuración › Notificaciones:
               qué avisos llegan también por correo. Mati pidió «una nueva ventana»:
               página propia (`#/notificaciones`), no una sección acá. */}
@@ -239,5 +243,47 @@ export function MasScreen() {
           conviviendo, superpuestas. */}
       <AppBottomBar active="mas" />
     </div>
+  );
+}
+
+/**
+ * D176 · «Agregar a inicio» en Configuración, cerca de Ubicación. En Safari de
+ * iOS abre la misma guía del aviso; en Android/Chrome muestra el diálogo de
+ * Chrome (`beforeinstallprompt`). Ya agregada, o sin ninguna de las dos vías,
+ * la fila no está.
+ */
+function FilaAgregarAInicio() {
+  const { t } = useIdioma();
+  const plataforma = usePlataformaDeInstalacion();
+  const [guia, setGuia] = useState(false);
+  const fila = useRef<HTMLButtonElement | null>(null);
+  if (plataforma === null) return null;
+  return (
+    <>
+      <button
+        ref={fila}
+        type="button"
+        className="list-row"
+        onClick={() => {
+          if (plataforma === 'ios_safari') setGuia(true);
+          else void pedirInstalacion();
+        }}
+      >
+        <span aria-hidden="true"><Icon name="home" size={16} /></span>
+        <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+          {t('Agregar a inicio')}
+        </div>
+        <span aria-hidden="true" style={{ color: 'var(--gray-b)' }}>→</span>
+      </button>
+      {guia && (
+        <GuiaAgregarAInicio
+          onCerrar={() => {
+            setGuia(false);
+            // El foco vuelve a la fila: el lector no queda en el vacío.
+            requestAnimationFrame(() => fila.current?.focus());
+          }}
+        />
+      )}
+    </>
   );
 }

@@ -11,6 +11,88 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.213.0 — Estadísticas según Claude Design, y la guía «Agregar a inicio» (2026-10-05)
+
+Orden AF-E173-4-E176-ESTADISTICAS-Y-AGREGAR-A-INICIO-20261005 (sha256 a9808514…), que junta
+AF-E173-4-ESTADISTICAS-REDISENO-20261004 (89c53bf3…, decisión 173) y AF-E176-GUIA-AGREGAR-A-INICIO-20261004
+(d8639fb1…, decisión 176, 3a1d5738…). Base `0.212.0` (`7fcbf2d`). Sin cambios de contrato ni de espejo. La orden de
+Estadísticas pedía «0.211.0», ya ocupada: va como 0.213.0.
+
+- **E173-4 · Estadísticas según `PANTALLA-estadisticas.md`** (023e1b56…). Manda la especificación; el prototipo se
+  leyó estático.
+  - **Burbuja del período:** el período con su selector y el total, Plus Jakarta 26/800 (21 por debajo de 360 px),
+    cifras tabulares. Sin visitas ni promedio. Un período sin consumo dice **$0.00**: el dueño lo acredita con
+    `consumption_month` en cero.
+  - **Filas de acceso** de 64 px: «{n} lugares distintos» («1 lugar» con uno); «{plato} es lo más elegido · {n}
+    platos», con `distinctDishes` (platos distintos; antes «y {n−1} platos más»); «Promedio mensual de los últimos 6
+    meses: {monto}». En un período vacío, «Sin visitas en {mes}» y «Sin platos en {mes}», con el mes en minúscula.
+  - **«Tu consumo por tipo de cocina»** («gasto» con pagos, sigue saliendo de `basis`): anillo de 168 px, grosor 20,
+    corte 2, arranca a las 12, con pista y los cuatro colores de la especificación en orden de monto; de la cuarta
+    cocina en adelante el anillo las junta y el detalle las muestra todas. El centro dice cuántas cocinas, sin
+    montos. «Detalle por cocina», cerrado por defecto (`aria-expanded`), con filas de 52 px: color, nombre, visitas,
+    monto y %. Vacío: sólo la pista, «—» + «Sin consumo» y «Todavía no registramos consumos este mes» (en otro
+    período, «No registramos consumos en este período.»). El `aria-label` del anillo nombra cada cocina con su %.
+  - Cada dato una vez: la tarjeta «Plato más pedido» ya no va en esta pantalla; el plato está en «Qué comes».
+  - El scroll deja abajo `calc(96px + max(8px, env(safe-area-inset-bottom)))`: 104 px en Safari, como pide la
+    especificación, y en la app de inicio sigue la barra para que el «+» no tape la última tarjeta.
+  - **Diferencia con el prototipo:** el selector lista meses; la app conserva los períodos que el dueño publica
+    (este mes, el mes pasado, los últimos 3 meses, este año), con filas de 48 px y la marca. Listar meses sueltos
+    pediría períodos que el contrato no tiene.
+  - La geometría del anillo pasó a ser un parámetro (`GEOMETRIA_2A` / `GEOMETRIA_E173`, `colorEnPaleta`): las
+    pantallas de detalle (Tus restaurantes, Qué comes, Evolución) conservan la suya y sus clases. Sin el bloque
+    `consumption_month` (dueño anterior o inválido) sigue la pantalla de siempre.
+  - Se retiraron 8 traducciones huérfanas del diseño anterior.
+- **D176 · la guía «Agregar a inicio».** Mati: «que salte un popup cuando entras la primera vez estilo "Agregar a
+  Inicio"»; eligió «Guía + fila en Configuración (Recomendada)».
+  - **Safari de iPhone/iPad, con sesión y sin la app agregada:** la primera vez, Inicio muestra una hoja corta,
+    «Agrega PayMe a tu inicio», con «1. Toca Compartir» (y su ícono) y «2. Elige «Agregar a inicio»», y una flecha
+    hacia Compartir: abajo en el iPhone, arriba a la derecha en el iPad. Se cierra con «Entendido», ✕, Escape o
+    tocando afuera; el foco entra en «Entendido». Al cerrarla queda `payme.app.agregar_a_inicio.v1` en
+    `localStorage`, con try/catch: si el almacenamiento falla, se recuerda en memoria y sale como mucho una vez por
+    carga. Sin servidor ni telemetría.
+  - Chrome, Firefox, Edge, Opera, la app de Google y los navegadores internos de Facebook, Instagram y LINE en iOS no
+    la muestran: ahí no está el «Agregar a inicio» de Safari. El iPad que se presenta como Mac (MacIntel con pantalla
+    táctil) cuenta como iPad.
+  - **Configuración › «Agregar a inicio»**, después de Ubicación, con el estilo de las filas: en Safari de iOS abre
+    la misma guía y al cerrarla el foco vuelve a la fila; en Android/Chrome llama `prompt()` del
+    `beforeinstallprompt` guardado. Ese evento se escucha en el arranque, antes del primer render (Chrome lo dispara
+    una vez por carga), con `preventDefault` para que la barra propia de Chrome no salga sola; sirve una sola vez, y
+    `appinstalled` lo descarta. Sin ninguno de los dos, la fila no se dibuja.
+  - **Ya agregada** (`navigator.standalone === true` o `display-mode: standalone`): ni guía ni fila.
+  - La copia de la orden venía en voseo («Agregá», «tocá»); el producto habla español mexicano y su guarda lo
+    rechaza: «Agrega», «Toca», «Elige», «Abre». Traducciones en `en.ts`.
+  - Navy y teal; el naranja, sólo en «Entendido». Táctil de 44 px. Los íconos y la flecha de la fila son decorativos
+    (`aria-hidden`): el nombre accesible es «Agregar a inicio».
+- **Pruebas:**
+  - `src/utils/estadisticasE173.test.ts` (8): geometría, colores y textos de la especificación.
+  - `e2e/estadisticas-anillo.spec.ts`, reescrito: burbuja, filas, centro y detalle; «gasto» con pagos; una cocina;
+    siete cocinas; mes vacío; las dos costuras del dueño anterior; y las medidas a 390 y 320 px (burbuja de 83,
+    total de 26 o 21, filas de 64, anillo de 168 y el «+» sin tapar la última tarjeta).
+  - Adaptados al diseño nuevo, sin aflojar lo que fijaban: `periodo-estadisticas`, `evolucion` y
+    `af-rediseno-12-censo-visual` (la burbuja de 2a mide ahora el padding de la especificación).
+  - `src/instalar/agregarAInicio.test.ts` (24): dónde se ofrece (iPhone, iPad, iPad como Mac, Mac, cinco navegadores
+    de iOS que no son Safari, Android con y sin evento, ya agregada, `standalone` estricto), el
+    `beforeinstallprompt` (captura, un solo uso, rechazo, `appinstalled`, desenganche) y la marca (guardada, valor
+    ajeno, almacenamiento roto, `null`).
+  - `e2e/agregar-a-inicio.spec.ts` (11): la guía al entrar, «Entendido» y no vuelve tras recargar; Escape; ✕; afuera
+    sí y adentro no; la fila con el foco que vuelve; ya agregada; almacenamiento bloqueado (una vez por carga); sin
+    sesión; la flecha del iPad; Android con un `beforeinstallprompt` de prueba; y la computadora sin nada.
+  - **La primera corrida de este spec cazó la fila:** su nombre accesible incluía la flecha «→» y no era «Agregar a
+    inicio»; los negativos «sin fila» pasaban sin poder fallar. Se marcaron decorativos el ícono y la flecha.
+  - «Qué comes» en Estadísticas fija sus platos contra el centro del anillo de su pantalla (el mismo
+    `distinctDishes`), y «Entendido» su naranja.
+  - **Rojo sobre el código anterior** (`7fcbf2d`, con los tests de hoy): 25 e2e (las guías de iPhone, iPad y
+    Android, la pantalla nueva de Estadísticas, sus medidas y los specs adaptados) y los dos archivos unitarios. Los
+    13 que pasan ahí son ausencias («ni guía ni fila», sin sesión, la computadora) y specs sin cambios de
+    Estadísticas: cada ausencia tiene su control positivo en el mismo spec y su mutante.
+  - **Mutantes:** 35 cazados. `G1`–`G8`, `G10`–`G22` para la guía; `E1`–`E11` para Estadísticas. Tres
+    sobrevivían en la primera corrida y se resolvieron en el producto: `G9` (el aviso sin exigir sesión) porque
+    Inicio sólo existe con sesión, y `E9a`/`E9b` (vacío por total o por cocinas) porque el decoder exige que las
+    cocinas sumen el total: los dos términos eran el mismo estado. Se sacó lo redundante y queda una sola
+    condición. `E5` (platos − 1) sobrevivía porque nada fijaba el número: ahora lo fija el e2e.
+- **Lo que no se probó acá:** un iPhone, un iPad ni un Android de verdad, y el diálogo real de instalación de Chrome.
+  Lo visible lo cierra la prueba de Mati (D63).
+
 ## 0.212.0 — «Nueva» abre la cámara directo, y la foto de quien invita en las invitaciones (2026-10-05)
 
 Orden AF-E174-3B-E177-INVITADOR-Y-CAMARA-20261005 (sha256 29a28911…), decisiones 174 y 177 de Mati, con la especificación
