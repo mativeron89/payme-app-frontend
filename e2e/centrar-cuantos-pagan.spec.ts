@@ -17,6 +17,13 @@ import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
  * y el monto están en los dos bordes (`space-between`), así que su extensión
  * conjunta TAMBIÉN está centrada; lo que no hay es grupo. Por eso además se
  * pide que el monto esté pegado al selector.
+ *
+ * 🔴 D181 · los montos ya no miden todos lo mismo («$840», «$93.34»): con el
+ * «+» fijo y el monto pegado al selector, el grupo VISIBLE no puede quedar
+ * centrado para todos los montos a la vez. Lo que se centra es el LUGAR del
+ * grupo: el selector y la caja reservada para el monto más ancho posible
+ * (`reservaDelMonto`). Un monto más corto que la reserva deja el grupo visible
+ * corrido a la izquierda, a lo sumo la mitad de lo que le falta: se mide eso.
  */
 
 const FORMAS = [
@@ -70,10 +77,15 @@ async function medir(page: Page) {
     const boton = document.querySelector('.division-stepper .stepper button[aria-label="Un comensal más"]')!.getBoundingClientRect();
     const derecha = Math.max(stepper.right, monto?.right ?? 0, rotulo?.right ?? 0);
     const izquierdaMonto = monto ? Math.min(monto.left, rotulo?.left ?? Infinity) : null;
+    // El lugar del grupo: el selector y la caja del monto (que reserva el más ancho).
+    const caja = document.querySelector('.division-stepper-monto')!.getBoundingClientRect();
     return {
       centro: card.left + card.width / 2,
       tituloCentro: (titulo.left + titulo.right) / 2,
-      grupoCentro: (stepper.left + derecha) / 2,
+      grupoCentro: (stepper.left + caja.right) / 2,
+      // Lo que el grupo visible se corre: la mitad de lo que el monto no llena de la caja.
+      corrimientoVisible: (stepper.left + derecha) / 2 - (stepper.left + caja.right) / 2,
+      faltante: caja.right - derecha,
       hueco: izquierdaMonto === null ? null : izquierdaMonto - stepper.right,
       mas: boton.left,
     };
@@ -111,6 +123,8 @@ for (const [ancho, alto] of [[390, 664], [375, 667]] as const) {
         const d = JSON.stringify(m);
         expect(Math.abs(m.tituloCentro - m.centro), `título · ${d}`).toBeLessThanOrEqual(2);
         expect(Math.abs(m.grupoCentro - m.centro), `grupo · ${d}`).toBeLessThanOrEqual(2);
+        // D181 · el monto entra en su reserva: si la pasara, la caja crecería y el «+» se correría.
+        expect(m.faltante, `el monto entra en la reserva · ${d}`).toBeGreaterThanOrEqual(-1);
         expect(m.hueco, `el monto va junto al selector · ${d}`).not.toBeNull();
         // Junto al selector: con «c/u» el monto define el ancho y el hueco es el
         // del grupo (12). Por consumo lo define «base de propina · c/u», que a

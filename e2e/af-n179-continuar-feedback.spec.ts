@@ -43,8 +43,8 @@ async function hastaConsumoDos(
   await sumar.click();
   await sumar.click();
   await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('2');
-  await expect(page.getByText('$840.00', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('$420.00', { exact: true })).toBeVisible();
+  await expect(page.getByText('$840', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('$420', { exact: true })).toBeVisible();
 }
 
 async function clickCentro(locator: Locator, page: Page): Promise<void> {

@@ -80,7 +80,7 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await capturar(page, 'cerrar-03-mesa-cerrada-por-el-organizador');
   });
 
-  test('AF-36 · los tres botones llevan color: invitar lleno, copiar con borde, cerrar en gris; todos AA', async ({ page }) => {
+  test('AF-36 + D181 · los tres botones llevan color: invitar lleno, copiar con borde, cerrar en rojo clarito; todos AA', async ({ page }) => {
     await mesaSinGarantia(page);
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
     await expect(boton(page)).toBeVisible();
@@ -96,9 +96,10 @@ test.describe('AF-34 · cerrar la mesa', () => {
         const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
         return (x + 0.05) / (y + 0.05);
       };
+      // D181 · el texto visible es corto; el nombre accesible, el completo.
       const de = (nombre: string) => {
         const b = [...document.querySelectorAll('.mesa-secondary-actions button')]
-          .find((e) => e.textContent?.includes(nombre)) as HTMLElement;
+          .find((e) => (e.getAttribute('aria-label') ?? e.textContent ?? '').includes(nombre)) as HTMLElement;
         const cs = getComputedStyle(b);
         return { fondo: cs.backgroundColor, texto: cs.color, borde: cs.borderTopColor, contraste: contraste(cs.color, cs.backgroundColor) };
       };
@@ -108,8 +109,8 @@ test.describe('AF-34 · cerrar la mesa', () => {
     expect(colores.invitar).toMatchObject({ fondo: 'rgb(10, 123, 128)', texto: 'rgb(255, 255, 255)' });
     // Borde y texto turquesa sobre blanco.
     expect(colores.copiar).toMatchObject({ fondo: 'rgb(255, 255, 255)', texto: 'rgb(10, 123, 128)', borde: 'rgb(10, 123, 128)' });
-    // Gris: ni turquesa ni lleno, para que no compita.
-    expect(colores.cerrar).toMatchObject({ fondo: 'rgb(255, 255, 255)', texto: 'rgb(71, 85, 105)', borde: 'rgb(203, 213, 225)' });
+    // D181 · «rojo clarito»: fondo rojo claro y texto rojo oscuro (6.07:1).
+    expect(colores.cerrar).toMatchObject({ fondo: 'rgb(253, 236, 234)', texto: 'rgb(155, 58, 38)', borde: 'rgba(155, 58, 38, 0.22)' });
     for (const [nombre, c] of Object.entries(colores)) expect(c.contraste, nombre).toBeGreaterThanOrEqual(4.5);
     await capturar(page, 'botones-01-mesa-con-los-tres');
   });

@@ -64,7 +64,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
 
     // Sin tocar ningún ítem: la fila ya dice "Mi parte" con el casillero.
     await expect(page.getByText('Mi parte')).toBeVisible();
-    await expect(page.getByText('$155.00').first()).toBeVisible();
+    await expect(page.getByText('$155').first()).toBeVisible();
 
     // 🔴 CORTE · el círculo es «Listo», habilitado, y el vacío también viaja
     // como reemplazo explícito. Con el guardado OK vuelve a Inicio (decisión
@@ -128,7 +128,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // declaración separada y el monto sigue siendo el slot fijo.
     await expect(page.locator('.qc-parte')).toHaveCount(0);
     const filaMiParte = page.locator('.mi-parte');
-    await expect(filaMiParte).toContainText('$155.00');
+    await expect(filaMiParte).toContainText('$155');
 
     // Captura el body real sin sustituir su respuesta: la prueba llega hasta
     // el mock normal y acredita que ⅓ viaja como dato declarado, mientras el
@@ -144,7 +144,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     });
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
-    await expect(page.getByText('Tu parte · $155.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tu parte · $155', { exact: true })).toBeVisible();
     await page.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('radio', { name: /Santander.*4532/ }).click();
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
@@ -195,7 +195,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await page.getByText('Tagliatelle Bolognese').click();
     const fracciones = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(fracciones.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
-    // ⅓ de $195.00 no es exacto: 6499.35 centavos se redondean a 6499.
+    // ⅓ de $195 no es exacto: 6499.35 centavos se redondean a 6499.
     await fracciones.getByRole('radio', { name: '⅓', exact: true }).click();
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] .qc-parte')).toHaveText('$64.99');
     const filaMiParte = page.locator('.mi-parte');

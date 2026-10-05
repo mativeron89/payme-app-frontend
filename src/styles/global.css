@@ -406,11 +406,29 @@ html.app-de-inicio-ios .app {
 }
 
 .mesa-secondary-actions {
+  /* D181 · arriba, «Copiar link» e «Invitar amigos» mitad y mitad; debajo,
+     centrado, «Cerrar mesa». */
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--sp-2);
   margin-top: var(--sp-3);
 }
+
+.mesa-secondary-actions > .btn-cerrar-mesa {
+  align-self: center;
+}
+
+.mesa-acciones-fila {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.mesa-acciones-fila > .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 
 .scroll {
   flex: 1;
@@ -561,6 +579,13 @@ html.app-de-inicio-ios .app {
   background: #fff;
   color: var(--gray-d);
   border: 1.5px solid var(--gray-b);
+}
+/* D181 · «Cerrar mesa» en rojo clarito: #9b3a26 sobre #fdecea da 6.07:1 (AA).
+   Va después de `.btn` (misma especificidad: gana la última declaración). */
+.btn-cerrar-mesa {
+  background: #fdecea;
+  color: #9b3a26;
+  border: 1.5px solid rgba(155, 58, 38, 0.22);
 }
 @media (hover: hover) {
   .btn-turquesa:not(:disabled):hover {
@@ -5518,6 +5543,13 @@ button.qc-circulo::after {
   margin: var(--sp-6) var(--sp-4) 0;
 }
 
+/* D181 · una tarjeta por mesa abierta, la de siempre, una debajo de la otra. */
+.home-mesas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
 .mesa-card {
   display: block;
   width: 100%;
@@ -5725,41 +5757,6 @@ button.qc-circulo::after {
   font-size: var(--fs-body);
   color: var(--text-muted);
   cursor: pointer;
-}
-.sheet-mesa {
-  display: block;
-  width: 100%;
-  padding: var(--sp-3) 0;
-  border: none;
-  border-top: 1px solid var(--border);
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-.sheet-mesa:focus-visible {
-  outline: 2px solid var(--action);
-  outline-offset: 2px;
-}
-.sheet-mesa-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-2);
-}
-.sheet-mesa-name {
-  font-family: var(--font-display);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-  font-weight: 600;
-  color: var(--text);
-}
-.sheet-mesa-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  margin-top: var(--sp-2);
 }
 
 /* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
@@ -8315,9 +8312,13 @@ h1.pay-title-lbl {
 .division-stepper-monto {
   display: grid;
   grid-template-areas: 'monto' 'rotulo';
-  justify-items: end;
+  /* D181 · los montos ya no miden todos lo mismo («$840» y «$93.33»): pegados
+     al selector, a la izquierda de su caja reservada. El «+» sigue sin moverse;
+     el grupo visible se corre a lo sumo la mitad de lo que le falta al monto
+     para llenar la reserva (medido en `centrar-cuantos-pagan`). */
+  justify-items: start;
   min-width: 0;
-  text-align: right;
+  text-align: left;
 }
 .division-stepper-monto .split-amt,
 .division-stepper-monto .split-amt-lbl,
@@ -8325,7 +8326,7 @@ h1.pay-title-lbl {
 .division-stepper-monto .marcador-monto,
 .division-stepper-monto .marcador-rotulo {
   margin-top: 0;
-  text-align: right;
+  text-align: left;
 }
 .division-stepper-monto .split-amt,
 .division-stepper-monto .reserva-monto,

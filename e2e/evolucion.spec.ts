@@ -5,7 +5,7 @@ import { ingresar } from './_app';
  * AF-31 · n167 · «Evolución» (2f), `GET /api/account/stats/evolution`.
  *
  * Mock (el mismo modelo que 2a, 2b y 2c), seis meses del más viejo al actual:
- * $300, $450, $0 (vacío), $680, $1,320 y $2,165 ⇒ $4,915.00, con un promedio de
+ * $300, $450, $0 (vacío), $680, $1,320 y $2,165 ⇒ $4,915, con un promedio de
  * $819.16 por mes: ÷ 6, con el vacío adentro, como el dueño. El último es el
  * total de 2a.
  */
@@ -37,7 +37,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     await expect(page).toHaveURL(/:\d+\/evolucion$/);
     const burbuja = page.locator('.stat-burbuja');
     await expect(burbuja).toContainText('6 meses');
-    await expect(burbuja).toContainText('$4,915.00');
+    await expect(burbuja).toContainText('$4,915');
     await expect(burbuja).toContainText('$819.16 promedio por mes');
     // Sin selector de período en esta pantalla.
     await expect(page.getByRole('button', { name: /^Período: / })).toHaveCount(0);
@@ -48,7 +48,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     // El actual, marcado; el vacío, sin alto.
     await expect(barras.last()).toHaveClass(/actual/);
     await expect(barras.nth(2).locator('.evo-barra-cuerpo')).toHaveCSS('height', '0px');
-    await expect(page.getByText(/ está \$845\.00 arriba de /)).toBeVisible();
+    await expect(page.getByText(/ está \$845 arriba de /)).toBeVisible();
 
     // Columnas al 100 %: el vacío dice que no hubo consumos; nunca el color solo.
     const columnas = page.locator('.evo-columna-cuerpo');
@@ -66,7 +66,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     await acceso(page).click();
     await expect(page.locator('.evo-barra-monto')).toHaveText(['$300', '$450', '$0', '$680', '$1,320', '$0']);
     await expect(page.locator('.evo-columna-cuerpo.vacia')).toHaveCount(2);
-    await expect(page.getByText(/ está \$1,320\.00 abajo de /)).toBeVisible();
+    await expect(page.getByText(/ está \$1,320 abajo de /)).toBeVisible();
     await capturar(page, 'evolucion-02-2f-meses-vacios');
   });
 

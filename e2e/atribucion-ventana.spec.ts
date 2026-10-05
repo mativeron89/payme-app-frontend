@@ -185,7 +185,8 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   const pantalla = await page.locator('body').innerText();
   const conPct = pantalla.match(/Propina \((\d+(?:[.,]\d+)?)%[^)]*\)/);
   expect(conPct, 'la pantalla no muestra el porcentaje de propina').not.toBeNull();
-  const importe = pantalla.match(/Total pagado\s*\$([\d,]+\.\d{2})/);
+  // D181 · sin «.00» cuando el monto es entero.
+  const importe = pantalla.match(/Total pagado\s*\$([\d,]+(?:\.\d{2})?)/);
   expect(importe, 'la pantalla no muestra el total pagado').not.toBeNull();
 
   // ② COMPARTIR — el texto real que sale, leído del portapapeles.
@@ -219,5 +220,5 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   // El progreso de la mesa vuelve con mi pago adentro: el remount ocurrió Y
   // el pago quedó del otro lado. Sin las dos cosas, esto no se sostiene — y
   // el número es el mismo que las tres superficies acaban de afirmar.
-  await expect(page.getByText(/\$210\.00 \/ \$840\.00/)).toBeVisible();
+  await expect(page.getByText(/\$210 \/ \$840/)).toBeVisible();
 });

@@ -114,8 +114,8 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.goto('/#/home');
     await page.reload();
     const tarjeta = page.locator('.mesa-card').filter({ hasText: RESTAURANTE });
-    await expect(tarjeta.locator('.mesa-money')).toContainText('$150.00');
-    await expect(tarjeta.locator('.mesa-money')).toContainText('$840.00');
+    await expect(tarjeta.locator('.mesa-money')).toContainText('$150');
+    await expect(tarjeta.locator('.mesa-money')).toContainText('$840');
     await capturar(page, 'd79-01-inicio-lo-elegido');
 
     // Decisión 79 · adentro: cuánto queda del plato, sin nombres, y la barra de
@@ -123,7 +123,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.goto(`/#/mesa/${CODIGO}`);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
     await expect(fila(page, 'Pizza para compartir')).toContainText('Queda ½');
-    await expect(barra(page)).toHaveText('$150.00 / $840.00 (18%)');
+    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
     await expect(page.locator('main, .screen').first()).not.toContainText(OTRA_CUENTA);
     await capturar(page, 'd79-02-queda-medio');
 
@@ -141,7 +141,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // mesa se relee sola: la barra cambia sin recargar la página.
     await otraCuentaDeclara(page, [[PIZZA, 10000]]);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(barra(page)).toHaveText('$300.00 / $840.00 (36%)');
+    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
 
     // El borrador de ½ quedó viejo: el dueño rechaza con 409 y se dice claro.
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
@@ -187,16 +187,16 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.clock.pauseAt(t0);
     await page.goto(`/#/mesa/${CODIGO}`);
     await page.clock.runFor(3_000);
-    await expect(barra(page)).toHaveText('$0.00 / $840.00 (0%)');
+    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
     await otraCuentaDeclara(page, [[PARRILLADA, 5000]]);
     // T0 + 8 s: el primer tick no puede haber pasado (nace en T0 o después).
     await page.clock.runFor(5_000);
-    await expect(barra(page)).toHaveText('$0.00 / $840.00 (0%)');
+    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
     // T0 + 14 s: pasó el tick de los 10 s y su lectura, con margen por si el
     // intervalo se reinició durante la carga (hasta T0 + 3 s); el segundo tick
     // no llega antes de T0 + 20 s.
     await page.clock.runFor(6_000);
-    await expect(barra(page)).toHaveText('$270.00 / $840.00 (32%)');
+    await expect(barra(page)).toHaveText('$270 / $840 (32%)');
     await expect(fila(page, 'Parrillada')).toContainText('Queda ½');
   });
 
@@ -208,7 +208,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.goto('/#/home');
     await page.reload();
     const tarjeta = page.locator('.mesa-card').filter({ hasText: RESTAURANTE });
-    await expect(tarjeta.locator('.mesa-money')).toContainText('$0.00');
-    await expect(tarjeta.locator('.mesa-money')).not.toContainText('$150.00');
+    await expect(tarjeta.locator('.mesa-money')).toContainText('$0');
+    await expect(tarjeta.locator('.mesa-money')).not.toContainText('$150');
   });
 });

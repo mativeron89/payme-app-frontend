@@ -107,16 +107,16 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await abrir(page, 'PA-8401');
 
     await expect(page.getByRole('progressbar', { name: 'Asignado 0% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$0.00 / $840.00 (0%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$0 / $840 (0%)', { exact: true })).toBeVisible();
     // Decisión 77 de Mati: «monto / total (porcentaje)» y nada más.
     await expect(page.locator('.mi-meta-amt')).not.toContainText(/asignad|por asignar/i);
 
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await expect(page.locator('.mi-parte-amt')).toHaveText('$300.00');
+    await expect(page.locator('.mi-parte-amt')).toHaveText('$300');
     // AF-BARRA-EN-VIVO · decisión 107, punto 3 («Sí, en vivo»): hasta 0.202.0 lo
     // provisional NO contaba y la barra seguía en 0 %. Ahora suma antes de «Listo».
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$300.00 / $840.00 (36%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
 
     // Dos eventos no duplican el claim: el owner reemplaza el lock propio.
     await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();
@@ -125,7 +125,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await page.goto('/#/mesa/PA-8401');
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$300.00 / $840.00 (36%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
       const { state } = await import(/* @vite-ignore */ storePath) as {
@@ -137,12 +137,12 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
 
     await page.reload();
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$300.00 / $840.00 (36%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Soltar Consumo de 300' }).dblclick();
     await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 0% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$0.00 / $840.00 (0%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$0 / $840 (0%)', { exact: true })).toBeVisible();
   });
 
   test('un 409 concurrente descarta lo provisional y refleja sólo la media asignada por otro actor', async ({ page }) => {
@@ -174,7 +174,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
 
       await expect(page.getByText('De ese plato queda solo ½')).toBeVisible();
       await expect(page.getByRole('progressbar', { name: 'Asignado 18% de la mesa' })).toBeVisible();
-      await expect(page.getByText('$150.00 / $840.00 (18%)', { exact: true })).toBeVisible();
+      await expect(page.getByText('$150 / $840 (18%)', { exact: true })).toBeVisible();
     });
     await expect.poll(() => page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
@@ -200,7 +200,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await sembrarMesa(page, { code: 'PA-8403', total_cents: 84000, items: completos });
     await abrir(page, 'PA-8403');
     await expect(page.getByRole('progressbar', { name: 'Asignado 100% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$840.00 / $840.00 (100%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$840 / $840 (100%)', { exact: true })).toBeVisible();
 
     await sembrarMesa(page, {
       code: 'PA-8404', total_cents: 84000, items: completos,
@@ -209,9 +209,9 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await abrir(page, 'PA-8404');
     await expect(page.getByText('Esta mesa cerró sin cobros')).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 100% de la mesa' })).toBeVisible();
-    await expect(page.getByText('Asignado', { exact: true }).locator('..')).toContainText('$840.00');
-    await expect(page.getByText('Por asignar', { exact: true }).locator('..')).toContainText('$0.00');
-    await expect(page.getByText('Pagado por los comensales').locator('..')).toContainText('$0.00');
+    await expect(page.getByText('Asignado', { exact: true }).locator('..')).toContainText('$840');
+    await expect(page.getByText('Por asignar', { exact: true }).locator('..')).toContainText('$0');
+    await expect(page.getByText('Pagado por los comensales').locator('..')).toContainText('$0');
   });
 
   /**
@@ -260,7 +260,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     });
     await abrir(page, 'PA-8405');
     await expect(page.getByRole('progressbar', { name: 'Pagado 36% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$300.00 / $840.00 (36%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
     await expect(page.getByText(/asignados/)).toHaveCount(0);
   });
 
@@ -271,7 +271,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     });
     await abrir(page, 'PA-8406');
     await expect(page.getByRole('progressbar', { name: 'Pagado 0% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$0.00 / $840.00 (0%)', { exact: true })).toBeVisible();
+    await expect(page.getByText('$0 / $840 (0%)', { exact: true })).toBeVisible();
     await expect(page.getByText(/asignados/)).toHaveCount(0);
   });
 });

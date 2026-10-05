@@ -9,7 +9,7 @@ const MESES = mesesDeMexico(new Date(), 'es');
  * (`ops/…/claude-design-estadisticas-20261004/…/PANTALLA-estadisticas.md`).
  *
  * - La burbuja: el período y el total, sin visitas ni promedio; un mes sin
- *   consumo dice $0.00.
+ *   consumo dice $0.
  * - Las filas: «{n} lugares distintos», «{plato} es lo más elegido · {n}
  *   platos», «Promedio mensual de los últimos 6 meses: {monto}».
  * - «Tu consumo por tipo de cocina»: anillo de 168 px, grosor 20, con su pista;
@@ -50,7 +50,7 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
 
     // La burbuja: el mes y el total, sin visitas ni promedio.
     await expect(burbuja(page)).toContainText(MESES.actual);
-    await expect(page.locator('.est-total')).toHaveText('$770.00');
+    await expect(page.locator('.est-total')).toHaveText('$770');
     await expect(burbuja(page)).not.toContainText(/visita|promedio/);
 
     // El anillo: el reparto en su aria-label; el centro sin montos.
@@ -68,7 +68,7 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await detalle(page).click();
     await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
     await expect(filas(page)).toHaveCount(4);
-    await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310\.00.*40%/);
+    await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310.*40%/);
     await expect(filas(page).nth(3)).toHaveText(/Mexicana.*1 visita.*\$86\.50.*11%/);
     await detalle(page).click();
     await expect(filas(page)).toHaveCount(0);
@@ -81,7 +81,7 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(fila(page, /^Tus restaurantes/)).toContainText(/\d+ lugares distintos$/);
     await expect(fila(page, /^Tus restaurantes/)).not.toContainText(/visita|este mes|el mes pasado/);
     await expect(fila(page, /^Qué comes/)).toContainText(/ es lo más elegido · \d+ platos?$/);
-    await expect(fila(page, /^Evolución/)).toContainText(/^EvoluciónPromedio mensual de los últimos 6 meses: \$[\d,]+\.\d{2}$/);
+    await expect(fila(page, /^Evolución/)).toContainText(/^EvoluciónPromedio mensual de los últimos 6 meses: \$[\d,]+(?:\.\d{2})?$/);
 
     // Los platos de la fila son `distinctDishes`, el mismo número que «Qué comes»
     // pone al centro de su anillo (no «distintos − 1», como decía «y N platos más»).
@@ -118,9 +118,9 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(filas(page)).toHaveCount(7);
   });
 
-  test('🔴 mes vacío: $0.00, las filas dicen qué falta y el anillo queda con su pista', async ({ page }) => {
+  test('🔴 mes vacío: $0, las filas dicen qué falta y el anillo queda con su pista', async ({ page }) => {
     await preparar(page, { costura: 'vacio', sinDinero: true });
-    await expect(page.locator('.est-total')).toHaveText('$0.00');
+    await expect(page.locator('.est-total')).toHaveText('$0');
     const mes = MESES.actual.toLocaleLowerCase('es-MX');
     await expect(fila(page, /^Tus restaurantes/)).toContainText(`Sin visitas en ${mes}`);
     await expect(fila(page, /^Qué comes/)).toContainText(`Sin platos en ${mes}`);
@@ -200,7 +200,7 @@ test.describe('E173-4 · capturas para Mati', () => {
       await page.getByRole('button', { name: /^Período: / }).click();
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
       await expect(burbuja(page)).toContainText(MESES.anterior);
-      await expect(page.locator('.est-total')).toHaveText('$1,320.00');
+      await expect(page.locator('.est-total')).toHaveText('$1,320');
       await capturar(page, `e173-estadisticas-${ancho}-${MESES.anterior.toLowerCase()}`);
       await detalle(page).click();
       await expect(filas(page).first()).toBeVisible();
@@ -212,7 +212,7 @@ test.describe('E173-4 · capturas para Mati', () => {
     test(`a ${ancho} px: mes vacío`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
       await preparar(page, { costura: 'vacio', sinDinero: true });
-      await expect(page.locator('.est-total')).toHaveText('$0.00');
+      await expect(page.locator('.est-total')).toHaveText('$0');
       await capturar(page, `e173-estadisticas-${ancho}-vacio`);
       // La tarjeta del anillo vacío, al fondo: el scroll es de la pantalla, no de la
       // página. Al fondo se ve también que el «+» no tapa la última tarjeta.

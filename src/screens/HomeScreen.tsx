@@ -20,7 +20,7 @@ import {
   walletTxLabel,
 } from '../utils/labels';
 import type { OpenMesa } from '../api/types';
-import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
+import { ordenarPorUrgencia } from './homeMesasView';
 import { Icon } from '../components/Icon';
 import { AppBottomBar } from '../components/AppBottomBar';
 import {
@@ -160,7 +160,6 @@ export function HomeScreen() {
   const rail = accountRailView(walletRailEnabled, accountActivity);
   const corte = corteDePagosView(useMoneyRail());
   const [tab, setTab] = useState<TabId>('cuenta');
-  const [hojaAbierta, setHojaAbierta] = useState(false);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
   const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
@@ -223,12 +222,9 @@ export function HomeScreen() {
     };
   }, [walletRailEnabled]);
 
-  // §1.1 (2026-08-05): la protagonista es la de vencimiento MÁS PRÓXIMO, no
-  // la primera del payload; las demás viven en la hoja de "+N más".
+  // §1.1 (2026-08-05): primero la de vencimiento MÁS PRÓXIMO, no la primera del
+  // payload. D181 · una tarjeta por mesa, en ese orden (sin «+N más» ni hoja).
   const porUrgencia = openMesas ? ordenarPorUrgencia(openMesas.mesas) : [];
-  const mesa = porUrgencia[0] ?? null;
-  const otras = porUrgencia.slice(1);
-  const cuenta = mesa ? countdownLong(mesa.expires_at) : null;
   const masked = '$ ••••';
 
   return (
@@ -343,68 +339,61 @@ export function HomeScreen() {
               <span className="sk-line w55" />
               <span className="sk-line w100 bar" />
             </div>
-          ) : mesa ? (
-            /* Con UNA sola mesa —el caso mayoritario— la tarjeta va SOLA,
-               exactamente como siempre: la condición de Diseño es cero cambio
-               visual. La fila "+N más" y su grupo existen únicamente cuando
-               hay más de una (§1.1, variante B). */
-            (() => {
-              const tarjeta = (
-                <button type="button" className="mesa-card" onClick={() => navigate('mesa', mesa.code)}>
-                  <div className="mesa-top">
-                    <span className="mesa-kicker">{t('Tu mesa abierta')}</span>
-                    {/* Teal siempre: el naranja tiene una lista cerrada de cuatro
-                        usos permitidos y un badge de estado no es ninguno. */}
-                    <span className="badge badge-teal">
-                      {etiquetaPersonal(mesa, t) ?? t(mesaStatusLabel(mesa.status))}
-                    </span>
-                  </div>
-                  <div className="mesa-name">{mesa.restaurant.name}</div>
-                  {/* G-27 · cerrado por el dueño v2.93.0 (`participants_count`). */}
-                  <div className="mesa-meta">{lineaDeMesa(mesa, t)}</div>
-                  {/* G-34 · lo que pagó ESTA cuenta, sólo junto a su etiqueta
-                      personal. Nunca lo de otro. */}
-                  {pagadoPropioCentavos(mesa) !== null && (
-                    <div className="mesa-meta">{t('Pagaste {0}', formatMXN(pagadoPropioCentavos(mesa)!))}</div>
-                  )}
-
-                  {/* La jerarquía dice "cuánto falta", no "cuánto es": el monto en
-                      --fs-h1 tabular, el total en --fs-body muted.
-                      Decisión 76 de Mati: con el dato del dueño (v2.134.0) se
-                      muestra lo ELEGIDO, la misma cifra que dentro de la mesa;
-                      sin él, lo pagado, como antes. Lo pagado se suma cuando se
-                      enciendan los pagos (orden futura). */}
-                  <div className="mesa-money">
-                    <span className="mesa-paid">{formatMXN(avanceDeMesa(mesa).cents)}</span>
-                    <span className="mesa-total">{t('de')} {formatMXN(mesa.total_cents)}</span>
-                  </div>
-                  {/* La barra NUNCA va sola: los dos importes de arriba son el dato,
-                      esto es el refuerzo. Por eso es aria-hidden. */}
-                  <div className="mesa-bar" aria-hidden="true">
-                    <span style={{ width: `${avanceDeMesa(mesa).percent}%` }} />
-                  </div>
-
-                  <div className="mesa-foot">
-                    {cuenta && (
-                      <span className={`mesa-cd ${cuenta.urgent ? 'urgent' : ''}`}>
-                        <Icon name="clock" size={15} className="ico-inline" /> {t('Vence en')} {cuenta.text}
+          ) : porUrgencia.length > 0 ? (
+            /* D181 · Mati: «cuando hay más de una mesa que hayan varias burbujas, una
+               por cada mesa, no me gusta que tengas que poner +1 mesa abierta más y
+               el mensaje que salta». Una tarjeta por mesa, la de siempre, en orden
+               de vencimiento. Con una sola, exactamente como antes. */
+            <div className="home-mesas">
+              {porUrgencia.map((mesa) => {
+                const cuenta = countdownLong(mesa.expires_at);
+                return (
+                  <button key={mesa.code} type="button" className="mesa-card" onClick={() => navigate('mesa', mesa.code)}>
+                    <div className="mesa-top">
+                      <span className="mesa-kicker">{t('Tu mesa abierta')}</span>
+                      {/* Teal siempre: el naranja tiene una lista cerrada de cuatro
+                          usos permitidos y un badge de estado no es ninguno. */}
+                      <span className="badge badge-teal">
+                        {etiquetaPersonal(mesa, t) ?? t(mesaStatusLabel(mesa.status))}
                       </span>
+                    </div>
+                    <div className="mesa-name">{mesa.restaurant.name}</div>
+                    {/* G-27 · cerrado por el dueño v2.93.0 (`participants_count`). */}
+                    <div className="mesa-meta">{lineaDeMesa(mesa, t)}</div>
+                    {/* G-34 · lo que pagó ESTA cuenta, sólo junto a su etiqueta
+                        personal. Nunca lo de otro. */}
+                    {pagadoPropioCentavos(mesa) !== null && (
+                      <div className="mesa-meta">{t('Pagaste {0}', formatMXN(pagadoPropioCentavos(mesa)!))}</div>
                     )}
-                    <span className="mesa-go">{t('Ver mesa →')}</span>
-                  </div>
-                </button>
-              );
-              return otras.length === 0 ? (
-                tarjeta
-              ) : (
-                <div className="mesa-card-group">
-                  {tarjeta}
-                  <button type="button" className="mesa-more" onClick={() => setHojaAbierta(true)}>
-                    {etiquetaMasMesas(otras.length, t)} <span aria-hidden="true">›</span>
+
+                    {/* La jerarquía dice "cuánto falta", no "cuánto es": el monto en
+                        --fs-h1 tabular, el total en --fs-body muted.
+                        Decisión 76 de Mati: con el dato del dueño (v2.134.0) se
+                        muestra lo ELEGIDO, la misma cifra que dentro de la mesa;
+                        sin él, lo pagado, como antes. Lo pagado se suma cuando se
+                        enciendan los pagos (orden futura). */}
+                    <div className="mesa-money">
+                      <span className="mesa-paid">{formatMXN(avanceDeMesa(mesa).cents)}</span>
+                      <span className="mesa-total">{t('de')} {formatMXN(mesa.total_cents)}</span>
+                    </div>
+                    {/* La barra NUNCA va sola: los dos importes de arriba son el dato,
+                        esto es el refuerzo. Por eso es aria-hidden. */}
+                    <div className="mesa-bar" aria-hidden="true">
+                      <span style={{ width: `${avanceDeMesa(mesa).percent}%` }} />
+                    </div>
+
+                    <div className="mesa-foot">
+                      {cuenta && (
+                        <span className={`mesa-cd ${cuenta.urgent ? 'urgent' : ''}`}>
+                          <Icon name="clock" size={15} className="ico-inline" /> {t('Vence en')} {cuenta.text}
+                        </span>
+                      )}
+                      <span className="mesa-go">{t('Ver mesa →')}</span>
+                    </div>
                   </button>
-                </div>
-              );
-            })()
+                );
+              })}
+            </div>
           ) : (
             /* Vacío REAL: sin borde —es el único estado que no lo lleva— y sin
                botón propio. La acción ya está en el círculo naranja de la barra,
@@ -512,68 +501,6 @@ export function HomeScreen() {
 
       <AppBottomBar active="home" />
 
-      {/* ─── Hoja inferior de "+N mesas abiertas más" (§1.1, variante B) ───
-          Una fila por mesa: restaurante, código, la misma barra de progreso y
-          el vencimiento. Mismo orden que la protagonista: vencimiento más
-          próximo primero. Tocar una fila entra a esa mesa. */}
-      {hojaAbierta && otras.length > 0 && (
-        <div className="sheet-overlay" onClick={() => setHojaAbierta(false)}>
-          <div
-            className="sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('Mesas abiertas')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sheet-head">
-              <span className="sheet-title">{t('Tus otras mesas abiertas')}</span>
-              <button
-                type="button"
-                className="sheet-close"
-                aria-label={t('Cerrar')}
-                onClick={() => setHojaAbierta(false)}
-              >
-                ✕
-              </button>
-            </div>
-            {otras.map((m) => {
-              const cd = countdownLong(m.expires_at);
-              return (
-                <button
-                  key={m.code}
-                  type="button"
-                  className="sheet-mesa"
-                  onClick={() => navigate('mesa', m.code)}
-                >
-                  <div className="sheet-mesa-top">
-                    <span className="sheet-mesa-name">{m.restaurant.name}</span>
-                    <span className="mesa-meta">{lineaDeMesa(m, t)}</span>
-                  </div>
-                  {etiquetaPersonal(m, t) !== null && (
-                    <div className="mesa-meta">
-                      {etiquetaPersonal(m, t)}
-                      {pagadoPropioCentavos(m) !== null && ` · ${t('Pagaste {0}', formatMXN(pagadoPropioCentavos(m)!))}`}
-                    </div>
-                  )}
-                  <div className="mesa-bar" aria-hidden="true">
-                    <span style={{ width: `${avanceDeMesa(m).percent}%` }} />
-                  </div>
-                  <div className="sheet-mesa-foot">
-                    <span className="mesa-total">
-                      {formatMXN(avanceDeMesa(m).cents)} {t('de')} {formatMXN(m.total_cents)}
-                    </span>
-                    {cd && (
-                      <span className={`mesa-cd ${cd.urgent ? 'urgent' : ''}`}>
-                        <Icon name="clock" size={14} className="ico-inline" /> {t('Vence en')} {cd.text}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

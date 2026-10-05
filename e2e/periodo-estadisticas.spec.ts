@@ -8,7 +8,7 @@ const MESES = mesesDeMexico(new Date(), 'es');
 /**
  * AF-31 · el selector de período de «Mis estadísticas» (dueño v2.106.0).
  *
- * Mock: «Mes pasado» suma $1,320.00 en 5 visitas; este mes, $2,165.00 en 6. Son
+ * Mock: «Mes pasado» suma $1,320 en 5 visitas; este mes, $2,165 en 6. Son
  * distintos a propósito: si el período no cambiara de verdad, el test no pasa.
  */
 
@@ -39,7 +39,7 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
   test('«Mes pasado» cambia el consumo, oculta lo que no se mueve y se conserva en 2b', async ({ page }) => {
     await preparar(page);
     const burbuja = page.locator('.stat-burbuja');
-    await expect(burbuja).toContainText('$2,165.00');
+    await expect(burbuja).toContainText('$2,165');
     // E173-4 · cada dato una vez: el plato más elegido va en la fila «Qué comes».
     await expect(page.getByRole('button', { name: /^Qué comes/ })).toContainText('es lo más elegido');
     await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
@@ -57,7 +57,7 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     // AF-36 · la burbuja dice el MES, no «Mes pasado».
     await expect(burbuja).toContainText(MESES.anterior);
     await expect(burbuja).not.toContainText('Mes pasado');
-    await expect(burbuja).toContainText('$1,320.00');
+    await expect(burbuja).toContainText('$1,320');
     // E173-4 · la burbuja ya no lleva visitas ni promedio.
     await expect(burbuja).not.toContainText('visitas');
     await expect(page.getByRole('heading', { name: 'Tu consumo por tipo de cocina', exact: true })).toBeVisible();
@@ -75,25 +75,25 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     await expect(page.locator('.rest-card').first()).toBeVisible();
     await expect(page.locator('.rest-card')).toHaveCount(3);
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
-    await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
     await page.getByRole('button', { name: 'Volver' }).click();
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
   });
 
   test('con el mes vacío el selector sigue: se puede ir a otro período', async ({ page }) => {
     await preparar(page, { stats: 'vacio' });
-    // E173-4 · el mes vacío dice $0.00 y el anillo queda con su leyenda.
-    await expect(page.locator('.stat-burbuja')).toContainText('$0.00');
+    // E173-4 · el mes vacío dice $0 y el anillo queda con su leyenda.
+    await expect(page.locator('.stat-burbuja')).toContainText('$0');
     await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
     await elegir(page, 'Mes pasado');
-    await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
     await elegir(page, 'Este mes');
     await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
   });
 
   test('🔴 backend anterior (no devuelve `period`): no hay selector y dice el mes en curso', async ({ page }) => {
     await preparar(page, { periodo: 'antiguo' });
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.actual);
     await expect(selector(page)).toHaveCount(0);
   });
@@ -106,7 +106,7 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     await page.evaluate(() => localStorage.setItem('payme.app.mock.periodo.v1', 'antiguo'));
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
     await expect(page.locator('.rest-card').first()).toBeVisible();
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.actual);
     await expect(page.locator('.stat-burbuja')).not.toContainText(MESES.anterior);
   });

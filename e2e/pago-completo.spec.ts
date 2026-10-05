@@ -52,7 +52,7 @@ test.describe('el camino de pago completo', () => {
   /**
    * El recorrido del organizador entero, y la plata mirada en cada pantalla.
    *
-   * Ticket $840.00 ÷ 4 partes iguales = $210.00. Propina 15% = $31.50.
+   * Ticket $840 ÷ 4 partes iguales = $210. Propina 15% = $31.50.
    * Total $241.50. Son centavos enteros: ningún redondeo raro en el medio.
    */
   /**
@@ -86,7 +86,7 @@ test.describe('el camino de pago completo', () => {
     // Decisión 77 de Mati: restaurante · modalidad, sin el código de mesa.
     await expect(seleccion).not.toContainText(mesa.code);
     await expect(seleccion).toContainText('partes iguales');
-    await expect(page.getByText('$840.00')).toBeVisible();
+    await expect(page.getByText('$840')).toBeVisible();
 
     // Marcar lo consumido sigue vivo y sigue sin mover un peso (H-14).
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
@@ -96,7 +96,7 @@ test.describe('el camino de pago completo', () => {
     // En «igual» no hay precio por plato: la porción es una declaración.
     await expect(page.locator('.qc-parte')).toHaveCount(0);
     const filaMiParte = page.locator('.mi-parte');
-    await expect(filaMiParte).toContainText('$210.00');
+    await expect(filaMiParte).toContainText('$210');
 
     // 🔴 EL CORTE · acá había un «Continuar» → «Pagar mi parte». No existe la
     // pantalla ni el selector de propina. El círculo dice «Listo» con o sin
@@ -120,9 +120,9 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // La barra de «igual» ya no mide lo pagado sino lo ELEGIDO (decisiones 77 y
-    // 79): la mitad del Tagliatelle, $97.50 de $840.00.
+    // 79): la mitad del Tagliatelle, $97.50 de $840.
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.locator('.mi-meta-amt')).toHaveText('$97.50 / $840.00 (12%)');
+    await expect(page.locator('.mi-meta-amt')).toHaveText('$97.50 / $840 (12%)');
     // Y nada se cobró: se mide en el dueño simulado, no en la barra.
     expect(await page.evaluate(async (code) => {
       const storePath = '/src/api/mock/store.ts';
@@ -148,11 +148,11 @@ test.describe('el camino de pago completo', () => {
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
     // opciones excluyentes y así la anuncia un lector de pantalla.
     await page.getByRole('radio', { name: '0%', exact: true }).click();
-    await expect(page.getByText('$210.00', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('$210', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('radio', { name: '20%', exact: true }).click();
-    // $210.00 + 20% = $252.00.
-    await expect(page.getByText('$252.00', { exact: true }).first()).toBeVisible();
+    // $210 + 20% = $252.
+    await expect(page.getByText('$252', { exact: true }).first()).toBeVisible();
   });
 
   /**
@@ -188,15 +188,15 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('¡Listo!')).toBeVisible();
     // 🔴 CAMBIÓ CON LA TANDA 4 (2026-08-20) y el propósito del test NO: el
     // comprobante **ya no lista la propina cuando no hubo** —decisión
-    // explícita del paquete—, así que afirmar «Propina (al mesero)» y «$0.00»
+    // explícita del paquete—, así que afirmar «Propina (al mesero)» y «$0»
     // dejó de describir la pantalla. Lo que este test protege sigue siendo
     // «el 0 % es una elección que se respeta», y eso se acredita mejor:
     // la fila NO está, y el total pagado es EXACTAMENTE la parte, sin nada
-    // agregado. Antes el $0.00 podía venir de una propina no elegida.
+    // agregado. Antes el $0 podía venir de una propina no elegida.
     const comprobante = await page.locator('body').innerText();
     expect(comprobante).not.toContain('Propina');
     expect(comprobante).toContain('Total pagado');
-    expect(comprobante).toContain('$210.00');
+    expect(comprobante).toContain('$210');
   });
 
   /**

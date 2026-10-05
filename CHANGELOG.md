@@ -11,6 +11,68 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.0 — Montos sin «.00», una tarjeta por mesa, los botones de la mesa y Configuración (2026-10-05)
+
+Orden AF-E181-CONFIG-DECIMALES-MESA-Y-VARIAS-MESAS-20261005 (sha256 4ebbdf59…), decisión 181 de Mati (956c9a1c…),
+con sus capturas 12, 13 y 14. Segunda rama del lease AF-E179B (enmienda 15:20:19Z). Base `0.216.0` (`f090f26`, la
+punta del PR #16), para que después sea fast-forward.
+
+- **E181-1 · Configuración sin «Sólo en este navegador».** Era el título del bloque plegado de ayuda de la ubicación
+  y el comienzo de su aviso. D181 supersede sólo esa leyenda visible: el bloque se titula «Más sobre la ubicación»,
+  y el aviso de no sincronización de D158 sigue, sin la frase («La ubicación elegida no se sincroniza entre
+  dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.»), con la ayuda y
+  «Restablecer país y zona», que no tiene otro lugar.
+- **E181-2 · montos sin «.00» si son enteros, en toda la app.** Un único formateador, `formatMXN`: «$840» si los
+  centavos son 0 y «$840.50» si no (con miles, «$1,250»; negativos, «-$1»). Cambia la presentación: los centavos y
+  la cuenta no se tocan.
+  - **Censo de la clase** (todo formateo de pesos fuera de `formatMXN`): `centsToString` es el formato de EDICIÓN de
+    los campos (el precio del ticket) y sigue con dos decimales, como pide la orden; `pesosCortos` son las etiquetas
+    de las barras de Evolución, ya sin decimales y redondeadas a propósito (diseño 2f); `centsToDisplay` sólo lo usa
+    el riel de saldo durmiente y el mock, espejo de los `*_display` del dueño. Ningún `toFixed(2)` ni otro
+    `Intl.NumberFormat` de pesos.
+  - **Fuera del alcance del front:** los textos de las notificaciones los escribe App Backend ya formateados («Se
+    cobró el faltante de la mesa ($210.00)…»); el front los muestra tal cual. Para que pierdan el «.00» hay que
+    cambiarlos en el dueño.
+  - **«¿Cuántos pagan?» (pedidos 127 y 136):** el «+» no se mueve bajo el dedo porque la caja del monto reserva el
+    ancho del más ancho. Con todos los montos en «$X.XX» alcanzaba el total; ahora un entero va «$840» y un reparto
+    «$93.34». `reservaDelMonto` recorre los repartos de 1 a 20 con el mismo formateador. Con montos de distinto
+    ancho, «+» fijo, monto pegado al selector y grupo visible centrado no se pueden tener a la vez: quedan el «+»
+    fijo y el monto pegado (a la izquierda de su caja), y lo centrado es el lugar del grupo. Medido: el grupo
+    visible se corre a la izquierda entre 0 y 23 px según el monto («$93.34» llena la reserva; un entero corto, no).
+- **E181-3 · los botones de la mesa** (captura 12): «Copiar link» e «Invitar amigos» en una fila, mitad y mitad; en
+  la mitad no entra el texto completo, así que se ve corto y el nombre accesible es el completo («Copiar link de invitación», «Invitar amigos de PayMe»), que contiene al visible. Debajo, centrado,
+  «Cerrar mesa» en rojo clarito: #9b3a26 sobre #fdecea (6.07:1, AA), con el candado. Con el panel de invitar
+  abierto, el panel va debajo de la fila.
+- **E181-4 · Inicio, una tarjeta por mesa** (capturas 13 y 14): la de siempre, una debajo de la otra, la que vence
+  antes arriba. Se fueron «+N mesa abierta más», la hoja «Tus otras mesas abiertas», `etiquetaMasMesas` y su CSS.
+  La fila «+N» de las invitaciones (`InvitacionEnInicio`) no cambia: D181 habla de las mesas.
+- Traducciones: se retiraron «Sólo en este navegador», su aviso, «+1 mesa abierta más», «+{0} mesas abiertas más»,
+  «Tus otras mesas abiertas» y «Mesas abiertas» (quedaba huérfana); se sumaron «Más sobre la ubicación», el aviso
+  sin la frase e «Invitar amigos».
+- **Pruebas:**
+  - `src/utils/format.test.ts` (+3): enteros, centavos y negativos. `src/screens/reservaDelMonto.test.ts` (4).
+    `RegionSettingsPanel.test` (+2): sin la leyenda y con el título nuevo.
+  - `e2e/d181.spec.ts` (8): Configuración; dos y tres tarjetas, en orden y sin «+N»; montos enteros sin «.00»; los
+    botones mitad y mitad dentro de la fila, «Cerrar mesa» debajo y centrado con su rojo, sin cortes a 390 y 320; y
+    las capturas.
+  - `e2e/home-mesas-multiples.spec.ts`, `cerrar-mesa` (los colores: cerrar en rojo clarito, AA), `mesas-campos-
+    aditivos`, `invitacion-inicio` y `atribucion-ventana`: adaptados a la tarjeta por mesa y a los botones nuevos.
+  - `e2e/centrar-cuantos-pagan.spec.ts`: lo centrado es el lugar del grupo (selector y caja reservada) y el monto
+    entra en su reserva; el «+» fijo y el monto pegado, como antes.
+  - **130 líneas con «$X.00» en 23 specs** pasaron a «$X» (y las regex de dos decimales, a opcionales). La
+    primera corrida completa con el cambio dio 92 rojos (730 verdes): montos, la tarjeta por mesa y los botones,
+    cada uno leído; la segunda corrida de esos archivos, 240 verdes. Los textos del dueño (notificaciones) quedaron
+    con su «.00».
+  - **Rojo sobre `f090f26`:** 8 e2e y los tres unitarios. Los de centrado pasan ahí (con «.00» los montos medían
+    igual) y quedan como red.
+  - **Mutantes:** 15 cazados (`D1`–`D15`): el formateador en los dos sentidos, la reserva (sólo el total, con
+    dígitos), la leyenda y el aviso, la fila, la mitad y mitad, el centrado y el rojo de «Cerrar mesa», el texto
+    corto y el nombre completo, una sola tarjeta, el orden, y el monto alineado. `D8` sobrevivía: con `width: 100%`
+    los dos botones medían la fila entera; ahora se pide cada uno en su mitad y dentro.
+- **Lo que no se probó acá:** el iPhone. Para Mati: Configuración sin la leyenda; montos sin «.00» en la mesa, Inicio,
+  Estadísticas e Historial; los botones de la mesa; Inicio con dos o tres mesas abiertas; y «¿Cuántos pagan?» con
+  el «+» quieto al cambiar el número.
+
 ## 0.216.0 — La app de inicio de iOS: la barra con los números del iPhone, y el teclado (2026-10-05)
 
 Orden AF-E179B-BARRA-100VH-STANDALONE-20261005 (sha256 5ba8727c…), lease AF-E179B (14:35:57Z). Decisiones 179, 180

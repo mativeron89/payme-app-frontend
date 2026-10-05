@@ -80,12 +80,12 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
     // Elegir 3: piso 1 + dos toques. La vista en vivo es la MISMA cuenta que
-    // §1.5 bis va a mostrar: 840 ÷ 3 = $280.00.
+    // §1.5 bis va a mostrar: 840 ÷ 3 = $280.
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     await mas.click();
     await mas.click();
     await mas.click();
-    await expect(page.getByText('$280.00')).toBeVisible();
+    await expect(page.getByText('$280')).toBeVisible();
     await expect(page.getByText('base de propina · c/u')).toBeVisible();
 
     await continuar.click();
@@ -140,13 +140,13 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 
-  test('partes iguales con N=3: viaja el 3 elegido y la parte es $280.00 — no el 4 fantasma (2-A.3)', async ({ page }) => {
+  test('partes iguales con N=3: viaja el 3 elegido y la parte es $280 — no el 4 fantasma (2-A.3)', async ({ page }) => {
     // El hueco que Codex midió: el caso de iguales sólo probaba el reset a
     // '—', nunca CREABA una mesa con N distinto de 4 — "un mutante que
     // reponga 4 sólo para division='igual' podría sobrevivir". Acá se elige
     // 3 en IGUAL, se abre la mesa, y se afirman las dos consecuencias: el N
-    // que viajó y la parte por persona (840÷3 = $280.00 — con el 4 fantasma
-    // sería $210.00).
+    // que viajó y la parte por persona (840÷3 = $280 — con el 4 fantasma
+    // sería $210).
     await declararRielVivo(page);
     await ingresar(page);
     await esperarRielVivo(page);
@@ -159,7 +159,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await mas.click(); // — → 2 (piso de iguales, del contrato)
     await mas.click(); // 2 → 3
     await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('3');
-    await expect(page.getByText('$280.00')).toBeVisible();
+    await expect(page.getByText('$280')).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Garantizar', exact: true }).click();

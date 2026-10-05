@@ -65,6 +65,7 @@ import { InviteFriends } from '../components/InviteFriends';
 import { CardBrandChip, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
+import { reservaDelMonto } from './reservaDelMonto';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
@@ -1986,7 +1987,10 @@ export function CreateMesaFlow() {
                     F, «un dato, un lugar») y una copia, aunque invisible, lo
                     repetiría en el documento. Con números tabulares todos los
                     dígitos miden lo mismo, así que el ancho es idéntico. */}
-                <div className="reserva-monto" aria-hidden="true">{formatMXN(total).replace(/[0-9]/g, '0')}</div>
+                {/* D181 · el más ancho de los repartos posibles, no el total: un total
+                    entero se ve «$840» y un reparto puede llevar centavos («$93.34»).
+                    Ver `reservaDelMonto.ts`. */}
+                <div className="reserva-monto" aria-hidden="true">{reservaDelMonto(total, reparteElTotal(division))}</div>
                 {participants !== null && (
                   <>
                     <div className="split-amt" aria-live="polite">

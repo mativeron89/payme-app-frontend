@@ -84,7 +84,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await preparar(page);
     await page.getByRole('button', { name: /^Período: / }).click();
     await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-    await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
     await acceso(page).click();
     await expect(tarjeta(page)).toBeVisible();
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
@@ -110,7 +110,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     // Es un dato de este mes: con otro período no va.
     await page.getByRole('button', { name: /^Período: / }).click();
     await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-    await expect(page.locator('.est-total')).toHaveText('$1,320.00');
+    await expect(page.locator('.est-total')).toHaveText('$1,320');
     await expect(page.getByRole('heading', { name: 'Plato más pedido', exact: true })).toHaveCount(0);
   });
 
@@ -162,7 +162,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page);
       await page.getByRole('button', { name: /^Período: / }).click();
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-      await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+      await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
       await acceso(page).click();
       await page.getByRole('tab', { name: 'Momento' }).click();
       await expect(momentos(page)).toContainText('De 5 visitas el mes pasado');
@@ -207,7 +207,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page);
       // E173-4 · el total de 2a es `.est-total`.
       const total2a = (await page.locator('.est-total').textContent()) ?? '';
-      expect(total2a).toBe('$2,165.00');
+      expect(total2a).toBe('$2,165');
       await abrirIngrediente(page);
       await expect(page.getByRole('tab', { name: 'Ingrediente' })).toHaveAttribute('aria-selected', 'true');
       await expect(region(page)).toBeVisible();
@@ -330,7 +330,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page);
       await page.getByRole('button', { name: /^Período: / }).click();
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-      await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+      await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
       await abrirIngrediente(page);
       // Los montos de las filas son los del mes elegido y el centro, sus platos.
       const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
@@ -345,9 +345,9 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page, { ingredientes: 'sin_platos' });
       await page.getByRole('button', { name: /^Período: / }).click();
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-      await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+      await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
       await abrirIngrediente(page);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320.00');
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320');
     });
   });
 });

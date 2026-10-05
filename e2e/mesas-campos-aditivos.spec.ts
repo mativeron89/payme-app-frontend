@@ -30,7 +30,9 @@ async function capturar(page: Page, nombre: string): Promise<void> {
   await page.screenshot({ path: `${dir}/${test.info().project.name}-${nombre}.png`, fullPage: true });
 }
 
-const tarjeta = (page: Page) => page.getByRole('button', { name: /Tu mesa abierta/ });
+/** D181 · una tarjeta por mesa: la primera es la que vence antes (PA-3121). */
+const tarjeta = (page: Page) => page.getByRole('button', { name: /Tu mesa abierta/ }).first();
+const segunda = (page: Page) => page.getByRole('button', { name: /Tu mesa abierta/ }).nth(1);
 
 test('G-27 · la burbuja dice cuánta gente hay; sin estado propio, la etiqueta genérica de siempre', async ({ page }) => {
   await ingresar(page);
@@ -45,14 +47,14 @@ test('G-34 · paid ⇒ «Ya pagaste, faltan otros» y lo que pagó ESTA cuenta',
   await ingresar(page);
   await expect(tarjeta(page)).toContainText('Ya pagaste, faltan otros');
   await expect(tarjeta(page)).not.toContainText('Pago en curso');
-  await expect(tarjeta(page)).toContainText(/Pagaste \$[\d,]+\.\d{2}/);
+  // D181 · sin «.00» si el monto es entero.
+  await expect(tarjeta(page)).toContainText(/Pagaste \$[\d,]+(?:\.\d{2})?/);
   await capturar(page, '02-ya-pagaste');
 
-  // La hoja de «+N mesas» usa la MISMA decisión.
-  await page.getByRole('button', { name: '+1 mesa abierta más' }).click();
-  const hoja = page.getByRole('dialog', { name: 'Mesas abiertas' });
-  await expect(hoja.getByRole('button', { name: /La Parolaccia/ })).toContainText('Ya pagaste, faltan otros');
-  await expect(hoja.getByRole('button', { name: /La Parolaccia/ })).toContainText('Mesa PA-2847 · 4 personas');
+  // D181 · la otra mesa es su propia tarjeta, con la MISMA decisión.
+  await expect(segunda(page)).toContainText('La Parolaccia');
+  await expect(segunda(page)).toContainText('Ya pagaste, faltan otros');
+  await expect(segunda(page)).toContainText('Mesa PA-2847 · 4 personas');
 });
 
 test('G-34 · pending ⇒ «Te falta pagar»', async ({ page }) => {
@@ -60,7 +62,7 @@ test('G-34 · pending ⇒ «Te falta pagar»', async ({ page }) => {
   await ingresar(page);
   await expect(tarjeta(page)).toContainText('Te falta pagar');
   await expect(tarjeta(page)).not.toContainText('Pago en curso');
-  // El mock publica my_paid_cents = 0 con pending: no se dibuja «Pagaste $0.00».
+  // El mock publica my_paid_cents = 0 con pending: no se dibuja «Pagaste $0».
   await expect(tarjeta(page)).not.toContainText('Pagaste');
   await capturar(page, '03-te-falta-pagar');
 });

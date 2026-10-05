@@ -17,7 +17,7 @@ test('rotar tokens durante el fetch conserva un solo toque y presenta el detalle
 
   await page.getByRole('button', { name: 'Quién no pagó' }).click();
   await expect(page.getByText('Luis Cárdenas')).toBeVisible();
-  await expect(page.getByText('$130.00')).toBeVisible();
+  await expect(page.getByText('$130')).toBeVisible();
   await expect.poll(() => page.evaluate(
     () => (window as HarnessWindow).__shortfallRefreshRequests?.() ?? -1,
   )).toBe(1);

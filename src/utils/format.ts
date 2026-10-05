@@ -11,9 +11,22 @@ const mxn = new Intl.NumberFormat('es-MX', {
   minimumFractionDigits: 2,
 });
 
-/** 125000 → "$1,250.00" (solo para mostrar; jamás para calcular). */
+const mxnEntero = new Intl.NumberFormat('es-MX', {
+  style: 'currency',
+  currency: 'MXN',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/**
+ * 125000 → "$1,250"; 125050 → "$1,250.50" (solo para mostrar; jamás para
+ * calcular). D181 · Mati: «si no hay decimales no poner por ejemplo "$840,00",
+ * dejar solamente "$840", solo mostrar decimales si los hay». Cambia la
+ * presentación: los centavos y la cuenta no se tocan. Lo que se escribe en un
+ * campo (`centsToString`) sigue con sus dos decimales.
+ */
 export function formatMXN(cents: number): string {
-  return mxn.format(cents / 100);
+  return cents % 100 === 0 ? mxnEntero.format(cents / 100) : mxn.format(cents / 100);
 }
 
 /** Countdown "MM:SS" hasta una fecha ISO; null si ya pasó. */

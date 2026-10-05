@@ -68,7 +68,7 @@ test.describe('Historial (§1.10)', () => {
 
       // Los tres montos del seed, tabulares, uno por mesa.
       await expect(page.getByText('$224.25')).toBeVisible();
-      await expect(page.getByText('$418.00')).toBeVisible();
+      await expect(page.getByText('$418')).toBeVisible();
       await expect(page.getByText('$156.50')).toBeVisible();
 
       // La ausencia es el spec: la mesa abierta vive en Inicio y esta pantalla
@@ -100,7 +100,7 @@ test.describe('Historial (§1.10)', () => {
           await expect(page.getByRole('region', { name: fixture.month, exact: true })
             .getByRole('button', { name: /\$224\.25/ })).toBeVisible();
           await expect(page.getByText('$224.25')).toBeVisible();
-          await expect(page.getByText('$418.00')).toBeVisible();
+          await expect(page.getByText('$418')).toBeVisible();
           await expect(page.getByText('$156.50')).toBeVisible();
           await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
           // El default automático no escribe una selección ni congela la zona.
@@ -120,7 +120,7 @@ test.describe('Historial (§1.10)', () => {
     await expect(fila).toHaveAttribute('aria-expanded', 'true');
 
     await expect(page.getByText('Tagliatelle Bolognese', { exact: true })).toBeVisible();
-    await expect(page.getByText('$195.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('$195', { exact: true })).toBeVisible();
     await expect(page.getByText('Propina', { exact: true })).toBeVisible();
     await expect(page.getByText('$29.25', { exact: true })).toBeVisible();
     await expect(page.getByText('No podemos confirmar que sea seguro de mostrar', { exact: false })).toHaveCount(0);
@@ -135,15 +135,15 @@ test.describe('Historial (§1.10)', () => {
     await ingresar(page);
     await page.goto('/#/mesas');
 
-    const fila = page.getByRole('button', { name: /\$418\.00/ });
+    const fila = page.getByRole('button', { name: /\$418/ });
     await fila.click();
     await expect(page.getByText('Omakase', { exact: true })).toBeVisible();
     await expect(page.getByText('Declaraste ⅔', { exact: true })).toBeVisible();
     const detalle = page.locator('.hist-detail').filter({ hasText: 'Omakase' });
     await expect(detalle.locator('.hist-detail-row:not(.hist-detail-tip) .hist-detail-amount')).toHaveCount(0);
     await expect(detalle.getByText('Propina', { exact: true })).toBeVisible();
-    await expect(detalle.getByText('$18.00', { exact: true })).toBeVisible();
-    await expect(detalle.getByText('$418.00', { exact: true })).toHaveCount(0);
+    await expect(detalle.getByText('$18', { exact: true })).toBeVisible();
+    await expect(detalle.getByText('$418', { exact: true })).toHaveCount(0);
   });
 
   /**
@@ -172,7 +172,7 @@ test.describe('Historial (§1.10)', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('$840.00')).toBeVisible();
+    await expect(page.getByText('$840')).toBeVisible();
 
     // 🔴 **F2-03 · el modo se declara sobre la MESA YA ABIERTA, y la primera
     // versión de esto estaba mal.**
@@ -186,7 +186,7 @@ test.describe('Historial (§1.10)', () => {
     // ⚠️ Lo cazó el navegador, no la suite: `typecheck` y los unitarios pasaban
     // con la versión rota adentro.
     await declararCorteYRecargar(page);
-    await expect(page.getByText('$840.00')).toBeVisible();
+    await expect(page.getByText('$840')).toBeVisible();
 
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el

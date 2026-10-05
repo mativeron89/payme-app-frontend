@@ -12,38 +12,41 @@ import { ingresar } from './_app';
  *
  * El seed trae dos abiertas con relojes distintos a propósito del criterio:
  * PA-3121 (Hanzo Sushi) vence en ~12 min y PA-2847 (La Parolaccia) en ~29.
- * La protagonista es la del reloj MÁS CORTO — antes de esta corrección la
- * tarjeta mostraba PA-2847 por orden de payload, que era el criterio
- * equivocado en silencio.
+ * La primera es la del reloj MÁS CORTO — antes de esta corrección la tarjeta
+ * mostraba PA-2847 por orden de payload, que era el criterio equivocado en
+ * silencio.
+ *
+ * D181 · Mati: una tarjeta por mesa, sin la fila «+N mesa abierta más» ni la
+ * hoja «Tus otras mesas abiertas».
  */
 
 test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
-  test('la protagonista es la que vence antes, y "+1 mesa abierta más" lleva a la otra', async ({ page }) => {
+  test('D181 · una tarjeta por mesa, la que vence antes arriba; la segunda lleva a la suya', async ({ page }) => {
     await ingresar(page);
 
-    // La tarjeta es la de vencimiento más próximo, no la primera del payload.
-    const tarjeta = page.getByRole('button', { name: /Tu mesa abierta/ });
-    await expect(tarjeta).toContainText('Hanzo Sushi');
-    await expect(tarjeta).toContainText('Mesa PA-3121');
+    // D181 · Mati: «que hayan varias burbujas, una por cada mesa». Sin «+N más» ni hoja.
+    const tarjetas = page.getByRole('button', { name: /Tu mesa abierta/ });
+    await expect(tarjetas).toHaveCount(2);
+    // Arriba la de vencimiento más próximo, no la primera del payload.
+    await expect(tarjetas.nth(0)).toContainText('Hanzo Sushi');
+    await expect(tarjetas.nth(0)).toContainText('Mesa PA-3121');
+    await expect(tarjetas.nth(1)).toContainText('La Parolaccia');
+    await expect(tarjetas.nth(1)).toContainText('Mesa PA-2847');
+    // Cada una es la tarjeta de siempre: reloj y «Ver mesa →».
+    for (const i of [0, 1]) {
+      await expect(tarjetas.nth(i)).toContainText('Vence en');
+      await expect(tarjetas.nth(i)).toContainText('Ver mesa →');
+    }
 
     // Badge de honestidad: describe a la mesa, no acusa a quien mira.
-    await expect(tarjeta).toContainText('Pago en curso');
+    await expect(tarjetas.nth(0)).toContainText('Pago en curso');
     await expect(page.getByText('Falta pagar')).toHaveCount(0);
 
-    // La fila nueva, en singular: hay exactamente UNA más.
-    const fila = page.getByRole('button', { name: '+1 mesa abierta más' });
-    await expect(fila).toBeVisible();
-    await fila.click();
+    await expect(page.getByRole('button', { name: /mesas? abiertas? más/ })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Mesas abiertas' })).toHaveCount(0);
 
-    // La hoja lista a la otra con restaurante, código, progreso y reloj.
-    const hoja = page.getByRole('dialog', { name: 'Mesas abiertas' });
-    await expect(hoja).toBeVisible();
-    const filaOtra = hoja.getByRole('button', { name: /La Parolaccia/ });
-    await expect(filaOtra).toContainText('Mesa PA-2847');
-    await expect(filaOtra).toContainText('Vence en');
-
-    // Tocar la fila entra a ESA mesa.
-    await filaOtra.click();
+    // Tocar la segunda entra a ESA mesa.
+    await tarjetas.nth(1).click();
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847/);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
     // Decisión 77 de Mati: la línea contextual es sólo el restaurante, sin el

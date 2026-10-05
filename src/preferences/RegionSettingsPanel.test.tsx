@@ -78,6 +78,9 @@ describe('D169 · gestión local fuera del panel de selección', () => {
     expect(html).toContain('otra persona heredará esta selección');
     expect(html).toContain('7 países y 62 zonas');
     expect(html).not.toContain('<dialog');
+    // D181 · sin la leyenda «Sólo en este navegador», ni como título ni en el texto.
+    expect(html).not.toContain('Sólo en este navegador');
+    expect(html).toContain('Más sobre la ubicación');
   });
 });
 

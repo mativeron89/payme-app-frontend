@@ -41,7 +41,8 @@ interface MockEstado {
  * con la mesa a la vista la lista de invitaciones ya llegó.
  */
 async function yaLlegoLaLista(page: Page): Promise<void> {
-  await expect(page.getByRole('region', { name: 'Tu mesa abierta', exact: true }).getByText('Ver mesa →')).toBeVisible();
+  // D181 · una tarjeta por mesa: el seed trae dos.
+  await expect(page.getByRole('region', { name: 'Tu mesa abierta', exact: true }).getByText('Ver mesa →').first()).toBeVisible();
 }
 
 /** Sin cortes a 390 px: la burbuja entra entera en el ancho y nada desborda adentro. */

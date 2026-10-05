@@ -31,14 +31,14 @@ const tarjeta = (page: Page, nombre: string) => page.getByRole('region', { name:
 test.describe('AF-29 · Tus restaurantes (2b)', () => {
   test('se abre desde Mis estadísticas, con el mismo total que 2a, y vuelve', async ({ page }) => {
     await preparar(page, { sinDinero: true });
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
     // E173-4 · el subtítulo de Claude Design: sólo los lugares.
     await expect(acceso(page)).toContainText('3 lugares distintos');
     // Con el acceso nuevo, la sección vieja de barras no está.
     await expect(page.locator('.stat-rest')).toHaveCount(0);
     await acceso(page).click();
     await expect(page).toHaveURL(/:\d+\/restaurantes$/);
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
+    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
     await expect(page.locator('.stat-burbuja')).toContainText('3 lugares · 6 visitas');
     await expect(page.locator('.rest-card')).toHaveCount(3);
     await expect(page.getByText('Lo que elegiste en tus mesas.', { exact: true })).toHaveCount(0);
@@ -118,7 +118,7 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     // E173-4 · son barras de este mes: con otro período no van.
     await page.getByRole('button', { name: /^Período: / }).click();
     await page.getByRole('radio', { name: /^Mes pasado/ }).click();
-    await expect(page.locator('.est-total')).toHaveText('$1,320.00');
+    await expect(page.locator('.est-total')).toHaveText('$1,320');
     await expect(page.locator('.stat-rest')).toHaveCount(0);
   });
 

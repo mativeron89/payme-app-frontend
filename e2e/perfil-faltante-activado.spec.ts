@@ -153,9 +153,9 @@ test('Notificaciones abre sólo el detalle acreditado y presenta el residual leg
   await expect(toggle).toBeVisible();
   await toggle.click();
   await expect(page.getByText('Luis Cárdenas')).toBeVisible();
-  await expect(page.getByText('$130.00')).toBeVisible();
+  await expect(page.getByText('$130')).toBeVisible();
   await expect(page.getByText('Sin asignar')).toBeVisible();
-  await expect(page.getByText('$80.00')).toBeVisible();
+  await expect(page.getByText('$80')).toBeVisible();
 
   const guarantee = page.locator('.aviso-row--guarantee');
   await expect(guarantee).not.toContainText(/propina/i);

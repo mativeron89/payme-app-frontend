@@ -22,8 +22,8 @@ import type { OpenMesa } from '../api/types';
  * La protagonista es la de `expires_at` MÁS PRÓXIMO — la única señal de
  * urgencia real que el payload trae (garantía con reloj corriendo), no la más
  * nueva. Empate → el orden del payload, que ya es el del contrato
- * (`created_at DESC`): el sort es estable y no lo toca. El mismo criterio
- * ordena la hoja de "las demás".
+ * (`created_at DESC`): el sort es estable y no lo toca. D181 · ordena las
+ * tarjetas de Inicio, una por mesa.
  *
  * Una fecha ilegible va al final: una mesa sin reloj que se pueda leer no
  * puede reclamar urgencia — pero no se descarta, sigue siendo una mesa
@@ -35,26 +35,4 @@ export function ordenarPorUrgencia(mesas: readonly OpenMesa[]): OpenMesa[] {
     return Number.isNaN(t) ? Infinity : t;
   };
   return [...mesas].sort((a, b) => urgencia(a) - urgencia(b));
-}
-
-/**
- * "+1 mesa abierta más" / "+3 mesas abiertas más". El singular importa: la
- * fila aparece por primera vez exactamente cuando hay UNA sola más.
- */
-export function etiquetaMasMesas(
-  n: number,
-  /**
-   * 🔴 El `t` entra por parámetro con IDENTIDAD INTERPOLADA por defecto, y no
-   * es un capricho: sin él, esta función devolvía la frase **ya interpolada**
-   * —«+3 mesas abiertas más»— que no matchea ninguna clave. Las claves son las
-   * PLANTILLAS. El default reproduce el comportamiento viejo exacto, así que
-   * los tests de esta función pura no cambian.
-   *
-   * El singular importa y por eso son DOS claves, no una con plural inventado:
-   * la fila aparece por primera vez justo cuando hay UNA sola más.
-   */
-  t: (s: string, ...a: unknown[]) => string =
-    (s, ...a) => s.replace(/\{0\}/g, String(a[0])),
-): string {
-  return n === 1 ? t('+1 mesa abierta más') : t('+{0} mesas abiertas más', n);
 }

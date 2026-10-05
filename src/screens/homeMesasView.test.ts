@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
+import { ordenarPorUrgencia } from './homeMesasView';
 import type { OpenMesa } from '../api/types';
 
 /**
@@ -50,14 +50,5 @@ describe('ordenarPorUrgencia', () => {
     const entrada = [mesa('B', 20), mesa('A', 10)];
     ordenarPorUrgencia(entrada);
     expect(entrada.map((m) => m.code)).toEqual(['B', 'A']);
-  });
-});
-
-describe('etiquetaMasMesas', () => {
-  it('singular cuando hay exactamente una más — el caso con que la fila estrena', () => {
-    expect(etiquetaMasMesas(1)).toBe('+1 mesa abierta más');
-  });
-  it('plural para el resto', () => {
-    expect(etiquetaMasMesas(3)).toBe('+3 mesas abiertas más');
   });
 });

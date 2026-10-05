@@ -128,9 +128,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(page.locator('.demo-strip')).toHaveCount(0);
     await expect(titulo).not.toContainText('La Parolaccia');
     await expect(titulo).not.toContainText('Roma Norte, CDMX');
-    await expect(titulo.getByText('$840.00', { exact: true })).toBeVisible();
+    await expect(titulo.getByText('$840', { exact: true })).toBeVisible();
     await expect(titulo.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
-    await expect(titulo.getByText('$840.00', { exact: true })).toHaveCSS('font-size', '26px');
+    await expect(titulo.getByText('$840', { exact: true })).toHaveCSS('font-size', '26px');
     await expect(titulo).toHaveCSS('text-align', 'center');
 
     const stepper = page.locator('.division-stepper');
@@ -154,7 +154,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
       page.locator('.ticket-sheet-layer').boundingBox(),
     ]);
     expect((dialogBox?.height ?? Infinity) / (layerBox?.height ?? 1)).toBeLessThanOrEqual(0.581);
-    await expect(dialogo.getByText('$840.00', { exact: true })).toHaveCount(0);
+    await expect(dialogo.getByText('$840', { exact: true })).toHaveCount(0);
     await expect(page.locator('.ticket-flow-scroll')).toHaveCSS('overflow-y', 'hidden');
     await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toBeFocused();
 
@@ -197,7 +197,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await dialogo.getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
     await dialogo.getByLabel('Precio por unidad').fill('196');
 
-    await expect(dialogo.getByText(/Checa que el total coincida/)).toContainText('$840.00');
+    await expect(dialogo.getByText(/Checa que el total coincida/)).toContainText('$840');
     expect(await dialogo.evaluate((node) => node.contains(document.activeElement))).toBe(true);
     await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Cerrar ticket tocando fuera' })).toHaveCount(0);
@@ -215,7 +215,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrirGarantia(page);
 
     const titulo = page.locator('.title-card.gar-title');
-    await expect(titulo).toContainText('Se retiene $840.00 hasta que todos paguen');
+    await expect(titulo).toContainText('Se retiene $840 hasta que todos paguen');
     const header = page.locator('.hdr-flow');
     const [headerBox, titleBox] = await Promise.all([header.boundingBox(), titulo.boundingBox()]);
     expect(headerBox).not.toBeNull();
@@ -347,7 +347,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     const titulo = page.locator('.title-card.pay-title');
     await page.getByRole('radio', { name: '5%', exact: true }).click();
     await expect(titulo).toContainText('Pagar mi parte');
-    await expect(titulo).toContainText('Consumos propios · $255.00');
+    await expect(titulo).toContainText('Consumos propios · $255');
     await expect(titulo).not.toContainText('La Parolaccia');
     await expect(titulo.locator('.pay-title-amount')).toHaveCount(0);
     await expect(page.locator('.pay-total-card')).toContainText('$265.50');
@@ -388,7 +388,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(comprobante.getByText('Total pagado', { exact: true })).toHaveCount(1);
     await expect(comprobante).toContainText('PA-8279');
     await expect(comprobante).toContainText('Santander ···· 4532');
-    await expect(comprobante).toContainText('$255.00');
+    await expect(comprobante).toContainText('$255');
     await expect(comprobante).toContainText('Propina (5% · Lupita)');
     await expect(comprobante).toContainText('$10.50');
     await expect(comprobante).toContainText('$265.50');

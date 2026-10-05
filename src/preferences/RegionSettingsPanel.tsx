@@ -267,10 +267,13 @@ export function RegionLocalManagement() {
   // avisos de navegador degradado.
   const caption = personalZoneCaption(region.presentationZone, t);
   return <details className="region-settings-local-help region-settings-management">
-    <summary>{t('Sólo en este navegador')}</summary>
+    {/* D181 · Mati: «quitar la leyenda de "Sólo en este navegador"». Supersede sólo
+        esa leyenda visible: el aviso de no sincronización de D158 sigue, sin ella,
+        y también la ayuda y «Restablecer país y zona», que no tiene otro lugar. */}
+    <summary>{t('Más sobre la ubicación')}</summary>
     <p>{regionNoticeText(region, t)}</p>
     {caption && <p>{caption}</p>}
-    <p>{t('Sólo en este navegador: no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
+    <p>{t('La ubicación elegida no se sincroniza entre dispositivos ni cuentas. Si compartes el navegador, otra persona heredará esta selección.')}</p>
     <p>{t('El modo privado o borrar los datos locales puede perder la selección. No detectamos tu ubicación ni cambiamos moneda, idioma o disponibilidad comercial.')}</p>
     <p>{t('Automático usa la zona configurada del dispositivo; no obtiene tu ubicación física.')}</p>
     <p>{t('Primera entrega: 7 países y 62 zonas del catálogo. Los demás países no están disponibles; las zonas que tu navegador no admite aparecen deshabilitadas.')}</p>

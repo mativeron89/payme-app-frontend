@@ -218,8 +218,8 @@ test('Pagar separa resumen, propina, método y total sin duplicar el monto', asy
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
   const title = page.locator('.pay-title');
-  await expect(title).toContainText('Consumos propios · $255.00');
-  await expect(title).not.toContainText('$255.00$255.00');
+  await expect(title).toContainText('Consumos propios · $255');
+  await expect(title).not.toContainText('$255$255');
   await expect(title.locator('.pay-title-amount')).toHaveCount(0);
   await expect(page.locator('.pay-total-card')).toContainText('Total a pagar');
   await page.getByRole('radio', { name: '5%', exact: true }).click();

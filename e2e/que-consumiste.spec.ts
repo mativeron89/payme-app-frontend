@@ -7,7 +7,7 @@ import { abrirMesaConLink, ingresar } from './_app';
  * DISENO_CLAUDE_DESIGN_QUE_CONSUMISTE_20260926/PANTALLA-que-consumiste.md`,
  * sha256 fabae11b…). Un caso por estado del diseño y por regla.
  *
- * Mesa del mock: la del organizador (La Parolaccia, $840.00, 4 personas), con
+ * Mesa del mock: la del organizador (La Parolaccia, $840, 4 personas), con
  * los pagos apagados como en producción. Para «Queda ½» y «Lo eligió otro» se
  * plantan tenencias de OTRA persona (`who: 'guest'`) en el estado del mock, en
  * memoria y con su `persist()`, y se recarga.
@@ -77,7 +77,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
    * otro» (primer Tiramisú, a mitad de la lista), mío entero (segundo Tiramisú) y
    * mío ½ (Agua mineral). Es la captura que va lado a lado con el prototipo.
    */
-  test('el ejemplo del diseño · los cinco estados a la vez, y «Mi parte · 2 platos» $90.00', async ({ page }) => {
+  test('el ejemplo del diseño · los cinco estados a la vez, y «Mi parte · 2 platos» $90', async ({ page }) => {
     const code = await abrirMesa(page);
     await plantarAjenos(page, code);
     await page.getByRole('button', { name: 'Tiramisú', exact: true }).click();
@@ -100,7 +100,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
       ['Vino tinto (copa)', 'libre', null],
     ]);
     await expect(page.locator('.mi-parte')).toContainText('Mi parte · 2 platos');
-    await expect(page.locator('.mi-parte-amt')).toHaveText('$90.00');
+    await expect(page.locator('.mi-parte-amt')).toHaveText('$90');
     await capturar(page, 'qc-00-ejemplo');
 
     await renglon(page, 'Agua mineral').getByRole('button', { name: /^Cambiar la porción/ }).click();
@@ -135,7 +135,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await expect(tagliatelle.locator('[data-estado="mio"]')).toBeVisible();
     await expect(tagliatelle.getByRole('button', { name: 'Cambiar la porción de Tagliatelle Bolognese: ½' })).toHaveText('½');
     await expect(tagliatelle.locator('.qc-parte')).toHaveText('$97.50');
-    await expect(tagliatelle).not.toContainText('$195.00');
+    await expect(tagliatelle).not.toContainText('$195');
     // Regla 8 · «Mi parte · 1 plato» y el monto.
     await expect(page.locator('.mi-parte')).toContainText('Mi parte · 1 plato');
     await expect(page.locator('.mi-parte-amt')).toHaveText('$97.50');
@@ -173,7 +173,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     const pizza = renglon(page, 'Pizza Margherita');
     await expect(pizza.locator('[data-estado="queda"]')).toBeVisible();
     await expect(pizza.locator('.qc-pildora--queda')).toHaveText('Queda ½');
-    await expect(pizza.locator('.qc-precio')).toHaveText('$185.00');
+    await expect(pizza.locator('.qc-precio')).toHaveText('$185');
 
     const tiramisu = renglon(page, 'Tiramisú');
     const otro = tiramisu.locator('[data-estado="tomado"]');
@@ -262,14 +262,14 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await abrirMesa(page);
     const burbuja = page.locator('.mesa-selection-title');
     await expect(burbuja.getByRole('progressbar')).toBeVisible();
-    await expect(burbuja.locator('.mi-meta-amt')).toHaveText(/^\$\d+\.\d{2} \/ \$840\.00 \(\d+%\)$/);
+    await expect(burbuja.locator('.mi-meta-amt')).toHaveText(/^\$\d+(?:\.\d{2})? \/ \$840 \(\d+%\)$/);
     await expect(burbuja.locator('.mi-count')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await renglon(page, 'Tagliatelle Bolognese').getByRole('radio', { name: 'Entero' }).click();
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
     await renglon(page, 'Risotto ai Funghi').getByRole('radio', { name: '½' }).click();
     await expect(page.locator('.mi-parte')).toContainText('Mi parte · 2 platos');
-    await expect(page.locator('.mi-parte-amt')).toHaveText('$305.00');
+    await expect(page.locator('.mi-parte-amt')).toHaveText('$305');
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
     await capturar(page, 'qc-08-mi-parte');
   });
@@ -311,7 +311,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     // En «igual» la porción es una declaración: no se inventa un precio por
     // plato. Lo que se paga es el casillero fijo ($840 ÷ 4) de «Mi parte».
     await expect(tagliatelle.locator('.qc-parte')).toHaveCount(0);
-    await expect(page.locator('.mi-parte-amt')).toHaveText('$210.00');
+    await expect(page.locator('.mi-parte-amt')).toHaveText('$210');
     await capturar(page, 'qc-09-igual');
   });
 });

@@ -26,7 +26,7 @@ test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', 
   // El acceso y el total viven en la MISMA burbuja compacta. Restaurante y
   // ubicación se retiraron de esta superficie para no repetir contexto.
   await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toHaveCount(0);
-  await expect(page.getByText('$840.00')).toBeVisible();
+  await expect(page.getByText('$840')).toBeVisible();
 
   /**
    * 🔴 ESTE TEST EXIGÍA VER «Paso 2 de 4», Y AHORA EXIGE LO CONTRARIO.
@@ -58,7 +58,7 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 
   // Y el monto NO se repite: aparece una sola vez en toda la pantalla.
-  await expect(page.getByText('$840.00')).toHaveCount(1);
+  await expect(page.getByText('$840')).toHaveCount(1);
 
   await page.getByRole('button', { name: /Ver el ticket/ }).click();
   // Abierto: vuelve el contenido íntegro de §1.3, no una versión reducida.
@@ -104,7 +104,7 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   // 840 ÷ 2 = 420: el total repartido entre los DOS que cubren. Con `consumo`
   // no existiría este casillero, existiría la lista de platos.
-  await expect(page.getByText('$420.00').first()).toBeVisible();
+  await expect(page.getByText('$420').first()).toBeVisible();
 });
 
 test('🔴 P3-01 · reescanear no hereda el acordeón abierto del ticket anterior', async ({ page }) => {

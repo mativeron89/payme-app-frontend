@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countdownLong } from './format';
+import { countdownLong, formatMXN } from './format';
 
 /**
  * `countdownLong` — el countdown de la burbuja de la mesa (SPEC_APP.md §1.1).
@@ -50,5 +50,26 @@ describe('countdownLong', () => {
     expect(countdownLong(en(-1), T0)).toBeNull();
     expect(countdownLong(T0.toISOString(), T0)).toBeNull();
     expect(countdownLong('no-es-una-fecha', T0)).toBeNull();
+  });
+});
+
+describe('D181 · formatMXN: sin «.00» si el monto es entero, con centavos si los hay', () => {
+  it('enteros, sin decimales', () => {
+    expect(formatMXN(84000)).toBe('$840');
+    expect(formatMXN(0)).toBe('$0');
+    expect(formatMXN(125000)).toBe('$1,250');
+    expect(formatMXN(100)).toBe('$1');
+  });
+
+  it('con centavos, siempre los dos', () => {
+    expect(formatMXN(84050)).toBe('$840.50');
+    expect(formatMXN(9334)).toBe('$93.34');
+    expect(formatMXN(5)).toBe('$0.05');
+    expect(formatMXN(125001)).toBe('$1,250.01');
+  });
+
+  it('negativos, igual', () => {
+    expect(formatMXN(-100)).toBe('-$1');
+    expect(formatMXN(-150)).toBe('-$1.50');
   });
 });

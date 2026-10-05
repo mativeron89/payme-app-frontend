@@ -908,24 +908,39 @@ export function MesaDetailView({
         {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
           <div className="mesa-secondary-actions">
             {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
-                con borde turquesa y cerrar en gris, para que no compita. */}
-            <button className="btn btn-borde-turquesa btn-sm btn-fit" onClick={onCopyInvitationLink}>
-              <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link de invitación')}
-            </button>
-            {inviteOpen ? (
-              <InviteFriends code={code} />
-            ) : (
-              <button className="btn btn-turquesa btn-sm btn-fit" onClick={onOpenInvite}>
-                <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos de PayMe')}
+                con borde turquesa.
+                D181 · «en la misma fila las burbujas de copiar link e invitar amigos
+                (que entren bien por temas de tamaño)»: mitad y mitad. A 320 px cada
+                mitad mide ~140 px, y el texto completo no entra ni a 390: se ve
+                corto, y el nombre accesible sigue siendo el completo (lo contiene). */}
+            <div className="mesa-acciones-fila">
+              <button
+                className="btn btn-borde-turquesa btn-sm"
+                onClick={onCopyInvitationLink}
+                aria-label={t('Copiar link de invitación')}
+              >
+                <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link')}
               </button>
-            )}
+              {!inviteOpen && (
+                <button
+                  className="btn btn-turquesa btn-sm"
+                  onClick={onOpenInvite}
+                  aria-label={t('Invitar amigos de PayMe')}
+                >
+                  <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}
+                </button>
+              )}
+            </div>
+            {inviteOpen && <InviteFriends code={code} />}
             {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
                 `close_not_applicable` a las otras): el organizador ya está
                 garantizado por el bloque que la contiene. */}
             {onCerrarMesa && sePuedeCerrar(mesa) && (
+              /* D181 · «abajo centrado la de cerrar mesa, ésta tiene que tener un rojo
+                 clarito». Rojo claro de fondo y rojo oscuro de texto (AA), el candado. */
               <button
                 type="button"
-                className="btn btn-neutro btn-sm btn-fit"
+                className="btn btn-cerrar-mesa btn-sm btn-fit"
                 onClick={() => setConfirmandoCerrarMesa(true)}
                 disabled={cerrando}
               >
