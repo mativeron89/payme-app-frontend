@@ -31,7 +31,8 @@ const acceso = (page: Page) => page.getByRole('button', { name: /^Evolución/ })
 test.describe('AF-31 · Evolución (2f)', () => {
   test('se abre desde 2a: seis barras, total y promedio con el mes vacío adentro', async ({ page }) => {
     await preparar(page);
-    await expect(acceso(page)).toContainText('$819.16 promedio en los últimos 6 meses');
+    // E173-4 · el subtítulo de Claude Design.
+    await expect(acceso(page)).toContainText('Promedio mensual de los últimos 6 meses: $819.16');
     await acceso(page).click();
     await expect(page).toHaveURL(/:\d+\/evolucion$/);
     const burbuja = page.locator('.stat-burbuja');

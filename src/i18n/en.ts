@@ -872,9 +872,6 @@ export const EN: Record<string, string> = {
   "Cuenta eliminada": "Deleted account",
   "Soltar todavía no está disponible.": "Releasing isn't available yet.",
   // AF-26 · «Mis estadísticas» 2a · inicio con anillo.
-  "{0} promedio": "{0} average",
-  "Tu consumo del mes": "Your consumption this month",
-  "Tu gasto del mes": "Your spending this month",
   "Lo que elegiste en tus mesas": "What you chose at your tables",
   "Lo que pagaste, descontando reembolsos": "What you paid, minus refunds",
   "de consumo": "consumed",
@@ -913,8 +910,6 @@ export const EN: Record<string, string> = {
   "Período: {0}. Cambiar": "Period: {0}. Change",
   "Elige el período": "Choose the period",
   "No registramos consumos en este período.": "We have no consumption in this period.",
-  "Tu consumo en el período": "Your consumption in the period",
-  "Tu gasto en el período": "Your spending in the period",
   // AF-31 · 2c «Qué comes».
   "Qué comes": "What you eat",
   "Cargando tus platos": "Loading your dishes",
@@ -948,8 +943,6 @@ export const EN: Record<string, string> = {
   "Bebidas": "Drinks",
   "Bebidas con alcohol": "Alcoholic drinks",
   "Lo cobrado por cada plato, sin la propina.": "What was charged for each dish, without the tip.",
-  "y 1 plato más": "and 1 more dish",
-  "y {0} platos más": "and {0} more dishes",
   // AF-31 · 2f «Evolución».
   "Evolución": "Trend",
   "6 meses": "6 months",
@@ -968,7 +961,6 @@ export const EN: Record<string, string> = {
   "Participación de cada tipo de cocina, mes a mes": "Share of each type of cuisine, month by month",
   "{0}: sin consumos": "{0}: no consumption",
   "hoy {0}": "today {0}",
-  "{0} promedio en los últimos 6 meses": "{0} average over the last 6 months",
   // AF-32 · la foto de quienes se sumaron.
   "Foto de {0}": "Photo of {0}",
   // U05 · audiencia privada de foto entre amistades aceptadas.
@@ -1140,4 +1132,18 @@ export const EN: Record<string, string> = {
   "No pudimos abrir la cámara. Elige una foto.": "We couldn't open the camera. Choose a photo.",
   "Elegir una foto": "Choose a photo",
   "Elegir una foto de la galería": "Choose a photo from your gallery",
+  // AF-E173-4-E176 · E173-4 · Estadísticas de Claude Design.
+  "Tu consumo por tipo de cocina": "Your spending by type of cuisine",
+  "Tu gasto por tipo de cocina": "Your spending by type of cuisine",
+  "Sin consumo": "No spending",
+  "cocina": "cuisine",
+  "cocinas": "cuisines",
+  "Todavía no registramos consumos este mes": "We haven't recorded any spending this month yet",
+  "Detalle por cocina": "Breakdown by cuisine",
+  "Promedio mensual de los últimos 6 meses: {0}": "Monthly average over the last 6 months: {0}",
+  "{0} es lo más elegido": "{0} is your top pick",
+  "Sin platos en {0}": "No dishes in {0}",
+  "Sin visitas en {0}": "No visits in {0}",
+  "lugares distintos": "different places",
+  "los últimos 3 meses": "the last 3 months",
 };

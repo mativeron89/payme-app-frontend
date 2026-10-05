@@ -13,14 +13,22 @@ import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
 import { extractApiError } from '../api/errors';
-import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
+import type { TusRestaurantes } from '../api/tusRestaurantes';
 import type { PlatosDelPeriodo } from '../api/platos';
 import type { Evolucion } from '../api/evolucion';
-import { lugaresYVisitas, nombreDeCocina, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
+import {
+  cocinasTexto,
+  lugaresDistintos,
+  nombreDeCocina,
+  periodoEnFrase,
+  platosTexto,
+  visitasTexto,
+} from '../utils/textosDeEstadisticas';
 import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
-import { colorDeFila, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
-import { AnilloSvg } from './AnilloSvg';
+import { colorEnPaleta, GEOMETRIA_E173, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
+import { AnilloSvg, type FormaAnillo } from './AnilloSvg';
+import { nombreDelPeriodo } from '../utils/meses';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -128,6 +136,13 @@ export function EstadisticasScreen() {
   const consumo = stats ? decodeConsumoDelMes(stats.consumption_month) : null;
   const conAnillo = consumo !== null && consumo.totalCents > 0;
   /**
+   * E173-4 · decisión 173 · la pantalla de Claude Design: con `consumption_month`
+   * válido, aunque el mes venga en cero. Ahí la burbuja dice $0.00 y el anillo
+   * queda vacío con «Sin consumo». Sin el bloque (backend anterior o inválido)
+   * sigue la pantalla de siempre.
+   */
+  const disenoE173 = consumo !== null;
+  /**
    * AF-31 · el período sólo vale si el dueño lo CONFIRMA (`period.key` igual al
    * pedido). Un backend anterior ignora `?period=` y manda el mes en curso: ahí
    * no hay selector y todo se rotula «Este mes».
@@ -143,6 +158,7 @@ export function EstadisticasScreen() {
   const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
   const otroPeriodo = efectiva !== 'this_month';
   const accesoVisible = restaurantes.estado === 'listo' || restaurantes.estado === 'sin_resumen';
+  const inicio = soportaPeriodo ? confirmaPeriodo(clave, stats.period)?.start ?? null : null;
 
   return (
     <div className="screen has-appbar">
@@ -151,12 +167,12 @@ export function EstadisticasScreen() {
           hoy sin uso y con otro tamaño) y queda fuera de esta orden: se declara,
           no se improvisa acá. El nombre sigue siendo el <h1> de la burbuja. */}
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
-      {conAnillo || soportaPeriodo ? (
-        <BurbujaDelMes
-          consumo={conAnillo ? consumo : null}
+      {disenoE173 ? (
+        <BurbujaDelPeriodo
+          consumo={consumo}
           clave={efectiva}
           selector={soportaPeriodo}
-          inicio={soportaPeriodo ? confirmaPeriodo(clave, stats.period)?.start ?? null : null}
+          inicio={inicio}
         />
       ) : (
         <div className="title-card">
@@ -164,7 +180,10 @@ export function EstadisticasScreen() {
         </div>
       )}
 
-      <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
+      <div
+        className={disenoE173 ? 'scroll est-scroll' : 'scroll'}
+        style={disenoE173 ? undefined : { paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}
+      >
         {!vista.showAccountActivity ? (
           <div className="state-unknown">
             <Icon name="info" size={20} />
@@ -193,12 +212,22 @@ export function EstadisticasScreen() {
               <span className="sk-line w70 tall" />
             </div>
           </div>
+        ) : disenoE173 ? (
+          <>
+            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={efectiva} inicio={inicio} />}
+            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && (
+              <AccesoQueComes acceso={platos} clave={efectiva} inicio={inicio} />
+            )}
+            {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
+            <TarjetaPorCocina consumo={consumo} clave={efectiva} />
+          </>
         ) : (
           <>
-            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={clave} />}
-            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && <AccesoQueComes acceso={platos} />}
+            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={efectiva} inicio={inicio} />}
+            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && (
+              <AccesoQueComes acceso={platos} clave={efectiva} inicio={inicio} />
+            )}
             {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
-            {conAnillo && <AnilloPorCocina consumo={consumo} clave={efectiva} />}
             {!conAnillo && otroPeriodo ? (
               <div className="mesa-empty">
                 <div className="mesa-empty-title">{t('No registramos consumos en este período.')}</div>
@@ -295,91 +324,111 @@ export function EstadisticasScreen() {
 }
 
 /**
- * AF-26 · burbuja de 2a: el período a la izquierda —su nombre, «Septiembre»,
- * desde AF-36; la flecha y el selector llegaron con AF-31— y el total a la derecha con
- * visitas y promedio debajo. El `<h1>` de la pantalla sigue siendo «Mis
- * estadísticas», sólo para lectores de pantalla: a la vista va en la cabecera.
+ * E173-4 · decisión 173 · la burbuja del período de Claude Design
+ * (`PANTALLA-estadisticas.md` §1): el período a la izquierda, con su selector,
+ * y el total a la derecha. Sin visitas ni promedio. Un período sin consumo dice
+ * **$0.00**: el dueño lo acredita con `consumption_month` en cero, no es un
+ * dato que falte. El `<h1>` sigue siendo «Mis estadísticas», sólo para
+ * lectores de pantalla.
  */
-function BurbujaDelMes({
+function BurbujaDelPeriodo({
   consumo,
   clave,
   selector,
   inicio,
 }: {
-  consumo: ConsumoDelMes | null;
+  consumo: ConsumoDelMes;
   clave: ClavePeriodo;
   selector: boolean;
   inicio: string | null;
 }) {
   const { t } = useIdioma();
   return (
-    <div className="title-card stat-burbuja">
+    <div className="title-card stat-burbuja est-burbuja">
       <h1 className="stat-oculto">{t('Mis estadísticas')}</h1>
-      {/* AF-31 · el período con su flecha, sólo si el dueño lo confirmó. Un
-          período sin consumo conserva la burbuja: si no, el selector se iría y
-          no habría cómo volver. */}
       <SelectorDePeriodo clave={clave} disponible={selector} inicio={inicio} />
-      {consumo && (
-        <div className="stat-burbuja-dato">
-          <div className="stat-burbuja-total">{formatMXN(consumo.totalCents)}</div>
-          <div className="stat-burbuja-contexto">
-            {visitasTexto(consumo.visits, t)} · {t('{0} promedio', formatMXN(consumo.avgPerVisitCents))}
-          </div>
-        </div>
-      )}
+      <div className="est-total">{formatMXN(consumo.totalCents)}</div>
     </div>
   );
 }
 
+/** E173-4 · el anillo de la especificación: 168 px, grosor 20, con su pista. */
+const FORMA_E173: FormaAnillo = { tamano: 168, caja: 168, radio: GEOMETRIA_E173.radio, grosor: GEOMETRIA_E173.grosor, pista: '#E4FBFC' };
+
 /**
- * AF-26 · el anillo por tipo de cocina (2a) y su lista. El rótulo sale de
- * `basis` —«consumo» con los pagos apagados, «gasto» con pagos—: el front no
- * adivina. **Nunca el color solo**: cada porción está escrita abajo con nombre,
- * visitas, monto y porcentaje, y el anillo lleva todo eso en su `aria-label`.
+ * E173-4 · «Tu consumo por tipo de cocina» (§3). El centro dice cuántas cocinas
+ * hubo, sin montos: el total vive sólo en la burbuja. El reparto (visitas,
+ * monto y %) va en «Detalle por cocina», cerrado por defecto. El rótulo sale de
+ * `basis` —«consumo» con los pagos apagados, «gasto» con pagos—. **Nunca el
+ * color solo**: el anillo lleva cada cocina con su % en el `aria-label`.
  */
-function AnilloPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
+function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
+  const [abierto, setAbierto] = useState(false);
   const esConsumo = consumo.basis === 'consumption';
+  const vacio = consumo.totalCents <= 0 || consumo.categories.length === 0;
   const montos = consumo.categories.map((c) => c.amountCents);
   const pcts = porcentajesEnteros(montos);
-  const porciones = porcionesDelAnillo(montos);
+  const porciones = vacio ? [] : porcionesDelAnillo(montos, GEOMETRIA_E173);
   // Una cocina que el front no conoce se rotula igual: el dueño pasa la
   // categoría del restaurante tal cual (ver `consumoDelMes.ts`).
   const nombres = consumo.categories.map((c) => nombreDeCocina(c.category, t) ?? t('Otra cocina'));
-  const resumen = nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
+  const resumen = vacio ? t('Sin consumo') : nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
+  const titulo = esConsumo ? t('Tu consumo por tipo de cocina') : t('Tu gasto por tipo de cocina');
   return (
-    <section className="stat-anillo-card" aria-labelledby="stat-anillo-titulo">
-      <div>
-        <h2 id="stat-anillo-titulo" className="stat-anillo-titulo">
-          {clave === 'this_month'
-            ? (esConsumo ? t('Tu consumo del mes') : t('Tu gasto del mes'))
-            : (esConsumo ? t('Tu consumo en el período') : t('Tu gasto en el período'))}
-        </h2>
-        <div className="stat-anillo-sub">
+    <section className="est-cocinas" aria-labelledby="est-cocinas-titulo">
+      <div className="est-cocinas-cabeza">
+        <h2 id="est-cocinas-titulo" className="est-cocinas-titulo">{titulo}</h2>
+        <div className="est-cocinas-sub">
           {esConsumo ? t('Lo que elegiste en tus mesas') : t('Lo que pagaste, descontando reembolsos')}
         </div>
       </div>
       <AnilloSvg
+        forma={FORMA_E173}
         porciones={porciones}
         etiqueta={esConsumo ? t('Consumo por tipo de cocina: {0}', resumen) : t('Gasto por tipo de cocina: {0}', resumen)}
         centro={
           <>
-            <div className="stat-anillo-total">{formatMXN(consumo.totalCents)}</div>
-            <div className="stat-anillo-unidad">{esConsumo ? t('de consumo') : t('de gasto')}</div>
+            <div className="est-cocinas-num">{vacio ? '—' : consumo.categories.length}</div>
+            <div className="est-cocinas-txt">{vacio ? t('Sin consumo') : cocinasTexto(consumo.categories.length, t)}</div>
           </>
         }
       />
-      <ul className="stat-anillo-lista">
-        {consumo.categories.map((c, i) => (
-          <li key={c.category} className="stat-anillo-fila">
-            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
-            <span className="stat-anillo-nombre">{nombres[i]}</span>
-            <span className="stat-anillo-visitas">{visitasTexto(c.visits, t)}</span>
-            <span className="stat-anillo-monto">{formatMXN(c.amountCents)}</span>
-            <span className="stat-anillo-pct">{pcts[i]}%</span>
-          </li>
-        ))}
-      </ul>
+      {vacio ? (
+        <p className="est-cocinas-vacio">
+          {clave === 'this_month' ? t('Todavía no registramos consumos este mes') : t('No registramos consumos en este período.')}
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="est-detalle"
+            aria-expanded={abierto}
+            aria-controls="est-detalle-lista"
+            onClick={() => setAbierto((v) => !v)}
+          >
+            <span>{t('Detalle por cocina')}</span>
+            <Icon name="chevron-down" size={18} className={`rest-chev${abierto ? ' abierto' : ''}`} />
+          </button>
+          {abierto && (
+            <ul id="est-detalle-lista" className="est-detalle-lista">
+              {consumo.categories.map((c, i) => (
+                <li key={c.category} className="est-detalle-fila">
+                  <span className="est-detalle-color" style={{ background: colorEnPaleta(i, GEOMETRIA_E173.colores) }} aria-hidden="true" />
+                  <span className="est-detalle-izq">
+                    <span className="est-detalle-nombre">{nombres[i]}</span>
+                    <span className="est-detalle-visitas">{visitasTexto(c.visits, t)}</span>
+                  </span>
+                  <span className="est-detalle-der">
+                    <span className="est-detalle-monto">{formatMXN(c.amountCents)}</span>
+                    <span className="est-detalle-pct">{pcts[i]}%</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </section>
   );
 }
@@ -397,8 +446,8 @@ type Sondeo<D> =
 type AccesoRestaurantes = Sondeo<TusRestaurantes>;
 
 /**
- * AF-31 · la fila de acceso de 2a: título, un resumen si lo hay y la flecha.
- * Los accesos se dibujan sólo si su pantalla existe y responde.
+ * La fila de acceso: título, un subtítulo si lo hay (en dos líneas si hace
+ * falta, nunca cortado) y la flecha. Se dibuja sólo si su pantalla existe.
  */
 function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | null; destino: 'restaurantes' | 'platos' | 'evolucion' }) {
   return (
@@ -407,46 +456,56 @@ function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | 
         <span className="stat-acceso-titulo">{titulo}</span>
         {sub && <span className="stat-acceso-sub">{sub}</span>}
       </span>
-      <Icon name="chevron-down" size={20} className="rest-chev derecha" />
+      <Icon name="chevron-down" size={18} className="rest-chev derecha" />
     </button>
   );
 }
 
-/** AF-31 · «Evolución · $730.00 promedio en los últimos 6 meses». */
+/** El período dentro de una frase: «octubre», «los últimos 3 meses». */
+function useFraseDelPeriodo(clave: ClavePeriodo, inicio: string | null): string {
+  const { t, idioma } = useIdioma();
+  return periodoEnFrase(clave, nombreDelPeriodo(clave, inicio, idioma, new Date()), idioma, t);
+}
+
+/** E173-4 · «Promedio mensual de los últimos 6 meses: $1,161.66». No depende del período. */
 function AccesoEvolucion({ acceso }: { acceso: Sondeo<Evolucion> }) {
   const { t } = useIdioma();
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
   const sub = datos && datos.totalCents > 0
-    ? t('{0} promedio en los últimos 6 meses', formatMXN(datos.avgPerMonthCents))
+    ? t('Promedio mensual de los últimos 6 meses: {0}', formatMXN(datos.avgPerMonthCents))
     : null;
   return <FilaDeAcceso titulo={t('Evolución')} sub={sub} destino="evolucion" />;
 }
 
-/** AF-31 · «Qué comes · Tiramisú · 3 veces · y 4 platos más». */
-function AccesoQueComes({ acceso }: { acceso: Sondeo<PlatosDelPeriodo> }) {
+/**
+ * E173-4 · «Risotto ai Funghi es lo más elegido · 48 platos». Los platos son
+ * `distinctDishes`, platos DISTINTOS (antes: «y 47 platos más» = distintos − 1).
+ * Sin platos en el período: «Sin platos en octubre».
+ */
+function AccesoQueComes({ acceso, clave, inicio }: { acceso: Sondeo<PlatosDelPeriodo>; clave: ClavePeriodo; inicio: string | null }) {
   const { t } = useIdioma();
+  const enElPeriodo = useFraseDelPeriodo(clave, inicio);
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
   const primero = datos?.dishes[0];
   let sub: string | null = null;
-  if (datos && primero) {
-    const resto = datos.distinctDishes - 1;
-    sub = `${primero.name} · ${vecesTexto(primero.times, t)}`
-      + (resto > 0 ? ` · ${resto === 1 ? t('y 1 plato más') : t('y {0} platos más', resto)}` : '');
-  }
+  if (datos && primero) sub = `${t('{0} es lo más elegido', primero.name)} · ${platosTexto(datos.distinctDishes, t)}`;
+  else if (datos) sub = t('Sin platos en {0}', enElPeriodo);
   return <FilaDeAcceso titulo={t('Qué comes')} sub={sub} destino="platos" />;
 }
 
 /**
- * AF-29 · el acceso de 2a a «Tus restaurantes». Es el único de los cuatro del
- * diseño que se dibuja: los otros (Qué comés, Evolución) todavía no tienen
- * pantalla. Con datos dice cuántos lugares y visitas; sin ellos, sólo el título.
+ * E173-4 · «20 lugares distintos»: sólo los lugares, sin visitas ni el sufijo
+ * del período (que decía «el mes pasado» con el período actual). Sin visitas:
+ * «Sin visitas en octubre».
  */
-function AccesoTusRestaurantes({ acceso, clave }: { acceso: AccesoRestaurantes; clave: ClavePeriodo }) {
+function AccesoTusRestaurantes({ acceso, clave, inicio }: { acceso: AccesoRestaurantes; clave: ClavePeriodo; inicio: string | null }) {
   const { t } = useIdioma();
+  const enElPeriodo = useFraseDelPeriodo(clave, inicio);
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
-  const sub = datos && datos.restaurants.length > 0
-    // Sólo si el dueño confirmó el período: si no, lo que llegó es el mes en curso.
-    ? `${lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)} ${sufijoDePeriodo(datos.period?.key === clave ? clave : 'this_month', t)}`
-    : null;
+  const sub = datos === null
+    ? null
+    : datos.restaurants.length > 0
+      ? lugaresDistintos(datos.restaurants.length, t)
+      : t('Sin visitas en {0}', enElPeriodo);
   return <FilaDeAcceso titulo={t('Tus restaurantes')} sub={sub} destino="restaurantes" />;
 }

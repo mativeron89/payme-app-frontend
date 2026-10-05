@@ -40,7 +40,9 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     await preparar(page);
     const burbuja = page.locator('.stat-burbuja');
     await expect(burbuja).toContainText('$2,165.00');
-    await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toBeVisible();
+    // E173-4 · cada dato una vez: el plato más elegido va en la fila «Qué comes».
+    await expect(page.getByRole('button', { name: /^Qué comes/ })).toContainText('es lo más elegido');
+    await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
 
     await selector(page).click();
     const hoja = page.getByRole('dialog', { name: 'Elige el período' });
@@ -56,11 +58,13 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     await expect(burbuja).toContainText(MESES.anterior);
     await expect(burbuja).not.toContainText('Mes pasado');
     await expect(burbuja).toContainText('$1,320.00');
-    await expect(burbuja).toContainText('5 visitas');
-    await expect(page.getByRole('heading', { name: 'Tu consumo en el período', exact: true })).toBeVisible();
+    // E173-4 · la burbuja ya no lleva visitas ni promedio.
+    await expect(burbuja).not.toContainText('visitas');
+    await expect(page.getByRole('heading', { name: 'Tu consumo por tipo de cocina', exact: true })).toBeVisible();
     // Lo que sale de pagos sin filtro de fecha NO se mezcla con otro período.
     await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toContainText('3 lugares · 5 visitas el mes pasado');
+    // E173-4 · sólo los lugares, sin el sufijo del período.
+    await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toContainText('3 lugares distintos');
     await capturar(page, 'periodo-02-2a-mes-pasado');
 
     // 2b con el mismo período y el mismo total. Se espera a la pantalla 2b ANTES
@@ -78,11 +82,13 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
 
   test('con el mes vacío el selector sigue: se puede ir a otro período', async ({ page }) => {
     await preparar(page, { stats: 'vacio' });
-    await expect(page.getByText('Todavía no registramos consumos este mes.')).toBeVisible();
+    // E173-4 · el mes vacío dice $0.00 y el anillo queda con su leyenda.
+    await expect(page.locator('.stat-burbuja')).toContainText('$0.00');
+    await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
     await elegir(page, 'Mes pasado');
     await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
     await elegir(page, 'Este mes');
-    await expect(page.getByText('Todavía no registramos consumos este mes.')).toBeVisible();
+    await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
   });
 
   test('🔴 backend anterior (no devuelve `period`): no hay selector y dice el mes en curso', async ({ page }) => {
@@ -110,11 +116,12 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     const medir = () => page.evaluate(() => {
       const b = document.querySelector('.stat-burbuja')!.getBoundingClientRect();
       const izq = document.querySelector('.stat-burbuja .stat-burbuja-periodo')!.getBoundingClientRect();
-      const der = document.querySelector('.stat-burbuja .stat-burbuja-dato')!.getBoundingClientRect();
+      // E173-4 · en 2a el dato es `.est-total`; en 2b, 2c y 2e sigue `.stat-burbuja-dato`.
+      const der = document.querySelector('.stat-burbuja .stat-burbuja-dato, .stat-burbuja .est-total')!.getBoundingClientRect();
       return { alto: Math.round(b.height), diferencia: Math.abs((izq.top + izq.height / 2) - (der.top + der.height / 2)) };
     });
     const altos: number[] = [];
-    await expect(page.locator('.stat-burbuja-dato')).toBeVisible();
+    await expect(page.locator('.est-total')).toBeVisible();
     let m = await medir();
     expect(m.diferencia, '2a').toBeLessThanOrEqual(1);
     altos.push(m.alto);

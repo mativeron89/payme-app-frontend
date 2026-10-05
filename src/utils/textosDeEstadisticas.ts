@@ -55,3 +55,25 @@ export function platosTexto(n: number, t: T): string {
 export function platosDistintos(n: number, t: T): string {
   return `${n} ${n === 1 ? t('plato distinto') : t('platos distintos')}`;
 }
+
+/**
+ * E173-4 · el período dentro de una frase: «Sin visitas en octubre». Los meses
+ * van en minúscula en español; en inglés, con mayúscula. Los períodos que no son
+ * un mes se nombran con su frase.
+ */
+export function periodoEnFrase(clave: string, nombre: string | null, idioma: 'es' | 'en', t: T): string {
+  if (clave === 'last_3_months') return t('los últimos 3 meses');
+  if (clave === 'this_year') return nombre ?? t('este año');
+  if (nombre === null) return clave === 'last_month' ? t('el mes pasado') : t('este mes');
+  return idioma === 'es' ? nombre.toLocaleLowerCase('es-MX') : nombre;
+}
+
+/** E173-4 · «20 lugares distintos»; con uno, «1 lugar». */
+export function lugaresDistintos(n: number, t: T): string {
+  return n === 1 ? `1 ${t('lugar')}` : `${n} ${t('lugares distintos')}`;
+}
+
+/** E173-4 · el centro del anillo: «4 cocinas»; con una, «cocina». */
+export function cocinasTexto(n: number, t: T): string {
+  return n === 1 ? t('cocina') : t('cocinas');
+}

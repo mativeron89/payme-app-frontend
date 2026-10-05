@@ -6381,17 +6381,20 @@ button.qc-circulo::after {
    restaurante a lo ancho (blanca), la visita una burbuja --bg 28px más angosta,
    y lo consumido una blanca con borde 24px más angosta que la visita. */
 .stat-acceso {
+  /* E173-4 · las filas de acceso de la especificación de Claude Design (§2):
+     alto mínimo 64, padding 12/14/12/16, la sombra de las tarjetas. Sólo las usa
+     Estadísticas. */
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  min-height: 60px;
+  min-height: 64px;
   margin-bottom: 10px;
-  padding: 12px 16px;
+  padding: 12px 14px 12px 16px;
   border: 0;
   border-radius: 22px;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+  box-shadow: 0 2px 8px rgba(15, 31, 61, 0.06);
   text-align: left;
   cursor: pointer;
 }
@@ -6407,12 +6410,19 @@ button.qc-circulo::after {
 
 .stat-acceso-titulo {
   font-family: var(--font-display);
-  font-size: 15.5px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--navy);
 }
 
-.stat-acceso-sub,
+/* E173-4 · el subtítulo de la fila: 14 px, puede ir en dos líneas, nunca cortado. */
+.stat-acceso-sub {
+  font-size: 14px;
+  line-height: 1.35;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
 .rest-sub {
   font-size: 12.5px;
   color: var(--gray-d);
@@ -8799,4 +8809,184 @@ h1.pay-title-lbl {
 .cartel-version-cerrar:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;
+}
+
+/* ─── E173-4 · Estadísticas, la pantalla de Claude Design ───────────────────
+   `ops/…/claude-design-estadisticas-20261004/…/PANTALLA-estadisticas.md`.
+   Clases propias: las de 2a (`.stat-anillo-*`, `.stat-burbuja-*`) las siguen
+   usando las pantallas de detalle, que esta entrega no toca. */
+
+/* §1 · la burbuja: el período a la izquierda, el total a la derecha. */
+.title-card.est-burbuja {
+  padding: 16px 18px 16px 8px;
+  box-shadow: 0 4px 16px rgba(15, 31, 61, 0.1);
+}
+
+.est-total {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 359px) {
+  .est-total {
+    font-size: 21px;
+  }
+}
+
+/* Margen 16, aire de 14 bajo la burbuja, y abajo lo que tapan la barra y el «+»
+   que sobresale (26), más aire: 104 en Safari (barra de 64). En la app de
+   inicio la barra suma el indicador (56 + 34): el mismo cálculo sigue la barra. */
+.has-appbar .scroll.est-scroll {
+  padding: 14px 16px calc(96px + max(8px, env(safe-area-inset-bottom)));
+}
+
+/* §3 · «Tu consumo por tipo de cocina». */
+.est-cocinas {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 31, 61, 0.06);
+}
+
+.est-cocinas-cabeza {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.est-cocinas-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.est-cocinas-sub {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* El centro: cuántas cocinas, sin montos. Cabe en el hueco de 128 px. */
+.est-cocinas-num {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--navy);
+}
+
+.est-cocinas-txt {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.est-cocinas-vacio {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.est-detalle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  border-top: 1px solid #f1f5f9;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.est-detalle > span {
+  flex: 1;
+}
+
+.est-detalle .rest-chev {
+  color: #0e7c8a;
+  transition: transform 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .est-detalle .rest-chev {
+    transition: none;
+  }
+}
+
+.est-detalle-lista {
+  display: flex;
+  flex-direction: column;
+  margin: -14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.est-detalle-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.est-detalle-color {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.est-detalle-izq,
+.est-detalle-der {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.est-detalle-izq {
+  flex: 1;
+  min-width: 0;
+}
+
+.est-detalle-der {
+  align-items: flex-end;
+}
+
+.est-detalle-nombre {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--navy);
+}
+
+.est-detalle-visitas,
+.est-detalle-pct {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.est-detalle-monto {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
 }

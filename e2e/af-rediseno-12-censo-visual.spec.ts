@@ -296,8 +296,11 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   // FINAL, con su valor exacto; que el cambio no mueve nada lo prueba el test
   // de abajo.
   await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
-  await expect(page.locator('.stat-burbuja-total')).toHaveText(/^\$[\d,]+\.\d{2}$/);
-  await acreditar(page, '12-estadisticas', true, undefined, 'space-between');
+  // E173-4 · el total de la burbuja de Estadísticas es `.est-total` (Claude Design).
+  await expect(page.locator('.est-total')).toHaveText(/^\$[\d,]+\.\d{2}$/);
+  // E173-4 · la burbuja de Claude Design: padding 16 / 18 / 16 / 8 (el botón del
+  // período lleva su propio aire a la izquierda). `PANTALLA-estadisticas.md` §1.
+  await acreditar(page, '12-estadisticas', true, { top: '16px', right: '18px', bottom: '16px', left: '8px' }, 'space-between');
 });
 
 /**

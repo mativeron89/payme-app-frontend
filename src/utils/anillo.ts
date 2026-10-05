@@ -42,9 +42,51 @@ export function porcentajesEnteros(montos: readonly number[]): number[] {
   return base;
 }
 
+/**
+ * La forma de un anillo: radio, grosor, corte entre porciones y paleta. Por
+ * defecto, la de 2a/2c (`GEOMETRIA_2A`), que siguen usando las pantallas de
+ * detalle. E173-4 · la de Estadísticas es otra (`GEOMETRIA_E173`).
+ */
+export interface GeometriaAnillo {
+  readonly radio: number;
+  readonly grosor: number;
+  readonly corte: number;
+  readonly colores: readonly string[];
+}
+
+export const GEOMETRIA_2A: GeometriaAnillo = {
+  radio: RADIO_ANILLO,
+  grosor: GROSOR_ANILLO,
+  corte: CORTE_ANILLO,
+  colores: COLORES_ANILLO,
+};
+
+/**
+ * E173-4 · decisión 173 · especificación de Claude Design
+ * (`PANTALLA-estadisticas.md`): anillo de 168 px, grosor 20 (r = 74 en un
+ * viewBox de 168), separación de 2 px y cuatro colores en orden de monto. De la
+ * cuarta cocina en adelante, el anillo las junta en la cuarta porción; la lista
+ * las sigue mostrando todas.
+ */
+export const GEOMETRIA_E173: GeometriaAnillo = {
+  radio: 74,
+  grosor: 20,
+  corte: 2,
+  colores: ['#0FB5C9', '#101E3B', '#6FD3DE', '#64748B'],
+};
+
 /** Índice de color de una categoría en la lista: de la quinta en adelante, el quinto. */
 export function colorDeFila(indice: number): string {
-  return COLORES_ANILLO[Math.min(indice, COLORES_ANILLO.length - 1)];
+  return colorEnPaleta(indice, COLORES_ANILLO);
+}
+
+/**
+ * E173-4 · el mismo criterio con otra paleta: de la última en adelante, la
+ * última. Función aparte y no un segundo parámetro de `colorDeFila`: ésa se usa
+ * en `.map(colorDeFila)`, que le pasaría el índice del arreglo como paleta.
+ */
+export function colorEnPaleta(indice: number, colores: readonly string[]): string {
+  return colores[Math.min(indice, colores.length - 1)]!;
 }
 
 export interface PorcionAnillo {
@@ -67,24 +109,26 @@ export interface PorcionAnillo {
  * Una sola categoría es un anillo entero, sin corte: no hay dos porciones que
  * separar.
  */
-export function porcionesDelAnillo(montos: readonly number[]): PorcionAnillo[] {
+export function porcionesDelAnillo(montos: readonly number[], geometria: GeometriaAnillo = GEOMETRIA_2A): PorcionAnillo[] {
+  const { colores, corte } = geometria;
+  const circunferencia = 2 * Math.PI * geometria.radio;
   const total = montos.reduce((a, m) => a + m, 0);
   if (total <= 0 || montos.length === 0) return [];
-  const max = COLORES_ANILLO.length;
+  const max = colores.length;
   const agrupados = montos.length <= max
     ? [...montos]
     : [...montos.slice(0, max - 1), montos.slice(max - 1).reduce((a, m) => a + m, 0)];
   const vivos = agrupados.filter((m) => m > 0);
   if (vivos.length === 1) {
-    return [{ color: COLORES_ANILLO[agrupados.findIndex((m) => m > 0)], trazo: CIRCUNFERENCIA, hueco: 0, desde: 0 }];
+    return [{ color: colores[agrupados.findIndex((m) => m > 0)]!, trazo: circunferencia, hueco: 0, desde: 0 }];
   }
   let acumulado = 0;
   const porciones: PorcionAnillo[] = [];
   agrupados.forEach((m, i) => {
     if (m <= 0) return;
-    const parte = (m / total) * CIRCUNFERENCIA;
-    const trazo = Math.max(parte - CORTE_ANILLO, 0);
-    porciones.push({ color: COLORES_ANILLO[i], trazo, hueco: CIRCUNFERENCIA - trazo, desde: -acumulado });
+    const parte = (m / total) * circunferencia;
+    const trazo = Math.max(parte - corte, 0);
+    porciones.push({ color: colores[i]!, trazo, hueco: circunferencia - trazo, desde: -acumulado });
     acumulado += parte;
   });
   return porciones;
