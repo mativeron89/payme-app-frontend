@@ -94,6 +94,9 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
   it('migra sólo el aviso legacy inequívoco; no inventa mesa para otra notificación', async () => {
     const { state } = await import('./store');
     const legacy = state.notifications.find((n) => n.type === 'mesa_shortfall_charged')!;
+    // Un estado legacy (anterior a v0.142.0) trae el texto de entonces, con «.00»:
+    // el seed actual (D202) ya nace con el payload completo y sin «.00».
+    legacy.body = 'Se cobró el faltante de la mesa ($210.00) a tu garantía.';
     legacy.payload = { shortfall_cents: 21000 };
     legacy.related_entity_id = null;
     state.notifications.push({

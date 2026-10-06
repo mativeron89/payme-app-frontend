@@ -176,7 +176,7 @@ test('OFF, ausente, malformado, 2.2.0 supersedido y aviso desconocido apagan amb
   await page.getByRole('button', { name: 'Avisos' }).click();
   await expect(page.getByRole('heading', { name: 'Notificaciones' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Quién no pagó' })).toHaveCount(0);
-  await expect(page.getByText('Se cobró el faltante de la mesa ($210.00) a tu garantía.')).toBeVisible();
+  await expect(page.getByText('Se cobró el faltante de la mesa ($210) a tu garantía.')).toBeVisible();
 });
 
 test('AF-19 · con el aviso 2.5.0 del dueño (v2.95.0) la edición de nombre y foto sigue viva', async ({ page }) => {

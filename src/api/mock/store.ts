@@ -687,7 +687,7 @@ export function seedWalletNotifications(): AppNotification[] {
       id: mockId('f'),
       type: 'transfer_received',
       title: null,
-      body: 'Juan López te envió $80.00',
+      body: 'Juan López te envió $80',
       payload: { amount_cents: 8000, sender_name: 'Juan López' },
       related_entity_type: 'transfer',
       related_entity_id: null,
@@ -698,7 +698,7 @@ export function seedWalletNotifications(): AppNotification[] {
       id: mockId('f'),
       type: 'topup_succeeded',
       title: null,
-      body: 'Se acreditaron $500.00 a tu saldo PayMe',
+      body: 'Se acreditaron $500 a tu saldo PayMe',
       payload: { amount_cents: 50000, method: 'oxxo' },
       related_entity_type: 'topup',
       related_entity_id: null,
@@ -742,7 +742,8 @@ function seedNotifications(mesas: MockMesa[]): {
       id: mockId('f'),
       type: 'mesa_shortfall_charged',
       title: null,
-      body: 'Se cobró el faltante de la mesa ($210.00) a tu garantía.',
+      // D202 · sin «.00», como lo escribe el dueño desde v2.152.0 (`montoEnTexto`).
+      body: 'Se cobró el faltante de la mesa ($210) a tu garantía.',
       payload: shortfallMesa ? {
         mesa_id: shortfallMesa.id,
         mesa_code: shortfallMesa.code,
@@ -1349,7 +1350,9 @@ function loadPersisted(): MockState | null {
       // v0.142.0 · el aviso histórico del seed traía sólo el monto. Ese
       // shape sigue mostrándose agregado, pero no puede abrir la ruta privada.
       // Se migra exclusivamente la fila demo acreditada contra su mesa cerrada;
-      // ningún aviso ajeno se completa por inferencia.
+      // ningún aviso ajeno se completa por inferencia. 🔴 El texto es el VIEJO a
+      // propósito («$210.00»): esta migración reconoce estados persistidos de
+      // antes; el seed nuevo («$210», D202) ya nace con el payload completo.
       const shortfallMesa = Array.isArray(parsed.mesas)
         ? parsed.mesas.find((mesa) => mesa?.code === 'PA-1099'
           && mesa?.captured_shortfall_cents === 21000)
