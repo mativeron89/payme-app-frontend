@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { medirPantalla, textoDelDiagnostico, type FilaDiagnostico } from '../utils/medirPantalla';
 import { useToast } from './ui';
+import { useHojaModal } from './useHojaModal';
 
 /**
  * E173-2 · el diagnóstico de pantalla, oculto: se abre con 5 toques en el logo
@@ -18,27 +19,24 @@ export function DiagnosticoPantalla({ onCerrar }: { onCerrar: () => void }) {
   const { t } = useIdioma();
   const toast = useToast();
   const [filas, setFilas] = useState<FilaDiagnostico[]>(() => medirPantalla());
+  const hoja = useRef<HTMLDivElement | null>(null);
   const cerrar = useRef<HTMLButtonElement | null>(null);
   const alCerrar = useRef(onCerrar);
   alCerrar.current = onCerrar;
+  // D202 · H-04: el foco entra en «Cerrar», Tab no sale de la hoja y el fondo queda inerte.
+  useHojaModal(hoja, cerrar, onCerrar);
 
   useEffect(() => {
-    cerrar.current?.focus();
     const medir = () => setFilas(medirPantalla());
-    const alTeclado = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') alCerrar.current();
-    };
     window.addEventListener('resize', medir);
     window.addEventListener('scroll', medir, true);
     window.visualViewport?.addEventListener('resize', medir);
     window.visualViewport?.addEventListener('scroll', medir);
-    document.addEventListener('keydown', alTeclado);
     return () => {
       window.removeEventListener('resize', medir);
       window.removeEventListener('scroll', medir, true);
       window.visualViewport?.removeEventListener('resize', medir);
       window.visualViewport?.removeEventListener('scroll', medir);
-      document.removeEventListener('keydown', alTeclado);
     };
   }, []);
 
@@ -54,6 +52,7 @@ export function DiagnosticoPantalla({ onCerrar }: { onCerrar: () => void }) {
   return createPortal(
     <div className="sheet-overlay" onClick={() => alCerrar.current()}>
       <div
+        ref={hoja}
         className="sheet diag-pantalla"
         role="dialog"
         aria-modal="true"

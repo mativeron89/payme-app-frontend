@@ -8,6 +8,7 @@ import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
+import { useHojaModal } from '../components/useHojaModal';
 import { useToast } from '../components/ui';
 import { FotoDeQuienInvita } from '../components/FotoDeQuienInvita';
 import {
@@ -158,20 +159,14 @@ function HojaBorrarTodas({
   hayInvitaciones: boolean;
 }) {
   const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement | null>(null);
   const volver = useRef<HTMLButtonElement | null>(null);
-  const alVolver = useRef(onVolver);
-  alVolver.current = onVolver;
-  useEffect(() => {
-    volver.current?.focus();
-    const alTeclado = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') alVolver.current();
-    };
-    document.addEventListener('keydown', alTeclado);
-    return () => document.removeEventListener('keydown', alTeclado);
-  }, []);
+  // D202 · H-04: el foco entra en «Volver», Tab no sale de la hoja y el fondo queda inerte.
+  useHojaModal(hoja, volver, onVolver);
   return createPortal(
     <div className="sheet-overlay" onClick={onVolver}>
       <div
+        ref={hoja}
         className="sheet"
         role="dialog"
         aria-modal="true"

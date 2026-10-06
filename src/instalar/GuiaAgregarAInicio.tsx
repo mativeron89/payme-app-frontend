@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../components/Icon';
+import { useHojaModal } from '../components/useHojaModal';
 import { useIdioma } from '../i18n/idioma';
 import {
   almacenLocal,
@@ -26,24 +27,19 @@ export function usePlataformaDeInstalacion(): Plataforma {
  */
 export function GuiaAgregarAInicio({ onCerrar }: { onCerrar: () => void }) {
   const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement | null>(null);
   const entendido = useRef<HTMLButtonElement | null>(null);
   const alCerrar = useRef(onCerrar);
   alCerrar.current = onCerrar;
   const ipad = esIPad(entornoActual());
-
-  useEffect(() => {
-    entendido.current?.focus();
-    const alTeclado = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') alCerrar.current();
-    };
-    document.addEventListener('keydown', alTeclado);
-    return () => document.removeEventListener('keydown', alTeclado);
-  }, []);
+  // D202 · H-04: el foco entra en «Entendido», Tab no sale de la hoja y el fondo queda inerte.
+  useHojaModal(hoja, entendido, onCerrar);
 
   return createPortal(
     <div className="sheet-overlay guia-inicio-fondo" onClick={() => alCerrar.current()}>
       {ipad && <span className="guia-inicio-flecha arriba" aria-hidden="true" />}
       <div
+        ref={hoja}
         className="sheet guia-inicio"
         role="dialog"
         aria-modal="true"
