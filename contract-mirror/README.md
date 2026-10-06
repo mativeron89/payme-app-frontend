@@ -6,6 +6,27 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Montos de los avisos sin «.00» · App Backend v2.152.0 · 2026-10-06
+
+Orden `AF-D202-AUDITORIA-20261006` (decisión 202, punto 4), con la enmienda de scope del Bibliotecario IV
+del 2026-10-06T02:43:14Z (`contract-mirror/**` y `scripts/mirror-inventory.json`).
+
+- Contenido: owner **`1a2da3b77f37ef3d2c332c41faf19bdec2b988cf`** (v2.152.0: los textos de las
+  notificaciones con `montoEnTexto`, sin «.00» cuando el monto es entero).
+- Inventario: el de `main` del owner en **`d964995c1d463dc14b2de910045b7d163d91124b`**
+  (`contract/mirror-inventory.json`, sha256
+  `7feeaa5e4f19dfdeae1c0d727dadbae245d65318ddbbc1602da32362bf53628c`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `1a2da3b`; entre `1a2da3b` y `d964995` sólo cambia el
+  inventario.
+- **121 archivos**, sin altas ni bajas. Cambian cuatro, todos por `64a94ec` (medido con
+  `git log 06fa648..1a2da3b -- <archivo>`): `services/settlement.js` (→ `docs/settlement.js.ref`),
+  `routes/topup.js`, `routes/transfers.js` y `services/topupProcessor.js`, copiados con
+  `git show 1a2da3b:<origen>` y con el sha256 que declara el inventario. `services/montoEnTexto.js` no
+  está en el inventario del dueño: no se espeja.
+- El checkout local del owner tiene su HEAD en v2.90.0: el inventario se leyó con `git show` de su
+  `origin/main`, sin fetch ni escrituras en ese repo.
+- `--paridad`: espejo = inventario = fuente en `1a2da3b`, 121/121.
+
 ### Foto de quien invita en las invitaciones · App Backend v2.149.0 · 2026-10-05
 
 Orden `AF-E174-3B-E177-INVITADOR-Y-CAMARA-20261005` (decisión 174, E174-3B).

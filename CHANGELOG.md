@@ -51,6 +51,9 @@ informe Codex `INFORME_AUDITORIA_TRAMO_CLAUDE_APP_OPS_20261006.md` (64058959…)
     v2.152.0 el dueño las escribe sin decimales. **Pendiente, fuera de esta orden:** el mock del front todavía
     siembra «Juan López te envió $80.00», «Se acreditaron $500.00…» y «Se cobró el faltante de la mesa ($210.00)…»
     (`src/api/mock/store.ts`).
+  - La procedencia del espejo (`contract-mirror/README.md`) suma la sección de v2.152.0. La primera corrida completa
+    (`40e8023`) la dejó en rojo: `contractMirror.test` exige que la procedencia vigente nombre el commit del
+    inventario, y seguía en `06fa648`. Se corrigió con un commit sucesor.
 - **Pruebas:**
   - `e2e/doble-captura.spec.ts` (4): dos toques en el mismo tick (antes del render) dan una captura y una lectura,
     con disparador y galería deshabilitados; salir con el JPEG pendiente no lee; salir con la lectura en curso no
