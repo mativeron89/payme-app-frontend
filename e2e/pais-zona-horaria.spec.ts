@@ -215,15 +215,23 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
         if (supported) {
           await expect(option).toBeEnabled();
           await expect(option.locator('small')).toHaveAttribute('title', new RegExp(zoneLabel(zone).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-          const instant = (await option.locator('time').getAttribute('datetime'))!;
-          const oracle = await page.evaluate(({ z, instant }) => {
+          // D202 · el `datetime` y el texto se leen JUNTOS, en una sola evaluación:
+          // React los escribe en el mismo commit. Leer el instante, calcular el
+          // oráculo y después esperar el texto fallaba si en el medio cambiaba el
+          // minuto (main 37362628976: esperaba 17:24, el texto ya decía 17:25).
+          const { oracle, offset, time } = await option.evaluate((el, z) => {
+            const reloj = el.querySelector('time')!;
             const formatter = new Intl.DateTimeFormat('en-US', { timeZone: z, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset' });
-            const parts = formatter.formatToParts(new Date(instant));
-            return { offset: parts.find((part) => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC').replace('-', '−'),
-              time: parts.find((part) => part.type === 'hour')!.value + ':' + parts.find((part) => part.type === 'minute')!.value };
-          }, { z: zone, instant });
-          await expect(option.locator('strong')).toHaveText(oracle.offset);
-          await expect(option.locator('time')).toHaveText(oracle.time);
+            const parts = formatter.formatToParts(new Date(reloj.getAttribute('datetime')!));
+            return {
+              oracle: { offset: parts.find((part) => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC').replace('-', '−'),
+                time: parts.find((part) => part.type === 'hour')!.value + ':' + parts.find((part) => part.type === 'minute')!.value },
+              offset: el.querySelector('strong')!.textContent,
+              time: reloj.textContent,
+            };
+          }, zone);
+          expect(offset).toBe(oracle.offset);
+          expect(time).toBe(oracle.time);
         }
         else { await expect(option).toBeDisabled(); await expect(option).toContainText('No compatible'); }
       }
