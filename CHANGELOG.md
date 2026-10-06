@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.5 — La consulta de una apertura anterior no se pierde cuando el riel carga después (2026-10-06)
+
+Orden AF-D206-FLAKY-N181-20261006 (sha256 bb2522fc…), decisión 206 (ba44ea88…). Base `15b3b2e` (0.217.4).
+
+- **El flaky** (`e2e/n181-clases-pendientes.spec.ts`, caso 5; main 37396935283, pasó en el reintento): tras recargar
+  con una apertura congelada, «Revisar cómo quedó esa apertura» no mostraba «No pudimos verificar cómo quedó esa
+  apertura…». **La causa está en la app, no en el test.** Medido con una traza (sonda no versionada):
+  `mesaScopeBase` cambia DOS veces después de la recarga: `…::mesa:sin-restaurante` (~620 ms, el riel de dinero
+  todavía pendiente) y `…::mesa:<restaurante>` (~975 ms, cuando el riel carga). El aviso con su botón ya aparece en
+  el primero (~653 ms). El efecto del scope ponía `frozen` y el diagnóstico en `null` y volvía a leer el intento: si
+  el toque caía antes del segundo cambio, la consulta fallida (única en ese modo) dejaba su diagnóstico y el efecto
+  lo borraba. En la Mac el toque de Playwright caía después (~1100 ms); en un CI lento, adentro de la ventana.
+- **El arreglo:** el diagnóstico lleva el intento al que pertenece (clave y generación) y se muestra sólo si es el
+  del intento congelado vigente (`esDelIntento`), la misma regla que `replayHabilitado` aplica al reenvío desde
+  ORDEN 2A. El efecto del scope ya no borra el diagnóstico ni la autorización de reenvío: si el principal cambiara, el
+  intento sería otro y dejarían de aplicar solos. Lo visible no cambia. `replayHabilitado` queda con su comparación
+  literal: la guarda `reconciliacionFuente.test` la exige.
+- **Censo de la clase** (estado de la consulta de un intento que el efecto del scope borra): `decision` (corregido),
+  `replayAutorizado` (ya dependía del intento). **Pendiente, fuera de esta orden:** `reconciledSavedPaymentMethodId`
+  y sus refs (la tarjeta original que restaura G-38) también se borran en ese efecto; una consulta EXITOSA en la
+  misma ventana perdería la tarjeta restaurada. Tiene su propio acople con el efecto que aplica la elegida.
+- **Pruebas:**
+  - `e2e/n181-clases-pendientes.spec.ts` (+1, «5b»): un `MutationObserver` toca «Revisar» en el instante en que
+    aparece el botón; control positivo: el aviso se va y vuelve después del toque (el scope cambió DESPUÉS). Rojo
+    sobre `15b3b2e` 3/3, con la misma firma que el CI; verde 3/3 con el arreglo. El caso 5 queda como estaba.
+  - `reconciliacionMesaView.test` (+3): `esDelIntento` con el mismo intento, otra clave u otra generación, y sin
+    diagnóstico o sin intento.
+  - **Mutantes:** volver a borrar el diagnóstico en el efecto (rojo en 5b); el helper sin la generación, sin la clave
+    o aceptando `null` (rojo en los unitarios). Uno sobrevive y se declara: mostrar el diagnóstico sin preguntar de
+    qué intento es. Con la pantalla montada el intento sólo cambia por el restaurante (el actor se resuelve una vez
+    por montaje), así que hoy no hay forma de llegar desde la UI a un diagnóstico de otro intento.
+- Sin reintentos ni esperas arbitrarias.
+
 ## 0.217.4 — «Cerrar mesa» y el período contienen el foco; los avisos del mock sin «.00» (2026-10-06)
 
 Segunda entrega del lease AF-D202-AUDITORIA-20261006 (decisión 202), pedida por el Bibliotecario IV tras el GREEN de

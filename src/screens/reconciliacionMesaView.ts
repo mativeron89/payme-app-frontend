@@ -168,3 +168,18 @@ export function decisionReconciliacion(
       return NO_CONCLUYENTE;
   }
 }
+
+/**
+ * D206 · ¿`handle` es el del intento congelado vigente? Mismo `key` y misma
+ * `generation`, la misma regla que `replayHabilitado` (ORDEN 2A) aplica al
+ * reenvío. El diagnóstico de una consulta pertenece al intento que se miró: si
+ * el vigente es otro, deja de aplicar solo, sin que nadie tenga que borrarlo
+ * (borrarlo en el efecto del scope perdía la consulta cuando el riel terminaba
+ * de cargar después del toque).
+ */
+export function esDelIntento(
+  handle: { key: string; generation: number } | null | undefined,
+  vigente: { key: string; generation: number } | null | undefined,
+): boolean {
+  return !!handle && !!vigente && handle.key === vigente.key && handle.generation === vigente.generation;
+}

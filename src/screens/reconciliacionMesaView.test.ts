@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MesaCreationLookup, MesaCreationOutcome, MesaStatus } from '../api/types';
-import { decisionReconciliacion, decisionSinRespuesta } from './reconciliacionMesaView';
+import { decisionReconciliacion, decisionSinRespuesta, esDelIntento } from './reconciliacionMesaView';
 
 /**
  * P0 · QUÉ LIBERA EL JOURNAL DE UNA APERTURA CON GARANTÍA (ORDEN 2A).
@@ -184,5 +184,21 @@ describe('la copy no afirma lo que no sabemos', () => {
     const d = decisionReconciliacion(lookup('open', { code: null }));
     expect(d.veredicto).toBe('no_concluyente');
     expect(d.liberaJournal).toBe(false);
+  });
+});
+
+describe('D206 · el diagnóstico y el reenvío pertenecen a SU intento', () => {
+  const vigente = { key: 'k-1', generation: 2 };
+  it('mismo intento (clave y generación): aplica', () => {
+    expect(esDelIntento({ key: 'k-1', generation: 2 }, vigente)).toBe(true);
+  });
+  it('otra clave u otra generación: no aplica', () => {
+    expect(esDelIntento({ key: 'k-2', generation: 2 }, vigente)).toBe(false);
+    expect(esDelIntento({ key: 'k-1', generation: 3 }, vigente)).toBe(false);
+  });
+  it('sin diagnóstico o sin intento vigente: no aplica', () => {
+    expect(esDelIntento(null, vigente)).toBe(false);
+    expect(esDelIntento({ key: 'k-1', generation: 2 }, null)).toBe(false);
+    expect(esDelIntento(undefined, undefined)).toBe(false);
   });
 });

@@ -308,6 +308,66 @@ test('5 · otra familia y consulta fallida conservan el intento sin duplicar', a
   }
 });
 
+/*
+ * D206 · el flaky del caso 5 (main 37396935283): tras la recarga, `mesaScopeBase`
+ * cambia DOS veces. Primero `…::mesa:sin-restaurante`, con el riel de dinero
+ * todavía pendiente, y ahí el aviso ya aparece con su botón. Después, cuando el
+ * riel carga, `…::mesa:<restaurante>`, y el efecto del scope volvía a leer el
+ * intento y BORRABA el diagnóstico. Si el toque caía antes del segundo cambio,
+ * la consulta fallida se perdía y el texto de error no llegaba. Acá el toque es
+ * inmediato: lo da un `MutationObserver` en el instante en que aparece el botón.
+ */
+test('5b · el diagnóstico de la consulta no se pierde si el restaurante termina de cargar después del toque', async ({ page }) => {
+  await instalarInstrumentacionN181(page, { mode: 'normal', moneyRail: 'sandbox' });
+  await page.addInitScript(() => {
+    if (localStorage.getItem('payme.test.n181.toque_inmediato') !== '1') return;
+    const w = window as unknown as { __n181Toque: { tocado: boolean; desaparecioDespues: boolean } };
+    w.__n181Toque = { tocado: false, desaparecioDespues: false };
+    const AVISO = 'Hay una apertura de una sesión anterior.';
+    new MutationObserver(() => {
+      const hay = document.body?.innerText.includes(AVISO) ?? false;
+      if (!w.__n181Toque.tocado) {
+        const boton = [...document.querySelectorAll('button')]
+          .find((b) => b.textContent === 'Revisar cómo quedó esa apertura');
+        if (hay && boton) {
+          w.__n181Toque.tocado = true;
+          localStorage.removeItem('payme.test.n181.toque_inmediato');
+          boton.click();
+        }
+      } else if (!hay) {
+        // El aviso se va y vuelve cuando cambia el scope: el cambio llegó DESPUÉS del toque.
+        w.__n181Toque.desaparecioDespues = true;
+      }
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+  await abrirTicket(page);
+  await clickContinuar(page);
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const key = 'payme_app_session__mock';
+    const session = JSON.parse(localStorage.getItem(key) ?? 'null');
+    if (!session) throw new Error('n181_session_missing');
+    localStorage.setItem(key, JSON.stringify({ ...session, family_id: '18118118-1811-4181-8181-181181181811' }));
+    localStorage.setItem('payme.test.n181.toque_inmediato', '1');
+  });
+  await modoN181EnSiguienteDocumento(page, 'lookup-failed-once');
+  await page.reload();
+
+  const toque = () => page.evaluate(() => (window as unknown as { __n181Toque?: { tocado: boolean; desaparecioDespues: boolean } }).__n181Toque);
+  await expect.poll(async () => (await toque())?.tocado).toBe(true);
+  // Control positivo: el scope cambió después del toque (el aviso se fue y volvió).
+  await expect.poll(async () => (await toque())?.desaparecioDespues).toBe(true);
+  await expect(page.getByText('Hay una apertura de una sesión anterior.')).toBeVisible();
+  await expect(page.getByText(
+    'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
+    { exact: true },
+  )).toBeVisible();
+  const probe = await probeN181(page);
+  expect(probe.lookupCalls).toBe(1);
+  expect(probe.lookupFailures).toBe(1);
+});
+
 test('6 · respuesta bruta incoherente cae en decoder y el replay no duplica', async ({ page }, testInfo) => {
   const evidence: Record<string, unknown> = {};
   const transforms = await instalarInstrumentacionN181(page, { mode: 'predecoder-incoherent', moneyRail: 'disabled' });

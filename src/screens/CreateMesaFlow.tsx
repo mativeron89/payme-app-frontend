@@ -37,6 +37,7 @@ import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutation
 import {
   decisionReconciliacion,
   decisionSinRespuesta,
+  esDelIntento,
   type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
@@ -598,9 +599,11 @@ export function CreateMesaFlow() {
     setPriorAttemptCheckedFor('');
     setPriorAttemptCheckFailedFor('');
     // El diagnóstico y su autorización de reenvío pertenecen al intento que se
-    // estaba mirando: cambiar de principal los invalida a los dos.
-    setDecision(null);
-    setReplayAutorizado(null);
+    // estaba mirando, y lo dicen ellos mismos (clave y generación): si cambia el
+    // principal, el intento es otro y dejan de aplicar solos. 🔴 D206 · no se
+    // borran acá: este efecto también corre cuando el riel termina de cargar y el
+    // scope pasa de `sin-restaurante` al restaurante, con el MISMO intento, y
+    // borrarlos ahí perdía la consulta que la persona acababa de hacer.
     reconciledSourceAppliedRef.current = false;
     setReconciledSavedPaymentMethodId(undefined);
     sinAutoseleccionRef.current = false;
@@ -672,7 +675,8 @@ export function CreateMesaFlow() {
    * más en ese navegador — y no existía transición posible.
    */
   const [reconciling, setReconciling] = useState(false);
-  const [decision, setDecision] = useState<DecisionReconciliacion | null>(null);
+  /** El diagnóstico de la consulta y el intento al que pertenece (D206). */
+  const [diagnostico, setDiagnostico] = useState<{ de: MonetaryIntentHandle; decision: DecisionReconciliacion } | null>(null);
   /**
    * ORDEN 2A · autorización de REENVÍO, y sólo con la MISMA clave. Guarda el
    * handle exacto que el contrato habilitó, no un booleano: si `frozen` cambia
@@ -684,6 +688,8 @@ export function CreateMesaFlow() {
     !!frozen && !!replayAutorizado &&
     replayAutorizado.key === frozen.handle.key &&
     replayAutorizado.generation === frozen.handle.generation;
+  /** Sólo se muestra el diagnóstico del intento congelado vigente, igual que el reenvío. */
+  const decision = diagnostico && esDelIntento(diagnostico.de, frozen?.handle) ? diagnostico.decision : null;
 
   /**
    * ORDEN 2A · la reconciliación PREGUNTA en vez de inferir.
@@ -708,9 +714,10 @@ export function CreateMesaFlow() {
    */
   async function checkMesaReconciliation() {
     if (!frozen) return;
+    const intento = frozen.handle;
     setReconciling(true);
     setError(null);
-    setDecision(null);
+    setDiagnostico(null);
     setReplayAutorizado(null);
     try {
       // ORDEN 2-A · el `payload_hash` sale del JOURNAL: es el sello congelado
@@ -726,19 +733,19 @@ export function CreateMesaFlow() {
         await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
         setFrozen(null);
         if (resultado.navegarA) {
-          setDecision(null);
+          setDiagnostico(null);
           toast(t('Esa mesa ya existe: {0}', resultado.navegarA));
           navigate('mesa', resultado.navegarA);
           return;
         }
       }
       if (resultado.permiteReintento) setReplayAutorizado(frozen.handle);
-      setDecision(resultado);
+      setDiagnostico({ de: intento, decision: resultado });
     } catch {
       // Cualquier cosa que no sea una respuesta del contrato —red, 5xx, un
       // cuerpo que no decodifica— es "no sabemos", y no sabemos NO es saber
       // que no: el intento queda como estaba.
-      setDecision(decisionSinRespuesta());
+      setDiagnostico({ de: intento, decision: decisionSinRespuesta() });
     } finally {
       setReconciling(false);
     }
