@@ -7063,10 +7063,12 @@ button.qc-circulo::after {
 .social-search-input:focus {
   outline: none;
 }
-.social-search:focus-within {
-  outline: 2px solid var(--action-2);
-  outline-offset: -2px;
-}
+/* D195 · Mati: «La burbuja donde escribo, se le genera un borde celeste que no
+   completa toda la burbuja, quitar el borce celeste». Era el `outline` teal de
+   `.social-search:focus-within`: un rectángulo dentro de la `.card` redondeada,
+   curvo arriba y recto abajo. Enfocado, el buscador (Amigos, Grupos e Invitar a
+   la mesa) se ve igual que sin foco: lo que cambia es el cursor, sin otro borde
+   ni sombra en su lugar. */
 
 /* Ícono propio de cada grupo (§1.9: "no uno repetido"). */
 .group-ico {

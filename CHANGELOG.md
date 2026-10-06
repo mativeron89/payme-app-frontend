@@ -11,6 +11,36 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.2 — Los buscadores de Amigos, Grupos e Invitar, sin el borde celeste (2026-10-05)
+
+Orden AF-D195-AMIGOS-BORDE-BUSCADOR-20261005 (sha256 90fe38b6…), decisión 195 de Mati (a307d857…), que aclara D182.
+Base `4d781d4` (0.217.1).
+
+- **Qué vio Mati** (captura 19, Amigos con el teclado abierto): «La burbuja donde escribo, se le genera un borde
+  celeste que no completa toda la burbuja, quitar el borce celeste». Era el `outline` teal (`--action-2`) de
+  `.social-search:focus-within`: un rectángulo sin radio dentro de la `.card` redondeada, curvo arriba y recto
+  abajo. Se fue la regla, sin reemplazo: enfocado, el buscador se ve igual que sin foco y lo que cambia es el
+  cursor. El campo ya tenía `outline: none`.
+- **Censo de la clase** (todo campo con forma de búsqueda):
+  - mismo componente y estilo (`.social-search`), los tres cambian: «Buscar entre tus amigos» y «Buscar entre tus
+    grupos» (`SocialScreen`), y el buscador de Invitar a la mesa (`InviteFriends`, «Buscar contactos para
+    invitar»);
+  - otro estilo, NO se tocan: el buscador por @ de «Nuevo amigo» (`BuscarPorArroba`, que pone teal el BORDE de su
+    caja con `.arroba-input:focus-within`) y el de Transferir (`.input` de formulario, en el riel durmiente);
+  - formularios (ingreso, alta, Configuración, ticket): no se tocan.
+- `src/tecladoAppDeInicio.ts` (D182) queda igual: el encabezado ya no se mete bajo la hora (Mati, D194).
+- **Accesibilidad, declarado:** en estos tres campos el indicador de foco pasa a ser el cursor que parpadea. Es lo
+  que pidió Mati («sin reemplazo»); los botones y las pestañas conservan su anillo de foco.
+- **Pruebas:**
+  - `e2e/d195.spec.ts` (4): en cada uno de los tres buscadores, enfocado (control positivo: tiene el foco y su
+    burbuja `:focus-within`), outline, borde y sombra del campo y de la burbuja son los mismos que sin foco y
+    ninguno es teal; y escribe. Control: los campos del ingreso siguen cambiando al enfocarse.
+  - **Rojo sobre `4d781d4`:** los tres buscadores (la burbuja pasaba a `outline: solid` teal); el control, verde.
+  - **Mutantes:** volver el `outline`, reemplazarlo por una sombra, por un borde inferior teal, ponerle el outline
+    al campo, y sacarle el foco al ingreso: los cinco cazados.
+- **Lo que no se probó acá:** el iPhone (Chromium no tiene el teclado de iOS). Para Mati: en Amigos, tocar el
+  buscador: sin borde celeste, sólo el cursor; lo mismo en Grupos y en Invitar amigos de una mesa.
+
 ## 0.217.1 — «Zona horaria» con un reloj, y la fila de adentro en inglés (2026-10-05)
 
 Decisión 189 de Mati (sha256 1c779f58…), tercera rama del lease AF-E179B (enmienda 18:13:52Z), sobre `514d52a`
