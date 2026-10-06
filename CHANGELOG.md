@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.4 — «Cerrar mesa» y el período contienen el foco; los avisos del mock sin «.00» (2026-10-06)
+
+Segunda entrega del lease AF-D202-AUDITORIA-20261006 (decisión 202), pedida por el Bibliotecario IV tras el GREEN de
+0.217.3. Base `515ff82` (0.217.3).
+
+- **El resto de la clase de H-04.** Las dos hojas modales que el censo de 0.217.3 dejó sin contención usan
+  `useHojaModal`: el foco entra, Tab y Shift+Tab ciclan dentro, `.app` queda inerte y Escape cierra. Lo visual no
+  cambia.
+  - «¿Cerrar la mesa?» (`MesaDetailView`): el foco entra en «Volver», la salida segura, y al cerrar vuelve a «Cerrar
+    mesa».
+  - «Elige el período» (`SelectorDePeriodo`): la hoja pasa a un componente propio (`HojaPeriodo`) para que el hook viva
+    lo que vive la hoja; el foco entra en el período elegido y, al cerrar o al elegir, vuelve al botón del período.
+  - Los dos padres devuelven el foco en el cuadro siguiente, como `AvisosScreen` y `MasScreen` (un clic en Safari no
+    enfoca el botón).
+- **Los avisos que siembra el mock, con los montos del dueño** (D181; App Backend v2.152.0, `montoEnTexto`): «Se cobró
+  el faltante de la mesa ($210) a tu garantía.», y en el riel durmiente «Se acreditaron $500…» y «Juan López te envió
+  $80». La migración de estados ya persistidos sigue reconociendo el texto VIEJO a propósito: es para estados de antes
+  de v0.142.0, y el seed nuevo ya nace con el payload completo. `seedRelanzable.test` le pone a su aviso legacy el
+  texto de entonces (antes lo copiaba del seed actual).
+- **Pruebas:**
+  - `e2e/foco-modales.spec.ts` (+2): las dos hojas, con el mismo chequeo que las otras tres, y el foco de vuelta en su
+    disparador. `src/api/mock/montosDeAvisos.test.ts` (1): los montos de los avisos sembrados, sin «.00» y con
+    `formatMXN`. `e2e/perfil-faltante-activado.spec.ts`: el texto nuevo del faltante.
+  - **Rojo sobre `515ff82`:** las dos hojas, los montos y el texto del faltante.
+  - **Mutantes:** sin devolver el foco en «Cerrar mesa» o en el período, sin el foco inicial en el elegido, y el seed
+    otra vez con «.00»: los cuatro cazados. Sin el hook es la base.
+- **Lo que no se probó acá:** el iPhone y lectores de pantalla.
+
 ## 0.217.3 — Correcciones de la auditoría Codex: una lectura por captura, foco de las hojas, un flaky y el espejo (2026-10-06)
 
 Orden AF-D202-AUDITORIA-20261006 (sha256 b8f01038…), decisión 202 de Mati (b7325ea6…: «Sí, corregilos»), sobre el
