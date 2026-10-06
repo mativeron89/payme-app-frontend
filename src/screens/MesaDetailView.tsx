@@ -4,6 +4,7 @@ import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
+import { useHojaModal } from '../components/useHojaModal';
 import { Avatar, useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
@@ -300,9 +301,14 @@ export function sePuedeCerrar(mesa: Pick<MesaDetail, 'my_role' | 'guarantee_mode
  */
 function HojaCerrarMesa({ onConfirmar, onVolver, cerrando }: { onConfirmar: () => void; onVolver: () => void; cerrando: boolean }) {
   const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement | null>(null);
+  const volver = useRef<HTMLButtonElement | null>(null);
+  // D202 · el foco entra en «Volver», la salida segura; Tab no sale de la hoja y el fondo queda inerte.
+  useHojaModal(hoja, volver, onVolver);
   return createPortal(
     <div className="sheet-overlay" onClick={onVolver}>
       <div
+        ref={hoja}
         className="sheet"
         role="dialog"
         aria-modal="true"
@@ -319,7 +325,7 @@ function HojaCerrarMesa({ onConfirmar, onVolver, cerrando }: { onConfirmar: () =
           <li>{t('No se puede reabrir: para seguir, abre una mesa nueva.')}</li>
         </ul>
         <div className="cerrar-mesa-acciones">
-          <button type="button" className="btn btn-ghost" onClick={onVolver}>{t('Volver')}</button>
+          <button ref={volver} type="button" className="btn btn-ghost" onClick={onVolver}>{t('Volver')}</button>
           <button type="button" className="btn btn-navy" onClick={onConfirmar} disabled={cerrando}>
             {cerrando ? t('Cerrando…') : t('Sí, cerrar la mesa')}
           </button>
@@ -379,6 +385,7 @@ export function MesaDetailView({
   const [itemsPulse, setItemsPulse] = useState(false);
   /** AF-34 · la hoja de «¿Cerrar la mesa?», distinta de la de D-R20. */
   const [confirmandoCerrarMesa, setConfirmandoCerrarMesa] = useState(false);
+  const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
@@ -939,6 +946,7 @@ export function MesaDetailView({
               /* D181 · «abajo centrado la de cerrar mesa, ésta tiene que tener un rojo
                  clarito». Rojo claro de fondo y rojo oscuro de texto (AA), el candado. */
               <button
+                ref={botonCerrarMesa}
                 type="button"
                 className="btn btn-cerrar-mesa btn-sm btn-fit"
                 onClick={() => setConfirmandoCerrarMesa(true)}
@@ -953,7 +961,11 @@ export function MesaDetailView({
       {confirmandoCerrarMesa && onCerrarMesa && (
         <HojaCerrarMesa
           cerrando={cerrando}
-          onVolver={() => setConfirmandoCerrarMesa(false)}
+          onVolver={() => {
+            setConfirmandoCerrarMesa(false);
+            // El foco vuelve al botón que abrió la hoja (un clic en Safari no lo enfoca).
+            requestAnimationFrame(() => botonCerrarMesa.current?.focus());
+          }}
           // La hoja queda abierta con «Cerrando…» apagado hasta que el dueño
           // contesta: un segundo toque cae en el botón apagado, no en lo que
           // hay debajo. Si se cerró, la pantalla pasa al cierre.

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { Icon } from '../components/Icon';
+import { useHojaModal } from '../components/useHojaModal';
 import { PERIODOS, elegirPeriodo, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { etiquetaDePeriodo } from '../utils/textosDeEstadisticas';
 import { mesesDeMexico, nombreDelPeriodo } from '../utils/meses';
@@ -37,15 +38,22 @@ export function SelectorDePeriodo({
 }) {
   const { t, idioma } = useIdioma();
   const [abierto, setAbierto] = useState(false);
+  const boton = useRef<HTMLButtonElement | null>(null);
   const ahora = new Date();
   if (!disponible) {
     return <div className="stat-burbuja-periodo">{nombreDelPeriodo('this_month', null, idioma, ahora)}</div>;
   }
   const rotulo = nombreDelPeriodo(clave, inicio, idioma, ahora) ?? etiquetaDePeriodo(clave, t);
   const meses = mesesDeMexico(ahora, idioma);
+  const cerrar = () => {
+    setAbierto(false);
+    // El foco vuelve al botón del período (un clic en Safari no lo enfoca).
+    requestAnimationFrame(() => boton.current?.focus());
+  };
   return (
     <>
       <button
+        ref={boton}
         type="button"
         className="stat-burbuja-periodo stat-periodo-boton"
         aria-haspopup="dialog"
@@ -56,45 +64,76 @@ export function SelectorDePeriodo({
         {rotulo}
         <Icon name="chevron-down" size={18} className="rest-chev" />
       </button>
-      {abierto && createPortal(
-        <div className="sheet-overlay" onClick={() => setAbierto(false)}>
-          <div
-            className="sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('Elige el período')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sheet-head">
-              <span className="sheet-title">{t('Elige el período')}</span>
-              <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={() => setAbierto(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="stat-periodos" role="radiogroup" aria-label={t('Elige el período')}>
-              {PERIODOS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  role="radio"
-                  aria-checked={p === clave}
-                  className={`stat-periodo-opcion ${p === clave ? 'on' : ''}`}
-                  onClick={() => { elegirPeriodo(p); setAbierto(false); }}
-                >
-                  <span className="stat-periodo-nombre">
-                    {etiquetaDePeriodo(p, t)}
-                    {(p === 'this_month' || p === 'last_month') && (
-                      <span className="stat-periodo-mes">{p === 'this_month' ? meses.actual : meses.anterior}</span>
-                    )}
-                  </span>
-                  {p === clave && <Icon name="check" size={18} />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>,
-        document.body,
+      {abierto && (
+        <HojaPeriodo
+          clave={clave}
+          meses={meses}
+          alElegir={(p) => { elegirPeriodo(p); cerrar(); }}
+          alCerrar={cerrar}
+        />
       )}
     </>
+  );
+}
+
+/**
+ * La hoja del período, aparte para que `useHojaModal` (D202) viva lo que vive la
+ * hoja: el foco entra en el período elegido, Tab no sale y el fondo queda inerte.
+ */
+function HojaPeriodo({
+  clave,
+  meses,
+  alElegir,
+  alCerrar,
+}: {
+  clave: ClavePeriodo;
+  meses: { actual: string; anterior: string };
+  alElegir: (p: ClavePeriodo) => void;
+  alCerrar: () => void;
+}) {
+  const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement | null>(null);
+  const elegido = useRef<HTMLButtonElement | null>(null);
+  useHojaModal(hoja, elegido, alCerrar);
+  return createPortal(
+    <div className="sheet-overlay" onClick={alCerrar}>
+      <div
+        ref={hoja}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('Elige el período')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-head">
+          <span className="sheet-title">{t('Elige el período')}</span>
+          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={alCerrar}>
+            ✕
+          </button>
+        </div>
+        <div className="stat-periodos" role="radiogroup" aria-label={t('Elige el período')}>
+          {PERIODOS.map((p) => (
+            <button
+              key={p}
+              ref={p === clave ? elegido : undefined}
+              type="button"
+              role="radio"
+              aria-checked={p === clave}
+              className={`stat-periodo-opcion ${p === clave ? 'on' : ''}`}
+              onClick={() => alElegir(p)}
+            >
+              <span className="stat-periodo-nombre">
+                {etiquetaDePeriodo(p, t)}
+                {(p === 'this_month' || p === 'last_month') && (
+                  <span className="stat-periodo-mes">{p === 'this_month' ? meses.actual : meses.anterior}</span>
+                )}
+              </span>
+              {p === clave && <Icon name="check" size={18} />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

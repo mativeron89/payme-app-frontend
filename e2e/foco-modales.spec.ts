@@ -1,11 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { ingresar, irEnLaApp } from './_app';
+import { abrirMesaConLink, ingresar, irEnLaApp } from './_app';
 
 /**
  * D202 · H-04 de la auditoría Codex del 06/10: en la hoja «¿Borrar todas las
  * notificaciones?» el tercer Tab enfocaba «Volver» de la pantalla de atrás con
  * la hoja abierta. Lo mismo, por lectura, en la guía «Agregar a inicio» y el
- * panel de diagnóstico. Las tres usan `useHojaModal`.
+ * panel de diagnóstico; y, por el censo de la clase (0.217.4), en la hoja
+ * «¿Cerrar la mesa?» y en el selector del período. Las cinco usan `useHojaModal`.
  *
  * En cada una: el foco entra; Tab y Shift+Tab, el doble de veces que botones
  * tiene la hoja, nunca salen y la recorren entera; el fondo (`.app`) queda
@@ -85,6 +86,31 @@ test.describe('D202 · H-04 · el foco no sale de las hojas modales', () => {
       await contieneElFoco(page, hoja, () => page.keyboard.press('Escape'));
       await expect(fila).toBeFocused();
     });
+  });
+
+  test('🔴 «¿Cerrar la mesa?»: Tab cicla adentro y al cerrar vuelve a «Cerrar mesa»', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+    await ingresar(page);
+    const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
+    await irEnLaApp(page, `/mesa/${mesa.code}`);
+    const cerrarMesa = page.getByRole('button', { name: 'Cerrar mesa', exact: true });
+    await cerrarMesa.click();
+    const hoja = page.getByRole('dialog', { name: '¿Cerrar la mesa?' });
+    await expect(hoja.getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+    await contieneElFoco(page, hoja, () => page.keyboard.press('Escape'));
+    await expect(cerrarMesa).toBeFocused();
+  });
+
+  test('🔴 «Elige el período»: el foco entra en el elegido, Tab cicla adentro y al cerrar vuelve al período', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+    await ingresar(page);
+    await irEnLaApp(page, '/estadisticas');
+    const periodo = page.getByRole('button', { name: /^Período: / });
+    await periodo.click();
+    const hoja = page.getByRole('dialog', { name: 'Elige el período' });
+    await expect(hoja.getByRole('radio', { name: /^Este mes/ })).toBeFocused();
+    await contieneElFoco(page, hoja, () => page.keyboard.press('Escape'));
+    await expect(periodo).toBeFocused();
   });
 
   test('🔴 el panel de diagnóstico: Tab cicla adentro', async ({ page }) => {
