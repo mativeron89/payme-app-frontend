@@ -9,7 +9,8 @@
 
 const pool = require('../db/pool');
 const notifs = require('./notifications');
-const { centsToDisplay, sumCents } = require('../utils/money');
+const { sumCents } = require('../utils/money');
+const { montoEnTexto } = require('./montoEnTexto');
 const logger = require('../utils/logger');
 
 const ACTIVE_STATUSES = new Set(['pending', 'processing']);
@@ -207,7 +208,7 @@ async function applyTopupIntent({ topupId, intent, voucher = null }) {
       if (nextStatus === 'failed') {
         await notifs.create({
           client, user_id: topup.user_id, type: 'topup_failed',
-          body: `No pudimos acreditar tu carga de ${centsToDisplay(Number(topup.amount_cents))}.`,
+          body: `No pudimos acreditar tu carga de ${montoEnTexto(Number(topup.amount_cents))}.`,
           payload: {
             amount_cents: Number(topup.amount_cents),
             reason: intent.last_payment_error?.code || null,
@@ -256,7 +257,7 @@ async function applyTopupIntent({ topupId, intent, voucher = null }) {
     );
     await notifs.create({
       client, user_id: topup.user_id, type: 'topup_succeeded',
-      body: `Se acreditaron ${centsToDisplay(Number(topup.amount_cents))} a tu saldo PayMe`,
+      body: `Se acreditaron ${montoEnTexto(Number(topup.amount_cents))} a tu saldo PayMe`,
       payload: {
         amount_cents: Number(topup.amount_cents), method: topup.method,
         new_balance: newBalance,

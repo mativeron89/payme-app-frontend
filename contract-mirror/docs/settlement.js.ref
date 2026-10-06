@@ -48,7 +48,8 @@ const legacyQuarantine = require('./legacyPlatformQuarantine');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
 const shortfallDetails = require('./shortfallDetails');
-const { centsToDisplay, calculateFee, prorateCents, sumCents } = require('../utils/money');
+const { calculateFee, prorateCents, sumCents } = require('../utils/money');
+const { montoEnTexto } = require('./montoEnTexto');
 const logger = require('../utils/logger');
 
 const SETTLE_BATCH = Number(process.env.SETTLE_BATCH) || 25;
@@ -2162,7 +2163,7 @@ async function settleMesaLocked(mesaId) {
       await notifs.create({
         user_id: m.opener_user_id,
         type: 'mesa_shortfall_charged',
-        body: `Se cobró el faltante de la mesa (${centsToDisplay(Number(shortfall))}) a tu garantía.`,
+        body: `Se cobró el faltante de la mesa (${montoEnTexto(Number(shortfall))}) a tu garantía.`,
         payload: {
           mesa_id: mesaId,
           mesa_code: m.code,

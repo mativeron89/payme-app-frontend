@@ -14,6 +14,7 @@ const { requireWalletRail } = require('../services/walletRail');
 const { createTransfer, validateBody } = require('../schemas');
 const notifs = require('../services/notifications');
 const { centsToDisplay, sumCents } = require('../utils/money');
+const { montoEnTexto } = require('../services/montoEnTexto');
 const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
 const logger = require('../utils/logger');
 
@@ -156,7 +157,7 @@ router.post('/', requireWalletRail, validateBody(createTransfer), async (req, re
 
         await notifs.create({
           client, user_id: req.user.id, type: 'transfer_sent',
-          body: `Le enviaste ${centsToDisplay(Number(amount_cents))} a ${recipient.first_name} ${recipient.last_name}`,
+          body: `Le enviaste ${montoEnTexto(Number(amount_cents))} a ${recipient.first_name} ${recipient.last_name}`,
           payload: {
             amount_cents, recipient_name: `${recipient.first_name} ${recipient.last_name}`,
             recipient_payme_id: recipient.payme_id, concept,
@@ -165,7 +166,7 @@ router.post('/', requireWalletRail, validateBody(createTransfer), async (req, re
         });
         await notifs.create({
           client, user_id: recipient.id, type: 'transfer_received',
-          body: `${req.user.first_name} ${req.user.last_name} te envió ${centsToDisplay(Number(amount_cents))}`,
+          body: `${req.user.first_name} ${req.user.last_name} te envió ${montoEnTexto(Number(amount_cents))}`,
           payload: {
             amount_cents, sender_name: `${req.user.first_name} ${req.user.last_name}`,
             sender_payme_id: req.user.payme_id, concept,

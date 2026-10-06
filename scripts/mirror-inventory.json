@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "06fa6489089fda4ec4359cbda2ba211bc4a7becd",
+  "commit": "1a2da3b77f37ef3d2c332c41faf19bdec2b988cf",
   "total": 121,
   "archivos": [
     {
@@ -343,8 +343,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "5705e0b325f434ac20d182dc24b8d7e6d00d0d1114fbe05066ca0cd6148a4dd0",
-      "bytes": 157662
+      "sha256": "890668ff320a150c01200aea9530af61eee997f238e7e38d836d9916e0cc245a",
+      "bytes": 157696
     },
     {
       "origen": "legal/README.md",
@@ -469,14 +469,14 @@
     {
       "origen": "routes/topup.js",
       "destino": "routes/topup.js",
-      "sha256": "08364dabcfd6263334e26185888240185002e15db1f59729c047a3e2fb3ae4cf",
-      "bytes": 17044
+      "sha256": "e51616055bf82366e6d100bf09194d4b962896535215aab7ffc30932f3c9f7e7",
+      "bytes": 17104
     },
     {
       "origen": "routes/transfers.js",
       "destino": "routes/transfers.js",
-      "sha256": "0d8459745355f3abc9740b977dbec2c77f1775b4ff939d749c545330f8e0b566",
-      "bytes": 11100
+      "sha256": "b43a22129ccc88f9512426a8a11effef2f7c90cb49ea86ecbd5ace61bbb24cfa",
+      "bytes": 11158
     },
     {
       "origen": "routes/webhooks.js",
@@ -691,8 +691,8 @@
     {
       "origen": "services/topupProcessor.js",
       "destino": "services/topupProcessor.js",
-      "sha256": "26ece6469237fd40ac274445a7dae698074f5da443323dd11afc687099679484",
-      "bytes": 11440
+      "sha256": "da32fe8359024a232eb02756bfca41f96849d777f64e432ec15f188c3cc8d33f",
+      "bytes": 11472
     },
     {
       "origen": "services/walletRail.js",

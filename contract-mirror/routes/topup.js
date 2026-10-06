@@ -16,6 +16,7 @@ const stripeOxxo = require('../services/stripe-oxxo');
 const topupProcessor = require('../services/topupProcessor');
 const notifs = require('../services/notifications');
 const { centsToDisplay } = require('../utils/money');
+const { montoEnTexto } = require('../services/montoEnTexto');
 const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
 const logger = require('../utils/logger');
 
@@ -261,7 +262,7 @@ router.post('/oxxo', requireWalletRail, validateBody(topupOxxo), async (req, res
     if (!applied.idempotent) {
       await notifs.create({
         user_id: topup.user_id, type: 'topup_pending',
-        body: `Tenés hasta el ${voucher.expires_at.toLocaleDateString('es-MX')} para pagar ${centsToDisplay(Number(topup.amount_cents))} en cualquier OXXO`,
+        body: `Tenés hasta el ${voucher.expires_at.toLocaleDateString('es-MX')} para pagar ${montoEnTexto(Number(topup.amount_cents))} en cualquier OXXO`,
         payload: { amount_cents: Number(topup.amount_cents), voucher_number: voucher.voucher_number },
         related_entity_type: 'topup', related_entity_id: topup.id,
       });
