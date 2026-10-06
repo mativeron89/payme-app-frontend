@@ -177,6 +177,25 @@ export function CreateMesaFlow() {
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
+  /**
+   * D202 · H-03 (auditoría Codex): dos toques en Capturar iniciaban dos
+   * lecturas. `scanning` se prende recién al empezar la lectura y el JPEG del
+   * cuadro se espera antes: en ese hueco pasaban los dos. La reserva es una ref
+   * que se toma ANTES del primer await: un estado llega al render siguiente,
+   * tarde para un segundo toque en el mismo tick. Desde ese render el botón
+   * queda deshabilitado por `capturando` y, sin volver a habilitarse, por
+   * `scanning`: los dos cambian en el mismo render cuando llega el JPEG.
+   */
+  const capturandoRef = useRef(false);
+  const [capturando, setCapturando] = useState(false);
+  /**
+   * El intento de lectura vigente. Cambia al empezar otro (capturar o elegir de
+   * la galería) y al desmontar: salir de la cámara navega a Inicio y desmonta
+   * esta pantalla. Una captura o una respuesta que llega tarde de un intento que
+   * ya no es el vigente se descarta, sin pantalla ni restaurante.
+   */
+  const intentoLecturaRef = useRef(0);
+  useEffect(() => () => { intentoLecturaRef.current += 1; }, []);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   /**
@@ -886,26 +905,36 @@ export function CreateMesaFlow() {
    * conteste 413 es un minuto perdido en la mesa. El adaptador conserva su
    * guarda igual. n81 · el piso, si el dueño lo publica (`rechazoLocalDeImagen`).
    */
-  function usarFoto(foto: Blob) {
+  function usarFoto(foto: Blob, intento = ++intentoLecturaRef.current) {
     setCaptura(URL.createObjectURL(foto));
     const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
     if (rechazo) {
       setScanIssue(rechazo);
       return;
     }
-    void runScan(foto);
+    void runScan(foto, intento);
   }
 
   /** D177 · el disparador: el cuadro del video, a JPEG, y sigue igual que una foto elegida. */
   async function disparar() {
-    if (scanning || camara.estado !== 'lista') return;
-    const foto = await camara.capturar(MAX_TICKET_IMAGE_BYTES);
-    if (foto === 'sin_cuadro') return;
-    if (foto === 'muy_grande') {
-      setScanIssue('too_large');
-      return;
+    if (capturandoRef.current || scanning || camara.estado !== 'lista') return;
+    capturandoRef.current = true;
+    setCapturando(true);
+    const intento = ++intentoLecturaRef.current;
+    try {
+      const foto = await camara.capturar(MAX_TICKET_IMAGE_BYTES);
+      // Se salió de la cámara (se desmontó) mientras se armaba el JPEG.
+      if (intento !== intentoLecturaRef.current) return;
+      if (foto === 'sin_cuadro') return;
+      if (foto === 'muy_grande') {
+        setScanIssue('too_large');
+        return;
+      }
+      usarFoto(foto, intento);
+    } finally {
+      capturandoRef.current = false;
+      setCapturando(false);
     }
-    usarFoto(foto);
   }
 
   /**
@@ -933,7 +962,7 @@ export function CreateMesaFlow() {
     if (!restaurantIdRef.current) void resolveTicketRestaurant().catch(() => undefined);
   }
 
-  async function runScan(image?: Blob) {
+  async function runScan(image: Blob | undefined, intento: number) {
     setScanning(true);
     setUploadProgress(null);
     setError(null);
@@ -944,6 +973,9 @@ export function CreateMesaFlow() {
     setScanIssue(null);
     try {
       const r = await api.scanTicket(image, setUploadProgress);
+      // D202 · una respuesta de un intento abandonado no toca nada: ni el
+      // recibo, ni el restaurante, ni el paso.
+      if (intento !== intentoLecturaRef.current) return;
       // Cada lectura reemplaza el recibo, aunque venga sin él.
       ocrReceiptRef.current = r.receipt ?? null;
       setOcrMerchant(r.merchant);
@@ -1761,7 +1793,7 @@ export function CreateMesaFlow() {
             type="button"
             className="camara-galeria"
             onClick={() => fileInput.current?.click()}
-            disabled={scanning}
+            disabled={scanning || capturando}
             aria-label={t('Elegir una foto de la galería')}
           >
             <Icon name="image" size={24} />
@@ -1770,7 +1802,7 @@ export function CreateMesaFlow() {
             type="button"
             className="camara-disparador"
             onClick={() => { void disparar(); }}
-            disabled={scanning || camara.estado !== 'lista' || captura !== null}
+            disabled={scanning || capturando || camara.estado !== 'lista' || captura !== null}
             aria-label={t('Capturar')}
           />
           <span className="camara-controles-espacio" aria-hidden="true" />
