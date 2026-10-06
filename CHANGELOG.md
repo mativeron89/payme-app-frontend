@@ -11,6 +11,60 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.217.3 — Correcciones de la auditoría Codex: una lectura por captura, foco de las hojas, un flaky y el espejo (2026-10-06)
+
+Orden AF-D202-AUDITORIA-20261006 (sha256 b8f01038…), decisión 202 de Mati (b7325ea6…: «Sí, corregilos»), sobre el
+informe Codex `INFORME_AUDITORIA_TRAMO_CLAUDE_APP_OPS_20261006.md` (64058959…), §H-03, §H-04 y §D. Base `ac8fae3`.
+
+- **H-03 · dos toques en Capturar iniciaban dos lecturas** (`CreateMesaFlow`, desde D177/0.212.0). `disparar` miraba
+  `scanning` antes de esperar el JPEG del cuadro, y `scanning` recién se prendía al empezar la lectura.
+  - Reserva síncrona antes del primer await (`capturandoRef`), liberada en `finally`; el disparador y la galería
+    quedan deshabilitados mientras se arma el JPEG (`capturando`), y sin volver a habilitarse pasan a `scanning`.
+  - Un intento de lectura (`intentoLecturaRef`) que cambia al empezar otro y al desmontar la pantalla (salir de la
+    cámara navega a Inicio): la captura o la respuesta que llega tarde de un intento abandonado se descarta, sin
+    pantalla, recibo ni `resolveRestaurant`. Ese último era un efecto real: con el riel apagado, una respuesta
+    tardía después de salir resolvía el restaurante del ticket (medido sobre la base: 0 → 1).
+  - Se probó y se sacó lo que no se podía romper con un test: una segunda ref de lectura, los incrementos del intento
+    en «Volver» y «Reintentar» (los cubre el desmontaje; «Reintentar» no convive con una captura pendiente) y la
+    guarda en el `catch` (sin pantalla montada no tiene efecto).
+- **H-04 · Tab salía de las hojas modales.** Un hook nuevo, `useHojaModal`: el foco entra, Tab y Shift+Tab ciclan
+  dentro, el armazón `.app` queda `inert` (la hoja va por portal a `body`; el toast es hermano de `.app` y se sigue
+  anunciando) y Escape cierra. Lo visual no cambia.
+  - **Tocadas:** «¿Borrar todas las notificaciones?» (`AvisosScreen`), la guía «Agregar a inicio»
+    (`GuiaAgregarAInicio`) y el panel de diagnóstico (`DiagnosticoPantalla`). El foco al disparador lo devuelven,
+    como antes, `AvisosScreen` y `MasScreen` (en el cuadro siguiente: un clic en Safari no enfoca el botón); el
+    panel de diagnóstico se abre con 5 toques en un logo que no recibe foco.
+  - **Censo de la clase, NO tocadas:** `TicketDigitalDialog` y la hoja del ticket de `CreateMesaFlow` ya contienen
+    el Tab (sin fondo inerte); la hoja de «Cerrar mesa» (`MesaDetailView`) y `SelectorDePeriodo` no contienen el
+    foco (ni foco inicial ni Escape); `PuertaArroba` y `PuertaLegal` son pantallas completas.
+- **Flaky `pais-zona-horaria` («7 países/62 IANA»):** el oráculo salía del `datetime` del `<time>` y después se
+  esperaba el texto; si en el medio cambiaba el minuto, el texto avanzaba y el oráculo no (main 37362628976,
+  intento 2: esperaba 17:24, recibió 17:25). Ahora el `datetime` y el texto se leen juntos, en una sola evaluación
+  (React los escribe en el mismo commit). Sin reintentos. Sonda con el reloj de Playwright (no versionada): el
+  patrón viejo con un minuto en el medio falla igual que el CI («14:24» contra «14:25»); el nuevo pasa.
+- **Espejo del contrato:** estaba en `06fa648` y el dueño, en v2.152.0, regeneró su inventario sobre `1a2da3b`
+  (`d964995`). Misma población (121); cambiaron 4 archivos del riel de saldo durmiente: los textos de notificaciones
+  usan `montoEnTexto` en lugar de `centsToDisplay` (sin «.00», la parte de App Backend de D181). Copiados de
+  `1a2da3b` con su sha verificado e inventario adoptado: integridad y paridad OK. El checkout local del AB tiene su
+  HEAD en v2.90.0: se comparó contra el inventario del dueño en su `origin/main`, sin fetch ni escrituras en el AB.
+  - **Corrige lo que dijo 0.217.0** («las notificaciones siguen con «.00» porque las escribe App Backend»): desde
+    v2.152.0 el dueño las escribe sin decimales. **Pendiente, fuera de esta orden:** el mock del front todavía
+    siembra «Juan López te envió $80.00», «Se acreditaron $500.00…» y «Se cobró el faltante de la mesa ($210.00)…»
+    (`src/api/mock/store.ts`).
+- **Pruebas:**
+  - `e2e/doble-captura.spec.ts` (4): dos toques en el mismo tick (antes del render) dan una captura y una lectura,
+    con disparador y galería deshabilitados; salir con el JPEG pendiente no lee; salir con la lectura en curso no
+    resuelve el restaurante ni abre el ticket (control positivo: la fachada contestó); y el control: sin salir, la
+    respuesta sí resuelve y abre el ticket. El JPEG se retiene en `canvas.toBlob`; sin OCR real ni red.
+  - `e2e/foco-modales.spec.ts` (3): en cada hoja, el foco entra; Tab y Shift+Tab, el doble de veces que botones,
+    nunca salen y la recorren entera; `.app` inerte y un botón de atrás no toma el foco; al cerrar, el fondo vuelve
+    (y el foco al disparador en las dos que lo tienen).
+  - **Rojo sobre `ac8fae3`:** los 3 de H-03 y los 3 de H-04; el control, verde.
+  - **Mutantes:** H-03 6/6 (sin la reserva, sin descartar la captura, sin descartar la respuesta, sin el desmontaje,
+    y el disparador o la galería sin `capturando`); H-04 6/6 (sin `inert`, sin el ciclo hacia adelante o hacia
+    atrás, sin devolver `inert`, sin Escape, sin el foco inicial).
+- **Lo que no se probó acá:** el iPhone (doble toque real con la cámara, latencia móvil) y lectores de pantalla.
+
 ## 0.217.2 — Los buscadores de Amigos, Grupos e Invitar, sin el borde celeste (2026-10-05)
 
 Orden AF-D195-AMIGOS-BORDE-BUSCADOR-20261005 (sha256 90fe38b6…), decisión 195 de Mati (a307d857…), que aclara D182.
