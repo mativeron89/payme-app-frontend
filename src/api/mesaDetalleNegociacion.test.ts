@@ -21,9 +21,11 @@ const { api, IS_MOCK } = await import('./index');
 
 beforeEach(() => {
   expect(IS_MOCK).toBe(false);
+  // Valores cortos a propósito: la auditoría de secretos (el repo es público)
+  // marca cualquier `*_token` con 8 caracteres o más.
   saveSession({
-    access_token: 'access-mesa',
-    refresh_token: 'refresh-mesa',
+    access_token: 'a',
+    refresh_token: 'r',
     family_id: 'family-mesa',
     principal_id: 'user-mesa',
     user: { id: 'user-mesa', payme_id: 'payme_mx_mesa', email: 'mesa@example.com', first_name: 'Me', last_name: 'Sa' },
