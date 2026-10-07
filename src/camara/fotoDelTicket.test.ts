@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   CALIDADES,
   OBJETIVO_BYTES,
+  codificarFoto,
+  decodificarFoto,
   escalera,
   LADO_MAX,
   prepararFotoDelTicket,
   tamanoObjetivo,
   type Herramientas,
   type Paso,
+  type Recorte,
 } from './fotoDelTicket';
 
 /** El tope del dueño: `fileSize: 8 * 1024 * 1024` en `routes/ocr.js`. */
@@ -249,5 +252,131 @@ describe('D212 · prepararFotoDelTicket', () => {
       expect(((await prepararFotoDelTicket(blob(10), TOPE, h)) as Blob).size).toBe(500);
       expect(registro).toEqual({ soltada: 1, terminada: 1 });
     });
+  });
+});
+
+/**
+ * D222 · el recorte a mano. Herramientas falsas que anotan cuántos argumentos
+ * recibió cada `codificar` y con qué recorte: sin tocar el marco, la llamada
+ * tiene que ser la de siempre (dos argumentos), no una con el recorte de la
+ * foto entera.
+ */
+function falsasConRecorte(
+  ancho: number,
+  alto: number,
+  pesar: (paso: Paso, recorte: Recorte | undefined) => number | null,
+) {
+  const llamadas: { paso: Paso; recorte: Recorte | undefined; argumentos: number }[] = [];
+  const registro = { soltada: 0, terminada: 0 };
+  const h: Herramientas<string> = {
+    async decodificar() {
+      return { ancho, alto, fuente: 'foto', soltar: () => { registro.soltada += 1; } };
+    },
+    async codificar(...args: [string, Paso, Recorte?]) {
+      const [, paso, recorte] = args;
+      llamadas.push({ paso, recorte, argumentos: args.length });
+      const bytes = pesar(paso, recorte);
+      return bytes === null ? null : blob(bytes);
+    },
+    terminar() {
+      registro.terminada += 1;
+    },
+  };
+  return { h, llamadas, registro };
+}
+
+describe('D222 · decodificar una vez, codificar con el recorte del marco', () => {
+  it('🔴 sin recorte, las mismas llamadas que antes de D222: dos argumentos, la escalera de la foto entera', async () => {
+    const pesos: Record<number, number> = { 0.92: mib(6), 0.85: mib(5.2), 0.75: mib(4.4) };
+    const hoy = falsas(4032, 3024, (p) => pesos[p.calidad] ?? 1);
+    const antes = await prepararFotoDelTicket(blob(10), TOPE, hoy.h);
+    const ahora = falsasConRecorte(4032, 3024, (p) => pesos[p.calidad] ?? 1);
+    const foto = await decodificarFoto(blob(10), ahora.h);
+    const { foto: preparada, enteraPorFallo } = await codificarFoto(foto!, TOPE, ahora.h, null);
+    expect(ahora.llamadas.map((l) => l.paso)).toEqual(hoy.pasos);
+    expect(ahora.llamadas.every((l) => l.argumentos === 2 && l.recorte === undefined)).toBe(true);
+    expect((preparada as Blob).size).toBe((antes as Blob).size);
+    expect(enteraPorFallo).toBe(false);
+    expect(ahora.registro).toEqual({ soltada: 1, terminada: 1 });
+  });
+
+  it('🔴 un ticket angosto y largo: 900×3000 de una foto 3024×4032 sale 900×3000, con ese rectángulo', async () => {
+    const recorte = { x: 1062, y: 516, ancho: 900, alto: 3000 };
+    const { h, llamadas } = falsasConRecorte(3024, 4032, () => mib(1.2));
+    const foto = await decodificarFoto(blob(10), h);
+    const { foto: preparada } = await codificarFoto(foto!, TOPE, h, recorte);
+    expect((preparada as Blob).size).toBe(mib(1.2));
+    expect(llamadas).toEqual([{ paso: { ancho: 900, alto: 3000, calidad: 0.92 }, recorte, argumentos: 3 }]);
+  });
+
+  it('🔴 un recorte más largo que 4096 baja a 4096 de lado largo, con su proporción', async () => {
+    const recorte = { x: 0, y: 0, ancho: 1000, alto: 5000 };
+    const { h, llamadas } = falsasConRecorte(3000, 6000, () => mib(2));
+    const foto = await decodificarFoto(blob(10), h);
+    await codificarFoto(foto!, TOPE, h, recorte);
+    expect(llamadas[0]!.paso).toEqual({ ancho: 819, alto: 4096, calidad: 0.92 });
+    expect(llamadas[0]!.recorte).toEqual(recorte);
+  });
+
+  it('el recorte recorre la misma escalera: primero la calidad, después el lado', async () => {
+    const recorte = { x: 10, y: 20, ancho: 2000, alto: 3000 };
+    const { h, llamadas } = falsasConRecorte(3024, 4032, (p) => (p.ancho === 2000 ? mib(6) : mib(3)));
+    const foto = await decodificarFoto(blob(10), h);
+    const { foto: preparada } = await codificarFoto(foto!, TOPE, h, recorte);
+    expect((preparada as Blob).size).toBe(mib(3));
+    expect(llamadas.map((l) => [l.paso.ancho, l.paso.calidad])).toEqual([
+      [2000, 0.92], [2000, 0.85], [2000, 0.75], [1600, 0.85],
+    ]);
+    expect(llamadas.every((l) => l.recorte === recorte)).toBe(true);
+  });
+
+  it('🔴 si el lienzo no puede con el recorte, va la foto ENTERA, saneada, y se avisa', async () => {
+    const recorte = { x: 100, y: 100, ancho: 800, alto: 2400 };
+    const { h, llamadas, registro } = falsasConRecorte(3024, 4032, (_p, r) => (r ? null : mib(3)));
+    const foto = await decodificarFoto(blob(10), h);
+    const { foto: preparada, enteraPorFallo } = await codificarFoto(foto!, TOPE, h, recorte);
+    expect((preparada as Blob).size).toBe(mib(3));
+    expect(enteraPorFallo).toBe(true);
+    // Toda la escalera del recorte y después la entera, de dos argumentos.
+    expect(llamadas.filter((l) => l.recorte)).toHaveLength(9);
+    expect(llamadas[9]).toEqual({ paso: { ancho: 3024, alto: 4032, calidad: 0.92 }, recorte: undefined, argumentos: 2 });
+    expect(registro).toEqual({ soltada: 1, terminada: 1 });
+  });
+
+  it('si codificar el recorte tira, también cae a la entera', async () => {
+    const recorte = { x: 0, y: 0, ancho: 10, alto: 10 };
+    const { h } = falsasConRecorte(100, 100, () => 500);
+    const codificar = h.codificar.bind(h);
+    h.codificar = async (f, p, r) => {
+      if (r) throw new Error('lienzo');
+      return codificar(f, p);
+    };
+    const foto = await decodificarFoto(blob(10), h);
+    const res = await codificarFoto(foto!, TOPE, h, recorte);
+    expect((res.foto as Blob).size).toBe(500);
+    expect(res.enteraPorFallo).toBe(true);
+  });
+
+  it('🔴 si tampoco sale la entera: «sin_preparar», sin aviso de entera, y no se sube nada', async () => {
+    const { h, registro } = falsasConRecorte(3024, 4032, () => null);
+    const foto = await decodificarFoto(blob(10), h);
+    const res = await codificarFoto(foto!, TOPE, h, { x: 0, y: 0, ancho: 100, alto: 100 });
+    expect(res).toEqual({ foto: 'sin_preparar', enteraPorFallo: false });
+    expect(registro).toEqual({ soltada: 1, terminada: 1 });
+  });
+
+  it('un recorte que dibuja pero no entra en el tope es «muy_grande»: la entera tampoco entraría', async () => {
+    const { h, llamadas } = falsasConRecorte(3024, 4032, () => TOPE + 1);
+    const foto = await decodificarFoto(blob(10), h);
+    const res = await codificarFoto(foto!, TOPE, h, { x: 0, y: 0, ancho: 3000, alto: 4000 });
+    expect(res).toEqual({ foto: 'muy_grande', enteraPorFallo: false });
+    expect(llamadas.every((l) => l.recorte)).toBe(true);
+  });
+
+  it('decodificar: null si no abre o si tira', async () => {
+    const no = falsas(1, 1, () => 1, { decodifica: false });
+    expect(await decodificarFoto(blob(10), no.h)).toBeNull();
+    const tira = falsas(1, 1, () => 1, { decodifica: 'tira' });
+    expect(await decodificarFoto(blob(10), tira.h)).toBeNull();
   });
 });

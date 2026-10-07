@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
-import { FOTO_QUE_NO_ABRE, fotoChica, sacarFoto } from './_camara';
+import { FOTO_QUE_NO_ABRE, fotoChica, sacarFoto, usarFoto } from './_camara';
 
 /**
  * AF-AVISO-FOTO · Mati, en el iPhone: «Funciona pero la imagen sale mal». En
@@ -67,6 +67,7 @@ test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enter
   test('foto chica, rechazada antes de subir (lo de Mati): el aviso entero y «Sacar otra foto»', async ({ page }) => {
     await abrirEscaneo(page);
     await page.locator('.camara-controles input[type="file"]').setInputFiles(await fotoChica(page));
+    await usarFoto(page);
     const aviso = page.getByRole('alert');
     await expect(aviso).toContainText('Toma otra más cerca, con buena luz y sin recortarla.');
     // La captura va ANTES de afirmar, para que exista también en la base.

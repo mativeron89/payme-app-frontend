@@ -16,9 +16,15 @@ import { FOTO_DE_CAMARA, sacarFoto } from './_camara';
  * El JPEG se retiene (`canvas.toBlob` encola su callback hasta soltarlo) y la
  * lectura se cuenta en la fachada sin OCR real ni red: `scanTicket` queda
  * colgada o se suelta a mano. La cámara es la simulada de `ingresar`.
+ *
+ * D222 · la foto llega primero al marco para recortarla y se prepara recién con
+ * «Usar foto». La regla de D202 vale en los dos puntos: dos fotos juntas abren
+ * UNA (una decodificación), y dos toques juntos en «Usar foto» preparan y leen
+ * una vez.
  */
 
 interface Ventana {
+  __decodificaciones: number;
   __jpeg: Array<() => void>;
   __soltarJpeg: boolean;
   __lecturas: number;
@@ -33,6 +39,13 @@ async function retenerJpeg(page: Page): Promise<void> {
     const w = window as unknown as Ventana;
     w.__jpeg = [];
     w.__soltarJpeg = false;
+    // D222 · cuántas fotos se abrieron (la de cada foto que llega, una vez).
+    w.__decodificaciones = 0;
+    const decodificar = HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode = function () {
+      if (this.src.startsWith('blob:')) w.__decodificaciones += 1;
+      return decodificar.call(this);
+    };
     const original = HTMLCanvasElement.prototype.toBlob;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback, ...resto: [string?, number?]) {
       original.call(this, (b) => {
@@ -128,6 +141,15 @@ test.describe('D202 · H-03 · una sola lectura por intento (D212: la foto prepa
   test('🔴 dos fotos en el mismo instante: una preparación y una lectura', async ({ page }) => {
     await abrirCamara(page, false);
     await dosFotosJuntas(page);
+    // D222 · llegan al marco: se abrió UNA de las dos.
+    await expect(page.getByRole('group', { name: 'Marco del recorte' })).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as unknown as Ventana).__decodificaciones)).toBe(1);
+    // Y dos toques en «Usar foto» en el mismo tick: una preparación.
+    await page.getByRole('button', { name: 'Usar foto', exact: true }).evaluate((b: HTMLButtonElement) => {
+      b.click();
+      b.click();
+    });
     await expect.poll(() => jpegRetenidos(page)).toBeGreaterThan(0);
     await expect(sacarFotoBoton(page)).toBeDisabled();
     await expect(galeria(page)).toBeDisabled();

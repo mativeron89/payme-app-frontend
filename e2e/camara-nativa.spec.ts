@@ -1,6 +1,6 @@
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { camarasAbiertas, FOTO_DE_CAMARA, FOTO_QUE_NO_ABRE, sacarFoto, type ArchivoDeFoto } from './_camara';
+import { camarasAbiertas, conOrientacion, FOTO_DE_CAMARA, FOTO_QUE_NO_ABRE, sacarFoto, usarFoto, type ArchivoDeFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 
 /**
@@ -133,24 +133,6 @@ async function fotoSintetica(
   return { name: nombre, mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') };
 }
 
-/**
- * La misma foto con un EXIF mínimo de orientación, justo después del SOI: así
- * guarda el iPhone una foto vertical (los píxeles acostados y la marca de girar).
- * 6 = girar 90° a la derecha para verla.
- */
-function conOrientacion(foto: ArchivoDeFoto, orientacion: number): ArchivoDeFoto {
-  const tiff = Buffer.from([
-    0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08, // «MM», 42, IFD0 en 8
-    0x00, 0x01, // una entrada
-    0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, orientacion, 0x00, 0x00, // Orientation, SHORT, 1
-    0x00, 0x00, 0x00, 0x00, // sin IFD siguiente
-  ]);
-  const cuerpo = Buffer.concat([Buffer.from('Exif\0\0', 'binary'), tiff]);
-  const app1 = Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, cuerpo.length + 2]), cuerpo]);
-  expect(foto.buffer.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
-  return { ...foto, buffer: Buffer.concat([foto.buffer.subarray(0, 2), app1, foto.buffer.subarray(2)]) };
-}
-
 const atributo = (selector: FileChooser, nombre: string) => selector.element().getAttribute(nombre);
 
 /**
@@ -235,6 +217,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const foto = await fotoSintetica(page, 4032, 3024);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect(s.tipo).toBe('image/jpeg');
@@ -249,6 +232,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const foto = await fotoSintetica(page, 6000, 4500);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect([s.ancho, s.alto]).toEqual([4096, 3072]);
@@ -262,6 +246,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const foto = conOrientacion(await fotoSintetica(page, 400, 200, { renglones: false }), 6);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     // Girada 90° a la derecha: vertical, con el rojo arriba.
@@ -278,6 +263,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const foto = conOrientacion(await fotoSintetica(page, 400, 200, { renglones: false }), 1);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect([s.ancho, s.alto]).toEqual([400, 200]);
@@ -294,6 +280,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const [otra] = await Promise.all([page.waitForEvent('filechooser'), sacarFotoBoton(page).click()]);
     expect(await atributo(otra, 'capture')).toBe('environment');
     await otra.setFiles(await fotoSintetica(page, 1600, 1200));
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
   });
 
@@ -304,6 +291,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     const [selector] = await Promise.all([page.waitForEvent('filechooser'), galeria(page).click()]);
     expect(await atributo(selector, 'capture')).toBeNull();
     await selector.setFiles(await fotoSintetica(page, 6000, 4500, { nombre: 'IMG_0421.jpg' }));
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect([s.ancho, s.alto]).toEqual([4096, 3072]);
@@ -338,6 +326,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await page.locator('.camara-controles input[type="file"]').setInputFiles({
       name: 'ticket.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64'),
     });
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect(s.tipo).toBe('image/jpeg');
@@ -385,6 +374,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await espiarOcr(page);
     const selector = await tocarNueva(page);
     await selector.setFiles(FOTO_DE_CAMARA);
+    await usarFoto(page);
     await expect(page.getByRole('alert').filter({ hasText: 'No pudimos leer el ticket' })).toBeVisible();
     // Control: la foto se abrió y se intentó la escalera entera.
     expect(await page.evaluate(() => (window as unknown as { __toBlob: number }).__toBlob)).toBe(9);
@@ -419,6 +409,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     });
     // Control: el original pasa el tope de 8 MiB y la app igual lo prepara.
     expect(original).toBeGreaterThan(8 * 1024 * 1024);
+    await usarFoto(page);
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     const s = await subida(page);
     expect(s.bytes).toBeLessThanOrEqual(5_000_000);

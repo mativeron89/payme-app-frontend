@@ -9,7 +9,7 @@ import {
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
@@ -45,7 +45,15 @@ import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
 import { desgloseDelTicket, montoDeDescuento, notaDeLoQueNoSeReparte } from './desgloseDelTicket';
 import { abrirCamaraNativa, alRecibirFotoDeLaCamara } from '../camara/camaraNativa';
-import { prepararEnNavegador } from '../camara/fotoDelTicket';
+import {
+  codificarFoto,
+  decodificarFoto,
+  herramientasDelNavegador,
+  type FotoDecodificada,
+  type Herramientas,
+} from '../camara/fotoDelTicket';
+import { MARCO_ENTERO, recortePixeles, type Marco } from '../camara/marcoDelRecorte';
+import { RecorteDelTicket } from '../components/RecorteDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
 import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
@@ -262,6 +270,14 @@ export function CreateMesaFlow() {
   const [stepperPulse, setStepperPulse] = useState(false);
   const stepperRef = useRef<HTMLDivElement | null>(null);
   /**
+   * D222 · la burbuja va pegada abajo, encima del círculo de Continuar. Cuando
+   * la barra lleva su fila de arriba («Completa nombre y precio…»), la barra es
+   * más alta y la burbuja tiene que subir lo mismo: se mide la fila (una o dos
+   * líneas, según el idioma y el ancho) y entra al aire de abajo del área.
+   */
+  const motivoRef = useRef<HTMLDivElement | null>(null);
+  const [filaSobreBarra, setFilaSobreBarra] = useState(0);
+  /**
    * Lo mismo que el stepper, para el TICKET incompleto — §5 bis · E, adjudicado
    * por Diseño el 2026-08-21 (`diseno@0206d44`): el círculo no se apaga por
    * falta de un dato, y responde con toast + scroll + pulso, LAS TRES JUNTAS.
@@ -348,11 +364,51 @@ export function CreateMesaFlow() {
    */
   const [captura, setCaptura] = useState<string | null>(null);
   useEffect(() => () => { if (captura) URL.revokeObjectURL(captura); }, [captura]);
+  /**
+   * D222 · la foto recién llegada, decodificada UNA vez, en pantalla con el
+   * marco hasta «Usar foto». `origen` decide el texto y la salida de «Sacar
+   * otra» (la cámara) o «Elegir otra» (la galería). `intento` es el de
+   * `intentoLecturaRef` de cuando llegó: una foto de un intento abandonado no
+   * se usa. El marco arranca en la foto entera: sin tocarlo, se manda entera.
+   */
+  const [recortando, setRecortando] = useState<{
+    foto: FotoDecodificada<HTMLImageElement>;
+    herramientas: Herramientas<HTMLImageElement>;
+    origen: 'camara' | 'galeria';
+    intento: number;
+  } | null>(null);
+  const [marco, setMarco] = useState<Marco>(MARCO_ENTERO);
+  /** D222 · el recorte no se pudo dibujar y se mandó la foto entera. */
+  const [recorteFallido, setRecorteFallido] = useState(false);
+  // La foto en recorte es de esta pantalla: se suelta al reemplazarla o al irse.
+  // Con «Usar foto» la suelta `codificarFoto`, y antes se saca de acá.
+  const recortandoRef = useRef(recortando);
+  recortandoRef.current = recortando;
+  const soltarRecorte = useCallback(() => {
+    const actual = recortandoRef.current;
+    recortandoRef.current = null;
+    if (actual) {
+      actual.foto.soltar();
+      actual.herramientas.terminar();
+    }
+    setRecortando(null);
+  }, []);
+  useEffect(() => () => {
+    const actual = recortandoRef.current;
+    recortandoRef.current = null;
+    if (actual) {
+      actual.foto.soltar();
+      actual.herramientas.terminar();
+    }
+  }, []);
+  useEffect(() => {
+    if (step !== 'scan') soltarRecorte();
+  }, [step, soltarRecorte]);
   const recibirFotoRef = useRef(recibirFoto);
   recibirFotoRef.current = recibirFoto;
   useEffect(() => {
     if (step !== 'scan') return undefined;
-    return alRecibirFotoDeLaCamara((foto) => { void recibirFotoRef.current(foto); });
+    return alRecibirFotoDeLaCamara((foto) => { void recibirFotoRef.current(foto, 'camara'); });
   }, [step]);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
@@ -829,6 +885,19 @@ export function CreateMesaFlow() {
     editItems.length > 0 &&
     editItems.every((i, index) => i.name.trim().length > 0 && lineTotals[index] !== null) &&
     total > 0;
+  useEffect(() => {
+    const fila = motivoRef.current?.closest('.appbar-above') ?? null;
+    if (!fila) {
+      setFilaSobreBarra(0);
+      return undefined;
+    }
+    const medir = () => setFilaSobreBarra(Math.ceil(fila.getBoundingClientRect().height));
+    medir();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(medir);
+    ro.observe(fila);
+    return () => ro.disconnect();
+  }, [ticketValid, step]);
   const ticketInvalidReason =
     editItems.length === 0
       ? t('Agrega al menos un consumo.')
@@ -931,39 +1000,94 @@ export function CreateMesaFlow() {
   }
 
   /**
-   * Una foto, de la cámara nativa o de la galería. D212 · primero se prepara
-   * (`fotoDelTicket`: lado largo hasta 4096, hasta 8 MiB, derecha, en JPEG y sin
-   * metadatos); después queda en pantalla y, si pasa los límites de tamaño, va
-   * al OCR de siempre. El techo y el piso se miran ACÁ y no después de subir:
-   * con mala señal, mandar 12 MB para que el backend conteste 413 es un minuto
-   * perdido en la mesa. El adaptador conserva su guarda igual. n81 · el piso,
-   * si el dueño lo publica (`rechazoLocalDeImagen`), sobre la foto preparada.
+   * Una foto, de la cámara nativa o de la galería. D222 · primero se decodifica
+   * UNA vez y queda en pantalla con el marco (`RecorteDelTicket`): «Usar foto»
+   * la prepara y la sube. Si no se puede decodificar (un HEIC fuera de Safari,
+   * un archivo dañado), no hay marco ni subida: el aviso de formato.
    *
    * D202 · una foto a la vez: la reserva se toma antes del primer await. Si se
-   * salió de la pantalla mientras se preparaba, la foto se descarta.
+   * salió de la pantalla mientras se decodificaba, la foto se descarta. La foto
+   * que estaba con el marco queda hasta que llega la nueva: si la persona
+   * cancela la cámara, sigue ahí.
    */
-  async function recibirFoto(original: Blob) {
+  async function recibirFoto(original: Blob, origen: 'camara' | 'galeria') {
     if (capturandoRef.current) return;
     capturandoRef.current = true;
     setCapturando(true);
     setScanIssue(null);
     setCaptura(null);
+    setRecorteFallido(false);
     const intento = ++intentoLecturaRef.current;
     try {
-      const foto = await prepararEnNavegador(original, MAX_TICKET_IMAGE_BYTES);
+      const herramientas = herramientasDelNavegador();
+      const foto = await decodificarFoto(original, herramientas);
+      if (intento !== intentoLecturaRef.current) {
+        foto?.soltar();
+        herramientas.terminar();
+        return;
+      }
+      soltarRecorte();
+      // AF-D212-SEGUIMIENTO · sin una foto recodificada no se sube nada: el
+      // original podría llevar metadatos. El aviso de formato que ya existe,
+      // con «Sacar otra foto», «Cargarlo a mano» y la galería abajo.
+      if (!foto) {
+        herramientas.terminar();
+        setScanIssue('image_type');
+        return;
+      }
+      setMarco(MARCO_ENTERO);
+      const nueva = { foto, herramientas, origen, intento };
+      recortandoRef.current = nueva;
+      setRecortando(nueva);
+    } finally {
+      capturandoRef.current = false;
+      setCapturando(false);
+    }
+  }
+
+  /**
+   * D222 · «Usar foto»: la foto con el marco, preparada (`fotoDelTicket`: el
+   * recorte y la escala en un solo dibujo, lado largo hasta 4096, hasta 8 MiB,
+   * derecha, en JPEG y sin metadatos). Sin tocar el marco, la foto entera, como
+   * antes. Después queda en pantalla y, si pasa los límites de tamaño, va al
+   * OCR de siempre. El techo y el piso se miran ACÁ y no después de subir: con
+   * mala señal, mandar 12 MB para que el backend conteste 413 es un minuto
+   * perdido en la mesa. El adaptador conserva su guarda igual. n81 · el piso,
+   * si el dueño lo publica (`rechazoLocalDeImagen`), sobre la foto preparada.
+   */
+  async function usarFoto() {
+    const elegida = recortandoRef.current;
+    if (!elegida || capturandoRef.current) return;
+    capturandoRef.current = true;
+    setCapturando(true);
+    // Desde acá la foto es de `codificarFoto`, que la suelta al terminar.
+    recortandoRef.current = null;
+    setRecortando(null);
+    const { intento } = elegida;
+    try {
+      if (intento !== intentoLecturaRef.current) {
+        elegida.foto.soltar();
+        elegida.herramientas.terminar();
+        return;
+      }
+      const recorte = recortePixeles(marco, elegida.foto.ancho, elegida.foto.alto);
+      const { foto, enteraPorFallo } = await codificarFoto(
+        elegida.foto,
+        MAX_TICKET_IMAGE_BYTES,
+        elegida.herramientas,
+        recorte,
+      );
       if (intento !== intentoLecturaRef.current) return;
       if (foto === 'muy_grande') {
         setScanIssue('too_large');
         return;
       }
-      // AF-D212-SEGUIMIENTO · sin una foto recodificada no se sube nada: el
-      // original podría llevar metadatos. El aviso de formato que ya existe,
-      // con «Sacar otra foto», «Cargarlo a mano» y la galería abajo.
       if (foto === 'sin_preparar') {
         setScanIssue('image_type');
         return;
       }
       setCaptura(URL.createObjectURL(foto));
+      setRecorteFallido(enteraPorFallo);
       const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
       if (rechazo) {
         setScanIssue(rechazo);
@@ -1631,10 +1755,22 @@ export function CreateMesaFlow() {
               ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
               : capturando
                 ? t('Preparando la foto…')
-                : t('Saca la foto del ticket completo, de cerca y con luz')}
+                : recortando
+                  ? t('Ajusta el marco para dejar sólo el ticket')
+                  : t('Saca la foto del ticket completo, de cerca y con luz')}
           </div>
         </div>
         <div className="camara-foto-slot">
+          {recortando ? (
+            <RecorteDelTicket
+              foto={recortando.foto.fuente}
+              ancho={recortando.foto.ancho}
+              alto={recortando.foto.alto}
+              marco={marco}
+              onMarco={setMarco}
+              disabled={capturando}
+            />
+          ) : (
           <div className="camara-foto" aria-busy={scanning || capturando || undefined}>
             {captura ? (
               <img
@@ -1651,8 +1787,17 @@ export function CreateMesaFlow() {
             )}
             {scanning && <div className="scan-line" />}
           </div>
+          )}
         </div>
         <div className="camara-panel">
+          {/* D222 · el recorte no se pudo dibujar: se mandó la foto entera, que
+              es la de antes del marco. Se dice, sin ámbar y sin frenar. */}
+          {recorteFallido && (
+            <div className="card card-p recorte-aviso" role="status">
+              <Icon name="info" size={18} />
+              <span>{t('No pudimos recortar la foto. Mandamos la foto entera.')}</span>
+            </div>
+          )}
           {scanning && uploadProgress && uploadProgress.totalBytes !== null && (
             <div className="scan-upload-progress">
               <progress
@@ -1836,6 +1981,39 @@ export function CreateMesaFlow() {
             )}
         </div>
         <div className="camara-controles">
+          {/* D222 · con la foto en el marco: «Sacar otra» (o «Elegir otra», si
+              vino de la galería) arriba y «Usar foto» abajo, donde cae el
+              pulgar. «Sacar otra» abre la cámara en este mismo toque, como el
+              botón redondo. La foto actual queda hasta que llega la otra. */}
+          {recortando ? (
+            <>
+              {recortando.origen === 'camara' ? (
+                <button type="button" className="camara-galeria" onClick={doScan} disabled={capturando}>
+                  <Icon name="camera" size={20} />
+                  <span>{t('Sacar otra')}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="camara-galeria"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={capturando}
+                >
+                  <Icon name="image" size={20} />
+                  <span>{t('Elegir otra')}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="camara-usar"
+                onClick={() => { void usarFoto(); }}
+                disabled={capturando}
+              >
+                {t('Usar foto')}
+              </button>
+            </>
+          ) : (
+          <>
           {/* AF-GALERIA · decisión 91 («Sí, las dos»), D177 y D212: la galería,
               abajo a la izquierda. 🔴 El `accept` sale del DUEÑO del contrato, no
               de una lista acá: Textract procesa jpeg y png. `readOcrRail` lo
@@ -1862,6 +2040,8 @@ export function CreateMesaFlow() {
             disabled={scanning || capturando}
             aria-label={t('Sacar foto')}
           />
+          </>
+          )}
           <input
             ref={fileInput}
             type="file"
@@ -1871,7 +2051,7 @@ export function CreateMesaFlow() {
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              void recibirFoto(file);
+              void recibirFoto(file, 'galeria');
             }}
           />
         </div>
@@ -1963,7 +2143,10 @@ export function CreateMesaFlow() {
             </button>
           </div>
         </div>
-        <div className="scroll flow-scroll ticket-flow-scroll">
+        <div
+          className="scroll flow-scroll ticket-flow-scroll"
+          style={{ '--fila-sobre-barra': `${filaSobreBarra}px` } as CSSProperties}
+        >
           {ticketContinuing && (
             <div className="note" role="status" aria-live="polite">
               {t('Continuando…')}
@@ -2043,7 +2226,6 @@ export function CreateMesaFlow() {
           <div
             ref={stepperRef}
             className={`card card-p division-stepper${participants === null ? ' division-stepper--pending' : ''}${stepperPulse ? ' tip-block--pulse' : ''}`}
-            style={{ marginBottom: 12 }}
             onAnimationEnd={() => setStepperPulse(false)}
           >
             <div className="sectlabel division-stepper-title">
@@ -2370,7 +2552,7 @@ export function CreateMesaFlow() {
         )}
         <AppBottomBar
           active={null}
-          above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
+          above={!ticketValid ? <div className="tk-invalid" ref={motivoRef}>{ticketInvalidReason}</div> : undefined}
           center={{
             label: ticketContinuing ? t('Continuando…') : t('Continuar'),
             icon: 'arrow-right',

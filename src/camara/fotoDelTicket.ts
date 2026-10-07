@@ -33,8 +33,19 @@
  *   Si Safari no puede con el lienzo de 4096², la escalera baja al lado
  *   siguiente antes de rendirse.
  *
+ * - **El recorte de D222 va en el mismo dibujo.** Mati: «el ticket es muy
+ *   angosto y cuando es largo tengo que alejar el celular y queda en la foto
+ *   MUCHO espacio que nada tiene que ver al ticket». La foto se decodifica UNA
+ *   vez (`decodificarFoto`), se muestra con el marco y, con «Usar foto», se
+ *   codifica (`codificarFoto`) con el rectángulo de origen del marco, en el
+ *   mismo `drawImage` que la escala: sin JPEG intermedio ni segunda
+ *   decodificación. Sin recorte, las llamadas son las de siempre. Si el lienzo
+ *   no puede con el recorte, se prueba la foto entera y se avisa; nunca se sube
+ *   el original. No hay recorte automático: el detector de la auditoría de
+ *   Codex perdió el TOTAL de un ticket.
+ *
  * La lógica no toca el DOM: decodificar y codificar se inyectan, y los tests
- * corren sin navegador. `prepararEnNavegador` es la versión real.
+ * corren sin navegador. `herramientasDelNavegador` son las reales.
  */
 
 /** El lado largo de la foto, como mucho. */
@@ -87,10 +98,24 @@ export interface FotoDecodificada<F> {
   soltar(): void;
 }
 
+/**
+ * D222 · el rectángulo de la foto que se manda, en píxeles de la foto ya
+ * orientada (las medidas de `FotoDecodificada`). Enteros, dentro de la foto.
+ */
+export interface Recorte {
+  readonly x: number;
+  readonly y: number;
+  readonly ancho: number;
+  readonly alto: number;
+}
+
 export interface Herramientas<F> {
   decodificar(foto: Blob): Promise<FotoDecodificada<F> | null>;
-  /** El JPEG de `fuente` a ese tamaño y calidad; `null` si el lienzo no pudo. */
-  codificar(fuente: F, paso: Paso): Promise<Blob | null>;
+  /**
+   * El JPEG de `fuente` a ese tamaño y calidad; `null` si el lienzo no pudo.
+   * Con `recorte`, sólo ese rectángulo de la foto, escalado al paso.
+   */
+  codificar(fuente: F, paso: Paso, recorte?: Recorte): Promise<Blob | null>;
   /** Suelta el lienzo al terminar (en Safari la memoria de lienzos es chica). */
   terminar(): void;
 }
@@ -103,9 +128,97 @@ export interface Herramientas<F> {
 export type FotoPreparada = Blob | 'muy_grande' | 'sin_preparar';
 
 /**
- * La foto lista para subir: el primer JPEG de la escalera que pesa hasta
- * `objetivo`; si ninguno, el primero (el de más píxeles y calidad) que entra en
- * `maxBytes`. Sin decodificar o sin ningún lienzo, `'sin_preparar'`.
+ * D222 · la foto decodificada una vez, con su orientación aplicada. `null` si
+ * el navegador no puede abrirla: entonces no se muestra ni se sube nada.
+ */
+export async function decodificarFoto<F>(
+  original: Blob,
+  herramientas: Herramientas<F>,
+): Promise<FotoDecodificada<F> | null> {
+  try {
+    return await herramientas.decodificar(original);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Recorre la escalera: el primer JPEG que pesa hasta `objetivo`; si ninguno, el
+ * primero (el de más píxeles y calidad) que entra en `maxBytes`. No suelta nada.
+ */
+async function recorrerEscalera<F>(
+  foto: FotoDecodificada<F>,
+  maxBytes: number,
+  herramientas: Herramientas<F>,
+  objetivo: number,
+  recorte: Recorte | null,
+): Promise<FotoPreparada> {
+  let algunLienzo = false;
+  let mejorEnElTope: Blob | null = null;
+  const ancho = recorte ? recorte.ancho : foto.ancho;
+  const alto = recorte ? recorte.alto : foto.alto;
+  for (const paso of escalera(ancho, alto)) {
+    let jpeg: Blob | null = null;
+    try {
+      // Sin recorte, la llamada de siempre (dos argumentos): la foto entera.
+      jpeg = recorte
+        ? await herramientas.codificar(foto.fuente, paso, recorte)
+        : await herramientas.codificar(foto.fuente, paso);
+    } catch {
+      jpeg = null;
+    }
+    if (!jpeg || jpeg.size <= 0) continue;
+    algunLienzo = true;
+    if (jpeg.size <= objetivo) return jpeg;
+    mejorEnElTope ??= jpeg.size <= maxBytes ? jpeg : null;
+  }
+  if (mejorEnElTope) return mejorEnElTope;
+  // Ningún lienzo funcionó (Safari sin memoria para 4096²... ni para 2048):
+  // no se sube nada. Si hubo JPEG y ninguno entró, es que no entra.
+  return algunLienzo ? 'muy_grande' : 'sin_preparar';
+}
+
+/**
+ * D222 · lo que sale de codificar: la foto preparada y si fue la ENTERA porque
+ * el recorte no se pudo dibujar (la pantalla lo avisa).
+ */
+export interface Codificada {
+  readonly foto: FotoPreparada;
+  readonly enteraPorFallo: boolean;
+}
+
+/**
+ * D222 · la foto decodificada, recortada o no, lista para subir. Suelta la
+ * foto y el lienzo al terminar, salga como salga.
+ *
+ * Con `recorte`, si ningún paso de la escalera pudo dibujarlo, se prueba la
+ * foto entera: es la misma foto que se mandaba antes de D222, saneada igual.
+ * Si el recorte dibujó pero no entra en el tope, la entera tampoco entraría.
+ */
+export async function codificarFoto<F>(
+  foto: FotoDecodificada<F>,
+  maxBytes: number,
+  herramientas: Herramientas<F>,
+  recorte: Recorte | null = null,
+  objetivo = Math.min(OBJETIVO_BYTES, maxBytes),
+): Promise<Codificada> {
+  try {
+    if (recorte) {
+      const recortada = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, recorte);
+      if (recortada !== 'sin_preparar') return { foto: recortada, enteraPorFallo: false };
+      const entera = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null);
+      return { foto: entera, enteraPorFallo: entera instanceof Blob };
+    }
+    return { foto: await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null), enteraPorFallo: false };
+  } finally {
+    foto.soltar();
+    herramientas.terminar();
+  }
+}
+
+/**
+ * La foto lista para subir, sin recorte: decodificar y codificar, la misma
+ * escalera de siempre. Sin decodificar o sin ningún lienzo, `'sin_preparar'`.
  */
 export async function prepararFotoDelTicket<F>(
   original: Blob,
@@ -113,36 +226,9 @@ export async function prepararFotoDelTicket<F>(
   herramientas: Herramientas<F>,
   objetivo = Math.min(OBJETIVO_BYTES, maxBytes),
 ): Promise<FotoPreparada> {
-  let foto: FotoDecodificada<F> | null = null;
-  try {
-    foto = await herramientas.decodificar(original);
-  } catch {
-    foto = null;
-  }
+  const foto = await decodificarFoto(original, herramientas);
   if (!foto) return 'sin_preparar';
-  let algunLienzo = false;
-  let mejorEnElTope: Blob | null = null;
-  try {
-    for (const paso of escalera(foto.ancho, foto.alto)) {
-      let jpeg: Blob | null = null;
-      try {
-        jpeg = await herramientas.codificar(foto.fuente, paso);
-      } catch {
-        jpeg = null;
-      }
-      if (!jpeg || jpeg.size <= 0) continue;
-      algunLienzo = true;
-      if (jpeg.size <= objetivo) return jpeg;
-      mejorEnElTope ??= jpeg.size <= maxBytes ? jpeg : null;
-    }
-  } finally {
-    foto.soltar();
-    herramientas.terminar();
-  }
-  if (mejorEnElTope) return mejorEnElTope;
-  // Ningún lienzo funcionó (Safari sin memoria para 4096²... ni para 2048):
-  // no se sube nada. Si hubo JPEG y ninguno entró, es que no entra.
-  return algunLienzo ? 'muy_grande' : 'sin_preparar';
+  return (await codificarFoto(foto, maxBytes, herramientas, null, objetivo)).foto;
 }
 
 /** Las herramientas del navegador: `<img>` para decodificar, un lienzo para el JPEG. */
@@ -171,15 +257,20 @@ export function herramientasDelNavegador(doc: Document = document): Herramientas
         alto: img.naturalHeight,
         fuente: img,
         soltar: () => {
+          // D222 · si estaba en pantalla con el marco, sale de ahí también.
+          img.remove();
           img.removeAttribute('src');
           URL.revokeObjectURL(url);
         },
       };
     },
-    async codificar(img, paso) {
+    async codificar(img, paso, recorte) {
       lienzo ??= doc.createElement('canvas');
-      const clave = `${paso.ancho}x${paso.alto}`;
+      const clave = recorte
+        ? `${paso.ancho}x${paso.alto}@${recorte.x},${recorte.y},${recorte.ancho}x${recorte.alto}`
+        : `${paso.ancho}x${paso.alto}`;
       if (dibujado !== clave) {
+        dibujado = '';
         lienzo.width = paso.ancho;
         lienzo.height = paso.alto;
         const ctx = lienzo.getContext('2d');
@@ -188,7 +279,14 @@ export function herramientasDelNavegador(doc: Document = document): Herramientas
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, paso.ancho, paso.alto);
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, paso.ancho, paso.alto);
+        // D222 · el recorte y la escala en el MISMO dibujo, desde la foto
+        // decodificada: el rectángulo de origen está en píxeles de la foto ya
+        // orientada, que es lo que dibuja `drawImage` con un `<img>`.
+        if (recorte) {
+          ctx.drawImage(img, recorte.x, recorte.y, recorte.ancho, recorte.alto, 0, 0, paso.ancho, paso.alto);
+        } else {
+          ctx.drawImage(img, 0, 0, paso.ancho, paso.alto);
+        }
         dibujado = clave;
       }
       const destino = lienzo;
@@ -203,9 +301,4 @@ export function herramientasDelNavegador(doc: Document = document): Herramientas
       dibujado = '';
     },
   };
-}
-
-/** La versión real, con el `document` de la app. */
-export function prepararEnNavegador(original: Blob, maxBytes: number): Promise<FotoPreparada> {
-  return prepararFotoDelTicket(original, maxBytes, herramientasDelNavegador());
 }

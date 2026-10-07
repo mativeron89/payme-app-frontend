@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.222.0 — Recortar la foto del ticket a mano y la burbuja «¿Cuántos son en la mesa?» abajo (2026-10-07)
+
+Orden AF-RECORTE-BURBUJA-20261007 (sha256 1ce4562f…); decisión D222 (152f714e…): «Siempre, con el marco abierto
+(Recomendada)» y «Abajo, cerca de Continuar (Recomendada)». Plan aprobado (0254660b…), respuesta A = (1). Base `d202f41`
+(0.221.0). Diseño de la foto de Codex (fc3270ab…): transformar una sola vez desde la fuente; **sin recorte automático**
+(el detector de esa auditoría perdió el TOTAL de un ticket).
+
+- **El marco** (Mati: «el ticket es muy angosto y cuando es largo tengo que alejar el celular y queda en la foto MUCHO
+  espacio que nada tiene que ver al ticket»):
+  - la foto de la cámara o de la galería se decodifica UNA vez y, en vez de subirse, queda en «Escanea el ticket» con un
+    marco que arranca en sus bordes; la ayuda dice «Ajusta el marco para dejar sólo el ticket»;
+  - se ajusta desde las cuatro esquinas y los cuatro bordes: ocho `<button>` con nombre («Esquina de arriba a la
+    izquierda»…, «Borde de la derecha»), zonas de 44 px, las flechas del teclado mueven un 2%; lo de afuera se ve en
+    negro al 55%; borde blanco con «L» en las esquinas y barritas en los bordes, con contorno oscuro;
+  - el marco vive en proporciones de la foto; no sale de ella ni baja de 64 px de lado; `touch-action: none`, un dedo
+    por vez (el segundo se ignora), y si el gesto se cancela queda donde estaba; arrastrar adentro no hace nada;
+  - abajo, «Sacar otra» (abre la cámara en el mismo toque) o «Elegir otra» si la foto vino de la galería (el selector
+    sin `capture`), y «Usar foto». La foto con el marco queda hasta que llega la otra: si se cancela, sigue ahí.
+- **Qué se sube:**
+  - sin tocar el marco (o vuelto a los bordes), la foto entera: la misma escalera y las mismas llamadas al lienzo que
+    antes, de dos argumentos;
+  - con el marco movido, el recorte en píxeles de la foto ya orientada (EXIF) va en el MISMO `drawImage` que la escala,
+    desde la foto decodificada, y sigue la escalera de siempre (`LADO_MAX` 4096, calidades, `OBJETIVO_BYTES`) sobre las
+    medidas del recorte: sin JPEG intermedio ni segunda decodificación; la vista del marco es el mismo `<img>`;
+  - si el lienzo no puede con el recorte, se prueba la foto entera y se avisa sin ámbar: «No pudimos recortar la foto.
+    Mandamos la foto entera.»; si tampoco sale, el aviso de formato de siempre. Nunca se sube el original;
+  - `fotoDelTicket` se parte en `decodificarFoto` y `codificarFoto` (suelta foto y lienzo al terminar);
+    `prepararFotoDelTicket` queda igual por fuera; `prepararEnNavegador` sale (su único uso era la pantalla).
+- **«Usar foto» es blanco con el azul de acción (16,5:1).** El plan decía naranja: el naranja de la marca con letra blanca
+  da 2,84:1 y la orden pide AA.
+- **La burbuja** (Mati: «bajar un poco la burbuja de cuántos son en la mesa, queda mucho espacio vacío»): el área de
+  «¿Cómo dividen?» pasa a columna y la burbuja lleva `margin-top: auto`, así lo que sobra va entre las opciones y ella.
+  El aire de abajo se mide contra el círculo de Continuar (el alto de la barra, con el indicador de inicio, + 26) o,
+  con la fila «Completa nombre y precio…», contra esa fila (medida en la pantalla). Termina 12 px arriba; ese aire se
+  achica hasta 8 sólo si no entra: medido a 375×667, con 12 fijos «¿Cómo dividen?» se pasaba 3,8 px y se desplazaba
+  (el pedido 127 es que entre en una vista), y queda a 8,2. Los hijos del área no se achican: la burbuja es una `.card`
+  con `overflow: hidden` y, en columna, a 320×568 quedaba de 28 px, cortada.
+- **Textos nuevos** (con su inglés): la ayuda, «Usar foto», «Sacar otra», «Elegir otra», el aviso del recorte, «Marco
+  del recorte», «Foto del ticket» y los ocho nombres de las zonas.
+- **Pruebas:**
+  - unitarias: `fotoDelTicket.test` (+9: sin recorte idéntico a antes, el ticket angosto, más de 4096, la escalera con
+    recorte, la caída a la entera, tirar, `sin_preparar`, `muy_grande`, decodificar) y `marcoDelRecorte.test` (20);
+  - e2e `recorte-del-ticket.spec.ts` (9, a 375×667, leyendo lo que recibe `api.scanTicket`): sin tocar, el ticket
+    angosto (medidas y colores), EXIF 6, el borde y el mínimo, «Sacar otra», «Elegir otra», el lienzo roto, el segundo
+    dedo y el teclado; `burbuja-abajo.spec.ts` (7): 390×844, 430×932, 375×667, 390×664, 320×568, «¿Cuántos pagan?» y
+    la fila sobre la barra;
+  - los specs que sacan o eligen la foto pasan por «Usar foto»: `sacarFoto` lo toca (salvo `{ usar: false }`),
+    `usarFoto` nuevo; `conOrientacion` pasa a `_camara.ts`. `doble-captura` cambia de sujeto con el paso nuevo y
+    conserva la regla de D202 en los dos puntos: dos fotos juntas se abren UNA vez (cuenta `decode`) y dos toques
+    juntos en «Usar foto» preparan y leen una vez;
+  - rojo sobre `d202f41`: el producto de la base da 9 unitarios rojos más `marcoDelRecorte.test` sin su módulo, y los
+    9 e2e del recorte; sólo el CSS de la base da 6 de 7 e2e de la burbuja (375×667 pasa: ahí no cambia nada);
+  - mutantes 20 de 20 cazados (`logs/mutantes/resumen.txt`).
+- **Lo que prueba Mati en el iPhone (D63):** una foto de lejos a un ticket largo y angosto, ajustar el marco y «Usar
+  foto»; sin mover el marco, la foto entera; desde la galería también; y la burbuja abajo, encima de «Continuar».
+
 ## 0.221.0 — El descuento impreso aparte, sin repartir, y la mesa retomada con IVA agregado (2026-10-07)
 
 Orden AF-NOCHE-DESCUENTO-20261007 (sha256 05c0a598…) y su adenda 1 (a04a57b0…, L1); decisiones D218, D215 y D209.

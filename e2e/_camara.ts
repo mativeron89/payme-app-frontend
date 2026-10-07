@@ -11,7 +11,8 @@ import { expect, type FileChooser, type Page } from '@playwright/test';
  * (evento `filechooser`) y este registro guarda los de la cámara —los que
  * tienen `capture`— hasta que el test «saca la foto» con `sacarFoto(page)`, que
  * es lo que antes era tocar «Capturar»: el disparador y «Usar foto» de la
- * cámara del teléfono.
+ * cámara del teléfono. D222 · después toca también «Usar foto» en el marco
+ * de PayMe (`usarFoto`), salvo `{ usar: false }`.
  *
  * La foto por defecto es una foto real del repo (`landing/img/mesa-comida.jpg`,
  * 1400×1050): se decodifica y se vuelve a codificar como lo haría la de una
@@ -59,10 +60,25 @@ export function camarasAbiertas(page: Page): number {
 }
 
 /**
- * Saca la foto con la cámara que se abrió último. Falla si la cámara nativa no
- * se abrió: eso es justo lo que este helper tiene que notar.
+ * D222 · la foto llega con el marco para recortarla: «Usar foto» la manda tal
+ * cual (sin tocar el marco, la foto entera, como antes de D222). Espera el
+ * marco antes de tocar: si la foto no se pudo abrir, no hay marco y falla acá.
  */
-export async function sacarFoto(page: Page, foto: ArchivoDeFoto = FOTO_DE_CAMARA): Promise<void> {
+export async function usarFoto(page: Page): Promise<void> {
+  await expect(page.getByRole('group', { name: 'Marco del recorte' })).toBeVisible();
+  await page.getByRole('button', { name: 'Usar foto', exact: true }).click();
+}
+
+/**
+ * Saca la foto con la cámara que se abrió último y, salvo `{ usar: false }`,
+ * toca «Usar foto» en el marco (D222). Falla si la cámara nativa no se abrió:
+ * eso es justo lo que este helper tiene que notar.
+ */
+export async function sacarFoto(
+  page: Page,
+  foto: ArchivoDeFoto = FOTO_DE_CAMARA,
+  { usar = true }: { usar?: boolean } = {},
+): Promise<void> {
   const registro = camaras.get(page);
   if (!registro) throw new Error('sacarFoto(): falta camaraSimulada(page) (la instala ingresar())');
   const { pendientes } = registro;
@@ -70,6 +86,7 @@ export async function sacarFoto(page: Page, foto: ArchivoDeFoto = FOTO_DE_CAMARA
   const ultima = pendientes[pendientes.length - 1]!;
   pendientes.length = 0;
   await ultima.setFiles(foto);
+  if (usar) await usarFoto(page);
 }
 
 /**
@@ -102,3 +119,21 @@ export const FOTO_QUE_NO_ABRE: ArchivoDeFoto = {
   mimeType: 'image/jpeg',
   buffer: Buffer.alloc(40 * 1024, 7),
 };
+
+/**
+ * La misma foto con un EXIF mínimo de orientación, justo después del SOI: así
+ * guarda el iPhone una foto vertical (los píxeles acostados y la marca de girar).
+ * 6 = girar 90° a la derecha para verla.
+ */
+export function conOrientacion(foto: ArchivoDeFoto, orientacion: number): ArchivoDeFoto {
+  const tiff = Buffer.from([
+    0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08, // «MM», 42, IFD0 en 8
+    0x00, 0x01, // una entrada
+    0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, orientacion, 0x00, 0x00, // Orientation, SHORT, 1
+    0x00, 0x00, 0x00, 0x00, // sin IFD siguiente
+  ]);
+  const cuerpo = Buffer.concat([Buffer.from('Exif\0\0', 'binary'), tiff]);
+  const app1 = Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, cuerpo.length + 2]), cuerpo]);
+  expect(foto.buffer.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+  return { ...foto, buffer: Buffer.concat([foto.buffer.subarray(0, 2), app1, foto.buffer.subarray(2)]) };
+}

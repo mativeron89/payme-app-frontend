@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
-import { FOTO_DE_CAMARA, fotoChica } from './_camara';
+import { FOTO_DE_CAMARA, fotoChica, usarFoto } from './_camara';
 
 /**
  * AF-GALERIA · decisión 91 de Mati: al abrir una mesa con el ticket, la foto se
@@ -40,6 +40,7 @@ test.describe('AF-GALERIA · la foto del ticket, de la cámara o del carrete', (
     // AF-D212-SEGUIMIENTO · una foto de verdad: lo que no se puede preparar ya
     // no se sube (antes servían 40 KB al azar).
     await input.setInputFiles({ ...FOTO_DE_CAMARA, name: 'IMG_0421.jpg' });
+    await usarFoto(page);
     // El mock lee el ticket de siempre y el flujo sigue a la división.
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -52,6 +53,7 @@ test.describe('AF-GALERIA · la foto del ticket, de la cámara o del carrete', (
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     await input.setInputFiles(await fotoChica(page, 'IMG_0422.jpg'));
+    await usarFoto(page);
     await expect(page.getByRole('alert')).toContainText('La foto es demasiado pequeña para leer el ticket.');
   });
 });
