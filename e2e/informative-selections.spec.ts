@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
 import { sacarFoto } from './_camara';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * Decisión 32 (Mati, 2026-09-24) · «Listo» guarda y vuelve a Inicio. Estas
@@ -12,6 +13,7 @@ async function listoYVolver(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(enMesa);
+  await enTuMesaConLaLista(page);
 }
 
 /**
@@ -68,7 +70,7 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
   }, code);
   expect(created).toMatchObject({ mode: 'igual', n: participantes });
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+  await enTuMesaConLaLista(page);
   return created.code;
 }
 
@@ -95,6 +97,7 @@ test.describe('Listo · selección informativa v2', () => {
     await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(mio(page, 'Tagliatelle Bolognese')).toBeVisible();
     await expect(mio(page, 'Tagliatelle Bolognese').locator('.qc-pildora')).toHaveText('½');
     expect(await page.evaluate((mesaCode) => {
@@ -136,6 +139,7 @@ test.describe('Listo · selección informativa v2', () => {
     await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(mio(page, 'Risotto ai Funghi').locator('.qc-pildora')).toHaveText('⅓');
   });
 
@@ -153,6 +157,7 @@ test.describe('Listo · selección informativa v2', () => {
       };
     });
     await page.goto('/#/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
@@ -177,7 +182,7 @@ test.describe('Listo · selección informativa v2', () => {
     expect(await page.evaluate(() => location.pathname)).toBe(enMesa);
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
     await expect(rows).toHaveCount(total);
@@ -188,6 +193,7 @@ test.describe('Listo · selección informativa v2', () => {
     }
 
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     await expect(page.locator('.qc-renglon [data-estado="mio"]')).toHaveCount(total);
   });
@@ -213,6 +219,7 @@ test.describe('Listo · selección informativa v2', () => {
     });
 
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
+    await enTuMesaConLaLista(page);
     const saved = mio(page, 'Omakase para dos');
     await expect(saved).toBeVisible();
     await expect(saved.locator('.qc-pildora')).toHaveText('½');
@@ -261,6 +268,7 @@ test.describe('Listo · selección informativa v2', () => {
     });
 
     await expect(page.getByText('No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.')).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
     expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.r2.puts'))).toBeNull();
@@ -326,6 +334,7 @@ test.describe('Listo · selección informativa v2', () => {
     const first = page.getByRole('button', { name: plato('Omakase para dos') });
     const second = page.getByRole('button', { name: plato('Sashimi mixto') });
     await expect(page.getByText('Estamos leyendo tu selección guardada…')).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(first).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_initial)());
     await expect(first).toBeEnabled();
@@ -340,6 +349,7 @@ test.describe('Listo · selección informativa v2', () => {
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     // n130 · sin recargar: el `api` parchado en memoria tiene que seguir vivo.
     await irEnLaApp(page, '/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
 
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.reload.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
@@ -378,12 +388,13 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(guardado).toBeEnabled();
     await expect(listo).toHaveCount(0);
     // De vuelta en la mesa, con la fila guardada a la vista.
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(mio(page, 'Tagliatelle Bolognese')).toBeVisible();
     // Una sola señal: no hay toast además de la nota.
     await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
 
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(nota).toBeVisible();
     await expect(guardado).toBeEnabled();
     await expect(mio(page, 'Tagliatelle Bolognese')).toBeVisible();
@@ -427,6 +438,7 @@ test.describe('Listo · selección informativa v2', () => {
 
     // Lo guardado vuelve con su porción en la píldora.
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(mio(page, 'Tagliatelle Bolognese').locator('.qc-pildora')).toHaveText('¼');
 
     // El dueño rechaza por N (400): el front lo dice con su copy y conserva lo guardado.

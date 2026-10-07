@@ -85,7 +85,8 @@ async function abrirInvitar(page: Page): Promise<void> {
   await expect(fila(page, '.inv-row', 'Sofía Fernández')).toBeVisible();
 }
 
-const seccionQuienes = (page: Page) => page.getByRole('region', { name: 'Quiénes se sumaron' });
+/** D223 · en «Tu mesa» la sección es «Quiénes están en la mesa», con «Tú» primero. */
+const seccionQuienes = (page: Page) => page.getByRole('region', { name: 'Quiénes están en la mesa' });
 
 /** Costura del mock: dos cuentas vivas SIN nombre en PA-2847, una con @ y otra sin. */
 async function participantesSinNombre(page: Page): Promise<void> {
@@ -243,7 +244,7 @@ for (const dueno of ['viejo', 'apagado'] as const) {
       const lista = seccionQuienes(page);
       await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
       await expect(lista.getByText('Renata Ortiz', { exact: true })).toBeVisible();
-      await expect(lista.locator('.quien-id')).toHaveCount(0);
+      await expect(lista.locator('.quien:not(.quien--titular) .quien-id')).toHaveCount(0);
       await expect(page.getByText('No pudimos cargar quiénes se sumaron.')).toHaveCount(0);
       await sinCodigo(page);
     });

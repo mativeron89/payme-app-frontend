@@ -42,7 +42,13 @@ async function pedidos(page: Page): Promise<number> {
   });
 }
 
-const seccion = (page: Page) => page.getByRole('region', { name: 'Quiénes se sumaron' });
+/**
+ * D223 · en «Tu mesa» la sección se llama «Quiénes están en la mesa», es
+ * desplegable (abierta al entrar sin solicitudes) y empieza por la fila del
+ * titular, «Tú». Lo que se prueba acá —los demás, su nombre, @ y foto— es lo
+ * de siempre.
+ */
+const seccion = (page: Page) => page.getByRole('region', { name: 'Quiénes están en la mesa' });
 
 test.describe('AF-25 · quiénes se sumaron (n72)', () => {
   test('el organizador ve nombre, apellido y @, y nada más', async ({ page }) => {
@@ -54,7 +60,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     // uno; Renata no, y debajo de ella no va nada). El código, nunca.
     await expect(lista.getByText('@luis.cardenas', { exact: true })).toBeVisible();
     await expect(lista.getByText('Renata Ortiz', { exact: true })).toBeVisible();
-    await expect(lista.locator('.quien-id')).toHaveCount(1);
+    await expect(lista.locator('.quien:not(.quien--titular) .quien-id')).toHaveCount(1);
     await expect(lista).not.toContainText('payme_');
     // AF-32 (aviso 2.5.3): Luis tiene foto y la ve el organizador, como `blob:`
     // en memoria; Renata no tiene, y va con sus iniciales. Sin plata.

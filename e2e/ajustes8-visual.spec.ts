@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
+import { abrirTusConsumos } from './_mesa';
 
 async function capturar(page: Page, name: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
@@ -119,6 +120,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await page.goto('/#/');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await page.goto(`/#/mesa/${mesa.code}`);
+    await abrirTusConsumos(page);
 
     const [titleBox, itemsBox] = await Promise.all([
       page.locator('.mesa-selection-title').boundingBox(),

@@ -97,6 +97,16 @@ import {
   decodeRecoveryRequestResponse,
 } from './recoveryFlow';
 import { confirmCardPayment } from './stripe';
+import {
+  decodeCancelarSolicitud,
+  decodeDecisionDelTitular,
+  decodePedirUnirse,
+  decodeSolicitudesDeLaMesa,
+  decodeSolicitudPropia,
+  type RespuestaAlPedir,
+  type SolicitudParaElTitular,
+  type SolicitudPropia,
+} from './joinRequests';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
 import type {
   AcceptInvitationLinkResponse,
@@ -408,6 +418,17 @@ export interface Api {
    * propia. 404 `avatar_not_found` para todo lo demás.
    */
   getParticipantAvatar(code: string, participantId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
+  /**
+   * D219 · D223 · unirse con el código (contrato `mesa-join-requests/v1`).
+   * Quien pide: pedir, consultar y cancelar. El titular: listar, aceptar y
+   * rechazar. Claves exactas en cada respuesta (`joinRequests.ts`).
+   */
+  requestJoin(code: string): Promise<RespuestaAlPedir>;
+  getJoinRequest(id: string): Promise<SolicitudPropia>;
+  cancelJoinRequest(id: string): Promise<void>;
+  getMesaJoinRequests(code: string): Promise<readonly SolicitudParaElTitular[]>;
+  acceptJoinRequest(code: string, id: string): Promise<void>;
+  rejectJoinRequest(code: string, id: string): Promise<void>;
   payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation, intent: MonetaryIntentHandle): Promise<PayMesaResponse>;
   createInvitation(code: string, idempotencyKey: string): Promise<CreateInvitationResponse>;
   /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
@@ -867,6 +888,23 @@ const realApi: Api = {
     ),
   closeMesa: async (code) =>
     decodeMesaCerrada(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/close`)),
+  requestJoin: async (code) => decodePedirUnirse(await httpRequest<unknown>('POST', '/join-requests', { code })),
+  getJoinRequest: async (id) =>
+    decodeSolicitudPropia(await httpRequest<unknown>('GET', `/join-requests/${encodeURIComponent(id)}`), id),
+  cancelJoinRequest: async (id) =>
+    decodeCancelarSolicitud(await httpRequest<unknown>('POST', `/join-requests/${encodeURIComponent(id)}/cancel`), id),
+  getMesaJoinRequests: async (code) =>
+    decodeSolicitudesDeLaMesa(await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/join-requests`)),
+  acceptJoinRequest: async (code, id) =>
+    decodeDecisionDelTitular(await httpRequest<unknown>(
+      'POST',
+      `/mesas/${encodeURIComponent(code)}/join-requests/${encodeURIComponent(id)}/accept`,
+    ), id, 'accepted'),
+  rejectJoinRequest: async (code, id) =>
+    decodeDecisionDelTitular(await httpRequest<unknown>(
+      'POST',
+      `/mesas/${encodeURIComponent(code)}/join-requests/${encodeURIComponent(id)}/reject`,
+    ), id, 'rejected'),
   releaseItems: async (code, itemIds) =>
     decodeSoltarConsumo(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/items/release`, {
       item_ids: [...itemIds],
@@ -1230,6 +1268,12 @@ const mockApi: Api = {
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
   closeMesa: async (code) => decodeMesaCerrada(await mock.mockCloseMesa(code, 'user')),
+  requestJoin: async (code) => decodePedirUnirse(await mock.mockRequestJoin(code)),
+  getJoinRequest: async (id) => decodeSolicitudPropia(await mock.mockGetJoinRequest(id), id),
+  cancelJoinRequest: async (id) => decodeCancelarSolicitud(await mock.mockCancelJoinRequest(id), id),
+  getMesaJoinRequests: async (code) => decodeSolicitudesDeLaMesa(await mock.mockMesaJoinRequests(code)),
+  acceptJoinRequest: async (code, id) => decodeDecisionDelTitular(await mock.mockDecideJoinRequest(code, id, 'accept'), id, 'accepted'),
+  rejectJoinRequest: async (code, id) => decodeDecisionDelTitular(await mock.mockDecideJoinRequest(code, id, 'reject'), id, 'rejected'),
   getMesaParticipants: async (code) => decodeParticipantes(await mock.mockMesaParticipants(code, 'user')),
   getParticipantAvatar: (code, participantId) => mock.mockParticipantAvatar(code, participantId, 'user'),
   payMesa: async (code, req, guestToken, expectation, intent) =>

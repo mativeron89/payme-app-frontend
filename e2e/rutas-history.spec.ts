@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * n130 · AF-HISTORY-N130 · rutas normales con History API, sin romper enlaces
@@ -63,10 +64,10 @@ test.describe('n130 · rutas normales', () => {
     await expect(page.getByRole('region', { name: 'Tus mesas' })).toBeVisible();
 
     await page.goto('/mesa/PA-2847');
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await page.reload();
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847$/);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
   });
 
   test('la navegación de la app crea entradas y Atrás vuelve', async ({ page }) => {
@@ -95,7 +96,7 @@ test.describe('n130 · enlaces viejos con # y sin secreto → su ruta', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847$/);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
   });
 
   test('el QR del restaurante: #/scan?r=… conserva su query en la ruta nueva', async ({ page }) => {

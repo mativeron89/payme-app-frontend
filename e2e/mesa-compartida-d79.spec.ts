@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
 
 /**
  * AF-MESA-D79 · decisiones 76 y 79 a 81 de Mati, con el mock que replica al
@@ -121,7 +122,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // Decisión 79 · adentro: cuánto queda del plato, sin nombres, y la barra de
     // lo elegido con el formato de la decisión 77.
     await page.goto(`/#/mesa/${CODIGO}`);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(fila(page, 'Pizza para compartir')).toContainText('Queda ½');
     await expect(barra(page)).toHaveText('$150 / $840 (18%)');
     await expect(page.locator('main, .screen').first()).not.toContainText(OTRA_CUENTA);
@@ -186,6 +187,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     const t0 = await page.evaluate(() => Date.now() + 5_000);
     await page.clock.pauseAt(t0);
     await page.goto(`/#/mesa/${CODIGO}`);
+    await abrirTusConsumos(page);
     await page.clock.runFor(3_000);
     await expect(barra(page)).toHaveText('$0 / $840 (0%)');
     await otraCuentaDeclara(page, [[PARRILLADA, 5000]]);

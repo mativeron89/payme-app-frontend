@@ -3147,7 +3147,8 @@ export async function mockMesaParticipants(
   if (identity === 'guest' || !mesa.openedByUser) return fail(403, 'not_mesa_organizer');
   if (costura === 'error') return fail(500, 'internal_error');
   if (costura === 'vacio') return delay({ participants: [] });
-  const base = PARTICIPANTES_SEED[code] ?? [];
+  // D219 · quienes el titular aceptó con «Unirme con código» se suman al final.
+  const base = [...(PARTICIPANTES_SEED[code] ?? []), ...(aceptadosPorMesaMock.get(code) ?? [])];
   const participants = costura === 'variedad'
     ? [
         ...base,
@@ -3178,6 +3179,240 @@ export async function mockMesaParticipants(
           ...arrobaEnListaMock(p.payme_id),
         })),
   });
+}
+
+// ─── D219 · D223 · unirse con el código (contrato `mesa-join-requests/v1`) ───
+
+/**
+ * La costura del mock para «Unirme con código», en JSON. Sin costura: pedir
+ * deja la solicitud pendiente para siempre y el titular no tiene solicitudes,
+ * así ninguna pantalla existente cambia por el mock.
+ *
+ * - `pedir`: `pending` (por defecto), `not_found`, `invalid`, `rate_limited`,
+ *   `full`, `not_allowed`, `suspended`, `error`, `already` (ya adentro,
+ *   `mesa`), `malformed` (falta `expires_at`) o `decoy` (claves de la mesa de
+ *   señuelo: el decoder tiene que rechazarla).
+ * - `estado` y `tras`: en qué termina el GET y después de cuántas consultas
+ *   (`accepted` lleva `mesa`, por defecto PA-4520); `error`, `decoy` (clave de
+ *   más) y `otro_id` (la respuesta trae otro id).
+ * - `cancelar`: `ok` (por defecto), `not_pending` (ganó la aceptación: el GET
+ *   dice `accepted`), `expired` o `error`.
+ * - `vence_en_s`: los segundos hasta `expires_at` (por defecto 900).
+ * - Del titular: `solicitudes` (cuántas, de 0 a 10; por defecto 0),
+ *   `listar` (`error`, `forbidden` o `decoy`: una clave de más en `requester`) y
+ *   `decidir` (`not_pending`, `expired`, `not_joinable`, `not_found` o `error`).
+ */
+const CLAVE_UNIRSE = 'payme.app.mock.unirse.v1';
+
+interface CosturaUnirse {
+  pedir?: string;
+  estado?: string;
+  tras?: number;
+  mesa?: string;
+  cancelar?: string;
+  vence_en_s?: number;
+  solicitudes?: number;
+  listar?: string;
+  decidir?: string;
+}
+
+function costuraUnirse(): CosturaUnirse {
+  try {
+    const raw = localStorage.getItem(CLAVE_UNIRSE);
+    const v: unknown = raw ? JSON.parse(raw) : {};
+    return typeof v === 'object' && v !== null ? v as CosturaUnirse : {};
+  } catch {
+    return {};
+  }
+}
+
+interface SolicitudMock {
+  id: string;
+  code: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
+  expires_at: string;
+  consultas: number;
+  mesa_code: string | null;
+}
+
+/**
+ * Los pedidos propios sobreviven a recargar, como en el dueño (que los tiene en
+ * la base): la app retoma la espera desde lo guardado (X06) y consulta este id.
+ */
+const CLAVE_PEDIDOS_UNIRSE = 'payme.app.mock.unirse.pedidos.v1';
+const solicitudesPropiasMock = new Map<string, SolicitudMock>((() => {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(CLAVE_PEDIDOS_UNIRSE) ?? '[]');
+    return Array.isArray(v) ? v.map((s: SolicitudMock) => [s.id, s] as [string, SolicitudMock]) : [];
+  } catch {
+    return [];
+  }
+})());
+let numeroDeSolicitudMock = solicitudesPropiasMock.size;
+
+function guardarPedidosUnirse(): void {
+  try {
+    localStorage.setItem(CLAVE_PEDIDOS_UNIRSE, JSON.stringify([...solicitudesPropiasMock.values()]));
+  } catch {
+    // Sin almacenamiento, los pedidos viven sólo en memoria.
+  }
+}
+
+function nuevaSolicitudId(): string {
+  numeroDeSolicitudMock += 1;
+  return `a1000000-0000-4000-8000-${String(numeroDeSolicitudMock).padStart(12, '0')}`;
+}
+
+/** POST /join-requests. */
+export async function mockRequestJoin(code: string): Promise<Record<string, unknown>> {
+  const c = costuraUnirse();
+  const normalizado = code.trim().toUpperCase();
+  switch (c.pedir) {
+    case 'invalid': return fail(400, 'join_code_invalid');
+    case 'not_found': return fail(404, 'join_code_not_found');
+    case 'rate_limited': return fail(429, 'join_requests_rate_limited');
+    case 'full': return fail(409, 'join_requests_full');
+    case 'not_allowed': return fail(409, 'join_request_not_allowed');
+    case 'suspended': return fail(403, 'user_suspended');
+    case 'error': return fail(500, 'internal_error');
+    case 'already': return delay({ status: 'already_participant', mesa_code: c.mesa ?? 'PA-2847' });
+    default: break;
+  }
+  const yaPendiente = [...solicitudesPropiasMock.values()].find((s) => s.code === normalizado && s.status === 'pending');
+  const s = yaPendiente ?? {
+    id: nuevaSolicitudId(),
+    code: normalizado,
+    status: 'pending' as const,
+    expires_at: new Date(Date.now() + (c.vence_en_s ?? 900) * 1000).toISOString(),
+    consultas: 0,
+    mesa_code: null,
+  };
+  solicitudesPropiasMock.set(s.id, s);
+  guardarPedidosUnirse();
+  if (c.pedir === 'malformed') return delay({ id: s.id, status: 'pending' });
+  if (c.pedir === 'decoy') {
+    return delay({ id: s.id, status: 'pending', expires_at: s.expires_at, restaurant: 'Señuelo del Mock', total_cents: 424242 });
+  }
+  return delay({ id: s.id, status: 'pending', expires_at: s.expires_at });
+}
+
+/** GET /join-requests/:id. */
+export async function mockGetJoinRequest(id: string): Promise<Record<string, unknown>> {
+  const c = costuraUnirse();
+  const s = solicitudesPropiasMock.get(id);
+  if (!s) return fail(404, 'join_request_not_found');
+  if (c.estado === 'error') return fail(500, 'internal_error');
+  s.consultas += 1;
+  if (s.status === 'pending') {
+    const destino = c.estado;
+    if (destino && destino !== 'pending' && destino !== 'decoy' && destino !== 'otro_id' && s.consultas >= (c.tras ?? 1)) {
+      s.status = destino as SolicitudMock['status'];
+      if (destino === 'accepted') s.mesa_code = c.mesa ?? 'PA-4520';
+    } else if (Date.parse(s.expires_at) <= Date.now()) {
+      s.status = 'expired';
+    }
+  }
+  guardarPedidosUnirse();
+  const cuerpo: Record<string, unknown> = { id: s.id, status: s.status, expires_at: s.expires_at };
+  if (s.status === 'accepted') cuerpo.mesa_code = s.mesa_code;
+  if (c.estado === 'decoy') cuerpo.restaurant = 'Señuelo del Mock';
+  if (c.estado === 'otro_id') cuerpo.id = nuevaSolicitudId();
+  return delay(cuerpo);
+}
+
+/** POST /join-requests/:id/cancel. */
+export async function mockCancelJoinRequest(id: string): Promise<Record<string, unknown>> {
+  const c = costuraUnirse();
+  const s = solicitudesPropiasMock.get(id);
+  if (!s) return fail(404, 'join_request_not_found');
+  if (c.cancelar === 'error') return fail(500, 'internal_error');
+  if (c.cancelar === 'not_pending') {
+    s.status = 'accepted';
+    s.mesa_code = c.mesa ?? 'PA-4520';
+    guardarPedidosUnirse();
+    return fail(409, 'join_request_not_pending');
+  }
+  if (c.cancelar === 'expired') {
+    s.status = 'expired';
+    guardarPedidosUnirse();
+    return fail(410, 'join_request_expired');
+  }
+  if (s.status !== 'pending') return fail(409, 'join_request_not_pending');
+  s.status = 'cancelled';
+  guardarPedidosUnirse();
+  return delay({ id: s.id, status: 'cancelled' });
+}
+
+/** Quienes piden en el mock: los del diseño, más relleno hasta diez. */
+const QUIENES_PIDEN_MOCK: Array<{ first_name: string | null; last_name: string | null; username: string | null }> = [
+  { first_name: 'Ana', last_name: 'López', username: 'ana.lopez' },
+  { first_name: 'Diego', last_name: 'Ramírez', username: 'diego.rmz' },
+  { first_name: 'Sofía', last_name: 'Torres', username: null },
+  ...Array.from({ length: 7 }, (_, i) => ({ first_name: `Persona ${i + 4}`, last_name: 'Prueba', username: `persona${i + 4}` })),
+];
+
+/** Las solicitudes pendientes de cada mesa del titular, sembradas al primer pedido. */
+const solicitudesDelTitularMock = new Map<string, Array<{ id: string; requester: typeof QUIENES_PIDEN_MOCK[number]; created_at: string; expires_at: string }>>();
+
+/** Quienes el titular aceptó: se suman a «Quiénes están en la mesa». */
+const aceptadosPorMesaMock = new Map<string, Array<{ first_name: string | null; last_name: string | null; payme_id: string | null }>>();
+
+function solicitudesDe(code: string): NonNullable<ReturnType<typeof solicitudesDelTitularMock.get>> {
+  let lista = solicitudesDelTitularMock.get(code);
+  if (!lista) {
+    const n = Math.max(0, Math.min(10, Math.floor(costuraUnirse().solicitudes ?? 0)));
+    const ahora = Date.now();
+    lista = QUIENES_PIDEN_MOCK.slice(0, n).map((requester, i) => ({
+      id: `b2000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+      requester,
+      created_at: new Date(ahora - (n - i) * 60_000).toISOString(),
+      expires_at: new Date(ahora + (15 - (n - i)) * 60_000).toISOString(),
+    }));
+    solicitudesDelTitularMock.set(code, lista);
+  }
+  return lista;
+}
+
+/** GET /mesas/:code/join-requests (sólo el titular). */
+export async function mockMesaJoinRequests(code: string): Promise<Record<string, unknown>> {
+  const c = costuraUnirse();
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (!mesa.openedByUser || c.listar === 'forbidden') return fail(403, 'not_mesa_organizer');
+  if (c.listar === 'error') return fail(500, 'internal_error');
+  return delay({
+    join_requests: solicitudesDe(code).map((s) => ({
+      id: s.id,
+      requester: c.listar === 'decoy'
+        ? { ...s.requester, avatar_url: 'SENUELO_FOTO', email: 'SENUELO_CORREO' }
+        : { ...s.requester },
+      created_at: s.created_at,
+      expires_at: s.expires_at,
+    })),
+  });
+}
+
+/** POST /mesas/:code/join-requests/:id/accept|reject (sólo el titular). */
+export async function mockDecideJoinRequest(code: string, id: string, accion: 'accept' | 'reject'): Promise<Record<string, unknown>> {
+  const c = costuraUnirse();
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (!mesa.openedByUser) return fail(403, 'not_mesa_organizer');
+  const lista = solicitudesDe(code);
+  const i = lista.findIndex((s) => s.id === id);
+  if (c.decidir === 'error') return fail(500, 'internal_error');
+  if (c.decidir === 'not_found' || i < 0) return fail(404, 'join_request_not_found');
+  // Los conflictos sacan la solicitud de la lista, como el dueño: ya no está pendiente.
+  if (c.decidir === 'not_pending') { lista.splice(i, 1); return fail(409, 'join_request_not_pending'); }
+  if (c.decidir === 'expired') { lista.splice(i, 1); return fail(410, 'join_request_expired'); }
+  if (c.decidir === 'not_joinable' && accion === 'accept') return fail(410, 'mesa_not_joinable');
+  const [s] = lista.splice(i, 1);
+  if (accion === 'accept' && s) {
+    const unidos = aceptadosPorMesaMock.get(code) ?? [];
+    unidos.push({ first_name: s.requester.first_name, last_name: s.requester.last_name, payme_id: `payme_mx_${s.id.slice(-4)}` });
+    aceptadosPorMesaMock.set(code, unidos);
+  }
+  return delay({ id, status: accion === 'accept' ? 'accepted' : 'rejected' });
 }
 
 /** AF-32 · quién tiene foto en el mock (Luis sí, Renata no: iniciales). */
@@ -3905,6 +4140,8 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
   const costura = (() => {
     try { return localStorage.getItem('payme.app.mock.avisos.v1'); } catch { return null; }
   })();
+  // D219 · la costura `unirse` trae los dos avisos nuevos, con la forma del dueño.
+  if (costura === 'unirse') return avisosDeUnirseMock();
   if (costura !== 'mesa_vencida') return [];
   const mesa = findMesa('PA-1099');
   return ([
@@ -3929,6 +4166,49 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
       related_entity_id: null,
       read_at: '2026-09-18T10:00:00.000Z',
       created_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    },
+  ] satisfies NotificationsResponse['notifications']).filter((notification) => !avisosDeCosturaBorrados.has(notification.id));
+}
+
+/**
+ * D219 · `join_request_received` (al titular) y `join_request_accepted` (a quien
+ * pidió), con título, cuerpo y payload del dueño (`services/joinRequests.js`).
+ * Uno con @ y otro sin @, y la aceptación apunta a PA-4520.
+ */
+function avisosDeUnirseMock(): NotificationsResponse['notifications'] {
+  return ([
+    {
+      id: 'aviso-unirse-1',
+      type: 'join_request_received',
+      title: 'Quieren unirse a tu mesa',
+      body: 'Ana López (@ana.lopez) quiere unirse a tu mesa PA-2847',
+      payload: { mesa_code: 'PA-2847', join_request_id: 'b2000000-0000-4000-8000-000000000001' },
+      related_entity_type: 'join_request',
+      related_entity_id: 'b2000000-0000-4000-8000-000000000001',
+      read_at: avisosDeCosturaLeidos.get('aviso-unirse-1') ?? null,
+      created_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+    },
+    {
+      id: 'aviso-unirse-2',
+      type: 'join_request_received',
+      title: 'Quieren unirse a tu mesa',
+      body: 'Sofía Torres quiere unirse a tu mesa PA-2847',
+      payload: { mesa_code: 'PA-2847', join_request_id: 'b2000000-0000-4000-8000-000000000003' },
+      related_entity_type: 'join_request',
+      related_entity_id: 'b2000000-0000-4000-8000-000000000003',
+      read_at: avisosDeCosturaLeidos.get('aviso-unirse-2') ?? null,
+      created_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+    },
+    {
+      id: 'aviso-unirse-3',
+      type: 'join_request_accepted',
+      title: 'Te aceptaron en la mesa',
+      body: 'Ya estás en la mesa PA-4520',
+      payload: { mesa_code: 'PA-4520' },
+      related_entity_type: 'join_request',
+      related_entity_id: 'a1000000-0000-4000-8000-000000000099',
+      read_at: avisosDeCosturaLeidos.get('aviso-unirse-3') ?? null,
+      created_at: new Date(Date.now() - 4 * 60_000).toISOString(),
     },
   ] satisfies NotificationsResponse['notifications']).filter((notification) => !avisosDeCosturaBorrados.has(notification.id));
 }

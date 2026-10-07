@@ -131,6 +131,13 @@ describe('AF-34 · mesaDelAviso · a qué mesa lleva el aviso', () => {
   it('🔴 un closure_reason desconocido no cambia nada: el texto es el body del dueño', () => {
     expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: 'PA-1', closure_reason: 'algo_nuevo' } })).toBe('PA-1');
   });
+
+  it('🔴 D219 · los dos avisos de unirse llevan a su mesa por `mesa_code`', () => {
+    expect(mesaDelAviso({ type: 'join_request_received', payload: { mesa_code: 'PA-12345', join_request_id: 'x' } })).toBe('PA-12345');
+    expect(mesaDelAviso({ type: 'join_request_accepted', payload: { mesa_code: 'PA-12345' } })).toBe('PA-12345');
+    expect(mesaDelAviso({ type: 'join_request_accepted', payload: {} })).toBeNull();
+    expect(mesaDelAviso({ type: 'join_request_received', payload: { join_request_id: 'x' } })).toBeNull();
+  });
 });
 
 /**

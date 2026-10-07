@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.223.0 — «Unirme con código» en Mesas y la mesa del titular reorganizada, «Tu mesa» (2026-10-07)
+
+Orden AF-UNIRSE-CODIGO-20261007 (sha256 354d67d6…); decisiones D219 (a4170e87…) y D223 (6452cc9e…): turno 2 del diseño
+de Claude Design, del turno 1 sólo 7, 10 y 11; «Todo junto, como el diseño»; sólo en Mesas; «Tu mesa». Plan aprobado
+(bd75bf3b…): A = 88 px (en 0.222.1), B = «Mesas», C = 10 s, D = «[n] partes» en igual, y los textos de X07. Contrato del
+dueño: App Backend 2.166.0, `contract/mesa-join-requests-v1.json` (8cce3d87…), leído entero con `git show`. Lista de
+pruebas: las de aceptación de Codex (`PRUEBAS_ACEPTACION_UNIRME.md`, 6c64408c…).
+
+- **Quien pide, en Mesas** (turno 2 · 2.1–2.8): la burbuja dice «Mesas» (era «Historial») y arriba del historial va la
+  fila «Unirme con código», que se abre en el lugar. «PA-» fijo y cinco celdas sobre UN input numérico (se puede pegar;
+  el cero inicial se conserva). «Solicitar unirme» naranja con texto navy, apagado hasta los cinco números; «Enviando…»
+  sin doble pedido; código equivocado al instante, con las celdas en rojo y el error que se borra al editar; el límite
+  sin hora, con campo y botón bloqueados; la espera con el código escrito, «Esperando respuesta», «Vence en mm:ss» desde
+  `expires_at`, el texto de aviso y «Cancelar»; «no se pudo» (rechazada o vencida, sin motivo) con «Escribir otro
+  código»; ya adentro, directo a la mesa; aceptado, directo a la mesa con «Te aceptaron. Ya estás en la mesa.» arriba de
+  la barra (104 px, una opción nueva del aviso que no mueve ningún otro).
+- **La respuesta** (C): `GET /api/join-requests/:id` cada 10 s con la espera a la vista, al volver a la app y cuando el
+  contador llega a cero; nunca en segundo plano. Cancelar no afirma nada antes del 200; con 409 decide un GET.
+- **Privacidad:** los decoders exigen las claves exactas de cada estado (`mesa_code` sólo en accepted; `requester` sólo
+  nombre, apellido y @) y el id consultado; lo que no cumple no produce ningún resultado. Antes de ser aceptado no se pide
+  ni se muestra nada de la mesa. En el teléfono sólo `{cuenta, id, código}`, y con otra cuenta se descarta (X06, P09).
+- **«Tu mesa»** (turno 2 · 2.9–2.11), sólo el titular: el título; quiénes están (desplegable, «Tú» primero desde la
+  sesión, «[n] personas» con el titular: el dueño lo excluye de la lista); solicitudes para unirse (sólo si hay, en
+  tinte info, «Rechazar» y «Aceptar» de 44 px, sin vencimiento, nada optimista: después de cada decisión se recargan
+  solicitudes y personas); compartir con «Código para unirse: PA-…» como texto y los mismos «Copiar link» e «Invitar
+  amigos»; tus consumos (cerrado por defecto, «[n] elegidos · toca para modificar», «[n] partes» en igual, «Toca para
+  elegir» sin nada); cerrar mesa al final. Con solicitudes al entrar, ellas abiertas y quiénes cerrado; sin, quiénes
+  abierto. «Listo» sin nada elegido abre «Tus consumos». Quien no es titular ve lo de siempre. No cambia cómo se elige,
+  se suelta, se divide ni se paga.
+- **Los encabezados de las tarjetas van en dos renglones** (título y resumen): en uno solo, al pasar de «Toca para
+  elegir» a «1 elegido · toca para modificar» el título bajaba de renglón y la lista saltaba 8 px; lo cazó la regla 1 de
+  «¿Qué consumiste?».
+- **Avisos:** `join_request_received` con el cuerpo del dueño; `join_request_accepted` con su título y cuerpo (X08);
+  los dos llevan a su mesa por `mesa_code`, que se vuelve a pedir.
+- **Textos** (X07, aprobados): `not_allowed` y `full` → «No pudimos unirte a esa mesa…»; sin red, error, respuesta mal
+  formada o cuenta suspendida → «No pudimos confirmar el resultado. Intenta de nuevo.»; del titular, «Esta solicitud ya
+  no está disponible.», «Ya no se puede sumar gente a esta mesa.» y «No pudimos cargar las solicitudes.»; sin nombre,
+  «Alguien quiere unirse». Con su inglés. Salen de `en.ts` «Historial» y «Quiénes se sumaron», que dejaron de usarse.
+- **Espejo** contra App Backend `8daca40` (inventario de `91aaf7b`): de 121 a 125 archivos (entran el contrato, rutas,
+  servicio y migración de unirse; cambian `ocr-merchant-v2.json`, `routes/mesas.js` y `services/notifications.js`).
+- **Mock:** la costura `payme.app.mock.unirse.v1` (pedir, estado, cancelar, vencimiento, solicitudes, listar y decidir,
+  con señuelos), los pedidos que sobreviven a recargar y los dos avisos en `payme.app.mock.avisos.v1 = unirse`.
+- **Pruebas:**
+  - unitarias: `joinRequests.test` (26: los decoders, cada negativo de privacidad, quién pide, el contador y lo
+    guardado), `mockUnirse.test` (5), `labels.test` (+1);
+  - e2e nuevas, a 375×667: `unirse-con-codigo` (28: A01–A24 que aplican, P01, P08 y la consulta cada 10 s con el reloj
+    de Playwright), `tu-mesa` (23: T01–T19, P04, «Listo», igual y quien no es titular) y `avisos-unirse` (5: N01–N06);
+  - las e2e que eligen platos como titular abren «Tus consumos» (`e2e/_mesa.ts`) y esperan «Tu mesa»; «Historial» pasa
+    a «Mesas»; quiénes, `cerrar-mesa`, `d181` y el cartel de versión siguen el bloque a su lugar nuevo (el cartel ya no
+    cuenta como tapado un botón que el scroll dejó afuera);
+  - rojo sobre `5111ed1` (con §0): el producto anterior da 55 de 56 e2e nuevas rojas (la que pasa es el control: quien
+    no es titular ve lo de siempre) y 6 unitarias, más `joinRequests.test` sin su módulo;
+  - mutantes 24 de 24 cazados (`logs/mutantes/resumen.txt`);
+  - Playwright completo: 941.
+- **Lo que prueba Mati en el iPhone (D63):** los nueve pasos del CIERRE.
+
 ## 0.222.1 — El marco del recorte: el mínimo se repara solo y los bordes miden 44×44 (2026-10-07)
 
 Orden AF-UNIRSE-CODIGO-20261007 (sha256 354d67d6…), §0, en un commit aparte; plan aprobado (bd75bf3b…), respuesta A = (1).

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, CORTE } from './_app';
 import { sacarFoto } from './_camara';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -216,6 +217,7 @@ test('Pagar separa resumen, propina, método y total sin duplicar el monto', asy
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();

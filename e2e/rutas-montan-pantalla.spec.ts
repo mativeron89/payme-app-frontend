@@ -169,7 +169,7 @@ const ESPERADO: Record<PageId, Esperado> = {
    * la pantalla es la píldora "Historial" — y es marcador fuerte: ningún otro
    * heading de la app dice así. El heading "Mesas" murió con la TopBar vieja.
    */
-  mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Historial' } },
+  mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mesas' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escanea el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Configuración' } },
   avisos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', nivel: 1 } },

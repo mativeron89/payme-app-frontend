@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar, CORTE } from './_app';
 import { sacarFoto } from './_camara';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -115,6 +116,7 @@ async function abrirCompartir(page: Page, modo: 'igual' | 'consumo' = 'igual'): 
 async function abrirPago(page: Page): Promise<void> {
   await abrirCompartir(page, 'consumo');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();

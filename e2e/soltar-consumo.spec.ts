@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, irEnLaApp, sinRefresco } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * AF-25 · n80 · soltar un consumo propio no pagado (`POST items/release`, dueño
@@ -31,12 +32,14 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await ingresar(page);
   const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
   await page.goto(`/#/mesa/${mesa.code}`);
+  await enTuMesaConLaLista(page);
   await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   // Decisión 32 · «Listo» registra y vuelve a Inicio; se vuelve a la mesa para mirar lo tomado.
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(`/#/mesa/${mesa.code}`);
+  await enTuMesaConLaLista(page);
   await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
   return mesa.code;
 }
@@ -127,6 +130,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     await expect(fila(page, 'Tagliatelle Bolognese').locator('[data-estado="registrado"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
@@ -138,6 +142,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
+    await enTuMesaConLaLista(page);
     // Testigo: el pago ajeno se ve en la mesa.
     await expect(fila(page, 'Risotto ai Funghi').locator('[data-estado="pagado"]')).toContainText('Pagado');
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
@@ -152,6 +157,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
+    await enTuMesaConLaLista(page);
     await expect(fila(page, 'Tagliatelle Bolognese')).toContainText('Pagaste ½ · elegiste ½ más');
     // Lo elegido que queda se puede soltar; lo pagado, no (el dueño suelta sólo lo `locked`).
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
@@ -195,6 +201,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
     // El Tagliatelle deja de existir en la mesa del mock: el dueño contestaría
     // 404 `item_not_found` CON `item_id`.
@@ -227,6 +234,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     await page.evaluate(async () => {
       const ruta = '/src/api/index.ts';

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "id": "payme.app.mesa-join-requests/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de «unirse con el código de la mesa», v2.166.0. Decisión 219 de Mati.",
+    "Quien escribe el código PIDE; el titular de la mesa acepta o rechaza. El front espeja: no infiere estados ni arma",
+    "textos con datos que el backend no manda. Claves EXACTAS en cada respuesta: el front rechaza claves desconocidas.",
+    "Ninguna respuesta a quien pide trae datos de la mesa salvo `mesa_code`, y sólo cuando ya está adentro."
+  ],
+  "code": {
+    "formato": "^[A-Z]{2}-\\d{3,5}$",
+    "normalizacion": "El backend recorta espacios y pasa a mayúsculas antes de validar; hasta 20 caracteres crudos.",
+    "estados_admitidos": ["open", "partially_paid"]
+  },
+  "limites": {
+    "vigencia_minutos": 15,
+    "pendientes_por_mesa": 10,
+    "pedidos_por_hora_por_cuenta": 5,
+    "nota": "El tope por hora se aplica dos veces: en memoria por cuenta sobre TODOS los intentos de POST /api/join-requests (también con código equivocado, que no se guarda) y en la base sobre los pedidos creados en la última hora."
+  },
+  "solicitante": {
+    "pedir": {
+      "endpoint": "POST /api/join-requests",
+      "request": { "code": "PA-12345" },
+      "respuestas": {
+        "201": { "claves": ["id", "status", "expires_at"], "status": "pending", "cuando": "pedido nuevo; el titular recibe el aviso join_request_received" },
+        "200_pendiente": { "claves": ["id", "status", "expires_at"], "status": "pending", "cuando": "ya había un pedido pendiente de esta cuenta en esta mesa: es el mismo" },
+        "200_ya_adentro": { "claves": ["status", "mesa_code"], "status": "already_participant", "cuando": "la cuenta es la titular o participante activa; vale aunque la mesa esté pagada" }
+      },
+      "errores": {
+        "400": ["join_code_invalid"],
+        "404": ["join_code_not_found"],
+        "409": ["join_request_not_allowed", "join_requests_full"],
+        "403": ["user_suspended"],
+        "429": ["join_requests_rate_limited"]
+      },
+      "cuenta_no_activa": "403 user_suspended, igual que el resto de las rutas autenticadas: la ruta ya lo corta y el servicio lo repite bajo lock por si la cuenta cambió en el medio.",
+      "no_oracular": "Mesa inexistente, pagada (fully_paid) o cerrada contestan el MISMO 404 {\"error\":\"join_code_not_found\"}, byte por byte.",
+      "rechazo_previo": "409 join_request_not_allowed: el titular ya rechazó a esta cuenta en esta mesa; no puede volver a pedir."
+    },
+    "estado": {
+      "endpoint": "GET /api/join-requests/:id",
+      "respuesta_200": {
+        "claves": ["id", "status", "expires_at"],
+        "claves_si_accepted": ["id", "status", "expires_at", "mesa_code"],
+        "status": ["pending", "accepted", "rejected", "cancelled", "expired"],
+        "nota": "Un pendiente pasado de hora se informa `expired`."
+      },
+      "errores": { "400": ["validation_error"], "404": ["join_request_not_found"] }
+    },
+    "cancelar": {
+      "endpoint": "POST /api/join-requests/:id/cancel",
+      "respuesta_200": { "claves": ["id", "status"], "status": "cancelled" },
+      "errores": {
+        "400": ["validation_error"],
+        "404": ["join_request_not_found"],
+        "409": ["join_request_not_pending"],
+        "410": ["join_request_expired"]
+      }
+    }
+  },
+  "titular": {
+    "acceso": "Sólo el titular (mesas.opener_user_id). Otro participante: 403 not_mesa_organizer. Quien no participa: 403 not_a_mesa_participant; mesa inexistente: 404 mesa_not_found (residual conocido, igual que /api/mesas/:code/participants).",
+    "listar": {
+      "endpoint": "GET /api/mesas/:code/join-requests",
+      "respuesta_200": {
+        "claves": ["join_requests"],
+        "item": {
+          "claves": ["id", "requester", "created_at", "expires_at"],
+          "requester": {
+            "claves": ["first_name", "last_name", "username"],
+            "username": "El @ elegido, o null (sin @ o con el @ apagado). Nunca payme_id (decisión 104)."
+          }
+        },
+        "orden": "created_at ascendente",
+        "nota": "Sólo pendientes vigentes de cuentas activas: el pedido de una cuenta suspendida o eliminada no se muestra porque no se puede aceptar."
+      }
+    },
+    "aceptar": {
+      "endpoint": "POST /api/mesas/:code/join-requests/:id/accept",
+      "respuesta_200": { "claves": ["id", "status"], "status": "accepted" },
+      "efecto": "Quien pidió queda como participante `invited` activo; recibe el aviso join_request_accepted.",
+      "cuenta_no_activa": "Si la cuenta de quien pidió ya no está activa: 409 join_request_not_pending, sin sumarla y sin tocar el pedido.",
+      "vigencia": "Se decide con el reloj real después de tomar los locks: un pedido que venció mientras se esperaba da 410 join_request_expired y queda expired, sin participante ni aviso.",
+      "errores": {
+        "400": ["validation_error"],
+        "403": ["not_mesa_organizer"],
+        "404": ["join_request_not_found"],
+        "409": ["join_request_not_pending"],
+        "410": ["join_request_expired", "mesa_not_joinable"]
+      }
+    },
+    "rechazar": {
+      "endpoint": "POST /api/mesas/:code/join-requests/:id/reject",
+      "respuesta_200": { "claves": ["id", "status"], "status": "rejected" },
+      "efecto": "Sin aviso a quien pidió: lo ve al consultar el estado.",
+      "errores": {
+        "400": ["validation_error"],
+        "403": ["not_mesa_organizer"],
+        "404": ["join_request_not_found"],
+        "409": ["join_request_not_pending"],
+        "410": ["join_request_expired"]
+      }
+    }
+  },
+  "avisos": {
+    "canal": "Sólo en la app. No tienen correo ni interruptor en Configuración.",
+    "join_request_received": {
+      "destinatario": "titular",
+      "title": "Quieren unirse a tu mesa",
+      "body": "<Nombre Apellido> (@usuario) quiere unirse a tu mesa <código>; sin «(@usuario)» si no hay @ visible",
+      "payload": ["mesa_code", "join_request_id"],
+      "related_entity_type": "join_request"
+    },
+    "join_request_accepted": {
+      "destinatario": "quien pidió",
+      "title": "Te aceptaron en la mesa",
+      "body": "Ya estás en la mesa <código>",
+      "payload": ["mesa_code"],
+      "related_entity_type": "join_request"
+    }
+  }
+}

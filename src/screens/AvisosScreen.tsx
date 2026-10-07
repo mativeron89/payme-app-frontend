@@ -120,6 +120,10 @@ const NOTIF_ICON: Record<string, IconName> = {
   // AF-34 · v2.112.0 · la mesa sin garantía se cerró (por tiempo, por selección
   // completa o por el organizador). Sin ícono propio caía en la campana.
   mesa_expired: 'clock',
+  // D219 · v2.166.0 · unirse con el código: alguien pide unirse a tu mesa, y
+  // te aceptaron en la que pediste.
+  join_request_received: 'users',
+  join_request_accepted: 'check-circle',
 };
 
 /** La fila principal de un aviso: un botón si lleva a una mesa, un div si no. */
@@ -539,6 +543,10 @@ export function AvisosScreen() {
                       <div id={tituloId} className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
                         {invitationSuffix !== null ? (
                           <><strong>{inviterName}</strong>{invitationSuffix}</>
+                        ) : n.type === 'join_request_accepted' && n.title ? (
+                          // D219 · X08 · título y cuerpo del dueño, tal cual: «Te
+                          // aceptaron en la mesa» y «Ya estás en la mesa PA-…».
+                          <><strong>{n.title}</strong><br />{n.body}</>
                         ) : n.body}
                       </div>
                       <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>

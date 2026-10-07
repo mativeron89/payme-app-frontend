@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { abrirTusConsumos } from './_mesa';
 
 async function capturar(page: Page, nombre: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
@@ -63,6 +64,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
       igual.status = 'open';
     });
     await page.goto('/#/mesa/PA-2847');
+    await abrirTusConsumos(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
 
     const consumo = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
@@ -77,6 +79,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await capturar(page, 'm01-consumo-n2');
 
     await page.goto('/#/mesa/PA-3121');
+    await abrirTusConsumos(page);
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
     await expect(page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' }).getByRole('radio'))
       .toHaveText(['Entero', '½', '⅓', '¼']);

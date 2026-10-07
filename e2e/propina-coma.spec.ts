@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar, CORTE } from './_app';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -27,6 +28,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
   test.skip(CORTE.pagosCortados, MOTIVO);
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
+  await abrirTusConsumos(page);
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();

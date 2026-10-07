@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { abrirTusConsumos } from './_mesa';
 
 const ITEM_ID = '70000000-0000-4000-8000-000000000007';
 
@@ -53,6 +54,7 @@ async function sembrar(page: Page, code: string, original: number | null): Promi
     persist();
   }, { mesaCode: code, originalParticipants: original, itemId: ITEM_ID });
   await page.goto(`/#/mesa/${code}`);
+  await abrirTusConsumos(page);
   // Decisión 77: el encabezado ya no muestra el código; el testigo es la URL
   // y el consumo que esta spec sembró.
   await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${code}$`));

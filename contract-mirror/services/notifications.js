@@ -35,6 +35,10 @@ const TYPES = {
   friend_added:         { title: 'Nuevo amigo en PayMe' },
   // OLA 3C: una solicitud avisa. Antes nadie se enteraba de que lo agregaban.
   friend_request_received: { title: 'Te quieren agregar en PayMe' },
+  // v2.166.0 · decisión 219 · unirse con el código de la mesa. Sólo en la app: no están en la
+  // política de correo (`notificationPreferences.CHANNEL_POLICY`).
+  join_request_received: { title: 'Quieren unirse a tu mesa' },
+  join_request_accepted: { title: 'Te aceptaron en la mesa' },
 };
 
 /**

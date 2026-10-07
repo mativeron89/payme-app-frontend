@@ -346,6 +346,11 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       soltarDisponible: true,
       quienesSeSumaron: { estado: 'oculto' },
       onReintentarQuienes: () => undefined,
+      // D223 · las solicitudes para unirse: sólo el titular; acá, participante.
+      solicitudes: { estado: 'oculto' },
+      decidiendo: new Set(),
+      onDecidirSolicitud: () => undefined,
+      onReintentarSolicitudes: () => undefined,
       fotoDe: () => null,
       onCerrarMesa: null,
       cerrando: false,

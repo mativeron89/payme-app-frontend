@@ -6,6 +6,27 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Unirse con el código de la mesa (`mesa-join-requests/v1`) · App Backend v2.166.0 · 2026-10-07
+
+Orden `AF-UNIRSE-CODIGO-20261007` (D219, D223). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`8daca40b0786720b70d08ad25fe5168ce9c4124d`** (v2.166.0: unirse con el código, con la
+  aceptación del titular, y los avisos `join_request_received` y `join_request_accepted`).
+- Inventario: el de `main` del owner en **`91aaf7b6ce3534c5039f94f6b1520d12445332cf`**
+  (`contract/mirror-inventory.json`, sha256
+  `a5d10697d0dadb56f047a6312b2930c2eed507946f2fe542af621effe3608262`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `8daca40`; entre `8daca40` y `91aaf7b` sólo cambia el
+  inventario (`git diff --stat`).
+- **125 archivos espejados** (antes 121). Entran cuatro: `contract/mesa-join-requests-v1.json`, `routes/joinRequests.js`,
+  `services/joinRequests.js` y `db/migrate_mesa_join_requests_v2.166.0.sql`. Cambian tres:
+  `contract/ocr-merchant-v2.json` (la documentación de L1, `mesa_detail_anchored`, ya implementada en 0.221.0),
+  `routes/mesas.js` y `services/notifications.js`. Copiados con `git show 8daca40:<origen>` y con el sha256
+  que declara el inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni
+  escrituras en ese repo.
+- `--paridad`: espejo = inventario = fuente en `8daca40`, 125/125.
+
 ### Descuento impreso aparte (`ticket_adjustments`) · App Backend v2.164.0 · 2026-10-07
 
 Orden `AF-NOCHE-DESCUENTO-20261007` (D218), punto 6. Scope del lease con `contract-mirror/**` y

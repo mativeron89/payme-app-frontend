@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * 🔴 **El corte se declara donde se prueba** (Q6, resuelta por medición).
@@ -56,6 +57,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
       module.persist();
     });
     await page.goto('/#/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
     await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
@@ -75,6 +77,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await listo.click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto('/#/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
     // Vacío→vacío no deja fila ni `updated_at`: al reentrar no hay nota, el
     // círculo vuelve a ser «Listo». El éxito lo acreditó la vuelta a Inicio.
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
@@ -82,6 +85,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
     // fila: el éxito se acredita por la respuesta canónica, no por una fila.
     await page.reload();
+    await enTuMesaConLaLista(page);
     await expect(page.locator('.qc-renglon [data-estado="mio"]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
@@ -117,6 +121,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
       store.persist();
     });
     await page.goto('/#/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
     expect(await nMesa()).toBe(4);
 
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
@@ -174,6 +179,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await conRielApagado(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await enTuMesaConLaLista(page);
     await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
@@ -227,6 +233,7 @@ for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await enTuMesaConLaLista(page);
 
     // Dos platos marcados. Desde la decisión 90 el selector vive DENTRO del
     // renglón y hay uno solo abierto a la vez (regla 3: «nada flota encima de
@@ -263,7 +270,9 @@ for (const width of [320, 390]) {
     expect(atEnd.scrollTop).toBeGreaterThanOrEqual(atEnd.max - 1);
 
     const lastItem = await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).boundingBox();
-    const lastAction = await page.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true }).boundingBox();
+    // D223 · en «Tu mesa» lo último del scroll ya no es «Invitar amigos» (que
+    // sube, a compartir) sino «Tus consumos» o «Cerrar mesa»: se mide lo último.
+    const lastAction = await page.locator('.mesa-selection-scroll > :last-child').boundingBox();
     const appbar = await page.locator('.screen > .appbar-block .appbar').boundingBox();
     expect(lastItem).not.toBeNull();
     expect(lastAction).not.toBeNull();

@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "c3b073fb9fa2f0d31e4be17c1d14e52e1eacedf6",
-  "total": 121,
+  "commit": "8daca40b0786720b70d08ad25fe5168ce9c4124d",
+  "total": 125,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -15,6 +15,12 @@
       "destino": "contract/informative-selections-v2.schema.json",
       "sha256": "2c6ea8c8b4b8894ab7c54fa20fe644c582f6e33a96fc6feeff2b59441db2417b",
       "bytes": 10080
+    },
+    {
+      "origen": "contract/mesa-join-requests-v1.json",
+      "destino": "contract/mesa-join-requests-v1.json",
+      "sha256": "8cce3d87e8e553d4640f56710c56317d9b35c94aa2efc5c6e349c90f232bfb56",
+      "bytes": 6283
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
@@ -37,8 +43,8 @@
     {
       "origen": "contract/ocr-merchant-v2.json",
       "destino": "contract/ocr-merchant-v2.json",
-      "sha256": "8fc8d05e57bc89c3d9cb6fdaeec2587f21f88119bc77180bc2166dce91d7aa33",
-      "bytes": 9881
+      "sha256": "21eb0948745c05e1bdaba092a20b5bec912340d71265f6419c881d59adf0c1ef",
+      "bytes": 10849
     },
     {
       "origen": "contract/restaurant-resolution-v1.json",
@@ -183,6 +189,12 @@
       "destino": "db/migrate_legal_acceptances_v2.129.0.sql",
       "sha256": "1ef60c6e8f17e3b05ba0b95a782fbc6caa586922dd22a56de7e06273c2827134",
       "bytes": 2774
+    },
+    {
+      "origen": "db/migrate_mesa_join_requests_v2.166.0.sql",
+      "destino": "db/migrate_mesa_join_requests_v2.166.0.sql",
+      "sha256": "7f6d69cc8614ad9e914fe6e21697ba807228cc074f7a9310ec01c7dff025fe7f",
+      "bytes": 2659
     },
     {
       "origen": "db/migrate_notification_preferences_v2.128.0.sql",
@@ -407,10 +419,16 @@
       "bytes": 17268
     },
     {
+      "origen": "routes/joinRequests.js",
+      "destino": "routes/joinRequests.js",
+      "sha256": "f3cf400f4030b5c85e71f92b98c3f979f3edf620de13adfa26692d20e77a9e9d",
+      "bytes": 2142
+    },
+    {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "a8c51e02d220bce76f94916d94487cc6deda11bb340c32eb1c74c134d3d41199",
-      "bytes": 196847
+      "sha256": "8228078b3996e773395d834af6e0b29160b3a27f14c576ebdae14d00344826bc",
+      "bytes": 199198
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -575,6 +593,12 @@
       "bytes": 21407
     },
     {
+      "origen": "services/joinRequests.js",
+      "destino": "services/joinRequests.js",
+      "sha256": "44a64bc12dd911012d1db29f500ed802c7ef53e3f308b0915137d1e06bdec89e",
+      "bytes": 16371
+    },
+    {
       "origen": "services/legalAcceptance.js",
       "destino": "services/legalAcceptance.js",
       "sha256": "9bbef107f303edaf6d94796d05b9a3259ca7a398b038f9686e99d302d38fbdcb",
@@ -607,8 +631,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "383b4f3788a0af57890f802910a78e89b9285a53b552c2bb3710544c4e1449fb",
-      "bytes": 10372
+      "sha256": "022630689e8288cffc4dafa50eeb1c6fdf1a5eb9274f20fa6a2d4bb878eab47d",
+      "bytes": 10669
     },
     {
       "origen": "services/ocrRail.js",

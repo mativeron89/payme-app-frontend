@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * §1.1 · VARIANTE B (corrección del 2026-08-05): CON VARIAS MESAS ABIERTAS,
@@ -48,7 +49,7 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
     // Tocar la segunda entra a ESA mesa.
     await tarjetas.nth(1).click();
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847/);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
     // Decisión 77 de Mati: la línea contextual es sólo el restaurante, sin el
     // código de mesa; el modo va en otro span y el «·» sigue `aria-hidden`.
     await expect(page.locator('.mesa-selection-context-main')).toHaveText('La Parolaccia');

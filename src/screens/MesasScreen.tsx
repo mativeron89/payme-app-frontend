@@ -9,6 +9,7 @@ import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
+import { UnirmeConCodigo } from '../components/UnirmeConCodigo';
 import { bpsLabel } from './mesaItemsView';
 import type { TuMesa } from '../api/misMesas';
 import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
@@ -287,11 +288,16 @@ export function MesasScreen() {
         unread={unread}
         onBell={() => navigate('avisos')}
       />
+      {/* D223 · turno 2 · 2.1: la burbuja dice «Mesas» (antes «Historial»,
+          §1.10), porque arriba del historial vive ahora «Unirme con código». */}
       <div className="title-card">
-        <h1 className="title-card-title">{t('Historial')}</h1>
+        <h1 className="title-card-title">{t('Mesas')}</h1>
       </div>
 
       <div className="scroll history-scroll">
+        {/* D219 · D223-3 · «Unirme con código», sólo acá: una fila que se abre
+            en el lugar, arriba del historial. */}
+        <UnirmeConCodigo />
         {zoneCaption && <p className="caption">{zoneCaption}</p>}
 
         {seccionTusMesas}

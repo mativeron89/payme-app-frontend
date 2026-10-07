@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * AF-BARRA-EN-VIVO · decisión 107, punto 3 (n190), «Sí, en vivo»: en «¿Qué
@@ -126,7 +127,7 @@ const barra = (page: Page) => page.locator('.mi-meta-amt');
 const renglon = (page: Page, nombre: string) => page.locator(`.qc-renglon[data-plato="${nombre}"]`);
 const abrir = async (page: Page, code: string) => {
   await page.goto(`/#/mesa/${code}`);
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
 };
 
 test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
@@ -204,7 +205,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await page.clock.pauseAt(t0);
     await page.goto(`/#/mesa/${CONSUMO}`);
     await page.clock.runFor(1_500);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await renglon(page, 'Consumo de 300').getByRole('radio', { name: '½' }).click();
     await expect(barra(page)).toHaveText('$150 / $840 (18%)');

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { CORTE } from './_app';
 import { camaraSimulada, sacarFoto } from './_camara';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -100,6 +101,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
 
   // Tomar un ítem y llegar al pago.
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
@@ -147,6 +149,7 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();

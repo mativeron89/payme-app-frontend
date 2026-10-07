@@ -58,7 +58,7 @@ import {
   paymentLanded,
   requiresReconciliation,
 } from './freezeMachine';
-import { MesaDetailView, type QuienesSeSumaron } from './MesaDetailView';
+import { MesaDetailView, type QuienesSeSumaron, type SolicitudesDeUnirse } from './MesaDetailView';
 import { bpsLabel, bpsValido, confirmedConsumptionProgress, itemsAmountFor, limiteInformativo } from './mesaItemsView';
 import { porcionesDisponibles } from './queConsumisteView';
 import { goBack, navigate } from '../router';
@@ -665,7 +665,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   useEffect(() => {
     const intentar = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      if (puedeRefrescarRef.current) refrescarMesa();
+      if (puedeRefrescarRef.current) {
+        refrescarMesa();
+        // D223 · las solicitudes para unirse, con el mismo refresco (sólo el titular).
+        refrescarSolicitudesRef.current?.();
+      }
     };
     const cadaTanto = setInterval(intentar, INTERVALO_REFRESCO_MS);
     const alVolver = () => { if (document.visibilityState === 'visible') intentar(); };
@@ -690,9 +694,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const esOrganizador = !isGuest && mesa?.my_role === 'opener';
   const [quienes, setQuienes] = useState<QuienesSeSumaron>({ estado: 'oculto' });
-  const cargarQuienes = useCallback(() => {
+  /**
+   * D223 · `silencioso`: después de aceptar a alguien la lista se vuelve a pedir
+   * sin pasar por «Cargando…» (la de antes queda hasta que llega la nueva).
+   */
+  const cargarQuienes = useCallback((silencioso = false) => {
     const identityEpoch = identityEpochRef.current.capture();
-    setQuienes({ estado: 'cargando' });
+    if (!silencioso) setQuienes({ estado: 'cargando' });
     api
       .getMesaParticipants(code)
       .then((lista) => {
@@ -701,6 +709,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       .catch((err) => {
         if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
         const { status } = extractApiError(err);
+        if (silencioso && status !== 404 && status !== 403) return;
         setQuienes(status === 404 || status === 403 ? { estado: 'oculto' } : { estado: 'error' });
       });
   }, [code]);
@@ -708,6 +717,75 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (esOrganizador) cargarQuienes();
     else setQuienes({ estado: 'oculto' });
   }, [esOrganizador, cargarQuienes]);
+
+  /**
+   * D219 · D223 · las solicitudes para unirse, **sólo el titular** y sólo con la
+   * mesa abierta (`open` o `partially_paid`, la misma condición que compartir).
+   * Se piden al entrar, con el refresco de la mesa y después de cada decisión.
+   * 403/404 ocultan la sección; otro error la muestra con reintento, sin
+   * inventar una lista vacía (T03). Aceptar o rechazar no mueve a nadie de forma
+   * optimista (X11): después del 200 se recargan las solicitudes y, al aceptar,
+   * quiénes están; con un conflicto, también, y se dice por qué.
+   */
+  const admiteSolicitudes = esOrganizador && (mesa?.status === 'open' || mesa?.status === 'partially_paid');
+  const [solicitudes, setSolicitudes] = useState<SolicitudesDeUnirse>({ estado: 'oculto' });
+  const cargarSolicitudes = useCallback((silencioso = false) => {
+    const identityEpoch = identityEpochRef.current.capture();
+    if (!silencioso) setSolicitudes({ estado: 'cargando' });
+    api
+      .getMesaJoinRequests(code)
+      .then((lista) => {
+        if (identityEpochRef.current.isCurrent(identityEpoch)) setSolicitudes({ estado: 'lista', lista });
+      })
+      .catch((err) => {
+        if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
+        const { status } = extractApiError(err);
+        if (status === 404 || status === 403) {
+          setSolicitudes({ estado: 'oculto' });
+          return;
+        }
+        // Un refresco que falla deja la lista que había; la primera carga, el error.
+        setSolicitudes((actual) => (silencioso && actual.estado === 'lista' ? actual : { estado: 'error' }));
+      });
+  }, [code]);
+  useEffect(() => {
+    if (admiteSolicitudes) cargarSolicitudes();
+    else setSolicitudes({ estado: 'oculto' });
+  }, [admiteSolicitudes, cargarSolicitudes]);
+  const refrescarSolicitudesRef = useRef<(() => void) | null>(null);
+  refrescarSolicitudesRef.current = admiteSolicitudes ? () => cargarSolicitudes(true) : null;
+
+  const decidiendoRef = useRef(new Set<string>());
+  const [decidiendo, setDecidiendo] = useState<ReadonlySet<string>>(() => new Set());
+  const decidirSolicitud = useCallback(async (id: string, accion: 'aceptar' | 'rechazar') => {
+    if (decidiendoRef.current.has(id)) return;
+    decidiendoRef.current.add(id);
+    setDecidiendo(new Set(decidiendoRef.current));
+    const identityEpoch = identityEpochRef.current.capture();
+    try {
+      if (accion === 'aceptar') await api.acceptJoinRequest(code, id);
+      else await api.rejectJoinRequest(code, id);
+    } catch (err) {
+      if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
+      const { status, code: error } = extractApiError(err);
+      if (status === 403) {
+        setSolicitudes({ estado: 'oculto' });
+        return;
+      }
+      toast(error === 'mesa_not_joinable'
+        ? t('Ya no se puede sumar gente a esta mesa.')
+        : status === 409 || status === 410 || status === 404
+          ? t('Esta solicitud ya no está disponible.')
+          : t('No pudimos confirmar el resultado. Intenta de nuevo.'));
+    } finally {
+      decidiendoRef.current.delete(id);
+      setDecidiendo(new Set(decidiendoRef.current));
+      if (identityEpochRef.current.isCurrent(identityEpoch)) {
+        cargarSolicitudes(true);
+        if (accion === 'aceptar') cargarQuienes(true);
+      }
+    }
+  }, [code, cargarSolicitudes, cargarQuienes, t, toast]);
 
   /**
    * AF-32 · las fotos de quienes se sumaron (dueño v2.110.0). Una
@@ -2925,7 +3003,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       cerrando={cerrando}
       quienesSeSumaron={quienes}
       fotoDe={(participantId) => fotosRef.current?.url(participantId) ?? null}
-      onReintentarQuienes={cargarQuienes}
+      onReintentarQuienes={() => cargarQuienes()}
+      solicitudes={solicitudes}
+      decidiendo={decidiendo}
+      onDecidirSolicitud={(id, accion) => { void decidirSolicitud(id, accion); }}
+      onReintentarSolicitudes={() => cargarSolicitudes()}
       onSetFraction={setFraction}
       onSetDenominator={setDenominator}
       onGoToPay={goToPay}

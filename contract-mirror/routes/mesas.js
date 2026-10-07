@@ -60,6 +60,7 @@ const origenItems = require('../services/origenItems');   // v2.145.0 · decisi�
 
 const informativeSelections = require('../services/informativeSelections');
 const usernameSvc = require('../services/username');
+const joinRequests = require('../services/joinRequests');   // v2.166.0 · decisión 219: unirse con el código
 const router = express.Router();
 const { validateBody, validateParams } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
@@ -198,7 +199,7 @@ async function promoteSavedCardSnapshot({ row, userId, snapshot }) {
  * C3 · lee de la mesa lo que el consumidor necesita para no confundir un cierre
  * SIN COBROS con el vencimiento de una garantía.
  */
-async function cerrojoDeGarantia(mesa) {
+async function cerrojoDeGarantia(mesa, { totalesAnclados = false } = {}) {
   // `status` sale de ESTA lectura y no del snapshot del middleware: si la mesa
   // cierra por selección entre las dos, la respuesta saldría con `open` y un
   // motivo de cierre al lado, que es una contradicción publicada.
@@ -209,7 +210,9 @@ async function cerrojoDeGarantia(mesa) {
   const status = fila ? fila.status : mesa.status;
   const escrito = fila?.metadata?.closure_reason || null;
   // v2.156.0 · AB-D209 · subtotal e IVA impresos, de la MISMA lectura (sin otra consulta).
-  const ticketTotals = origenItems.totalesPublicables(fila?.metadata?.ticket_totals, Number(mesa.total_cents));
+  // v2.165.0 · AB-NOCHE G · L1: con `totals_version=2` también sale con IVA agregado si la mesa no se editó.
+  const ticketTotals = origenItems.totalesPublicables(fila?.metadata?.ticket_totals, Number(mesa.total_cents),
+    { anclados: totalesAnclados });
   // v2.164.0 · AB-NOCHE F · D218: el descuento aparte, si la mesa sigue igual a los platos del ticket.
   const ticketAdjustments = origenItems.ajustesPublicables(fila?.metadata?.ticket_adjustments, Number(mesa.total_cents));
   if (escrito) {
@@ -1387,7 +1390,9 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
     // garantía en `expired` sin motivo escrito cerró porque se le acabaron las
     // cinco horas—. Derivarlo evita tocar `services/timer.js`, que no está en
     // scope, y deja una sola verdad para el consumidor.
-    const garantiaMesa = await cerrojoDeGarantia(mesa);
+    // v2.165.0 · AB-NOCHE G · L1: `totals_version=2` exacto. El visor del ticket de la App 0.220.0 exige
+    // subtotal + IVA = total de la mesa y lanza si no; sin negociar, la regla de siempre, byte a byte.
+    const garantiaMesa = await cerrojoDeGarantia(mesa, { totalesAnclados: req.query.totals_version === '2' });
     const informativeCapability = await informativeSelections.getCapability({ mesaId: mesa.id, userId: req.user.id });
     // Decisión 79 (2026-09-25): en «igual» con pagos apagados, cuánto queda por
     // elegir de cada plato sumando lo declarado por TODOS — agregado por plato,
@@ -1600,6 +1605,40 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
     res.json({ participants });
   } catch (err) { next(err); }
 });
+
+// ═══════════════════════════════════════════════════════════
+// v2.166.0 · decisión 219 · los pedidos para unirse con el código, del lado del
+// titular: GET /:code/join-requests (las pendientes vigentes) y
+// POST /:code/join-requests/:id/accept|reject. Sólo el titular
+// (`mesas.opener_user_id`); otro participante recibe el mismo 403 que en
+// /:code/participants. El 404/403 de una mesa ajena es el residual conocido de
+// requireMesaParticipant (queda en el Roadmap). La lógica, en
+// services/joinRequests.js.
+// ═══════════════════════════════════════════════════════════
+function soloTitular(req, res, next) {
+  if (!req.user || req.mesa.opener_user_id !== req.user.id) {
+    return res.status(403).json({ error: 'not_mesa_organizer' });
+  }
+  next();
+}
+
+router.get('/:code/join-requests', requireAuth, requireMesaParticipant, soloTitular, async (req, res, next) => {
+  try {
+    const { status, body } = await joinRequests.listar(req.mesa.id);
+    res.status(status).json(body);
+  } catch (err) { next(err); }
+});
+
+for (const decision of ['accept', 'reject']) {
+  // validateParams va DESPUÉS de requireMesaParticipant: deja en req.params sólo el id.
+  router.post(`/:code/join-requests/:id/${decision}`, requireAuth, requireMesaParticipant, soloTitular,
+    validateParams(schemas.uuidIdParam), async (req, res, next) => {
+      try {
+        const { status, body } = await joinRequests.decidir(req.user.id, req.mesa.id, req.params.id, decision);
+        res.status(status).json(body);
+      } catch (err) { next(err); }
+    });
+}
 
 /**
  * AB-25 · n164 (decisión de Mati 17d436dd…af78: «Aprobado tal cual»; menores:

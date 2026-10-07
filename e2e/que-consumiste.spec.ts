@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * AF-QUE-CONSUMISTE · decisión 90 de Mati · «¿Qué consumiste?» construido del
@@ -23,7 +24,7 @@ async function abrirMesa(page: Page, modo: 'consumo' | 'igual' = 'consumo'): Pro
   await ingresar(page);
   const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo });
   await page.goto(`/mesa/${mesa.code}`);
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
   return mesa.code;
 }
 
@@ -47,7 +48,7 @@ async function plantarAjenos(page: Page, code: string): Promise<void> {
     await new Promise<void>((r) => queueMicrotask(r));
   }, code);
   await page.reload();
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
 }
 
 /**
@@ -208,6 +209,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
       await new Promise<void>((r) => queueMicrotask(r));
     }, code);
     await page.reload();
+    await enTuMesaConLaLista(page);
     const agua = renglon(page, 'Agua mineral');
     await page.getByRole('button', { name: 'Agua mineral, Queda ¼' }).click();
     await expect(agua.getByRole('radiogroup')).toHaveCount(0);
@@ -290,6 +292,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
       store.persist();
     }, code);
     await page.reload();
+    await enTuMesaConLaLista(page);
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
     await expect(tagliatelle.locator('[data-estado="registrado"] .qc-pildora')).toHaveText('⅔');
     // Al marcar otro plato el selector ofrece sólo las cuatro: ni ⅔ ni ¾.

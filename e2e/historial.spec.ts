@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * §1.10 · LA ENTRADA "MESAS" ES EL HISTORIAL DE MESAS CERRADAS.
@@ -54,9 +55,10 @@ test.describe('Historial (§1.10)', () => {
       await ingresar(page);
       await page.goto('/#/mesas');
 
-      // El título de la PANTALLA es "Historial"; "Mesas" es la etiqueta de la
-      // barra, por espacio. El heading viejo "Mesas" murió con la TopBar.
-      await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+      // D223 · turno 2 · 2.1: el título de la pantalla vuelve a ser «Mesas»
+      // (fue «Historial» desde §1.10): arriba del historial vive ahora «Unirme
+      // con código».
+      await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
       await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
 
@@ -93,7 +95,7 @@ test.describe('Historial (§1.10)', () => {
           await page.clock.setFixedTime(new Date(fixture.instant));
           await ingresar(page); await page.goto('/#/mesas');
           expect(await page.evaluate(() => new Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(device.zone);
-          await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+          await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
           await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
           await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
           await expect(page.getByRole('heading', { name: fixture.month, exact: true })).toBeVisible();
@@ -172,6 +174,7 @@ test.describe('Historial (§1.10)', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('$840')).toBeVisible();
 
     // 🔴 **F2-03 · el modo se declara sobre la MESA YA ABIERTA, y la primera
@@ -187,6 +190,7 @@ test.describe('Historial (§1.10)', () => {
     // con la versión rota adentro.
     await declararCorteYRecargar(page);
     await expect(page.getByText('$840')).toBeVisible();
+    await enTuMesaConLaLista(page);
 
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el
@@ -195,7 +199,7 @@ test.describe('Historial (§1.10)', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
 
     await page.goto('/#/mesas');
-    await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
     // La pantalla no está vacía ni rota: el seed sigue ahí…
     await expect(page.getByText('$224.25')).toBeVisible();
     // …y MI mesa viva no está.

@@ -69,29 +69,43 @@ export function CardBrandChip({ brand }: { brand: string }) {
   );
 }
 
-const ToastContext = createContext<(msg: string) => void>(() => undefined);
+/**
+ * `sobreLaBarra` (D222 · D223, «Te aceptaron»): el aviso va arriba de la barra
+ * de abajo y de su círculo, a 104 px del borde, como el turno 1 · 7 del
+ * diseño. Sin la opción, donde estuvo siempre: ningún otro aviso se mueve.
+ */
+export interface OpcionesDelAviso {
+  readonly sobreLaBarra?: boolean;
+}
+
+type MostrarAviso = (msg: string, opciones?: OpcionesDelAviso) => void;
+
+const ToastContext = createContext<MostrarAviso>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [msg, setMsg] = useState<string | null>(null);
+  const [sobreLaBarra, setSobreLaBarra] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const show = useCallback((m: string) => {
+  const show = useCallback((m: string, opciones?: OpcionesDelAviso) => {
     setMsg(m);
+    setSobreLaBarra(opciones?.sobreLaBarra === true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setMsg(null), 2400);
   }, []);
+  const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : ''].filter(Boolean).join(' ');
   return (
     <ToastContext.Provider value={show}>
       {children}
       {/* Siempre montado (ver .toast-hidden en global.css): una región live que
           se inserta junto con su texto no la anuncian varios lectores. */}
-      <div className={msg ? 'toast' : 'toast toast-hidden'} role="status" aria-live="polite">
+      <div className={clases} role="status" aria-live="polite">
         {msg}
       </div>
     </ToastContext.Provider>
   );
 }
 
-export function useToast(): (msg: string) => void {
+export function useToast(): MostrarAviso {
   return useContext(ToastContext);
 }
 

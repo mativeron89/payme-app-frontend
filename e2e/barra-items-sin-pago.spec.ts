@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, sinRefresco } from './_app';
+import { abrirTusConsumos } from './_mesa';
 
 interface SyntheticClaim {
   who: 'user' | 'other';
@@ -89,6 +90,7 @@ async function sembrarMesa(page: Page, spec: SyntheticMesa): Promise<void> {
 
 async function abrir(page: Page, code: string): Promise<void> {
   await page.goto(`/#/mesa/${code}`);
+  await abrirTusConsumos(page);
   // Decisión 77: el encabezado ya no muestra el código, así que el testigo de
   // carga es la barra de la mesa, que tienen la vista activa y la del cierre.
   await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${code}$`));
@@ -123,6 +125,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     // Decisión 32 · con el lock OK se vuelve a Inicio; se reentra para mirar la barra.
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto('/#/mesa/PA-8401');
+    await abrirTusConsumos(page);
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
     await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
@@ -136,6 +139,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     })).toBe(1);
 
     await page.reload();
+    await abrirTusConsumos(page);
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
     await expect(page.getByText('$300 / $840 (36%)', { exact: true })).toBeVisible();
 
@@ -187,6 +191,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     // El mock no adjunta item_id al 409; el owner real sí. Una recarga completa
     // descarta igualmente la intención local y conserva sólo el agregado real.
     await page.reload();
+    await abrirTusConsumos(page);
     await expect(page.getByRole('button', { name: /^Consumo de 300/ })).toContainText('Queda ½');
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toHaveCount(0);
   });
@@ -242,6 +247,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto('/#/mesa/PA-8407');
+    await abrirTusConsumos(page);
     await page.getByRole('button', { name: 'Soltar Consumo de 300' }).click();
     await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toBeVisible();
 

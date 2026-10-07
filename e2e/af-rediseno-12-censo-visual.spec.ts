@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
+import { enTuMesaConLaLista } from './_mesa';
 
 const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 
@@ -253,7 +254,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '06-compartir');
 
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
   await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
   // F2-03 · de acá en adelante el recorrido prueba el CORTE, así que el modo
@@ -261,6 +262,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   // riel vivo —incluida la garantía, que con el dinero apagado no existe—; la
   // divergencia se declara en la entrega, no se tapa cambiando el censo.
   await declararCorteYRecargar(page);
+  await enTuMesaConLaLista(page);
   await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/queda reservado/)).toHaveCount(0);
   await page.evaluate(() => {
@@ -290,7 +292,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await expect(page.locator('.config-card').getByText('Idioma', { exact: true }).locator('..').locator('svg')).toHaveCount(1);
   await acreditar(page, '10-configuracion');
   await page.goto('/#/mesas');
-  await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
   await acreditar(page, '11-historial');
   await page.goto('/#/estadisticas');
   await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeVisible();

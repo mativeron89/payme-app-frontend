@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -7,6 +7,8 @@ import { Icon } from '../components/Icon';
 import { useHojaModal } from '../components/useHojaModal';
 import { Avatar, useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
+import { Desplegable, SolicitudesParaUnirse } from '../components/TuMesa';
+import type { SolicitudParaElTitular } from '../api/joinRequests';
 import type { MesaDetail, MesaItem } from '../api/types';
 import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
@@ -59,6 +61,13 @@ export type QuienesSeSumaron =
   | { readonly estado: 'cargando' }
   | { readonly estado: 'error' }
   | { readonly estado: 'lista'; readonly lista: readonly Participante[] };
+
+/** D219 · D223 · las solicitudes para unirse, como las ve el titular. */
+export type SolicitudesDeUnirse =
+  | { readonly estado: 'oculto' }
+  | { readonly estado: 'cargando' }
+  | { readonly estado: 'error' }
+  | { readonly estado: 'lista'; readonly lista: readonly SolicitudParaElTitular[] };
 
 export interface MesaDetailViewProps {
   mesa: MesaDetail;
@@ -154,6 +163,16 @@ export interface MesaDetailViewProps {
    */
   quienesSeSumaron: QuienesSeSumaron;
   onReintentarQuienes: () => void;
+  /**
+   * D219 · D223 · las solicitudes para unirse (sólo el titular, con la mesa
+   * abierta; `oculto` para los demás). La red y las decisiones las hace
+   * `MesaScreen`; acá se dibujan y se avisan las intenciones.
+   */
+  solicitudes: SolicitudesDeUnirse;
+  /** Los ids con una decisión en vuelo: su fila queda ocupada. */
+  decidiendo: ReadonlySet<string>;
+  onDecidirSolicitud: (id: string, accion: 'aceptar' | 'rechazar') => void;
+  onReintentarSolicitudes: () => void;
   /**
    * AF-32 · la foto (`blob:`) de una fila, o `null` ⇒ iniciales. La pide y la
    * libera `MesaScreen`; acá sólo se dibuja.
@@ -366,6 +385,10 @@ export function MesaDetailView({
   soltarDisponible,
   quienesSeSumaron,
   onReintentarQuienes,
+  solicitudes,
+  decidiendo,
+  onDecidirSolicitud,
+  onReintentarSolicitudes,
   fotoDe,
   onCerrarMesa,
   cerrando,
@@ -387,6 +410,31 @@ export function MesaDetailView({
   const [confirmandoCerrarMesa, setConfirmandoCerrarMesa] = useState(false);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * D223 · «Tu mesa» es la del TITULAR. Quien no lo es ve la pantalla de
+   * siempre, con «¿Qué consumiste?» y la lista abierta.
+   */
+  const esTitular = !isGuest && mesa.my_role === 'opener';
+  /** «Tus consumos» arranca cerrado (turno 2 · 2.9). */
+  const [consumosAbierto, setConsumosAbierto] = useState(false);
+  /**
+   * Qué arranca abierto (turno 2 · 2.10 y 2.11): con solicitudes, ellas
+   * abiertas y quiénes cerrado; sin solicitudes, quiénes abierto. Se decide con
+   * la PRIMERA lista que llega; después manda lo que toque la persona (`null` =
+   * todavía no tocó). Una solicitud que llega más tarde no cambia nada.
+   */
+  const [quienesAbierto, setQuienesAbierto] = useState<boolean | null>(null);
+  const [solicitudesAbierto, setSolicitudesAbierto] = useState<boolean | null>(null);
+  const [habiaSolicitudesAlEntrar, setHabiaSolicitudesAlEntrar] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (habiaSolicitudesAlEntrar !== null) return;
+    // Sólo con una respuesta: `oculto` es también el estado ANTES de pedir, y
+    // decidir con él dejaba quiénes abierto aunque llegaran solicitudes.
+    if (solicitudes.estado === 'lista') setHabiaSolicitudesAlEntrar(solicitudes.lista.length > 0);
+    else if (solicitudes.estado === 'error') setHabiaSolicitudesAlEntrar(false);
+  }, [solicitudes, habiaSolicitudesAlEntrar]);
+  const quienesAbiertoEfectivo = quienesAbierto ?? habiaSolicitudesAlEntrar !== true;
+  const solicitudesAbiertoEfectivo = solicitudesAbierto ?? true;
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
@@ -551,16 +599,247 @@ export function MesaDetailView({
   // tres. Compartido por «Continuar» y «Listo»: nunca se avanza sin elegir.
   const frenarSinEleccion = (): void => {
     toast(t('Elige lo que consumiste para continuar'));
-    itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    // D223 · en «Tu mesa» la lista vive dentro de «Tus consumos», que puede
+    // estar cerrado: se abre ANTES de bajar, si no el aviso lleva a una tarjeta
+    // cerrada que no dice qué falta.
+    if (esTitular && !consumosAbierto) {
+      setConsumosAbierto(true);
+      requestAnimationFrame(() => itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }));
+    } else {
+      itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }
     setItemsPulse(true);
   };
+  /**
+   * D223 · D (aprobado) · el encabezado de «Tus consumos»: cuántos elegiste, no
+   * cuánto (el monto vive en la burbuja y en la barra). En partes iguales lo
+   * elegido son partes.
+   */
+  const resumenDeConsumos = selected.size === 0
+    ? t('Toca para elegir')
+    : esConsumo
+      ? (selected.size === 1 ? t('1 elegido · toca para modificar') : t('{0} elegidos · toca para modificar', selected.size))
+      : (selected.size === 1 ? t('1 parte · toca para modificar') : t('{0} partes · toca para modificar', selected.size));
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
+
+  /**
+   * La lista de «¿Qué consumiste?» (y la nota de «Ya pagaste»). Quien no es
+   * titular la ve como siempre; en «Tu mesa» (D223) va dentro de «Tus consumos».
+   */
+  const listaDeConsumos = (
+    <>
+      {/* AF-QUE-CONSUMISTE · decisión 90 de Mati · la lista de «¿Qué
+          consumiste?» del diseño de Claude Design
+          (`PANTALLA-que-consumiste.md`, sha256 fabae11b…). Reemplaza el bloque
+          «¿Cuánto tomas tú?» que se abría debajo del plato y la lista con borde
+          punteado, «Elegiste ½» y X roja:
+          - regla 1: todos los renglones miden lo mismo; elegir, cambiar la
+            porción o soltar nunca mueve la lista;
+          - regla 2: lo propio queda en su lugar, en teal, con la píldora de
+            porción y tu parte;
+          - regla 3: la píldora abre el selector EN el mismo renglón;
+          - reglas 5 y 6: «Queda ½» y «Lo eligió otro», sin nombre;
+          - regla 7: se suelta tocando el círculo o «Soltar», sin X roja.
+          El estado (selección, límites de D79, bloqueos) sigue siendo de
+          `MesaScreen`: acá sólo se dibuja y se avisan intenciones. */}
+      <div
+        ref={itemsRef}
+        className={`card qc-lista${itemsPulse ? ' tk-fold--pulse' : ''}`}
+        style={{ marginBottom: 14 }}
+        onAnimationEnd={() => setItemsPulse(false)}
+      >
+        {mesa.items.map((i) => <div key={i.id} className="qc-renglon" data-plato={i.name}>{(() => {
+          const fullPrice = i.price_cents * i.quantity;
+          const nombre = `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`;
+          const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
+          // En igualdad la selección sólo declara consumo y no reclama el
+          // ítem. Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto
+          // queda del plato (de TODOS, sin nombres): esta cuenta puede declarar
+          // eso más lo propio guardado; `null` = sin dato, no se limita.
+          const restanteIgual = esConsumo ? null : restanteInformativo(i);
+          const limiteIgual = esConsumo ? null : limiteInformativo(i, informativasGuardadas);
+          const state = esConsumo
+            ? rowStateOf(i, selected)
+            : selected.has(i.id)
+              ? 'seleccionado'
+              : limiteIgual === 0 ? 'tomado' : 'disponible';
+          const sel = state === 'seleccionado';
+          // 1A.3 · 'indeterminado' bloquea igual que 'tomado'.
+          const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
+          const registrado = !sel && esMioElegido(i, esConsumo);
+          const soltableRegistrado = registrado && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
+          const editBloqueado = !esConsumo && informativeEditingBlocked;
+          // Regla 4 · las porciones que caben en la mesa y en lo que queda.
+          const restanteParaPorcion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
+          const opciones = porcionesDisponibles(original, restanteParaPorcion);
+          const tag = esConsumo ? rowTag(state, i, t) : tagIgual(state, restanteIgual, t);
+          const queda = !sel && !registrado && !bloqueado && (esConsumo
+            ? state === 'parcial'
+            : restanteIgual !== null && restanteIgual > 0 && restanteIgual < 10000);
+
+          if (sel || registrado) {
+            const bps = sel ? (selected.get(i.id) ?? 10000) : i.my_bps;
+            const etiqueta = etiquetaPorcion(bps, t);
+            // Regla 2 del diseño · «píldora de porción + tu parte en pesos». En
+            // consumo la última porción la ajusta el dueño (`fractionPreview`).
+            // 🔴 En «igual» NO hay pesos por plato: la porción es una declaración
+            // y lo que se paga es el casillero fijo («Mi parte» abajo). Mostrar
+            // «$97.50» junto a ½ plato inventaría un precio que nadie cobra
+            // (regla vigente desde 6d32f2e, que la pantalla nueva no deroga).
+            const parte = !esConsumo
+              ? null
+              : sel
+                ? fractionPreview(fullPrice, bps, i.remaining_bps)
+                : fractionPreview(fullPrice, bps, 10000);
+            // Con la edición bloqueada (D79: leyendo, guardando, sólo lectura)
+            // el renglón propio no ofrece nada: ni selector, ni píldora que
+            // abra, ni círculo que suelte. Se ve lo elegido y nada más.
+            if (sel && abierto === i.id && !editBloqueado) {
+              return (
+                <div key={i.id} className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
+                  <div className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
+                    {opciones.map((d) => {
+                      const elegida = bps === denominatorBps(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          role="radio"
+                          aria-checked={elegida}
+                          className={`qc-opcion${elegida ? ' on' : ''}`}
+                          onClick={() => elegirPorcion(i.id, d)}
+                        >
+                          {etiquetaPorcion(denominatorBps(d), t)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className="qc-soltar"
+                    onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                  >
+                    {t('Soltar')}
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <div
+                key={i.id}
+                className="qc-fila qc-mia"
+                data-estado={sel ? 'mio' : 'registrado'}
+                role="group"
+                aria-label={registrado ? `${nombreAria}${t(', {0}', etiquetaDeLoMio(i, t))}` : nombreAria}
+              >
+                {sel && !editBloqueado ? (
+                  <button
+                    type="button"
+                    className="qc-circulo qc-circulo--marcado"
+                    aria-label={t('Soltar {0}', i.name)}
+                    onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                  >
+                    <Icon name="check" size={14} />
+                  </button>
+                ) : soltableRegistrado ? (
+                  <button
+                    type="button"
+                    className="qc-circulo qc-circulo--marcado"
+                    aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
+                    aria-busy={soltando === i.id || undefined}
+                    disabled={soltando !== null}
+                    onClick={() => onReleaseItem(i.id)}
+                  >
+                    <Icon name={soltando === i.id ? 'clock' : 'check'} size={14} />
+                  </button>
+                ) : (
+                  <span className="qc-circulo qc-circulo--marcado" aria-hidden="true">
+                    <Icon name="check" size={14} />
+                  </span>
+                )}
+                {/* AF-29 · si parte de lo mío ya está PAGADO, el renglón lo dice
+                    con palabras en una segunda línea («Pagaste ½ · elegiste ½
+                    más»), como «Lo eligió otro»: confundir elegido con pagado es
+                    confundir plata. Sin pago, la píldora ya dice la porción. */}
+                {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0 ? (
+                  <span className="qc-cuerpo">
+                    <span className="qc-nombre qc-nombre--mio">{nombre}</span>
+                    <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>
+                  </span>
+                ) : (
+                  <span className="qc-nombre qc-nombre--mio">{nombre}</span>
+                )}
+                {sel && opciones.length > 1 && !editBloqueado ? (
+                  <button
+                    type="button"
+                    className="qc-pildora"
+                    aria-label={t('Cambiar la porción de {0}: {1}', nombreAria, etiqueta)}
+                    aria-expanded={false}
+                    onClick={() => setAbierto(i.id)}
+                  >
+                    {etiqueta}
+                    <Icon name="chevron-down" size={12} />
+                  </button>
+                ) : (
+                  <span className="qc-pildora qc-pildora--fija">{etiqueta}</span>
+                )}
+                {parte !== null && <span className="qc-parte">{formatMXN(parte)}</span>}
+              </div>
+            );
+          }
+
+          if (bloqueado) {
+            return (
+              <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
+                <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
+                <span className="qc-cuerpo">
+                  <span className="qc-nombre qc-nombre--otro">{nombre}</span>
+                  {tag && <span className="qc-etiqueta">{tag}</span>}
+                </span>
+                <span className="qc-precio qc-precio--otro">{formatMXN(fullPrice)}</span>
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={i.id}
+              type="button"
+              className="qc-fila qc-libre"
+              data-estado={queda ? 'queda' : 'libre'}
+              disabled={editBloqueado}
+              aria-pressed={false}
+              aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}
+              onClick={() => tomarPlato(i.id, opciones.length)}
+            >
+              <span className="qc-circulo" aria-hidden="true" />
+              <span className="qc-nombre">{nombre}</span>
+              {queda && tag && <span className="qc-pildora qc-pildora--queda">{tag}</span>}
+              <span className="qc-precio">{formatMXN(fullPrice)}</span>
+            </button>
+          );
+        })()}</div>)}
+      </div>
+      {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
+          comensal ver que su parte YA está tomada. Sin esto volvía, veía
+          casilleros libres y pagaba de nuevo — llevándose el de otro.
+          No se bloquea: pagar más de una parte es legítimo (acta
+          2026-07-25), pero tiene que ser una decisión, no un accidente. */}
+      {mySlotsTaken > 0 && !esConsumo && (
+        <div className="note note-teal" style={{ marginTop: 8 }}>
+          <b>{t('Ya pagaste')} {mySlotsTaken === 1 ? t('tu parte') : t('{0} partes', mySlotsTaken)} ✓</b>
+          {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
-        <h1 className="title-card-title">{t('¿Qué consumiste?')}</h1>
+        {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
+        <h1 className="title-card-title">{esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}</h1>
         <div className="title-card-sub mesa-selection-context">
           {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
               abiertas— y en UNA línea, restaurante · modalidad. */}
@@ -641,322 +920,180 @@ export function MesaDetailView({
             {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
           </div>
         )}
-        {/* AF-QUE-CONSUMISTE · decisión 90 de Mati · la lista de «¿Qué
-            consumiste?» del diseño de Claude Design
-            (`PANTALLA-que-consumiste.md`, sha256 fabae11b…). Reemplaza el bloque
-            «¿Cuánto tomas tú?» que se abría debajo del plato y la lista con borde
-            punteado, «Elegiste ½» y X roja:
-            - regla 1: todos los renglones miden lo mismo; elegir, cambiar la
-              porción o soltar nunca mueve la lista;
-            - regla 2: lo propio queda en su lugar, en teal, con la píldora de
-              porción y tu parte;
-            - regla 3: la píldora abre el selector EN el mismo renglón;
-            - reglas 5 y 6: «Queda ½» y «Lo eligió otro», sin nombre;
-            - regla 7: se suelta tocando el círculo o «Soltar», sin X roja.
-            El estado (selección, límites de D79, bloqueos) sigue siendo de
-            `MesaScreen`: acá sólo se dibuja y se avisan intenciones. */}
-        <div
-          ref={itemsRef}
-          className={`card qc-lista${itemsPulse ? ' tk-fold--pulse' : ''}`}
-          style={{ marginBottom: 14 }}
-          onAnimationEnd={() => setItemsPulse(false)}
-        >
-          {mesa.items.map((i) => <div key={i.id} className="qc-renglon" data-plato={i.name}>{(() => {
-            const fullPrice = i.price_cents * i.quantity;
-            const nombre = `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`;
-            const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
-            // En igualdad la selección sólo declara consumo y no reclama el
-            // ítem. Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto
-            // queda del plato (de TODOS, sin nombres): esta cuenta puede declarar
-            // eso más lo propio guardado; `null` = sin dato, no se limita.
-            const restanteIgual = esConsumo ? null : restanteInformativo(i);
-            const limiteIgual = esConsumo ? null : limiteInformativo(i, informativasGuardadas);
-            const state = esConsumo
-              ? rowStateOf(i, selected)
-              : selected.has(i.id)
-                ? 'seleccionado'
-                : limiteIgual === 0 ? 'tomado' : 'disponible';
-            const sel = state === 'seleccionado';
-            // 1A.3 · 'indeterminado' bloquea igual que 'tomado'.
-            const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
-            const registrado = !sel && esMioElegido(i, esConsumo);
-            const soltableRegistrado = registrado && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
-            const editBloqueado = !esConsumo && informativeEditingBlocked;
-            // Regla 4 · las porciones que caben en la mesa y en lo que queda.
-            const restanteParaPorcion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
-            const opciones = porcionesDisponibles(original, restanteParaPorcion);
-            const tag = esConsumo ? rowTag(state, i, t) : tagIgual(state, restanteIgual, t);
-            const queda = !sel && !registrado && !bloqueado && (esConsumo
-              ? state === 'parcial'
-              : restanteIgual !== null && restanteIgual > 0 && restanteIgual < 10000);
-
-            if (sel || registrado) {
-              const bps = sel ? (selected.get(i.id) ?? 10000) : i.my_bps;
-              const etiqueta = etiquetaPorcion(bps, t);
-              // Regla 2 del diseño · «píldora de porción + tu parte en pesos». En
-              // consumo la última porción la ajusta el dueño (`fractionPreview`).
-              // 🔴 En «igual» NO hay pesos por plato: la porción es una declaración
-              // y lo que se paga es el casillero fijo («Mi parte» abajo). Mostrar
-              // «$97.50» junto a ½ plato inventaría un precio que nadie cobra
-              // (regla vigente desde 6d32f2e, que la pantalla nueva no deroga).
-              const parte = !esConsumo
-                ? null
-                : sel
-                  ? fractionPreview(fullPrice, bps, i.remaining_bps)
-                  : fractionPreview(fullPrice, bps, 10000);
-              // Con la edición bloqueada (D79: leyendo, guardando, sólo lectura)
-              // el renglón propio no ofrece nada: ni selector, ni píldora que
-              // abra, ni círculo que suelte. Se ve lo elegido y nada más.
-              if (sel && abierto === i.id && !editBloqueado) {
-                return (
-                  <div key={i.id} className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
-                    <div className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
-                      {opciones.map((d) => {
-                        const elegida = bps === denominatorBps(d);
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            role="radio"
-                            aria-checked={elegida}
-                            className={`qc-opcion${elegida ? ' on' : ''}`}
-                            onClick={() => elegirPorcion(i.id, d)}
-                          >
-                            {etiquetaPorcion(denominatorBps(d), t)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      className="qc-soltar"
-                      onClick={() => { setAbierto(null); onToggleItem(i.id); }}
-                    >
-                      {t('Soltar')}
+        {esTitular ? (
+          <>
+            {/* D223 · «Tu mesa» (turno 2 · 2.9–2.11), en este orden: quiénes
+                están, solicitudes (sólo si hay), compartir, tus consumos
+                (cerrado por defecto) y cerrar mesa. Cambia la DISPOSICIÓN: cómo
+                se elige, se suelta, se divide y se paga es lo de siempre. */}
+            {quienesSeSumaron.estado !== 'oculto' && (
+              <Desplegable
+                className="quienes"
+                titulo={t('Quiénes están en la mesa')}
+                resumen={quienesSeSumaron.estado === 'lista'
+                  ? (quienesSeSumaron.lista.length + 1 === 1
+                    ? t('1 persona')
+                    : t('{0} personas', quienesSeSumaron.lista.length + 1))
+                  : ''}
+                abierto={quienesAbiertoEfectivo}
+                onToggle={() => setQuienesAbierto(!quienesAbiertoEfectivo)}
+              >
+                {/* La fila del titular sale de la sesión: el dueño no lo incluye
+                    en la lista (`routes/mesas.js`, «p.user_id <> $2»). Después,
+                    los demás en el orden de llegada del dueño. */}
+                <ul className="quienes-lista">
+                  <li className="quien quien--titular">
+                    <Avatar name={userName ?? t('Tú')} />
+                    <span className="quien-texto">
+                      <span className="quien-nombre">{userName ?? t('Tú')}</span>
+                      {userName && <span className="quien-id">{t('Tú')}</span>}
+                    </span>
+                  </li>
+                  {quienesSeSumaron.estado === 'lista' && quienesSeSumaron.lista.map((p, idx) => {
+                    const fila = filaDeParticipante(p, arrobaHabilitada);
+                    return (
+                      // Sin id estable en el contrato: el orden de llegada es el del dueño.
+                      <li key={idx} className="quien">
+                        {fila.tipo === 'persona' ? (
+                          (() => {
+                            // AF-32 · foto si el dueño la dio y llegó; si no, iniciales.
+                            const foto = fotoDe(p.participantId);
+                            const quien = fila.nombre ?? fila.arroba ?? '';
+                            return foto ? (
+                              <img className="avatar quien-foto" src={foto} alt={t('Foto de {0}', quien)} />
+                            ) : (
+                              <Avatar name={quien} />
+                            );
+                          })()
+                        ) : (
+                          // Invitado y cuenta eliminada: como antes, sin avatar;
+                          // el hueco mantiene alineados los nombres.
+                          <span className="quien-hueco" aria-hidden="true" />
+                        )}
+                        <span className="quien-texto">
+                          {fila.tipo === 'invitado' ? (
+                            <span className="quien-nombre">{t('Invitado')}</span>
+                          ) : fila.tipo === 'eliminada' ? (
+                            <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
+                          ) : (
+                            // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @.
+                            // Hasta 0.198.1 iba el `payme_id`, y EN LUGAR del nombre
+                            // si faltaba; ahora sin nombre va el @, y sin los dos,
+                            // «Sin nombre». El código nunca.
+                            <>
+                              <span className="quien-nombre">{fila.nombre ?? fila.arroba ?? t('Sin nombre')}</span>
+                              {fila.nombre !== null && fila.arroba !== null && (
+                                <span className="quien-id">{fila.arroba}</span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {quienesSeSumaron.estado === 'cargando' ? (
+                  <p className="quienes-vacio" aria-busy="true">{t('Cargando quiénes se sumaron…')}</p>
+                ) : quienesSeSumaron.estado === 'error' ? (
+                  <div className="quienes-vacio" role="alert">
+                    {t('No pudimos cargar quiénes se sumaron.')}{' '}
+                    <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onReintentarQuienes}>
+                      {t('Reintentar')}
                     </button>
                   </div>
-                );
-              }
-              return (
-                <div
-                  key={i.id}
-                  className="qc-fila qc-mia"
-                  data-estado={sel ? 'mio' : 'registrado'}
-                  role="group"
-                  aria-label={registrado ? `${nombreAria}${t(', {0}', etiquetaDeLoMio(i, t))}` : nombreAria}
-                >
-                  {sel && !editBloqueado ? (
-                    <button
-                      type="button"
-                      className="qc-circulo qc-circulo--marcado"
-                      aria-label={t('Soltar {0}', i.name)}
-                      onClick={() => { setAbierto(null); onToggleItem(i.id); }}
-                    >
-                      <Icon name="check" size={14} />
-                    </button>
-                  ) : soltableRegistrado ? (
-                    <button
-                      type="button"
-                      className="qc-circulo qc-circulo--marcado"
-                      aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
-                      aria-busy={soltando === i.id || undefined}
-                      disabled={soltando !== null}
-                      onClick={() => onReleaseItem(i.id)}
-                    >
-                      <Icon name={soltando === i.id ? 'clock' : 'check'} size={14} />
-                    </button>
-                  ) : (
-                    <span className="qc-circulo qc-circulo--marcado" aria-hidden="true">
-                      <Icon name="check" size={14} />
-                    </span>
-                  )}
-                  {/* AF-29 · si parte de lo mío ya está PAGADO, el renglón lo dice
-                      con palabras en una segunda línea («Pagaste ½ · elegiste ½
-                      más»), como «Lo eligió otro»: confundir elegido con pagado es
-                      confundir plata. Sin pago, la píldora ya dice la porción. */}
-                  {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0 ? (
-                    <span className="qc-cuerpo">
-                      <span className="qc-nombre qc-nombre--mio">{nombre}</span>
-                      <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>
-                    </span>
-                  ) : (
-                    <span className="qc-nombre qc-nombre--mio">{nombre}</span>
-                  )}
-                  {sel && opciones.length > 1 && !editBloqueado ? (
-                    <button
-                      type="button"
-                      className="qc-pildora"
-                      aria-label={t('Cambiar la porción de {0}: {1}', nombreAria, etiqueta)}
-                      aria-expanded={false}
-                      onClick={() => setAbierto(i.id)}
-                    >
-                      {etiqueta}
-                      <Icon name="chevron-down" size={12} />
-                    </button>
-                  ) : (
-                    <span className="qc-pildora qc-pildora--fija">{etiqueta}</span>
-                  )}
-                  {parte !== null && <span className="qc-parte">{formatMXN(parte)}</span>}
-                </div>
-              );
-            }
-
-            if (bloqueado) {
-              return (
-                <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
-                  <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
-                  <span className="qc-cuerpo">
-                    <span className="qc-nombre qc-nombre--otro">{nombre}</span>
-                    {tag && <span className="qc-etiqueta">{tag}</span>}
-                  </span>
-                  <span className="qc-precio qc-precio--otro">{formatMXN(fullPrice)}</span>
-                </div>
-              );
-            }
-
-            return (
-              <button
-                key={i.id}
-                type="button"
-                className="qc-fila qc-libre"
-                data-estado={queda ? 'queda' : 'libre'}
-                disabled={editBloqueado}
-                aria-pressed={false}
-                aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}
-                onClick={() => tomarPlato(i.id, opciones.length)}
-              >
-                <span className="qc-circulo" aria-hidden="true" />
-                <span className="qc-nombre">{nombre}</span>
-                {queda && tag && <span className="qc-pildora qc-pildora--queda">{tag}</span>}
-                <span className="qc-precio">{formatMXN(fullPrice)}</span>
-              </button>
-            );
-          })()}</div>)}
-        </div>
-        {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
-            comensal ver que su parte YA está tomada. Sin esto volvía, veía
-            casilleros libres y pagaba de nuevo — llevándose el de otro.
-            No se bloquea: pagar más de una parte es legítimo (acta
-            2026-07-25), pero tiene que ser una decisión, no un accidente. */}
-        {mySlotsTaken > 0 && !esConsumo && (
-          <div className="note note-teal" style={{ marginTop: 8 }}>
-            <b>{t('Ya pagaste')} {mySlotsTaken === 1 ? t('tu parte') : t('{0} partes', mySlotsTaken)} ✓</b>
-            {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
-          </div>
-        )}
-        {/* AF-25 · n72 · quiénes se sumaron: nombre, apellido e identificador,
-            SÓLO para el organizador (la decisión la toma `MesaScreen`, que ni
-            pide la lista si no lo sos). Sin foto, sin montos, sin quién eligió
-            ni pagó qué: el dueño no lo manda y el decodificador lo rechazaría. */}
-        {quienesSeSumaron.estado !== 'oculto' && (
-          <section className="quienes" aria-label={t('Quiénes se sumaron')}>
-            <h2 className="sectlabel">{t('Quiénes se sumaron')}</h2>
-            {quienesSeSumaron.estado === 'cargando' ? (
-              <p className="quienes-vacio" aria-busy="true">{t('Cargando quiénes se sumaron…')}</p>
-            ) : quienesSeSumaron.estado === 'error' ? (
-              <div className="quienes-vacio" role="alert">
-                {t('No pudimos cargar quiénes se sumaron.')}{' '}
-                <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onReintentarQuienes}>
+                ) : quienesSeSumaron.estado === 'lista' && quienesSeSumaron.lista.length === 0 ? (
+                  <p className="quienes-vacio">{t('Todavía no se sumó nadie.')}</p>
+                ) : null}
+              </Desplegable>
+            )}
+            {solicitudes.estado === 'error' && (
+              <div className="note note-amber solicitudes-error" role="alert">
+                {t('No pudimos cargar las solicitudes.')}{' '}
+                <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onReintentarSolicitudes}>
                   {t('Reintentar')}
                 </button>
               </div>
-            ) : quienesSeSumaron.lista.length === 0 ? (
-              <p className="quienes-vacio">{t('Todavía no se sumó nadie.')}</p>
-            ) : (
-              <ul className="quienes-lista">
-                {quienesSeSumaron.lista.map((p, idx) => {
-                  const fila = filaDeParticipante(p, arrobaHabilitada);
-                  return (
-                    // Sin id estable en el contrato: el orden de llegada es el del dueño.
-                    <li key={idx} className="quien">
-                      {fila.tipo === 'persona' ? (
-                        (() => {
-                          // AF-32 · foto si el dueño la dio y llegó; si no, iniciales.
-                          const foto = fotoDe(p.participantId);
-                          const quien = fila.nombre ?? fila.arroba ?? '';
-                          return foto ? (
-                            <img className="avatar quien-foto" src={foto} alt={t('Foto de {0}', quien)} />
-                          ) : (
-                            <Avatar name={quien} />
-                          );
-                        })()
-                      ) : (
-                        // Invitado y cuenta eliminada: como antes, sin avatar;
-                        // el hueco mantiene alineados los nombres.
-                        <span className="quien-hueco" aria-hidden="true" />
-                      )}
-                      <span className="quien-texto">
-                        {fila.tipo === 'invitado' ? (
-                          <span className="quien-nombre">{t('Invitado')}</span>
-                        ) : fila.tipo === 'eliminada' ? (
-                          <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
-                        ) : (
-                          // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @.
-                          // Hasta 0.198.1 iba el `payme_id`, y EN LUGAR del nombre
-                          // si faltaba; ahora sin nombre va el @, y sin los dos,
-                          // «Sin nombre». El código nunca.
-                          <>
-                            <span className="quien-nombre">{fila.nombre ?? fila.arroba ?? t('Sin nombre')}</span>
-                            {fila.nombre !== null && fila.arroba !== null && (
-                              <span className="quien-id">{fila.arroba}</span>
-                            )}
-                          </>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
             )}
-          </section>
-        )}
-        {/* T-F1: el organizador puede invitar amigos in-app también acá —
-            la pantalla de compartir post-crear se ve UNA sola vez. */}
-        {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
-          <div className="mesa-secondary-actions">
-            {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
-                con borde turquesa.
-                D181 · «en la misma fila las burbujas de copiar link e invitar amigos
-                (que entren bien por temas de tamaño)»: mitad y mitad. A 320 px cada
-                mitad mide ~140 px, y el texto completo no entra ni a 390: se ve
-                corto, y el nombre accesible sigue siendo el completo (lo contiene). */}
-            <div className="mesa-acciones-fila">
-              <button
-                className="btn btn-borde-turquesa btn-sm"
-                onClick={onCopyInvitationLink}
-                aria-label={t('Copiar link de invitación')}
+            {solicitudes.estado === 'lista' && solicitudes.lista.length > 0 && (
+              <Desplegable
+                className="solicitudes"
+                titulo={t('Solicitudes para unirse')}
+                resumen={solicitudes.lista.length === 1
+                  ? t('1 pendiente')
+                  : t('{0} pendientes', solicitudes.lista.length)}
+                abierto={solicitudesAbiertoEfectivo}
+                onToggle={() => setSolicitudesAbierto(!solicitudesAbiertoEfectivo)}
               >
-                <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link')}
-              </button>
-              {!inviteOpen && (
-                <button
-                  className="btn btn-turquesa btn-sm"
-                  onClick={onOpenInvite}
-                  aria-label={t('Invitar amigos de PayMe')}
-                >
-                  <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}
-                </button>
-              )}
-            </div>
-            {inviteOpen && <InviteFriends code={code} />}
+                <SolicitudesParaUnirse lista={solicitudes.lista} decidiendo={decidiendo} onDecidir={onDecidirSolicitud} />
+              </Desplegable>
+            )}
+            {/* T-F1: el organizador puede invitar amigos in-app también acá —
+                la pantalla de compartir post-crear se ve UNA sola vez.
+                D223 · arriba, el código como TEXTO, para dictarlo (sin botón de
+                copiar el código: para compartir están «Copiar link» e «Invitar
+                amigos», que siguen igual). */}
+            {(mesa.status === 'open' || mesa.status === 'partially_paid') && (
+              <div className="mesa-secondary-actions">
+                <p className="mesa-codigo-para-unirse">
+                  {t('Código para unirse:')} <strong>{code}</strong>
+                </p>
+                {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
+                    con borde turquesa.
+                    D181 · «en la misma fila las burbujas de copiar link e invitar amigos
+                    (que entren bien por temas de tamaño)»: mitad y mitad. A 320 px cada
+                    mitad mide ~140 px, y el texto completo no entra ni a 390: se ve
+                    corto, y el nombre accesible sigue siendo el completo (lo contiene). */}
+                <div className="mesa-acciones-fila">
+                  <button
+                    className="btn btn-borde-turquesa btn-sm"
+                    onClick={onCopyInvitationLink}
+                    aria-label={t('Copiar link de invitación')}
+                  >
+                    <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link')}
+                  </button>
+                  {!inviteOpen && (
+                    <button
+                      className="btn btn-turquesa btn-sm"
+                      onClick={onOpenInvite}
+                      aria-label={t('Invitar amigos de PayMe')}
+                    >
+                      <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}
+                    </button>
+                  )}
+                </div>
+                {inviteOpen && <InviteFriends code={code} />}
+              </div>
+            )}
+            <Desplegable
+              className="tus-consumos"
+              titulo={t('Tus consumos')}
+              resumen={resumenDeConsumos}
+              abierto={consumosAbierto}
+              onToggle={() => setConsumosAbierto((a) => !a)}
+            >
+              {listaDeConsumos}
+            </Desplegable>
             {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
-                `close_not_applicable` a las otras): el organizador ya está
-                garantizado por el bloque que la contiene. */}
+                `close_not_applicable` a las otras). D223 · al final, centrado,
+                en tinte de error. */}
             {onCerrarMesa && sePuedeCerrar(mesa) && (
-              /* D181 · «abajo centrado la de cerrar mesa, ésta tiene que tener un rojo
-                 clarito». Rojo claro de fondo y rojo oscuro de texto (AA), el candado. */
-              <button
-                ref={botonCerrarMesa}
-                type="button"
-                className="btn btn-cerrar-mesa btn-sm btn-fit"
-                onClick={() => setConfirmandoCerrarMesa(true)}
-                disabled={cerrando}
-              >
-                <Icon name="lock" size={16} className="ico-inline" /> {t('Cerrar mesa')}
-              </button>
+              <div className="mesa-cerrar">
+                {/* D181 · «abajo centrado la de cerrar mesa, ésta tiene que tener
+                    un rojo clarito». Rojo claro de fondo y rojo oscuro de texto
+                    (AA), el candado. */}
+                <button
+                  ref={botonCerrarMesa}
+                  type="button"
+                  className="btn btn-cerrar-mesa btn-sm btn-fit"
+                  onClick={() => setConfirmandoCerrarMesa(true)}
+                  disabled={cerrando}
+                >
+                  <Icon name="lock" size={16} className="ico-inline" /> {t('Cerrar mesa')}
+                </button>
+              </div>
             )}
-          </div>
-        )}
+          </>
+        ) : listaDeConsumos}
       </div>
       {confirmandoCerrarMesa && onCerrarMesa && (
         <HojaCerrarMesa

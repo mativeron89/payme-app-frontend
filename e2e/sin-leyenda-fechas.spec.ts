@@ -26,7 +26,7 @@ test.describe('E173-1 · sin la leyenda «Fechas mostradas…»', () => {
   test('🔴 Historial', async ({ page }) => {
     await preparar(page);
     await page.goto('/#/mesas');
-    await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
     await expect(page.getByText(LEYENDA)).toHaveCount(0);
   });
 

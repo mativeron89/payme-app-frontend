@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * Decisión 77 de Mati (2026-09-25): en «¿Qué consumiste?» el encabezado lleva
@@ -41,7 +42,7 @@ for (const ancho of [390, 320]) {
     await ingresar(page);
     await nombrarRestaurante(page, 'PA-2847', 'Restaurante sin identificar');
     await page.goto('/#/mesa/PA-2847');
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
 
     await expect(page.locator('.mesa-selection-context-main')).toHaveText('Restaurante sin identificar');
     await expect(page.locator('.mesa-selection-context strong')).toHaveText('cada uno lo suyo');
@@ -60,7 +61,7 @@ test('320 px · un nombre largo se recorta con «…» y la modalidad queda ente
   await ingresar(page);
   await nombrarRestaurante(page, 'PA-2847', 'Trattoria de la Abuela Giuseppina y sus Nietos del Barrio');
   await page.goto('/#/mesa/PA-2847');
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
 
   const m = await medirLinea(page);
   expect(m.alto).toBeLessThanOrEqual(m.lh * 1.5);

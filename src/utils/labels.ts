@@ -267,14 +267,25 @@ export function estadoDeTuMesa(m: {
 
 // ─── AF-34 · n98 · el aviso `mesa_expired` ─────────────────────────────────
 
+/** Los avisos que llevan a una mesa por `payload.mesa_code`. */
+const AVISOS_CON_MESA: ReadonlySet<string> = new Set([
+  'mesa_expired',
+  // D219 · al titular: abre «Tu mesa» con las solicitudes; a quien pidió, la
+  // mesa en la que ya está (`join_request_accepted` no trae el id del pedido).
+  'join_request_received',
+  'join_request_accepted',
+]);
+
 /**
- * ¿A qué mesa lleva un aviso? Sólo `mesa_expired` con un `payload.mesa_code`
- * de texto (dueño v2.112.0); para cualquier otro tipo, o sin código, `null` y
- * el aviso no navega. No mira `closure_reason`: el texto lo escribe el dueño en
- * `body`, así que un motivo nuevo nunca rompe la fila.
+ * ¿A qué mesa lleva un aviso? `mesa_expired` (dueño v2.112.0) y los dos de
+ * unirse con el código (v2.166.0), con un `payload.mesa_code` de texto; para
+ * cualquier otro tipo, o sin código, `null` y el aviso no navega. Abrir la mesa
+ * la vuelve a pedir: el acceso lo decide el dueño en ese momento, no el aviso.
+ * No mira `closure_reason`: el texto lo escribe el dueño en `body`, así que un
+ * motivo nuevo nunca rompe la fila.
  */
 export function mesaDelAviso(n: { readonly type: string; readonly payload: Record<string, unknown> | null }): string | null {
-  if (n.type !== 'mesa_expired') return null;
+  if (!AVISOS_CON_MESA.has(n.type)) return null;
   const code = n.payload?.mesa_code;
   if (typeof code !== 'string') return null;
   const limpio = code.trim();

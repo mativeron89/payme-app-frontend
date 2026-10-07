@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar, tokenDeLaUrl, CORTE } from './_app';
+import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
 
 /**
  * 🔴 **Este recorrido prueba el CORTE, así que lo declara** (Q6, resuelta por
@@ -82,6 +83,7 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await enTuMesaConLaLista(page);
     const seleccion = page.locator('.mesa-selection-title');
     // Decisión 77 de Mati: restaurante · modalidad, sin el código de mesa.
     await expect(seleccion).not.toContainText(mesa.code);
@@ -142,6 +144,7 @@ test.describe('el camino de pago completo', () => {
     await ingresar(page);
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
@@ -169,6 +172,7 @@ test.describe('el camino de pago completo', () => {
     await ingresar(page);
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
@@ -250,6 +254,9 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
 
     await page.getByRole('button', { name: 'Ver mis ítems' }).click();
+    // D223 · en el mock quien abre el link es el mismo titular: su lista vive
+    // en «Tus consumos», cerrado. Quien se suma de verdad ve la lista abierta.
+    await abrirTusConsumos(page);
 
     // Se llegó a Mis ítems: los ítems del ticket son botones de esta pantalla y
     // de ninguna otra del recorrido.

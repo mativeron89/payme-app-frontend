@@ -98,7 +98,8 @@ test.describe('AF-34 · cerrar la mesa', () => {
       };
       // D181 · el texto visible es corto; el nombre accesible, el completo.
       const de = (nombre: string) => {
-        const b = [...document.querySelectorAll('.mesa-secondary-actions button')]
+        // D223 · «Cerrar mesa» sale de compartir y va al final de «Tu mesa».
+        const b = [...document.querySelectorAll('.mesa-secondary-actions button, .mesa-cerrar button')]
           .find((e) => (e.getAttribute('aria-label') ?? e.textContent ?? '').includes(nombre)) as HTMLElement;
         const cs = getComputedStyle(b);
         return { fondo: cs.backgroundColor, texto: cs.color, borde: cs.borderTopColor, contraste: contraste(cs.color, cs.backgroundColor) };
@@ -132,7 +133,8 @@ test.describe('AF-34 · cerrar la mesa', () => {
         const re = new RegExp(`\\.${c.replace(/[-]/g, '\\-')}(?![\\w-])`);
         return selectores.some((s) => re.test(s));
       };
-      return [...document.querySelectorAll('.mesa-secondary-actions button')].flatMap((b) => (
+      // D223 · «Cerrar mesa» quedó en `.mesa-cerrar`: se lo sigue mirando.
+      return [...document.querySelectorAll('.mesa-secondary-actions button, .mesa-cerrar button')].flatMap((b) => (
         [...b.classList].filter((c) => !conEstilo(c)).map((c) => `${b.textContent?.trim()}: .${c}`)
       ));
     });

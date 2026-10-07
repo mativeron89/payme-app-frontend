@@ -56,7 +56,7 @@ const ACCESOS = [
   // Decisión 98 de Mati: mientras los pagos estén apagados, «Ver pagos» lleva a
   // Mesas (su título es «Historial»). La ruta `#/pagos` sigue viva y la cubre
   // `corteGuard.test.ts` («#/pagos SÍ monta Mis pagos»).
-  { pestana: 'Cuenta', acceso: 'Ver pagos', hash: '#/mesas', titulo: 'Historial' },
+  { pestana: 'Cuenta', acceso: 'Ver pagos', hash: '#/mesas', titulo: 'Mesas' },
   // Decisión 99: «Ver perfil» lleva a Configuración, la misma pantalla que «Más».
   { pestana: 'Cuenta', acceso: 'Ver perfil', hash: '#/mas', titulo: 'Configuración' },
   {
@@ -77,7 +77,9 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
 
       // n130 · la ruta vive en el path: `#/x` → `:puerto/x`.
       await expect(page).toHaveURL(new RegExp(`:\\d+${hash.replace('#/', '\\/')}$`));
-      await expect(page.getByText(titulo, { exact: true })).toBeVisible();
+      // El título de la pantalla, como encabezado: «Mesas» es también la
+      // etiqueta de la barra (D223 · antes la pantalla se titulaba «Historial»).
+      await expect(page.getByRole('heading', { name: titulo, exact: true })).toBeVisible();
 
       /**
        * Y la vuelta: "Volver" devuelve a Inicio, no a una pantalla intermedia.

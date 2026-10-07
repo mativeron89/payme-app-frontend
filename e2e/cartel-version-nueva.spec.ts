@@ -81,6 +81,15 @@ async function nadaTapado(page: Page): Promise<void> {
       if (r.width === 0 || r.height === 0 || r.bottom <= 0 || r.top >= innerHeight) continue;
       const x = r.left + r.width / 2;
       const y = Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
+      // Un botón que su contenedor con scroll ya dejó afuera no se ve: no lo
+      // tapa el cartel, lo recorta el scroll. (D223: «Unirme con código», arriba
+      // de Mesas, queda ahí al bajar la lista; antes contaba como tapado.)
+      let contenedor = b.parentElement;
+      while (contenedor && !/(auto|scroll)/.test(getComputedStyle(contenedor).overflowY)) contenedor = contenedor.parentElement;
+      if (contenedor) {
+        const c = contenedor.getBoundingClientRect();
+        if (y < c.top || y > c.bottom) continue;
+      }
       const arriba = document.elementFromPoint(x, y);
       if (arriba && cartel?.contains(arriba)) malos.push(b.textContent?.trim() || b.getAttribute('aria-label') || b.className);
     }

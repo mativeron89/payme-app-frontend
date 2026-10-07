@@ -97,7 +97,7 @@ test.describe('n179 · ticket real sin QR', () => {
       persist();
     }, code);
     await page.goto('/#/mesas');
-    await expect(page.getByRole('heading', { name: 'Historial' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
     await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('v07-nombre-privado-historial.png'), fullPage: true });
   });

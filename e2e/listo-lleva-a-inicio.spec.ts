@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, sinRefresco } from './_app';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * Decisión 32 de Mati (2026-09-24): «En esa pantalla ya muestra lo que elegí,
@@ -30,7 +31,7 @@ async function sigueEnLaMesa(page: Page, code: string): Promise<void> {
   // Se espera un momento real: la navegación, si ocurriera, sería asíncrona.
   await page.waitForTimeout(600);
   expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${code}`);
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+  await enTuMesaConLaLista(page);
 }
 
 /**
@@ -73,6 +74,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'lockItems');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
@@ -80,6 +82,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="registrado"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 23% de la mesa' })).toBeVisible();
@@ -90,11 +93,13 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await enInicio(page);
 
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="registrado"]')).toBeVisible();
     await contarLlamadas(page, 'lockItems');
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
@@ -109,6 +114,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'lockItems');
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();
@@ -123,6 +129,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     // La mesa vence EN MEMORIA del mock justo antes del lock: el dueño contesta
     // 409 `mesa_not_active`, que el front dice con su toast genérico de reserva.
@@ -141,7 +148,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'replaceInformativeSelection');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
@@ -149,6 +156,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
 
     await page.goto(`/#/mesa/${mesa.code}`);
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await contarLlamadas(page, 'replaceInformativeSelection');
     const guardado = page.getByRole('button', { name: 'Guardado', exact: true });
@@ -163,7 +171,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     // AF-HIGIENE-2 · lo mismo en «igual»: sin refresco entre el vencimiento y el PUT.
     await sinRefresco(page, async () => {

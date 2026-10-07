@@ -103,7 +103,7 @@ test.describe('D98 + D99 · Inicio › Cuenta: Pagos lleva a Mesas y Perfil a Co
     await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
     await page.getByRole('button', { name: 'Ver pagos', exact: true }).click();
     await expect(page).toHaveURL(/:\d+\/mesas$/);
-    await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
   });
 
   test('«Ver perfil» lleva a Configuración, la misma pantalla que «Más»', async ({ page }) => {

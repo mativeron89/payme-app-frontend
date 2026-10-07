@@ -16,6 +16,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar, abrirMesaConLink, CORTE } from './_app';
+import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -58,6 +59,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   // una ventana cerrada — verde por la razón equivocada.
   await frenarJournal(page, 1_500);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
@@ -168,6 +170,7 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   await ingresar(page);
   const mesa = await abrirMesaConLink(page);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
@@ -210,13 +213,14 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   // seguir diciendo lo mismo — es el caso donde el estado visual nace vacío y
   // sólo el body persistido puede sostener el dato.
   await page.reload();
+  await abrirTusConsumos(page);
   // El remount tiene que DEJAR ALGO acreditado, no sólo ocurrir: la mesa
   // vuelve con el pago hecho — el ítem que pagué ya no está disponible para
   // nadie. Si la recarga no hubiera pasado, o el pago no hubiera quedado, esto
   // no se sostiene.
   // Decisión 77: el encabezado ya no muestra el código; la URL sí.
   await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${mesa.code}$`));
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await enTuMesaConLaLista(page);
   // El progreso de la mesa vuelve con mi pago adentro: el remount ocurrió Y
   // el pago quedó del otro lado. Sin las dos cosas, esto no se sostiene — y
   // el número es el mismo que las tres superficies acaban de afirmar.

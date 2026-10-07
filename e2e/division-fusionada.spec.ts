@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
+import { enTuMesaConLaLista } from './_mesa';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
@@ -190,7 +191,7 @@ test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se a
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+  await enTuMesaConLaLista(page);
   await expect(page.locator('.mesa-selection-title')).toContainText('pagar el total');
 });
 

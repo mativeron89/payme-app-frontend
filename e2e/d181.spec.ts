@@ -148,7 +148,8 @@ test.describe('D181 · a 320 px', () => {
 
   test('3 · los botones de la mesa entran sin cortarse', async ({ page }) => {
     await mesaConSusBotones(page);
-    const cortados = await page.evaluate(() => [...document.querySelectorAll('.mesa-secondary-actions .btn')]
+    // D223 · «Cerrar mesa» va al final de «Tu mesa», fuera del bloque de compartir.
+    const cortados = await page.evaluate(() => [...document.querySelectorAll('.mesa-secondary-actions .btn, .mesa-cerrar .btn')]
       .map((el) => (el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth));
     expect(cortados).toEqual([false, false, false]);
     await captura(page, '320-mesa-botones');

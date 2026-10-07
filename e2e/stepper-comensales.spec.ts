@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
+import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
 
 /**
  * §1.4 (2026-08-06) · EL STEPPER SE PREGUNTA SIEMPRE, Y EL 4 INVENTADO MURIÓ.
@@ -117,7 +118,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // donde el organizador pasa por la garantía; ninguna de esas aserciones se
     // tocó.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await enTuMesaConLaLista(page);
     await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     // 🔴 **F2-03 · el modo se declara sobre la MESA YA ABIERTA, y la primera
@@ -132,6 +133,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // ⚠️ Lo cazó el navegador, no la suite: `typecheck` y los unitarios pasaban
     // con la versión rota adentro.
     await declararCorteYRecargar(page);
+    await abrirTusConsumos(page);
     await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
