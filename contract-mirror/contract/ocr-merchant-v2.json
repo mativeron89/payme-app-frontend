@@ -7,6 +7,10 @@
     "merchant?": {
       "name?": "NFC trim/collapse <=200",
       "rfc?": "uppercase compact syntax only"
+    },
+    "ticket_totals?": {
+      "subtotal_cents": "safe integer > 0",
+      "tax_cents": "safe integer >= 0"
     }
   },
   "merchant_source": [
@@ -15,12 +19,26 @@
   ],
   "omitted": [
     "address",
+    "waiter",
     "buyer RFC",
     "payment digits"
   ],
-  "manual_review": "nonrepresentable quantity/price or multiple documents: items=[], total_cents=0, warnings no_items_found/total_mismatch; single document total_detected preserved",
+  "omitted_note": "Address and waiter are not read nor stored until Aviso 3.1 is in force (decision 209).",
+  "manual_review": "Since 2.157.0 (decision 212) there is no manual path. Each row is resolved by its prices: unit and line amount rule over the read quantity, a line amount alone means quantity 1, and rows without price or at 0.00 are not items and invalidate nothing. The printed TOTAL is the control, with finite alternatives (price read as unit, summary rows read as items) adopted only when exactly one closes (two that close are ambiguous and the base stays), and the Blocks of the same AnalyzeExpense response as fallback. Net items equal to the printed SUBTOTAL with SUBTOTAL + tax = TOTAL are read as added tax: amounts unchanged, total_mismatch as before, ticket_totals carries the tax. Items are never empty when rows with price exist; if nothing closes, items come with total_mismatch. Rows naming a person by role (waiter, cook, cashier, user, client...) are never used. Two or more documents each with its own TOTAL: items=[], total_cents=0, warnings no_items_found/total_mismatch. Several documents are read as one ticket only when at most one has a TOTAL and it is the last one, no later document repeats the vendor header, and there are no two different receipt ids; otherwise they are not mixed.",
   "error": {
     "invalid_ocr_contract_version": 400
+  },
+  "ticket_totals": {
+    "since": "2.156.0",
+    "decision": "209",
+    "source": "Textract SummaryFields SUBTOTAL and TAX (services/ocrTextract.js, totalesDeDocumento)",
+    "rule": "Only the single (subtotal, tax) pair with subtotal_cents + tax_cents === total_detected_cents exactly. Values containing % are rates and are discarded. Missing SUBTOTAL, TAX or TOTAL, no pair, two pairs, or several documents => absent. No new warning codes.",
+    "negotiation": "HTTP requires contract_version=2 AND totals_version=1 (exact scalar string). Missing, unknown or duplicate totals_version returns the unchanged contract without ticket_totals; v1 and mock never emit it.",
+    "invariant": "When present, total_detected_cents is present and equals subtotal_cents + tax_cents; the owner throws ocr_response_ticket_totals_invalid otherwise.",
+    "receipt": "When the ticket has valid totals the receipt is v2 with t=[subtotal_cents, tax_cents], even if totals_version was not negotiated; otherwise v1 unchanged. Still opaque to the client.",
+    "stored": "mesas.metadata.ticket_totals = {version:1, subtotal_cents, tax_cents, total_cents}, written by POST /api/mesas only from an accepted receipt; never from the request body. No migration.",
+    "mesa_detail": "GET /api/mesas/:code adds optional mesa.ticket_totals = {subtotal_cents, tax_cents} only when the stored row is valid and mesa.total_cents equals the printed total; otherwise the key is absent.",
+    "client": "App Frontend: add totals_version=1 to the scan request, add ticket_totals to OCR_V2_KEYS with the same exact-sum check, and show subtotal and IVA above the total in «Ver el ticket» and the digital ticket."
   },
   "origin_receipt": {
     "since": "2.145.0",

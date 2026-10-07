@@ -84,7 +84,7 @@ const lecturas = (page: Page) => page.evaluate(() => (window as unknown as Venta
 const resoluciones = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__resoluciones);
 
 const sacarFotoBoton = (page: Page) => page.getByRole('button', { name: 'Sacar foto', exact: true });
-const galeria = (page: Page) => page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true });
+const galeria = (page: Page) => page.getByRole('button', { name: 'Elegir de la galería o Drive', exact: true });
 
 /**
  * Dos fotos en el MISMO tick: la de la cámara nativa y una de la galería, cada

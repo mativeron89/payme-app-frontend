@@ -745,6 +745,12 @@ export interface MesaDetail {
   division_slots?: DivisionSlot[];
   active_staff: ActiveStaff[];
   my_role: 'opener' | 'participant' | 'guest' | null;
+  /**
+   * D209 · App Backend 2.156.0 (`mesa_detail` de `ocr-merchant-v2.json`): el
+   * subtotal y el IVA del ticket, sólo cuando la fila guardada es válida y
+   * `total_cents` es el total impreso. Si no, la clave no viene.
+   */
+  ticket_totals?: TicketTotals;
 }
 
 export interface MesaDetailResponse {
@@ -1001,6 +1007,18 @@ export interface OcrMerchant {
   rfc?: string;
 }
 
+/**
+ * D209 · el subtotal y el IVA impresos (App Backend 2.156.0,
+ * `contract-mirror/contract/ocr-merchant-v2.json` → `ticket_totals`). Sólo la
+ * pareja única que cierra exacto con el total impreso:
+ * `subtotal_cents + tax_cents === total_detected_cents`. Importes, no datos
+ * personales. El IVA NO se reparte entre las personas (D215).
+ */
+export interface TicketTotals {
+  subtotal_cents: number;
+  tax_cents: number;
+}
+
 /** POST /api/ocr → 200; shape autoritativo de ocrResponseContract.js. */
 export interface OcrResponse {
   /** Ausente en el contrato v1; exactamente 2 cuando se pidió v2. */
@@ -1018,6 +1036,12 @@ export interface OcrResponse {
   total_cents: number;
   /** Total IMPRESO detectado; `total_cents` es la suma de las filas. */
   total_detected_cents?: number;
+  /**
+   * D209 · sólo con `contract_version=2` y `totals_version=1` negociados; el
+   * mock del dueño nunca lo emite. Presente ⇒ `total_detected_cents` presente
+   * y `subtotal_cents + tax_cents === total_detected_cents`.
+   */
+  ticket_totals?: TicketTotals;
   warnings: OcrWarning[];
   mock: boolean;
   /**

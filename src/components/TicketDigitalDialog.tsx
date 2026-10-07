@@ -179,6 +179,20 @@ export function TicketDigitalDialog({
                   ))}
                 </ul>
               )}
+              {/* D209 · el subtotal y el IVA impresos, arriba del total, sólo
+                  cuando el dueño los publica. Sin ellos, como antes. */}
+              {estado.ticket.totals && (
+                <dl className="ticket-digital-desglose">
+                  <div>
+                    <dt>{t('Subtotal')}</dt>
+                    <dd>{formatMXN(estado.ticket.totals.subtotalCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('IVA')}</dt>
+                    <dd>{formatMXN(estado.ticket.totals.taxCents)}</dd>
+                  </div>
+                </dl>
+              )}
               <div className="ticket-digital-total">
                 <span>{t('Total del ticket')}</span>
                 <strong>{formatMXN(estado.ticket.totalCents)}</strong>

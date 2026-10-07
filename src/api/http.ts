@@ -206,7 +206,8 @@ function rawOcrUploadRequest<T>(
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     // Extensión opt-in del owner: las pestañas anteriores siguen recibiendo v2 sin claves nuevas.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1`);
+    // D209 · `totals_version=1` (string exacto) negocia `ticket_totals`.
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

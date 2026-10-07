@@ -150,6 +150,11 @@ export interface MockMesa {
    * PA-1099 no lo lleva: su historia ES estar cerrada (A-2).
    */
   seedRelanzable?: { status: MesaStatus; expiraEnMs: number };
+  /**
+   * D209 · `mesas.metadata.ticket_totals` del dueño (2.156.0): lo escribe el
+   * alta SÓLO desde un recibo aceptado, nunca desde el cuerpo del pedido.
+   */
+  ticket_totals?: { version: 1; subtotal_cents: number; tax_cents: number; total_cents: number };
 }
 
 export interface MockIdemEntry {
@@ -1650,6 +1655,13 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     ...(slots && { division_slots: slots }),
     active_staff: m.active_staff,
     my_role: identity === 'guest' ? 'guest' : m.openedByUser ? 'opener' : 'participant',
+    // D209 · `mesa_detail` del dueño: sólo con la fila guardada válida y el
+    // total de la mesa igual al impreso. Si no, la clave no viene.
+    ...(m.ticket_totals
+      && m.ticket_totals.subtotal_cents + m.ticket_totals.tax_cents === m.ticket_totals.total_cents
+      && m.total_cents === m.ticket_totals.total_cents
+      ? { ticket_totals: { subtotal_cents: m.ticket_totals.subtotal_cents, tax_cents: m.ticket_totals.tax_cents } }
+      : {}),
   };
 }
 

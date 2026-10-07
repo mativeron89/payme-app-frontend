@@ -5,7 +5,7 @@ import {
   configurarTicketSinQr,
   estadoN179,
 } from './fixtures/ticket-sin-qr';
-import { sacarFoto } from './_camara';
+import { fotoChica, sacarFoto } from './_camara';
 
 async function escanearSinQr(page: import('@playwright/test').Page): Promise<void> {
   await ingresar(page);
@@ -176,9 +176,7 @@ test.describe('n179 · ticket real sin QR', () => {
     // no hay piso publicado y la foto se subiría, que es lo correcto.
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
-    await input.setInputFiles({
-      name: 'ticket.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(5 * 1024, 1),
-    });
+    await input.setInputFiles(await fotoChica(page, 'ticket.jpg'));
     const alerta = page.getByRole('alert');
     await expect(alerta).toContainText('La foto es demasiado pequeña para leer el ticket.');
     expect(await page.evaluate(() => localStorage.getItem('payme.app.mock.n179.ocr_attempts.v1')), 'se llamó al OCR').toBeNull();

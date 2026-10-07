@@ -208,8 +208,10 @@ async function cerrojoDeGarantia(mesa) {
   const guaranteeMode = fila ? fila.guarantee_mode : true;
   const status = fila ? fila.status : mesa.status;
   const escrito = fila?.metadata?.closure_reason || null;
+  // v2.156.0 · AB-D209 · subtotal e IVA impresos, de la MISMA lectura (sin otra consulta).
+  const ticketTotals = origenItems.totalesPublicables(fila?.metadata?.ticket_totals, Number(mesa.total_cents));
   if (escrito) {
-    return { guarantee_mode: guaranteeMode, status, closure_reason: escrito };
+    return { guarantee_mode: guaranteeMode, status, closure_reason: escrito, ticket_totals: ticketTotals };
   }
   // Sólo las mesas de C3 derivan «cerró por tiempo»: una mesa legacy sin
   // garantía en `expired` venció por el camino monetario de siempre.
@@ -220,6 +222,7 @@ async function cerrojoDeGarantia(mesa) {
     guarantee_mode: guaranteeMode,
     status,
     closure_reason: cerradaSinGarantia ? 'time' : null,
+    ticket_totals: ticketTotals,
   };
 }
 
@@ -1487,6 +1490,9 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         restaurant: { id: mesa.restaurant_id, name: mesaPresentation.displayRestaurantName(mesa, r.name, r.status), category: r.category, address: r.address },
         total_cents: Number(mesa.total_cents),
         total_display: centsToDisplay(Number(mesa.total_cents)),
+        // v2.156.0 · AB-D209 (decisión 209): subtotal e IVA del ticket, opcional. Sólo si la mesa se
+        // creó con un recibo que los traía y su total sigue igual al impreso.
+        ...(garantiaMesa.ticket_totals && { ticket_totals: garantiaMesa.ticket_totals }),
         paid_amount_cents: Number(mesa.paid_amount_cents),
         tip_amount_cents: Number(mesa.tip_amount_cents),
         // D7 (v2.17): base partes-iguales de la propina (total ÷ N declarados),

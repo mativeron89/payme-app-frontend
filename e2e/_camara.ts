@@ -71,3 +71,34 @@ export async function sacarFoto(page: Page, foto: ArchivoDeFoto = FOTO_DE_CAMARA
   pendientes.length = 0;
   await ultima.setFiles(foto);
 }
+
+/**
+ * AF-D212-SEGUIMIENTO · una foto de verdad, pero CHICA: 64×64, armada en el
+ * navegador. Se decodifica y se prepara (nada sin sanear se sube), y la
+ * preparada pesa ~1 KB, debajo del piso de 10 KB del mock: es la que prueba
+ * «La foto es demasiado pequeña». Antes se usaban bytes al azar, que ahora ni
+ * se preparan.
+ */
+export async function fotoChica(page: Page, name = 'IMG_0500.jpg'): Promise<ArchivoDeFoto> {
+  const b64 = await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#d9d4c7';
+    ctx.fillRect(0, 0, 64, 64);
+    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.9));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let s = '';
+    for (const b of bytes) s += String.fromCharCode(b);
+    return btoa(s);
+  });
+  return { name, mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') };
+}
+
+/** Bytes que ningún navegador abre como imagen: no se pueden preparar. */
+export const FOTO_QUE_NO_ABRE: ArchivoDeFoto = {
+  name: 'IMG_0501.jpg',
+  mimeType: 'image/jpeg',
+  buffer: Buffer.alloc(40 * 1024, 7),
+};

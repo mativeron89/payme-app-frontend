@@ -1,6 +1,6 @@
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { camarasAbiertas, sacarFoto, type ArchivoDeFoto } from './_camara';
+import { camarasAbiertas, FOTO_DE_CAMARA, FOTO_QUE_NO_ABRE, sacarFoto, type ArchivoDeFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 
 /**
@@ -172,7 +172,43 @@ const ROJO = (c: [number, number, number]) => c[0] > 200 && c[1] < 60 && c[2] < 
 const AZUL = (c: [number, number, number]) => c[0] < 60 && c[1] < 60 && c[2] > 200;
 const ticketListo = (page: Page) => page.getByRole('radiogroup', { name: '¿Cómo dividen?' });
 const sacarFotoBoton = (page: Page) => page.getByRole('button', { name: 'Sacar foto', exact: true });
-const galeria = (page: Page) => page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true });
+const galeria = (page: Page) => page.getByRole('button', { name: 'Elegir de la galería o Drive', exact: true });
+
+for (const ancho of [375, 320] as const) {
+  test.describe(`D214 · el botón «Elegir de la galería o Drive», a ${ancho} px`, () => {
+    test.use({ viewport: { width: ancho, height: 667 } });
+
+    test('🔴 se lee entero, no tapa el botón redondo y se toca bien', async ({ page }) => {
+      await ingresar(page);
+      await tocarNueva(page);
+      const boton = galeria(page);
+      await expect(boton).toBeVisible();
+      await expect(boton).toHaveText('Elegir de la galería o Drive');
+      const medidas = await boton.evaluate((b) => {
+        const r = b.getBoundingClientRect();
+        const tiro = document.querySelector('.camara-disparador')!.getBoundingClientRect();
+        const texto = b.querySelector('span')!;
+        return {
+          alto: r.height,
+          izquierda: r.left,
+          derecha: r.right,
+          cortado: texto.scrollWidth > texto.clientWidth + 1,
+          // No se superponen: o termina antes de que empiece el redondo, o al revés.
+          pisa: !(r.bottom <= tiro.top || tiro.bottom <= r.top || r.right <= tiro.left || tiro.right <= r.left),
+          ancho: window.innerWidth,
+        };
+      });
+      expect(medidas.alto).toBeGreaterThanOrEqual(44);
+      expect(medidas.cortado).toBe(false);
+      expect(medidas.pisa).toBe(false);
+      expect(medidas.izquierda).toBeGreaterThanOrEqual(0);
+      expect(medidas.derecha).toBeLessThanOrEqual(medidas.ancho);
+      if (process.env.PAYME_E2E_CAPTURAS) {
+        await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/d214-galeria-${ancho}.png` });
+      }
+    });
+  });
+}
 
 test.describe('D212 · «Nueva» abre la cámara nativa', () => {
   test('🔴 en el mismo toque: la cámara trasera del teléfono, y «Escanea el ticket» debajo', async ({ page }) => {
@@ -310,18 +346,83 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     expect(AZUL(s.abajo), `abajo: ${s.abajo}`).toBe(true);
   });
 
-  test('🔴 lo que el navegador no puede abrir (un HEIC en Chrome) se manda como antes', async ({ page }) => {
+  /**
+   * AF-D212-SEGUIMIENTO · punto 1: ninguna foto se sube sin sanear. Lo que el
+   * navegador no abre (un HEIC en Chrome, un archivo dañado) da el aviso de
+   * formato que ya existía, con «Sacar otra foto», «Cargarlo a mano» y la
+   * galería abajo. Antes se mandaba el original.
+   */
+  for (const [que, foto] of [
+    ['un HEIC que Chrome no abre', { ...FOTO_QUE_NO_ABRE, name: 'IMG_0500.HEIC', mimeType: 'image/heic' }],
+    ['un archivo dañado', FOTO_QUE_NO_ABRE],
+  ] as const) {
+    test(`🔴 ${que}: el aviso de formato y no se sube nada`, async ({ page }) => {
+      await ingresar(page);
+      await espiarOcr(page);
+      await tocarNueva(page);
+      await page.locator('.camara-controles input[type="file"]').setInputFiles(foto);
+      const aviso = page.getByRole('alert').filter({ hasText: 'No pudimos leer el ticket' });
+      await expect(aviso).toBeVisible();
+      await expect(aviso.getByRole('button', { name: 'Sacar otra foto', exact: true })).toBeVisible();
+      await expect(aviso.getByRole('button', { name: 'Cargarlo a mano', exact: true })).toBeVisible();
+      await expect(galeria(page)).toBeEnabled();
+      await page.waitForTimeout(400);
+      expect(await cantidadDeSubidas(page)).toBe(0);
+    });
+  }
+
+  test('🔴 sin ningún lienzo (Safari sin memoria): el aviso y no se sube nada', async ({ page }) => {
+    // El lienzo no entrega JPEG en ningún paso de la escalera.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __toBlob: number };
+      w.__toBlob = 0;
+      HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+        w.__toBlob += 1;
+        setTimeout(() => cb(null), 0);
+      };
+    });
+    await ingresar(page);
+    await espiarOcr(page);
+    const selector = await tocarNueva(page);
+    await selector.setFiles(FOTO_DE_CAMARA);
+    await expect(page.getByRole('alert').filter({ hasText: 'No pudimos leer el ticket' })).toBeVisible();
+    // Control: la foto se abrió y se intentó la escalera entera.
+    expect(await page.evaluate(() => (window as unknown as { __toBlob: number }).__toBlob)).toBe(9);
+    expect(await cantidadDeSubidas(page)).toBe(0);
+  });
+
+  test('🔴 objetivo de 5.000.000 bytes: el peor caso (ruido puro de 4096×3072) baja a 3277×2458', async ({ page }) => {
     await ingresar(page);
     await espiarOcr(page);
     await tocarNueva(page);
-    const heic = { name: 'IMG_0500.HEIC', mimeType: 'image/heic', buffer: Buffer.alloc(40 * 1024, 3) };
-    await page.locator('.camara-controles input[type="file"]').setInputFiles(heic);
-    await expect(ticketListo(page)).toBeVisible();
-    const s = await page.evaluate(() => {
-      const b = (window as unknown as { __subidas: Blob[] }).__subidas[0]!;
-      return { tipo: b.type, bytes: b.size };
+    // Se arma en el navegador y se entrega directo a la galería, sin viajar.
+    const original = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 4096;
+      c.height = 3072;
+      const ctx = c.getContext('2d')!;
+      const d = ctx.createImageData(4096, 3072);
+      for (let i = 0; i < d.data.length; i += 4) {
+        d.data[i] = Math.random() * 256;
+        d.data[i + 1] = Math.random() * 256;
+        d.data[i + 2] = Math.random() * 256;
+        d.data[i + 3] = 255;
+      }
+      ctx.putImageData(d, 0, 0);
+      const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.95));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'IMG_0600.jpg', { type: 'image/jpeg' }));
+      const input = document.querySelector<HTMLInputElement>('.camara-controles input[type="file"]')!;
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return blob.size;
     });
-    expect(s).toEqual({ tipo: 'image/heic', bytes: 40 * 1024 });
+    // Control: el original pasa el tope de 8 MiB y la app igual lo prepara.
+    expect(original).toBeGreaterThan(8 * 1024 * 1024);
+    await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
+    const s = await subida(page);
+    expect(s.bytes).toBeLessThanOrEqual(5_000_000);
+    expect([s.ancho, s.alto]).toEqual([3277, 2458]);
   });
 
   test('🔴 «Reintentar» abre la cámara en el mismo toque y, si se cancela, el aviso sigue', async ({ page }) => {

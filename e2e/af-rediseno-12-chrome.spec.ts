@@ -22,7 +22,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await expect(disparador).toBeEnabled();
     const [volverBox, galeriaBox, disparadorBox, appBox, pantallaBox] = await Promise.all([
       page.locator('.camara-arriba').getByRole('button', { name: 'Volver', exact: true }).boundingBox(),
-      page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
+      page.getByRole('button', { name: 'Elegir de la galería o Drive', exact: true }).boundingBox(),
       disparador.boundingBox(),
       page.locator('.app').boundingBox(),
       page.locator('.screen.camara').boundingBox(),

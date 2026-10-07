@@ -12,6 +12,21 @@ function normalizeRfc(value) {
   return /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc) ? rfc : null;
 }
 
+/**
+ * v2.156.0 · AB-D209 · subtotal e IVA del ticket (decisión 209). Existen SÓLO si cuadran exacto al
+ * centavo con el total impreso: subtotal + IVA = total. UNA definición para el OCR, el recibo firmado
+ * y la mesa (`services/origenItems.js`). Devuelve el objeto normalizado o `null`.
+ */
+function totalesDelTicket(valor, totalImpresoCents) {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const claves = Object.keys(valor);
+  if (claves.length !== 2 || !claves.includes('subtotal_cents') || !claves.includes('tax_cents')) return null;
+  const { subtotal_cents: subtotal, tax_cents: iva } = valor;
+  if (!Number.isSafeInteger(subtotal) || subtotal <= 0 || !Number.isSafeInteger(iva) || iva < 0) return null;
+  if (!Number.isSafeInteger(totalImpresoCents) || subtotal + iva !== totalImpresoCents) return null;
+  return { subtotal_cents: subtotal, tax_cents: iva };
+}
+
 const OCR_WARNING_CODES = Object.freeze([
   'no_items_found',
   'low_confidence_items',
@@ -76,7 +91,7 @@ function assertItem(item) {
  * cosa. `confidence`/`low_confidence` son opcionales porque el mock histórico
  * no los inventa; Textract sí los entrega por ítem.
  */
-function respuestaOcr(payload, { mock, contractVersion = 1 }) {
+function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion }) {
   if (!payload || !Array.isArray(payload.items)) throw new Error('ocr_response_items_invalid');
   payload.items.forEach(assertItem);
   if (!enteroSeguroNoNegativo(payload.total_cents)) {
@@ -102,6 +117,13 @@ function respuestaOcr(payload, { mock, contractVersion = 1 }) {
     }
     merchant = { ...input };
   }
+  // v2.156.0 · AB-D209 · `ticket_totals` sólo para quien lo negocia (`totals_version=1`): el decoder
+  // v2 del AF servido es cerrado y una clave que no conoce rompe la lectura del ticket.
+  let ticketTotals;
+  if (contractVersion === 2 && totalsVersion === 1 && payload.ticket_totals !== undefined) {
+    ticketTotals = totalesDelTicket(payload.ticket_totals, payload.total_detected_cents);
+    if (!ticketTotals) throw new Error('ocr_response_ticket_totals_invalid');
+  }
   return {
     ...(contractVersion === 2 ? { contract_version: 2, ...(merchant && { merchant }) } : {}),
     items: payload.items,
@@ -109,6 +131,7 @@ function respuestaOcr(payload, { mock, contractVersion = 1 }) {
     ...(payload.total_detected_cents !== undefined
       ? { total_detected_cents: payload.total_detected_cents }
       : {}),
+    ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
     warnings: payload.warnings,
     mock: !!mock,
   };
@@ -132,6 +155,7 @@ function errorOcr(code, extra = {}) {
 module.exports = {
   normalizeName,
   normalizeRfc,
+  totalesDelTicket,
   OCR_WARNING_CODES,
   OCR_ERROR_STATUS,
   OCR_ITEM_FIELDS,

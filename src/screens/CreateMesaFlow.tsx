@@ -43,6 +43,7 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
+import { desgloseDelTicket } from './desgloseDelTicket';
 import { abrirCamaraNativa, alRecibirFotoDeLaCamara } from '../camara/camaraNativa';
 import { prepararEnNavegador } from '../camara/fotoDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
@@ -50,7 +51,7 @@ import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../ap
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
-import type { CreateMesaResponse, OcrMerchant, PaymentMethod, Restaurant } from '../api/types';
+import type { CreateMesaResponse, OcrMerchant, PaymentMethod, Restaurant, TicketTotals } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -221,6 +222,12 @@ export function CreateMesaFlow() {
    * que nadie miró, y la garantía retiene ese monto.
    */
   const [scannedTotalCents, setScannedTotalCents] = useState<number | null>(null);
+  /**
+   * D209 · el subtotal y el IVA de la lectura, cuando el dueño los publica
+   * (`ticket_totals`). Como el total impreso, sólo se MUESTRAN: nunca viajan en
+   * el alta (el dueño los toma del recibo firmado) y el IVA no se reparte (D215).
+   */
+  const [scannedTotals, setScannedTotals] = useState<TicketTotals | null>(null);
   /** §1.3 · "Modificar ítems": vista normal ↔ modo edición, y qué fila se abrió. */
   const [editingItems, setEditingItems] = useState(false);
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
@@ -834,8 +841,20 @@ export function CreateMesaFlow() {
    * lo que esta pantalla existe para permitir, y ahí la suma se aparta del
    * impreso a propósito; lo que el spec prohíbe es ajustar en silencio.
    */
+  /**
+   * D209 · D215 · subtotal e IVA del ticket, sólo si cierran con los ítems de
+   * AHORA. Con IVA agregado (los ítems suman el subtotal), la diferencia contra
+   * el impreso no es una lectura mala: subtotal + IVA cierra. Lo que se divide
+   * sigue siendo `total`; el IVA no se reparte.
+   */
+  const desglose = desgloseDelTicket({
+    sumaItems: total,
+    ticketValido: ticketValid,
+    impreso: scannedTotalCents,
+    totales: scannedTotals,
+  });
   const totalMismatch =
-    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents
+    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents && desglose.tipo !== 'agregado'
       ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
       : null;
   const ticketForcedOpen = totalMismatch !== null;
@@ -934,6 +953,13 @@ export function CreateMesaFlow() {
         setScanIssue('too_large');
         return;
       }
+      // AF-D212-SEGUIMIENTO · sin una foto recodificada no se sube nada: el
+      // original podría llevar metadatos. El aviso de formato que ya existe,
+      // con «Sacar otra foto», «Cargarlo a mano» y la galería abajo.
+      if (foto === 'sin_preparar') {
+        setScanIssue('image_type');
+        return;
+      }
       setCaptura(URL.createObjectURL(foto));
       const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
       if (rechazo) {
@@ -956,6 +982,7 @@ export function CreateMesaFlow() {
   function cargarAMano() {
     setScanIssue(null);
     setScannedTotalCents(null);
+    setScannedTotals(null);
     setRestaurantLabel('');
     // 🔴 P3-01 (Codex, 2026-08-20): el ticket vuelve a nacer PLEGADO en cada
     // llegada a la pantalla. Sin este reset, abrir el acordeón, volver y
@@ -995,11 +1022,13 @@ export function CreateMesaFlow() {
       const decision = decideOcrScan(r);
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
+        setScannedTotals(null);
         setScanIssue('provider');
         return;
       }
       if (decision.kind === 'no_items') {
         setScannedTotalCents(null);
+        setScannedTotals(null);
         setScanIssue('no_items');
         return;
       }
@@ -1016,6 +1045,7 @@ export function CreateMesaFlow() {
       // El total impreso, para contrastarlo (§1.3). Ausente significa “no lo
       // sé”; cero PRESENTE sí es un valor contractual y debe producir mismatch.
       setScannedTotalCents(decision.printedTotalCents);
+      setScannedTotals(decision.response.ticket_totals ?? null);
       setScanIssue(null);
       // La baja confianza abre los lápices desde el primer frame. No bloquea
       // continuar: la persona ve la señal y decide qué corregir.
@@ -1780,14 +1810,17 @@ export function CreateMesaFlow() {
               construye según el modo publicado. ⚠️ `accept` es una SUGERENCIA, no
               un gate: la foto igual pasa por `recibirFoto`, que la convierte a
               JPEG. */}
+          {/* D214 · «Cámara directa + botón claro»: la galería deja de ser un
+              ícono solo y dice qué abre. Va en su propia fila, arriba del botón
+              redondo: a 375 px el texto no entra al lado sin taparlo. */}
           <button
             type="button"
             className="camara-galeria"
             onClick={() => fileInput.current?.click()}
             disabled={scanning || capturando}
-            aria-label={t('Elegir una foto de la galería')}
           >
-            <Icon name="image" size={24} />
+            <Icon name="image" size={20} />
+            <span>{t('Elegir de la galería o Drive')}</span>
           </button>
           {/* D212 · el botón redondo abre la cámara nativa en este toque. */}
           <button
@@ -1797,7 +1830,6 @@ export function CreateMesaFlow() {
             disabled={scanning || capturando}
             aria-label={t('Sacar foto')}
           />
-          <span className="camara-controles-espacio" aria-hidden="true" />
           <input
             ref={fileInput}
             type="file"
@@ -1864,6 +1896,14 @@ export function CreateMesaFlow() {
         <div className="title-card ticket-title-card">
           <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
           <div className="ticket-title-amount">{formatMXN(total)}</div>
+          {/* D215 · «Dejarlo para los pagos»: con IVA agregado, lo que se divide
+              es la suma de los platos. Se dice, sin ámbar y sin frenar nada. */}
+          {desglose.tipo === 'agregado' && (
+            <p className="ticket-title-iva">
+              <Icon name="info" size={14} className="ico-inline" />{' '}
+              {t('Lo que paga cada uno todavía no incluye el IVA ({0})', formatMXN(desglose.ivaCents))}
+            </p>
+          )}
           <div
             className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
             onAnimationEnd={() => setTicketPulse(false)}
@@ -2254,6 +2294,25 @@ export function CreateMesaFlow() {
                   );
                 })}
               </div>
+              {/* D209 · el subtotal y el IVA impresos, arriba del total, sólo
+                  cuando el dueño los publica y cierran con los ítems de ahora.
+                  Sin ellos, la hoja queda como antes. */}
+              {desglose.tipo !== 'ninguno' && (
+                <dl className="tk-desglose">
+                  <div>
+                    <dt>{t('Subtotal')}</dt>
+                    <dd>{formatMXN(desglose.subtotalCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('IVA')}</dt>
+                    <dd>{formatMXN(desglose.ivaCents)}</dd>
+                  </div>
+                  <div className="tk-desglose-total">
+                    <dt>{t('Total del ticket')}</dt>
+                    <dd>{formatMXN(desglose.totalCents)}</dd>
+                  </div>
+                </dl>
+              )}
               <div className="tk-foot">
                 <button
                   className="tk-edit-link"

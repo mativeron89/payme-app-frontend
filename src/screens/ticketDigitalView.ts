@@ -11,6 +11,8 @@ export interface TicketDigitalView {
   readonly restaurantName: string;
   readonly items: readonly TicketDigitalItem[];
   readonly totalCents: number;
+  /** D209 · subtotal e IVA del ticket, sólo cuando el dueño los publica. */
+  readonly totals?: { readonly subtotalCents: number; readonly taxCents: number };
 }
 
 function enteroSeguro(value: unknown, min: number): value is number {
@@ -44,10 +46,30 @@ export function ticketDigitalView(mesa: MesaDetail, expectedCode: string): Ticke
     };
   });
 
+  // D209 · `mesa_detail` del dueño: la clave viene sólo cuando el total de la
+  // mesa es el impreso, así que subtotal + IVA tiene que dar `total_cents`
+  // exacto. Una forma que no cumple es un contrato roto, igual que lo demás.
+  let totals: TicketDigitalView['totals'];
+  if (mesa.ticket_totals !== undefined) {
+    const raw: unknown = mesa.ticket_totals;
+    const tt = typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+      ? raw as Record<string, unknown>
+      : null;
+    if (
+      !tt
+      || Object.keys(tt).length !== 2
+      || !enteroSeguro(tt.subtotal_cents, 1)
+      || !enteroSeguro(tt.tax_cents, 0)
+      || tt.subtotal_cents + tt.tax_cents !== mesa.total_cents
+    ) throw new Error('ticket_digital_malformed');
+    totals = { subtotalCents: tt.subtotal_cents, taxCents: tt.tax_cents };
+  }
+
   return {
     code: mesa.code,
     restaurantName: mesa.restaurant.name,
     items,
     totalCents: mesa.total_cents,
+    ...(totals ? { totals } : {}),
   };
 }

@@ -12,19 +12,26 @@
  * - **Lado largo hasta 4096.** 4032×3024 pasa entera; 24 a 50 MP bajan a
  *   4096×3072. 4096² (16.777.216 px) es además el lienzo más grande que Safari
  *   de iPhone dibuja: con 4096 de lado largo entra con cualquier proporción.
- * - **Hasta 8 MiB**, el `fileSize` del dueño (`MAX_TICKET_IMAGE_BYTES`).
+ * - **Hasta 8 MiB**, el `fileSize` del dueño (`MAX_TICKET_IMAGE_BYTES`), que es
+ *   el tope duro y no cambia.
+ * - **Objetivo de 5.000.000 bytes** (AF-D212-SEGUIMIENTO, punto 2): la
+ *   documentación de Textract se contradice entre 5 MB y 10 MB para
+ *   `Document.Bytes`. Gana el primer paso de la escalera que pesa eso o menos;
+ *   si ninguno, el mejor que entra en el tope, que se manda igual.
  * - **Primero baja la calidad y después los píxeles**: para leer, pesa más la
- *   resolución que la compresión. Medido en Chromium a 4096×3072: un ticket
- *   simulado pesa 3,61 MiB a 0,92 y el ruido puro (el peor caso) 6,87 MiB a
- *   0,75, así que bajar el lado es sólo la red de seguridad.
+ *   resolución que la compresión. 0,75 es el piso de calidad. Medido en
+ *   Chromium: un ticket de 12 MP sale entero a 0,92 en 4,14 MB, debajo del
+ *   objetivo; sólo el ruido puro (el peor caso) baja a 3277×2458 a 0,75.
  * - **Siempre a JPEG, derecho y sin metadatos.** Se decodifica con `<img>`,
  *   que aplica la orientación EXIF, y se dibuja en un lienzo: el HEIC del
  *   iPhone sale JPEG (el proveedor acepta jpeg y png) y no viaja ningún dato de
  *   la foto, tampoco la ubicación GPS.
- * - **Respaldo, como antes de D212:** si el navegador no puede decodificar la
- *   foto (un HEIC fuera de Safari, un archivo dañado) o no puede dibujar ningún
- *   lienzo, se manda el original si entra en el tope y decide el dueño, igual
- *   que hacía la galería. Si no entra, «La foto pesa más de 8 MB».
+ * - **Nada sin sanear** (AF-D212-SEGUIMIENTO, punto 1): si el navegador no puede
+ *   decodificar la foto (un HEIC fuera de Safari, un archivo dañado) o no puede
+ *   dibujar ningún lienzo, sale `'sin_preparar'` y no se sube nada: el original
+ *   podría llevar metadatos, incluida la ubicación. Antes se mandaba el original.
+ *   Si Safari no puede con el lienzo de 4096², la escalera baja al lado
+ *   siguiente antes de rendirse.
  *
  * La lógica no toca el DOM: decodificar y codificar se inyectan, y los tests
  * corren sin navegador. `prepararEnNavegador` es la versión real.
@@ -32,6 +39,9 @@
 
 /** El lado largo de la foto, como mucho. */
 export const LADO_MAX = 4096;
+
+/** Lo que se busca pesar, dentro del tope del dueño. */
+export const OBJETIVO_BYTES = 5_000_000;
 
 /** Las calidades al tamaño completo, de mejor a peor. */
 export const CALIDADES = [0.92, 0.85, 0.75] as const;
@@ -85,26 +95,33 @@ export interface Herramientas<F> {
   terminar(): void;
 }
 
-export type FotoPreparada = Blob | 'muy_grande';
+/**
+ * - un JPEG preparado: lo único que se sube;
+ * - `'muy_grande'`: hubo JPEG, pero ninguno entra en el tope;
+ * - `'sin_preparar'`: no se pudo decodificar ni dibujar. No se sube nada.
+ */
+export type FotoPreparada = Blob | 'muy_grande' | 'sin_preparar';
 
 /**
- * La foto lista para subir: el primer JPEG de la escalera que entra en
- * `maxBytes`. Sin decodificar o sin ningún lienzo, el respaldo (ver arriba).
+ * La foto lista para subir: el primer JPEG de la escalera que pesa hasta
+ * `objetivo`; si ninguno, el primero (el de más píxeles y calidad) que entra en
+ * `maxBytes`. Sin decodificar o sin ningún lienzo, `'sin_preparar'`.
  */
 export async function prepararFotoDelTicket<F>(
   original: Blob,
   maxBytes: number,
   herramientas: Herramientas<F>,
+  objetivo = Math.min(OBJETIVO_BYTES, maxBytes),
 ): Promise<FotoPreparada> {
-  const respaldo = (): FotoPreparada => (original.size <= maxBytes ? original : 'muy_grande');
   let foto: FotoDecodificada<F> | null = null;
   try {
     foto = await herramientas.decodificar(original);
   } catch {
     foto = null;
   }
-  if (!foto) return respaldo();
+  if (!foto) return 'sin_preparar';
   let algunLienzo = false;
+  let mejorEnElTope: Blob | null = null;
   try {
     for (const paso of escalera(foto.ancho, foto.alto)) {
       let jpeg: Blob | null = null;
@@ -115,15 +132,17 @@ export async function prepararFotoDelTicket<F>(
       }
       if (!jpeg || jpeg.size <= 0) continue;
       algunLienzo = true;
-      if (jpeg.size <= maxBytes) return jpeg;
+      if (jpeg.size <= objetivo) return jpeg;
+      mejorEnElTope ??= jpeg.size <= maxBytes ? jpeg : null;
     }
   } finally {
     foto.soltar();
     herramientas.terminar();
   }
+  if (mejorEnElTope) return mejorEnElTope;
   // Ningún lienzo funcionó (Safari sin memoria para 4096²... ni para 2048):
-  // como antes de D212. Si hubo JPEG y ninguno entró, es que no entra.
-  return algunLienzo ? 'muy_grande' : respaldo();
+  // no se sube nada. Si hubo JPEG y ninguno entró, es que no entra.
+  return algunLienzo ? 'muy_grande' : 'sin_preparar';
 }
 
 /** Las herramientas del navegador: `<img>` para decodificar, un lienzo para el JPEG. */

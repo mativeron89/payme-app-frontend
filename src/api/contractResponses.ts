@@ -21,6 +21,7 @@ import type {
   OcrWarning,
   OutgoingFriendRequest,
   OutgoingFriendRequestsResponse,
+  TicketTotals,
 } from './types';
 import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
@@ -308,7 +309,30 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
 ];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
 const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
-const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt'];
+const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt', 'ticket_totals'];
+const TICKET_TOTALS_KEYS = ['subtotal_cents', 'tax_cents'];
+
+/**
+ * D209 · `ticket_totals`, con el control del dueño (`invariant` de
+ * `contract-mirror/contract/ocr-merchant-v2.json`): subtotal entero seguro > 0,
+ * IVA entero seguro ≥ 0, sin otras claves, y la suma EXACTA igual al total
+ * impreso, que tiene que venir. `null` = no cumple, y la respuesta entera se
+ * rechaza como cualquier otra forma inválida. Sin la clave, `undefined`.
+ */
+export function ticketTotalsOf(value: unknown, printedTotalCents: unknown): TicketTotals | null | undefined {
+  if (value === undefined) return undefined;
+  const raw = record(value);
+  if (!raw
+      || Object.keys(raw).length !== TICKET_TOTALS_KEYS.length
+      || Object.keys(raw).some((key) => !TICKET_TOTALS_KEYS.includes(key))
+      || !safeNonNegative(raw.subtotal_cents) || raw.subtotal_cents === 0
+      || !safeNonNegative(raw.tax_cents)
+      || !safeNonNegative(printedTotalCents)
+      || raw.subtotal_cents + raw.tax_cents !== printedTotalCents) {
+    return null;
+  }
+  return { subtotal_cents: raw.subtotal_cents, tax_cents: raw.tax_cents };
+}
 
 /**
  * AF-ORIGEN-POR-PLATO · decisión 141 · techo del recibo, el del dueño:
@@ -408,6 +432,9 @@ export function ocrResponse(value: unknown): OcrResponse {
   }
 
   const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
+  // En v1 la clave ni siquiera está permitida (arriba).
+  const ticketTotals = version2 ? ticketTotalsOf(body.ticket_totals, body.total_detected_cents) : undefined;
+  if (ticketTotals === null) throw new ContractResponseError('ocr');
 
   return {
     ...(version2 ? { contract_version: 2 as const } : {}),
@@ -417,6 +444,7 @@ export function ocrResponse(value: unknown): OcrResponse {
     ...(body.total_detected_cents !== undefined
       ? { total_detected_cents: body.total_detected_cents }
       : {}),
+    ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
     warnings: [...body.warnings] as OcrWarning[],
     mock: body.mock,
     ...(receipt !== undefined ? { receipt } : {}),

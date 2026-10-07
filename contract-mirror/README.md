@@ -6,6 +6,25 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Subtotal e IVA del ticket (`ticket_totals`) · App Backend v2.157.0 · 2026-10-07
+
+Orden `AF-D212-SEGUIMIENTO-20261007` (D212, D209, D214, punto 4), con la enmienda de scope del Bibliotecario
+IV del 2026-10-07 (`contract-mirror/**` y `scripts/mirror-inventory.json`).
+
+- Contenido: owner **`1a30cb615287af5b7ce54e2da312645206f7e57f`** (v2.157.0: `ticket_totals` de 2.156.0 y la
+  lectura robusta de 2.157.0).
+- Inventario: el de `main` del owner en **`61b3aaafda01519d93321357219f803ea66d4371`**
+  (`contract/mirror-inventory.json`, sha256
+  `945665fe0e6511298762ab12d6dbe07017fd253c5976e1ff9757daf40e9c810f`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `1a30cb6`; entre `1a30cb6` y `61b3aaa` sólo cambia el
+  inventario (`git diff --stat`).
+- **121 archivos**, sin altas ni bajas. Cambian cuatro: `contract/ocr-merchant-v2.json`, `routes/mesas.js`,
+  `routes/ocr.js` y `services/ocrResponseContract.js`, copiados con `git show 1a30cb6:<origen>` y con el
+  sha256 que declara el inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni
+  escrituras en ese repo.
+- `--paridad`: espejo = inventario = fuente en `1a30cb6`, 121/121.
+
 ### Montos de los avisos sin «.00» · App Backend v2.152.0 · 2026-10-06
 
 Orden `AF-D202-AUDITORIA-20261006` (decisión 202, punto 4), con la enmienda de scope del Bibliotecario IV

@@ -201,6 +201,9 @@ router.post('/', (req, res, next) => {
   // Sólo quien solicita la extensión exacta recibe claves nuevas; valores desconocidos o
   // repetidos conservan el contrato base. La capacidad no acredita origen: el recibo sí.
   req.ocrReceiptRequested = req.ocrContractVersion === 2 && req.query.receipt_version === '1';
+  // v2.156.0 · AB-D209 · subtotal e IVA (`ticket_totals`), con la misma negociación exacta: sólo v2 y
+  // `totals_version=1` literal. Ausente, distinto o repetido conserva el contrato de hoy.
+  req.ocrTotalsVersion = req.ocrContractVersion === 2 && req.query.totals_version === '1' ? 1 : undefined;
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -268,9 +271,12 @@ router.post('/', (req, res, next) => {
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
-        const respuesta = respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion });
+        const respuesta = respuestaOcr(result, {
+          mock: false, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
+        });
+        // El recibo lleva los totales del resultado del servidor aunque el cliente no los negocie.
         return res.json(req.ocrReceiptRequested
-          ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
+          ? origenItems.conRecibo(respuesta, req.user.id, { logger, totales: result.ticket_totals }) : respuesta);
       } catch (e) {
         if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
           const out = errorOcr(e.code);
@@ -302,7 +308,7 @@ router.post('/', (req, res, next) => {
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-    }, { mock: true, contractVersion: req.ocrContractVersion });
+    }, { mock: true, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion });
     res.json(req.ocrReceiptRequested
       ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {

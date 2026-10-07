@@ -11,6 +11,74 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.219.0 — Ninguna foto sin sanear, objetivo de 5 MB, subtotal e IVA del ticket y la galería con nombre (2026-10-07)
+
+Orden AF-D212-SEGUIMIENTO-20261007 (sha256 f6987fd3…) y su adenda 1 (2c2e3e3d…); decisiones D212, D209, D214 y
+D215. Plan aprobado (a06768bc…). Base `0154cbe` (0.218.0).
+
+- **1 · Ninguna foto se sube sin sanear** (`src/camara/fotoDelTicket.ts`).
+  - Si el navegador no decodifica la foto (un HEIC fuera de Safari, un archivo dañado) o no puede dibujar ningún
+    lienzo, sale `'sin_preparar'` y no se sube nada: el original podría llevar metadatos, incluida la ubicación.
+    Antes se mandaba el original si entraba en 8 MiB.
+  - La pantalla muestra el aviso de formato que ya existía: «No pudimos leer el ticket», con «Sacar otra foto»,
+    «Cargarlo a mano» y la galería abajo. Sin copy nueva y sin culpar a nadie.
+  - **Riesgo declarado, sin medir:** una foto de galería muy grande en un iPhone con poca memoria podría no
+    decodificarse y dar el aviso, donde antes subía el original. Lo prueba Mati.
+  - «La foto pesa más de 8 MB» ya no sale de una foto preparada (a 2048 y 0,75 pesa menos de 2 MiB); queda para el
+    413 del dueño, mapeado como antes.
+- **2 · Objetivo de 5.000.000 bytes, tope de 8 MiB intacto.** La documentación de Textract se contradice entre 5 MB y
+  10 MB para `Document.Bytes`. La escalera no cambia (0,92 → 0,85 → 0,75 al tamaño completo; después el lado ×0,8,
+  ×0,64, ×0,5 con 0,85 y 0,75; 0,75 es el piso de calidad). Cambia qué paso gana: el primero ≤ 5.000.000; si
+  ninguno, el mejor que entra en 8.388.608 (se manda igual); si ninguno, «muy grande».
+  - Con lo medido en 0.218.0 (Chromium): el ticket de 12 MP (4,14 MB), el vertical (4,32 MB) y el de 6000×4500
+    (3,03 MB) **no cambian**. Sólo el peor caso, ruido puro de 4096×3072, pasa de 7,2 MB a 0,75 a **3277×2458 a 0,75**
+    (≤ 5.000.000, e2e). Safari no está medido.
+- **3 · Subtotal e IVA del ticket (D209, cliente de `ticket_totals` de App Backend 2.156.0):**
+  - el pedido de lectura negocia `totals_version=1` (`src/api/http.ts`);
+  - `ticket_totals` entra en `OCR_V2_KEYS` con el control del dueño: subtotal entero > 0, IVA entero ≥ 0, sin otras
+    claves y `subtotal + IVA === total_detected_cents` exacto; si no, la respuesta entera se rechaza. **Corrección al
+    plan:** en v1 no se rechaza, porque el decoder v1 tolera claves desconocidas desde siempre; se descarta y no
+    llega a la app;
+  - `mesa.ticket_totals` de GET `/api/mesas/:code` se decodifica en el ticket digital (`ticketDigitalView`), con
+    subtotal + IVA = total de la mesa; una forma inválida deja el visor en error, como el resto de ese visor;
+  - **«Ver el ticket»:** al pie de la lista, «Subtotal», «IVA» y «Total del ticket», sólo si vienen y cierran con
+    los ítems de AHORA (`desgloseDelTicket`). Si la persona corrige un ítem y ya no cierran, se ocultan y vuelve el
+    aviso de siempre. Sin ellos, la hoja queda como antes;
+  - **ticket digital:** «Subtotal» e «IVA» arriba de «Total del ticket», sólo cuando vienen;
+  - **IVA agregado (2.157.0, D215, «Dejarlo para los pagos»):** si los ítems suman exacto el subtotal, la diferencia
+    contra el impreso ya no es un aviso ámbar que abre la hoja a la fuerza (`totalMismatch`). La tarjeta «¿Cómo
+    dividen?» muestra una nota informativa, sin ámbar y sin frenar nada: «Lo que paga cada uno todavía no incluye el
+    IVA ($134.40)», con el monto real. Lo que se divide sigue siendo la suma de los ítems: **el IVA no se reparte**;
+  - **el mock** no emite `ticket_totals` por defecto (como el `mode: 'mock'` del dueño); suma dos seams de prueba
+    (`iva_incluido`, `iva_agregado`), firma el recibo v2 con `t = [subtotal, IVA]`, guarda los totales sólo desde el
+    recibo y los devuelve en GET mesa sólo si el total de la mesa es el impreso.
+- **4 · Espejo** contra App Backend `61b3aaa` (inventario sobre `1a30cb6`): cambian 4 de 121 archivos,
+  `contract/ocr-merchant-v2.json`, `routes/mesas.js`, `routes/ocr.js` y `services/ocrResponseContract.js`. Integridad y
+  paridad 121/121; procedencia en `contract-mirror/README.md`. Scope enmendado por el Bibliotecario.
+- **5 · D214 · «Elegir de la galería o Drive».** El ícono solo pasa a ser un botón con texto, en su propia fila arriba
+  del botón redondo (a 375 px el texto no entra al lado sin taparlo). Mismo `<input>` sin `capture`, mismo `accept`
+  del dueño, y la foto elegida pasa por la misma preparación. «Nueva», «Sacar foto», «Sacar otra foto» y «Reintentar»
+  siguen abriendo la cámara nativa en el mismo toque.
+- **Textos nuevos** (con su inglés): «Elegir de la galería o Drive», «Subtotal», «IVA» y «Lo que paga cada uno todavía
+  no incluye el IVA ({0})». Sale «Elegir una foto de la galería».
+- **Pruebas:**
+  - unitarias: `fotoDelTicket.test` (`'sin_preparar'`, el objetivo con los pesos medidos, el mejor en el tope, el piso
+    de calidad), `ocrTicketTotals.test`, `desgloseDelTicket.test`, `ticketDigitalView.test` (+6),
+    `mockTicketTotals.test` y la URL con `totals_version=1` (`ocrUpload.test`);
+  - e2e: `ticket-iva.spec.ts` (IVA incluido, IVA agregado sin ámbar y sin frenar, sin totales, ítem corregido, ticket
+    digital con y sin); en `camara-nativa`, el HEIC y el archivo dañado dan el aviso sin subir nada, sin lienzo da el
+    aviso tras intentar los 9 pasos, el peor caso baja a 3277×2458 ≤ 5.000.000 y el botón de la galería a 375 y
+    320 px;
+    `camara-android.spec.ts` con el perfil Pixel 7 de Playwright, **que no es un Android real**;
+  - los specs que usaban bytes al azar como «foto» pasan a fotos de verdad (`fotoChica`, `FOTO_DE_CAMARA`):
+    `ticket-galeria`, `escaneo-aviso-visible` (el de «más de 8 MB» pasa a «no se puede preparar») y `ticket-sin-qr`.
+  - rojo sobre `0154cbe`: 21 unitarios y 13 e2e; mutantes 16 de 17 cazados. **Sobrevive, declarado:** poner la
+    galería al lado del botón redondo en vez de en su propia fila. No es un defecto medible: a 375 y a 320 px el
+    texto igual se lee entero (en dos líneas), no tapa el botón y mide 44 px o más; la fila propia es una elección de
+    diseño (una línea y el pulgar libre), no un requisito de la orden.
+- **Lo que prueba Mati en el iPhone (D63):** cancelar la cámara y ver «Elegir de la galería o Drive»; un ticket con
+  subtotal e IVA impresos; un ticket con IVA agregado; una foto muy grande de la galería.
+
 ## 0.218.0 — «Nueva» abre la cámara del teléfono y la foto del ticket sale con toda su definición (2026-10-07)
 
 Orden AF-D212-CAMARA-20261007 (sha256 7068dccb…), decisión 212 (7b7a75ed…), plan aprobado (395f9763…). Base

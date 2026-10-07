@@ -26,6 +26,23 @@ describe('ticketDigitalView', () => {
     expect(JSON.stringify(ticketDigitalView(mesa, 'PA-1234'))).not.toContain('locked');
   });
 
+  it('D209 · con `ticket_totals` del dueño, el subtotal y el IVA; sin la clave, como antes', () => {
+    const conTotales = { ...mesa, ticket_totals: { subtotal_cents: 36207, tax_cents: 5793 } } as MesaDetail;
+    expect(ticketDigitalView(conTotales, 'PA-1234').totals).toEqual({ subtotalCents: 36207, taxCents: 5793 });
+    expect('totals' in ticketDigitalView(mesa, 'PA-1234')).toBe(false);
+  });
+
+  it.each([
+    ['no suman el total de la mesa', { subtotal_cents: 36207, tax_cents: 5794 }],
+    ['subtotal cero', { subtotal_cents: 0, tax_cents: 42000 }],
+    ['IVA negativo', { subtotal_cents: 43000, tax_cents: -1000 }],
+    ['una clave de más', { subtotal_cents: 36207, tax_cents: 5793, total_cents: 42000 }],
+    ['no es objeto', [36207, 5793]],
+  ])('🔴 D209 · `ticket_totals` que %s: falla cerrado, como el resto del visor', (_caso, ticketTotals) => {
+    expect(() => ticketDigitalView({ ...mesa, ticket_totals: ticketTotals } as unknown as MesaDetail, 'PA-1234'))
+      .toThrow('ticket_digital_malformed');
+  });
+
   it('falla cerrado si el código o los campos visibles no son válidos', () => {
     expect(() => ticketDigitalView(mesa, 'PA-9999')).toThrow('ticket_digital_malformed');
     expect(() => ticketDigitalView({ ...mesa, total_cents: -1 }, 'PA-1234')).toThrow('ticket_digital_malformed');

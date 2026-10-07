@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
-import { sacarFoto } from './_camara';
+import { FOTO_QUE_NO_ABRE, fotoChica, sacarFoto } from './_camara';
 
 /**
  * AF-AVISO-FOTO · Mati, en el iPhone: «Funciona pero la imagen sale mal». En
@@ -66,9 +66,7 @@ async function avisoSinTapar(page: Page, titulo: string): Promise<void> {
 test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enteros', () => {
   test('foto chica, rechazada antes de subir (lo de Mati): el aviso entero y «Sacar otra foto»', async ({ page }) => {
     await abrirEscaneo(page);
-    await page.locator('.camara-controles input[type="file"]').setInputFiles({
-      name: 'IMG_0500.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(5 * 1024, 1),
-    });
+    await page.locator('.camara-controles input[type="file"]').setInputFiles(await fotoChica(page));
     const aviso = page.getByRole('alert');
     await expect(aviso).toContainText('Toma otra más cerca, con buena luz y sin recortarla.');
     // La captura va ANTES de afirmar, para que exista también en la base.
@@ -97,14 +95,16 @@ test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enter
     await avisoSinTapar(page, 'La foto es demasiado pequeña para leer el ticket.');
   });
 
-  test('foto demasiado grande, rechazada antes de subir', async ({ page }) => {
+  /**
+   * AF-D212-SEGUIMIENTO · antes era «foto demasiado grande»: 9 MB al azar que
+   * se rechazaban por tamaño. Ahora una foto que no se puede preparar no se sube
+   * y da el aviso de formato; «más de 8 MB» ya no sale de una foto preparada
+   * (queda para el 413 del dueño). Lo que se mide es lo mismo: el aviso entero.
+   */
+  test('foto que no se puede preparar: el aviso entero', async ({ page }) => {
     await abrirEscaneo(page);
-    await page.locator('.camara-controles input[type="file"]').setInputFiles({
-      name: 'IMG_0501.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(9 * 1024 * 1024, 1),
-    });
-    const titulo = await page.getByRole('alert').locator('.state-error-title').textContent();
-    expect(titulo).toBeTruthy();
-    await avisoSinTapar(page, titulo!);
+    await page.locator('.camara-controles input[type="file"]').setInputFiles(FOTO_QUE_NO_ABRE);
+    await avisoSinTapar(page, 'No pudimos leer el ticket');
   });
 
   for (const ocr of ['no_items', 'budget_exhausted'] as const) {

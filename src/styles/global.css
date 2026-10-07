@@ -2396,24 +2396,32 @@ html.app-de-inicio-ios .app {
 
 .camara-controles {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: var(--sp-4) var(--sp-6) max(var(--sp-4), env(safe-area-inset-bottom));
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) max(var(--sp-4), env(safe-area-inset-bottom));
   background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.65));
 }
 
+/* D214 · la galería en su propia fila, arriba del botón redondo: con el texto
+   «Elegir de la galería o Drive» no entra al lado a 375 px sin taparlo. El
+   botón redondo queda solo, al centro, donde cae el pulgar. */
 .camara-galeria {
-  justify-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border: 0;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
+  gap: var(--sp-2);
+  max-width: min(100%, 360px);
+  min-height: 44px;
+  padding: 10px var(--sp-4);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -4764,6 +4772,37 @@ html.app-de-inicio-ios .app {
   cursor: pointer;
 }
 
+/* D209 · subtotal, IVA y total impreso, al pie de la lista y arriba de las
+   acciones. Sólo aparece cuando el dueño publica `ticket_totals`. */
+.tk-desglose {
+  display: grid;
+  gap: 4px;
+  margin: var(--sp-3) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-desglose > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.tk-desglose dt,
+.tk-desglose dd {
+  margin: 0;
+}
+
+.tk-desglose > .tk-desglose-total {
+  font-family: var(--font-display);
+  font-size: inherit;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .tk-foot {
   display: flex;
   align-items: center;
@@ -6862,6 +6901,26 @@ button.qc-circulo::after {
   color: var(--navy);
 }
 
+/* D209 · subtotal e IVA del ticket, arriba del total. */
+.ticket-digital-desglose {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-digital-desglose > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  color: var(--text-muted);
+}
+
+.ticket-digital-desglose dt,
+.ticket-digital-desglose dd {
+  margin: 0;
+}
+
 .ticket-digital-total {
   display: flex;
   justify-content: space-between;
@@ -7493,6 +7552,14 @@ h1.pay-title-lbl {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+/* D215 · nota informativa del IVA agregado: sin ámbar, no es un error. */
+.ticket-title-iva {
+  margin: 4px 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
 }
 
 .ticket-title-fold {

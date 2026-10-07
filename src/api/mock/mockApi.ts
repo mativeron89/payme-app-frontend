@@ -2342,6 +2342,7 @@ export async function mockReplaceInformativeSelection(
  */
 async function mockOcrReceipt(
   items: ReadonlyArray<{ name: string; price_cents: number; quantity: number }>,
+  totales?: { subtotal_cents: number; tax_cents: number },
 ): Promise<string | undefined> {
   if (items.length < 1 || items.length > 100) return undefined;
   const b64url = (bytes: Uint8Array) =>
@@ -2352,12 +2353,15 @@ async function mockOcrReceipt(
   )));
   const iat = Math.floor(Date.now() / 1000);
   const payload = {
-    v: 1,
+    // D209 · con totales válidos el dueño firma un recibo v2 con
+    // `t = [subtotal, IVA]` (`receipt` de `ocr-merchant-v2.json`).
+    v: totales ? 2 : 1,
     jti: b64url(crypto.getRandomValues(new Uint8Array(16))),
     mode: 'mock',
     iat,
     exp: iat + 2 * 60 * 60,
     items: await Promise.all(items.map(async (i) => [await huella(i.name), i.price_cents, i.quantity])),
+    ...(totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
   };
   const cuerpo = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   return `or1.${cuerpo}.${b64url(crypto.getRandomValues(new Uint8Array(32)))}`;
@@ -2411,6 +2415,32 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       mock: true,
     });
   }
+  /**
+   * D209 · el mock del dueño NUNCA emite `ticket_totals`; estos dos modos son
+   * seams de prueba para ejercitar el cliente con las dos formas que publica
+   * 2.157.0:
+   * - `iva_incluido`: los ítems suman el total impreso y el ticket lo desglosa;
+   * - `iva_agregado`: los ítems suman el SUBTOTAL y el IVA se agrega al final
+   *   (sigue saliendo `total_mismatch`, literal, como en el dueño).
+   */
+  if (mode === 'iva_incluido' || mode === 'iva_agregado') {
+    const agregado = mode === 'iva_agregado';
+    const subtotal = agregado ? total : Math.round(total / 1.16);
+    const iva = agregado ? Math.round(total * 0.16) : total - subtotal;
+    const totales = { subtotal_cents: subtotal, tax_cents: iva };
+    const conTotales = await mockOcrReceipt(items, totales);
+    return delay({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      items,
+      total_cents: total,
+      total_detected_cents: subtotal + iva,
+      ticket_totals: totales,
+      warnings: agregado ? ['total_mismatch'] : [],
+      mock: true,
+      ...(conTotales ? { receipt: conTotales } : {}),
+    });
+  }
   const receipt = await mockOcrReceipt(items);
   if (mode === 'no_merchant') {
     return delay({
@@ -2433,6 +2463,30 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       ...(receipt ? { receipt } : {}),
     }), 1200),
   );
+}
+
+/**
+ * D209 · lo que el alta guarda del recibo: `{version:1, subtotal, IVA, total}`
+ * sólo si es un recibo v2 con `t` válido. El mock no verifica la firma (no tiene
+ * la clave del dueño), pero NUNCA toma los totales del cuerpo del pedido.
+ */
+function totalesDelRecibo(recibo: unknown): MockMesa['ticket_totals'] {
+  if (typeof recibo !== 'string') return undefined;
+  const partes = recibo.split('.');
+  if (partes.length !== 3 || partes[0] !== 'or1') return undefined;
+  try {
+    const b64 = partes[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))) as {
+      v?: unknown; t?: unknown;
+    };
+    if (json.v !== 2 || !Array.isArray(json.t) || json.t.length !== 2) return undefined;
+    const [subtotal, iva] = json.t as unknown[];
+    if (typeof subtotal !== 'number' || !Number.isSafeInteger(subtotal) || subtotal <= 0
+        || typeof iva !== 'number' || !Number.isSafeInteger(iva) || iva < 0) return undefined;
+    return { version: 1, subtotal_cents: subtotal, tax_cents: iva, total_cents: subtotal + iva };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Garantía 3DS pendiente del mock (mesa creada con card, aún pending_auth). */
@@ -2612,6 +2666,9 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
         ? req.payment_method_id
         : null,
   };
+  // D209 · `stored` del dueño: sólo desde el recibo aceptado.
+  const totalesGuardados = totalesDelRecibo(ocrReceipt);
+  if (totalesGuardados) mesa.ticket_totals = totalesGuardados;
   state.mesas.unshift(mesa);
 
   /**

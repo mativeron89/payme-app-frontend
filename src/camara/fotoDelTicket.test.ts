@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALIDADES,
+  OBJETIVO_BYTES,
   escalera,
   LADO_MAX,
   prepararFotoDelTicket,
@@ -122,12 +123,48 @@ describe('D212 · prepararFotoDelTicket', () => {
     expect(registro).toEqual({ soltada: 1, terminada: 1 });
   });
 
-  it('🔴 la primera calidad que entra en 8 MiB, sin bajar píxeles', async () => {
-    const pesos: Record<number, number> = { 0.92: mib(10.5), 0.85: mib(8.55), 0.75: mib(6.87) };
-    const { h, pasos } = falsas(4096, 3072, (p) => pesos[p.calidad] ?? 1);
-    const foto = await prepararFotoDelTicket(blob(1000), TOPE, h);
-    expect((foto as Blob).size).toBe(mib(6.87));
-    expect(pasos.map((p) => [p.ancho, p.calidad])).toEqual([[4096, 0.92], [4096, 0.85], [4096, 0.75]]);
+  describe('AF-D212-SEGUIMIENTO · objetivo de 5.000.000 bytes, tope de 8 MiB intacto', () => {
+    it('el objetivo es 5.000.000 y queda debajo del tope', () => {
+      expect(OBJETIVO_BYTES).toBe(5_000_000);
+      expect(OBJETIVO_BYTES).toBeLessThan(TOPE);
+    });
+
+    it('🔴 el peor caso medido (ruido puro): baja a 3277×2458 a 0,75, el primero ≤ 5.000.000', async () => {
+      // Los pesos de la sonda de bytes en Chromium (MiB), por lado y calidad.
+      const medidos: Record<string, number> = {
+        '4096:0.92': mib(10.5), '4096:0.85': mib(8.55), '4096:0.75': mib(6.87),
+        '3277:0.85': mib(5.49), '3277:0.75': mib(4.41),
+      };
+      const { h, pasos } = falsas(4096, 3072, (p) => medidos[`${p.ancho}:${p.calidad}`] ?? 1);
+      const foto = await prepararFotoDelTicket(blob(1000), TOPE, h);
+      expect((foto as Blob).size).toBe(mib(4.41));
+      expect(pasos.map((p) => [p.ancho, p.calidad])).toEqual([
+        [4096, 0.92], [4096, 0.85], [4096, 0.75], [3277, 0.85], [3277, 0.75],
+      ]);
+    });
+
+    it('🔴 justo 5.000.000 gana; un byte más sigue buscando', async () => {
+      const justo = falsas(4032, 3024, () => OBJETIVO_BYTES);
+      expect(((await prepararFotoDelTicket(blob(10), TOPE, justo.h)) as Blob).size).toBe(OBJETIVO_BYTES);
+      expect(justo.pasos).toHaveLength(1);
+      const unoMas = falsas(4032, 3024, (p) => (p.calidad === 0.92 ? OBJETIVO_BYTES + 1 : 4_000_000));
+      expect(((await prepararFotoDelTicket(blob(10), TOPE, unoMas.h)) as Blob).size).toBe(4_000_000);
+      expect(unoMas.pasos.map((p) => p.calidad)).toEqual([0.92, 0.85]);
+    });
+
+    it('🔴 si nada pesa ≤ 5.000.000 pero entra en el tope, va el mejor que entra: el de más píxeles y calidad', async () => {
+      const pesos: Record<number, number> = { 0.92: mib(9), 0.85: mib(7), 0.75: mib(6) };
+      const { h, pasos } = falsas(4096, 3072, (p) => pesos[p.calidad] ?? 1);
+      const foto = await prepararFotoDelTicket(blob(1000), TOPE, h);
+      expect((foto as Blob).size).toBe(mib(7));
+      // Recorrió la escalera entera buscando el objetivo, y se quedó con el primero en el tope.
+      expect(pasos).toHaveLength(9);
+      expect(pasos[1]).toEqual({ ancho: 4096, alto: 3072, calidad: 0.85 });
+    });
+
+    it('nunca baja de 0,75: el piso de calidad', () => {
+      expect(Math.min(...escalera(8160, 6120).map((p) => p.calidad))).toBe(0.75);
+    });
   });
 
   it('justo 8 MiB entra; un byte más no', async () => {
@@ -163,23 +200,22 @@ describe('D212 · prepararFotoDelTicket', () => {
     expect(pasos).toEqual([{ ancho: 3024, alto: 4032, calidad: 0.92 }]);
   });
 
-  describe('respaldo, como antes de D212', () => {
-    it('🔴 sin decodificar (HEIC fuera de Safari, archivo dañado): el original si entra en el tope', async () => {
+  describe('AF-D212-SEGUIMIENTO · nada sin sanear: sin JPEG preparado, «sin_preparar»', () => {
+    it('🔴 sin decodificar (HEIC fuera de Safari, archivo dañado): no se devuelve el original', async () => {
       const heic = blob(2 * MiB, 'image/heic');
       const { h, pasos } = falsas(1, 1, () => 1, { decodifica: false });
-      expect(await prepararFotoDelTicket(heic, TOPE, h)).toBe(heic);
+      expect(await prepararFotoDelTicket(heic, TOPE, h)).toBe('sin_preparar');
       expect(pasos).toEqual([]);
     });
 
     it('si decodificar tira, igual', async () => {
-      const original = blob(1000);
       const { h } = falsas(1, 1, () => 1, { decodifica: 'tira' });
-      expect(await prepararFotoDelTicket(original, TOPE, h)).toBe(original);
+      expect(await prepararFotoDelTicket(blob(1000), TOPE, h)).toBe('sin_preparar');
     });
 
-    it('sin decodificar y más grande que el tope: «muy_grande»', async () => {
+    it('sin decodificar, el tamaño del original no importa: tampoco es «muy_grande»', async () => {
       const { h } = falsas(1, 1, () => 1, { decodifica: false });
-      expect(await prepararFotoDelTicket(blob(TOPE + 1), TOPE, h)).toBe('muy_grande');
+      expect(await prepararFotoDelTicket(blob(TOPE + 1), TOPE, h)).toBe('sin_preparar');
     });
 
     it('🔴 Safari sin lienzo de 4096²: baja al lado siguiente', async () => {
@@ -189,18 +225,16 @@ describe('D212 · prepararFotoDelTicket', () => {
       expect(pasos.map((p) => p.ancho)).toEqual([4096, 4096, 4096, 3277]);
     });
 
-    it('🔴 sin ningún lienzo: el original si entra, y se sueltan foto y lienzo', async () => {
-      const original = blob(2.7 * MiB);
+    it('🔴 sin ningún lienzo: «sin_preparar», y se sueltan foto y lienzo', async () => {
       const { h, pasos, registro } = falsas(4032, 3024, () => null);
-      expect(await prepararFotoDelTicket(original, TOPE, h)).toBe(original);
+      expect(await prepararFotoDelTicket(blob(2.7 * MiB), TOPE, h)).toBe('sin_preparar');
       expect(pasos).toHaveLength(9);
       expect(registro).toEqual({ soltada: 1, terminada: 1 });
     });
 
     it('un JPEG vacío cuenta como lienzo fallido', async () => {
-      const original = blob(1000);
       const { h } = falsas(4032, 3024, () => 0);
-      expect(await prepararFotoDelTicket(original, TOPE, h)).toBe(original);
+      expect(await prepararFotoDelTicket(blob(1000), TOPE, h)).toBe('sin_preparar');
     });
 
     it('si codificar tira, sigue con el paso siguiente y suelta todo', async () => {

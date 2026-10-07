@@ -20,7 +20,7 @@ async function acreditarCamara(page: Page): Promise<void> {
     page.locator('.app').boundingBox(),
     page.locator('.screen.camara').boundingBox(),
     disparador.boundingBox(),
-    page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
+    page.getByRole('button', { name: 'Elegir de la galería o Drive', exact: true }).boundingBox(),
   ]);
   expect(app?.width).toBe(390);
   expect(app?.height).toBe(844);
