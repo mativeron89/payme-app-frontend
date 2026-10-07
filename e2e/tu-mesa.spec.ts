@@ -268,6 +268,10 @@ test.describe('D223 · «Tu mesa» del titular', () => {
   test('🔴 T19 · las tres tarjetas se abren y cierran con su estado accesible', async ({ page }) => {
     await costura(page, { solicitudes: 1 });
     await tuMesa(page);
+    // Las solicitudes YA cargadas: con ellas quiénes pasa a cerrado (2.10), y
+    // leer el estado antes era leer el de antes de saberlo (CI local de ffe0af5).
+    await expect(cabecera(solicitudes(page))).toContainText('1 pendiente');
+    await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
     for (const region of [quienes(page), solicitudes(page), consumos(page)]) {
       const c = cabecera(region);
       const antes = await c.getAttribute('aria-expanded');
