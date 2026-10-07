@@ -2349,9 +2349,12 @@ html.app-de-inicio-ios .app {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* Base 0, no `auto`: el hueco de la foto toma lo que dejan la cabecera, el panel
+   de avisos y los controles, y la foto se achica. Con `auto` la foto pedía su
+   alto natural y el aviso quedaba cortado (AF-NOCHE-COMANDA, a 375×667). */
 .camara-foto-slot {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   align-items: center;

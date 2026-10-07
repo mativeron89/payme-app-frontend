@@ -11,6 +11,44 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.220.0 — Aviso propio cuando la foto es una comanda sin precios (2026-10-07)
+
+Orden AF-NOCHE-COMANDA-20261007 (sha256 efb7a1d9…), decisión D212. Plan aprobado (648da893…). Base `46a46b2`
+(0.219.0). Contrato del dueño: App Backend 2.161.0, `5170a45`, sección `warnings_v2` de `ocr-merchant-v2.json`.
+
+- **El pedido negocia `warnings_version=2`** (string exacto, una sola vez), junto a `totals_version=1`
+  (`src/api/http.ts`).
+- **El decoder acepta `no_prices_found` sólo en v2**, con la regla del dueño: siempre junto a `no_items_found` y con
+  cero ítems; si no, se rechaza la respuesta entera. En v1 sigue siendo un warning desconocido y se rechaza, como
+  cualquier otro (`OCR_WARNINGS_V2`).
+- **`decideOcrScan` → `no_prices`.** Con cero ítems: el proveedor caído sigue ganando; después la comanda sin precios;
+  si no, «sin ítems» como antes.
+- **El aviso** (texto aprobado por el Bibliotecario, en tú y sin culpar a nadie), un `state-warn`:
+  - título «Parece una comanda sin precios»;
+  - texto «Para dividir la cuenta necesitamos el ticket con los importes. Sácale una foto a ese ticket o elígelo de
+    la galería.»;
+  - sólo dos salidas, sin «Cargarlo a mano» (D212): «Sacar otra foto» (la cámara nativa en el mismo toque) y
+    «Elegir de la galería o Drive» (el selector sin `capture`);
+  - en inglés: «This looks like a kitchen order with no prices» y «To split the bill we need the ticket with the
+    amounts. Take a photo of that ticket or choose it from your gallery.».
+  - Los otros avisos sin ítems quedan como antes, con «Cargarlo a mano».
+- **«Escanea el ticket» deja lugar a los avisos:** el hueco de la foto pasa a `flex: 1 1 0`. Con `auto` la foto pedía
+  su alto natural y, a 375×667, este aviso quedaba con los botones cortados (se alcanzaban sólo con scroll). Ahora la
+  foto se achica y el aviso se ve entero. Vale para todos los avisos de la pantalla.
+- **El mock** no emite `no_prices_found` por defecto (como el del dueño); suma el seam `no_prices`.
+- **Espejo** contra App Backend `5170a45` (inventario sobre `a0a6ca8`): cambian 3 de 121 archivos,
+  `contract/ocr-merchant-v2.json`, `routes/ocr.js` y `services/ocrResponseContract.js`. Integridad y paridad 121/121.
+- **Pruebas:**
+  - unitarias: `ocrNoPrices.test` (acepta en v2; rechaza con ítems, sin `no_items_found` y en v1; el mock por
+    defecto y el seam), `ocrScanView.test` (+2) y la URL con `warnings_version=2` una sola vez;
+  - e2e `comanda-sin-precios.spec.ts`: el aviso con su texto exacto y sólo las dos salidas, cada una con su `capture`
+    correcto, el aviso de siempre como control, y el aviso entero a 375×667 sin desplazar el panel;
+  - rojo sobre `46a46b2`: 4 unitarios y 3 e2e (el control pasa, como corresponde); mutantes 8 de 8 cazados, incluido
+    volver el hueco de la foto a `auto` (el panel vuelve a necesitar scroll: 191 px de contenido en 149).
+- **Lo que prueba Mati en el iPhone (D63):** sacarle foto a una comanda de cocina sin precios y ver el aviso; «Sacar
+  otra foto» abre la Cámara y «Elegir de la galería o Drive», Fototeca/Archivos/Drive; el ticket con importes se lee
+  como siempre.
+
 ## 0.219.0 — Ninguna foto sin sanear, objetivo de 5 MB, subtotal e IVA del ticket y la galería con nombre (2026-10-07)
 
 Orden AF-D212-SEGUIMIENTO-20261007 (sha256 f6987fd3…) y su adenda 1 (2c2e3e3d…); decisiones D212, D209, D214 y

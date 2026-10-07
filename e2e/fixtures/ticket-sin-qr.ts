@@ -5,7 +5,7 @@ export async function configurarTicketSinQr(
   options: {
     lostResponse?: boolean;
     ocr?: 'malformed' | 'no_items' | 'no_merchant' | 'budget_exhausted' | 'budget_unavailable' | 'too_small'
-      | 'iva_incluido' | 'iva_agregado';
+      | 'iva_incluido' | 'iva_agregado' | 'no_prices';
   } = {},
 ): Promise<void> {
   await page.addInitScript((config) => {

@@ -204,6 +204,8 @@ router.post('/', (req, res, next) => {
   // v2.156.0 · AB-D209 · subtotal e IVA (`ticket_totals`), con la misma negociación exacta: sólo v2 y
   // `totals_version=1` literal. Ausente, distinto o repetido conserva el contrato de hoy.
   req.ocrTotalsVersion = req.ocrContractVersion === 2 && req.query.totals_version === '1' ? 1 : undefined;
+  // v2.161.0 · AB-NOCHE D · códigos de aviso nuevos (`no_prices_found`), con la misma negociación exacta.
+  req.ocrWarningsVersion = req.ocrContractVersion === 2 && req.query.warnings_version === '2' ? 2 : undefined;
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -273,6 +275,7 @@ router.post('/', (req, res, next) => {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
         const respuesta = respuestaOcr(result, {
           mock: false, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
+          warningsVersion: req.ocrWarningsVersion,
         });
         // El recibo lleva los totales del resultado del servidor aunque el cliente no los negocie.
         return res.json(req.ocrReceiptRequested
@@ -308,7 +311,8 @@ router.post('/', (req, res, next) => {
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-    }, { mock: true, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion });
+    }, { mock: true, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
+      warningsVersion: req.ocrWarningsVersion });
     res.json(req.ocrReceiptRequested
       ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {

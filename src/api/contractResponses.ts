@@ -307,6 +307,12 @@ const OCR_CATEGORIES: readonly OcrCategory[] = ['italian', 'japanese', 'mexican'
 const OCR_WARNINGS: readonly OcrWarning[] = [
   'no_items_found', 'low_confidence_items', 'total_mismatch', 'provider_error',
 ];
+/**
+ * AF-NOCHE-COMANDA · `warnings_v2` del dueño (2.161.0): `no_prices_found` sólo
+ * existe en v2. En v1 sigue siendo un warning desconocido, y se rechaza como
+ * cualquier otro.
+ */
+const OCR_WARNINGS_V2: readonly OcrWarning[] = [...OCR_WARNINGS, 'no_prices_found'];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
 const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
 const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt', 'ticket_totals'];
@@ -377,7 +383,11 @@ export function ocrResponse(value: unknown): OcrResponse {
       || !safeNonNegative(body.total_cents)
       || (body.total_detected_cents !== undefined && !safeNonNegative(body.total_detected_cents))
       || !Array.isArray(body.warnings)
-      || body.warnings.some((warning) => !OCR_WARNINGS.includes(warning as OcrWarning))
+      || body.warnings.some((warning) => !(version2 ? OCR_WARNINGS_V2 : OCR_WARNINGS).includes(warning as OcrWarning))
+      // La regla del dueño: `no_prices_found` siempre con `no_items_found` y
+      // con cero ítems. Si no, es un contrato roto.
+      || (body.warnings.includes('no_prices_found')
+        && (!body.warnings.includes('no_items_found') || body.items.length !== 0))
       || new Set(body.warnings).size !== body.warnings.length
       || typeof body.mock !== 'boolean') {
     throw new ContractResponseError('ocr');

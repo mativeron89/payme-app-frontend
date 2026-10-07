@@ -37,6 +37,21 @@ describe('decisión visible del OCR', () => {
       .toMatchObject({ kind: 'ticket', hasLowConfidence: true });
   });
 
+  it('AF-NOCHE-COMANDA · una comanda sin precios es su propio caso, no «sin ítems»', () => {
+    expect(decideOcrScan(response({
+      items: [], total_cents: 0, warnings: ['no_items_found', 'no_prices_found'],
+    }))).toEqual({ kind: 'no_prices' });
+    // Sin `no_prices_found`, el caso de siempre.
+    expect(decideOcrScan(response({ items: [], total_cents: 0, warnings: ['no_items_found'] })))
+      .toEqual({ kind: 'no_items' });
+  });
+
+  it('AF-NOCHE-COMANDA · el proveedor caído sigue ganando', () => {
+    expect(decideOcrScan(response({
+      items: [], total_cents: 0, warnings: ['no_items_found', 'no_prices_found', 'provider_error'],
+    }))).toEqual({ kind: 'provider_unavailable' });
+  });
+
   it('no confunde provider_error 200 con un ticket vacío', () => {
     expect(decideOcrScan(response({
       items: [], total_cents: 0, warnings: ['provider_error'],

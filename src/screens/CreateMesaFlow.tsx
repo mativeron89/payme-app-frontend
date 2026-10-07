@@ -207,7 +207,7 @@ export function CreateMesaFlow() {
    * colapsarlos vuelve falsa al menos una explicación.
    */
   const [scanIssue, setScanIssue] = useState<
-    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large' | 'too_small'
+    'ocr' | 'no_items' | 'no_prices' | 'provider' | 'image_type' | 'too_large' | 'too_small'
     | 'budget_exhausted' | 'budget_unavailable' | null
   >(null);
   /**
@@ -1026,10 +1026,10 @@ export function CreateMesaFlow() {
         setScanIssue('provider');
         return;
       }
-      if (decision.kind === 'no_items') {
+      if (decision.kind === 'no_items' || decision.kind === 'no_prices') {
         setScannedTotalCents(null);
         setScannedTotals(null);
-        setScanIssue('no_items');
+        setScanIssue(decision.kind);
         return;
       }
       setEditItems(
@@ -1724,6 +1724,31 @@ export function CreateMesaFlow() {
                   </button>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
                     {t('Cargarlo a mano')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* AF-NOCHE-COMANDA · App Backend 2.161.0 (`no_prices_found`): la foto
+                se leyó, pero es una comanda de cocina, sin importes. No es un error
+                de la persona ni de la lectura: hace falta el ticket con precios.
+                Sólo las dos salidas a otra foto (D212: sin manualidades). */}
+            {scanIssue === 'no_prices' && (
+              <div className="state-warn" role="alert">
+                <div className="state-error-row">
+                  <Icon name="receipt" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('Parece una comanda sin precios')}</div>
+                    <p className="state-error-body">
+                      {t('Para dividir la cuenta necesitamos el ticket con los importes. Sácale una foto a ese ticket o elígelo de la galería.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                    {t('Sacar otra foto')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()}>
+                    {t('Elegir de la galería o Drive')}
                   </button>
                 </div>
               </div>

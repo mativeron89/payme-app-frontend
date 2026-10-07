@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "1a30cb615287af5b7ce54e2da312645206f7e57f",
+  "commit": "a0a6ca8601e790f14a61902c7aaaf8e444e9626d",
   "total": 121,
   "archivos": [
     {
@@ -37,8 +37,8 @@
     {
       "origen": "contract/ocr-merchant-v2.json",
       "destino": "contract/ocr-merchant-v2.json",
-      "sha256": "e58a1be01af385fcdf34d8410df496a6274f10de4c2e20524d82332ed5317ae6",
-      "bytes": 4623
+      "sha256": "00fab40db24d4294ba312319510090336892f62212b4f71d6b1a3392129677a6",
+      "bytes": 5468
     },
     {
       "origen": "contract/restaurant-resolution-v1.json",
@@ -427,8 +427,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "d0609c1dcf4489a17709118c9ad87ed53fa6d6474efc981f5f87fc8c6a952469",
-      "bytes": 15421
+      "sha256": "47942ee9e03b72ae10d2d340ccbdb182ca3acdd1a145d91cc0027aadff386c19",
+      "bytes": 15741
     },
     {
       "origen": "routes/payment-methods.js",
@@ -619,8 +619,8 @@
     {
       "origen": "services/ocrResponseContract.js",
       "destino": "services/ocrResponseContract.js",
-      "sha256": "d3e91812929c0c9c8db23fd532f532fd425a9f8c18a82bb88ed347648b12bf6c",
-      "bytes": 6960
+      "sha256": "d57e8f4889be17f7db8069372c7eed3f74627415322a46c1ac52662a71205082",
+      "bytes": 7833
     },
     {
       "origen": "services/paymentAttemptReconciler.js",

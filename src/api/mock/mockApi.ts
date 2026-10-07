@@ -2404,6 +2404,18 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       mock: true,
     } as unknown as OcrResponse);
   }
+  // AF-NOCHE-COMANDA · seam de prueba: el mock del dueño nunca emite
+  // `no_prices_found`; acá se ejercita la forma de 2.161.0 (siempre junto a
+  // `no_items_found` y con cero ítems).
+  if (mode === 'no_prices') {
+    return delay({
+      contract_version: 2,
+      items: [],
+      total_cents: 0,
+      warnings: ['no_items_found', 'no_prices_found'],
+      mock: true,
+    });
+  }
   if (mode === 'no_items') {
     return delay({
       contract_version: 2,

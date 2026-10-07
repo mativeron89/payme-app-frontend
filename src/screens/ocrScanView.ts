@@ -2,6 +2,8 @@ import type { OcrResponse } from '../api/types';
 
 export type OcrScanDecision =
   | { kind: 'provider_unavailable' }
+  /** AF-NOCHE-COMANDA · la foto es una comanda sin precios (`no_prices_found`). */
+  | { kind: 'no_prices' }
   | { kind: 'no_items' }
   | {
       kind: 'ticket';
@@ -27,6 +29,10 @@ export function decideOcrScan(response: OcrResponse): OcrScanDecision {
   }
   if (response.warnings.includes('provider_error')) {
     return { kind: 'provider_unavailable' };
+  }
+  // El decoder ya exige que venga con `no_items_found` y cero ítems.
+  if (response.warnings.includes('no_prices_found')) {
+    return { kind: 'no_prices' };
   }
   return { kind: 'no_items' };
 }

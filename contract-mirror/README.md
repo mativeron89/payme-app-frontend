@@ -6,6 +6,25 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Aviso de comanda sin precios (`warnings_v2`) · App Backend v2.161.0 · 2026-10-07
+
+Orden `AF-NOCHE-COMANDA-20261007`, punto 5. Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`a0a6ca8601e790f14a61902c7aaaf8e444e9626d`** (v2.161.0: `no_prices_found`, negociado con
+  `warnings_version=2`).
+- Inventario: el de `main` del owner en **`5170a45389065ff46eaa4875498b7f0e1145be42`**
+  (`contract/mirror-inventory.json`, sha256
+  `23ccc99688f2425df3a28f889b96640d21c8a0f6c8e11261f25234c516429e0b`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `a0a6ca8`; entre `a0a6ca8` y `5170a45` sólo cambia el
+  inventario (`git diff --stat`).
+- **121 archivos**, sin altas ni bajas. Cambian tres: `contract/ocr-merchant-v2.json`, `routes/ocr.js` y
+  `services/ocrResponseContract.js`, copiados con `git show a0a6ca8:<origen>` y con el sha256 que declara el
+  inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni
+  escrituras en ese repo.
+- `--paridad`: espejo = inventario = fuente en `a0a6ca8`, 121/121.
+
 ### Subtotal e IVA del ticket (`ticket_totals`) · App Backend v2.157.0 · 2026-10-07
 
 Orden `AF-D212-SEGUIMIENTO-20261007` (D212, D209, D214, punto 4), con la enmienda de scope del Bibliotecario

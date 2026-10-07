@@ -35,6 +35,14 @@ const OCR_WARNING_CODES = Object.freeze([
   'provider_error',
 ]);
 
+/**
+ * v2.161.0 · AB-NOCHE D: la extensión negociada (`warnings_version=2`). La lista base de arriba NO cambia:
+ * el decoder del AF servido rechaza un código que no conoce, y la base está en su espejo.
+ *   · `no_prices_found`: la foto tiene renglones de texto y ningún precio (una comanda). Siempre junto a
+ *     `no_items_found` y con cero ítems.
+ */
+const OCR_WARNING_CODES_V2 = Object.freeze([...OCR_WARNING_CODES, 'no_prices_found']);
+
 const OCR_ERROR_STATUS = Object.freeze({
   invalid_ocr_contract_version: 400,
   no_image: 400,
@@ -91,7 +99,7 @@ function assertItem(item) {
  * cosa. `confidence`/`low_confidence` son opcionales porque el mock histórico
  * no los inventa; Textract sí los entrega por ítem.
  */
-function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion }) {
+function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warningsVersion }) {
   if (!payload || !Array.isArray(payload.items)) throw new Error('ocr_response_items_invalid');
   payload.items.forEach(assertItem);
   if (!enteroSeguroNoNegativo(payload.total_cents)) {
@@ -102,10 +110,15 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion }) {
     throw new Error('ocr_response_detected_total_invalid');
   }
   if (!Array.isArray(payload.warnings)
-      || payload.warnings.some((warning) => !OCR_WARNING_CODES.includes(warning))
-      || new Set(payload.warnings).size !== payload.warnings.length) {
+      || payload.warnings.some((warning) => !OCR_WARNING_CODES_V2.includes(warning))
+      || new Set(payload.warnings).size !== payload.warnings.length
+      || (payload.warnings.includes('no_prices_found')
+        && (!payload.warnings.includes('no_items_found') || payload.items.length > 0))) {
     throw new Error('ocr_response_warnings_invalid');
   }
+  // Sin la negociación exacta (v2 + warnings_version=2) la lista sale con los códigos de siempre.
+  const warnings = contractVersion === 2 && warningsVersion === 2
+    ? payload.warnings : payload.warnings.filter((w) => OCR_WARNING_CODES.includes(w));
   let merchant;
   if (contractVersion === 2 && payload.merchant !== undefined) {
     const input = payload.merchant;
@@ -132,7 +145,7 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion }) {
       ? { total_detected_cents: payload.total_detected_cents }
       : {}),
     ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
-    warnings: payload.warnings,
+    warnings,
     mock: !!mock,
   };
 }
@@ -157,6 +170,7 @@ module.exports = {
   normalizeRfc,
   totalesDelTicket,
   OCR_WARNING_CODES,
+  OCR_WARNING_CODES_V2,
   OCR_ERROR_STATUS,
   OCR_ITEM_FIELDS,
   OCR_CATEGORIES,

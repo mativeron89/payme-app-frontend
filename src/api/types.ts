@@ -1000,7 +1000,14 @@ export type OcrWarning =
   | 'no_items_found'
   | 'low_confidence_items'
   | 'total_mismatch'
-  | 'provider_error';
+  | 'provider_error'
+  /**
+   * AF-NOCHE-COMANDA · App Backend 2.161.0 (`warnings_v2` de
+   * `ocr-merchant-v2.json`): la foto tiene renglones y ningún precio, una
+   * comanda de cocina. Sólo con `contract_version=2` y `warnings_version=2`
+   * negociados; siempre junto a `no_items_found` y con cero ítems.
+   */
+  | 'no_prices_found';
 
 export interface OcrMerchant {
   name?: string;

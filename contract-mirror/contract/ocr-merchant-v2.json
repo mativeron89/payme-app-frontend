@@ -28,6 +28,14 @@
   "error": {
     "invalid_ocr_contract_version": 400
   },
+  "warnings_v2": {
+    "since": "2.161.0",
+    "order": "AB-NOCHE-D-20261007",
+    "codes": ["no_items_found", "low_confidence_items", "total_mismatch", "provider_error", "no_prices_found"],
+    "no_prices_found": "The photo has text rows and no price at all (a kitchen ticket without amounts). Always together with no_items_found and with items=[]. Never for no rows, all rows discarded or several documents.",
+    "negotiation": "HTTP requires contract_version=2 AND warnings_version=2 (exact scalar string). Missing, unknown or duplicate warnings_version returns the base warning list unchanged; v1 and mock never emit no_prices_found.",
+    "client": "App Frontend: add warnings_version=2 to the scan request, add no_prices_found to OCR_WARNINGS, and tell the person to photograph the ticket with prices instead of the kitchen ticket."
+  },
   "ticket_totals": {
     "since": "2.156.0",
     "decision": "209",

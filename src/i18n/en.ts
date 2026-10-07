@@ -1119,6 +1119,9 @@ export const EN: Record<string, string> = {
   "No se pudo copiar. Haz una captura de pantalla.": "Couldn't copy. Take a screenshot.",
   // AF-D212-SEGUIMIENTO · D214 · la galería, con un botón que dice qué abre.
   "Elegir de la galería o Drive": "Choose from gallery or Drive",
+  // AF-NOCHE-COMANDA · la foto es una comanda sin precios (`no_prices_found`).
+  "Parece una comanda sin precios": "This looks like a kitchen order with no prices",
+  "Para dividir la cuenta necesitamos el ticket con los importes. Sácale una foto a ese ticket o elígelo de la galería.": "To split the bill we need the ticket with the amounts. Take a photo of that ticket or choose it from your gallery.",
   // AF-D212-SEGUIMIENTO · D209 · D215 · subtotal e IVA del ticket.
   "Subtotal": "Subtotal",
   "IVA": "VAT",
