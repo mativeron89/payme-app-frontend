@@ -2569,17 +2569,23 @@ html.app-de-inicio-ios .app {
   transform: translate(-50%, -50%) scale(-1, -1);
 }
 
-/* Los bordes: una franja de 44 px a lo largo del lado, entre las esquinas, con
-   la barrita en el medio. */
+/* Los bordes: una franja de 44 px a lo largo del lado, entre las esquinas
+   (centrada, de `lado − 44` y nunca menos de 44), con la barrita en el medio. */
 .recorte-arriba,
 .recorte-abajo {
   height: 44px;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
 }
 .recorte-izquierda,
 .recorte-derecha {
   width: 44px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
+}
+/* F2 · con el mínimo de 88 los bordes y las esquinas no se pisan; si la foto en
+   pantalla mide menos de 88 de un lado, el borde (44 de largo) se monta sobre
+   las esquinas y queda arriba: es el único que recorta en ese sentido. */
+.recorte-borde {
+  z-index: 2;
 }
 .recorte-arriba::before,
 .recorte-abajo::before {

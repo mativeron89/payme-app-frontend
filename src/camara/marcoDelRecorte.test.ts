@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asegurarMinimo,
   BORDES,
   ESQUINAS,
   MARCO_ENTERO,
@@ -85,14 +86,18 @@ describe('D222 · moverAsa: la esquina mueve dos lados; el borde, uno', () => {
   });
 });
 
-describe('D222 · minimoProporcional: 64 px de pantalla en proporciones', () => {
-  it('64 px de una foto que se ve de 320 px son 0,2', () => {
-    expect(minimoProporcional(320)).toBeCloseTo(0.2, 10);
-    expect(MINIMO_PX).toBe(64);
+describe('D222 · minimoProporcional: 88 px de pantalla en proporciones', () => {
+  it('🔴 F2 · el mínimo es 88 px: en un lado entran dos esquinas (22 adentro cada una) y un borde de 44', () => {
+    expect(MINIMO_PX).toBe(88);
+    expect(MINIMO_PX - 2 * 22).toBe(44);
+  });
+
+  it('88 px de una foto que se ve de 352 px son 0,25', () => {
+    expect(minimoProporcional(352)).toBeCloseTo(0.25, 10);
   });
 
   it('si la foto se ve más chica que el mínimo, el mínimo es la foto entera', () => {
-    expect(minimoProporcional(40)).toBe(1);
+    expect(minimoProporcional(80)).toBe(1);
     expect(minimoProporcional(0)).toBe(1);
     expect(minimoProporcional(Number.NaN)).toBe(1);
   });
@@ -161,5 +166,46 @@ describe('D222 · recortePixeles: el marco en píxeles de la foto ya orientada',
 
   it('medidas inválidas: `null`', () => {
     expect(recortePixeles({ x0: 0.1, y0: 0.1, x1: 0.5, y1: 0.5 }, 0, 100)).toBeNull();
+  });
+});
+
+describe('AF-UNIRSE-CODIGO §0 · F1 · asegurarMinimo: el marco vuelve al mínimo si la pantalla cambia', () => {
+  it('🔴 la reproducción de Codex: 0,8–1 era el mínimo a 320 px; a 160 px agranda hacia adentro, contra el borde', () => {
+    const marco = { x0: 0.8, y0: 0, x1: 1, y1: 1 };
+    const m = asegurarMinimo(marco, MINIMO_PX / 160, MINIMO_PX / 400);
+    expect(m.x1).toBe(1);
+    expect(m.x1 - m.x0).toBeCloseTo(MINIMO_PX / 160, 10);
+    expect(m.y0).toBe(0);
+    expect(m.y1).toBe(1);
+  });
+
+  it('agranda desde el centro si entra', () => {
+    const m = asegurarMinimo({ x0: 0.45, y0: 0.2, x1: 0.55, y1: 0.8 }, 0.3, 0.1);
+    expect(m.x0).toBeCloseTo(0.35, 10);
+    expect(m.x1).toBeCloseTo(0.65, 10);
+    expect(m.y0).toBe(0.2);
+    expect(m.y1).toBe(0.8);
+  });
+
+  it('pegado al borde de arriba, crece hacia abajo sin salir de la foto', () => {
+    const m = asegurarMinimo({ x0: 0, y0: 0, x1: 1, y1: 0.05 }, 0.1, 0.2);
+    expect(m.y0).toBe(0);
+    expect(m.y1).toBeCloseTo(0.2, 10);
+  });
+
+  it('🔴 un marco que cumple vuelve IGUAL (el mismo objeto): no se toca', () => {
+    const marco = { x0: 0.1, y0: 0.1, x1: 0.9, y1: 0.9 };
+    expect(asegurarMinimo(marco, MIN_X, MIN_Y)).toBe(marco);
+    expect(asegurarMinimo(MARCO_ENTERO, 1, 1)).toBe(MARCO_ENTERO);
+  });
+
+  it('si la foto mide menos que el mínimo, toma el lado entero', () => {
+    const m = asegurarMinimo({ x0: 0.4, y0: 0.4, x1: 0.6, y1: 0.6 }, 1, 1);
+    expect(m).toEqual(MARCO_ENTERO);
+  });
+
+  it('un mínimo que no es un número cuenta como el lado entero', () => {
+    const m = asegurarMinimo({ x0: 0.4, y0: 0, x1: 0.6, y1: 1 }, Number.NaN, 0.1);
+    expect([m.x0, m.x1]).toEqual([0, 1]);
   });
 });

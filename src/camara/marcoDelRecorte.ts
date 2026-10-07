@@ -11,7 +11,8 @@
  * - **Se mueve desde las cuatro esquinas y los cuatro bordes.** La esquina
  *   mueve dos lados; el borde, uno. Arrastrar adentro no mueve el marco entero.
  * - **Nunca sale de la foto ni baja del mínimo**, que llega en proporciones
- *   (64 px de pantalla divididos por lo que mide la foto en pantalla).
+ *   (88 px de pantalla divididos por lo que mide la foto en pantalla). Si la
+ *   pantalla cambia, `asegurarMinimo` lo vuelve a llevar al mínimo.
  * - **Sin tocar, o vuelto a los bordes, es la foto entera**: `recortePixeles`
  *   devuelve `null` y se manda exactamente lo de antes de D222.
  *
@@ -28,8 +29,13 @@ export interface Marco {
 
 export const MARCO_ENTERO: Marco = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
-/** El lado mínimo del marco en pantalla. */
-export const MINIMO_PX = 64;
+/**
+ * El lado mínimo del marco en pantalla. AF-UNIRSE-CODIGO §0 (F2 de la auditoría
+ * de Codex): 88 y no 64. En un lado entran tres zonas de 44 px —dos esquinas,
+ * que adentro ocupan 22 cada una, y el borde— y el borde queda de `lado − 44`:
+ * con 64 medía 20×44. Con 88, las ocho zonas miden 44×44 sin pisarse.
+ */
+export const MINIMO_PX = 88;
 
 /** Lo que mueve una flecha del teclado: un 2% de la foto. */
 export const PASO_TECLADO = 0.02;
@@ -83,6 +89,28 @@ export function moverAsa(marco: Marco, asa: Asa, dx: number, dy: number, minX: n
   if (y === 'y0') m.y0 = entre(marco.y0 + ddy, 0, Math.max(0, marco.y1 - my));
   if (y === 'y1') m.y1 = entre(marco.y1 + ddy, Math.min(1, marco.y0 + my), 1);
   return m;
+}
+
+/**
+ * AF-UNIRSE-CODIGO §0 (F1 de la auditoría de Codex): el marco con cada lado al
+ * menos en el mínimo. El mínimo se aplicaba sólo al mover un asa: si la pantalla
+ * se achicaba (al rotar el teléfono), un marco que estaba en el mínimo quedaba
+ * más chico y no se reparaba. Agranda SÓLO el lado que no llega, desde su
+ * centro, y lo corre para que no salga de la foto. Un marco que cumple vuelve
+ * igual (el mismo objeto), así quien lo llama sabe que no cambió nada.
+ */
+export function asegurarMinimo(marco: Marco, minX: number, minY: number): Marco {
+  const ajustar = (a: number, b: number, min: number): [number, number] => {
+    const m = entre(Number.isFinite(min) ? min : 1, 0, 1);
+    if (b - a >= m) return [a, b];
+    const centro = (a + b) / 2;
+    const desde = entre(centro - m / 2, 0, 1 - m);
+    return [desde, desde + m];
+  };
+  const [x0, x1] = ajustar(marco.x0, marco.x1, minX);
+  const [y0, y1] = ajustar(marco.y0, marco.y1, minY);
+  if (x0 === marco.x0 && x1 === marco.x1 && y0 === marco.y0 && y1 === marco.y1) return marco;
+  return { x0, y0, x1, y1 };
 }
 
 /**

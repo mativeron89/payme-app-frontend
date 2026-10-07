@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import {
+  asegurarMinimo,
   BORDES,
   ESQUINAS,
   minimoProporcional,
@@ -104,6 +105,19 @@ export function RecorteDelTicket({ foto, ancho, alto, marco, onMarco, disabled }
   const minX = minimoProporcional(tamano?.ancho ?? 0);
   const minY = minimoProporcional(tamano?.alto ?? 0);
 
+  // AF-UNIRSE-CODIGO §0 (F1): si la foto se ve más chica (el teléfono rotó, la
+  // barra de Safari), un marco que estaba en el mínimo queda debajo. Se lleva
+  // otra vez al mínimo; un marco que cumple no se toca.
+  const marcoRef = useRef(marco);
+  marcoRef.current = marco;
+  const onMarcoRef = useRef(onMarco);
+  onMarcoRef.current = onMarco;
+  useEffect(() => {
+    if (!tamano) return;
+    const asegurado = asegurarMinimo(marcoRef.current, minX, minY);
+    if (asegurado !== marcoRef.current) onMarcoRef.current(asegurado);
+  }, [tamano, minX, minY]);
+
   const empezar = (asa: Asa) => (e: PointerEvent<HTMLButtonElement>) => {
     if (disabled || !tamano) return;
     // Un dedo por vez: el segundo, durante un arrastre, no hace nada.
@@ -114,12 +128,15 @@ export function RecorteDelTicket({ foto, ancho, alto, marco, onMarco, disabled }
     } catch {
       // Sin captura, el arrastre igual sigue mientras el dedo esté encima.
     }
+    // F1 · el arrastre arranca desde un marco que cumple el mínimo.
+    const inicio = asegurarMinimo(marco, minX, minY);
+    if (inicio !== marco) onMarco(inicio);
     arrastre.current = {
       asa,
       pointerId: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      marco,
+      marco: inicio,
       anchoPx: tamano.ancho,
       altoPx: tamano.alto,
     };
@@ -169,18 +186,21 @@ export function RecorteDelTicket({ foto, ancho, alto, marco, onMarco, disabled }
       case 'arriba-derecha': return { left: pct(marco.x1), top: pct(marco.y0) };
       case 'abajo-izquierda': return { left: pct(marco.x0), top: pct(marco.y1) };
       case 'abajo-derecha': return { left: pct(marco.x1), top: pct(marco.y1) };
-      // Los bordes van entre las zonas de las esquinas, a lo largo del lado.
+      // Los bordes van centrados en su lado, entre las zonas de las esquinas:
+      // `lado − 44`, que con el mínimo de 88 son 44. Nunca menos de 44 (F2): si
+      // la foto en pantalla mide menos de 88 de ese lado, el borde se monta
+      // sobre las esquinas y gana él (`z-index`), que es el que recorta.
       case 'arriba':
       case 'abajo':
         return {
-          left: `calc(${pct(marco.x0)} + 22px)`,
-          width: `max(0px, calc(${pct(marco.x1 - marco.x0)} - 44px))`,
+          left: pct((marco.x0 + marco.x1) / 2),
+          width: `max(44px, calc(${pct(marco.x1 - marco.x0)} - 44px))`,
           top: pct(asa === 'arriba' ? marco.y0 : marco.y1),
         };
       default:
         return {
-          top: `calc(${pct(marco.y0)} + 22px)`,
-          height: `max(0px, calc(${pct(marco.y1 - marco.y0)} - 44px))`,
+          top: pct((marco.y0 + marco.y1) / 2),
+          height: `max(44px, calc(${pct(marco.y1 - marco.y0)} - 44px))`,
           left: pct(asa === 'izquierda' ? marco.x0 : marco.x1),
         };
     }

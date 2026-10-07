@@ -11,6 +11,25 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.222.1 — El marco del recorte: el mínimo se repara solo y los bordes miden 44×44 (2026-10-07)
+
+Orden AF-UNIRSE-CODIGO-20261007 (sha256 354d67d6…), §0, en un commit aparte; plan aprobado (bd75bf3b…), respuesta A = (1).
+Los dos hallazgos bajos de la auditoría independiente de Codex sobre 0.222.0 (`AUDITORIA_RECORTE_FOTO.md`, e5c60c20…).
+
+- **F1 · el mínimo no se reparaba al cambiar el tamaño.** Se aplicaba sólo al mover un asa: si la pantalla se achicaba
+  (al rotar el teléfono), un marco que estaba en el mínimo quedaba más chico. `asegurarMinimo` agranda sólo el lado
+  que no llega, desde su centro y sin salir de la foto, y se aplica cuando cambia la medida y al empezar un arrastre. Un
+  marco que cumple no se toca.
+- **F2 · los bordes medían 20×44 en el mínimo.** En un lado entran dos esquinas (22 px adentro cada una) y el borde: con
+  el mínimo de 64 el borde quedaba de 20. El mínimo pasa a **88 px**, y las ocho zonas miden 44×44 sin pisarse. Si la
+  foto en pantalla mide menos de 88 de un lado, el borde (nunca menos de 44) se monta sobre las esquinas y gana él.
+- **La prueba que no lo cazó:** el e2e de 0.222.0 afirmaba `max(ancho, alto) >= 44`, que aprobaba un borde de 20×44.
+  Ahora mide ancho Y alto de cada zona y que cada una reciba el toque en su centro (`elementFromPoint`), también en el
+  mínimo y después de achicar la pantalla.
+- **Pruebas:** `marcoDelRecorte.test` (+7: el mínimo de 88, la reproducción de Codex, desde el centro, contra el borde,
+  el que cumple no cambia, la foto más chica que el mínimo); e2e `recorte-del-ticket` (10: las zonas enteras, el mínimo
+  de 88 y la pantalla que se achica). El ticket sintético pasa a 420 px de ancho para quedar por encima del mínimo.
+
 ## 0.222.0 — Recortar la foto del ticket a mano y la burbuja «¿Cuántos son en la mesa?» abajo (2026-10-07)
 
 Orden AF-RECORTE-BURBUJA-20261007 (sha256 1ce4562f…); decisión D222 (152f714e…): «Siempre, con el marco abierto

@@ -22,8 +22,12 @@ test.use({ viewport: { width: 375, height: 667 } });
 
 const ANCHO = 1200;
 const ALTO = 1600;
-/** El ticket en la foto, en píxeles: 300×1400 en el medio. */
-const TICKET = { x: 450, y: 100, ancho: 300, alto: 1400 };
+/**
+ * El ticket en la foto, en píxeles: 420×1400 en el medio. A 375×667 se ve de
+ * unos 99 px de ancho: más que el mínimo del marco (88), así se puede ajustar
+ * justo a sus bordes.
+ */
+const TICKET = { x: 390, y: 100, ancho: 420, alto: 1400 };
 
 type Color = [number, number, number];
 
@@ -194,6 +198,25 @@ async function arrastrar(page: Page, nombre: string, x: number, y: number): Prom
   await page.mouse.up();
 }
 
+/**
+ * AF-UNIRSE-CODIGO §0 · F2 · cada zona mide al menos 44×44 (ancho Y alto: con
+ * `max(ancho, alto)` pasaba un borde de 20×44) y es la que recibe un toque en
+ * su centro. Devuelve las medidas para el mensaje de error.
+ */
+async function zonasEnteras(page: Page): Promise<void> {
+  const medidas = await page.evaluate((nombres) => nombres.map((nombre) => {
+    const b = document.querySelector<HTMLButtonElement>(`button[aria-label="${nombre}"]`)!;
+    const r = b.getBoundingClientRect();
+    const tocado = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { nombre, ancho: r.width, alto: r.height, recibe: tocado === b };
+  }), [...NOMBRES]);
+  for (const m of medidas) {
+    expect(m.ancho, JSON.stringify(m)).toBeGreaterThanOrEqual(44);
+    expect(m.alto, JSON.stringify(m)).toBeGreaterThanOrEqual(44);
+    expect(m.recibe, JSON.stringify(m)).toBe(true);
+  }
+}
+
 /** El marco dibujado, en px de la página. */
 async function marcoEnPantalla(page: Page) {
   return (await page.locator('.recorte-marco').boundingBox())!;
@@ -212,17 +235,9 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     expect(Math.abs(m.y - foto.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(m.width - foto.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(m.height - foto.height)).toBeLessThanOrEqual(1);
-    // Las ocho zonas: botones con nombre, de al menos 44 px.
-    for (const nombre of NOMBRES) {
-      const zona = page.getByRole('button', { name: nombre, exact: true });
-      await expect(zona).toBeVisible();
-      const b = (await zona.boundingBox())!;
-      expect(Math.max(b.width, b.height), nombre).toBeGreaterThanOrEqual(44);
-    }
-    for (const nombre of NOMBRES.slice(0, 4)) {
-      const b = (await page.getByRole('button', { name: nombre, exact: true }).boundingBox())!;
-      expect([b.width, b.height], nombre).toEqual([44, 44]);
-    }
+    // Las ocho zonas: botones con nombre, de 44×44 como mínimo en las DOS
+    // medidas, y cada una recibe el toque en su centro (no la pisa otra).
+    await zonasEnteras(page);
     await expect(page.getByRole('img', { name: 'Foto del ticket' })).toBeVisible();
     // «Sacar otra» (vino de la cámara) y «Usar foto», enteros en pantalla; sin
     // el botón redondo ni la galería.
@@ -297,7 +312,7 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     }
   });
 
-  test('🔴 el marco no sale de la foto, y no baja de 64 px de lado', async ({ page }) => {
+  test('🔴 el marco no sale de la foto, y no baja de 88 px de lado, con las ocho zonas enteras', async ({ page }) => {
     await conLaFoto(page, await ticketEnLaMesa(page));
     const foto = await fotoEnPantalla(page);
     // Hacia afuera: queda en el borde.
@@ -308,15 +323,34 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     // La esquina de abajo, hasta pasar la de arriba: se frena en el mínimo.
     await arrastrar(page, 'Esquina de abajo a la derecha', foto.x - 40, foto.y - 40);
     m = await marcoEnPantalla(page);
-    expect(Math.abs(m.width - 64)).toBeLessThanOrEqual(1);
-    expect(Math.abs(m.height - 64)).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.width - 88)).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.height - 88)).toBeLessThanOrEqual(1);
     expect(Math.abs(m.x - foto.x)).toBeLessThanOrEqual(1);
+    // F2 · en el mínimo, las ocho zonas siguen de 44×44 y sin pisarse.
+    await zonasEnteras(page);
     // Lo que se sube es ese cuadrado, en píxeles de la foto.
     await usar(page).click();
     const s = await subida(page);
-    const lado = (64 / foto.width) * ANCHO;
+    const lado = (88 / foto.width) * ANCHO;
     expect(Math.abs(s.ancho - lado), `ancho ${s.ancho} vs ${lado}`).toBeLessThanOrEqual(6);
-    expect(Math.abs(s.alto - (64 / foto.height) * ALTO)).toBeLessThanOrEqual(6);
+    expect(Math.abs(s.alto - (88 / foto.height) * ALTO)).toBeLessThanOrEqual(6);
+  });
+
+  test('🔴 F1 · si la pantalla se achica con el marco en el mínimo, el marco vuelve a 88 px', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page));
+    let foto = await fotoEnPantalla(page);
+    await arrastrar(page, 'Esquina de abajo a la derecha', foto.x - 40, foto.y - 40);
+    const antes = await marcoEnPantalla(page);
+    expect(Math.abs(antes.width - 88)).toBeLessThanOrEqual(1);
+    // Más baja: la foto se ve más chica y, en proporciones, el marco quedaría
+    // de menos de 88 px. Se repara solo.
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect.poll(async () => {
+      foto = await fotoEnPantalla(page);
+      const m = await marcoEnPantalla(page);
+      return foto.width < 280 && m.width >= 87.5 && m.height >= 87.5;
+    }).toBe(true);
+    await zonasEnteras(page);
   });
 
   test('🔴 «Sacar otra» abre la cámara en el mismo toque; si se cancela, la foto sigue con su marco y no se sube nada', async ({ page }) => {
