@@ -82,16 +82,26 @@ async function subida(page: Page, i = 0): Promise<Subida> {
 }
 
 /**
+ * El piso de bytes que publica el mock (`features.ocr.min_image_bytes`). Toda
+ * foto de este spec tiene que quedar arriba DESPUÉS de prepararse: una imagen
+ * lisa pasada a JPEG pesa muy poco (400×200 en dos colores: 1625 bytes) y la
+ * app la frena por «demasiado pequeña». El CI 37556446879 lo encontró: el PNG
+ * de papel blanco salía en 6084 bytes y sólo pasaba en la Mac porque la foto
+ * llegaba antes de que se publicara el piso.
+ */
+const PISO = 10240;
+
+/**
  * Una foto JPEG armada en el navegador: mitad izquierda roja y derecha azul,
- * con renglones de «ticket» para que tenga detalle (sin ellos en las de
- * orientación, donde se mide el color).
+ * con renglones de «ticket» para que tenga detalle o, en las de orientación
+ * (donde se mide el color), con un grano de ±18 por píxel que no cambia el
+ * color pero sí le da peso.
  */
 async function fotoSintetica(
   page: Page,
   ancho: number,
   alto: number,
-  nombre = 'image.jpg',
-  renglones = true,
+  { nombre = 'image.jpg', renglones = true } = {},
 ): Promise<ArchivoDeFoto> {
   const b64 = await page.evaluate(async ([w, h, conRenglones]) => {
     const c = document.createElement('canvas');
@@ -102,6 +112,13 @@ async function fotoSintetica(
     ctx.fillRect(0, 0, w! / 2, h!);
     ctx.fillStyle = '#0000ff';
     ctx.fillRect(w! / 2, 0, w! / 2, h!);
+    if (!conRenglones) {
+      const d = ctx.getImageData(0, 0, w!, h!);
+      for (let i = 0; i < d.data.length; i += 4) {
+        for (let k = 0; k < 3; k += 1) d.data[i + k] = d.data[i + k]! + Math.round((Math.random() - 0.5) * 36);
+      }
+      ctx.putImageData(d, 0, 0);
+    }
     ctx.fillStyle = '#ffffff';
     ctx.font = `${Math.max(10, Math.round(h! / 60))}px monospace`;
     if (conRenglones) {
@@ -136,12 +153,18 @@ function conOrientacion(foto: ArchivoDeFoto, orientacion: number): ArchivoDeFoto
 
 const atributo = (selector: FileChooser, nombre: string) => selector.element().getAttribute(nombre);
 
-/** «Nueva», con el selector que abre ese mismo toque. */
+/**
+ * «Nueva», con el selector que abre ese mismo toque. Antes de devolverlo espera
+ * a que el dueño haya publicado el piso (el `accept` del mock trae HEIC sólo
+ * con el riel cargado): así el piso rige SIEMPRE en estos tests, y no según
+ * cuánto tardó en llegar la configuración.
+ */
 async function tocarNueva(page: Page): Promise<FileChooser> {
   const [selector] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: 'Nueva', exact: true }).click(),
   ]);
+  await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
   return selector;
 }
 
@@ -200,7 +223,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await ingresar(page);
     await espiarOcr(page);
     // Los píxeles acostados (400×200, rojo a la izquierda) y la marca 6.
-    const foto = conOrientacion(await fotoSintetica(page, 400, 200, 'image.jpg', false), 6);
+    const foto = conOrientacion(await fotoSintetica(page, 400, 200, { renglones: false }), 6);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
     await expect(ticketListo(page)).toBeVisible();
@@ -210,18 +233,20 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     expect(ROJO(s.arriba), `arriba: ${s.arriba}`).toBe(true);
     expect(AZUL(s.abajo), `abajo: ${s.abajo}`).toBe(true);
     expect(s.exif).toBe(false);
+    expect(s.bytes).toBeGreaterThan(PISO);
   });
 
   test('control · la misma foto con orientación 1 queda acostada: lo que la giró fue el EXIF', async ({ page }) => {
     await ingresar(page);
     await espiarOcr(page);
-    const foto = conOrientacion(await fotoSintetica(page, 400, 200, 'image.jpg', false), 1);
+    const foto = conOrientacion(await fotoSintetica(page, 400, 200, { renglones: false }), 1);
     const selector = await tocarNueva(page);
     await selector.setFiles(foto);
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect([s.ancho, s.alto]).toEqual([400, 200]);
     expect(s.exif).toBe(false);
+    expect(s.bytes).toBeGreaterThan(PISO);
   });
 
   test('🔴 cancelar la cámara: quedan «Sacar foto», que la vuelve a abrir, y la galería', async ({ page }) => {
@@ -242,7 +267,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await tocarNueva(page);
     const [selector] = await Promise.all([page.waitForEvent('filechooser'), galeria(page).click()]);
     expect(await atributo(selector, 'capture')).toBeNull();
-    await selector.setFiles(await fotoSintetica(page, 6000, 4500, 'IMG_0421.jpg'));
+    await selector.setFiles(await fotoSintetica(page, 6000, 4500, { nombre: 'IMG_0421.jpg' }));
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect([s.ancho, s.alto]).toEqual([4096, 3072]);
@@ -253,16 +278,21 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await ingresar(page);
     await espiarOcr(page);
     await tocarNueva(page);
-    // Arriba transparente, abajo azul: una captura de pantalla de un ticket digital.
+    // Arriba transparente y lisa, abajo azul con grano: una captura de pantalla de
+    // un ticket digital. El grano es para que el JPEG quede arriba del piso.
     const b64 = await page.evaluate(async () => {
       const c = document.createElement('canvas');
       c.width = 600;
       c.height = 800;
       const ctx = c.getContext('2d')!;
-      ctx.fillStyle = '#0000ff';
-      ctx.fillRect(0, 400, 600, 400);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      for (let x = 0; x < 600; x += 7) ctx.fillRect(x, 700, 3, 3);
+      const d = ctx.createImageData(600, 400);
+      for (let i = 0; i < d.data.length; i += 4) {
+        d.data[i] = Math.round(Math.random() * 30);
+        d.data[i + 1] = Math.round(Math.random() * 30);
+        d.data[i + 2] = 225 + Math.round(Math.random() * 30);
+        d.data[i + 3] = 255;
+      }
+      ctx.putImageData(d, 0, 400);
       const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/png'));
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let s = '';
@@ -275,6 +305,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await expect(ticketListo(page)).toBeVisible();
     const s = await subida(page);
     expect(s.tipo).toBe('image/jpeg');
+    expect(s.bytes).toBeGreaterThan(PISO);
     expect(s.arriba.every((v) => v > 240), `arriba: ${s.arriba}`).toBe(true);
     expect(AZUL(s.abajo), `abajo: ${s.abajo}`).toBe(true);
   });

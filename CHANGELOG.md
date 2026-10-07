@@ -66,6 +66,24 @@ Orden AF-D212-CAMARA-20261007 (sha256 7068dccb…), decisión 212 (7b7a75ed…),
     «Reintentar»; «Volver». `doble-captura.spec.ts` pasa a la foto preparada. `e2e/_camara.ts` simula la cámara
     nativa: los 34 toques a «Capturar» pasan a `sacarFoto(page)`; los pasos que vuelven al paso 1 tocan «Sacar
     foto». `retome-apertura` afirma que el aviso de Inicio no abre la cámara.
+- **Rojo del CI del PR (run 37556446879 sobre `eb07ce2`), corregido en un commit sucesor:** «un PNG con
+  transparencia sale JPEG con papel blanco» falló en Linux, determinista. **La causa era el test, no el
+  codificador:** su PNG (13.882 bytes) sale JPEG en 6.084 bytes —medido también en la Mac—, debajo del piso n81 del
+  mock (10.240), y la app lo frenaba por «demasiado pequeña». En la Mac pasaba porque la foto llegaba antes de que
+  se publicara el piso (sin piso, se sube y decide el dueño); reproducido en la Mac esperando el piso. Las fotos de
+  orientación (400×200 lisas: 1.625 bytes) tenían el mismo defecto latente y pasaban por la misma carrera.
+  - Arreglo: `tocarNueva` espera a que el piso esté publicado, así rige siempre; las fotos chicas llevan grano (el
+    PNG, en su mitad azul; la de arriba sigue transparente y lisa) y los tests afirman que lo subido pasa el piso. La
+    aserción del papel blanco no cambió y sigue cazando el mutante sin fondo blanco (`arriba: 0,0,0`).
+  - Censo de la clase (fotos de ticket de los e2e que podrían quedar debajo del piso después de prepararse): la de
+    `sacarFoto` (`mesa-comida.jpg`, 309.949 bytes preparada, 24 specs), las de `ticket-galeria` (40 KB que el
+    navegador no decodifica: va el original) y las que buscan a propósito «demasiado pequeña» o «más de 8 MB»
+    (`ticket-galeria`, `escaneo-aviso-visible`, `ticket-sin-qr`, que ya esperaban el piso). Sólo las de este spec
+    estaban debajo.
+  - **Conducta que cambia, declarada:** el piso se mira sobre la foto PREPARADA, que es lo que se sube y lo que mide
+    el dueño. Una imagen casi lisa puede quedar debajo al pasarla a JPEG (ese PNG de 13,9 KB sale en 6,1 KB) y se
+    avisa «demasiado pequeña»; antes de D212 ese PNG se subía. Una foto de cámara o una captura con texto pesa
+    cientos de KB.
 - **Lo que prueba Mati en el iPhone (D63):** «Nueva» abre la Cámara directo (también desde la app de inicio); con
   «Usar foto» se lee un ticket largo completo; cancelar deja «Sacar foto» y la galería; una foto de la galería.
 
