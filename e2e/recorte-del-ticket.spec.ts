@@ -353,6 +353,53 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     await zonasEnteras(page);
   });
 
+  test('🔴 F2 · una foto muy apaisada (menos de 88 px de alto en pantalla): los bordes que recortan siguen de 44×44', async ({ page }) => {
+    const b64 = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 2000;
+      c.height = 100;
+      const ctx = c.getContext('2d')!;
+      const d = ctx.createImageData(2000, 100);
+      for (let i = 0; i < d.data.length; i += 4) {
+        d.data[i] = 120 + Math.round(Math.random() * 60);
+        d.data[i + 1] = 90 + Math.round(Math.random() * 40);
+        d.data[i + 2] = 40 + Math.round(Math.random() * 30);
+        d.data[i + 3] = 255;
+      }
+      ctx.putImageData(d, 0, 0);
+      const blob = await new Promise<Blob>((r) => c.toBlob((x) => r(x!), 'image/jpeg', 0.92));
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let t = '';
+      for (const x of bytes) t += String.fromCharCode(x);
+      return btoa(t);
+    });
+    await conLaFoto(page, { name: 'IMG_0704.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') });
+    const foto = await fotoEnPantalla(page);
+    expect(foto.height).toBeLessThan(88);
+    // Con menos de 88 de alto el marco no se achica en ese sentido: los bordes
+    // de arriba y de abajo no harían nada (y se pisarían entre sí), y no están.
+    await expect(page.getByRole('button', { name: 'Borde de arriba', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Borde de abajo', exact: true })).toHaveCount(0);
+    // Los que recortan, nunca menos de 44 y arriba de las esquinas: cada uno
+    // recibe el toque en su centro.
+    const bordes = await page.evaluate((nombres) => nombres.map((nombre) => {
+      const b = document.querySelector<HTMLButtonElement>(`button[aria-label="${nombre}"]`)!;
+      const r = b.getBoundingClientRect();
+      return { nombre, ancho: r.width, alto: r.height, recibe: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b };
+    }), ['Borde de la izquierda', 'Borde de la derecha']);
+    for (const b of bordes) {
+      expect(b.ancho, JSON.stringify(b)).toBeGreaterThanOrEqual(44);
+      expect(b.alto, JSON.stringify(b)).toBeGreaterThanOrEqual(44);
+      expect(b.recibe, JSON.stringify(b)).toBe(true);
+    }
+    // Y recortan: el borde de la izquierda, 100 px hacia adentro.
+    await arrastrar(page, 'Borde de la izquierda', foto.x + 100, foto.y + foto.height / 2);
+    await usar(page).click();
+    const s = await subida(page);
+    expect(Math.abs(s.ancho - ((foto.width - 100) / foto.width) * 2000), `ancho ${s.ancho}`).toBeLessThanOrEqual(12);
+    expect(s.alto).toBe(100);
+  });
+
   test('🔴 «Sacar otra» abre la cámara en el mismo toque; si se cancela, la foto sigue con su marco y no se sube nada', async ({ page }) => {
     await conLaFoto(page, await ticketEnLaMesa(page));
     const antes = camarasAbiertas(page);

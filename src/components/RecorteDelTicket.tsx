@@ -128,15 +128,15 @@ export function RecorteDelTicket({ foto, ancho, alto, marco, onMarco, disabled }
     } catch {
       // Sin captura, el arrastre igual sigue mientras el dedo esté encima.
     }
-    // F1 · el arrastre arranca desde un marco que cumple el mínimo.
-    const inicio = asegurarMinimo(marco, minX, minY);
-    if (inicio !== marco) onMarco(inicio);
+    // F1 · el marco ya cumple el mínimo: lo repara el efecto de arriba en cada
+    // cambio de medida. (Repararlo también acá no se podía alcanzar: el mutante
+    // que lo quitaba sobrevivía.)
     arrastre.current = {
       asa,
       pointerId: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      marco: inicio,
+      marco,
       anchoPx: tamano.ancho,
       altoPx: tamano.alto,
     };
@@ -247,8 +247,13 @@ export function RecorteDelTicket({ foto, ancho, alto, marco, onMarco, disabled }
             }}
           />
         </div>
-        {ESQUINAS.map((a) => asa(a, 'esquina'))}
-        {BORDES.map((a) => asa(a, 'borde'))}
+        {/* F2 · sólo las zonas que pueden mover el marco. Si la foto en
+            pantalla mide menos que el mínimo de un lado, en ese sentido el
+            marco ya es la foto entera y no se achica: sus dos bordes no hacen
+            nada, y además se pisarían entre sí. Sin ellos, los que quedan
+            miden siempre 44×44 y reciben el toque. */}
+        {tamano && (minX < 1 || minY < 1) && ESQUINAS.map((a) => asa(a, 'esquina'))}
+        {tamano && BORDES.filter((a) => (a === 'arriba' || a === 'abajo' ? minY < 1 : minX < 1)).map((a) => asa(a, 'borde'))}
       </div>
     </div>
   );

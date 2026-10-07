@@ -43,6 +43,11 @@ pruebas: las de aceptación de Codex (`PRUEBAS_ACEPTACION_UNIRME.md`, 6c64408c�
 - **Los encabezados de las tarjetas van en dos renglones** (título y resumen): en uno solo, al pasar de «Toca para
   elegir» a «1 elegido · toca para modificar» el título bajaba de renglón y la lista saltaba 8 px; lo cazó la regla 1 de
   «¿Qué consumiste?».
+- **El marco del recorte, completando F2 de 0.222.1:** con una foto que en pantalla mide menos de 88 de un lado (muy
+  apaisada), el marco no se achica en ese sentido y sus dos bordes no hacían nada y se pisaban entre sí: ya no se
+  dibujan, y los que recortan siguen de 44×44 y arriba de las esquinas. Una prueba nueva lo mide con una foto de
+  2000×100. Sale la reparación del mínimo al empezar el arrastre: no se podía alcanzar (la hace el efecto en cada
+  cambio de medida) y su mutante sobrevivía. Mutantes de §0: 5 de 5 (`logs/mutantes-s0-resumen.txt`).
 - **Avisos:** `join_request_received` con el cuerpo del dueño; `join_request_accepted` con su título y cuerpo (X08);
   los dos llevan a su mesa por `mesa_code`, que se vuelve a pedir.
 - **Textos** (X07, aprobados): `not_allowed` y `full` → «No pudimos unirte a esa mesa…»; sin red, error, respuesta mal
