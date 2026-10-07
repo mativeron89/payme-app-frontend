@@ -5,12 +5,13 @@ import {
   configurarTicketSinQr,
   estadoN179,
 } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 async function escanearSinQr(page: import('@playwright/test').Page): Promise<void> {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await expect(page).toHaveURL(/:\d+\/scan$/);
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
 }
 
 test.describe('n179 · ticket real sin QR', () => {
@@ -173,7 +174,7 @@ test.describe('n179 · ticket real sin QR', () => {
     // Testigo de que la capability ya llegó: el `accept` se ensancha a la lista
     // del modo mock (con HEIC) sólo cuando el rail es autoritativo. Antes de eso
     // no hay piso publicado y la foto se subiría, que es lo correcto.
-    const input = page.locator('input[type="file"]');
+    const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     await input.setInputFiles({
       name: 'ticket.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(5 * 1024, 1),

@@ -10,6 +10,7 @@ import {
   probeN181,
   type N181TransformEvidence,
 } from './fixtures/n181-clases-pendientes';
+import { sacarFoto } from './_camara';
 
 const EVIDENCE_DIR = process.env.AF_N181_EVIDENCE_DIR;
 
@@ -59,7 +60,7 @@ async function abrirTicket(page: Page): Promise<void> {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
   await completarDivision(page);
 }

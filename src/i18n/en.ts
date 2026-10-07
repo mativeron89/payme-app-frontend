@@ -134,7 +134,6 @@ export const EN: Record<string, string> = {
   "Cancelar": "Cancel",
   "Cancelar y elegir otra garantía": "Cancel and choose another guarantee",
   "Cantidad de {0}": "Quantity of {0}",
-  "Capturar": "Capture",
   "Carga los datos de la tarjeta para continuar.": "Enter your card details to continue.",
   "Cargando amigos…": "Loading friends…",
   "Cargando avisos…": "Loading notifications…",
@@ -230,7 +229,6 @@ export const EN: Record<string, string> = {
   "En partes iguales": "Split evenly",
   "En tu resumen de tarjeta vas a ver": "On your card statement you'll see",
   "En tu resumen de tarjeta: {0}": "On your card statement: {0}",
-  "Encuadra el ticket dentro del marco": "Frame the ticket inside the box",
   "Entero": "Whole",
   "Porción de {0}": "Portion of {0}",
   "Cambiar la porción de {0}: {1}": "Change the portion of {0}: {1}",
@@ -1120,10 +1118,11 @@ export const EN: Record<string, string> = {
   "Copiado": "Copied",
   "No se pudo copiar. Haz una captura de pantalla.": "Couldn't copy. Take a screenshot.",
   // AF-E174-3B-E177 · D177 · «Nueva» abre la cámara directo, con la galería.
-  "Abriendo la cámara…": "Opening the camera…",
-  "No pudimos abrir la cámara. Elige una foto.": "We couldn't open the camera. Choose a photo.",
-  "Elegir una foto": "Choose a photo",
   "Elegir una foto de la galería": "Choose a photo from your gallery",
+  // AF-D212 · «Nueva» abre la cámara nativa del teléfono.
+  "Saca la foto del ticket completo, de cerca y con luz": "Take a photo of the whole ticket, up close and in good light",
+  "Sacar foto": "Take photo",
+  "Preparando la foto…": "Preparing the photo…",
   // AF-E173-4-E176 · E173-4 · Estadísticas de Claude Design.
   "Tu consumo por tipo de cocina": "Your spending by type of cuisine",
   "Tu gasto por tipo de cocina": "Your spending by type of cuisine",

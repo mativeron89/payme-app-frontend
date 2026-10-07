@@ -14,6 +14,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
+import { camarasAbiertas, sacarFoto } from './_camara';
 
 test('🔴 abandonar el 3DS y volver a Inicio: la app ofrece retomar', async ({ page }) => {
   await ingresar(page);
@@ -23,7 +24,7 @@ test('🔴 abandonar el 3DS y volver a Inicio: la app ofrece retomar', async ({ 
   await expect(page.getByText(/Dejaste una autorización sin confirmar/)).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /En partes iguales/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
@@ -39,7 +40,14 @@ test('🔴 abandonar el 3DS y volver a Inicio: la app ofrece retomar', async ({ 
   // El texto no puede invitar a abrir otra: sería un segundo hold por el total.
   await expect(page.getByText(/no abras otra mesa/)).toBeVisible();
 
+  const camaras = camarasAbiertas(page);
   await aviso.click();
   // Lleva al flujo que sabe retomar esa garantía, no a una mesa nueva vacía.
   await expect(page.getByText(/apertura/i).first()).toBeVisible();
+  // D212 · y sin abrir la cámara: es retomar una garantía, no sacar otra foto.
+  // Control: «Nueva» sí la abrió una vez, al principio.
+  // El selector se cuenta en un evento aparte: se le da un momento para llegar.
+  expect(camaras).toBe(1);
+  await page.waitForTimeout(400);
+  expect(camarasAbiertas(page)).toBe(camaras);
 });

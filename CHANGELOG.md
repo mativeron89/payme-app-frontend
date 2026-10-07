@@ -11,6 +11,64 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.218.0 — «Nueva» abre la cámara del teléfono y la foto del ticket sale con toda su definición (2026-10-07)
+
+Orden AF-D212-CAMARA-20261007 (sha256 7068dccb…), decisión 212 (7b7a75ed…), plan aprobado (395f9763…). Base
+`29d14e3` (0.217.5).
+
+- **Por qué:** con la lectura real de tickets encendida, los tickets largos fallaban. La cámara en vivo de D177
+  mandaba un cuadro del video (ideal 1920×1080, reducido a 2048 de lado largo) y su recuadro chico obligaba a alejar
+  el teléfono: la letra llegaba diminuta. Las fotos que fallaron pesaban de 0,36 a 0,93 MB; la que salió bien, 2,7 MB.
+  Mati eligió «Cámara del iPhone (Recomendada)».
+- **«Nueva» abre la cámara nativa en el mismo toque** (`src/camara/camaraNativa.ts`): una sola entrada
+  `<input type="file" accept="image/*" capture="environment">` para toda la app, en el `body`. El `click()` va en el
+  `onClick` de «Nueva» (`AppBottomBar`), antes de navegar: iOS sólo abre la cámara dentro del gesto. Debajo queda
+  «Escanea el ticket», que recibe la foto. En iPhone abre la Cámara a pantalla completa (12 MP, enfoque y luz
+  automáticos) y, en Android, la app de cámara. En la computadora el navegador ignora `capture` y abre el selector.
+  - El aviso de Inicio «Dejaste una autorización sin confirmar» sigue llevando al paso 1 **sin** abrir la cámara.
+  - «Sacar foto» (el botón redondo), «Sacar otra foto» y «Reintentar» la abren en su toque. Si se cancela, la foto y
+    el aviso anteriores siguen en pantalla. «Volver» desde el ticket deja «Escanea el ticket» sin abrirla sola.
+- **La foto, preparada** (`src/camara/fotoDelTicket.ts`), para la de la cámara y la de la galería:
+  - lado largo hasta **4096** (antes 2048): una foto de 12 MP (4032×3024) pasa entera; 24 a 50 MP bajan a
+    4096×3072. 4096² (16.777.216 px) es el lienzo más grande que Safari de iPhone dibuja (límite documentado de
+    WebKit, no medido acá);
+  - hasta **8 MiB** (`MAX_TICKET_IMAGE_BYTES`, el `fileSize` del dueño), sin cambio;
+  - primero baja la calidad (0,92 → 0,85 → 0,75) y después el lado (×0,8, ×0,64, ×0,5 con 0,85 y 0,75): para leer
+    pesan más los píxeles;
+  - siempre a JPEG: se decodifica con `<img>`, que aplica la orientación EXIF, y se dibuja en un lienzo con fondo
+    blanco. Sale derecha y **sin metadatos** (tampoco la ubicación GPS). El HEIC que el navegador decodifica (Safari
+    17+) sale JPEG;
+  - **respaldo, como antes de D212:** si el navegador no decodifica la foto (un HEIC en Chrome, un archivo dañado) o
+    no puede dibujar ningún lienzo, se manda el original si entra en 8 MiB y decide el dueño; si no, «La foto pesa
+    más de 8 MB». Si Safari no puede con el lienzo de 4096², el `toBlob` vacío cuenta como «no entra» y la escalera
+    baja al lado siguiente (3277, 2621, 2048).
+  - **Medido** (Chromium en la Mac, sondas no versionadas en la corrida): un ticket simulado de 12 MP a 0,92 pesa
+    3,54 MiB (sonda de bytes) y, por `prepararEnNavegador`, sale 4032×3024 en 3,95 MiB en ~220 ms; uno de
+    6000×4500 sale 4096×3072 en 2,89 MiB. El peor caso, ruido puro a 4096×3072, entra a 0,75 (6,87 MiB). Al lado de
+    antes (2048) el ticket simulado pesaba 0,98 MiB. **No medido:** el codificador ni los tiempos de Safari en iPhone.
+- **La pantalla «Escanea el ticket»:** sin video, sin marco y sin esquinas. La ayuda dice «Saca la foto del ticket
+  completo, de cerca y con luz»; mientras se prepara, «Preparando la foto…». La foto preparada se ve entera
+  (`object-fit: contain`) mientras se sube. Salen «Encuadra el ticket dentro del marco», «Abriendo la cámara…» y
+  «No pudimos abrir la cámara. Elige una foto.» (sin `getUserMedia` no hay permiso de la web que negar).
+- **D177 se retira del flujo:** se borran `useCamaraTrasera.ts`, `camaraTrasera.ts` y su test (quedan en git, OK
+  del Bibliotecario). La galería sigue igual (D91/D177): abajo a la izquierda, sin `capture`, con el `accept` del
+  dueño.
+- **D202 se conserva:** una foto a la vez (la reserva se toma antes del primer await) y una foto o una lectura de un
+  intento abandonado no toca la pantalla.
+- **Pruebas:**
+  - unitarias: `fotoDelTicket.test` (tope de lado y de bytes, escalera, respaldo, HEIC decodificable → JPEG con un
+    decodificador falso, lienzo de 4096² fallido), `camaraNativa.test` (atributos, una sola entrada, foto sin
+    receptor descartada) y `camaraEnElToque.test` (guarda de fuente: cada apertura es la primera línea de un toque,
+    nunca un efecto: Chromium no distingue «en el toque» de «un rato después», iOS sí);
+  - e2e: `camara-nativa.spec.ts` reemplaza a `camara-directa.spec.ts`: el selector con `capture` en el mismo toque
+    de «Nueva»; 4032×3024 entera; 6000×4500 → 4096×3072; EXIF orientación 6 → vertical, con el rojo arriba y sin
+    EXIF, y su control con orientación 1; cancelar; la galería; el HEIC que Chrome no abre va como antes;
+    «Reintentar»; «Volver». `doble-captura.spec.ts` pasa a la foto preparada. `e2e/_camara.ts` simula la cámara
+    nativa: los 34 toques a «Capturar» pasan a `sacarFoto(page)`; los pasos que vuelven al paso 1 tocan «Sacar
+    foto». `retome-apertura` afirma que el aviso de Inicio no abre la cámara.
+- **Lo que prueba Mati en el iPhone (D63):** «Nueva» abre la Cámara directo (también desde la app de inicio); con
+  «Usar foto» se lee un ticket largo completo; cancelar deja «Sacar foto» y la galería; una foto de la galería.
+
 ## 0.217.5 — La consulta de una apertura anterior no se pierde cuando el riel carga después (2026-10-06)
 
 Orden AF-D206-FLAKY-N181-20261006 (sha256 bb2522fc…), decisión 206 (ba44ea88…). Base `15b3b2e` (0.217.4).

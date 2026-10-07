@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { sacarFoto } from './_camara';
 
 /**
  * ⭐ ORDEN 1-B · LA GARANTÍA NO SE LE ATRIBUYE A UNA TARJETA QUE NADIE ELIGIÓ.
@@ -44,7 +45,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await ingresar(page);
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
@@ -70,8 +71,10 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
   await expect(page.getByText(/se creó, pero su garantía quedó sin confirmar/)).toBeVisible();
 
-  // Se rehace el ticket para llegar a la pantalla de garantía.
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  // Se rehace el ticket para llegar a la pantalla de garantía. D212 · tras la
+  // recarga la cámara nativa no se abre sola: la abre «Sacar foto».
+  await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   const otroMas = page.getByRole('button', { name: 'Un comensal más' });

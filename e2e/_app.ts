@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { corteDePagosView } from '../src/api/releaseGates';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
-import { camaraSimulada } from './_camara';
+import { camaraSimulada, sacarFoto } from './_camara';
 
 /**
  * ORDEN 5 · lo que toda corrida de navegador necesita saber de la app.
@@ -90,7 +90,7 @@ export async function abrirMesaConLink(
   // filas no lleva título, y el <h1> pasó a la tarjeta de título `--teal-l`.
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   // 🔴 CAMBIÓ CON §1.3-bis (2026-08-20): Ticket y División son UNA pantalla, y
   // el ticket nace PLEGADO — «Modificar ítems» ya no está visible al llegar, y
   // esperar por él acá dejaba el helper colgado. Se espera la forma de dividir,

@@ -1,6 +1,7 @@
 import { Icon, type IconName } from './Icon';
 import { useIdioma } from '../i18n/idioma';
 import { navigate, type PageId } from '../router';
+import { abrirCamaraNativa } from '../camara/camaraNativa';
 
 /**
  * Barra inferior de CINCO posiciones — SISTEMA_DISENO.md §5 bis · C.
@@ -102,7 +103,13 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
   const centro = center ?? {
     label: t('Nueva'),
     icon: 'plus' as IconName,
-    onClick: () => navigate('scan'),
+    // D212 · «Nueva» abre la cámara nativa EN ESTE TOQUE (iOS sólo la abre
+    // dentro del gesto) y la app pasa a «Escanea el ticket» debajo, que recibe
+    // la foto. Si la persona cancela, ahí tiene «Sacar foto» y la galería.
+    onClick: () => {
+      abrirCamaraNativa();
+      navigate('scan');
+    },
     disabled: false,
     busy: false,
   };

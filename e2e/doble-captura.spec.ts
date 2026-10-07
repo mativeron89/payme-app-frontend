@@ -1,11 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { FOTO_DE_CAMARA, sacarFoto } from './_camara';
 
 /**
  * D202 · H-03 de la auditoría Codex del 06/10: dos activaciones de Capturar
  * iniciaban dos lecturas. `disparar` miraba `scanning` antes de esperar el JPEG
  * del cuadro, y `scanning` recién se prendía al empezar la lectura: en ese hueco
  * pasaban las dos.
+ *
+ * D212 · la foto ahora sale de la cámara nativa (o de la galería) y el JPEG es
+ * el de la foto PREPARADA (`fotoDelTicket`). El hueco es el mismo: dos fotos
+ * casi juntas, o salir mientras se prepara. La regla también: una foto a la vez,
+ * y nada de un intento abandonado toca la pantalla.
  *
  * El JPEG se retiene (`canvas.toBlob` encola su callback hasta soltarlo) y la
  * lectura se cuenta en la fachada sin OCR real ni red: `scanTicket` queda
@@ -77,7 +83,27 @@ async function espiar(page: Page, responder: boolean): Promise<void> {
 const lecturas = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__lecturas);
 const resoluciones = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__resoluciones);
 
-const disparador = (page: Page) => page.getByRole('button', { name: 'Capturar', exact: true });
+const sacarFotoBoton = (page: Page) => page.getByRole('button', { name: 'Sacar foto', exact: true });
+const galeria = (page: Page) => page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true });
+
+/**
+ * Dos fotos en el MISMO tick: la de la cámara nativa y una de la galería, cada
+ * una con su `change`, antes de que React vuelva a dibujar. La reserva tiene
+ * que ser síncrona, no un `disabled` que llega después.
+ */
+async function dosFotosJuntas(page: Page): Promise<void> {
+  await page.evaluate((b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const entregar = (input: HTMLInputElement, nombre: string) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], nombre, { type: 'image/jpeg' }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    entregar(document.querySelector<HTMLInputElement>('input[type="file"][capture]')!, 'image.jpg');
+    entregar(document.querySelector<HTMLInputElement>('.camara-controles input[type="file"]')!, 'IMG_0001.jpg');
+  }, FOTO_DE_CAMARA.buffer.toString('base64'));
+}
 
 /**
  * `sinRiel`: con el riel de dinero apagado el mock no trae un restaurante por
@@ -90,7 +116,7 @@ async function abrirCamara(page: Page, responder: boolean, sinRiel = false): Pro
   await ingresar(page);
   await espiar(page, responder);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await expect(disparador(page)).toBeEnabled();
+  await expect(sacarFotoBoton(page)).toBeEnabled();
 }
 
 async function salir(page: Page): Promise<void> {
@@ -98,15 +124,14 @@ async function salir(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
-test.describe('D202 · H-03 · Capturar, una sola lectura por intento', () => {
-  test('🔴 dos toques en el mismo instante: una captura y una lectura', async ({ page }) => {
+test.describe('D202 · H-03 · una sola lectura por intento (D212: la foto preparada)', () => {
+  test('🔴 dos fotos en el mismo instante: una preparación y una lectura', async ({ page }) => {
     await abrirCamara(page, false);
-    // Los dos en el mismo tick, antes de que React vuelva a dibujar el botón:
-    // la reserva tiene que ser síncrona, no un `disabled` que llega después.
-    await disparador(page).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
+    await dosFotosJuntas(page);
     await expect.poll(() => jpegRetenidos(page)).toBeGreaterThan(0);
-    await expect(disparador(page)).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true })).toBeDisabled();
+    await expect(sacarFotoBoton(page)).toBeDisabled();
+    await expect(galeria(page)).toBeDisabled();
+    await expect(page.locator('.camara-sub')).toHaveText('Preparando la foto…');
     expect(await jpegRetenidos(page)).toBe(1);
     await soltarJpeg(page);
     await expect.poll(() => lecturas(page)).toBe(1);
@@ -114,9 +139,9 @@ test.describe('D202 · H-03 · Capturar, una sola lectura por intento', () => {
     expect(await lecturas(page)).toBe(1);
   });
 
-  test('🔴 salir con el JPEG pendiente: no se lee', async ({ page }) => {
+  test('🔴 salir con la foto preparándose: no se lee', async ({ page }) => {
     await abrirCamara(page, false);
-    await disparador(page).click();
+    await sacarFoto(page);
     await expect.poll(() => jpegRetenidos(page)).toBe(1);
     await salir(page);
     await soltarJpeg(page);
@@ -128,7 +153,7 @@ test.describe('D202 · H-03 · Capturar, una sola lectura por intento', () => {
 
   test('control · sin salir, la respuesta resuelve el restaurante y abre el ticket', async ({ page }) => {
     await abrirCamara(page, true, true);
-    await disparador(page).click();
+    await sacarFoto(page);
     await expect.poll(() => jpegRetenidos(page)).toBe(1);
     await soltarJpeg(page);
     await expect.poll(() => lecturas(page)).toBe(1);
@@ -140,7 +165,7 @@ test.describe('D202 · H-03 · Capturar, una sola lectura por intento', () => {
 
   test('🔴 salir con la lectura en curso: la respuesta tardía no resuelve el restaurante ni abre el ticket', async ({ page }) => {
     await abrirCamara(page, true, true);
-    await disparador(page).click();
+    await sacarFoto(page);
     await expect.poll(() => jpegRetenidos(page)).toBe(1);
     await soltarJpeg(page);
     await expect.poll(() => lecturas(page)).toBe(1);

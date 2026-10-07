@@ -1,11 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * AF-AVISO-FOTO · Mati, en el iPhone: «Funciona pero la imagen sale mal». En
  * «Escanea el ticket» el aviso de foto chica aparecía DEBAJO de la tarjeta del
- * marco, que lo tapaba: sólo se leía «leer el ticket.».
+ * marco, que lo tapaba: sólo se leía «leer el ticket.». D212 · el marco se fue;
+ * en su lugar está el hueco de la foto (`.camara-foto`), y vale lo mismo.
  *
  * Se mide la geometría real a 390×664 (el alto visible del iPhone), por clase: el aviso de
  * foto chica (local y del dueño) y los demás avisos de la pantalla. Para cada
@@ -25,7 +27,7 @@ async function abrirEscaneo(page: Page): Promise<void> {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await expect(page).toHaveURL(/:\d+\/scan$/);
-  await expect(page.locator('input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
+  await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
 }
 
 async function capturar(page: Page, nombre: string): Promise<void> {
@@ -44,8 +46,9 @@ async function avisoSinTapar(page: Page, titulo: string): Promise<void> {
   await tituloEl.scrollIntoViewIfNeeded();
   const m = await tituloEl.evaluate((t) => {
     const avisoEl = t.closest('[role="alert"]')!;
-    // D177 · el marco es el de la cámara; los avisos van en su panel.
-    const marco = document.querySelector('.camara-marco')!.getBoundingClientRect();
+    // D177 · los avisos van en su panel. D212 · lo que no pueden pisar es el
+    // hueco de la foto, que ocupa el lugar del marco.
+    const marco = document.querySelector('.camara-foto')!.getBoundingClientRect();
     const a = avisoEl.getBoundingClientRect();
     const r = t.getBoundingClientRect();
     const enPunto = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -63,7 +66,7 @@ async function avisoSinTapar(page: Page, titulo: string): Promise<void> {
 test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enteros', () => {
   test('foto chica, rechazada antes de subir (lo de Mati): el aviso entero y «Sacar otra foto»', async ({ page }) => {
     await abrirEscaneo(page);
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.locator('.camara-controles input[type="file"]').setInputFiles({
       name: 'IMG_0500.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(5 * 1024, 1),
     });
     const aviso = page.getByRole('alert');
@@ -90,13 +93,13 @@ test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enter
   test('foto chica según el dueño (422 ticket_image_too_small)', async ({ page }) => {
     await configurarTicketSinQr(page, { ocr: 'too_small' });
     await abrirEscaneo(page);
-    await page.getByRole('button', { name: 'Capturar' }).click();
+    await sacarFoto(page);
     await avisoSinTapar(page, 'La foto es demasiado pequeña para leer el ticket.');
   });
 
   test('foto demasiado grande, rechazada antes de subir', async ({ page }) => {
     await abrirEscaneo(page);
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.locator('.camara-controles input[type="file"]').setInputFiles({
       name: 'IMG_0501.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(9 * 1024 * 1024, 1),
     });
     const titulo = await page.getByRole('alert').locator('.state-error-title').textContent();
@@ -108,7 +111,7 @@ test.describe('AF-AVISO-FOTO · los avisos de «Escanea el ticket» se ven enter
     test(`el aviso de ${ocr}`, async ({ page }) => {
       await configurarTicketSinQr(page, { ocr });
       await abrirEscaneo(page);
-      await page.getByRole('button', { name: 'Capturar' }).click();
+      await sacarFoto(page);
       await expect(page.getByRole('alert').locator('.state-error-title')).toBeVisible();
       const titulo = await page.getByRole('alert').locator('.state-error-title').textContent();
       await avisoSinTapar(page, titulo!);

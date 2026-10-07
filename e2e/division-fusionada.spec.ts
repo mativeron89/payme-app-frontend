@@ -8,11 +8,12 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
+import { sacarFoto } from './_camara';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
@@ -119,7 +120,9 @@ test('🔴 P3-01 · reescanear no hereda el acordeón abierto del ticket anterio
 
   // Volver y escanear OTRO ticket: la hoja no puede recordar el anterior.
   await page.getByRole('button', { name: /Volver/ }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  // D212 · «Volver» deja «Escanea el ticket»; la cámara la abre «Sacar foto».
+  await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 });

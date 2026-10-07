@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { sacarFoto } from './_camara';
 
 test.use({ viewport: { width: 375, height: 667 } });
 
 test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
   /**
    * D177 · el paso 1 dejó de tener el chrome compartido: es la cámara a pantalla
-   * completa. Lo que este test fijaba ahí —el shell que no scrollea, los
+   * completa. D212 · la cámara es la nativa del teléfono y este paso queda
+   * debajo, a pantalla completa igual, con «Sacar foto» en lugar del disparador. Lo que este test fijaba ahí —el shell que no scrollea, los
    * tamaños táctiles y la campana navegable del flujo— se mide ahora en la
    * cámara (shell y toques) y en el paso siguiente (la campana). Las medidas
    * del chrome (cabecera 154, barra 64, círculo 56) las sigue fijando
@@ -16,22 +18,22 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
 
-    const disparador = page.getByRole('button', { name: 'Capturar', exact: true });
+    const disparador = page.getByRole('button', { name: 'Sacar foto', exact: true });
     await expect(disparador).toBeEnabled();
-    const [volverBox, galeriaBox, disparadorBox, appBox, videoBox] = await Promise.all([
+    const [volverBox, galeriaBox, disparadorBox, appBox, pantallaBox] = await Promise.all([
       page.locator('.camara-arriba').getByRole('button', { name: 'Volver', exact: true }).boundingBox(),
       page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
       disparador.boundingBox(),
       page.locator('.app').boundingBox(),
-      page.locator('.camara-video').boundingBox(),
+      page.locator('.screen.camara').boundingBox(),
     ]);
     expect(volverBox?.height).toBeGreaterThanOrEqual(44);
     expect(galeriaBox?.width).toBeGreaterThanOrEqual(44);
     expect(galeriaBox?.height).toBeGreaterThanOrEqual(44);
     expect(disparadorBox?.width).toBeGreaterThanOrEqual(64);
     expect(disparadorBox?.height).toBeGreaterThanOrEqual(64);
-    // La cámara llena la columna de la app, y los controles quedan adentro.
-    expect(videoBox).toEqual(appBox);
+    // La pantalla llena la columna de la app, y los controles quedan adentro.
+    expect(pantallaBox).toEqual(appBox);
     expect((disparadorBox?.y ?? 0) + (disparadorBox?.height ?? 0)).toBeLessThanOrEqual((appBox?.y ?? 0) + (appBox?.height ?? 0));
     // Sin la barra de navegación ni la campana: es pantalla completa.
     await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
@@ -47,7 +49,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     expect(shell.scrollHeight).toBe(shell.clientHeight);
 
     // El paso siguiente conserva el chrome del flujo y su campana navegable.
-    await disparador.click();
+    await sacarFoto(page);
     const header = page.locator('.hdr-flow');
     await expect(header).toBeVisible();
     const bellBox = await header.getByRole('button', { name: 'Avisos', exact: true }).boundingBox();
@@ -87,7 +89,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
   test('Garantía deja la nota fija separada del círculo a 375 × 667', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-    await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+    await sacarFoto(page);
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
     const sumar = page.getByRole('button', { name: 'Un comensal más' });
     for (let i = 0; i < 3; i += 1) await sumar.click();

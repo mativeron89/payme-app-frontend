@@ -1,91 +1,73 @@
-import type { Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { expect, type FileChooser, type Page } from '@playwright/test';
 
 /**
- * D177 · la cámara simulada de la suite e2e.
+ * D212 · la cámara NATIVA simulada de la suite e2e.
  *
- * «Nueva» abre la cámara en vivo con `getUserMedia`. El Chromium de la suite no
- * tiene cámara, así que se reemplaza `navigator.mediaDevices.getUserMedia` antes
- * de que cargue la app:
- * - `concedida` (la de `ingresar()`, por defecto): un `MediaStream` de verdad,
- *   sacado de un canvas con ruido, para que el JPEG del disparador supere el
- *   piso de 10 KB del mock como lo haría una foto;
- * - `negada`: `NotAllowedError`, como cuando la persona dice que no;
- * - `sin_camara`: `NotFoundError`;
- * - `sin_soporte`: sin `navigator.mediaDevices`, como fuera de un contexto seguro.
+ * «Nueva» abre la cámara del teléfono: un `<input type="file" accept="image/*"
+ * capture="environment">` al que la app le hace `click()` en el mismo toque. El
+ * Chromium de la suite no tiene cámara: Playwright intercepta ese selector
+ * (evento `filechooser`) y este registro guarda los de la cámara —los que
+ * tienen `capture`— hasta que el test «saca la foto» con `sacarFoto(page)`, que
+ * es lo que antes era tocar «Capturar»: el disparador y «Usar foto» de la
+ * cámara del teléfono.
  *
- * Cuenta los pedidos, guarda las restricciones y cada pista, para afirmar que la
- * luz de la cámara se apaga (pista en `ended`). Un test que quiere otro modo lo
- * pide ANTES de `ingresar()`: el primero que se instala gana.
+ * La foto por defecto es una foto real del repo (`landing/img/mesa-comida.jpg`,
+ * 1400×1050): se decodifica y se vuelve a codificar como lo haría la de una
+ * cámara, y supera el piso de 10 KB del mock.
+ *
+ * Los selectores de la GALERÍA (sin `capture`) no se tocan acá: los specs de
+ * galería usan `setInputFiles` o su propio `waitForEvent('filechooser')`.
  */
-export type ModoCamara = 'concedida' | 'negada' | 'sin_camara' | 'sin_soporte';
-
 interface Registro {
-  modo: ModoCamara;
-  pedidos: number;
-  restricciones: unknown[];
-  pistas: MediaStreamTrack[];
+  /** Las abiertas que todavía no sacaron foto. */
+  pendientes: FileChooser[];
+  /** Todas las veces que se abrió. */
+  abiertas: number;
 }
 
-const instaladas = new WeakSet<Page>();
+const camaras = new WeakMap<Page, Registro>();
 
-export async function camaraSimulada(page: Page, modo: ModoCamara = 'concedida'): Promise<void> {
-  if (instaladas.has(page)) return;
-  instaladas.add(page);
-  await page.addInitScript((m: ModoCamara) => {
-    const w = window as unknown as { __camara: Registro };
-    w.__camara = { modo: m, pedidos: 0, restricciones: [], pistas: [] };
-    if (m === 'sin_soporte') {
-      Object.defineProperty(Navigator.prototype, 'mediaDevices', { configurable: true, get: () => undefined });
-      return;
-    }
-    const dispositivos = navigator.mediaDevices;
-    if (!dispositivos) return;
-    dispositivos.getUserMedia = async (restricciones?: MediaStreamConstraints) => {
-      w.__camara.pedidos += 1;
-      w.__camara.restricciones.push(restricciones ?? null);
-      if (m === 'negada') throw new DOMException('Permission denied', 'NotAllowedError');
-      if (m === 'sin_camara') throw new DOMException('Requested device not found', 'NotFoundError');
-      const lienzo = document.createElement('canvas');
-      lienzo.width = 640;
-      lienzo.height = 480;
-      const ctx = lienzo.getContext('2d')!;
-      const ruido = ctx.createImageData(lienzo.width, lienzo.height);
-      for (let i = 0; i < ruido.data.length; i += 4) {
-        const v = Math.floor(Math.random() * 256);
-        ruido.data[i] = v;
-        ruido.data[i + 1] = (v * 7) & 255;
-        ruido.data[i + 2] = (v * 13) & 255;
-        ruido.data[i + 3] = 255;
-      }
-      ctx.putImageData(ruido, 0, 0);
-      // Algo que se mueve, para que el stream siga entregando cuadros.
-      let x = 0;
-      const tic = window.setInterval(() => {
-        ctx.fillStyle = '#0fb5c9';
-        ctx.fillRect(x % (lienzo.width - 30), 10, 30, 30);
-        x += 7;
-      }, 100);
-      const stream = lienzo.captureStream(10);
-      for (const pista of stream.getTracks()) {
-        w.__camara.pistas.push(pista);
-        const detener = pista.stop.bind(pista);
-        pista.stop = () => {
-          window.clearInterval(tic);
-          detener();
-        };
-      }
-      return stream;
-    };
-  }, modo);
+export const FOTO_DE_CAMARA = {
+  name: 'image.jpg',
+  mimeType: 'image/jpeg',
+  buffer: readFileSync(resolve('landing/img/mesa-comida.jpg')),
+};
+
+export type ArchivoDeFoto = { name: string; mimeType: string; buffer: Buffer };
+
+export async function camaraSimulada(page: Page): Promise<void> {
+  if (camaras.has(page)) return;
+  const registro: Registro = { pendientes: [], abiertas: 0 };
+  camaras.set(page, registro);
+  page.on('filechooser', (selector) => {
+    void selector.element().getAttribute('capture').then(
+      (capture) => {
+        if (capture === null) return;
+        registro.abiertas += 1;
+        registro.pendientes.push(selector);
+      },
+      () => undefined,
+    );
+  });
 }
 
-/** Cuántas pistas de cámara siguen vivas (la luz encendida). */
-export const pistasVivas = (page: Page) => page.evaluate(
-  () => (window as unknown as { __camara: Registro }).__camara.pistas.filter((p) => p.readyState === 'live').length,
-);
+/** Cuántas veces se abrió la cámara nativa desde que se instaló el registro. */
+export function camarasAbiertas(page: Page): number {
+  return camaras.get(page)?.abiertas ?? 0;
+}
 
-/** Cuántas veces se pidió la cámara, y con qué restricciones. */
-export const registroDeCamara = (page: Page) => page.evaluate(() => {
-  const r = (window as unknown as { __camara: Registro }).__camara;
-  return { pedidos: r.pedidos, restricciones: r.restricciones, pistas: r.pistas.length };
-});
+/**
+ * Saca la foto con la cámara que se abrió último. Falla si la cámara nativa no
+ * se abrió: eso es justo lo que este helper tiene que notar.
+ */
+export async function sacarFoto(page: Page, foto: ArchivoDeFoto = FOTO_DE_CAMARA): Promise<void> {
+  const registro = camaras.get(page);
+  if (!registro) throw new Error('sacarFoto(): falta camaraSimulada(page) (la instala ingresar())');
+  const { pendientes } = registro;
+  await expect.poll(() => pendientes.length, { message: 'la cámara nativa no se abrió' }).toBeGreaterThan(0);
+  const ultima = pendientes[pendientes.length - 1]!;
+  pendientes.length = 0;
+  await ultima.setFiles(foto);
+}

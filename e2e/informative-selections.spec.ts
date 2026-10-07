@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
+import { sacarFoto } from './_camara';
 
 /**
  * Decisión 32 (Mati, 2026-09-24) · «Listo» guarda y vuelve a Inicio. Estas
@@ -41,7 +42,7 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   const opcion = page.getByRole('radio', { name: new RegExp(forma) });
   await expect(opcion).toBeVisible();
   await opcion.click();

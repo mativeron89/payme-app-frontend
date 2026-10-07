@@ -43,8 +43,8 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
-import { useCamaraTrasera } from '../camara/useCamaraTrasera';
-import { sinCamaraEnVivo } from '../camara/camaraTrasera';
+import { abrirCamaraNativa, alRecibirFotoDeLaCamara } from '../camara/camaraNativa';
+import { prepararEnNavegador } from '../camara/fotoDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
 import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
@@ -180,12 +180,13 @@ export function CreateMesaFlow() {
   const [scanning, setScanning] = useState(false);
   /**
    * D202 · H-03 (auditoría Codex): dos toques en Capturar iniciaban dos
-   * lecturas. `scanning` se prende recién al empezar la lectura y el JPEG del
-   * cuadro se espera antes: en ese hueco pasaban los dos. La reserva es una ref
-   * que se toma ANTES del primer await: un estado llega al render siguiente,
-   * tarde para un segundo toque en el mismo tick. Desde ese render el botón
-   * queda deshabilitado por `capturando` y, sin volver a habilitarse, por
+   * lecturas. `scanning` se prende recién al empezar la lectura y el JPEG se
+   * espera antes: en ese hueco pasaban los dos. La reserva es una ref que se
+   * toma ANTES del primer await: un estado llega al render siguiente, tarde
+   * para un segundo toque en el mismo tick. Desde ese render los botones quedan
+   * deshabilitados por `capturando` y, sin volver a habilitarse, por
    * `scanning`: los dos cambian en el mismo render cuando llega el JPEG.
+   * D212 · el JPEG ahora es el de la foto preparada (`recibirFoto`).
    */
   const capturandoRef = useRef(false);
   const [capturando, setCapturando] = useState(false);
@@ -332,15 +333,18 @@ export function CreateMesaFlow() {
   const linkInFlightRef = useRef(createInFlightMutex());
   const fileInput = useRef<HTMLInputElement | null>(null);
   /**
-   * D177 · la cámara en vivo del paso 1. Encendida mientras se está en el paso,
-   * sin una foto en pantalla y sin subir: al disparar (o al elegir de la
-   * galería) la foto queda congelada y la cámara se apaga, hasta que se pide
-   * otra.
+   * D212 · la foto del paso 1, ya preparada, en pantalla mientras se sube. La
+   * cámara es la nativa del teléfono (`camaraNativa`): la foto llega por
+   * `alRecibirFotoDeLaCamara` mientras se está en el paso, o por la galería.
    */
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [captura, setCaptura] = useState<string | null>(null);
-  const camara = useCamaraTrasera(videoRef, step === 'scan' && captura === null && !scanning);
   useEffect(() => () => { if (captura) URL.revokeObjectURL(captura); }, [captura]);
+  const recibirFotoRef = useRef(recibirFoto);
+  recibirFotoRef.current = recibirFoto;
+  useEffect(() => {
+    if (step !== 'scan') return undefined;
+    return alRecibirFotoDeLaCamara((foto) => { void recibirFotoRef.current(foto); });
+  }, [step]);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -895,49 +899,48 @@ export function CreateMesaFlow() {
   }
 
   /**
-   * D177 · «Reintentar» y «Sacar otra foto»: se va la foto congelada y el aviso,
-   * y vuelve la cámara en vivo. Sin cámara (permiso negado, sin cámara o sin
-   * soporte) se abre directo la galería.
+   * D212 · «Sacar foto», «Sacar otra foto» y «Reintentar» abren la cámara
+   * nativa en este mismo toque (iOS sólo la abre dentro del gesto). La foto y
+   * el aviso anteriores se quedan hasta que llega la nueva: si la persona
+   * cancela la cámara, el motivo por el que falló sigue en pantalla.
    */
   function doScan() {
-    setScanIssue(null);
-    setCaptura(null);
-    if (sinCamaraEnVivo(camara.estado)) fileInput.current?.click();
+    abrirCamaraNativa();
   }
 
   /**
-   * Una foto, de la cámara o de la galería: queda en pantalla y, si pasa los
-   * límites de tamaño, va al OCR de siempre. El techo y el piso se miran ACÁ y
-   * no después de subir: con mala señal, mandar 12 MB para que el backend
-   * conteste 413 es un minuto perdido en la mesa. El adaptador conserva su
-   * guarda igual. n81 · el piso, si el dueño lo publica (`rechazoLocalDeImagen`).
+   * Una foto, de la cámara nativa o de la galería. D212 · primero se prepara
+   * (`fotoDelTicket`: lado largo hasta 4096, hasta 8 MiB, derecha, en JPEG y sin
+   * metadatos); después queda en pantalla y, si pasa los límites de tamaño, va
+   * al OCR de siempre. El techo y el piso se miran ACÁ y no después de subir:
+   * con mala señal, mandar 12 MB para que el backend conteste 413 es un minuto
+   * perdido en la mesa. El adaptador conserva su guarda igual. n81 · el piso,
+   * si el dueño lo publica (`rechazoLocalDeImagen`), sobre la foto preparada.
+   *
+   * D202 · una foto a la vez: la reserva se toma antes del primer await. Si se
+   * salió de la pantalla mientras se preparaba, la foto se descarta.
    */
-  function usarFoto(foto: Blob, intento = ++intentoLecturaRef.current) {
-    setCaptura(URL.createObjectURL(foto));
-    const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
-    if (rechazo) {
-      setScanIssue(rechazo);
-      return;
-    }
-    void runScan(foto, intento);
-  }
-
-  /** D177 · el disparador: el cuadro del video, a JPEG, y sigue igual que una foto elegida. */
-  async function disparar() {
-    if (capturandoRef.current || scanning || camara.estado !== 'lista') return;
+  async function recibirFoto(original: Blob) {
+    if (capturandoRef.current) return;
     capturandoRef.current = true;
     setCapturando(true);
+    setScanIssue(null);
+    setCaptura(null);
     const intento = ++intentoLecturaRef.current;
     try {
-      const foto = await camara.capturar(MAX_TICKET_IMAGE_BYTES);
-      // Se salió de la cámara (se desmontó) mientras se armaba el JPEG.
+      const foto = await prepararEnNavegador(original, MAX_TICKET_IMAGE_BYTES);
       if (intento !== intentoLecturaRef.current) return;
-      if (foto === 'sin_cuadro') return;
       if (foto === 'muy_grande') {
         setScanIssue('too_large');
         return;
       }
-      usarFoto(foto, intento);
+      setCaptura(URL.createObjectURL(foto));
+      const rechazo = rechazoLocalDeImagen(foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
+      if (rechazo) {
+        setScanIssue(rechazo);
+        return;
+      }
+      void runScan(foto, intento);
     } finally {
       capturandoRef.current = false;
       setCapturando(false);
@@ -1538,7 +1541,8 @@ export function CreateMesaFlow() {
         setRestaurant(null);
         setRestaurantRecordOnly(false);
       }
-      // D177 · vuelve la cámara en vivo, sin la foto anterior.
+      // D212 · vuelve «Escanea el ticket», sin la foto anterior: «Sacar foto»
+      // abre la cámara. «Volver» no la abre solo.
       setCaptura(null);
       return setStep('scan');
     }
@@ -1547,25 +1551,25 @@ export function CreateMesaFlow() {
     return navigate('home');
   }
 
-  // ─── Paso 1: scan · la cámara en vivo (D177) ─────────────
+  // ─── Paso 1: scan · la cámara nativa (D212) ──────────────
   /**
-   * D177 · decisión 177 de Mati: «Nueva» abre la cámara directo, sin la
-   * pantalla intermedia en la que había que tocar «Capturar» para abrir el
-   * selector del sistema.
+   * D212 · decisión 212 de Mati, «Cámara del iPhone (Recomendada)»: «Nueva»
+   * abre la cámara NATIVA del teléfono en el mismo toque (`camaraNativa`), con
+   * su máxima calidad, enfoque y luz automáticos y la pantalla entera para
+   * encuadrar. Reemplaza la cámara en vivo de D177 (un cuadro de video de
+   * 1920×1080 con un recuadro chico: los tickets largos no se leían) y conserva
+   * su intención: sin pantalla intermedia.
    *
-   *  - La cámara trasera en vivo a pantalla completa (`useCamaraTrasera`), con
-   *    el marco del ticket encima. El disparador (≥ 64 px) saca el cuadro a
-   *    JPEG —evita el HEIC del iPhone— y sigue el OCR de siempre.
+   *  - Esta pantalla queda DEBAJO de la cámara. Muestra la ayuda corta, la foto
+   *    ya preparada mientras se sube y los avisos de siempre. Si la persona
+   *    cancela la cámara, acá tiene «Sacar foto» (el botón redondo, que la
+   *    vuelve a abrir) y la galería. Nunca una pantalla muerta.
    *  - Abajo a la izquierda, la galería: el mismo `<input type="file">` SIN
    *    `capture` de la decisión 91, que en iPhone ofrece Fototeca y Archivos
-   *    (y Drive, si está instalado). El selector de fotos no pide permiso: la
-   *    persona elige y la app no ve el resto del carrete.
-   *  - Sin cámara en vivo (permiso negado, sin cámara, sin soporte o error) se
-   *    muestra la galería con un aviso corto. Nunca una pantalla muerta.
-   *  - El título sigue siendo «Escanea el ticket»: es el encabezado de esta
-   *    pantalla, sobre la cámara, no un paso aparte.
-   *  - Los estados (subida con progreso, errores, «Sacar otra foto», «Cargarlo
-   *    a mano») van en un panel sobre la cámara, con la misma copy de siempre.
+   *    (y Drive, si está instalado). La foto elegida pasa por la misma
+   *    preparación que la de la cámara.
+   *  - Sin marco ni recuadro: la foto es la de la cámara entera.
+   *  - El título sigue siendo «Escanea el ticket».
    *
    * **G-29 cerrado:** el multipart del OCR tiene un transporte XHR dedicado,
    * aislado del `fetch` de creación de mesa/pagos/refunds. Cuando el navegador
@@ -1576,23 +1580,8 @@ export function CreateMesaFlow() {
     const uploadPercentage = uploadProgress && uploadProgress.totalBytes !== null
       ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
       : null;
-    const sinVivo = sinCamaraEnVivo(camara.estado);
     return (
       <div className="screen camara">
-        {/* `playsinline` y `muted`: sin ellos iOS abre el video a pantalla completa
-            o no lo reproduce solo. Sin `src`: el stream lo pone el hook. */}
-        <video ref={videoRef} className="camara-video" playsInline muted autoPlay aria-hidden="true" />
-        {captura && (
-          <img
-            className="camara-captura"
-            src={captura}
-            alt=""
-            aria-hidden="true"
-            // Un HEIC elegido de la galería no se puede dibujar fuera de Safari:
-            // se oculta la vista previa, la foto igual se sube.
-            onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-          />
-        )}
         <div className="camara-arriba">
           <button type="button" className="camara-volver" onClick={back}>
             <Icon name="arrow-left" size={20} />
@@ -1603,36 +1592,30 @@ export function CreateMesaFlow() {
           <div className="camara-sub" aria-live="polite" aria-atomic="true">
             {scanning
               ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
-              : camara.estado === 'abriendo'
-                ? t('Abriendo la cámara…')
-                : t('Encuadra el ticket dentro del marco')}
+              : capturando
+                ? t('Preparando la foto…')
+                : t('Saca la foto del ticket completo, de cerca y con luz')}
           </div>
         </div>
-        <div className="camara-marco-slot">
-          <div className="camara-marco" aria-busy={scanning || undefined}>
-            <div className="scan-corner tl" />
-            <div className="scan-corner tr" />
-            <div className="scan-corner bl" />
-            <div className="scan-corner br" />
+        <div className="camara-foto-slot">
+          <div className="camara-foto" aria-busy={scanning || capturando || undefined}>
+            {captura ? (
+              <img
+                className="camara-captura"
+                src={captura}
+                alt=""
+                aria-hidden="true"
+                // Por las dudas: si la vista previa no se puede dibujar, se oculta;
+                // la foto igual se sube.
+                onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+              />
+            ) : (
+              <Icon name="camera" size={48} />
+            )}
             {scanning && <div className="scan-line" />}
           </div>
         </div>
         <div className="camara-panel">
-          {sinVivo && !captura && (
-            <div className="state-warn" role="alert">
-              <div className="state-error-row">
-                <Icon name="camera" size={22} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">{t('No pudimos abrir la cámara. Elige una foto.')}</div>
-                </div>
-              </div>
-              <div className="state-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()}>
-                  {t('Elegir una foto')}
-                </button>
-              </div>
-            </div>
-          )}
           {scanning && uploadProgress && uploadProgress.totalBytes !== null && (
             <div className="scan-upload-progress">
               <progress
@@ -1791,11 +1774,12 @@ export function CreateMesaFlow() {
             )}
         </div>
         <div className="camara-controles">
-          {/* AF-GALERIA · decisión 91 («Sí, las dos») y D177: la galería, abajo a
-              la izquierda. 🔴 El `accept` sale del DUEÑO del contrato, no de una
-              lista acá: Textract procesa jpeg y png, y un HEIC —el default del
-              iPhone— moría en el proveedor. `readOcrRail` lo construye según el
-              modo publicado. ⚠️ `accept` es una SUGERENCIA, no un gate. */}
+          {/* AF-GALERIA · decisión 91 («Sí, las dos»), D177 y D212: la galería,
+              abajo a la izquierda. 🔴 El `accept` sale del DUEÑO del contrato, no
+              de una lista acá: Textract procesa jpeg y png. `readOcrRail` lo
+              construye según el modo publicado. ⚠️ `accept` es una SUGERENCIA, no
+              un gate: la foto igual pasa por `recibirFoto`, que la convierte a
+              JPEG. */}
           <button
             type="button"
             className="camara-galeria"
@@ -1805,12 +1789,13 @@ export function CreateMesaFlow() {
           >
             <Icon name="image" size={24} />
           </button>
+          {/* D212 · el botón redondo abre la cámara nativa en este toque. */}
           <button
             type="button"
             className="camara-disparador"
-            onClick={() => { void disparar(); }}
-            disabled={scanning || capturando || camara.estado !== 'lista' || captura !== null}
-            aria-label={t('Capturar')}
+            onClick={doScan}
+            disabled={scanning || capturando}
+            aria-label={t('Sacar foto')}
           />
           <span className="camara-controles-espacio" aria-hidden="true" />
           <input
@@ -1822,8 +1807,7 @@ export function CreateMesaFlow() {
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              setScanIssue(null);
-              usarFoto(file);
+              void recibirFoto(file);
             }}
           />
         </div>

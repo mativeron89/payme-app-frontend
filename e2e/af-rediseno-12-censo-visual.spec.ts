@@ -2,24 +2,29 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar } from './_app';
+import { sacarFoto } from './_camara';
 
 const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
-/** D177 · la cámara: llena la app, sin cabecera ni barra, con toques de tamaño táctil. */
+/**
+ * D177 · la cámara: llena la app, sin cabecera ni barra, con toques de tamaño
+ * táctil. D212 · la cámara es la nativa; «Escanea el ticket» queda debajo, a
+ * pantalla completa, con «Sacar foto» en lugar del disparador.
+ */
 async function acreditarCamara(page: Page): Promise<void> {
-  const disparador = page.getByRole('button', { name: 'Capturar', exact: true });
+  const disparador = page.getByRole('button', { name: 'Sacar foto', exact: true });
   await expect(disparador).toBeEnabled();
-  const [app, video, tiro, galeria] = await Promise.all([
+  const [app, pantalla, tiro, galeria] = await Promise.all([
     page.locator('.app').boundingBox(),
-    page.locator('.camara-video').boundingBox(),
+    page.locator('.screen.camara').boundingBox(),
     disparador.boundingBox(),
     page.getByRole('button', { name: 'Elegir una foto de la galería', exact: true }).boundingBox(),
   ]);
   expect(app?.width).toBe(390);
   expect(app?.height).toBe(844);
-  expect(video).toEqual(app);
+  expect(pantalla).toEqual(app);
   await expect(page.locator('.screen > .hdr')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
   expect(tiro?.width).toBeGreaterThanOrEqual(64);
@@ -218,7 +223,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   // D177 · el paso 1 es la cámara a pantalla completa, sin el chrome compartido
   // que mide `acreditar`: se mide lo suyo.
   await acreditarCamara(page);
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
   await acreditar(page, '04-division', true, {
     top: '10px', right: '18px', bottom: '12px', left: '18px',

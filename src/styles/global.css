@@ -2239,40 +2239,9 @@ html.app-de-inicio-ios .app {
    (§5 bis · D). Es el único elemento oscuro de la pantalla.
    ══════════════════════════════════════════════════════════════════════════ */
 
-.scan-corner {
-  position: absolute;
-  width: 38px;
-  height: 38px;
-  border: 3px solid var(--teal);
-}
-.scan-corner.tl {
-  top: 14px;
-  left: 14px;
-  border-right: none;
-  border-bottom: none;
-  border-radius: 6px 0 0 0;
-}
-.scan-corner.tr {
-  top: 14px;
-  right: 14px;
-  border-left: none;
-  border-bottom: none;
-  border-radius: 0 6px 0 0;
-}
-.scan-corner.bl {
-  bottom: 14px;
-  left: 14px;
-  border-right: none;
-  border-top: none;
-  border-radius: 0 0 0 6px;
-}
-.scan-corner.br {
-  bottom: 14px;
-  right: 14px;
-  border-left: none;
-  border-top: none;
-  border-radius: 0 0 6px 0;
-}
+/* D212 · las esquinas del marco (`.scan-corner`) se fueron con la cámara en
+   vivo: la foto la encuadra la cámara del teléfono. Queda la línea de barrido
+   sobre la foto mientras se sube. */
 .scan-line {
   position: absolute;
   left: 14px;
@@ -2330,26 +2299,19 @@ html.app-de-inicio-ios .app {
   accent-color: var(--teal);
 }
 
-/* ─── D177 · la cámara del ticket, en vivo y a pantalla completa ───
-   El video va detrás de todo, `object-fit: cover`; encima, de arriba abajo: la
-   cabecera (Volver, título y estado), el marco, el panel de avisos y los
-   controles (galería a la izquierda, disparador al centro). Los avisos son las
-   mismas tarjetas blancas de antes. Todo dentro de `.app`: si `.app` mide menos
-   (la app de inicio de iOS al abrir), los controles quedan enteros, más arriba. */
+/* ─── D212 · «Escanea el ticket», debajo de la cámara nativa ───
+   La foto la saca la cámara del teléfono; esta pantalla queda debajo. De arriba
+   abajo: la cabecera (Volver, título y la ayuda o el estado), la foto preparada
+   entera (`object-fit: contain`, sin recortar el ticket), el panel de avisos y
+   los controles (galería a la izquierda, «Sacar foto» al centro). Los avisos son
+   las mismas tarjetas blancas de antes. Todo dentro de `.app`: si `.app` mide
+   menos (la app de inicio de iOS al abrir), los controles quedan enteros, más
+   arriba. */
 .screen.camara {
   position: relative;
   background: #000;
   color: #fff;
   overflow: hidden;
-}
-
-.camara-video,
-.camara-captura {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .camara-arriba {
@@ -2387,7 +2349,7 @@ html.app-de-inicio-ios .app {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.camara-marco-slot {
+.camara-foto-slot {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
@@ -2397,11 +2359,27 @@ html.app-de-inicio-ios .app {
   padding: var(--sp-4);
 }
 
-.camara-marco {
+/* Sin proporción fija: la foto se ve entera, sea vertical u horizontal. */
+.camara-foto {
   position: relative;
-  width: min(100%, 420px);
-  aspect-ratio: 3 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Estirado al alto del hueco (sin `height`): la foto adentro resuelve su
+     `max-height: 100%` contra ese alto. */
+  align-self: stretch;
+  width: 100%;
   max-height: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.camara-captura {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .camara-panel {

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar, CORTE } from './_app';
+import { sacarFoto } from './_camara';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -76,7 +77,7 @@ async function abrirTicket(page: Page, conTotalDetectado = false): Promise<void>
     });
   }
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
 }
 

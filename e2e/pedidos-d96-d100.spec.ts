@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * AF-NOMBRE-COMPACTO · el paquete de pedidos chicos de Mati del 26/09
@@ -19,7 +20,7 @@ async function hastaComoDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
@@ -57,7 +58,7 @@ test.describe('D96 → pedido 127 · el nombre del restaurante se edita en el ti
     await configurarTicketSinQr(page);
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-    await page.getByRole('button', { name: 'Capturar' }).click();
+    await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);
     await page.getByRole('button', { name: 'Ver el ticket' }).click();

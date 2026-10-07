@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { sacarFoto } from './_camara';
 
 /**
  * El estado del mock, leído del `localStorage` de la página. Se mira acá y no
@@ -49,7 +50,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await ingresar(page);
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
@@ -99,8 +100,10 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
 
   // Y la salida existe de verdad: rehecho el ticket, el CTA deja de decir
   // "Reconciliación necesaria" y pasa a ofrecer reenviar ESTE intento —con SU
-  // clave, que es lo único que no puede duplicar la garantía—.
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  // clave, que es lo único que no puede duplicar la garantía—. D212 · tras la
+  // recarga la cámara nativa no se abre sola: la abre «Sacar foto».
+  await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await expectCampanaBloqueada(page);
   await page.getByRole('radio', { name: /En partes iguales/ }).click();

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { completarDivision, configurarTicketSinQr } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * AF-ORIGEN-POR-PLATO · decisión 141, respuesta 2: «App Backend y App Frontend
@@ -59,7 +60,7 @@ async function hastaLaCamara(page: Page): Promise<void> {
 }
 
 async function escanear(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
@@ -71,7 +72,7 @@ async function abrirLaMesa(page: Page): Promise<void> {
 
 async function cargarAManoTrasFallar(page: Page): Promise<void> {
   await page.evaluate(() => localStorage.setItem('payme.app.mock.n179.ocr.v1', 'budget_exhausted'));
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('alert')).toContainText('Se alcanzó el límite mensual de lectura');
   await page.getByRole('button', { name: 'Cargarlo a mano' }).click();
   await page.getByRole('button', { name: 'Ver el ticket' }).click();
@@ -124,7 +125,8 @@ test.describe('AF-ORIGEN-POR-PLATO · el alta lleva el recibo del último escane
     await hastaLaCamara(page);
     await escanear(page);
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Capturar' })).toBeVisible();
+    // D212 · «Volver» deja «Escanea el ticket»; la cámara la abre «Sacar foto».
+    await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
     await escanear(page);
     await abrirLaMesa(page);
 
@@ -153,6 +155,7 @@ test.describe('AF-ORIGEN-POR-PLATO · el alta lleva el recibo del último escane
     await hastaLaCamara(page);
     await escanear(page);
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
     await cargarAManoTrasFallar(page);
     await abrirLaMesa(page);
 

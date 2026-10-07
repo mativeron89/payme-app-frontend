@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, CORTE } from './_app';
+import { sacarFoto } from './_camara';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
@@ -112,26 +113,28 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
 
 /**
  * D177 · la tarjeta de título y el marco decorativo de «Escanea el ticket» se
- * fueron con la cámara en vivo. Lo que sigue valiendo es que nada se pise: la
- * cabecera arriba, el marco en el medio y los controles abajo.
+ * fueron con la cámara en vivo. D212 · el marco tampoco está: en el medio va el
+ * hueco de la foto. Lo que sigue valiendo es que nada se pise: la cabecera
+ * arriba, la foto en el medio y los controles abajo.
  */
-test('Escaneo (cámara): la cabecera, el marco y los controles no se pisan', async ({ page }) => {
+test('Escaneo (cámara): la cabecera, la foto y los controles no se pisan', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Capturar', exact: true })).toBeEnabled();
-  const [arriba, marco, controles] = await Promise.all([
+  await expect(page.getByRole('button', { name: 'Sacar foto', exact: true })).toBeEnabled();
+  const [arriba, foto, controles] = await Promise.all([
     page.locator('.camara-arriba').boundingBox(),
-    page.locator('.camara-marco').boundingBox(),
+    page.locator('.camara-foto').boundingBox(),
     page.locator('.camara-controles').boundingBox(),
   ]);
-  expect(marco!.y).toBeGreaterThanOrEqual(arriba!.y + arriba!.height);
-  expect(marco!.y + marco!.height).toBeLessThanOrEqual(controles!.y);
+  expect(foto!.height).toBeGreaterThan(100);
+  expect(foto!.y).toBeGreaterThanOrEqual(arriba!.y + arriba!.height);
+  expect(foto!.y + foto!.height).toBeLessThanOrEqual(controles!.y);
 });
 
 test('División muestra un acceso al ticket compacto, centrado y sin subtítulo', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
 
   const card = page.locator('.ticket-title-card');
   const trigger = page.getByRole('button', { name: 'Ver el ticket', exact: true });
@@ -167,7 +170,7 @@ test('Notificaciones conserva la invitación sólo en su tarjeta accionable', as
 async function hastaGarantia(page: Page) {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await sumar.click();

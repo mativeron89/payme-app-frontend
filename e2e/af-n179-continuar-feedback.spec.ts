@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar } from './_app';
 import { configurarTicketSinQr, estadoN179 } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 const CAPTURES_DIR = process.env.AF_N179_FEEDBACK_CAPTURES_DIR;
 
@@ -36,7 +37,7 @@ async function hastaConsumoDos(
     });
   }
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });

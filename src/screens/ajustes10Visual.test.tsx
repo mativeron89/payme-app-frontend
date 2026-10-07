@@ -38,15 +38,18 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
   });
 
   /**
-   * D177 · el marco decorativo de 4:3 se fue con la pantalla intermedia. El de
-   * la cámara es el del ticket (3:4, vertical) y sigue sin una altura fija: se
-   * achica con el espacio que dejan la cabecera, los avisos y los controles.
+   * D212 · sin marco: la foto la encuadra la cámara del teléfono. El hueco de la
+   * foto sigue sin una altura fija —se achica con el espacio que dejan la
+   * cabecera, los avisos y los controles— y la foto se ve ENTERA (`contain`),
+   * sin recortar el ticket.
    */
-  it('el marco de la cámara usa proporción y altura máxima, no una altura fija', () => {
-    const regla = css.match(/\.camara-marco\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(regla).toContain('aspect-ratio: 3 / 4');
-    expect(regla).toContain('max-height: 100%');
-    expect(regla).not.toMatch(/(?:^|\s)height:\s*\d/);
+  it('la foto del ticket se ve entera y su hueco no tiene una altura fija', () => {
+    const hueco = css.match(/\.camara-foto\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(hueco).toContain('max-height: 100%');
+    expect(hueco).not.toMatch(/(?:^|\s)height:\s*\d/);
+    const foto = css.match(/\.camara-captura\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(foto).toContain('object-fit: contain');
+    expect(css).not.toMatch(/\n\.camara-marco\s*\{/);
     expect(css).not.toMatch(/\n\.scan-frame\s*\{/);
   });
 

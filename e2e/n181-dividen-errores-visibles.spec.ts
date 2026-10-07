@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { completarDivision, configurarTicketSinQr, estadoN179 } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * n181 · «¿Cómo dividen?» no puede fallar en silencio · los casos que la matriz
@@ -23,7 +24,7 @@ async function abrirDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page);
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
   await completarDivision(page);
 }
@@ -69,7 +70,7 @@ test.describe('n181 · «¿Cómo dividen?» dice por qué no abre la mesa', () =
     // «Continuar»: el reemplazo va antes de escanear, así ninguna resolución gana.
     await fallar(page, 'resolveRestaurant', 404, 'restaurant_not_found');
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-    await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+    await sacarFoto(page);
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
     await completarDivision(page);
 

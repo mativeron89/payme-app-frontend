@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { completarDivision, configurarTicketSinQr, estadoN179 } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * AF-NOMBRE-EN-TICKET · pedido 127 de Mati: «Vamos a sacar la burbuja de nombre
@@ -30,7 +31,7 @@ async function hastaComoDividen(page: Page, opciones: Parameters<typeof configur
   await configurarTicketSinQr(page, opciones);
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   // Testigo: el comercio privado ya se resolvió (de ahí sale la elegibilidad).
   await expect.poll(async () => (await estadoN179(page)).privateRestaurantIds.length).toBe(1);
@@ -183,7 +184,7 @@ test.describe('AF-NOMBRE-EN-TICKET · el lápiz en la hoja del ticket', () => {
     await configurarTicketSinQr(page);
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-    await page.getByRole('button', { name: 'Capturar' }).click();
+    await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await abrirHoja(page);
     // Testigo: la hoja ya muestra el comercio leído.

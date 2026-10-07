@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
+import { sacarFoto } from './_camara';
 
 /**
  * AF-CENTRAR-CUANTOS-PAGAN · pedido 136 de Mati: «Centra el ¿Cuántos pagan?»,
@@ -41,7 +42,7 @@ async function hastaComoDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await page.getByRole('button', { name: 'Capturar' }).click();
+  await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
