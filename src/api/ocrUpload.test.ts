@@ -147,13 +147,15 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const xhr = FakeXmlHttpRequest.instances[0];
     expect(xhr).toBeDefined();
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2$/);
+    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=1$/);
     // D209 · el dueño negocia `ticket_totals` sólo con el string exacto «1» y
     // UNA vez: duplicado o desconocido devuelve el contrato sin los totales.
     expect(new URL(xhr.url, 'https://payme.test').searchParams.getAll('totals_version')).toEqual(['1']);
     // AF-NOCHE-COMANDA · `no_prices_found` se negocia con `warnings_version=2`,
     // el string exacto y una sola vez (`warnings_v2` del dueño).
     expect(new URL(xhr.url, 'https://payme.test').searchParams.getAll('warnings_version')).toEqual(['2']);
+    // D218 · `ticket_adjustments` se negocia con `adjustments_version=1`, exacto y una vez.
+    expect(new URL(xhr.url, 'https://payme.test').searchParams.getAll('adjustments_version')).toEqual(['1']);
     expect(xhr.body).toBe(form);
     expect(xhr.timeout).toBe(OCR_TIMEOUT_MS);
     expect(xhr.responseType).toBe('json');

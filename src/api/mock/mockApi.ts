@@ -2342,7 +2342,8 @@ export async function mockReplaceInformativeSelection(
  */
 async function mockOcrReceipt(
   items: ReadonlyArray<{ name: string; price_cents: number; quantity: number }>,
-  totales?: { subtotal_cents: number; tax_cents: number },
+  totales?: { subtotal_cents: number; tax_cents?: number },
+  descuentos?: readonly number[],
 ): Promise<string | undefined> {
   if (items.length < 1 || items.length > 100) return undefined;
   const b64url = (bytes: Uint8Array) =>
@@ -2355,13 +2356,16 @@ async function mockOcrReceipt(
   const payload = {
     // D209 · con totales válidos el dueño firma un recibo v2 con
     // `t = [subtotal, IVA]` (`receipt` de `ocr-merchant-v2.json`).
-    v: totales ? 2 : 1,
+    // D218 · si la lectura cierra con descuento, v3 con `d` y `t` (o `null`).
+    v: descuentos ? 3 : totales ? 2 : 1,
     jti: b64url(crypto.getRandomValues(new Uint8Array(16))),
     mode: 'mock',
     iat,
     exp: iat + 2 * 60 * 60,
     items: await Promise.all(items.map(async (i) => [await huella(i.name), i.price_cents, i.quantity])),
-    ...(totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
+    ...(descuentos
+      ? { d: [...descuentos], t: totales ? [totales.subtotal_cents, totales.tax_cents ?? null] : null }
+      : totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
   };
   const cuerpo = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   return `or1.${cuerpo}.${b64url(crypto.getRandomValues(new Uint8Array(32)))}`;
@@ -2453,6 +2457,33 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       ...(conTotales ? { receipt: conTotales } : {}),
     });
   }
+  /**
+   * D218 · seams de prueba del descuento aparte (el mock del dueño nunca emite
+   * `ticket_adjustments`), con las dos formas de 2.164.0:
+   * - `descuento`: subtotal impreso sin IVA ($840), descuento $50, impreso $790;
+   * - `descuento_iva`: IVA agregado sobre el subtotal ($840 + $134.40) menos el
+   *   descuento ($50): impreso $924.40.
+   * Los ítems no cambian y `total_mismatch` sigue saliendo, literal.
+   */
+  if (mode === 'descuento' || mode === 'descuento_iva') {
+    const conIva = mode === 'descuento_iva';
+    const descuento = 5000;
+    const iva = conIva ? Math.round(total * 0.16) : undefined;
+    const totales = conIva ? { subtotal_cents: total, tax_cents: iva! } : { subtotal_cents: total };
+    const conDescuento = await mockOcrReceipt(items, totales, [descuento]);
+    return delay({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      items,
+      total_cents: total,
+      total_detected_cents: total - descuento + (iva ?? 0),
+      ticket_totals: totales,
+      ticket_adjustments: [{ kind: 'discount' as const, amount_cents: descuento }],
+      warnings: ['total_mismatch'],
+      mock: true,
+      ...(conDescuento ? { receipt: conDescuento } : {}),
+    });
+  }
   const receipt = await mockOcrReceipt(items);
   if (mode === 'no_merchant') {
     return delay({
@@ -2482,23 +2513,57 @@ export async function mockScanTicket(): Promise<OcrResponse> {
  * sólo si es un recibo v2 con `t` válido. El mock no verifica la firma (no tiene
  * la clave del dueño), pero NUNCA toma los totales del cuerpo del pedido.
  */
-function totalesDelRecibo(recibo: unknown): MockMesa['ticket_totals'] {
-  if (typeof recibo !== 'string') return undefined;
+function cuerpoDelRecibo(recibo: unknown): { v?: unknown; t?: unknown; d?: unknown; items?: unknown } | null {
+  if (typeof recibo !== 'string') return null;
   const partes = recibo.split('.');
-  if (partes.length !== 3 || partes[0] !== 'or1') return undefined;
+  if (partes.length !== 3 || partes[0] !== 'or1') return null;
   try {
     const b64 = partes[1]!.replace(/-/g, '+').replace(/_/g, '/');
-    const json = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))) as {
-      v?: unknown; t?: unknown;
-    };
-    if (json.v !== 2 || !Array.isArray(json.t) || json.t.length !== 2) return undefined;
-    const [subtotal, iva] = json.t as unknown[];
-    if (typeof subtotal !== 'number' || !Number.isSafeInteger(subtotal) || subtotal <= 0
-        || typeof iva !== 'number' || !Number.isSafeInteger(iva) || iva < 0) return undefined;
-    return { version: 1, subtotal_cents: subtotal, tax_cents: iva, total_cents: subtotal + iva };
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
   } catch {
-    return undefined;
+    return null;
   }
+}
+
+const enteroPositivo = (x: unknown): x is number => typeof x === 'number' && Number.isSafeInteger(x) && x > 0;
+
+/** La suma de los platos firmados en el recibo (Σ precio × cantidad): el ancla del dueño. */
+function itemsDelRecibo(items: unknown): number | null {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  let suma = 0;
+  for (const i of items) {
+    if (!Array.isArray(i) || !enteroPositivo(i[1]) || !enteroPositivo(i[2])) return null;
+    suma += i[1] * i[2];
+  }
+  return suma;
+}
+
+/**
+ * D209 · L1 · `stored` del dueño (2.165.0): `{version: 2, subtotal, IVA, total,
+ * items_total_cents}`, sólo desde un recibo v2 aceptado.
+ */
+function totalesDelRecibo(recibo: unknown): MockMesa['ticket_totals'] {
+  const json = cuerpoDelRecibo(recibo);
+  if (!json || json.v !== 2 || !Array.isArray(json.t) || json.t.length !== 2) return undefined;
+  const [subtotal, iva] = json.t as unknown[];
+  const itemsTotal = itemsDelRecibo(json.items);
+  if (!enteroPositivo(subtotal) || typeof iva !== 'number' || !Number.isSafeInteger(iva) || iva < 0
+      || itemsTotal === null) return undefined;
+  return { version: 2, subtotal_cents: subtotal, tax_cents: iva, total_cents: subtotal + iva, items_total_cents: itemsTotal };
+}
+
+/**
+ * D218 · `stored` del dueño (2.164.0): `{version: 1, discounts_cents,
+ * items_total_cents}`, sólo desde un recibo v3 aceptado. Con descuento el alta
+ * no guarda `ticket_totals`.
+ */
+function ajustesDelRecibo(recibo: unknown): MockMesa['ticket_adjustments'] {
+  const json = cuerpoDelRecibo(recibo);
+  if (!json || json.v !== 3 || !Array.isArray(json.d) || json.d.length === 0 || json.d.length > 10
+      || !json.d.every(enteroPositivo)) return undefined;
+  const itemsTotal = itemsDelRecibo(json.items);
+  if (itemsTotal === null) return undefined;
+  return { version: 1, discounts_cents: [...json.d], items_total_cents: itemsTotal };
 }
 
 /** Garantía 3DS pendiente del mock (mesa creada con card, aún pending_auth). */
@@ -2678,8 +2743,11 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
         ? req.payment_method_id
         : null,
   };
-  // D209 · `stored` del dueño: sólo desde el recibo aceptado.
-  const totalesGuardados = totalesDelRecibo(ocrReceipt);
+  // D209 · D218 · `stored` del dueño: sólo desde el recibo aceptado, nunca del
+  // cuerpo. Con descuento (recibo v3) se guarda el ajuste y no los totales.
+  const ajustesGuardados = ajustesDelRecibo(ocrReceipt);
+  const totalesGuardados = ajustesGuardados ? undefined : totalesDelRecibo(ocrReceipt);
+  if (ajustesGuardados) mesa.ticket_adjustments = ajustesGuardados;
   if (totalesGuardados) mesa.ticket_totals = totalesGuardados;
   state.mesas.unshift(mesa);
 

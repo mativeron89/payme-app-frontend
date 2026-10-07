@@ -21,6 +21,7 @@ import type {
   OcrWarning,
   OutgoingFriendRequest,
   OutgoingFriendRequestsResponse,
+  TicketAdjustment,
   TicketTotals,
 } from './types';
 import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
@@ -315,7 +316,7 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
 const OCR_WARNINGS_V2: readonly OcrWarning[] = [...OCR_WARNINGS, 'no_prices_found'];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
 const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
-const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt', 'ticket_totals'];
+const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt', 'ticket_totals', 'ticket_adjustments'];
 const TICKET_TOTALS_KEYS = ['subtotal_cents', 'tax_cents'];
 
 /**
@@ -338,6 +339,48 @@ export function ticketTotalsOf(value: unknown, printedTotalCents: unknown): Tick
     return null;
   }
   return { subtotal_cents: raw.subtotal_cents, tax_cents: raw.tax_cents };
+}
+
+/**
+ * D218 · `ticket_adjustments` con la forma del dueño (`ajustesDelTicket` de
+ * `contract-mirror/services/ocrResponseContract.js`): de 1 a 10, cada uno
+ * `{kind:'discount', amount_cents: entero seguro > 0}` y sin otras claves.
+ * `null` = no cumple; sin la clave, `undefined`.
+ */
+const AJUSTES_MAX = 10;
+export function ticketAdjustmentsOf(value: unknown): TicketAdjustment[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > AJUSTES_MAX) return null;
+  const out: TicketAdjustment[] = [];
+  for (const raw of value) {
+    const a = record(raw);
+    if (!a || Object.keys(a).length !== 2 || a.kind !== 'discount'
+        || !safeNonNegative(a.amount_cents) || a.amount_cents === 0) return null;
+    out.push({ kind: 'discount', amount_cents: a.amount_cents });
+  }
+  return out;
+}
+
+const sumaDeAjustes = (ajustes: readonly TicketAdjustment[]) => ajustes.reduce((s, a) => s + a.amount_cents, 0);
+
+/**
+ * D218 · `ticket_totals` de un ticket con descuento (`totalesConAjustes` del
+ * dueño): `subtotal_cents` obligatorio, `tax_cents` opcional, y la identidad
+ * incluye el descuento: `S + IVA = impreso` (S ya descontado) o
+ * `S + IVA − Σdescuentos = impreso`. Vale sólo con descuentos válidos.
+ */
+function ticketTotalsConAjustes(value: unknown, printedTotalCents: unknown, descuentoCents: number): TicketTotals | null {
+  const raw = record(value);
+  if (!raw || !('subtotal_cents' in raw)
+      || Object.keys(raw).some((key) => !TICKET_TOTALS_KEYS.includes(key))
+      || !safeNonNegative(raw.subtotal_cents) || raw.subtotal_cents === 0
+      || (raw.tax_cents !== undefined && !safeNonNegative(raw.tax_cents))
+      || !safeNonNegative(printedTotalCents) || descuentoCents <= 0) return null;
+  const conIva = raw.subtotal_cents + (raw.tax_cents ?? 0);
+  if (conIva !== printedTotalCents && conIva - descuentoCents !== printedTotalCents) return null;
+  return raw.tax_cents === undefined
+    ? { subtotal_cents: raw.subtotal_cents }
+    : { subtotal_cents: raw.subtotal_cents, tax_cents: raw.tax_cents };
 }
 
 /**
@@ -442,9 +485,31 @@ export function ocrResponse(value: unknown): OcrResponse {
   }
 
   const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
-  // En v1 la clave ni siquiera está permitida (arriba).
-  const ticketTotals = version2 ? ticketTotalsOf(body.ticket_totals, body.total_detected_cents) : undefined;
-  if (ticketTotals === null) throw new ContractResponseError('ocr');
+  // En v1 las claves ni siquiera están permitidas (arriba).
+  // D218 · primero los descuentos: `ticket_totals` puede depender de ellos.
+  const ticketAdjustments = version2 ? ticketAdjustmentsOf(body.ticket_adjustments) : undefined;
+  if (ticketAdjustments === null) throw new ContractResponseError('ocr');
+  let ticketTotals = version2 ? ticketTotalsOf(body.ticket_totals, body.total_detected_cents) : undefined;
+  if (ticketTotals === null) {
+    // Con descuento, el par de siempre puede no cuadrar o faltar el IVA: vale
+    // sólo con sus descuentos y la identidad que los incluye.
+    ticketTotals = ticketAdjustments
+      ? ticketTotalsConAjustes(body.ticket_totals, body.total_detected_cents, sumaDeAjustes(ticketAdjustments))
+      : null;
+    if (!ticketTotals) throw new ContractResponseError('ocr');
+  }
+  // La invariante del dueño: los ítems menos los descuentos (más el IVA
+  // agregado, si lo hay) son el total impreso.
+  if (ticketAdjustments) {
+    const descuento = sumaDeAjustes(ticketAdjustments);
+    const iva = ticketTotals?.tax_cents;
+    const impreso = body.total_detected_cents;
+    // `total_cents` ya se validó arriba como entero seguro ≥ 0.
+    const items = body.total_cents as number;
+    const cierra = safeNonNegative(impreso)
+      && [0, ...(iva !== undefined ? [iva] : [])].some((x) => items - descuento + x === impreso);
+    if (!cierra) throw new ContractResponseError('ocr');
+  }
 
   return {
     ...(version2 ? { contract_version: 2 as const } : {}),
@@ -455,6 +520,7 @@ export function ocrResponse(value: unknown): OcrResponse {
       ? { total_detected_cents: body.total_detected_cents }
       : {}),
     ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
+    ...(ticketAdjustments ? { ticket_adjustments: ticketAdjustments } : {}),
     warnings: [...body.warnings] as OcrWarning[],
     mock: body.mock,
     ...(receipt !== undefined ? { receipt } : {}),

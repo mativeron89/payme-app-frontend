@@ -6,6 +6,27 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Descuento impreso aparte (`ticket_adjustments`) · App Backend v2.164.0 · 2026-10-07
+
+Orden `AF-NOCHE-DESCUENTO-20261007` (D218), punto 6. Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`c3b073fb9fa2f0d31e4be17c1d14e52e1eacedf6`** (v2.164.0: `ticket_adjustments`, negociado
+  con `adjustments_version=1`, y `ticket_totals.with_adjustments`).
+- Inventario: el de `main` del owner en **`1d9115644140a2a035b098398aa00cd470e044da`**
+  (`contract/mirror-inventory.json`, sha256
+  `be039e6cf24b75ffb76166a6d3cbe04d18412308563c548398f07f9f47b340b8`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `c3b073f`; entre `c3b073f` y `1d91156` sólo cambia el
+  inventario (`git diff --stat`).
+- **121 archivos**, sin altas ni bajas. Cambian cuatro: `contract/ocr-merchant-v2.json`, `routes/mesas.js`,
+  `routes/ocr.js` y `services/ocrResponseContract.js`, copiados con `git show c3b073f:<origen>` y con el
+  sha256 que declara el inventario.
+- La adenda 1 (L1, `totals_version=2` en `GET /mesas/:code`) sigue el plan aprobado del dueño para 2.165.0,
+  todavía sin publicar: no hay contrato que espejar de ella.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni
+  escrituras en ese repo.
+- `--paridad`: espejo = inventario = fuente en `c3b073f`, 121/121.
+
 ### Aviso de comanda sin precios (`warnings_v2`) · App Backend v2.161.0 · 2026-10-07
 
 Orden `AF-NOCHE-COMANDA-20261007`, punto 5. Scope del lease con `contract-mirror/**` y

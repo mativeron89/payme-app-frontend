@@ -6934,6 +6934,18 @@ button.qc-circulo::after {
   color: var(--navy);
 }
 
+/* D218 · el descuento va debajo del total de los consumos, aparte. */
+.ticket-digital-desglose.ticket-digital-descuento {
+  margin: var(--sp-2) 0 0;
+}
+
+/* D215 · D218 · la nota de lo que no se reparte: informa, sin ámbar. */
+.ticket-digital-nota {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
 .ticket-digital-empty {
   margin: var(--sp-4) 0;
   color: var(--text-muted);

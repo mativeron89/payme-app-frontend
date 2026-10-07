@@ -4,6 +4,7 @@ import { extractApiError } from '../api/errors';
 import { isCurrentSession, loadSession } from '../api/storage';
 import { useAuth } from '../auth/AuthContext';
 import { useIdioma } from '../i18n/idioma';
+import { montoDeDescuento, notaDeLoQueNoSeReparte } from '../screens/desgloseDelTicket';
 import { ticketDigitalView, type TicketDigitalView } from '../screens/ticketDigitalView';
 import { formatMXN } from '../utils/format';
 import { RequestEpoch } from '../utils/requestEpoch';
@@ -179,24 +180,57 @@ export function TicketDigitalDialog({
                   ))}
                 </ul>
               )}
-              {/* D209 · el subtotal y el IVA impresos, arriba del total, sólo
-                  cuando el dueño los publica. Sin ellos, como antes. */}
-              {estado.ticket.totals && (
-                <dl className="ticket-digital-desglose">
-                  <div>
-                    <dt>{t('Subtotal')}</dt>
-                    <dd>{formatMXN(estado.ticket.totals.subtotalCents)}</dd>
+              {estado.ticket.discountCents !== undefined ? (
+                /* D218 · con descuento el dueño guarda sólo los descuentos y la
+                   suma de los ítems: no hay subtotal, IVA ni total impreso. Lo
+                   que siempre es cierto es el total de los consumos y el
+                   descuento aparte, que no se reparte (opción 1 aprobada). */
+                <>
+                  <div className="ticket-digital-total">
+                    <span>{t('Total de los consumos')}</span>
+                    <strong>{formatMXN(estado.ticket.totalCents)}</strong>
                   </div>
-                  <div>
-                    <dt>{t('IVA')}</dt>
-                    <dd>{formatMXN(estado.ticket.totals.taxCents)}</dd>
+                  <dl className="ticket-digital-desglose ticket-digital-descuento">
+                    <div>
+                      <dt>{t('Descuento')}</dt>
+                      <dd>{montoDeDescuento(estado.ticket.discountCents)}</dd>
+                    </div>
+                  </dl>
+                  <p className="ticket-digital-nota">{t('El descuento no se reparte.')}</p>
+                </>
+              ) : (
+                <>
+                  {/* D209 · el subtotal y el IVA impresos, arriba del total, sólo
+                      cuando el dueño los publica. Sin ellos, como antes. */}
+                  {estado.ticket.totals && (
+                    <dl className="ticket-digital-desglose">
+                      <div>
+                        <dt>{t('Subtotal')}</dt>
+                        <dd>{formatMXN(estado.ticket.totals.subtotalCents)}</dd>
+                      </div>
+                      <div>
+                        <dt>{t('IVA')}</dt>
+                        <dd>{formatMXN(estado.ticket.totals.taxCents)}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  <div className="ticket-digital-total">
+                    <span>{t('Total del ticket')}</span>
+                    {/* L1 · con IVA agregado el total de la mesa es el subtotal; el
+                        del ticket es subtotal + IVA (en los dos casos, el impreso). */}
+                    <strong>
+                      {formatMXN(estado.ticket.totals
+                        ? estado.ticket.totals.subtotalCents + estado.ticket.totals.taxCents
+                        : estado.ticket.totalCents)}
+                    </strong>
                   </div>
-                </dl>
+                  {estado.ticket.totals?.ivaAparte && (
+                    <p className="ticket-digital-nota">
+                      {notaDeLoQueNoSeReparte({ ivaCents: estado.ticket.totals.taxCents, descuentoCents: 0 }, t)}
+                    </p>
+                  )}
+                </>
               )}
-              <div className="ticket-digital-total">
-                <span>{t('Total del ticket')}</span>
-                <strong>{formatMXN(estado.ticket.totalCents)}</strong>
-              </div>
             </>
           )}
         </div>

@@ -154,7 +154,19 @@ export interface MockMesa {
    * D209 · `mesas.metadata.ticket_totals` del dueño (2.156.0): lo escribe el
    * alta SÓLO desde un recibo aceptado, nunca desde el cuerpo del pedido.
    */
-  ticket_totals?: { version: 1; subtotal_cents: number; tax_cents: number; total_cents: number };
+  ticket_totals?: {
+    version: 1 | 2;
+    subtotal_cents: number;
+    tax_cents: number;
+    total_cents: number;
+    /** L1 · versión 2 (App Backend 2.165.0): la suma de los platos del recibo. */
+    items_total_cents?: number;
+  };
+  /**
+   * D218 · `mesas.metadata.ticket_adjustments` del dueño (2.164.0): sólo desde un
+   * recibo v3 aceptado.
+   */
+  ticket_adjustments?: { version: 1; discounts_cents: number[]; items_total_cents: number };
 }
 
 export interface MockIdemEntry {
@@ -1655,12 +1667,18 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     ...(slots && { division_slots: slots }),
     active_staff: m.active_staff,
     my_role: identity === 'guest' ? 'guest' : m.openedByUser ? 'opener' : 'participant',
-    // D209 · `mesa_detail` del dueño: sólo con la fila guardada válida y el
-    // total de la mesa igual al impreso. Si no, la clave no viene.
-    ...(m.ticket_totals
-      && m.ticket_totals.subtotal_cents + m.ticket_totals.tax_cents === m.ticket_totals.total_cents
-      && m.total_cents === m.ticket_totals.total_cents
-      ? { ticket_totals: { subtotal_cents: m.ticket_totals.subtotal_cents, tax_cents: m.ticket_totals.tax_cents } }
+    // D209 · L1 · `mesa_detail` del dueño. La app siempre negocia
+    // `totals_version=2`, así que el mock aplica esa regla: con la fila v2, sólo
+    // una mesa sin editar (total = suma de los platos del recibo) que sea IVA
+    // agregado (total = S) o incluido (total = S + IVA). Una fila v1 vieja, la
+    // regla de antes (total = impreso). Si no, la clave no viene.
+    ...(ticketTotalsPublicables(m)
+      ? { ticket_totals: { subtotal_cents: m.ticket_totals!.subtotal_cents, tax_cents: m.ticket_totals!.tax_cents } }
+      : {}),
+    // D218 · con `adjustments_version=1`: el descuento, sólo de una mesa sin
+    // editar (total = suma de los platos del recibo).
+    ...(m.ticket_adjustments && m.total_cents === m.ticket_adjustments.items_total_cents
+      ? { ticket_adjustments: m.ticket_adjustments.discounts_cents.map((amount_cents) => ({ kind: 'discount' as const, amount_cents })) }
       : {}),
   };
 }
@@ -1668,6 +1686,14 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
 /** v2.18: bps tomados (locked+paid) de un ítem. */
 export function takenBps(i: MockItem): number {
   return i.claims.reduce((s, c) => s + c.fraction_bps, 0);
+}
+
+function ticketTotalsPublicables(m: MockMesa): boolean {
+  const tt = m.ticket_totals;
+  if (!tt || tt.subtotal_cents + tt.tax_cents !== tt.total_cents) return false;
+  if (tt.version === 1) return m.total_cents === tt.total_cents;
+  return m.total_cents === tt.items_total_cents
+    && (m.total_cents === tt.subtotal_cents || m.total_cents === tt.subtotal_cents + tt.tax_cents);
 }
 
 /** v2.18: MI tenencia (locked+paid) en bps. */

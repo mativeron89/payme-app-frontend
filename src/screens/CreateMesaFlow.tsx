@@ -43,7 +43,7 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
-import { desgloseDelTicket } from './desgloseDelTicket';
+import { desgloseDelTicket, montoDeDescuento, notaDeLoQueNoSeReparte } from './desgloseDelTicket';
 import { abrirCamaraNativa, alRecibirFotoDeLaCamara } from '../camara/camaraNativa';
 import { prepararEnNavegador } from '../camara/fotoDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
@@ -51,7 +51,7 @@ import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../ap
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
-import type { CreateMesaResponse, OcrMerchant, PaymentMethod, Restaurant, TicketTotals } from '../api/types';
+import type { CreateMesaResponse, OcrMerchant, PaymentMethod, Restaurant, TicketAdjustment, TicketTotals } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -228,6 +228,8 @@ export function CreateMesaFlow() {
    * el alta (el dueño los toma del recibo firmado) y el IVA no se reparte (D215).
    */
   const [scannedTotals, setScannedTotals] = useState<TicketTotals | null>(null);
+  /** D218 · el descuento impreso de la lectura, aparte. Tampoco se reparte. */
+  const [scannedAdjustments, setScannedAdjustments] = useState<TicketAdjustment[] | null>(null);
   /** §1.3 · "Modificar ítems": vista normal ↔ modo edición, y qué fila se abrió. */
   const [editingItems, setEditingItems] = useState(false);
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
@@ -852,9 +854,10 @@ export function CreateMesaFlow() {
     ticketValido: ticketValid,
     impreso: scannedTotalCents,
     totales: scannedTotals,
+    ajustes: scannedAdjustments,
   });
   const totalMismatch =
-    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents && desglose.tipo !== 'agregado'
+    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents && desglose.tipo !== 'cierra'
       ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
       : null;
   const ticketForcedOpen = totalMismatch !== null;
@@ -983,6 +986,7 @@ export function CreateMesaFlow() {
     setScanIssue(null);
     setScannedTotalCents(null);
     setScannedTotals(null);
+    setScannedAdjustments(null);
     setRestaurantLabel('');
     // 🔴 P3-01 (Codex, 2026-08-20): el ticket vuelve a nacer PLEGADO en cada
     // llegada a la pantalla. Sin este reset, abrir el acordeón, volver y
@@ -1023,12 +1027,14 @@ export function CreateMesaFlow() {
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
         setScannedTotals(null);
+    setScannedAdjustments(null);
         setScanIssue('provider');
         return;
       }
       if (decision.kind === 'no_items' || decision.kind === 'no_prices') {
         setScannedTotalCents(null);
         setScannedTotals(null);
+    setScannedAdjustments(null);
         setScanIssue(decision.kind);
         return;
       }
@@ -1046,6 +1052,7 @@ export function CreateMesaFlow() {
       // sé”; cero PRESENTE sí es un valor contractual y debe producir mismatch.
       setScannedTotalCents(decision.printedTotalCents);
       setScannedTotals(decision.response.ticket_totals ?? null);
+      setScannedAdjustments(decision.response.ticket_adjustments ?? null);
       setScanIssue(null);
       // La baja confianza abre los lápices desde el primer frame. No bloquea
       // continuar: la persona ve la señal y decide qué corregir.
@@ -1921,12 +1928,13 @@ export function CreateMesaFlow() {
         <div className="title-card ticket-title-card">
           <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
           <div className="ticket-title-amount">{formatMXN(total)}</div>
-          {/* D215 · «Dejarlo para los pagos»: con IVA agregado, lo que se divide
-              es la suma de los platos. Se dice, sin ámbar y sin frenar nada. */}
-          {desglose.tipo === 'agregado' && (
+          {/* D215 · D218 · «Dejarlo para los pagos»: con IVA agregado o con un
+              descuento, lo que se divide es la suma de los platos. Se dice, sin
+              ámbar y sin frenar nada. Una sola nota aunque sean las dos cosas. */}
+          {desglose.tipo === 'cierra' && notaDeLoQueNoSeReparte(desglose.aparte, t) && (
             <p className="ticket-title-iva">
               <Icon name="info" size={14} className="ico-inline" />{' '}
-              {t('Lo que paga cada uno todavía no incluye el IVA ({0})', formatMXN(desglose.ivaCents))}
+              {notaDeLoQueNoSeReparte(desglose.aparte, t)}
             </p>
           )}
           <div
@@ -2319,23 +2327,23 @@ export function CreateMesaFlow() {
                   );
                 })}
               </div>
-              {/* D209 · el subtotal y el IVA impresos, arriba del total, sólo
-                  cuando el dueño los publica y cierran con los ítems de ahora.
-                  Sin ellos, la hoja queda como antes. */}
-              {desglose.tipo !== 'ninguno' && (
+              {/* D209 · D218 · el subtotal, el IVA y el descuento impresos, arriba
+                  del total y en el orden de la cuenta, sólo cuando el dueño los
+                  publica y cierran con los ítems de ahora. Sin ellos, la hoja
+                  queda como antes. */}
+              {desglose.tipo === 'cierra' && (
                 <dl className="tk-desglose">
-                  <div>
-                    <dt>{t('Subtotal')}</dt>
-                    <dd>{formatMXN(desglose.subtotalCents)}</dd>
-                  </div>
-                  <div>
-                    <dt>{t('IVA')}</dt>
-                    <dd>{formatMXN(desglose.ivaCents)}</dd>
-                  </div>
-                  <div className="tk-desglose-total">
-                    <dt>{t('Total del ticket')}</dt>
-                    <dd>{formatMXN(desglose.totalCents)}</dd>
-                  </div>
+                  {desglose.filas.map((fila) => (
+                    <div key={fila.clave} className={fila.clave === 'total' ? 'tk-desglose-total' : undefined}>
+                      <dt>
+                        {fila.clave === 'subtotal' ? t('Subtotal')
+                          : fila.clave === 'iva' ? t('IVA')
+                            : fila.clave === 'descuento' ? t('Descuento')
+                              : t('Total del ticket')}
+                      </dt>
+                      <dd>{fila.clave === 'descuento' ? montoDeDescuento(fila.cents) : formatMXN(fila.cents)}</dd>
+                    </div>
+                  ))}
                 </dl>
               )}
               <div className="tk-foot">

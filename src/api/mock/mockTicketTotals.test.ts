@@ -79,7 +79,9 @@ describe('mock · ticket_totals (D209)', () => {
     expect(detalle.mesa.ticket_totals).toEqual({ subtotal_cents: 72414, tax_cents: 11586 });
   });
 
-  it('🔴 IVA agregado: ítems = subtotal; el total de la mesa no es el impreso y GET no lo devuelve', async () => {
+  it('🔴 L1 · IVA agregado: ítems = subtotal; con `totals_version=2` la mesa retomada SÍ lo devuelve', async () => {
+    // Antes de la adenda 1 (regla de 2.156.0) no salía: el total de la mesa no
+    // es el impreso. Con `totals_version=2` (2.165.0) sale si la mesa vale S.
     localStorage.setItem('payme.app.mock.n179.ocr.v1', 'iva_agregado');
     const { mock, ocrResponse, MOCK_RESTAURANTS } = await load();
     const leido = ocrResponse(await mock.mockScanTicket());
@@ -90,6 +92,17 @@ describe('mock · ticket_totals (D209)', () => {
     const { mesa } = await mock.mockCreateMesa(alta(MOCK_RESTAURANTS[0].id, leido.items, { ocr_receipt: leido.receipt }));
     const detalle = await mock.mockGetMesa(mesa.code, 'user');
     expect(detalle.mesa.total_cents).toBe(84000);
+    expect(detalle.mesa.ticket_totals).toEqual({ subtotal_cents: 84000, tax_cents: 13440 });
+  });
+
+  it('🔴 L1 · una mesa editada (otro total que el de los platos del recibo) no lo devuelve', async () => {
+    localStorage.setItem('payme.app.mock.n179.ocr.v1', 'iva_incluido');
+    const { mock, ocrResponse, MOCK_RESTAURANTS } = await load();
+    const leido = ocrResponse(await mock.mockScanTicket());
+    const editados = [...leido.items, { name: 'Café', category: 'cafe' as const, price_cents: 3000, quantity: 1 }];
+    const { mesa } = await mock.mockCreateMesa(alta(MOCK_RESTAURANTS[0].id, editados, { ocr_receipt: leido.receipt }));
+    const detalle = await mock.mockGetMesa(mesa.code, 'user');
+    expect(detalle.mesa.total_cents).toBe(87000);
     expect('ticket_totals' in detalle.mesa).toBe(false);
   });
 

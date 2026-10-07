@@ -27,6 +27,45 @@ function totalesDelTicket(valor, totalImpresoCents) {
   return { subtotal_cents: subtotal, tax_cents: iva };
 }
 
+/**
+ * v2.164.0 · AB-NOCHE F · D218: los ajustes del ticket, negociados con `adjustments_version=1`. En v1 sólo el
+ * descuento impreso, con su importe en centavos positivos (el signo lo da `kind`) y sin el texto de la
+ * etiqueta. Devuelve la lista normalizada o `null`.
+ */
+const OCR_ADJUSTMENT_KINDS = Object.freeze(['discount']);
+const OCR_ADJUSTMENTS_MAX = 10;
+function ajustesDelTicket(valor) {
+  if (!Array.isArray(valor) || valor.length === 0 || valor.length > OCR_ADJUSTMENTS_MAX) return null;
+  const out = [];
+  for (const a of valor) {
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
+    const claves = Object.keys(a);
+    if (claves.length !== 2 || !claves.includes('kind') || !claves.includes('amount_cents')) return null;
+    if (!OCR_ADJUSTMENT_KINDS.includes(a.kind) || !Number.isSafeInteger(a.amount_cents) || a.amount_cents <= 0) return null;
+    out.push({ kind: a.kind, amount_cents: a.amount_cents });
+  }
+  return out;
+}
+const sumaDeAjustes = (ajustes) => ajustes.reduce((s, a) => s + a.amount_cents, 0);
+
+/**
+ * v2.164.0 · D218: `ticket_totals` de un ticket con descuento, sólo para quien negocia ajustes. El IVA puede
+ * faltar (el ticket imprime SUBTOTAL y no IVA), y la identidad incluye el descuento: S + V − D = T (el
+ * descuento después del subtotal) o S + V = T (antes, S ya descontado). Devuelve el objeto o `null`.
+ */
+function totalesConAjustes(valor, totalImpresoCents, descuentoCents) {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const claves = Object.keys(valor);
+  if (!claves.includes('subtotal_cents') || claves.some((c) => !['subtotal_cents', 'tax_cents'].includes(c))) return null;
+  const { subtotal_cents: subtotal, tax_cents: iva } = valor;
+  if (!Number.isSafeInteger(subtotal) || subtotal <= 0) return null;
+  if (iva !== undefined && (!Number.isSafeInteger(iva) || iva < 0)) return null;
+  if (!Number.isSafeInteger(totalImpresoCents) || !Number.isSafeInteger(descuentoCents) || descuentoCents <= 0) return null;
+  const conIva = subtotal + (iva ?? 0);
+  if (conIva !== totalImpresoCents && conIva - descuentoCents !== totalImpresoCents) return null;
+  return iva === undefined ? { subtotal_cents: subtotal } : { subtotal_cents: subtotal, tax_cents: iva };
+}
+
 const OCR_WARNING_CODES = Object.freeze([
   'no_items_found',
   'low_confidence_items',
@@ -99,7 +138,7 @@ function assertItem(item) {
  * cosa. `confidence`/`low_confidence` son opcionales porque el mock histórico
  * no los inventa; Textract sí los entrega por ítem.
  */
-function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warningsVersion }) {
+function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warningsVersion, adjustmentsVersion }) {
   if (!payload || !Array.isArray(payload.items)) throw new Error('ocr_response_items_invalid');
   payload.items.forEach(assertItem);
   if (!enteroSeguroNoNegativo(payload.total_cents)) {
@@ -135,7 +174,25 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warni
   let ticketTotals;
   if (contractVersion === 2 && totalsVersion === 1 && payload.ticket_totals !== undefined) {
     ticketTotals = totalesDelTicket(payload.ticket_totals, payload.total_detected_cents);
-    if (!ticketTotals) throw new Error('ocr_response_ticket_totals_invalid');
+    if (!ticketTotals) {
+      // v2.164.0 · D218: con descuento, el par de siempre puede no cuadrar o faltar el IVA. Vale sólo con sus
+      // ajustes, y sale sólo a quien negocia `adjustments_version=1`; a quien no, se omite como antes.
+      const ajustes = payload.ticket_adjustments === undefined ? null : ajustesDelTicket(payload.ticket_adjustments);
+      const conAjustes = ajustes && totalesConAjustes(payload.ticket_totals, payload.total_detected_cents, sumaDeAjustes(ajustes));
+      if (!conAjustes) throw new Error('ocr_response_ticket_totals_invalid');
+      ticketTotals = adjustmentsVersion === 1 ? conAjustes : undefined;
+    }
+  }
+  // v2.164.0 · D218: el descuento aparte, sólo para quien negocia `adjustments_version=1`. Invariante: la suma
+  // de los ítems menos los descuentos (más el IVA agregado, si lo hay) es el total impreso.
+  let ticketAdjustments;
+  if (contractVersion === 2 && adjustmentsVersion === 1 && payload.ticket_adjustments !== undefined) {
+    ticketAdjustments = ajustesDelTicket(payload.ticket_adjustments);
+    const iva = payload.ticket_totals?.tax_cents;
+    const cierra = ticketAdjustments && Number.isSafeInteger(payload.total_detected_cents)
+      && [0, ...(Number.isSafeInteger(iva) ? [iva] : [])]
+        .some((x) => payload.total_cents - sumaDeAjustes(ticketAdjustments) + x === payload.total_detected_cents);
+    if (!cierra) throw new Error('ocr_response_ticket_adjustments_invalid');
   }
   return {
     ...(contractVersion === 2 ? { contract_version: 2, ...(merchant && { merchant }) } : {}),
@@ -145,6 +202,7 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warni
       ? { total_detected_cents: payload.total_detected_cents }
       : {}),
     ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
+    ...(ticketAdjustments ? { ticket_adjustments: ticketAdjustments } : {}),
     warnings,
     mock: !!mock,
   };
@@ -169,6 +227,9 @@ module.exports = {
   normalizeName,
   normalizeRfc,
   totalesDelTicket,
+  totalesConAjustes,
+  ajustesDelTicket,
+  OCR_ADJUSTMENT_KINDS,
   OCR_WARNING_CODES,
   OCR_WARNING_CODES_V2,
   OCR_ERROR_STATUS,

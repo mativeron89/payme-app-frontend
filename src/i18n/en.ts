@@ -1126,6 +1126,12 @@ export const EN: Record<string, string> = {
   "Subtotal": "Subtotal",
   "IVA": "VAT",
   "Lo que paga cada uno todavía no incluye el IVA ({0})": "What each person pays doesn't include VAT yet ({0})",
+  // AF-NOCHE-DESCUENTO · D218 · el descuento impreso, aparte y sin repartir.
+  "Descuento": "Discount",
+  "Lo que paga cada uno todavía no incluye el descuento ({0})": "What each person pays doesn't include the discount yet ({0})",
+  "Lo que paga cada uno todavía no incluye el IVA ({0}) ni el descuento ({1})": "What each person pays doesn't include VAT ({0}) or the discount ({1}) yet",
+  "Total de los consumos": "Total of the items",
+  "El descuento no se reparte.": "The discount isn't split.",
   // AF-D212 · «Nueva» abre la cámara nativa del teléfono.
   "Saca la foto del ticket completo, de cerca y con luz": "Take a photo of the whole ticket, up close and in good light",
   "Sacar foto": "Take photo",

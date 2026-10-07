@@ -749,8 +749,15 @@ export interface MesaDetail {
    * D209 · App Backend 2.156.0 (`mesa_detail` de `ocr-merchant-v2.json`): el
    * subtotal y el IVA del ticket, sólo cuando la fila guardada es válida y
    * `total_cents` es el total impreso. Si no, la clave no viene.
+   * L1 · con `totals_version=2` (App Backend 2.165.0): también cuando
+   * `total_cents` es el subtotal (IVA agregado, D215).
    */
   ticket_totals?: TicketTotals;
+  /**
+   * D218 · con `adjustments_version=1`: los descuentos impresos, sólo si la
+   * mesa no se editó (`total_cents` es la suma de los ítems del recibo).
+   */
+  ticket_adjustments?: TicketAdjustment[];
 }
 
 export interface MesaDetailResponse {
@@ -1023,7 +1030,22 @@ export interface OcrMerchant {
  */
 export interface TicketTotals {
   subtotal_cents: number;
-  tax_cents: number;
+  /**
+   * AF-NOCHE-DESCUENTO · App Backend 2.164.0 (`with_adjustments`): con un
+   * descuento negociado, el ticket puede imprimir SUBTOTAL y ningún IVA. Fuera
+   * de ese caso viene siempre.
+   */
+  tax_cents?: number;
+}
+
+/**
+ * D218 · App Backend 2.164.0 (`ticket_adjustments` de `ocr-merchant-v2.json`):
+ * un descuento impreso, aparte. El importe es positivo y el signo lo da `kind`
+ * (un descuento resta). La etiqueta impresa nunca se publica. No se reparte.
+ */
+export interface TicketAdjustment {
+  kind: 'discount';
+  amount_cents: number;
 }
 
 /** POST /api/ocr → 200; shape autoritativo de ocrResponseContract.js. */
@@ -1049,6 +1071,11 @@ export interface OcrResponse {
    * y `subtotal_cents + tax_cents === total_detected_cents`.
    */
   ticket_totals?: TicketTotals;
+  /**
+   * D218 · sólo con `contract_version=2` y `adjustments_version=1` negociados.
+   * Presente ⇒ `total_cents − Σ amount_cents (+ IVA agregado)` es el impreso.
+   */
+  ticket_adjustments?: TicketAdjustment[];
   warnings: OcrWarning[];
   mock: boolean;
   /**

@@ -208,7 +208,8 @@ function rawOcrUploadRequest<T>(
     // Extensión opt-in del owner: las pestañas anteriores siguen recibiendo v2 sin claves nuevas.
     // D209 · `totals_version=1` (string exacto) negocia `ticket_totals`.
     // AF-NOCHE-COMANDA · `warnings_version=2` negocia `no_prices_found`.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2`);
+    // D218 · `adjustments_version=1` negocia `ticket_adjustments`.
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=1`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

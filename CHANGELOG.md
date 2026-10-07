@@ -11,6 +11,61 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.221.0 — El descuento impreso aparte, sin repartir, y la mesa retomada con IVA agregado (2026-10-07)
+
+Orden AF-NOCHE-DESCUENTO-20261007 (sha256 05c0a598…) y su adenda 1 (a04a57b0…, L1); decisiones D218, D215 y D209.
+Plan aprobado (327256af…) con el delta de la adenda (5a4c8b24…). Base `360119e` (0.220.0). Contrato del dueño: App
+Backend 2.164.0, `1d91156` (`ticket_adjustments`, `ticket_totals.with_adjustments`); la adenda sigue el plan aprobado
+de 2.165.0 (`ESTADO_G.md`, 17093eab…), todavía sin servir.
+
+- **Antes:** desde 2.164.0 la fila del descuento ya no es un plato, así que sin negociar los ítems sumaban más que el
+  impreso y la hoja se abría con el ámbar «Checa que el total coincida… $50 más». Es lo que D218 saca.
+- **Negociación:** el escaneo pide `adjustments_version=1` (junto a `totals_version=1` y `warnings_version=2`);
+  `GET /api/mesas/:code` pide `?adjustments_version=1&totals_version=2`, en sus dos caminos. Strings exactos, una vez;
+  un dueño anterior los ignora. El query va escrito en el template, sin interpolar, para no eximir nada en la guarda de
+  interpolaciones de ruta.
+- **Decoder, con las reglas del dueño** (`ajustesDelTicket`, `totalesConAjustes` y la invariante de `respuestaOcr`):
+  - `ticket_adjustments`: 1 a 10 `{kind:'discount', amount_cents > 0}`, sin otras claves; `ítems − Σdescuentos (+ IVA)
+    = impreso`;
+  - `ticket_totals`: primero la identidad de siempre; si no cuadra, vale sólo con descuentos válidos, con `tax_cents`
+    opcional y `S + IVA = impreso` o `S + IVA − Σdescuentos = impreso`;
+  - lo que no cumple, se rechaza; en v1 las claves se descartan como antes. `TicketTotals.tax_cents` pasa a opcional.
+- **«Ver el ticket»** (`desgloseDelTicket`, generalizado): si la lectura cierra con los ítems de ahora (incluido:
+  `ítems − desc = impreso`; o IVA agregado: `ítems − desc + IVA = impreso` con el subtotal igual a los ítems o a los
+  ítems menos el descuento), no hay ámbar ni hoja forzada y las filas van en el orden de la cuenta: «Descuento»
+  primero si el subtotal ya viene descontado, «Subtotal», «IVA», «Descuento» si va después, «Total del ticket».
+  El descuento se muestra en negativo, con `−` (U+2212). Si la persona corrige un ítem y deja de cerrar, se ocultan y
+  vuelve el aviso de siempre.
+- **La nota, sin ámbar, una sola** (textos aprobados): «Lo que paga cada uno todavía no incluye el descuento (−$50)»;
+  con IVA agregado, «Lo que paga cada uno todavía no incluye el IVA ($134.40) ni el descuento (−$50)»; la del IVA solo
+  queda como estaba. **No se reparte** nada: lo que se divide sigue siendo la suma de los ítems.
+- **El ticket digital (la mesa retomada):**
+  - **con descuento** (opción 1 aprobada): el dueño guarda sólo los descuentos y la suma de los ítems, sin subtotal,
+    IVA ni impreso; el visor muestra «Total de los consumos», «Descuento −$X» y «El descuento no se reparte.», que
+    siempre es verdad. Si llegaran también totales, manda el descuento;
+  - **L1 · con IVA agregado** (`totals_version=2`): `ticketDigitalView` acepta `S === total` (IVA agregado, que antes
+    lanzaba `ticket_digital_malformed`) o `S + IVA === total` (incluido, como antes). Muestra «Subtotal», «IVA» y
+    «Total del ticket» = S + IVA (el impreso en los dos casos), y con IVA agregado la nota del IVA, sin ámbar.
+- **El mock:** seams `descuento` y `descuento_iva`; recibo v3 con `d` y `t`; el alta guarda el ajuste (y no
+  `ticket_totals`) desde el recibo v3, y `ticket_totals` v2 con `items_total_cents` desde el v2; GET mesa publica con
+  las reglas del dueño (sin editar; L1 para los totales).
+- **Espejo** contra App Backend `1d91156` (inventario sobre `c3b073f`): cambian 4 de 121, `contract/ocr-merchant-v2.json`,
+  `routes/mesas.js`, `routes/ocr.js` y `services/ocrResponseContract.js`. Integridad y paridad 121/121. La adenda 1
+  sigue el plan de 2.165.0, sin contrato que espejar todavía.
+- **Textos nuevos** (con su inglés): «Descuento», las dos notas nuevas, «Total de los consumos» y «El descuento no se
+  reparte.».
+- **Pruebas:**
+  - unitarias: `ocrDescuento.test` (decoder: los tres casos aceptados, ocho formas rechazadas, la invariante, sin
+    impreso, totales sin IVA sin descuento; el mock: seams, recibo v3, la mesa retomada con el ajuste y la editada),
+    `desgloseDelTicket.test` (reescrito: cada caso, el orden, las notas), `ticketDigitalView.test` (IVA agregado,
+    descuento, formas inválidas), `mockTicketTotals.test` (L1: la retomada con IVA agregado sale, la editada no),
+    `mesaDetalleNegociacion.test` (la query de `getMesa`) y la URL del escaneo;
+  - e2e `ticket-descuento.spec.ts` a 375×667: con descuento, con descuento e IVA, sin descuento, el ítem corregido, el
+    ticket digital con descuento y la mesa retomada con IVA agregado;
+  - rojo sobre `360119e`: 32 unitarios y 5 e2e (el control sin descuento pasa); mutantes 14 de 14 cazados.
+- **Lo que prueba Mati en el iPhone (D63):** un ticket con descuento impreso (sin ámbar, la nota y la línea
+  «Descuento»), uno con descuento e IVA agregado (una sola nota), uno sin descuento (como antes).
+
 ## 0.220.0 — Aviso propio cuando la foto es una comanda sin precios (2026-10-07)
 
 Orden AF-NOCHE-COMANDA-20261007 (sha256 efb7a1d9…), decisión D212. Plan aprobado (648da893…). Base `46a46b2`

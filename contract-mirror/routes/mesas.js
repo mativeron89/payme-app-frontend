@@ -210,8 +210,11 @@ async function cerrojoDeGarantia(mesa) {
   const escrito = fila?.metadata?.closure_reason || null;
   // v2.156.0 · AB-D209 · subtotal e IVA impresos, de la MISMA lectura (sin otra consulta).
   const ticketTotals = origenItems.totalesPublicables(fila?.metadata?.ticket_totals, Number(mesa.total_cents));
+  // v2.164.0 · AB-NOCHE F · D218: el descuento aparte, si la mesa sigue igual a los platos del ticket.
+  const ticketAdjustments = origenItems.ajustesPublicables(fila?.metadata?.ticket_adjustments, Number(mesa.total_cents));
   if (escrito) {
-    return { guarantee_mode: guaranteeMode, status, closure_reason: escrito, ticket_totals: ticketTotals };
+    return { guarantee_mode: guaranteeMode, status, closure_reason: escrito, ticket_totals: ticketTotals,
+      ticket_adjustments: ticketAdjustments };
   }
   // Sólo las mesas de C3 derivan «cerró por tiempo»: una mesa legacy sin
   // garantía en `expired` venció por el camino monetario de siempre.
@@ -223,6 +226,7 @@ async function cerrojoDeGarantia(mesa) {
     status,
     closure_reason: cerradaSinGarantia ? 'time' : null,
     ticket_totals: ticketTotals,
+    ticket_adjustments: ticketAdjustments,
   };
 }
 
@@ -1493,6 +1497,10 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         // v2.156.0 · AB-D209 (decisión 209): subtotal e IVA del ticket, opcional. Sólo si la mesa se
         // creó con un recibo que los traía y su total sigue igual al impreso.
         ...(garantiaMesa.ticket_totals && { ticket_totals: garantiaMesa.ticket_totals }),
+        // v2.164.0 · AB-NOCHE F · D218: sólo a quien negocia `adjustments_version=1` (exacto): el decoder de la
+        // mesa del AF servido es cerrado. Ausente, distinto o repetido: la respuesta de hoy, byte a byte.
+        ...(req.query.adjustments_version === '1' && garantiaMesa.ticket_adjustments
+          && { ticket_adjustments: garantiaMesa.ticket_adjustments }),
         paid_amount_cents: Number(mesa.paid_amount_cents),
         tip_amount_cents: Number(mesa.tip_amount_cents),
         // D7 (v2.17): base partes-iguales de la propina (total ÷ N declarados),

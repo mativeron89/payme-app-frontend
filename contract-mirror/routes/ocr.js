@@ -206,6 +206,8 @@ router.post('/', (req, res, next) => {
   req.ocrTotalsVersion = req.ocrContractVersion === 2 && req.query.totals_version === '1' ? 1 : undefined;
   // v2.161.0 · AB-NOCHE D · códigos de aviso nuevos (`no_prices_found`), con la misma negociación exacta.
   req.ocrWarningsVersion = req.ocrContractVersion === 2 && req.query.warnings_version === '2' ? 2 : undefined;
+  // v2.164.0 · AB-NOCHE F · D218: el descuento aparte (`ticket_adjustments`), con la misma regla exacta.
+  req.ocrAdjustmentsVersion = req.ocrContractVersion === 2 && req.query.adjustments_version === '1' ? 1 : undefined;
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -275,11 +277,12 @@ router.post('/', (req, res, next) => {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
         const respuesta = respuestaOcr(result, {
           mock: false, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
-          warningsVersion: req.ocrWarningsVersion,
+          warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion,
         });
         // El recibo lleva los totales del resultado del servidor aunque el cliente no los negocie.
         return res.json(req.ocrReceiptRequested
-          ? origenItems.conRecibo(respuesta, req.user.id, { logger, totales: result.ticket_totals }) : respuesta);
+          ? origenItems.conRecibo(respuesta, req.user.id, { logger, totales: result.ticket_totals,
+            ajustes: result.ticket_adjustments }) : respuesta);
       } catch (e) {
         if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
           const out = errorOcr(e.code);
@@ -301,7 +304,8 @@ router.post('/', (req, res, next) => {
         // ratificada en D5: el flujo de dividir la cuenta NUNCA se rompe por
         // OCR. Lo que C6 garantiza en ese caso es que NO hubo llamada a AWS,
         // porque la reserva lanza antes de cargar el SDK.
-        logger.error('ocr_provider_error', { user_id: req.user.id, error: e.message });
+        // v2.163.0 · AB-NOCHE E2: clase y código cerrados, nunca `e.message` (auditoría D217).
+        logger.error('ocr_provider_error', { user_id: req.user.id, ...ocrTextract.clasificarErrorDelProveedor(e) });
         return res.json(respuestaProveedorNoDisponible(req.ocrContractVersion));
       }
     }
@@ -312,7 +316,7 @@ router.post('/', (req, res, next) => {
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
     }, { mock: true, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
-      warningsVersion: req.ocrWarningsVersion });
+      warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion });
     res.json(req.ocrReceiptRequested
       ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {
