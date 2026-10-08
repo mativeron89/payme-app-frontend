@@ -6,6 +6,28 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Al día con lo servido · App Backend v2.166.2 · 2026-10-07
+
+Orden `AF-INICIO-SAMSUNG-20261007`, adenda 1 (D230 y el espejo al día). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`22e8a48e91cb86c7e6a98aa9307249fb67f2cfca`** (v2.166.2: la invitación a una mesa que ya no
+  admite sale de «Te invitaron» y de la campana; v2.166.1: pedir bloquea también al titular y una mesa cuyo
+  titular ya no está activo no admite pedidos).
+- Inventario: el de `main` del owner en **`56359acb198f42306f2862e66c4760f7ca355d3e`**, la versión servida
+  (`contract/mirror-inventory.json`, sha256
+  `3707bdaff2970d5d9f9108ebd94fa04548339824b33d1674ad348153df5583c0`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `22e8a48`; entre `22e8a48` y `56359acb` sólo cambia el
+  inventario (`git diff --stat`). No incluye 2.167.0, que no está servida.
+- **125 archivos espejados** (sin cambio de población). Cambian cinco: `contract/mesa-join-requests-v1.json`,
+  `routes/invitations.js`, `routes/notifications.js`, `services/joinRequests.js` y `services/notifications.js`.
+  Copiados con `git show 22e8a48:<origen>` y con el sha256 que declara el inventario.
+- En el contrato sólo cambia texto: «no oracular» suma la mesa cuyo titular no está activo, con el mismo 404
+  `join_code_not_found`. Ninguna respuesta cambia de forma: el front no cambia.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni escrituras en
+  ese repo.
+- `--paridad`: espejo = inventario = fuente en `22e8a48`, 125/125.
+
 ### Unirse con el código de la mesa (`mesa-join-requests/v1`) · App Backend v2.166.0 · 2026-10-07
 
 Orden `AF-UNIRSE-CODIGO-20261007` (D219, D223). Scope del lease con `contract-mirror/**` y

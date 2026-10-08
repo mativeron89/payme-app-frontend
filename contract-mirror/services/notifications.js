@@ -14,6 +14,7 @@
 
 const pool = require('../db/pool');
 const logger = require('../utils/logger');
+const { MESA_ESTADOS_VIVOS } = require('../utils/stateMachine');
 
 const TYPES = {
   invitation_received:  { title: 'Te invitaron a una mesa' },
@@ -148,10 +149,23 @@ async function markAllRead(user_id) {
   return rowCount;
 }
 
-async function unreadCount(user_id) {
-  const { rows } = await pool.query(
-    `SELECT COUNT(*)::int AS c FROM notifications WHERE user_id = $1 AND read_at IS NULL`,
-    [user_id]
+/**
+ * Los avisos sin leer de la campana. La ÚNICA definición: la usan `GET /unread-count` y el
+ * `unread_count` del listado de avisos.
+ *
+ * v2.166.2 · decisión 228: no cuenta el `invitation_received` de una invitación cuya mesa ya no
+ * admite gente (la misma regla `mesaViva` de aceptar): esa invitación salió de «Te invitaron»
+ * y no queda nada que hacer con ella. El aviso sigue en la lista; sólo deja de sumar a la campana.
+ */
+async function unreadCount(user_id, db = pool) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS c FROM notifications n
+      WHERE n.user_id = $1 AND n.read_at IS NULL
+        AND NOT (n.type = 'invitation_received' AND n.related_entity_type = 'invitation'
+                 AND EXISTS (SELECT 1 FROM invitations i JOIN mesas m ON m.id = i.mesa_id
+                              WHERE i.id = n.related_entity_id
+                                AND NOT (m.status = ANY($2::text[]))))`,
+    [user_id, [...MESA_ESTADOS_VIVOS]]
   );
   return rows[0].c;
 }

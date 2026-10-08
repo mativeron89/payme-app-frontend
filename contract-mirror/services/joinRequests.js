@@ -4,8 +4,9 @@
  * Decisión 219 de Mati («Sí, aprobado (Recomendada)») y respuestas del Bibliotecario al plan:
  *   · quien escribe el código PIDE; el titular de la mesa (`mesas.opener_user_id`) acepta o
  *     rechaza. Aceptar lo suma como participante `invited`, igual que una invitación;
- *   · sólo mesas `open` y `partially_paid`. Una mesa inexistente, pagada o cerrada contestan
- *     EXACTAMENTE lo mismo (`join_code_not_found`): el código no revela en qué estado está;
+ *   · sólo mesas `open` y `partially_paid` con el titular activo. Una mesa inexistente, pagada,
+ *     cerrada o con el titular suspendido o eliminado contestan EXACTAMENTE lo mismo
+ *     (`join_code_not_found`): el código no revela en qué estado está;
  *   · quien ya está en la mesa (titular o participante activo) entra directo, aunque esté pagada;
  *   · un pedido vence a los 15 minutos; como mucho 10 pendientes por mesa y 5 pedidos creados
  *     por persona en la última hora (el tope en memoria de la ruta cuenta además los intentos
@@ -15,8 +16,8 @@
  *     aceptan.
  *
  * Bloqueo, siempre en este orden: (al pedir, el turno de la cuenta) → la mesa (`FOR UPDATE`, el
- * mismo lock que la fase 1 del cierre) → las cuentas que se van a escribir (`FOR SHARE`, por id)
- * → el pedido (`FOR UPDATE`). Así la mesa no puede cerrarse entre el control y el alta del
+ * mismo lock que la fase 1 del cierre) → las cuentas que se van a escribir o que reciben un aviso
+ * (`FOR SHARE`, por id; al pedir, quien pide y el titular) → el pedido (`FOR UPDATE`). Así la mesa no puede cerrarse entre el control y el alta del
  * participante, y dos decisiones sobre el mismo pedido se ordenan.
  *   · Las cuentas van ANTES que el pedido por la eliminación de cuenta (auditoría Codex, R1): ella
  *     bloquea `users FOR UPDATE` y después cancela los pedidos. Si aceptar bloqueara el pedido
@@ -128,18 +129,25 @@ async function pedir(userId, valor) {
     const { rows: [mesa] } = await client.query(
       `SELECT id, code, status, opener_user_id FROM mesas WHERE code=$1 FOR UPDATE`, [code]
     );
-    if (!mesa) return { refused: 'not_found', out: respuesta(404, NO_ENCONTRADA) };
-    // La cuenta que pide, después de la mesa (el orden de arriba). La ruta ya exige una cuenta
-    // activa; esto cubre la que dejó de estarlo mientras su pedido esperaba.
-    const cuentas = await bloquearCuentas(client, [userId]);
+    // Las cuentas, después de la mesa (el orden de arriba): quien pide y, si hay mesa, su titular,
+    // que recibe el aviso (la FK del aviso pide su fila). Van antes de vencer pedidos o escribir
+    // avisos: la eliminación del titular bloquea su cuenta y después cancela los pedidos de sus
+    // mesas (v2.166.1, R1 de pedir en la verificación de Codex).
+    const cuentas = await bloquearCuentas(client, mesa ? [userId, mesa.opener_user_id] : [userId]);
+    // La ruta ya exige una cuenta activa; esto cubre la que dejó de estarlo mientras su pedido
+    // esperaba. Va ANTES de mirar si la mesa existe: con la mesa o sin ella, la misma respuesta
+    // (v2.166.1, N1: un 404 contra un 403 decía si el código existía).
     if (cuentas.get(userId) !== 'active') {
       return { refused: 'account_not_active', out: respuesta(403, { error: 'user_suspended' }) };
     }
+    if (!mesa) return { refused: 'not_found', out: respuesta(404, NO_ENCONTRADA) };
 
     if (mesa.opener_user_id === userId || await esParticipanteActivo(client, mesa.id, userId)) {
       return { out: respuesta(200, { status: 'already_participant', mesa_code: mesa.code }) };
     }
-    if (!ESTADOS_ADMITIDOS.includes(mesa.status)) {
+    // No admite: una mesa fuera de `open`/`partially_paid`, o cuyo titular ya no está activo
+    // (suspendido o eliminado: nadie podría decidir el pedido). El mismo 404 que una inexistente.
+    if (!ESTADOS_ADMITIDOS.includes(mesa.status) || cuentas.get(mesa.opener_user_id) !== 'active') {
       return { refused: 'not_found', out: respuesta(404, NO_ENCONTRADA) };
     }
 

@@ -21,17 +21,20 @@ const router = express.Router();
 router.use(requireAuth);
 
 // ─── GET / (invitations pendientes para el user actual) ───
-// Tercera puerta del gate de admisión (ratificado 2026-08-06): el listado
-// MARCA, no filtra. Una invitación cuya mesa murió sigue apareciendo —
-// desaparecerla parecería un bug y la persona no entendería qué pasó — pero
-// viaja con `mesa_joinable: false` para que el front la muestre apagada
-// ("Esta mesa ya cerró") sin que nadie toque un camino muerto.
+// 🔴 v2.166.2 · decisión 228 de Mati («Que desaparezca sola (Recomendada)»): una invitación cuya
+// mesa ya no admite gente SALE del listado, para todos los invitados, también las que ya estaban.
+// Supersede la tercera puerta del 2026-08-06 («el listado MARCA, no filtra»): Mati vio la tarjeta
+// trabada con «Esta mesa ya cerró» y sin nada que hacer con ella.
 //
-// `mesa_joinable` se computa acá en JS con EL MISMO `mesaViva()` que gatea
-// las dos puertas de entrar — no en SQL, que sería una segunda expresión de
-// la regla desincronizándose sola. `mesa_status` acompaña para el copy. El
-// front lee `mesa_joinable` directo, sin inferir ni reimplementar la regla.
-// Ambos campos son aditivos: un front que los ignora ve lo mismo que ayer.
+// Se filtra al leer, sin escribir: la fila sigue `pending` en la base porque una invitación
+// pendiente también da acceso a la mesa (`requireMesaParticipant`), a la selección informativa
+// propia (`informativeSelections`) y al historial (`GET /mesas/mine`) de quien declaró con ella.
+// Aceptarla ya da 410 `mesa_not_joinable` bajo el lock de la mesa.
+//
+// La regla es EL MISMO `mesaViva()` que gatea las dos puertas de entrar, en JS y no en SQL, que
+// sería una segunda expresión de la regla desincronizándose sola. `mesa_joinable` sigue en la
+// respuesta (ahora siempre true): el front lo conserva como defensa para la carrera, una mesa que
+// cierra entre este listado y el toque. `mesa_status` acompaña para el copy.
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -63,14 +66,15 @@ router.get('/', async (req, res, next) => {
     // respondería 200 a este usuario. La misma regla n164 (`profileIdentity.fotoVisibleN164`) que la
     // ruta y que la pista de la notificación. El listado sólo trae invitaciones RECIBIDAS, así que
     // la clave va siempre. El id del invitador no sale: es sólo para calcularla.
-    const conFoto = await Promise.all(rows.map((r) => profileIdentity.fotoVisibleN164(
+    const vivas = rows.filter((r) => stateMachine.mesaViva(r.mesa_status));
+    const conFoto = await Promise.all(vivas.map((r) => profileIdentity.fotoVisibleN164(
       { userId: r.foto_inviter_id, status: r.foto_inviter_status, tieneFoto: r.foto_tiene })));
     res.json({
       // AB-NOMBRE-RESTO (2026-09-25) · `restaurant_name` con la MISMA regla que
       // GET /mesas/:code (el nombre que se le puso a la mesa si el restaurante es
       // privado). Cambia el VALOR, no las claves: las dos columnas auxiliares no
       // salen en la respuesta.
-      invitations: rows.map(({
+      invitations: vivas.map(({
         nombre_restaurant_status, nombre_restaurant_label, foto_inviter_id: _id, foto_inviter_status: _st,
         foto_tiene: _tf, ...row
       }, i) => ({

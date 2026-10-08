@@ -34,8 +34,8 @@
         "403": ["user_suspended"],
         "429": ["join_requests_rate_limited"]
       },
-      "cuenta_no_activa": "403 user_suspended, igual que el resto de las rutas autenticadas: la ruta ya lo corta y el servicio lo repite bajo lock por si la cuenta cambió en el medio.",
-      "no_oracular": "Mesa inexistente, pagada (fully_paid) o cerrada contestan el MISMO 404 {\"error\":\"join_code_not_found\"}, byte por byte.",
+      "cuenta_no_activa": "403 user_suspended, igual que el resto de las rutas autenticadas: la ruta ya lo corta y el servicio lo repite bajo lock por si la cuenta cambió en el medio. Exista o no la mesa del código: la misma respuesta.",
+      "no_oracular": "Mesa inexistente, pagada (fully_paid), cerrada o cuyo titular ya no está activo (suspendido o eliminado) contestan el MISMO 404 {\"error\":\"join_code_not_found\"}, byte por byte. Quien ya está adentro sigue entrando directo.",
       "rechazo_previo": "409 join_request_not_allowed: el titular ya rechazó a esta cuenta en esta mesa; no puede volver a pedir."
     },
     "estado": {

@@ -50,6 +50,11 @@ fila y el toast.
     abajo queda en los 26 px del círculo. Los dos textos salen de `en.ts`.
   - `division-fusionada` y `burbuja-abajo` se reescriben a lo nuevo: sin cartel con un consumo incompleto y sin
     consumos, «Continuar» no avanza y no hay toast, y nada se superpone a 375×667 y 390×844.
+- **Espejo al día con lo servido (adenda 1):** contra App Backend 2.166.2 (inventario de `56359acb`, contenido
+  `22e8a48`), leído con `git show` del `origin/main` del dueño, sin fetch. Siguen 125 archivos; cambian cinco
+  (`contract/mesa-join-requests-v1.json`, `routes/invitations.js`, `routes/notifications.js`,
+  `services/joinRequests.js`, `services/notifications.js`). En el contrato sólo cambia texto y ninguna respuesta cambia
+  de forma: el front no cambia. No incluye 2.167.0, que no está servida.
 
 ## 0.223.0 — «Unirme con código» en Mesas y la mesa del titular reorganizada, «Tu mesa» (2026-10-07)
 

@@ -24,13 +24,11 @@ router.get('/', validateQuery(notificationsQuery), async (req, res, next) => {
          FROM notifications WHERE ${where}
         ORDER BY created_at DESC LIMIT $2 OFFSET $3`, params
     );
-    const { rows: countRows } = await pool.query(
-      `SELECT COUNT(*)::int AS unread FROM notifications WHERE user_id = $1 AND read_at IS NULL`,
-      [req.user.id]
-    );
+    // La misma cuenta que la campana (`notifs.unreadCount`, v2.166.2 · decisión 228).
+    const unread = await notifs.unreadCount(req.user.id);
     res.json({
       notifications: rows,
-      unread_count: countRows[0].unread,
+      unread_count: unread,
       limit, offset,
     });
   } catch (err) { next(err); }

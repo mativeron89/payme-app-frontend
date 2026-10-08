@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "8daca40b0786720b70d08ad25fe5168ce9c4124d",
+  "commit": "22e8a48e91cb86c7e6a98aa9307249fb67f2cfca",
   "total": 125,
   "archivos": [
     {
@@ -19,8 +19,8 @@
     {
       "origen": "contract/mesa-join-requests-v1.json",
       "destino": "contract/mesa-join-requests-v1.json",
-      "sha256": "8cce3d87e8e553d4640f56710c56317d9b35c94aa2efc5c6e349c90f232bfb56",
-      "bytes": 6283
+      "sha256": "dc2c7270f81ed1dd910bc0530ec83ea8fa47749dc01c7cb7a55a9a36cc34b66f",
+      "bytes": 6441
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
@@ -415,8 +415,8 @@
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "894ae56598dfd9dbbc666e5f991db95209a43587e21f3c6afd43d4939c4c132f",
-      "bytes": 17268
+      "sha256": "e753869699f6021a1b4482fb610fdece9d3afd041d276427c181327a7fadb5f3",
+      "bytes": 17695
     },
     {
       "origen": "routes/joinRequests.js",
@@ -439,8 +439,8 @@
     {
       "origen": "routes/notifications.js",
       "destino": "routes/notifications.js",
-      "sha256": "a1d9123f1c5788db7454faac39ce8f3675f47f42f8672527ddf583d552aaff8b",
-      "bytes": 4816
+      "sha256": "8339e6d4b8181c94d96ef7875373dd0bcfa813cc3e3a211c0a934b77b3888949",
+      "bytes": 4775
     },
     {
       "origen": "routes/ocr.js",
@@ -595,8 +595,8 @@
     {
       "origen": "services/joinRequests.js",
       "destino": "services/joinRequests.js",
-      "sha256": "44a64bc12dd911012d1db29f500ed802c7ef53e3f308b0915137d1e06bdec89e",
-      "bytes": 16371
+      "sha256": "832d627eeb06ea56b54ae005b38d4d1d86a6d14bd9c62313cd477c601b4630b4",
+      "bytes": 17238
     },
     {
       "origen": "services/legalAcceptance.js",
@@ -631,8 +631,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "022630689e8288cffc4dafa50eeb1c6fdf1a5eb9274f20fa6a2d4bb878eab47d",
-      "bytes": 10669
+      "sha256": "f7a02698a1d2726c857e9a29495c56b4e716bfcd7c2a0b38d4cb74db1629a664",
+      "bytes": 11539
     },
     {
       "origen": "services/ocrRail.js",
