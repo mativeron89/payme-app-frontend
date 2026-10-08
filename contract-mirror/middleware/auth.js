@@ -217,8 +217,17 @@ async function guestOrAuth(req, res, next) {
  *
  * v2.5.1 P1 #8: para guests, valida por token_hash primero (nuevos links)
  *               con fallback a token crudo (legacy).
+ *
+ * v2.168.1 · n325 (D237): `ajenoComoInexistente` le responde a quien no participa lo mismo que a un código que no
+ * existe (404 `mesa_not_found`, byte por byte), para no decir qué códigos existen. Quién entra no cambia: es la
+ * misma consulta, sólo cambia la respuesta del rechazo. La usa `GET /api/mesas/:code` (`requireMesaParticipantSinRevelar`);
+ * las otras rutas de `requireMesaParticipant` conservan su 403 (residual declarado de n325).
  */
-async function requireMesaParticipant(req, res, next) {
+const MESA_NO_ENCONTRADA = Object.freeze({ error: 'mesa_not_found' });
+async function verificarParticipante(req, res, next, { ajenoComoInexistente = false } = {}) {
+  const noParticipa = () => (ajenoComoInexistente
+    ? res.status(404).json(MESA_NO_ENCONTRADA)
+    : res.status(403).json({ error: 'not_a_mesa_participant' }));
   try {
     const code = req.params.code;
     const { rows: mRows } = await pool.query(
@@ -242,7 +251,7 @@ async function requireMesaParticipant(req, res, next) {
            FROM mesas WHERE code = $1`,
         [code]
       );
-      if (m2.length === 0) return res.status(404).json({ error: 'mesa_not_found' });
+      if (m2.length === 0) return res.status(404).json(MESA_NO_ENCONTRADA);
       req.mesa = m2[0];
     } else {
       req.mesa = mRows[0];
@@ -262,7 +271,7 @@ async function requireMesaParticipant(req, res, next) {
           return res.status(503).json({ error: 'invitation_link_unavailable' });
         }
         if (!versionedInvitationId) {
-          return res.status(403).json({ error: 'not_a_mesa_participant' });
+          return noParticipa();
         }
       }
 
@@ -310,7 +319,7 @@ async function requireMesaParticipant(req, res, next) {
         [req.mesa.id, hash, raw, versionedInvitationId]
       );
       if (rowCount === 0) {
-        return res.status(403).json({ error: 'not_a_mesa_participant' });
+        return noParticipa();
       }
       req.mesaRole = 'guest';
       return next();
@@ -335,7 +344,7 @@ async function requireMesaParticipant(req, res, next) {
       [req.mesa.id, u]
     );
     if (rowCount === 0) {
-      return res.status(403).json({ error: 'not_a_mesa_participant' });
+      return noParticipa();
     }
     req.mesaRole = 'participant';
     next();
@@ -344,11 +353,16 @@ async function requireMesaParticipant(req, res, next) {
     res.status(500).json({ error: 'mesa_check_failed' });
   }
 }
+// De tres argumentos: Express trata una función de cuatro como manejador de errores.
+const requireMesaParticipant = (req, res, next) => verificarParticipante(req, res, next);
+const requireMesaParticipantSinRevelar = (req, res, next) =>
+  verificarParticipante(req, res, next, { ajenoComoInexistente: true });
 
 module.exports = {
   requireAuth,
   guestOrAuth,
   requireMesaParticipant,
+  requireMesaParticipantSinRevelar,
   verifyJwt,
   // Compartido con /auth/logout: aceptar una forma legacy en el middleware
   // pero no poder revocarla dejaría una sesión activa tras un logout exitoso.

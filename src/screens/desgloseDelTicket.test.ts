@@ -13,13 +13,13 @@ describe('desgloseDelTicket · sin descuento (D209, D215)', () => {
   it('🔴 IVA incluido: los ítems suman el total impreso; nada queda aparte', () => {
     const d = desgloseDelTicket({ sumaItems: 42000, ticketValido: true, impreso: 42000, totales });
     expect(claves(d)).toEqual(['subtotal:36207', 'iva:5793', 'total:42000']);
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 0 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 0, servicioCents: 0 });
   });
 
   it('🔴 IVA agregado: los ítems suman EXACTO el subtotal; el IVA queda aparte', () => {
     const d = desgloseDelTicket({ sumaItems: 36207, ticketValido: true, impreso: 42000, totales });
     expect(claves(d)).toEqual(['subtotal:36207', 'iva:5793', 'total:42000']);
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 5793, descuentoCents: 0 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 5793, descuentoCents: 0, servicioCents: 0 });
   });
 
   it.each([
@@ -35,7 +35,7 @@ describe('desgloseDelTicket · sin descuento (D209, D215)', () => {
 
   it('con IVA cero y los ítems en el total, nada aparte', () => {
     const d = desgloseDelTicket({ sumaItems: 42000, ticketValido: true, impreso: 42000, totales: { subtotal_cents: 42000, tax_cents: 0 } });
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 0 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 0, servicioCents: 0 });
   });
 });
 
@@ -43,7 +43,7 @@ describe('desgloseDelTicket · con descuento (D218)', () => {
   it('🔴 sin totales: ítems − descuento = impreso → Descuento y Total', () => {
     const d = desgloseDelTicket({ sumaItems: 84000, ticketValido: true, impreso: 79000, totales: null, ajustes: descuento50 });
     expect(claves(d)).toEqual(['descuento:5000', 'total:79000']);
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 5000 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 5000, servicioCents: 0 });
   });
 
   it('🔴 subtotal antes del descuento, sin IVA: Subtotal, Descuento, Total', () => {
@@ -65,7 +65,7 @@ describe('desgloseDelTicket · con descuento (D218)', () => {
       sumaItems: 84000, ticketValido: true, impreso: 92440, totales: { subtotal_cents: 84000, tax_cents: 13440 }, ajustes: descuento50,
     });
     expect(claves(d)).toEqual(['subtotal:84000', 'iva:13440', 'descuento:5000', 'total:92440']);
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 13440, descuentoCents: 5000 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 13440, descuentoCents: 5000, servicioCents: 0 });
   });
 
   it('IVA incluido y descuento: el IVA no queda aparte, el descuento sí', () => {
@@ -74,7 +74,7 @@ describe('desgloseDelTicket · con descuento (D218)', () => {
       sumaItems: 89000, ticketValido: true, impreso: 84000, totales: { subtotal_cents: 72414, tax_cents: 11586 }, ajustes: descuento50,
     });
     expect(claves(d)).toEqual(['descuento:5000', 'subtotal:72414', 'iva:11586', 'total:84000']);
-    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 5000 });
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 5000, servicioCents: 0 });
   });
 
   it('🔴 ítems editados que ya no cierran con el descuento: «ninguno»', () => {
@@ -106,5 +106,58 @@ describe('la nota y el monto del descuento', () => {
     expect(notaDeLoQueNoSeReparte({ ivaCents: 13440, descuentoCents: 5000 }, t))
       .toBe('Lo que paga cada uno todavía no incluye el IVA ($134.40) ni el descuento (−$50)');
     expect(notaDeLoQueNoSeReparte({ ivaCents: 0, descuentoCents: 0 }, t)).toBeNull();
+  });
+});
+
+describe('desgloseDelTicket · con cargo por servicio (D224)', () => {
+  const servicio85 = [{ kind: 'service_charge' as const, amount_cents: 8500 }];
+  const t = (s: string, ...a: unknown[]) => a.reduce<string>((acc, v, i) => acc.replace(`{${i}}`, String(v)), s);
+
+  it('🔴 sin totales: ítems + servicio = impreso → Cargo por servicio y Total; el servicio aparte', () => {
+    const d = desgloseDelTicket({ sumaItems: 84000, ticketValido: true, impreso: 92500, totales: null, ajustes: servicio85 });
+    expect(claves(d)).toEqual(['servicio:8500', 'total:92500']);
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 0, descuentoCents: 0, servicioCents: 8500 });
+  });
+
+  it('🔴 IVA agregado y servicio: Subtotal, IVA, Cargo por servicio, Total (plan A)', () => {
+    const d = desgloseDelTicket({
+      sumaItems: 84000, ticketValido: true, impreso: 105940, totales: { subtotal_cents: 84000, tax_cents: 13440 }, ajustes: servicio85,
+    });
+    expect(claves(d)).toEqual(['subtotal:84000', 'iva:13440', 'servicio:8500', 'total:105940']);
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 13440, descuentoCents: 0, servicioCents: 8500 });
+  });
+
+  it('🔴 IVA, servicio y descuento después del subtotal: el servicio antes del descuento', () => {
+    const d = desgloseDelTicket({
+      sumaItems: 84000, ticketValido: true, impreso: 100940, totales: { subtotal_cents: 84000, tax_cents: 13440 },
+      ajustes: [{ kind: 'discount', amount_cents: 5000 }, ...servicio85],
+    });
+    expect(claves(d)).toEqual(['subtotal:84000', 'iva:13440', 'servicio:8500', 'descuento:5000', 'total:100940']);
+    expect(d.tipo === 'cierra' && d.aparte).toEqual({ ivaCents: 13440, descuentoCents: 5000, servicioCents: 8500 });
+  });
+
+  it('con el subtotal ya descontado, el descuento va primero, como hoy', () => {
+    const d = desgloseDelTicket({
+      sumaItems: 84000, ticketValido: true, impreso: 100140, totales: { subtotal_cents: 79000, tax_cents: 12640 },
+      ajustes: [{ kind: 'discount', amount_cents: 5000 }, ...servicio85],
+    });
+    expect(claves(d)).toEqual(['descuento:5000', 'subtotal:79000', 'iva:12640', 'servicio:8500', 'total:100140']);
+  });
+
+  it('🔴 sin el servicio no cierra: el servicio no se resta ni se ignora', () => {
+    // Ítems editados que ya no cierran con el servicio.
+    expect(desgloseDelTicket({ sumaItems: 80000, ticketValido: true, impreso: 92500, totales: null, ajustes: servicio85 }))
+      .toEqual({ tipo: 'ninguno' });
+  });
+
+  it('🔴 las cuatro notas con el servicio (plan C, aprobadas)', () => {
+    expect(notaDeLoQueNoSeReparte({ ivaCents: 0, descuentoCents: 0, servicioCents: 8500 }, t))
+      .toBe('Lo que paga cada uno todavía no incluye el cargo por servicio ($85)');
+    expect(notaDeLoQueNoSeReparte({ ivaCents: 13440, descuentoCents: 0, servicioCents: 8500 }, t))
+      .toBe('Lo que paga cada uno todavía no incluye el IVA ($134.40) ni el cargo por servicio ($85)');
+    expect(notaDeLoQueNoSeReparte({ ivaCents: 0, descuentoCents: 5000, servicioCents: 8500 }, t))
+      .toBe('Lo que paga cada uno todavía no incluye el cargo por servicio ($85) ni el descuento (−$50)');
+    expect(notaDeLoQueNoSeReparte({ ivaCents: 13440, descuentoCents: 5000, servicioCents: 8500 }, t))
+      .toBe('Lo que paga cada uno todavía no incluye el IVA ($134.40), el cargo por servicio ($85) ni el descuento (−$50)');
   });
 });

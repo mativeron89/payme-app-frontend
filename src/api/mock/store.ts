@@ -165,8 +165,18 @@ export interface MockMesa {
   /**
    * D218 · `mesas.metadata.ticket_adjustments` del dueño (2.164.0): sólo desde un
    * recibo v3 aceptado.
+   * D224 · versión 2 (2.168.0): desde un recibo v4, con los cargos por servicio.
    */
-  ticket_adjustments?: { version: 1; discounts_cents: number[]; items_total_cents: number };
+  ticket_adjustments?:
+    | { version: 1; discounts_cents: number[]; items_total_cents: number }
+    | {
+      version: 2;
+      discounts_cents: number[];
+      service_charges_cents: number[];
+      subtotal_cents: number | null;
+      tax_cents: number | null;
+      items_total_cents: number;
+    };
 }
 
 export interface MockIdemEntry {
@@ -1675,10 +1685,26 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     ...(ticketTotalsPublicables(m)
       ? { ticket_totals: { subtotal_cents: m.ticket_totals!.subtotal_cents, tax_cents: m.ticket_totals!.tax_cents } }
       : {}),
-    // D218 · con `adjustments_version=1`: el descuento, sólo de una mesa sin
-    // editar (total = suma de los platos del recibo).
+    // D218 · D224 · con `adjustments_version=2` (lo que pide la app): los
+    // descuentos y los cargos por servicio, sólo de una mesa sin editar (total =
+    // suma de los platos del recibo). Una fila v2 trae además `ticket_totals`
+    // con lo impreso (subtotal y, si hay, IVA); una v1, sólo descuentos.
     ...(m.ticket_adjustments && m.total_cents === m.ticket_adjustments.items_total_cents
-      ? { ticket_adjustments: m.ticket_adjustments.discounts_cents.map((amount_cents) => ({ kind: 'discount' as const, amount_cents })) }
+      ? {
+        ticket_adjustments: [
+          ...m.ticket_adjustments.discounts_cents.map((amount_cents) => ({ kind: 'discount' as const, amount_cents })),
+          ...(m.ticket_adjustments.version === 2
+            ? m.ticket_adjustments.service_charges_cents.map((amount_cents) => ({ kind: 'service_charge' as const, amount_cents }))
+            : []),
+        ],
+        ...(m.ticket_adjustments.version === 2 && m.ticket_adjustments.subtotal_cents !== null
+          ? {
+            ticket_totals: m.ticket_adjustments.tax_cents === null
+              ? { subtotal_cents: m.ticket_adjustments.subtotal_cents }
+              : { subtotal_cents: m.ticket_adjustments.subtotal_cents, tax_cents: m.ticket_adjustments.tax_cents },
+          }
+          : {}),
+      }
       : {}),
   };
 }

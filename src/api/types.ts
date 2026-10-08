@@ -754,8 +754,9 @@ export interface MesaDetail {
    */
   ticket_totals?: TicketTotals;
   /**
-   * D218 · con `adjustments_version=1`: los descuentos impresos, sólo si la
-   * mesa no se editó (`total_cents` es la suma de los ítems del recibo).
+   * D218 · D224 · con `adjustments_version=2`: los descuentos y los cargos por
+   * servicio impresos, sólo si la mesa no se editó (`total_cents` es la suma de
+   * los ítems del recibo). Una fila v2 trae además `ticket_totals`.
    */
   ticket_adjustments?: TicketAdjustment[];
 }
@@ -1042,9 +1043,12 @@ export interface TicketTotals {
  * D218 · App Backend 2.164.0 (`ticket_adjustments` de `ocr-merchant-v2.json`):
  * un descuento impreso, aparte. El importe es positivo y el signo lo da `kind`
  * (un descuento resta). La etiqueta impresa nunca se publica. No se reparte.
+ * D224 · App Backend 2.168.0 (`ticket_adjustments_v2`, con
+ * `adjustments_version=2`): también el cargo por servicio impreso, que SUMA.
+ * Tampoco se reparte ni es un plato.
  */
 export interface TicketAdjustment {
-  kind: 'discount';
+  kind: 'discount' | 'service_charge';
   amount_cents: number;
 }
 
@@ -1072,8 +1076,9 @@ export interface OcrResponse {
    */
   ticket_totals?: TicketTotals;
   /**
-   * D218 · sólo con `contract_version=2` y `adjustments_version=1` negociados.
-   * Presente ⇒ `total_cents − Σ amount_cents (+ IVA agregado)` es el impreso.
+   * D218 · D224 · sólo con `contract_version=2` y `adjustments_version=2`
+   * negociados. Presente ⇒ `total_cents + Σservicio − Σdescuento (+ IVA
+   * agregado)` es el impreso.
    */
   ticket_adjustments?: TicketAdjustment[];
   warnings: OcrWarning[];

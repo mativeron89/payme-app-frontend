@@ -54,6 +54,12 @@ if (USE_REAL && !(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS
   throw new Error(msg);
 }
 const ocrTextract = USE_REAL ? require('../services/ocrTextract') : null;
+// v2.167.0 · D220 · los contadores de «Tickets» para OPS. Sólo el modo real: el mock no se cuenta. La
+// escritura sale sin que la ruta la espere y nunca lanza (services/ticketMetrics.js).
+const ticketMetrics = require('../services/ticketMetrics');
+function contarSiReal(evento) {
+  if (USE_REAL) ticketMetrics.contar(evento);
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -77,18 +83,22 @@ function parseImageUpload(req, res, next) {
   uploadImage(req, res, (err) => {
     if (!err) return next();
     if (err.message === 'invalid_image_type') {
+      contarSiReal(ticketMetrics.eventoDeError('invalid_image_type'));
       const out = errorOcr('invalid_image_type');
       return res.status(out.status).json(out.body);
     }
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
+        contarSiReal(ticketMetrics.eventoDeError('image_too_large'));
         const out = errorOcr('image_too_large');
         return res.status(out.status).json(out.body);
       }
+      contarSiReal(ticketMetrics.eventoDeError('invalid_multipart'));
       const out = errorOcr('invalid_multipart');
       return res.status(out.status).json(out.body);
     }
     if (err.message === 'Unexpected end of form') {
+      contarSiReal(ticketMetrics.eventoDeError('invalid_multipart'));
       const out = errorOcr('invalid_multipart');
       return res.status(out.status).json(out.body);
     }
@@ -207,7 +217,10 @@ router.post('/', (req, res, next) => {
   // v2.161.0 · AB-NOCHE D · códigos de aviso nuevos (`no_prices_found`), con la misma negociación exacta.
   req.ocrWarningsVersion = req.ocrContractVersion === 2 && req.query.warnings_version === '2' ? 2 : undefined;
   // v2.164.0 · AB-NOCHE F · D218: el descuento aparte (`ticket_adjustments`), con la misma regla exacta.
-  req.ocrAdjustmentsVersion = req.ocrContractVersion === 2 && req.query.adjustments_version === '1' ? 1 : undefined;
+  // v2.168.0 · AB-SERVICIO-APARTE · D224: `adjustments_version=2` pide además la lectura nueva, con el cargo por
+  // servicio aparte (`service_charge`). Sin él, la lectura de siempre, byte por byte.
+  const ajustes = req.ocrContractVersion === 2 ? req.query.adjustments_version : undefined;
+  req.ocrAdjustmentsVersion = ajustes === '1' ? 1 : ajustes === '2' ? 2 : undefined;
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -224,6 +237,7 @@ router.post('/', (req, res, next) => {
         detected_magic: magic,
         size: req.file.size,
       });
+      contarSiReal(ticketMetrics.eventoDeError('invalid_image_type'));
       const out = errorOcr('invalid_image_type', {
         message: 'File content does not match declared image type',
       });
@@ -235,6 +249,7 @@ router.post('/', (req, res, next) => {
     // igual en mock y en real. Se mide el buffer recibido, no el tamaño declarado.
     if (req.file.buffer.length < MIN_IMAGE_BYTES) {
       logger.warn('ocr_image_too_small', { user_id: req.user.id, size_bytes: req.file.buffer.length });
+      contarSiReal(ticketMetrics.eventoDeError('ticket_image_too_small'));
       const out = errorOcr('ticket_image_too_small', { min_image_bytes: MIN_IMAGE_BYTES });
       return res.status(out.status).json(out.body);
     }
@@ -262,6 +277,7 @@ router.post('/', (req, res, next) => {
       logger.warn('ocr_unsupported_for_provider', {
         user_id: req.user.id, mime: req.file.mimetype, magic,
       });
+      contarSiReal(ticketMetrics.eventoDeError('unsupported_image_type_for_provider'));
       const out = errorOcr('unsupported_image_type_for_provider', {
         provider_mime_types: [...MIME_PROVEEDOR],
         message: 'El proveedor de lectura no procesa este formato de imagen.',
@@ -274,17 +290,22 @@ router.post('/', (req, res, next) => {
       // devolver lo utilizable (acá: nada + warning) para que el usuario
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
-        const result = await ocrTextract.analyzeExpense(req.file.buffer);
+        const result = await ocrTextract.analyzeExpense(req.file.buffer, { servicioAparte: req.ocrAdjustmentsVersion === 2 });
         const respuesta = respuestaOcr(result, {
           mock: false, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
           warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion,
         });
         // El recibo lleva los totales del resultado del servidor aunque el cliente no los negocie.
-        return res.json(req.ocrReceiptRequested
+        const cuerpo = req.ocrReceiptRequested
           ? origenItems.conRecibo(respuesta, req.user.id, { logger, totales: result.ticket_totals,
-            ajustes: result.ticket_adjustments }) : respuesta);
+            ajustes: result.ticket_adjustments }) : respuesta;
+        // Se cuenta lo que la persona recibe: si armar la respuesta falla, el catch lo cuenta UNA vez,
+        // como la respuesta de proveedor no disponible que ve.
+        contarSiReal(ticketMetrics.eventoDeLectura(result, result[ocrTextract.METRICAS]));
+        return res.json(cuerpo);
       } catch (e) {
         if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
+          contarSiReal(ticketMetrics.eventoDeError(e.code));
           const out = errorOcr(e.code);
           return res.status(out.status).json(out.body);
         }
@@ -297,6 +318,7 @@ router.post('/', (req, res, next) => {
         if (e && e.code === 'ocr_daily_quota_exhausted') {
           // Sin `user_id`: el rechazo por cuota no necesita saber quién lo pidió.
           logger.warn('ocr_daily_quota_rejected', {});
+          contarSiReal(ticketMetrics.eventoDeError('ocr_daily_quota_exhausted'));
           const out = errorOcr('ocr_daily_quota_exhausted');
           return res.status(out.status).json(out.body);
         }
@@ -306,6 +328,7 @@ router.post('/', (req, res, next) => {
         // porque la reserva lanza antes de cargar el SDK.
         // v2.163.0 · AB-NOCHE E2: clase y código cerrados, nunca `e.message` (auditoría D217).
         logger.error('ocr_provider_error', { user_id: req.user.id, ...ocrTextract.clasificarErrorDelProveedor(e) });
+        contarSiReal(ticketMetrics.eventoDeError('provider_error'));
         return res.json(respuestaProveedorNoDisponible(req.ocrContractVersion));
       }
     }
@@ -321,6 +344,7 @@ router.post('/', (req, res, next) => {
       ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {
     if (err.message === 'invalid_image_type') {
+      contarSiReal(ticketMetrics.eventoDeError('invalid_image_type'));
       const out = errorOcr('invalid_image_type');
       return res.status(out.status).json(out.body);
     }

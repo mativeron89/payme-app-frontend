@@ -767,7 +767,8 @@ const realApi: Api = {
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
 
   getOpenMesas: () => httpRequest<OpenMesasResponse>('GET', '/mesas/open'),
-  // D218 · `adjustments_version=1` (el descuento aparte, App Backend 2.164.0) y
+  // D218 · D224 · `adjustments_version=2` (el descuento y el cargo por servicio
+  // aparte, App Backend 2.168.0; las filas v1 salen igual con 1 y con 2) y
   // L1 · `totals_version=2` (subtotal e IVA también con IVA agregado, 2.165.0;
   // uno anterior lo ignora). Strings exactos y fijos, escritos acá para que la
   // guarda de interpolaciones no tenga nada que eximir: sin ellos el dueño
@@ -775,9 +776,9 @@ const realApi: Api = {
   getMesa: (code, guestToken) =>
     guestToken
       ? httpGuestRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=1&totals_version=2`, guestToken,
+        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2`, guestToken,
       )
-      : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=1&totals_version=2`),
+      : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2`),
   getInformativeSelection: async (code) => informativeSelectionResponse(
     await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),
   ),

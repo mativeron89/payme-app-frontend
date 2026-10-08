@@ -4,7 +4,7 @@ import { extractApiError } from '../api/errors';
 import { isCurrentSession, loadSession } from '../api/storage';
 import { useAuth } from '../auth/AuthContext';
 import { useIdioma } from '../i18n/idioma';
-import { montoDeDescuento, notaDeLoQueNoSeReparte } from '../screens/desgloseDelTicket';
+import { montoDeDescuento, notaDeLoQueNoSeReparte, type FilaDelDesglose, type LoQueNoSeReparte } from '../screens/desgloseDelTicket';
 import { ticketDigitalView, type TicketDigitalView } from '../screens/ticketDigitalView';
 import { formatMXN } from '../utils/format';
 import { RequestEpoch } from '../utils/requestEpoch';
@@ -180,7 +180,53 @@ export function TicketDigitalDialog({
                   ))}
                 </ul>
               )}
-              {estado.ticket.discountCents !== undefined ? (
+              {estado.ticket.desglose ? (
+                /* D224 · una fila v2 con el impreso deducido sin ambigüedad: el
+                   desglose en el orden de la cuenta, el cargo por servicio en su
+                   línea y el total impreso. El cargo no se reparte. */
+                <>
+                  <dl className="ticket-digital-desglose">
+                    {estado.ticket.desglose.filas.filter((fila) => fila.clave !== 'total').map((fila) => (
+                      <div key={fila.clave}>
+                        <dt>{etiquetaDeFila(fila.clave, t)}</dt>
+                        <dd>{fila.clave === 'descuento' ? montoDeDescuento(fila.cents) : formatMXN(fila.cents)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="ticket-digital-total">
+                    <span>{t('Total del ticket')}</span>
+                    <strong>{formatMXN(estado.ticket.desglose.filas.find((fila) => fila.clave === 'total')!.cents)}</strong>
+                  </div>
+                  <p className="ticket-digital-nota">{notaDelServicio(estado.ticket.desglose.aparte, t)}</p>
+                </>
+              ) : estado.ticket.apartes ? (
+                /* D224 · una fila v2 cuyo impreso no se pudo deducir: como la
+                   mesa con descuento, el total de los consumos y las líneas
+                   aparte. Nunca un total inventado (plan D). */
+                <>
+                  <div className="ticket-digital-total">
+                    <span>{t('Total de los consumos')}</span>
+                    <strong>{formatMXN(estado.ticket.totalCents)}</strong>
+                  </div>
+                  <dl className="ticket-digital-desglose ticket-digital-descuento">
+                    {estado.ticket.apartes.servicioCents > 0 && (
+                      <div>
+                        <dt>{t('Cargo por servicio')}</dt>
+                        <dd>{formatMXN(estado.ticket.apartes.servicioCents)}</dd>
+                      </div>
+                    )}
+                    {estado.ticket.apartes.descuentoCents > 0 && (
+                      <div>
+                        <dt>{t('Descuento')}</dt>
+                        <dd>{montoDeDescuento(estado.ticket.apartes.descuentoCents)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  <p className="ticket-digital-nota">
+                    {notaDelServicio({ ivaCents: 0, ...estado.ticket.apartes }, t)}
+                  </p>
+                </>
+              ) : estado.ticket.discountCents !== undefined ? (
                 /* D218 · con descuento el dueño guarda sólo los descuentos y la
                    suma de los ítems: no hay subtotal, IVA ni total impreso. Lo
                    que siempre es cierto es el total de los consumos y el
@@ -237,4 +283,29 @@ export function TicketDigitalDialog({
       </section>
     </div>
   );
+}
+
+/** D224 · el rótulo de cada fila del desglose, con los textos de «¿Cómo dividen?». */
+function etiquetaDeFila(clave: FilaDelDesglose['clave'], t: (s: string, ...args: unknown[]) => string): string {
+  return clave === 'subtotal' ? t('Subtotal')
+    : clave === 'iva' ? t('IVA')
+      : clave === 'servicio' ? t('Cargo por servicio')
+        : clave === 'descuento' ? t('Descuento')
+          : t('Total del ticket');
+}
+
+/**
+ * D224 · la nota de lo que no se reparte, en «Ver el ticket» de una mesa con
+ * cargo por servicio (plan C aprobado): la corta, como «El descuento no se
+ * reparte.»; con IVA agregado también, la larga de «¿Cómo dividen?», que nombra
+ * los tres.
+ */
+function notaDelServicio(aparte: LoQueNoSeReparte, t: (s: string, ...args: unknown[]) => string): string | null {
+  if (aparte.ivaCents > 0) return notaDeLoQueNoSeReparte(aparte, t);
+  if ((aparte.servicioCents ?? 0) > 0) {
+    return aparte.descuentoCents > 0
+      ? t('El cargo por servicio y el descuento no se reparten.')
+      : t('El cargo por servicio no se reparte.');
+  }
+  return notaDeLoQueNoSeReparte(aparte, t);
 }

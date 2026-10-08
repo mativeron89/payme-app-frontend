@@ -2487,7 +2487,7 @@ export function CreateMesaFlow() {
                   );
                 })}
               </div>
-              {/* D209 · D218 · el subtotal, el IVA y el descuento impresos, arriba
+              {/* D209 · D218 · D224 · el subtotal, el IVA, el cargo por servicio y el descuento impresos, arriba
                   del total y en el orden de la cuenta, sólo cuando el dueño los
                   publica y cierran con los ítems de ahora. Sin ellos, la hoja
                   queda como antes. */}
@@ -2498,8 +2498,10 @@ export function CreateMesaFlow() {
                       <dt>
                         {fila.clave === 'subtotal' ? t('Subtotal')
                           : fila.clave === 'iva' ? t('IVA')
-                            : fila.clave === 'descuento' ? t('Descuento')
-                              : t('Total del ticket')}
+                            // D224 · el cargo por servicio, en su línea, sin signo como el IVA.
+                            : fila.clave === 'servicio' ? t('Cargo por servicio')
+                              : fila.clave === 'descuento' ? t('Descuento')
+                                : t('Total del ticket')}
                       </dt>
                       <dd>{fila.clave === 'descuento' ? montoDeDescuento(fila.cents) : formatMXN(fila.cents)}</dd>
                     </div>

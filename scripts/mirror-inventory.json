@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "22e8a48e91cb86c7e6a98aa9307249fb67f2cfca",
+  "commit": "b551d843669338a6a9eb82c663bf79fd9acac3c8",
   "total": 125,
   "archivos": [
     {
@@ -43,8 +43,8 @@
     {
       "origen": "contract/ocr-merchant-v2.json",
       "destino": "contract/ocr-merchant-v2.json",
-      "sha256": "21eb0948745c05e1bdaba092a20b5bec912340d71265f6419c881d59adf0c1ef",
-      "bytes": 10849
+      "sha256": "379ef9d045b281cd931867d8a7e1c31c39c98d44e4947edaa8a5735333baef2f",
+      "bytes": 15268
     },
     {
       "origen": "contract/restaurant-resolution-v1.json",
@@ -367,8 +367,8 @@
     {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "1fd173642df5eff742d1a3fa3c0948c199e4a7ea20cd77719165879713eab789",
-      "bytes": 13787
+      "sha256": "6fa7a4d531c38f2f56db666e00617e87ae7959d3455bffec4c37f5e54f603b29",
+      "bytes": 14721
     },
     {
       "origen": "routes/account.js",
@@ -427,8 +427,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "8228078b3996e773395d834af6e0b29160b3a27f14c576ebdae14d00344826bc",
-      "bytes": 199198
+      "sha256": "58a88dc37abc01c62fcb36ee451fcfb3b507645590edc0981c2e479f829001d1",
+      "bytes": 200077
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -445,8 +445,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "feb482f80b2d4d85ddde7d1f151290c8a4224e05aa1ffca267088e2278b05cc9",
-      "bytes": 16236
+      "sha256": "7494c74f6955a483f01cf6b1e317a3ead9dcd57d02897fd89a06d3cd002bf55b",
+      "bytes": 17977
     },
     {
       "origen": "routes/payment-methods.js",
@@ -643,8 +643,8 @@
     {
       "origen": "services/ocrResponseContract.js",
       "destino": "services/ocrResponseContract.js",
-      "sha256": "9c75ce7938f033fbdc85286b8e5017dbbefbfc3a8875d620b38fb3dc7c3a6d70",
-      "bytes": 11646
+      "sha256": "4f0fcb576961afb1e877cdceb8a66c46bacbce1d81a2e1351c5bff3dbef8f5e7",
+      "bytes": 13156
     },
     {
       "origen": "services/paymentAttemptReconciler.js",

@@ -342,41 +342,52 @@ export function ticketTotalsOf(value: unknown, printedTotalCents: unknown): Tick
 }
 
 /**
- * D218 · `ticket_adjustments` con la forma del dueño (`ajustesDelTicket` de
- * `contract-mirror/services/ocrResponseContract.js`): de 1 a 10, cada uno
- * `{kind:'discount', amount_cents: entero seguro > 0}` y sin otras claves.
- * `null` = no cumple; sin la clave, `undefined`.
+ * D218 · D224 · `ticket_adjustments` con la forma del dueño (`ajustesDelTicket`
+ * de `contract-mirror/services/ocrResponseContract.js`, con
+ * `OCR_ADJUSTMENT_KINDS_V2`): de 1 a 10, cada uno `{kind, amount_cents: entero
+ * seguro > 0}` y sin otras claves, con `kind` `discount` (resta) o
+ * `service_charge` (suma, sólo con `adjustments_version=2`, que es lo que se
+ * pide). `null` = no cumple; sin la clave, `undefined`.
+ *
+ * El contrato dice «descuentos primero», pero el validador del dueño no lo
+ * exige y acá se suma por tipo: un orden distinto no cambia nada de lo que se
+ * muestra, y rechazarlo tumbaría la lectura entera.
  */
 const AJUSTES_MAX = 10;
+const TIPOS_DE_AJUSTE: readonly TicketAdjustment['kind'][] = ['discount', 'service_charge'];
 export function ticketAdjustmentsOf(value: unknown): TicketAdjustment[] | null | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.length === 0 || value.length > AJUSTES_MAX) return null;
   const out: TicketAdjustment[] = [];
   for (const raw of value) {
     const a = record(raw);
-    if (!a || Object.keys(a).length !== 2 || a.kind !== 'discount'
+    if (!a || Object.keys(a).length !== 2 || !TIPOS_DE_AJUSTE.includes(a.kind as TicketAdjustment['kind'])
         || !safeNonNegative(a.amount_cents) || a.amount_cents === 0) return null;
-    out.push({ kind: 'discount', amount_cents: a.amount_cents });
+    out.push({ kind: a.kind as TicketAdjustment['kind'], amount_cents: a.amount_cents });
   }
   return out;
 }
 
-const sumaDeAjustes = (ajustes: readonly TicketAdjustment[]) => ajustes.reduce((s, a) => s + a.amount_cents, 0);
+/** D224 · la suma de los ajustes de un tipo (el descuento resta y el servicio suma: acá van en positivo). */
+export const sumaDeTipo = (ajustes: readonly TicketAdjustment[] | null | undefined, kind: TicketAdjustment['kind']): number =>
+  (ajustes ?? []).filter((a) => a.kind === kind).reduce((s, a) => s + a.amount_cents, 0);
 
 /**
- * D218 · `ticket_totals` de un ticket con descuento (`totalesConAjustes` del
- * dueño): `subtotal_cents` obligatorio, `tax_cents` opcional, y la identidad
- * incluye el descuento: `S + IVA = impreso` (S ya descontado) o
- * `S + IVA − Σdescuentos = impreso`. Vale sólo con descuentos válidos.
+ * D218 · D224 · `ticket_totals` de un ticket con ajustes (`totalesConAjustes`
+ * del dueño): `subtotal_cents` obligatorio, `tax_cents` opcional, y la identidad
+ * incluye el servicio y el descuento: `S + IVA + C = impreso` (S ya descontado)
+ * o `S + IVA + C − Σdescuentos = impreso`. Vale sólo con algún ajuste válido.
  */
-function ticketTotalsConAjustes(value: unknown, printedTotalCents: unknown, descuentoCents: number): TicketTotals | null {
+function ticketTotalsConAjustes(
+  value: unknown, printedTotalCents: unknown, descuentoCents: number, servicioCents = 0,
+): TicketTotals | null {
   const raw = record(value);
   if (!raw || !('subtotal_cents' in raw)
       || Object.keys(raw).some((key) => !TICKET_TOTALS_KEYS.includes(key))
       || !safeNonNegative(raw.subtotal_cents) || raw.subtotal_cents === 0
       || (raw.tax_cents !== undefined && !safeNonNegative(raw.tax_cents))
-      || !safeNonNegative(printedTotalCents) || descuentoCents <= 0) return null;
-  const conIva = raw.subtotal_cents + (raw.tax_cents ?? 0);
+      || !safeNonNegative(printedTotalCents) || descuentoCents + servicioCents <= 0) return null;
+  const conIva = raw.subtotal_cents + (raw.tax_cents ?? 0) + servicioCents;
   if (conIva !== printedTotalCents && conIva - descuentoCents !== printedTotalCents) return null;
   return raw.tax_cents === undefined
     ? { subtotal_cents: raw.subtotal_cents }
@@ -494,20 +505,21 @@ export function ocrResponse(value: unknown): OcrResponse {
     // Con descuento, el par de siempre puede no cuadrar o faltar el IVA: vale
     // sólo con sus descuentos y la identidad que los incluye.
     ticketTotals = ticketAdjustments
-      ? ticketTotalsConAjustes(body.ticket_totals, body.total_detected_cents, sumaDeAjustes(ticketAdjustments))
+      ? ticketTotalsConAjustes(body.ticket_totals, body.total_detected_cents,
+        sumaDeTipo(ticketAdjustments, 'discount'), sumaDeTipo(ticketAdjustments, 'service_charge'))
       : null;
     if (!ticketTotals) throw new ContractResponseError('ocr');
   }
-  // La invariante del dueño: los ítems menos los descuentos (más el IVA
-  // agregado, si lo hay) son el total impreso.
+  // La invariante del dueño: los ítems, más los cargos por servicio, menos los
+  // descuentos (más el IVA agregado, si lo hay) son el total impreso (D218, D224).
   if (ticketAdjustments) {
-    const descuento = sumaDeAjustes(ticketAdjustments);
+    const neto = sumaDeTipo(ticketAdjustments, 'service_charge') - sumaDeTipo(ticketAdjustments, 'discount');
     const iva = ticketTotals?.tax_cents;
     const impreso = body.total_detected_cents;
     // `total_cents` ya se validó arriba como entero seguro ≥ 0.
     const items = body.total_cents as number;
     const cierra = safeNonNegative(impreso)
-      && [0, ...(iva !== undefined ? [iva] : [])].some((x) => items - descuento + x === impreso);
+      && [0, ...(iva !== undefined ? [iva] : [])].some((x) => items + neto + x === impreso);
     if (!cierra) throw new ContractResponseError('ocr');
   }
 

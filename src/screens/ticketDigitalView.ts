@@ -1,4 +1,6 @@
-import type { MesaDetail } from '../api/types';
+import { sumaDeTipo, ticketAdjustmentsOf } from '../api/contractResponses';
+import type { MesaDetail, TicketAdjustment, TicketTotals } from '../api/types';
+import { desgloseDelTicket, type DesgloseDelTicket, type FilaDelDesglose, type LoQueNoSeReparte } from './desgloseDelTicket';
 
 export interface TicketDigitalItem {
   readonly name: string;
@@ -19,6 +21,17 @@ export interface TicketDigitalView {
   readonly totals?: { readonly subtotalCents: number; readonly taxCents: number; readonly ivaAparte: boolean };
   /** D218 · la suma de los descuentos impresos, sólo cuando el dueño los publica. */
   readonly discountCents?: number;
+  /**
+   * D224 · una fila v2 (con cargo por servicio) cuyo total impreso se pudo
+   * deducir sin ambigüedad: las filas en el orden de la cuenta, terminando en el
+   * total impreso, y lo que no se reparte.
+   */
+  readonly desglose?: { readonly filas: readonly FilaDelDesglose[]; readonly aparte: LoQueNoSeReparte };
+  /**
+   * D224 · una fila v2 cuyo impreso NO se pudo deducir: como la mesa con
+   * descuento de hoy, el total de los consumos y las líneas aparte.
+   */
+  readonly apartes?: { readonly descuentoCents: number; readonly servicioCents: number };
 }
 
 function enteroSeguro(value: unknown, min: number): value is number {
@@ -52,6 +65,41 @@ export function ticketDigitalView(mesa: MesaDetail, expectedCode: string): Ticke
     };
   });
 
+  const base = {
+    code: mesa.code,
+    restaurantName: mesa.restaurant.name,
+    items,
+    totalCents: mesa.total_cents,
+  };
+
+  // D218 · D224 · los ajustes van PRIMERO: con una fila v2 (cargo por servicio,
+  // App Backend 2.168.0) el dueño publica también `ticket_totals`, con otra
+  // identidad, y el control de siempre de abajo lo rechazaría.
+  const ajustes = ajustesDeLaMesa(mesa.ticket_adjustments);
+  if (ajustes) {
+    const descuento = sumaDeTipo(ajustes, 'discount');
+    const servicio = sumaDeTipo(ajustes, 'service_charge');
+    if (servicio === 0 && mesa.ticket_totals === undefined) {
+      // D218 · una fila v1: sólo descuentos y sin totales. Igual que hoy: el
+      // total de los consumos y el descuento aparte.
+      return { ...base, discountCents: descuento };
+    }
+    // D224 · una fila v2. La mesa no guarda el impreso: se deduce con las dos
+    // identidades del dueño y se muestra SÓLO si da un único total que cierra
+    // (la misma cuenta que «¿Cómo dividen?», `desgloseDelTicket`). Si no, como
+    // la mesa con descuento de hoy: nunca un total inventado (plan D).
+    const totales = totalesDeUnaFilaV2(mesa.ticket_totals);
+    const candidatos = totales
+      ? [totales.subtotal_cents + (totales.tax_cents ?? 0) + servicio - descuento,
+        totales.subtotal_cents + (totales.tax_cents ?? 0) + servicio]
+      : [mesa.total_cents + servicio - descuento];
+    const cierran = [...new Set(candidatos)]
+      .map((impreso) => desgloseDelTicket({ sumaItems: mesa.total_cents, ticketValido: true, impreso, totales, ajustes }))
+      .filter((d): d is Extract<DesgloseDelTicket, { tipo: 'cierra' }> => d.tipo === 'cierra');
+    if (cierran.length === 1) return { ...base, desglose: { filas: cierran[0]!.filas, aparte: cierran[0]!.aparte } };
+    return { ...base, apartes: { descuentoCents: descuento, servicioCents: servicio } };
+  }
+
   // D209 · `mesa_detail` del dueño: la clave viene sólo cuando el total de la
   // mesa es el impreso, así que subtotal + IVA tiene que dar `total_cents`
   // exacto. Una forma que no cumple es un contrato roto, igual que lo demás.
@@ -78,31 +126,32 @@ export function ticketDigitalView(mesa: MesaDetail, expectedCode: string): Ticke
     };
   }
 
-  // D218 · el descuento aparte (`adjustments_version=1`), con la forma del dueño:
-  // de 1 a 10, `{kind:'discount', amount_cents > 0}`. Sale sólo de una mesa sin
-  // editar, y entonces el dueño no publica `ticket_totals`: si vinieran los dos,
-  // manda el descuento, que es lo que el visor puede mostrar sin afirmar nada falso.
-  let discountCents: number | undefined;
-  if (mesa.ticket_adjustments !== undefined) {
-    const raw: unknown = mesa.ticket_adjustments;
-    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 10) throw new Error('ticket_digital_malformed');
-    discountCents = 0;
-    for (const a of raw) {
-      const ajuste = typeof a === 'object' && a !== null && !Array.isArray(a) ? a as Record<string, unknown> : null;
-      if (!ajuste || Object.keys(ajuste).length !== 2 || ajuste.kind !== 'discount' || !enteroSeguro(ajuste.amount_cents, 1)) {
-        throw new Error('ticket_digital_malformed');
-      }
-      discountCents += ajuste.amount_cents;
-    }
-    totals = undefined;
-  }
+  return { ...base, ...(totals ? { totals } : {}) };
+}
 
-  return {
-    code: mesa.code,
-    restaurantName: mesa.restaurant.name,
-    items,
-    totalCents: mesa.total_cents,
-    ...(totals ? { totals } : {}),
-    ...(discountCents !== undefined ? { discountCents } : {}),
-  };
+/**
+ * D218 · D224 · `ticket_adjustments` de la mesa, con la forma del dueño: de 1 a
+ * 10, `{kind: 'discount' | 'service_charge', amount_cents > 0}`. Sin la clave,
+ * `null`; con una forma que no cumple, el contrato está roto.
+ */
+function ajustesDeLaMesa(raw: unknown): TicketAdjustment[] | null {
+  if (raw === undefined) return null;
+  const ajustes = ticketAdjustmentsOf(raw);
+  if (!ajustes) throw new Error('ticket_digital_malformed');
+  return ajustes;
+}
+
+/** D224 · `ticket_totals` de una fila v2: `{subtotal_cents > 0, tax_cents? ≥ 0}`, sin otras claves. */
+function totalesDeUnaFilaV2(raw: unknown): TicketTotals | null {
+  if (raw === undefined) return null;
+  const tt = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+  if (
+    !tt
+    || Object.keys(tt).some((k) => k !== 'subtotal_cents' && k !== 'tax_cents')
+    || !enteroSeguro(tt.subtotal_cents, 1)
+    || (tt.tax_cents !== undefined && !enteroSeguro(tt.tax_cents, 0))
+  ) throw new Error('ticket_digital_malformed');
+  return tt.tax_cents === undefined
+    ? { subtotal_cents: tt.subtotal_cents }
+    : { subtotal_cents: tt.subtotal_cents, tax_cents: tt.tax_cents as number };
 }

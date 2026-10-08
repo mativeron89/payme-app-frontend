@@ -6,6 +6,26 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### El cargo por servicio aparte, al día con lo servido · App Backend v2.168.1 · 2026-10-08
+
+Orden `AF-SERVICIO-APARTE-VISIBLE-20261008` (n327, D224, D237); respuesta E del plan: el espejo va contra lo SERVIDO
+del dueño. Scope del lease con `contract-mirror/**` y `scripts/mirror-inventory.json`.
+
+- Contenido: owner **`b551d843669338a6a9eb82c663bf79fd9acac3c8`** (v2.168.1: el detalle de la mesa responde igual,
+  404 `mesa_not_found`, si el código no existe o si no participás, n325; sobre v2.168.0: `ticket_adjustments_v2`
+  con el cargo por servicio, D224).
+- Inventario: el de `main` del owner en **`8b0d177ea6f4a156eab00e4b51548b55ad2b97fe`**, la versión servida
+  (`contract/mirror-inventory.json`, sha256
+  `aaccde3bbb11e9f4c93f16c3a351e093fe1015f5499b389fd1a12bb7ad0abe9b`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `b551d84`; entre `b551d84` y `8b0d177` sólo cambian el inventario, su
+  CHANGELOG y tests del dueño (`git diff --stat`).
+- **125 archivos espejados** (sin cambio de población). Cambian cinco: `contract/ocr-merchant-v2.json`,
+  `middleware/auth.js`, `routes/mesas.js`, `routes/ocr.js` y `services/ocrResponseContract.js`. Copiados con
+  `git show b551d84:<origen>` y con el sha256 que declara el inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni escrituras en
+  ese repo.
+- `--paridad`: espejo = inventario = fuente en `b551d84`, 125/125.
+
 ### Al día con lo servido · App Backend v2.166.2 · 2026-10-07
 
 Orden `AF-INICIO-SAMSUNG-20261007`, adenda 1 (D230 y el espejo al día). Scope del lease con `contract-mirror/**` y

@@ -5,7 +5,8 @@ export async function configurarTicketSinQr(
   options: {
     lostResponse?: boolean;
     ocr?: 'malformed' | 'no_items' | 'no_merchant' | 'budget_exhausted' | 'budget_unavailable' | 'too_small'
-      | 'iva_incluido' | 'iva_agregado' | 'no_prices' | 'descuento' | 'descuento_iva';
+      | 'iva_incluido' | 'iva_agregado' | 'no_prices' | 'descuento' | 'descuento_iva'
+      | 'servicio' | 'servicio_descuento' | 'servicio_iva' | 'servicio_dudoso';
   } = {},
 ): Promise<void> {
   await page.addInitScript((config) => {

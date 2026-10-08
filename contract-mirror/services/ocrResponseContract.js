@@ -33,35 +33,41 @@ function totalesDelTicket(valor, totalImpresoCents) {
  * etiqueta. Devuelve la lista normalizada o `null`.
  */
 const OCR_ADJUSTMENT_KINDS = Object.freeze(['discount']);
+// v2.168.0 · AB-SERVICIO-APARTE · D224: `adjustments_version=2` suma el cargo por servicio impreso, que se suma al
+// total (el signo lo da `kind`). La lista v1 no cambia: el decoder de la App 0.221.0 rechaza un tipo que no conoce.
+const OCR_ADJUSTMENT_KINDS_V2 = Object.freeze(['discount', 'service_charge']);
 const OCR_ADJUSTMENTS_MAX = 10;
-function ajustesDelTicket(valor) {
+function ajustesDelTicket(valor, tipos = OCR_ADJUSTMENT_KINDS) {
   if (!Array.isArray(valor) || valor.length === 0 || valor.length > OCR_ADJUSTMENTS_MAX) return null;
   const out = [];
   for (const a of valor) {
     if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
     const claves = Object.keys(a);
     if (claves.length !== 2 || !claves.includes('kind') || !claves.includes('amount_cents')) return null;
-    if (!OCR_ADJUSTMENT_KINDS.includes(a.kind) || !Number.isSafeInteger(a.amount_cents) || a.amount_cents <= 0) return null;
+    if (!tipos.includes(a.kind) || !Number.isSafeInteger(a.amount_cents) || a.amount_cents <= 0) return null;
     out.push({ kind: a.kind, amount_cents: a.amount_cents });
   }
   return out;
 }
-const sumaDeAjustes = (ajustes) => ajustes.reduce((s, a) => s + a.amount_cents, 0);
+const sumaDeTipo = (ajustes, kind) => ajustes.filter((a) => a.kind === kind).reduce((s, a) => s + a.amount_cents, 0);
 
 /**
  * v2.164.0 · D218: `ticket_totals` de un ticket con descuento, sólo para quien negocia ajustes. El IVA puede
  * faltar (el ticket imprime SUBTOTAL y no IVA), y la identidad incluye el descuento: S + V − D = T (el
  * descuento después del subtotal) o S + V = T (antes, S ya descontado). Devuelve el objeto o `null`.
+ * v2.168.0 · D224: también con un cargo por servicio C (sólo `adjustments_version=2`): S + V + C − D = T, o
+ * S + V + C = T con S ya descontado. Sin cargo (C = 0), la regla de siempre: hace falta un descuento.
  */
-function totalesConAjustes(valor, totalImpresoCents, descuentoCents) {
+function totalesConAjustes(valor, totalImpresoCents, descuentoCents, servicioCents = 0) {
   if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
   const claves = Object.keys(valor);
   if (!claves.includes('subtotal_cents') || claves.some((c) => !['subtotal_cents', 'tax_cents'].includes(c))) return null;
   const { subtotal_cents: subtotal, tax_cents: iva } = valor;
   if (!Number.isSafeInteger(subtotal) || subtotal <= 0) return null;
   if (iva !== undefined && (!Number.isSafeInteger(iva) || iva < 0)) return null;
-  if (!Number.isSafeInteger(totalImpresoCents) || !Number.isSafeInteger(descuentoCents) || descuentoCents <= 0) return null;
-  const conIva = subtotal + (iva ?? 0);
+  if (!Number.isSafeInteger(totalImpresoCents) || !Number.isSafeInteger(descuentoCents) || descuentoCents < 0
+      || !Number.isSafeInteger(servicioCents) || servicioCents < 0 || descuentoCents + servicioCents <= 0) return null;
+  const conIva = subtotal + (iva ?? 0) + servicioCents;
   if (conIva !== totalImpresoCents && conIva - descuentoCents !== totalImpresoCents) return null;
   return iva === undefined ? { subtotal_cents: subtotal } : { subtotal_cents: subtotal, tax_cents: iva };
 }
@@ -177,21 +183,29 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warni
     if (!ticketTotals) {
       // v2.164.0 · D218: con descuento, el par de siempre puede no cuadrar o faltar el IVA. Vale sólo con sus
       // ajustes, y sale sólo a quien negocia `adjustments_version=1`; a quien no, se omite como antes.
-      const ajustes = payload.ticket_adjustments === undefined ? null : ajustesDelTicket(payload.ticket_adjustments);
-      const conAjustes = ajustes && totalesConAjustes(payload.ticket_totals, payload.total_detected_cents, sumaDeAjustes(ajustes));
+      // v2.168.0 · D224: con un cargo por servicio, sólo a quien negocia `adjustments_version=2`.
+      const ajustes = payload.ticket_adjustments === undefined ? null
+        : ajustesDelTicket(payload.ticket_adjustments, OCR_ADJUSTMENT_KINDS_V2);
+      const conAjustes = ajustes && totalesConAjustes(payload.ticket_totals, payload.total_detected_cents,
+        sumaDeTipo(ajustes, 'discount'), sumaDeTipo(ajustes, 'service_charge'));
       if (!conAjustes) throw new Error('ocr_response_ticket_totals_invalid');
-      ticketTotals = adjustmentsVersion === 1 ? conAjustes : undefined;
+      const conServicio = ajustes.some((a) => a.kind === 'service_charge');
+      ticketTotals = adjustmentsVersion === 2 || (adjustmentsVersion === 1 && !conServicio) ? conAjustes : undefined;
     }
   }
   // v2.164.0 · D218: el descuento aparte, sólo para quien negocia `adjustments_version=1`. Invariante: la suma
   // de los ítems menos los descuentos (más el IVA agregado, si lo hay) es el total impreso.
   let ticketAdjustments;
-  if (contractVersion === 2 && adjustmentsVersion === 1 && payload.ticket_adjustments !== undefined) {
-    ticketAdjustments = ajustesDelTicket(payload.ticket_adjustments);
+  // v2.168.0 · D224: `adjustments_version=2` también publica el cargo por servicio, que se suma: la suma de los
+  // ítems, más los cargos, menos los descuentos (más el IVA agregado) es el total impreso. La v1 rechaza un cargo.
+  if (contractVersion === 2 && (adjustmentsVersion === 1 || adjustmentsVersion === 2) && payload.ticket_adjustments !== undefined) {
+    ticketAdjustments = ajustesDelTicket(payload.ticket_adjustments,
+      adjustmentsVersion === 2 ? OCR_ADJUSTMENT_KINDS_V2 : OCR_ADJUSTMENT_KINDS);
     const iva = payload.ticket_totals?.tax_cents;
+    const neto = ticketAdjustments ? sumaDeTipo(ticketAdjustments, 'service_charge') - sumaDeTipo(ticketAdjustments, 'discount') : 0;
     const cierra = ticketAdjustments && Number.isSafeInteger(payload.total_detected_cents)
       && [0, ...(Number.isSafeInteger(iva) ? [iva] : [])]
-        .some((x) => payload.total_cents - sumaDeAjustes(ticketAdjustments) + x === payload.total_detected_cents);
+        .some((x) => payload.total_cents + neto + x === payload.total_detected_cents);
     if (!cierra) throw new Error('ocr_response_ticket_adjustments_invalid');
   }
   return {
@@ -230,6 +244,7 @@ module.exports = {
   totalesConAjustes,
   ajustesDelTicket,
   OCR_ADJUSTMENT_KINDS,
+  OCR_ADJUSTMENT_KINDS_V2,
   OCR_WARNING_CODES,
   OCR_WARNING_CODES_V2,
   OCR_ERROR_STATUS,

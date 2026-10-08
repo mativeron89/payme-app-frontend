@@ -2359,6 +2359,7 @@ async function mockOcrReceipt(
   items: ReadonlyArray<{ name: string; price_cents: number; quantity: number }>,
   totales?: { subtotal_cents: number; tax_cents?: number },
   descuentos?: readonly number[],
+  servicios?: readonly number[],
 ): Promise<string | undefined> {
   if (items.length < 1 || items.length > 100) return undefined;
   const b64url = (bytes: Uint8Array) =>
@@ -2372,15 +2373,19 @@ async function mockOcrReceipt(
     // D209 · con totales válidos el dueño firma un recibo v2 con
     // `t = [subtotal, IVA]` (`receipt` de `ocr-merchant-v2.json`).
     // D218 · si la lectura cierra con descuento, v3 con `d` y `t` (o `null`).
-    v: descuentos ? 3 : totales ? 2 : 1,
+    // D224 · si cierra con un cargo por servicio, v4 con `d` (puede ir vacío),
+    // `s` y `t` (o `null`).
+    v: servicios ? 4 : descuentos ? 3 : totales ? 2 : 1,
     jti: b64url(crypto.getRandomValues(new Uint8Array(16))),
     mode: 'mock',
     iat,
     exp: iat + 2 * 60 * 60,
     items: await Promise.all(items.map(async (i) => [await huella(i.name), i.price_cents, i.quantity])),
-    ...(descuentos
-      ? { d: [...descuentos], t: totales ? [totales.subtotal_cents, totales.tax_cents ?? null] : null }
-      : totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
+    ...(servicios
+      ? { d: [...(descuentos ?? [])], s: [...servicios], t: totales ? [totales.subtotal_cents, totales.tax_cents ?? null] : null }
+      : descuentos
+        ? { d: [...descuentos], t: totales ? [totales.subtotal_cents, totales.tax_cents ?? null] : null }
+        : totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
   };
   const cuerpo = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   return `or1.${cuerpo}.${b64url(crypto.getRandomValues(new Uint8Array(32)))}`;
@@ -2499,6 +2504,51 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       ...(conDescuento ? { receipt: conDescuento } : {}),
     });
   }
+  /**
+   * D224 · seams del cargo por servicio aparte (App Backend 2.168.0, lectura
+   * nueva con `adjustments_version=2`; el mock del dueño nunca lo emite):
+   * - `servicio`: los $840 de platos + $85 de servicio, impreso $925;
+   * - `servicio_descuento`: menos $50 de descuento, impreso $875;
+   * - `servicio_iva`: IVA agregado ($840 + $134.40) + $85, impreso $1,059.40;
+   * - `servicio_dudoso`: el dueño no reconoce el cargo: `total_mismatch`, sin
+   *   ajustes, y la fila no es un plato. El impreso sigue en $925.
+   * Los ítems no cambian: el cargo nunca es un plato.
+   */
+  if (mode === 'servicio' || mode === 'servicio_descuento' || mode === 'servicio_iva' || mode === 'servicio_dudoso') {
+    const servicio = 8500;
+    if (mode === 'servicio_dudoso') {
+      return delay({
+        contract_version: 2,
+        merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+        items,
+        total_cents: total,
+        total_detected_cents: total + servicio,
+        warnings: ['total_mismatch'],
+        mock: true,
+        ...(await mockOcrReceipt(items).then((r) => (r ? { receipt: r } : {}))),
+      });
+    }
+    const descuento = mode === 'servicio_descuento' ? 5000 : 0;
+    const iva = mode === 'servicio_iva' ? Math.round(total * 0.16) : undefined;
+    const totales = iva !== undefined ? { subtotal_cents: total, tax_cents: iva } : undefined;
+    const conServicio = await mockOcrReceipt(items, totales, descuento ? [descuento] : [], [servicio]);
+    return delay({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      items,
+      total_cents: total,
+      total_detected_cents: total + servicio - descuento + (iva ?? 0),
+      ...(totales ? { ticket_totals: totales } : {}),
+      // Los descuentos primero, como los publica el dueño.
+      ticket_adjustments: [
+        ...(descuento ? [{ kind: 'discount' as const, amount_cents: descuento }] : []),
+        { kind: 'service_charge' as const, amount_cents: servicio },
+      ],
+      warnings: ['total_mismatch'],
+      mock: true,
+      ...(conServicio ? { receipt: conServicio } : {}),
+    });
+  }
   const receipt = await mockOcrReceipt(items);
   if (mode === 'no_merchant') {
     return delay({
@@ -2528,7 +2578,7 @@ export async function mockScanTicket(): Promise<OcrResponse> {
  * sólo si es un recibo v2 con `t` válido. El mock no verifica la firma (no tiene
  * la clave del dueño), pero NUNCA toma los totales del cuerpo del pedido.
  */
-function cuerpoDelRecibo(recibo: unknown): { v?: unknown; t?: unknown; d?: unknown; items?: unknown } | null {
+function cuerpoDelRecibo(recibo: unknown): { v?: unknown; t?: unknown; d?: unknown; s?: unknown; items?: unknown } | null {
   if (typeof recibo !== 'string') return null;
   const partes = recibo.split('.');
   if (partes.length !== 3 || partes[0] !== 'or1') return null;
@@ -2579,6 +2629,31 @@ function ajustesDelRecibo(recibo: unknown): MockMesa['ticket_adjustments'] {
   const itemsTotal = itemsDelRecibo(json.items);
   if (itemsTotal === null) return undefined;
   return { version: 1, discounts_cents: [...json.d], items_total_cents: itemsTotal };
+}
+
+/**
+ * D224 · `stored` del dueño (2.168.0): `{version: 2, discounts_cents,
+ * service_charges_cents, subtotal_cents | null, tax_cents | null,
+ * items_total_cents}`, sólo desde un recibo v4 aceptado. Tampoco guarda
+ * `ticket_totals`: el total de la mesa es la suma de los platos.
+ */
+function ajustesV2DelRecibo(recibo: unknown): MockMesa['ticket_adjustments'] {
+  const json = cuerpoDelRecibo(recibo);
+  if (!json || json.v !== 4 || !Array.isArray(json.d) || json.d.length > 10 || !json.d.every(enteroPositivo)
+      || !Array.isArray(json.s) || json.s.length === 0 || json.s.length > 10 || !json.s.every(enteroPositivo)) return undefined;
+  const itemsTotal = itemsDelRecibo(json.items);
+  if (itemsTotal === null) return undefined;
+  const t = Array.isArray(json.t) && json.t.length === 2 ? json.t as unknown[] : null;
+  const subtotal = t && enteroPositivo(t[0]) ? t[0] : null;
+  const iva = t && typeof t[1] === 'number' && Number.isSafeInteger(t[1]) && t[1] >= 0 ? t[1] : null;
+  return {
+    version: 2,
+    discounts_cents: [...json.d],
+    service_charges_cents: [...json.s],
+    subtotal_cents: subtotal,
+    tax_cents: iva,
+    items_total_cents: itemsTotal,
+  };
 }
 
 /** Garantía 3DS pendiente del mock (mesa creada con card, aún pending_auth). */
@@ -2760,7 +2835,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   };
   // D209 · D218 · `stored` del dueño: sólo desde el recibo aceptado, nunca del
   // cuerpo. Con descuento (recibo v3) se guarda el ajuste y no los totales.
-  const ajustesGuardados = ajustesDelRecibo(ocrReceipt);
+  const ajustesGuardados = ajustesV2DelRecibo(ocrReceipt) ?? ajustesDelRecibo(ocrReceipt);
   const totalesGuardados = ajustesGuardados ? undefined : totalesDelRecibo(ocrReceipt);
   if (ajustesGuardados) mesa.ticket_adjustments = ajustesGuardados;
   if (totalesGuardados) mesa.ticket_totals = totalesGuardados;

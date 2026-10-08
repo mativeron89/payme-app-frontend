@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.226.0 — El cargo por servicio aparte, visible y sin repartir (2026-10-08)
+
+Orden AF-SERVICIO-APARTE-VISIBLE-20261008 (35fe11b8…, n327); decisiones D224 («Aparte, sin repartir») y D237. Plan
+aprobado (095df6fa…): A, el orden Subtotal · IVA · Cargo por servicio · Descuento · Total; B, «Cargo por servicio» /
+"Service charge", sin signo como el IVA; C, las notas en las siete combinaciones; D, en el ticket digital, el total
+impreso deducido sólo si cierra único; E, el espejo contra lo servido (App Backend 2.168.1).
+
+- **Se pide la v2** (`adjustments_version=2`, App Backend 2.168.0) al escanear y en el detalle de la mesa. Elige la
+  lectura nueva del ticket: sin ella, el cargo por servicio podía llegar como un plato (D212). El alta (`POST
+  /mesas`) no negocia nada: el dueño guarda la fila v2 desde el recibo v4.
+- **El decodificador** acepta `service_charge` además de `discount` (el validador del dueño, `OCR_ADJUSTMENT_KINDS_V2`),
+  los totales con el servicio y la invariante `ítems + servicio − descuentos (+ IVA) = impreso`. Lo que no cumple se
+  rechaza como hoy. El orden «descuentos primero» del contrato no se exige: el validador del dueño tampoco, y acá se
+  suma por tipo.
+- **«¿Cómo dividen?» y su hoja:** el cargo en su propia línea, «Cargo por servicio», entre el IVA y el descuento, y el
+  total del ticket igual al impreso. Lo que se divide sigue siendo la suma de los platos: debajo del monto, la nota
+  «Lo que paga cada uno todavía no incluye el cargo por servicio ($85)» (y sus combinaciones con el IVA y el
+  descuento). El cargo nunca es un plato para elegir.
+- **El ticket digital** («Tus restaurantes» → «Ver ticket completo») de una mesa con cargo por servicio: la mesa no
+  guarda el impreso, así que se deduce con las identidades del dueño y se muestra sólo si da un único total que cierra;
+  entonces el desglose, «Total del ticket» y «El cargo por servicio no se reparte.» (o «El cargo por servicio y el
+  descuento no se reparten.»). Si no cierra, como la mesa con descuento: «Total de los consumos» y las líneas aparte,
+  nunca un total inventado. Una mesa v1 se ve igual que hoy.
+- **El dudoso** (el dueño no reconoce el cargo): como hoy, el aviso de que el total no cierra, sin línea inventada.
+- **Espejo** contra App Backend 2.168.1 servido (inventario de `8b0d177`, contenido `b551d84`): 125 archivos; cambian
+  cinco (`contract/ocr-merchant-v2.json`, `middleware/auth.js`, `routes/mesas.js`, `routes/ocr.js`,
+  `services/ocrResponseContract.js`). En 2.168.1 el detalle responde 404 `mesa_not_found` también a quien no
+  participa (antes 403): en el ticket digital eso cae en «Este detalle ya no está disponible.», que ya existía.
+- **Mock:** lecturas `servicio`, `servicio_descuento`, `servicio_iva` y `servicio_dudoso` en `payme.app.mock.n179.ocr.v1`;
+  el recibo v4; el alta guarda la fila v2 y el detalle publica los ajustes (y los totales impresos) de una mesa sin
+  editar.
+- **Pruebas:** `ocrServicio.test` (nueva), `desgloseDelTicket.test` (+6: las filas en los cuatro casos, el que no
+  cierra y las cuatro notas nuevas), `ticketDigitalView.test` (+7: v2 sin totales, con IVA agregado e incluido, que no
+  cierra, que cierra con dos totales, v1 igual que hoy, forma rota); las de negociación pasan de `1` a `2`. e2e
+  `ticket-servicio` (9, a 375×667).
+
 ## 0.225.0 — Pestañas sin parpadeo: al volver, lo último visto (2026-10-08)
 
 Orden AF-PESTANAS-SIN-PARPADEO-20261008 (7353d9bb…); decisión D237 (18c7d1c9…), Mati: «espero puedas hacerll mas

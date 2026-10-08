@@ -1130,6 +1130,13 @@ export const EN: Record<string, string> = {
   "Lo que paga cada uno todavía no incluye el IVA ({0}) ni el descuento ({1})": "What each person pays doesn't include VAT ({0}) or the discount ({1}) yet",
   "Total de los consumos": "Total of the items",
   "El descuento no se reparte.": "The discount isn't split.",
+  "Cargo por servicio": "Service charge",
+  "El cargo por servicio no se reparte.": "The service charge isn't split.",
+  "El cargo por servicio y el descuento no se reparten.": "The service charge and the discount aren't split.",
+  "Lo que paga cada uno todavía no incluye el cargo por servicio ({0})": "What each person pays doesn't include the service charge yet ({0})",
+  "Lo que paga cada uno todavía no incluye el IVA ({0}) ni el cargo por servicio ({1})": "What each person pays doesn't include VAT ({0}) or the service charge ({1}) yet",
+  "Lo que paga cada uno todavía no incluye el cargo por servicio ({0}) ni el descuento ({1})": "What each person pays doesn't include the service charge ({0}) or the discount ({1}) yet",
+  "Lo que paga cada uno todavía no incluye el IVA ({0}), el cargo por servicio ({1}) ni el descuento ({2})": "What each person pays doesn't include VAT ({0}), the service charge ({1}) or the discount ({2}) yet",
   // AF-UNIRSE-CODIGO · D219 · D223 · «Unirme con código» y «Tu mesa».
   "Unirme con código": "Join with a code",
   "Escribe el código de la mesa": "Type the table code",

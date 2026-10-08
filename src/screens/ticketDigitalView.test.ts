@@ -50,6 +50,63 @@ describe('ticketDigitalView', () => {
     expect('discountCents' in ticketDigitalView(mesa, 'PA-1234')).toBe(false);
   });
 
+  describe('D224 · una mesa con cargo por servicio (fila v2)', () => {
+    const conServicio = (extra: Partial<MesaDetail>) => ({
+      ...mesa, ticket_adjustments: [{ kind: 'service_charge', amount_cents: 5000 }], ...extra,
+    }) as MesaDetail;
+
+    it('🔴 sin totales: el servicio y el total impreso = ítems + servicio', () => {
+      const vista = ticketDigitalView(conServicio({}), 'PA-1234');
+      expect(vista.desglose?.filas).toEqual([{ clave: 'servicio', cents: 5000 }, { clave: 'total', cents: 47000 }]);
+      expect(vista.desglose?.aparte).toEqual({ ivaCents: 0, descuentoCents: 0, servicioCents: 5000 });
+      expect(vista.totalCents).toBe(42000);
+    });
+
+    it('🔴 con IVA agregado: Subtotal, IVA, Cargo por servicio y el impreso deducido', () => {
+      const vista = ticketDigitalView(conServicio({ ticket_totals: { subtotal_cents: 42000, tax_cents: 6720 } }), 'PA-1234');
+      expect(vista.desglose?.filas.map((f) => `${f.clave}:${f.cents}`))
+        .toEqual(['subtotal:42000', 'iva:6720', 'servicio:5000', 'total:53720']);
+    });
+
+    it('con IVA incluido: el IVA no queda aparte, el servicio sí', () => {
+      const vista = ticketDigitalView(conServicio({ ticket_totals: { subtotal_cents: 36207, tax_cents: 5793 } }), 'PA-1234');
+      expect(vista.desglose?.filas.map((f) => `${f.clave}:${f.cents}`))
+        .toEqual(['subtotal:36207', 'iva:5793', 'servicio:5000', 'total:47000']);
+      expect(vista.desglose?.aparte).toEqual({ ivaCents: 0, descuentoCents: 0, servicioCents: 5000 });
+    });
+
+    it('🔴 si no cierra, como la mesa con descuento: sin total inventado (plan D)', () => {
+      const vista = ticketDigitalView(conServicio({ ticket_totals: { subtotal_cents: 30000, tax_cents: 4800 } }), 'PA-1234');
+      expect(vista.desglose).toBeUndefined();
+      expect(vista.apartes).toEqual({ descuentoCents: 0, servicioCents: 5000 });
+    });
+
+    it('🔴 si cierran DOS totales distintos, tampoco se elige uno (plan D)', () => {
+      // Con IVA igual al descuento, «incluido» y «agregado» cierran los dos.
+      const vista = ticketDigitalView({
+        ...mesa,
+        ticket_adjustments: [{ kind: 'discount', amount_cents: 6000 }, { kind: 'service_charge', amount_cents: 5000 }],
+        ticket_totals: { subtotal_cents: 36000, tax_cents: 6000 },
+      } as MesaDetail, 'PA-1234');
+      expect(vista.desglose).toBeUndefined();
+      expect(vista.apartes).toEqual({ descuentoCents: 6000, servicioCents: 5000 });
+    });
+
+    it('🔴 una mesa v1 (sólo descuentos, sin totales) se ve igual que hoy', () => {
+      const v1 = ticketDigitalView({ ...mesa, ticket_adjustments: [{ kind: 'discount', amount_cents: 5000 }] } as MesaDetail, 'PA-1234');
+      expect(v1.discountCents).toBe(5000);
+      expect(v1.desglose).toBeUndefined();
+      expect(v1.apartes).toBeUndefined();
+    });
+
+    it('🔴 totales de una fila v2 con forma rota: falla cerrado', () => {
+      expect(() => ticketDigitalView(conServicio({ ticket_totals: { subtotal_cents: 0 } as never }), 'PA-1234'))
+        .toThrow('ticket_digital_malformed');
+      expect(() => ticketDigitalView(conServicio({ ticket_totals: { subtotal_cents: 42000, total_cents: 1 } as never }), 'PA-1234'))
+        .toThrow('ticket_digital_malformed');
+    });
+  });
+
   it.each([
     ['vacío', []],
     ['más de 10', Array.from({ length: 11 }, () => ({ kind: 'discount', amount_cents: 100 }))],

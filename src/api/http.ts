@@ -208,8 +208,10 @@ function rawOcrUploadRequest<T>(
     // Extensión opt-in del owner: las pestañas anteriores siguen recibiendo v2 sin claves nuevas.
     // D209 · `totals_version=1` (string exacto) negocia `ticket_totals`.
     // AF-NOCHE-COMANDA · `warnings_version=2` negocia `no_prices_found`.
-    // D218 · `adjustments_version=1` negocia `ticket_adjustments`.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=1`);
+    // D218 · D224 · `adjustments_version=2` negocia `ticket_adjustments` con el
+    // cargo por servicio, y elige la LECTURA NUEVA del ticket (App Backend
+    // 2.168.0): sin ella, el cargo puede llegar como un plato (D212).
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

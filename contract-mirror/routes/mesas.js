@@ -25,7 +25,7 @@ const {
   // Sin `guestOrAuth`: tras el cierre del pago sin cuenta ninguna ruta de la
   // app acepta invitados. El middleware sigue existiendo y exportado, pero ya
   // no tiene un solo call site — se deja en pie porque sacarlo es otro cambio.
-  requireAuth, requireMesaParticipant,
+  requireAuth, requireMesaParticipant, requireMesaParticipantSinRevelar,
 } = require('../middleware/auth');
 const schemas = require('../schemas');
 const mesaPresentation = require('../services/mesaPresentation');
@@ -199,7 +199,7 @@ async function promoteSavedCardSnapshot({ row, userId, snapshot }) {
  * C3 · lee de la mesa lo que el consumidor necesita para no confundir un cierre
  * SIN COBROS con el vencimiento de una garantía.
  */
-async function cerrojoDeGarantia(mesa, { totalesAnclados = false } = {}) {
+async function cerrojoDeGarantia(mesa, { totalesAnclados = false, versionDeAjustes = 1 } = {}) {
   // `status` sale de ESTA lectura y no del snapshot del middleware: si la mesa
   // cierra por selección entre las dos, la respuesta saldría con `open` y un
   // motivo de cierre al lado, que es una contradicción publicada.
@@ -211,10 +211,15 @@ async function cerrojoDeGarantia(mesa, { totalesAnclados = false } = {}) {
   const escrito = fila?.metadata?.closure_reason || null;
   // v2.156.0 · AB-D209 · subtotal e IVA impresos, de la MISMA lectura (sin otra consulta).
   // v2.165.0 · AB-NOCHE G · L1: con `totals_version=2` también sale con IVA agregado si la mesa no se editó.
+  // v2.168.0 · AB-SERVICIO-APARTE · D224: con `adjustments_version=2`, una mesa con cargo por servicio publica
+  // también su subtotal e IVA, de la fila v2 de los ajustes. Sin 2, la regla de siempre, byte a byte.
   const ticketTotals = origenItems.totalesPublicables(fila?.metadata?.ticket_totals, Number(mesa.total_cents),
-    { anclados: totalesAnclados });
+    { anclados: totalesAnclados })
+    ?? (versionDeAjustes === 2
+      ? origenItems.totalesDeAjustesPublicables(fila?.metadata?.ticket_adjustments, Number(mesa.total_cents)) : null);
   // v2.164.0 · AB-NOCHE F · D218: el descuento aparte, si la mesa sigue igual a los platos del ticket.
-  const ticketAdjustments = origenItems.ajustesPublicables(fila?.metadata?.ticket_adjustments, Number(mesa.total_cents));
+  const ticketAdjustments = origenItems.ajustesPublicables(fila?.metadata?.ticket_adjustments, Number(mesa.total_cents),
+    { version: versionDeAjustes });
   if (escrito) {
     return { guarantee_mode: guaranteeMode, status, closure_reason: escrito, ticket_totals: ticketTotals,
       ticket_adjustments: ticketAdjustments };
@@ -1380,7 +1385,9 @@ router.put('/:code/informative-selection', informativePrivate, requireAuth, priv
       next(err);
     }
   });
-router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant, async (req, res, next) => {
+// v2.168.1 · n325 (D237): a quien no participa, la misma respuesta que a un código que no existe (404
+// `mesa_not_found`), para no decir qué códigos existen. Quién entra no cambia.
+router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipantSinRevelar, async (req, res, next) => {
   try {
     const mesa = req.mesa;
     // `req.mesa` no trae `guarantee_mode` y su middleware está fuera del
@@ -1392,7 +1399,8 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
     // scope, y deja una sola verdad para el consumidor.
     // v2.165.0 · AB-NOCHE G · L1: `totals_version=2` exacto. El visor del ticket de la App 0.220.0 exige
     // subtotal + IVA = total de la mesa y lanza si no; sin negociar, la regla de siempre, byte a byte.
-    const garantiaMesa = await cerrojoDeGarantia(mesa, { totalesAnclados: req.query.totals_version === '2' });
+    const garantiaMesa = await cerrojoDeGarantia(mesa, { totalesAnclados: req.query.totals_version === '2',
+      versionDeAjustes: req.query.adjustments_version === '2' ? 2 : 1 });
     const informativeCapability = await informativeSelections.getCapability({ mesaId: mesa.id, userId: req.user.id });
     // Decisión 79 (2026-09-25): en «igual» con pagos apagados, cuánto queda por
     // elegir de cada plato sumando lo declarado por TODOS — agregado por plato,
@@ -1504,7 +1512,8 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         ...(garantiaMesa.ticket_totals && { ticket_totals: garantiaMesa.ticket_totals }),
         // v2.164.0 · AB-NOCHE F · D218: sólo a quien negocia `adjustments_version=1` (exacto): el decoder de la
         // mesa del AF servido es cerrado. Ausente, distinto o repetido: la respuesta de hoy, byte a byte.
-        ...(req.query.adjustments_version === '1' && garantiaMesa.ticket_adjustments
+        // v2.168.0 · D224: con `adjustments_version=2`, también el cargo por servicio (`service_charge`).
+        ...((req.query.adjustments_version === '1' || req.query.adjustments_version === '2') && garantiaMesa.ticket_adjustments
           && { ticket_adjustments: garantiaMesa.ticket_adjustments }),
         paid_amount_cents: Number(mesa.paid_amount_cents),
         tip_amount_cents: Number(mesa.tip_amount_cents),
