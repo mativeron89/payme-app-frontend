@@ -75,7 +75,7 @@ async function debajo(row: Locator, arroba: string | null): Promise<void> {
 }
 
 async function irAAmigos(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+  await page.getByRole('button', { name: /^Amigos/ }).click();
   await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
 }
 

@@ -59,7 +59,7 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
     // a la barra — "Amigos" también es una pestaña, y sin scope el selector
     // matchea dos elementos y el test se cae por ambigüedad.
     await expect(barra.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await expect(barra.getByRole('button', { name: 'Amigos', exact: true })).toBeVisible();
+    await expect(barra.getByRole('button', { name: /^Amigos/ })).toBeVisible();
     /**
      * La posición "Cuenta" existe en la barra VIEJA y no en la de cinco (Cuenta
      * se fusionó dentro de las pestañas de Inicio en §1.11). Es lo que
@@ -96,7 +96,7 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
       const barra = page.getByRole('navigation', { name: BARRA });
       await expect(barra).toHaveCount(1);
       // `aria-current="page"` es lo que marca la posición activa de la barra.
-      await expect(barra.getByRole('button', { name: 'Amigos', exact: true }))
+      await expect(barra.getByRole('button', { name: /^Amigos/ }))
         .toHaveAttribute('aria-current', 'page');
     });
   }

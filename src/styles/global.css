@@ -3106,6 +3106,35 @@ html.app-de-inicio-ios .app {
   font-weight: 700;
 }
 
+/* D230 · el ícono lleva su burbuja: la caja es la del ícono, sin cambiar la medida. */
+.appbar-icono {
+  position: relative;
+  display: block;
+  line-height: 0;
+}
+
+/* D230 · la burbuja roja de «Amigos»: el rojo de error de la app (--danger)
+   con el número en blanco (6.6:1, AA), arriba a la derecha del ícono, con un
+   aro del color de la barra para despegarla del glifo. */
+.appbar-burbuja {
+  position: absolute;
+  top: -6px;
+  left: 13px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--danger);
+  color: var(--white);
+  box-shadow: 0 0 0 2px var(--surface);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 /* Rayita del activo, pegada al borde superior de la barra. */
 .appbar-tick {
   position: absolute;

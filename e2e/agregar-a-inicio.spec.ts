@@ -229,6 +229,7 @@ test.describe('D229 · en Samsung Internet', () => {
   test.use({ userAgent: SAMSUNG });
 
   test('sin el evento: al entrar, Inicio muestra la guía de Samsung; «Entendido» la cierra y no vuelve', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
     await ingresar(page);
     await expect(guia(page)).toBeVisible();
     await expect(guia(page).getByText('Abre PayMe desde tu pantalla de inicio, como una app.')).toBeVisible();

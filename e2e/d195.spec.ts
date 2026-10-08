@@ -53,7 +53,7 @@ async function sinBordeDeFoco(page: Page, campo: Locator): Promise<void> {
 test.describe('D195 · los buscadores de la burbuja, sin borde de foco', () => {
   test('Amigos: «Buscar entre tus amigos»', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     const campo = page.getByRole('textbox', { name: 'Buscar entre tus amigos', exact: true });
     await sinBordeDeFoco(page, campo);
     const dir = process.env.PAYME_E2E_CAPTURAS;
@@ -62,7 +62,7 @@ test.describe('D195 · los buscadores de la burbuja, sin borde de foco', () => {
 
   test('Grupos: «Buscar entre tus grupos»', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
     await sinBordeDeFoco(page, page.getByRole('textbox', { name: 'Buscar entre tus grupos', exact: true }));
   });

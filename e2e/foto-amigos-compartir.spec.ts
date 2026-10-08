@@ -28,7 +28,7 @@ test.describe('compartir mesa · la foto de los amigos', () => {
   test('control positivo: en Amigos, Sofía tiene foto y María no', async ({ page }) => {
     await ingresar(page);
     await page.getByLabel('Actualización del Aviso de Privacidad').getByRole('button', { name: 'Entendido', exact: true }).click();
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     await expect(page.locator('.friend-row').filter({ hasText: 'Sofía Fernández' }).locator('.friend-avatar-image')).toBeVisible();
     await expect(page.locator('.friend-row').filter({ hasText: 'María Ruiz' }).locator('.friend-avatar-image')).toHaveCount(0);
   });

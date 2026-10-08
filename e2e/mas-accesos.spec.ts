@@ -200,7 +200,7 @@ test.describe('los accesos de Más', () => {
      */
     const barra = page.getByRole('navigation', { name: 'Navegación principal' });
     await expect(page.getByRole('button', { name: /^Amigos/ })).toHaveCount(1);
-    await expect(barra.getByRole('button', { name: 'Amigos', exact: true })).toHaveCount(1);
+    await expect(barra.getByRole('button', { name: /^Amigos/ })).toHaveCount(1);
 
     // Grupos no tiene posición propia —vive como pestaña dentro de Amigos—, así
     // que acá el cero es cero en toda la página.

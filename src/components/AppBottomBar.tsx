@@ -2,6 +2,12 @@ import { Icon, type IconName } from './Icon';
 import { useIdioma } from '../i18n/idioma';
 import { navigate, type PageId } from '../router';
 import { abrirCamaraNativa } from '../camara/camaraNativa';
+import { useSolicitudesPendientes } from '../amigos/solicitudesPendientes';
+
+/** D230 · la burbuja muestra hasta 9; desde 10 dice «9+». */
+export function textoDeLaBurbuja(cantidad: number): string {
+  return cantidad > 9 ? '9+' : String(cantidad);
+}
 
 /**
  * Barra inferior de CINCO posiciones — SISTEMA_DISENO.md §5 bis · C.
@@ -100,6 +106,9 @@ export interface AppBottomBarProps {
 
 export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
   const { t } = useIdioma();
+  // D230 · solicitudes de amistad recibidas sin responder; `null` si no hay un
+  // número confirmado (sin sesión, otra cuenta o la consulta falló).
+  const pendientes = useSolicitudesPendientes();
   const centro = center ?? {
     label: t('Nueva'),
     icon: 'plus' as IconName,
@@ -116,6 +125,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
 
   const item = (it: SideItem) => {
     const on = active === it.slot;
+    const burbuja = it.slot === 'amigos' && pendientes !== null && pendientes > 0 ? pendientes : 0;
     return (
       <button
         key={it.slot}
@@ -123,11 +133,18 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
         className={`appbar-item ${on ? 'on' : ''}`}
         onClick={() => navigate(it.page)}
         aria-current={on ? 'page' : undefined}
+        // D230 · el nombre dice cuántas hay, con el número exacto aunque se vea «9+».
+        aria-label={burbuja === 0 ? undefined
+          : burbuja === 1 ? t('Amigos, 1 solicitud pendiente')
+            : t('Amigos, {0} solicitudes pendientes', burbuja)}
       >
         {/* La rayita del activo es decorativa: el color y el peso ya lo marcan,
             y `aria-current` lo dice de verdad. */}
         {on && <span className="appbar-tick" aria-hidden="true" />}
-        <Icon name={it.icon} size={22} />
+        <span className="appbar-icono">
+          <Icon name={it.icon} size={22} />
+          {burbuja > 0 && <span className="appbar-burbuja" aria-hidden="true">{textoDeLaBurbuja(burbuja)}</span>}
+        </span>
         <span className="appbar-label">{t(it.label)}</span>
       </button>
     );

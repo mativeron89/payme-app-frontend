@@ -34,7 +34,7 @@ async function preparar(page: Page, appDeInicio: boolean): Promise<void> {
 }
 
 async function abrirAmigos(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+  await page.getByRole('button', { name: /^Amigos/ }).click();
   await expect(buscador(page)).toBeVisible();
 }
 

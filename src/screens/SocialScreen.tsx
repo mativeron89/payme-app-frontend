@@ -14,6 +14,7 @@ import { useWalletRail } from '../api/walletRail';
 import { fold, relTime } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { isCurrentSession } from '../api/storage';
+import { publicarSolicitudesPendientes } from '../amigos/solicitudesPendientes';
 import { RequestEpoch } from '../utils/requestEpoch';
 import {
   cancelOutgoingReceipt, incomingRowView, outgoingRowView,
@@ -122,6 +123,9 @@ export function SocialScreen() {
         if (!requestsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
         setIncoming(entrantes.requests.map(incomingRowView));
         setOutgoing(salientes.requests.map(outgoingRowView));
+        // D230 · la burbuja de «Amigos» sigue a esta misma carga: al entrar, al
+        // volver y después de aceptar o rechazar.
+        publicarSolicitudesPendientes(expected, entrantes.requests.length);
       })
       .catch(() => undefined);
   }, [session]);

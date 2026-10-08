@@ -30,6 +30,17 @@ fila y el toast.
     Los textos viven en un solo lugar, `src/instalar/textosDeLaGuia.ts`, para ajustarlos con la captura del teléfono de
     prueba.
   - Dos glifos nuevos en `Icon`: `menu` y `plus-circle`.
+- **La burbuja roja de «Amigos» (D230):** en la pestaña «Amigos» de la barra, la cantidad de solicitudes de amistad
+  recibidas sin responder, con «9+» desde 10 y sin burbuja en cero. Es el rojo de error (`--danger`, 6.57:1 con el
+  número en blanco). El nombre de la pestaña lo dice con el número exacto: «Amigos, 1 solicitud pendiente» / «Amigos,
+  {n} solicitudes pendientes». Se consulta al abrir la app (una vez por cuenta, no en cada pantalla) y al volver a ella,
+  nunca en segundo plano; la pantalla de Amigos publica su propia carga (al entrar, al volver y después de aceptar o
+  rechazar), así que baja al responder y entrar sin responder no la saca. Si la consulta falla, no hay burbuja; el
+  número se guarda con la cuenta y nunca se ve en otra (`src/amigos/solicitudesPendientes.ts`).
+  - Mock: la costura `payme.app.mock.amigos.solicitudes.v1` (un número o `falla`). El seed tiene una entrante, así que
+    el mock muestra «1».
+  - Las e2e que buscaban el botón de la barra con `{ name: 'Amigos', exact: true }` pasan a `/^Amigos/` (11 sitios en
+    7 specs).
 
 ## 0.223.0 — «Unirme con código» en Mesas y la mesa del titular reorganizada, «Tu mesa» (2026-10-07)
 

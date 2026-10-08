@@ -114,6 +114,8 @@ export const EN: Record<string, string> = {
   "Alguien ya tomó uno de esos consumos": "Someone already claimed one of those items",
   "Amigo quitado": "Friend removed",
   "Amigos": "Friends",
+  "Amigos, 1 solicitud pendiente": "Friends, 1 pending request",
+  "Amigos, {0} solicitudes pendientes": "Friends, {0} pending requests",
   "Apellido": "Last name",
   "Apple Pay": "Apple Pay",
   "Asociadas": "Linked",

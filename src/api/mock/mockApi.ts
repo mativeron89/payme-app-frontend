@@ -5256,9 +5256,64 @@ function paymeIdPorArrobaMock(raw: string): string | undefined {
   return DIRECTORIO_ARROBA_MOCK.find((d) => d.username === u)?.payme;
 }
 
+/**
+ * D230 · costura para la burbuja de «Amigos»: `payme.app.mock.amigos.solicitudes.v1`.
+ * - un número N: las solicitudes entrantes pasan a ser N personas de prueba,
+ *   una sola vez por valor (`…sembradas.v1` lo recuerda: los tests la escriben
+ *   en cada carga, y aceptar o rechazar tiene que seguir bajando el número);
+ * - `falla`: la consulta de entrantes contesta 500.
+ * Sin la costura, el seed de siempre (una entrante).
+ */
+const COSTURA_SOLICITUDES = 'payme.app.mock.amigos.solicitudes.v1';
+const SOLICITUDES_SEMBRADAS = 'payme.app.mock.amigos.sembradas.v1';
+
+function costuraDeSolicitudes(): 'falla' | number | null {
+  let valor: string | null = null;
+  try { valor = localStorage.getItem(COSTURA_SOLICITUDES); } catch { return null; }
+  if (valor === 'falla') return 'falla';
+  if (valor !== null && /^\d{1,3}$/.test(valor)) return Number(valor);
+  return null;
+}
+
+function sembrarSolicitudesDePrueba(cantidad: number): void {
+  try {
+    if (localStorage.getItem(SOLICITUDES_SEMBRADAS) === String(cantidad)) return;
+    localStorage.setItem(SOLICITUDES_SEMBRADAS, String(cantidad));
+  } catch {
+    return;
+  }
+  const ahora = Date.now();
+  state.friendRequests = [
+    ...state.friendRequests.filter((r) => r.direction !== 'incoming'),
+    ...Array.from({ length: cantidad }, (_, i) => {
+      const n = i + 1;
+      return {
+        id: mockId('f'),
+        direction: 'incoming' as const,
+        person: {
+          id: mockId('a'),
+          payme_id: `payme_mx_prueba${n}`,
+          first_name: `Persona ${n}`,
+          last_name: 'Prueba',
+          full_name: `Persona ${n} Prueba`,
+          email: `prueba${n}@mail.com`,
+          added_at: '',
+        },
+        requested_at: new Date(ahora - n * 60_000).toISOString(),
+      };
+    }),
+  ];
+  persist();
+}
+
 export function mockFriendRequests(direction: 'incoming'): Promise<IncomingFriendRequestsResponse>;
 export function mockFriendRequests(direction: 'outgoing'): Promise<OutgoingFriendRequestsResponse>;
 export function mockFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse> {
+  if (direction === 'incoming') {
+    const costura = costuraDeSolicitudes();
+    if (costura === 'falla') return fail(500, 'internal_error');
+    if (costura !== null) sembrarSolicitudesDePrueba(costura);
+  }
   if (direction === 'outgoing') {
     return delay({
       direction,

@@ -16,7 +16,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
 
     await notice.getByRole('button', { name: 'Ahora no', exact: true }).click();
     await expect(notice).toHaveCount(0);
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     await expect(page.getByPlaceholder('Buscar entre tus amigos')).toBeVisible();
     await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
 
@@ -32,7 +32,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
     await notice.getByRole('button', { name: 'Entendido', exact: true }).click();
     await expect(notice).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     const sofia = page.locator('.friend-row').filter({ hasText: 'Sofía Fernández' });
     const maria = page.locator('.friend-row').filter({ hasText: 'María Ruiz' });
     await expect(sofia.locator('.friend-avatar-image')).toBeVisible();
@@ -96,7 +96,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
   test('pin tolerante · un par ajeno o cruzado no muestra el cartel ni acusa nada (falla cerrado)', async ({ page }) => {
     await conServidorQueDevuelve(page, '3.0.0', '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5');
     await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     await expect(page.getByPlaceholder('Buscar entre tus amigos')).toBeVisible();
     await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.u05.acuse'))).toBeNull();
