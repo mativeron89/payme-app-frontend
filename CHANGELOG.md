@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.225.0 — Pestañas sin parpadeo: al volver, lo último visto (2026-10-08)
+
+Orden AF-PESTANAS-SIN-PARPADEO-20261008 (7353d9bb…); decisión D237 (18c7d1c9…), Mati: «espero puedas hacerll mas
+eficiente». Plan aprobado (2e9410b5…): A, Inicio también para las mesas abiertas; B, 300 ms; C, las pantallas de los
+accesos de Inicio quedan fuera.
+
+- **Lo que se veía** (video de Mati, cuadro por cuadro): Mesas, 4 filas esqueleto y después 2 mesas; Inicio, una tarjeta
+  esqueleto de mesa y después «No tienes mesas abiertas»; Amigos, «Cargando amigos…»; un recuadro gris al tocar la barra.
+  Los datos llegaban en 100–200 ms: cada pestaña se armaba de cero (`App.tsx` monta una pantalla nueva) y volvía a la
+  carga.
+- **Lo último visto, en memoria** (`src/api/ultimoVisto.ts`): Inicio (mesas abiertas, invitaciones), Mesas («Tus
+  mesas», historial), Amigos (amigos, grupos, solicitudes) y los sin leer de la campana arrancan con lo último que se
+  vio con esa cuenta y **siempre** vuelven a pedir por detrás; si llega lo mismo, no se vuelve a dibujar (mismo
+  objeto); si cambió, se reemplaza sin pasar por la carga.
+  - **Sólo memoria**, nunca `localStorage`, `sessionStorage` ni IndexedDB; **de una cuenta**: se vacía al cerrar
+    sesión o cambiar de cuenta, y con otra cuenta adentro no se lee nada.
+  - **Sólo para mostrar**: una guarda lista los únicos cinco archivos que lo leen; la mesa, el alta, Avisos y la
+    entrada por link no lo leen.
+  - **Se borra** lo de las mesas al salir de una mesa o del alta (donde se crea, elige, paga, cierra o acepta), al
+    aceptar una invitación y cuando sube el conteo de sin leer; lo de Amigos, al responder, bloquear, agregar o tocar
+    grupos. Si un pedido falla, lo guardado tampoco se muestra (va el error de siempre).
+  - El aviso de la foto entre amigos **no** se guarda: su «Entendido» acusa lo que se ve, y una acción no sale de lo
+    guardado.
+- **La primera carga** muestra el esqueleto sólo si tarda más de **300 ms**, y no promete: en Inicio una línea neutra
+  (ya no la silueta de una tarjeta de mesa), en Mesas una fila por sección (dos, no cuatro), en Amigos «Cargando…».
+- **El toque en la barra**, sin el recuadro gris de iOS (`-webkit-tap-highlight-color: transparent`).
+- **«Enviando…» de «Solicitar unirme»:** el spinner y el texto juntos y centrados (el `margin: 0 auto` de `.spinner`).
+- **Medición** (mock de 350 ms, del toque hasta que el contenido está, mediana de 5 corridas, la misma sonda v2 sobre la
+  base y sobre esto): **segunda visita** Mesas 366 → 13 ms, Amigos 366 → 13 ms, Inicio 364 → 14 ms; en la base, con
+  estado de carga en las 15 visitas, ahora en ninguna. La primera visita no cambia de tiempo (Mesas 364 → 372, Amigos
+  390 → 381): en el mock (350 ms) el esqueleto llega a asomar unos 50 ms; con los 100–200 ms reales del video, no.
+- **Mock:** la costura `payme.app.mock.latencia.v1` (0–5000 ms) para probar los dos lados del umbral.
+- **Pruebas:** `ultimoVisto.test` (11: dueño, igual = mismo objeto, vaciar, olvidar, sin storage, quiénes lo leen);
+  e2e `pestanas-sin-parpadeo` (9, con un espía de estados de carga: segunda visita, primera rápida y lenta, datos que
+  cambian, cerrar sesión, cerrar una mesa, la foto, el toque); en `unirse-con-codigo` A04, el spinner centrado.
+
 ## 0.224.1 — «Solicitar unirme» con texto blanco (2026-10-07)
 
 Orden AF-TEXTO-BLANCO-UNIRME-20261008 (782605a8…); decisión D236 (421da1df…), literal de Mati: «La letra de la burbuja

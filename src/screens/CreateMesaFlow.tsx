@@ -10,6 +10,7 @@ import {
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
@@ -163,6 +164,10 @@ function lineTotalCents(it: EditItem): number | null {
 
 export function CreateMesaFlow() {
   const { t } = useIdioma();
+  // D237 · acá pasan las acciones sobre una mesa (crear, elegir, pagar,
+  // cerrar, aceptar a alguien): al salir, lo guardado de las mesas para Inicio y
+  // Mesas ya no se puede dar por cierto y se borra. La próxima visita pide.
+  useEffect(() => () => olvidarLoDeMesas(), []);
   const { accept: acceptOcr, minImageBytes } = useOcrRail();
   const moneyRail = useMoneyRail();
   /**

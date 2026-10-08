@@ -127,6 +127,21 @@ import {
 
 const LATENCY_MS = 350;
 
+/**
+ * D237 · costura de latencia: `payme.app.mock.latencia.v1` = milisegundos
+ * (0–5000). Las e2e de «pestañas sin parpadeo» la fijan a un lado y al otro del
+ * umbral de 300 ms del esqueleto. Sin costura, los 350 ms de siempre.
+ */
+function latencia(): number {
+  try {
+    const valor = localStorage.getItem('payme.app.mock.latencia.v1');
+    if (valor !== null && /^\d{1,4}$/.test(valor) && Number(valor) <= 5000) return Number(valor);
+  } catch {
+    // sin almacenamiento: la de siempre
+  }
+  return LATENCY_MS;
+}
+
 function validNonNegativeCents(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
@@ -248,12 +263,12 @@ export class MockApiError extends Error {
  */
 function delay<T>(value: T): Promise<T> {
   persist();
-  return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
+  return new Promise((resolve) => setTimeout(() => resolve(value), latencia()));
 }
 
 function fail(status: number, error: string, extra: Record<string, unknown> = {}): Promise<never> {
   return new Promise((_, reject) =>
-    setTimeout(() => reject(new MockApiError(status, error, extra)), LATENCY_MS),
+    setTimeout(() => reject(new MockApiError(status, error, extra)), latencia()),
   );
 }
 
@@ -1118,7 +1133,7 @@ function validSocialCredential(value: unknown): value is string {
 }
 
 function waitSocialLatency(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+  return new Promise((resolve) => setTimeout(resolve, latencia()));
 }
 
 async function persistMockSocialUser(

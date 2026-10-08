@@ -3064,6 +3064,10 @@ html.app-de-inicio-ios .app {
 .appbar-center {
   position: relative;
   display: flex;
+  /* D237 · sin el recuadro gris que iOS pinta al tocar (el video de Mati lo
+     mostraba en casi todos los toques). La respuesta queda en la rayita del
+     activo, el color y la escala del círculo. */
+  -webkit-tap-highlight-color: transparent;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
@@ -6187,6 +6191,16 @@ button.qc-circulo::after {
 .sk-line.w70 { width: 70%; }
 .sk-line.w100 { width: 100%; }
 
+/* D237 · el esqueleto NEUTRO: una línea que dice «algo carga» sin dibujar la
+   forma de lo que capaz no hay (la tarjeta de mesa de Inicio prometía una mesa
+   que después no estaba). Sólo aparece si la primera carga tarda más de 300 ms. */
+.sk-neutro {
+  padding: var(--sp-2) 0;
+}
+.sk-neutro .sk-line {
+  margin-bottom: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    §1.11 · las tres pantallas que lanzan las pestañas: Tarjetas, Pagos y
    Estadísticas. La pestaña lanza; el contenido completo vive acá.
@@ -6639,6 +6653,10 @@ button.qc-circulo::after {
 .unirse-spinner {
   width: 16px;
   height: 16px;
+  /* D237 · `.spinner` trae `margin: 0 auto` (es el de pantalla completa): en el
+     botón empujaba el texto contra el borde. Spinner y «Enviando…» van juntos
+     y centrados. */
+  margin: 0;
 }
 .unirse-espera,
 .unirse-no-se-pudo {

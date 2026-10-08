@@ -158,6 +158,22 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     expect(colores).toEqual({ fondo: 'rgb(255, 107, 53)', texto: 'rgb(255, 255, 255)' });
     await solicitar(page).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
     await expect(page.getByRole('button', { name: 'Enviando…' })).toBeVisible();
+    // D237 · el spinner y «Enviando…» van juntos y centrados en el botón (antes
+    // el `margin: 0 auto` de `.spinner` empujaba el texto contra el borde).
+    const cajas = await page.getByRole('button', { name: 'Enviando…' }).evaluate((b) => {
+      const r = (el: Element) => el.getBoundingClientRect();
+      const boton = r(b);
+      const spinner = r(b.querySelector('.unirse-spinner')!);
+      const rango = document.createRange();
+      rango.selectNodeContents(b.lastChild!);
+      const texto = rango.getBoundingClientRect();
+      return { boton, spinner, texto };
+    });
+    const centroDelConjunto = (cajas.spinner.left + cajas.texto.right) / 2;
+    const centroDelBoton = cajas.boton.left + cajas.boton.width / 2;
+    expect(Math.abs(centroDelConjunto - centroDelBoton), JSON.stringify(cajas)).toBeLessThanOrEqual(2);
+    expect(cajas.texto.left - cajas.spinner.right, JSON.stringify(cajas)).toBeGreaterThanOrEqual(6);
+    expect(cajas.texto.left - cajas.spinner.right, JSON.stringify(cajas)).toBeLessThanOrEqual(10);
     await expect(campo(page)).toBeDisabled();
     await capturar(page, 'unirse-enviando-375');
     await expect(espera(page)).toBeVisible();

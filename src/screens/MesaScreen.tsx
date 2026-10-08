@@ -1,4 +1,5 @@
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { FotosDeParticipantes } from '../api/fotosDeParticipantes';
@@ -344,6 +345,10 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { t } = useIdioma();
+  // D237 · acá pasan las acciones sobre una mesa (crear, elegir, pagar,
+  // cerrar, aceptar a alguien): al salir, lo guardado de las mesas para Inicio y
+  // Mesas ya no se puede dar por cierto y se borra. La próxima visita pide.
+  useEffect(() => () => olvidarLoDeMesas(), []);
   const moneyRail = useMoneyRail();
   /**
    * F2 · el corte lo declara el dueño. Antes era una constante de módulo leída

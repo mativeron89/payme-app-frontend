@@ -126,3 +126,69 @@ export async function espiarAvisos(page: Page): Promise<void> {
 export async function avisosVistos(page: Page): Promise<string[]> {
   return page.evaluate(() => (window as VentanaConAvisos).__avisos ?? []);
 }
+
+interface VentanaConCargas extends Window {
+  __cargas?: string[];
+  __buscados?: string[];
+}
+
+/**
+ * D237 · espía de los ESTADOS DE CARGA de las pestañas, para afirmar que en la
+ * segunda visita no aparece ninguno (ni un cuadro). Como con los toasts, una
+ * ausencia no se afirma esperando: se graba lo que aparece y al final se mira.
+ *
+ * Anota, en cada cambio del DOM:
+ * - `sk:<clase>` por cada esqueleto (`.sk`, `.sk-neutro`) y `filas-sk:<n>` con
+ *   cuántas filas esqueleto de lista hay a la vez (`.pago-row.sk`);
+ * - `cargando:<texto>` por cada `.loading` que diga «Cargando…»;
+ * - `texto:<t>` si aparece en la página alguno de los textos de
+ *   `window.__buscados` (se pueden sumar después de cargar, ver `buscarTexto`);
+ * - `iniciales:<nombre>` si la fila de un amigo de `window.__conFoto` se dibuja
+ *   sin su foto.
+ */
+export async function espiarCargas(page: Page, opciones: { conFoto?: string[] } = {}): Promise<void> {
+  await page.addInitScript((conFoto: string[]) => {
+    const w = window as VentanaConCargas;
+    const vistas: string[] = [];
+    w.__cargas = vistas;
+    w.__buscados = [];
+    const anotar = () => {
+      document.querySelectorAll('.sk, .sk-neutro').forEach((el) => vistas.push(`sk:${el.className}`));
+      const filas = document.querySelectorAll('.pago-row.sk').length;
+      if (filas > 0) vistas.push(`filas-sk:${filas}`);
+      document.querySelectorAll('.loading').forEach((el) => {
+        const texto = el.textContent ?? '';
+        if (/Cargando/.test(texto)) vistas.push(`cargando:${texto}`);
+      });
+      const cuerpo = document.body.textContent ?? '';
+      for (const buscado of w.__buscados ?? []) if (cuerpo.includes(buscado)) vistas.push(`texto:${buscado}`);
+      document.querySelectorAll('.friend-row').forEach((fila) => {
+        for (const nombre of conFoto) {
+          if ((fila.textContent ?? '').includes(nombre) && !fila.querySelector('.friend-avatar-image')) vistas.push(`iniciales:${nombre}`);
+        }
+      });
+    };
+    const empezar = () => {
+      new MutationObserver(anotar).observe(document.body, {
+        subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'],
+      });
+    };
+    if (document.body) empezar();
+    else document.addEventListener('DOMContentLoaded', empezar);
+  }, opciones.conFoto ?? []);
+}
+
+/** Suma un texto a buscar desde ahora (por ejemplo, el código de una mesa recién creada). */
+export async function buscarTexto(page: Page, texto: string): Promise<void> {
+  await page.evaluate((t) => { (window as VentanaConCargas).__buscados?.push(t); }, texto);
+}
+
+/** Cuántas anotaciones hay hasta ahora: se usa como marca. */
+export async function marcaDeCargas(page: Page): Promise<number> {
+  return page.evaluate(() => (window as VentanaConCargas).__cargas?.length ?? 0);
+}
+
+/** Las anotaciones desde la marca, sin repetidas. */
+export async function cargasDesde(page: Page, marca: number): Promise<string[]> {
+  return page.evaluate((m) => [...new Set(((window as VentanaConCargas).__cargas ?? []).slice(m))], marca);
+}

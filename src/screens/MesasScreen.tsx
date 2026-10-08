@@ -12,6 +12,8 @@ import { Icon, type IconName } from '../components/Icon';
 import { UnirmeConCodigo } from '../components/UnirmeConCodigo';
 import { bpsLabel } from './mesaItemsView';
 import type { TuMesa } from '../api/misMesas';
+import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
+import { useSinLeer } from '../components/useSinLeer';
 import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
 import { useRegion } from '../preferences/RegionProvider';
 import { personalDateLabel, personalZoneCaption } from '../utils/personalDates';
@@ -90,15 +92,23 @@ function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): st
   return m.amountCents === null ? que : `${que} · ${formatMXN(m.amountCents)}`;
 }
 
+/** D237 · lo que se guarda de «Tus mesas»: la primera página y su cursor. */
+interface PrimeraPaginaDeTusMesas {
+  readonly mesas: TuMesa[];
+  readonly nextCursor: string | null;
+}
+
 export function MesasScreen() {
   const { presentationZone } = useRegion();
   const { t, locale } = useIdioma();
   // E173-1 · sin «Fechas mostradas en …»: sólo el aviso de navegador degradado.
   const zoneCaption = personalZoneCaption(presentationZone, t);
   const { session } = useAuth();
-  const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
+  // D237 · lo último visto de esta cuenta: al volver a Mesas, las listas están
+  // desde el primer cuadro y se actualizan por detrás.
+  const [pagos, setPagos] = useState<HistoryEntry[] | null>(() => ultimoVisto.leer<HistoryEntry[]>('mesas.historial') ?? null);
   const [fallo, setFallo] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const unread = useSinLeer();
   const [abierta, setAbierta] = useState<string | null>(null);
   const [mesaPropiaAbierta, setMesaPropiaAbierta] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
@@ -108,17 +118,35 @@ export function MesasScreen() {
    * varias mesas; esta lista es la única que las muestra. Se carga aparte y
    * falla aparte: un error acá no tapa los pagos, ni al revés.
    */
-  const [misMesas, setMisMesas] = useState<TuMesa[] | null>(null);
-  const [cursorMesas, setCursorMesas] = useState<string | null>(null);
+  const [misMesas, setMisMesas] = useState<TuMesa[] | null>(
+    () => ultimoVisto.leer<PrimeraPaginaDeTusMesas>('mesas.tusMesas')?.mesas ?? null,
+  );
+  const [cursorMesas, setCursorMesas] = useState<string | null>(
+    () => ultimoVisto.leer<PrimeraPaginaDeTusMesas>('mesas.tusMesas')?.nextCursor ?? null,
+  );
   const [falloMesas, setFalloMesas] = useState(false);
   const [cargandoMasMesas, setCargandoMasMesas] = useState(false);
 
-  const cargarMisMesas = useCallback(() => {
+  const cargarMisMesas = useCallback((desdeCero: boolean) => {
     setFalloMesas(false);
-    setMisMesas(null);
+    // D237 · con lo último visto en pantalla se pide por detrás; «Reintentar»
+    // empieza de cero.
+    if (desdeCero) setMisMesas(null);
     api.getMyMesas({ detail: 'items' })
-      .then((r) => { setMisMesas([...r.mesas]); setCursorMesas(r.nextCursor); })
-      .catch(() => setFalloMesas(true));
+      .then((r) => {
+        // Sólo la primera página: «Ver más mesas» no se guarda.
+        const pagina = ultimoVisto.guardar<PrimeraPaginaDeTusMesas>('mesas.tusMesas', {
+          mesas: [...r.mesas],
+          nextCursor: r.nextCursor,
+        });
+        setMisMesas(pagina.mesas);
+        setCursorMesas(pagina.nextCursor);
+      })
+      .catch(() => {
+        ultimoVisto.olvidar('mesas.tusMesas');
+        setMisMesas(null);
+        setFalloMesas(true);
+      });
   }, []);
 
   const cargarMasMesas = useCallback(() => {
@@ -134,7 +162,7 @@ export function MesasScreen() {
   }, [cursorMesas, cargandoMasMesas]);
 
   useEffect(() => {
-    cargarMisMesas();
+    cargarMisMesas(false);
   }, [cargarMisMesas]);
 
   const cargarDetalle = useCallback((mesaCode: string, paymentIds: readonly string[]) => {
@@ -160,27 +188,28 @@ export function MesasScreen() {
    * pantalla. O está todo, o es el estado de error — la falla a mitad de
    * carga propaga a propósito (ver `traerHistorialCompleto`).
    */
-  const cargarHistorial = useCallback(() => {
+  const cargarHistorial = useCallback((desdeCero: boolean) => {
     setFallo(false);
-    setPagos(null);
+    if (desdeCero) setPagos(null);
     traerHistorialCompleto((limit, offset) =>
       api.getHistory({ limit, offset }).then((r) => r.history),
     )
-      .then(setPagos)
-      .catch(() => setFallo(true));
+      .then((h) => setPagos(ultimoVisto.guardar('mesas.historial', h)))
+      .catch(() => {
+        // O está todo o es el error (ver arriba): lo guardado tampoco se muestra.
+        ultimoVisto.olvidar('mesas.historial');
+        setPagos(null);
+        setFallo(true);
+      });
   }, []);
 
   useEffect(() => {
-    cargarHistorial();
+    cargarHistorial(false);
   }, [cargarHistorial]);
 
-  useEffect(() => {
-    let alive = true;
-    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // D237 · la primera carga muestra sus esqueletos sólo si tarda más de 300 ms.
+  const esperaTusMesasVisible = useEsperaVisible(misMesas === null && !falloMesas);
+  const esperaHistorialVisible = useEsperaVisible(pagos === null && !fallo);
 
   const cerradas = pagos ? mesasCerradas(pagos) : null;
   const grupos = cerradas ? agruparPorMes(cerradas, locale, presentationZone) : [];
@@ -197,17 +226,19 @@ export function MesasScreen() {
           <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
         </div>
       </div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={cargarMisMesas}>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => cargarMisMesas(true)}>
         {t('Reintentar')}
       </button>
     </div>
   ) : tusMesas === null ? (
-    <div aria-busy="true" aria-label={t('Cargando tus mesas')}>
-      <div className="pago-row sk">
-        <span className="sk-line w55" />
-        <span className="sk-line w40" />
+    esperaTusMesasVisible ? (
+      <div aria-busy="true" aria-label={t('Cargando tus mesas')}>
+        <div className="pago-row sk">
+          <span className="sk-line w55" />
+          <span className="sk-line w40" />
+        </div>
       </div>
-    </div>
+    ) : null
   ) : tusMesas.length > 0 || cursorMesas ? (
     <section className="tus-mesas" aria-label={t('Tus mesas')}>
       {tusMesas.map((m) => {
@@ -311,19 +342,22 @@ export function MesasScreen() {
                 <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
               </div>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={cargarHistorial}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => cargarHistorial(true)}>
               {t('Reintentar')}
             </button>
           </div>
         ) : cerradas === null ? (
-          <div aria-busy="true" aria-label={t('Cargando tu historial')}>
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="pago-row sk">
+          /* D237 · Mati, en su video: 4 filas esqueleto (1 + estas 3) y después
+             eran 2 mesas, y saltaba el alto. Una fila neutra por sección, y sólo
+             si la primera carga tarda más de 300 ms. */
+          esperaHistorialVisible ? (
+            <div aria-busy="true" aria-label={t('Cargando tu historial')}>
+              <div className="pago-row sk">
                 <span className="sk-line w55" />
                 <span className="sk-line w40" />
               </div>
-            ))}
-          </div>
+            </div>
+          ) : null
         ) : cerradas.length === 0 ? (
           /* Vacío REAL: sin borde, único estado del sistema que no lo lleva.
              AF-24 · y sólo si tampoco hay «Tus mesas»: con los pagos apagados,

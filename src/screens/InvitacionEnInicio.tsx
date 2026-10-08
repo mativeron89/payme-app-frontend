@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { olvidarLoDeMesas, ultimoVisto } from '../api/ultimoVisto';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { useToast } from '../components/ui';
@@ -98,6 +99,8 @@ export function useAceptarInvitacion(recargar: () => void): {
   const [ocupada, setOcupada] = useState<string | null>(null);
   async function aceptar(inv: InvitacionMostrable) {
     setOcupada(inv.id);
+    // D237 · aceptar cambia las mesas y las invitaciones: lo guardado ya no vale.
+    olvidarLoDeMesas();
     try {
       await aceptarInvitacion(inv, {
         aceptar: (id) => api.acceptInvitation(id),
@@ -179,7 +182,11 @@ export function VistaInvitacionEnInicio({
 /** Inicio: pide las invitaciones y dibuja la burbuja, o nada. */
 export function InvitacionEnInicio() {
   const { t } = useIdioma();
-  const [lista, setLista] = useState<InvitacionMostrable[]>([]);
+  // D237 · lo último visto: la tarjeta «Te invitaron» no aparece de golpe al
+  // volver a Inicio empujando lo de abajo.
+  const [lista, setLista] = useState<InvitacionMostrable[]>(
+    () => ultimoVisto.leer<InvitacionMostrable[]>('inicio.invitaciones') ?? [],
+  );
   const cargar = useCallback(() => {
     api
       .getPendingInvitations()
@@ -188,9 +195,13 @@ export function InvitacionEnInicio() {
         // E174-3B · la misma poda que en Avisos.
         const actual = loadSession();
         if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
-        setLista(mostrables);
+        setLista(ultimoVisto.guardar('inicio.invitaciones', mostrables));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // Sin poder confirmarla, no se sigue mostrando la guardada.
+        ultimoVisto.olvidar('inicio.invitaciones');
+        setLista([]);
+      });
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
   const { ocupada, aceptar } = useAceptarInvitacion(cargar);

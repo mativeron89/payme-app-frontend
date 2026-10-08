@@ -15,6 +15,7 @@ import { fold, relTime } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { isCurrentSession } from '../api/storage';
 import { publicarSolicitudesPendientes } from '../amigos/solicitudesPendientes';
+import { olvidarLoDeAmigos, ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { RequestEpoch } from '../utils/requestEpoch';
 import {
   cancelOutgoingReceipt, incomingRowView, outgoingRowView,
@@ -70,6 +71,12 @@ function alfabetico(a: string, b: string): number {
  */
 const ICONOS_GRUPO = ['👨‍👩‍👧', '💼', '🎉', '⚽', '🎓', '🏠', '✈️', '🍕'];
 
+/** D237 · lo que se guarda de Solicitudes: las filas de vista, entrantes y salientes. */
+interface SolicitudesGuardadas {
+  readonly incoming: IncomingRowView[];
+  readonly outgoing: OutgoingRowView[];
+}
+
 export function SocialScreen() {
   const { t } = useIdioma();
   const { session } = useAuth();
@@ -79,7 +86,9 @@ export function SocialScreen() {
   const [tab, setTab] = useState<SocialTabId>('amigos');
 
   // ─── Amigos ───
-  const [friends, setFriends] = useState<Friend[] | null>(null);
+  // D237 · lo último visto de esta cuenta: al volver a Amigos la lista está
+  // desde el primer cuadro y se actualiza por detrás.
+  const [friends, setFriends] = useState<Friend[] | null>(() => ultimoVisto.leer<Friend[]>('amigos.amigos') ?? null);
   const [friendsRevision, setFriendsRevision] = useState(0);
   const [filtroAmigos, setFiltroAmigos] = useState('');
   /**
@@ -92,7 +101,7 @@ export function SocialScreen() {
   const [busy, setBusy] = useState(false);
 
   // ─── Grupos ───
-  const [groups, setGroups] = useState<Group[] | null>(null);
+  const [groups, setGroups] = useState<Group[] | null>(() => ultimoVisto.leer<Group[]>('amigos.grupos') ?? null);
   const [filtroGrupos, setFiltroGrupos] = useState('');
   const [detail, setDetail] = useState<GroupDetailResponse | null>(null);
   const [creating, setCreating] = useState(false);
@@ -101,15 +110,22 @@ export function SocialScreen() {
   const [groupBusy, setGroupBusy] = useState(false);
 
   // ─── Solicitudes ───
-  const [incoming, setIncoming] = useState<IncomingRowView[]>([]);
+  const [incoming, setIncoming] = useState<IncomingRowView[]>(
+    () => ultimoVisto.leer<SolicitudesGuardadas>('amigos.solicitudes')?.incoming ?? [],
+  );
   /**
    * ⚠️ `OutgoingRowView`, nunca el DTO legacy crudo: la identidad del
    * destinatario se descarta en el borde de red y nunca entra al componente.
    * Guardar la respuesta anterior y "acordarse de no pintarla" es lo que
    * falló en su momento (`fabddfe`).
    */
-  const [outgoing, setOutgoing] = useState<OutgoingRowView[]>([]);
+  const [outgoing, setOutgoing] = useState<OutgoingRowView[]>(
+    () => ultimoVisto.leer<SolicitudesGuardadas>('amigos.solicitudes')?.outgoing ?? [],
+  );
   const [reqBusy, setReqBusy] = useState<string | null>(null);
+  // D237 · la primera carga dice «Cargando…» sólo si tarda más de 300 ms.
+  const esperaAmigosVisible = useEsperaVisible(friends === null);
+  const esperaGruposVisible = useEsperaVisible(groups === null);
   const friendsEpoch = useRef(new RequestEpoch());
   const groupsEpoch = useRef(new RequestEpoch());
   const requestsEpoch = useRef(new RequestEpoch());
@@ -121,8 +137,14 @@ export function SocialScreen() {
     void Promise.all([api.getIncomingFriendRequests(), api.getOutgoingFriendRequests()])
       .then(([entrantes, salientes]) => {
         if (!requestsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
-        setIncoming(entrantes.requests.map(incomingRowView));
-        setOutgoing(salientes.requests.map(outgoingRowView));
+        // Se guardan las FILAS de vista, no los DTO: la saliente ya viene sin la
+        // identidad del destinatario, y así queda también en memoria.
+        const guardadas = ultimoVisto.guardar<SolicitudesGuardadas>('amigos.solicitudes', {
+          incoming: entrantes.requests.map(incomingRowView),
+          outgoing: salientes.requests.map(outgoingRowView),
+        });
+        setIncoming(guardadas.incoming);
+        setOutgoing(guardadas.outgoing);
         // D230 · la burbuja de «Amigos» sigue a esta misma carga: al entrar, al
         // volver y después de aceptar o rechazar.
         publicarSolicitudesPendientes(expected, entrantes.requests.length);
@@ -143,9 +165,10 @@ export function SocialScreen() {
       .then((r) => {
         if (!friendsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
         podarFotosDeAmigos(expected, r.friends);
-        setFriends(r.friends);
+        setFriends(ultimoVisto.guardar('amigos.amigos', r.friends));
       })
       .catch(() => {
+        ultimoVisto.olvidar('amigos.amigos');
         if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends([]);
       });
   }, [session]);
@@ -156,9 +179,12 @@ export function SocialScreen() {
     const epoch = groupsEpoch.current.next();
     api.getGroups()
       .then((r) => {
-        if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setGroups(r.groups);
+        if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) {
+          setGroups(ultimoVisto.guardar('amigos.grupos', r.groups));
+        }
       })
       .catch(() => {
+        ultimoVisto.olvidar('amigos.grupos');
         if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setGroups([]);
       });
   }, [session]);
@@ -196,6 +222,8 @@ export function SocialScreen() {
     quien?: string,
   ) {
     setReqBusy(requestId);
+    // D237 · responder cambia amigos y solicitudes: lo guardado ya no vale.
+    olvidarLoDeAmigos();
     try {
       if (action === 'accept') await api.acceptFriendRequest(requestId);
       else if (action === 'reject') await api.rejectFriendRequest(requestId);
@@ -218,6 +246,7 @@ export function SocialScreen() {
 
   async function block(userId: string, quien: string) {
     if (!window.confirm(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien))) return;
+    olvidarLoDeAmigos();
     try {
       await api.blockUser(userId);
       toast(t('{0} quedó bloqueado', quien));
@@ -232,6 +261,7 @@ export function SocialScreen() {
     const q = newQuery.trim();
     if (!q) return;
     setBusy(true);
+    olvidarLoDeAmigos();
     try {
       await api.addFriend(q.includes('@') ? { email: q } : { payme_id: q });
       // C1/C2: el backend responde 202 igual exista o no la persona. La app NO
@@ -251,6 +281,7 @@ export function SocialScreen() {
   async function createGroup() {
     if (!newName.trim()) return;
     setGroupBusy(true);
+    olvidarLoDeAmigos();
     try {
       await api.createGroup(newName.trim(), newIcon);
       toast(t('Grupo creado ✓'));
@@ -332,6 +363,7 @@ export function SocialScreen() {
                   aria-label={t('Quitar a {0} del grupo', m.first_name)}
                   onClick={async () => {
                     try {
+                      olvidarLoDeAmigos();
                       await api.removeGroupMember(detail.group.id, m.id);
                       setDetail(await api.getGroup(detail.group.id));
                       loadGroups();
@@ -355,6 +387,7 @@ export function SocialScreen() {
                     className="friend-row"
                     onClick={async () => {
                       try {
+                        olvidarLoDeAmigos();
                         await api.addGroupMember(detail.group.id, f.id);
                         setDetail(await api.getGroup(detail.group.id));
                         loadGroups();
@@ -379,6 +412,7 @@ export function SocialScreen() {
             onClick={async () => {
               if (!window.confirm(t('¿Eliminar el grupo "{0}"?', detail.group.name))) return;
               try {
+                olvidarLoDeAmigos();
                 await api.deleteGroup(detail.group.id);
                 toast(t('Grupo eliminado'));
                 setDetail(null);
@@ -489,7 +523,8 @@ export function SocialScreen() {
                   onChange={(e) => setFiltroAmigos(e.target.value)}
                 />
               </div>
-              {amigosVisibles === null && <div className="loading">{t('Cargando amigos…')}</div>}
+              {/* D237 · «Cargando…» sólo si la primera carga tarda más de 300 ms. */}
+              {amigosVisibles === null && esperaAmigosVisible && <div className="loading">{t('Cargando amigos…')}</div>}
               {amigosVisibles?.length === 0 && (
                 <div className="empty">
                   <div className="emoji"><Icon name="users" size={40} /></div>
@@ -599,7 +634,7 @@ export function SocialScreen() {
                   onChange={(e) => setFiltroGrupos(e.target.value)}
                 />
               </div>
-              {gruposVisibles === null && <div className="loading">{t('Cargando grupos…')}</div>}
+              {gruposVisibles === null && esperaGruposVisible && <div className="loading">{t('Cargando grupos…')}</div>}
               {gruposVisibles?.length === 0 && (
                 <div className="empty">
                   <div className="emoji"><Icon name="users-group" size={40} /></div>

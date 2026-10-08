@@ -29,6 +29,8 @@ import {
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 import { InvitacionEnInicio } from './InvitacionEnInicio';
 import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
+import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
+import { useSinLeer } from '../components/useSinLeer';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -162,10 +164,16 @@ export function HomeScreen() {
   const [tab, setTab] = useState<TabId>('cuenta');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
-  const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
+  // D237 · lo último visto de esta cuenta, si hay: al volver a Inicio la mesa
+  // está desde el primer cuadro y se actualiza por detrás.
+  const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(
+    () => ultimoVisto.leer<OpenMesasResponse>('inicio.mesasAbiertas') ?? null,
+  );
   const [mesasFallaron, setMesasFallaron] = useState(false);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
-  const [unread, setUnread] = useState(0);
+  const unread = useSinLeer();
+  // D237 · la primera carga muestra su esqueleto sólo si tarda más de 300 ms.
+  const esperaMesaVisible = useEsperaVisible(openMesas === null && !mesasFallaron);
 
   /**
    * La mesa se pide aparte del resto porque es lo único que puede fallar
@@ -175,27 +183,27 @@ export function HomeScreen() {
    * la pantalla diciendo "No tenés mesas abiertas" cuando lo cierto era que no
    * habíamos podido preguntar — vacío real y falla de red son cosas distintas.
    */
-  const cargarMesas = useCallback(() => {
+  const cargarMesas = useCallback((desdeCero: boolean) => {
     setMesasFallaron(false);
-    setOpenMesas(null);
+    // D237 · con lo último visto en pantalla se pide por detrás, sin volver a
+    // la carga; «Reintentar» sí empieza de cero.
+    if (desdeCero) setOpenMesas(null);
     return api
       .getOpenMesas()
-      .then(setOpenMesas)
-      .catch(() => setMesasFallaron(true));
+      .then((r) => setOpenMesas(ultimoVisto.guardar('inicio.mesasAbiertas', r)))
+      .catch(() => {
+        // Lo guardado ya no se puede confirmar: no se lo muestra como cierto.
+        ultimoVisto.olvidar('inicio.mesasAbiertas');
+        setOpenMesas(null);
+        setMesasFallaron(true);
+      });
   }, []);
 
-  // Card-only: no depende del riel y se pide una sola vez.
+  // Card-only: no depende del riel y se pide una sola vez (y siempre, aunque
+  // haya algo guardado: lo guardado sólo decide el primer cuadro).
   useEffect(() => {
-    void cargarMesas();
+    void cargarMesas(false);
   }, [cargarMesas]);
-
-  useEffect(() => {
-    let alive = true;
-    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   /**
    * ⚠️ EL RIEL VA EN SU PROPIO EFECTO, Y LA DEPENDENCIA NO ES OPCIONAL.
@@ -326,19 +334,20 @@ export function HomeScreen() {
               </div>
               {/* La salida es OBLIGATORIA: un estado que congela sin acción
                   visible es un defecto de diseño, no una medida de seguridad. */}
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void cargarMesas()}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void cargarMesas(true)}>
                 {t('Reintentar')}
               </button>
             </div>
           ) : openMesas === null ? (
-            /* Cargando: esqueleto con la SILUETA de la burbuja, nunca un spinner
-               centrado (§5 · Estados honestos). */
-            <div className="mesa-card sk" aria-busy="true" aria-label={t('Cargando tu mesa')}>
-              <span className="sk-line w40" />
-              <span className="sk-line w70 tall" />
-              <span className="sk-line w55" />
-              <span className="sk-line w100 bar" />
-            </div>
+            /* D237 · cargando. Mati, en su video: la silueta de una tarjeta de
+               mesa «prometía» una mesa y después decía «No tienes mesas
+               abiertas». Ahora, nada durante 300 ms (lo habitual es que llegue
+               antes) y, si tarda, una línea neutra que no dice si hay mesa. */
+            esperaMesaVisible ? (
+              <div className="sk-neutro" aria-busy="true" aria-label={t('Cargando tu mesa')}>
+                <span className="sk-line w55" />
+              </div>
+            ) : null
           ) : porUrgencia.length > 0 ? (
             /* D181 · Mati: «cuando hay más de una mesa que hayan varias burbujas, una
                por cada mesa, no me gusta que tengas que poner +1 mesa abierta más y
