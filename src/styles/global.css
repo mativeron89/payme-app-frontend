@@ -5040,16 +5040,6 @@ html.app-de-inicio-ios .app {
   padding: var(--sp-2) 0 var(--sp-4);
 }
 
-/* Motivo por el que Continuar está apagado. Va en la fila propia de la barra,
-   no flotando sobre el contenido como antes. */
-.tk-invalid {
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text-muted);
-  text-align: center;
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    MIS ÍTEMS · SPEC_APP.md §1.5
    La pantalla que gobierna a cualquier participante autenticado de la mesa.
@@ -8882,15 +8872,14 @@ h1.pay-title-lbl {
    El aire de abajo se mide contra el CÍRCULO, que sobresale 26 px de la barra, y
    la barra crece con el indicador de inicio del iPhone: el alto de `.appbar` +
    26. Con el aire de 12 px de abajo, termina 12 px arriba del
-   círculo (`::after`, abajo). Con la fila de arriba de la barra («Completa
-   nombre y precio…»), lo más alto es esa fila (el círculo queda montado sobre
-   ella), así que cuenta la fila en vez de los 26 (`--fila-sobre-barra`, que
-   mide la pantalla). Sin teclado en juego: la pantalla no tiene campos fuera
+   círculo (`::after`, abajo). La barra de esta pantalla ya no lleva fila de
+   arriba: D231 sacó «Completa nombre y precio…», que la hacía más alta y
+   obligaba a medirla. Sin teclado en juego: la pantalla no tiene campos fuera
    de la hoja y la app mide con `100dvh`. */
 .has-appbar .scroll.ticket-flow-scroll {
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + max(26px, var(--fila-sobre-barra, 0px)));
+  padding-bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 26px);
 }
 
 /* En columna, un hijo con `overflow: hidden` (la burbuja es una `.card`) se

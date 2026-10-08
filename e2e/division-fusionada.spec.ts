@@ -230,7 +230,14 @@ test('🔴 «En partes iguales» no baja de 2, aunque el contrato lo admita', as
  * abre y lleva allí el foco. Si el test la dejara abierta, no podría distinguir
  * «la abrió el feedback» de «ya estaba abierta».
  */
-test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas sus señales', async ({
+/**
+ * 🔴 D231 · Mati eligió «Quitarlo del todo»: «No se muestra nunca. Si falta un
+ * dato, «Continuar» no avanza y no dice por qué.» Desde 0.224.0 ni la fila sobre
+ * la barra ni el toast dicen el motivo; las señales que quedan son el pulso, la
+ * hoja del ticket abierta (con sus marcas de campo incompleto) y, sobre todo,
+ * que no se llega a Garantía.
+ */
+test('🔴 ticket incompleto: el círculo NO se apaga, frena sin decir por qué y abre el ticket', async ({
   page,
 }) => {
   await hastaLaPantallaFusionada(page);
@@ -244,7 +251,9 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   await page.getByRole('button', { name: /Ver el ticket/ }).click();
   await page.getByRole('button', { name: 'Modificar ítems' }).click();
   await page.getByRole('button', { name: 'Agregar consumo' }).click();
-  await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toBeVisible();
+  // D231 · con un consumo incompleto no aparece el cartel.
+  await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toHaveCount(0);
+  await expect(page.locator('.appbar-above')).toHaveCount(0);
 
   // Se cierra la edición y luego la hoja por su control modal para poder
   // afirmar que la rama de Continuar la ABRE de nuevo.
@@ -264,18 +273,12 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   // ③ NO se llegó a Garantía — la afirmación que el bypass rompe
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
   /**
-   * ④ el toast · 🔴 SE AFIRMA DENTRO DEL `.toast`, NO POR EL TEXTO SUELTO.
-   *
-   * Ese mismo texto vive TAMBIÉN en el aviso permanente de la barra
-   * (`tk-invalid`, visible mientras el ticket sea inválido). Un
-   * `getByText(...)` lo matchea ahí y **pasa aunque el toast no exista**:
-   * borrar `toast(ticketInvalidReason)` dejaba este test VERDE. Lo cacé
-   * plantando ese mutante, no leyéndolo — es el mismo falso verde que el P62
-   * vino a corregir, cometido de nuevo dentro del test que lo corrige.
+   * ④ D231 · SIN TOAST y sin fila. Se afirma sobre el `.toast` visible y sobre
+   * el texto en toda la página: el motivo no se dice en ningún lado.
    */
-  const toast = page.locator('.toast:not(.toast-hidden)');
-  await expect(toast).toBeVisible();
-  await expect(toast).toHaveText('Completa nombre y precio (mayor a cero) de cada consumo.');
+  await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
+  await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toHaveCount(0);
+  await expect(page.locator('.appbar-above')).toHaveCount(0);
   // ⑤ la hoja quedó abierta: el aviso lleva a donde se resuelve
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
 

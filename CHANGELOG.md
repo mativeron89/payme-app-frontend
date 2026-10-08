@@ -41,6 +41,15 @@ fila y el toast.
     el mock muestra «1».
   - Las e2e que buscaban el botón de la barra con `{ name: 'Amigos', exact: true }` pasan a `/^Amigos/` (11 sitios en
     7 specs).
+- **Sin el cartel de «¿Cómo dividen?» (D231):** Mati eligió «Quitarlo del todo» («No se muestra nunca. Si falta un dato,
+  «Continuar» no avanza y no dice por qué»). Sale la fila sobre la barra en sus dos variantes («Agrega al menos un
+  consumo.» y «Completa nombre y precio (mayor a cero) de cada consumo.») y también el toast con el mismo texto al
+  tocar «Continuar» (plan, D = 2: Mati descartó «Sólo al tocar Continuar», que es lo que hacía el toast). No cambian
+  `ticketValid`, que «Continuar» no avance, el ticket que se abre y late, ni las marcas de campo incompleto.
+  - Sin la fila, la medición que subía la burbuja con ella (`--fila-sobre-barra`) no tenía uso y sale; el aire de
+    abajo queda en los 26 px del círculo. Los dos textos salen de `en.ts`.
+  - `division-fusionada` y `burbuja-abajo` se reescriben a lo nuevo: sin cartel con un consumo incompleto y sin
+    consumos, «Continuar» no avanza y no hay toast, y nada se superpone a 375×667 y 390×844.
 
 ## 0.223.0 — «Unirme con código» en Mesas y la mesa del titular reorganizada, «Tu mesa» (2026-10-07)
 

@@ -9,7 +9,7 @@ import {
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
@@ -270,17 +270,10 @@ export function CreateMesaFlow() {
   const [stepperPulse, setStepperPulse] = useState(false);
   const stepperRef = useRef<HTMLDivElement | null>(null);
   /**
-   * D222 · la burbuja va pegada abajo, encima del círculo de Continuar. Cuando
-   * la barra lleva su fila de arriba («Completa nombre y precio…»), la barra es
-   * más alta y la burbuja tiene que subir lo mismo: se mide la fila (una o dos
-   * líneas, según el idioma y el ancho) y entra al aire de abajo del área.
-   */
-  const motivoRef = useRef<HTMLDivElement | null>(null);
-  const [filaSobreBarra, setFilaSobreBarra] = useState(0);
-  /**
    * Lo mismo que el stepper, para el TICKET incompleto — §5 bis · E, adjudicado
    * por Diseño el 2026-08-21 (`diseno@0206d44`): el círculo no se apaga por
-   * falta de un dato, y responde con toast + scroll + pulso, LAS TRES JUNTAS.
+   * falta de un dato. 🔴 D231 (Mati, «Quitarlo del todo»): ya no dice por qué —
+   * ni la fila sobre la barra ni el toast—; abre el ticket y lo hace latir.
    */
   const [ticketPulse, setTicketPulse] = useState(false);
   const ticketRef = useRef<HTMLDivElement | null>(null);
@@ -885,23 +878,6 @@ export function CreateMesaFlow() {
     editItems.length > 0 &&
     editItems.every((i, index) => i.name.trim().length > 0 && lineTotals[index] !== null) &&
     total > 0;
-  useEffect(() => {
-    const fila = motivoRef.current?.closest('.appbar-above') ?? null;
-    if (!fila) {
-      setFilaSobreBarra(0);
-      return undefined;
-    }
-    const medir = () => setFilaSobreBarra(Math.ceil(fila.getBoundingClientRect().height));
-    medir();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(medir);
-    ro.observe(fila);
-    return () => ro.disconnect();
-  }, [ticketValid, step]);
-  const ticketInvalidReason =
-    editItems.length === 0
-      ? t('Agrega al menos un consumo.')
-      : t('Completa nombre y precio (mayor a cero) de cada consumo.');
   /**
    * §1.3 · la suma de las filas contra el total IMPRESO que leyó el OCR. Se
    * compara sólo cuando las dos cifras son de fiar: sin total del OCR, o con
@@ -2143,10 +2119,7 @@ export function CreateMesaFlow() {
             </button>
           </div>
         </div>
-        <div
-          className="scroll flow-scroll ticket-flow-scroll"
-          style={{ '--fila-sobre-barra': `${filaSobreBarra}px` } as CSSProperties}
-        >
+        <div className="scroll flow-scroll ticket-flow-scroll">
           {ticketContinuing && (
             <div className="note" role="status" aria-live="polite">
               {t('Continuando…')}
@@ -2552,7 +2525,6 @@ export function CreateMesaFlow() {
         )}
         <AppBottomBar
           active={null}
-          above={!ticketValid ? <div className="tk-invalid" ref={motivoRef}>{ticketInvalidReason}</div> : undefined}
           center={{
             label: ticketContinuing ? t('Continuando…') : t('Continuar'),
             icon: 'arrow-right',
@@ -2566,17 +2538,19 @@ export function CreateMesaFlow() {
               }
               /**
                * 🔴 EL TICKET INCOMPLETO YA NO APAGA EL CÍRCULO (§5 bis · E,
-               * adjudicado 2026-08-21). Faltar consumos ES «falta un dato para
-               * avanzar», así que frena explicando, igual que el stepper.
+               * adjudicado 2026-08-21): faltar consumos frena, igual que el
+               * stepper.
                *
-               * ⚠️ SE ABRE EL ACORDEÓN ANTES DE SCROLLEAR, y no es un extra:
-               * el ticket nace PLEGADO, así que scrollear sin abrirlo deja a la
-               * persona mirando una barra cerrada que no dice cuál consumo está
-               * incompleto. Un cartel que nombra el problema y no lleva a
-               * resolverlo es peor que no avisar.
+               * 🔴 D231 · Mati eligió «Quitarlo del todo»: «No se muestra nunca.
+               * Si falta un dato, «Continuar» no avanza y no dice por qué.» Sale
+               * el toast con el motivo, además de la fila sobre la barra; queda
+               * abrir el ticket y el pulso, sin texto. (Descartó «Sólo al tocar
+               * Continuar», que es lo que hacía el toast.)
+               *
+               * ⚠️ SE ABRE EL ACORDEÓN, y no es un extra: el ticket nace
+               * PLEGADO, y abierto se ven las marcas de los campos incompletos.
                */
               if (!ticketValid) {
-                toast(ticketInvalidReason);
                 setTicketAbierto(true);
                 setTicketPulse(true);
                 return;
