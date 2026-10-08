@@ -9863,6 +9863,13 @@ h1.pay-title-lbl {
   list-style: none;
 }
 
+/* D229 · la nota de Samsung, debajo de los pasos y sin número. */
+.guia-inicio-nota {
+  margin: 0 0 var(--sp-4);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
 .guia-inicio-pasos li {
   display: flex;
   align-items: center;

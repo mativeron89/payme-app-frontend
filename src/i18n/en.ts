@@ -1201,6 +1201,11 @@ export const EN: Record<string, string> = {
   "Abre PayMe desde tu pantalla de inicio, como una app.": "Open PayMe from your Home Screen, like an app.",
   "Toca Compartir": "Tap Share",
   "Elige «Agregar a inicio»": "Choose «Add to Home Screen»",
+  "Toca el menú": "Tap the menu",
+  "Toca «Agregar a»": "Tap «Add to»",
+  "Elige «Pantalla de inicio»": "Choose «Home screen»",
+  "Toca «Agregar»": "Tap «Add»",
+  "Si en la barra de direcciones ves el ícono de instalar, también sirve.": "If you see the install icon in the address bar, that works too.",
   "Agregar a inicio": "Add to Home Screen",
   // AF-E178 · D178 · el rediseño de Notificaciones.
   "Todo leído": "All read",

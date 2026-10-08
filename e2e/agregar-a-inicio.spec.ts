@@ -23,6 +23,13 @@ const IPAD_SAFARI =
   'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const ANDROID_CHROME =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+// D229 · Samsung Internet en un Galaxy, y su WebView (el navegador interno de otra app).
+const SAMSUNG =
+  'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36';
+const SAMSUNG_WEBVIEW =
+  'Mozilla/5.0 (Linux; Android 14; SM-S918B; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36';
+const PASOS_SAMSUNG = ['1Toca el menú', '2Toca «Agregar a»', '3Elige «Pantalla de inicio»', '4Toca «Agregar»'];
+const NOTA_SAMSUNG = 'Si en la barra de direcciones ves el ícono de instalar, también sirve.';
 
 const CLAVE_VISTO = 'payme.app.agregar_a_inicio.v1';
 
@@ -198,6 +205,147 @@ test.describe('en Chrome de Android', () => {
     await expect.poll(() => page.evaluate(() => (window as unknown as { __prompts: number }).__prompts)).toBe(1);
     await expect(guia(page)).toHaveCount(0);
     // El aviso de Chrome sirve una vez: la fila se va.
+    await expect(fila(page)).toHaveCount(0);
+  });
+});
+
+/** Despacha un `beforeinstallprompt` de prueba que cuenta sus `prompt()` en `__prompts`. */
+async function ofrecerInstalacion(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const evento = new Event('beforeinstallprompt', { cancelable: true });
+    Object.assign(evento, {
+      prompt: () => {
+        (window as unknown as { __prompts: number }).__prompts += 1;
+        return Promise.resolve();
+      },
+      userChoice: Promise.resolve({ outcome: 'dismissed' }),
+    });
+    window.dispatchEvent(evento);
+    return evento.defaultPrevented;
+  });
+}
+
+test.describe('D229 · en Samsung Internet', () => {
+  test.use({ userAgent: SAMSUNG });
+
+  test('sin el evento: al entrar, Inicio muestra la guía de Samsung; «Entendido» la cierra y no vuelve', async ({ page }) => {
+    await ingresar(page);
+    await expect(guia(page)).toBeVisible();
+    await expect(guia(page).getByText('Abre PayMe desde tu pantalla de inicio, como una app.')).toBeVisible();
+    await expect(guia(page).getByRole('listitem')).toHaveText(PASOS_SAMSUNG);
+    await expect(guia(page).getByText(NOTA_SAMSUNG, { exact: true })).toBeVisible();
+    // Los íconos del menú ≡ y del ⊕, en sus pasos; los otros dos, sin ícono.
+    await expect(guia(page).getByRole('listitem').nth(0).locator('.guia-inicio-icono svg')).toHaveCount(1);
+    await expect(guia(page).getByRole('listitem').nth(1).locator('.guia-inicio-icono svg')).toHaveCount(1);
+    await expect(guia(page).getByRole('listitem').nth(2).locator('.guia-inicio-icono')).toHaveCount(0);
+    await expect(guia(page).getByRole('listitem').nth(3).locator('.guia-inicio-icono')).toHaveCount(0);
+    // Sin flecha: en Samsung la barra se puede mover. Y nada de los pasos de iOS.
+    await expect(page.locator('.guia-inicio-flecha')).toHaveCount(0);
+    await expect(guia(page).getByText('Toca Compartir')).toHaveCount(0);
+    await expect(entendido(page)).toBeFocused();
+    await captura(page, 'guia-samsung-375');
+
+    await entendido(page).click();
+    await expect(guia(page)).toHaveCount(0);
+    expect(await page.evaluate((clave) => localStorage.getItem(clave), CLAVE_VISTO)).toBe('1');
+
+    await page.reload();
+    await inicioListo(page);
+    await expect(guia(page)).toHaveCount(0);
+  });
+
+  test('Escape y ✕ la cierran', async ({ page }) => {
+    await ingresar(page);
+    await expect(entendido(page)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(guia(page)).toHaveCount(0);
+
+    await configuracion(page);
+    await fila(page).click();
+    await guia(page).getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(guia(page)).toHaveCount(0);
+    await expect(fila(page)).toBeFocused();
+  });
+
+  test('desde Configuración: la fila abre la guía de Samsung, no la ventana nativa', async ({ page }) => {
+    await marcarSinPrompts(page);
+    await marcarVisto(page);
+    await ingresar(page);
+    await expect(guia(page)).toHaveCount(0);
+    await configuracion(page);
+    await fila(page).click();
+    await expect(guia(page)).toBeVisible();
+    await expect(guia(page).getByRole('listitem')).toHaveText(PASOS_SAMSUNG);
+    expect(await page.evaluate(() => (window as unknown as { __prompts: number }).__prompts)).toBe(0);
+  });
+
+  test('🔴 con el evento gana la ventana nativa: sin aviso, y la fila abre el diálogo', async ({ page }) => {
+    await marcarSinPrompts(page);
+    // El evento llega en cada carga, como en un Samsung viejo, apenas el
+    // arranque engancha la captura: la captura está detrás de `import()`, así
+    // que no hay un momento fijo de la carga que llegue siempre después.
+    await page.addInitScript(() => {
+      const agregar = window.addEventListener;
+      window.addEventListener = function (this: Window, ...args: Parameters<Window['addEventListener']>) {
+        agregar.apply(this, args);
+        if (args[0] !== 'beforeinstallprompt') return;
+        queueMicrotask(() => {
+          const evento = new Event('beforeinstallprompt', { cancelable: true });
+          Object.assign(evento, {
+            prompt: () => {
+              (window as unknown as { __prompts: number }).__prompts += 1;
+              return Promise.resolve();
+            },
+            userChoice: Promise.resolve({ outcome: 'dismissed' }),
+          });
+          window.dispatchEvent(evento);
+        });
+      } as Window['addEventListener'];
+    });
+    await ingresar(page);
+    await inicioListo(page);
+    // Sin marcar «visto»: si la guía fuera a salir, saldría acá.
+    await expect(guia(page)).toHaveCount(0);
+    await configuracion(page);
+    await fila(page).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __prompts: number }).__prompts)).toBe(1);
+    await expect(guia(page)).toHaveCount(0);
+  });
+
+  test('si el evento llega con la guía abierta, la guía se queda hasta que la cierren', async ({ page }) => {
+    await marcarSinPrompts(page);
+    await ingresar(page);
+    await expect(guia(page)).toBeVisible();
+    expect(await ofrecerInstalacion(page)).toBe(true);
+    await expect(guia(page).getByRole('listitem')).toHaveText(PASOS_SAMSUNG);
+    await entendido(page).click();
+    await expect(guia(page)).toHaveCount(0);
+  });
+
+  test('ya agregada a inicio (standalone): ni guía ni fila', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = window.matchMedia.bind(window);
+      window.matchMedia = (consulta: string) =>
+        consulta === '(display-mode: standalone)'
+          ? ({ ...original(consulta), matches: true } as MediaQueryList)
+          : original(consulta);
+    });
+    await ingresar(page);
+    await inicioListo(page);
+    await expect(guia(page)).toHaveCount(0);
+    await configuracion(page);
+    await expect(fila(page)).toHaveCount(0);
+  });
+});
+
+test.describe('D229 · en el navegador interno de otra app (WebView de Samsung)', () => {
+  test.use({ userAgent: SAMSUNG_WEBVIEW });
+
+  test('ni guía ni fila', async ({ page }) => {
+    await ingresar(page);
+    await inicioListo(page);
+    await expect(guia(page)).toHaveCount(0);
+    await configuracion(page);
     await expect(fila(page)).toHaveCount(0);
   });
 });

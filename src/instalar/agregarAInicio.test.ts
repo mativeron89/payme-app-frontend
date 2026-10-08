@@ -10,12 +10,15 @@ import {
   entornoActual,
   esIPad,
   marcarAvisoVisto,
+  esSamsungInternet,
   pedirInstalacion,
   plataformaDeInstalacion,
   reiniciarParaTests,
   suscribir,
+  tieneGuia,
   type EntornoInstalacion,
 } from './agregarAInicio';
+import { textosDeLaGuia } from './textosDeLaGuia';
 
 const UA = {
   iphoneSafari:
@@ -36,6 +39,21 @@ const UA = {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
   android:
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+  // D229 · Samsung Internet: teléfono, tableta, su WebView, Facebook adentro y el modo escritorio.
+  samsung:
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
+  samsungTableta:
+    'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Safari/537.36',
+  samsungWebView:
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
+  samsungFacebook:
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/480.0.0.40.109;]',
+  samsungInstagram:
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36 Instagram 350.0.0.32.106 Android',
+  samsungLine:
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36 Line/14.15.1',
+  samsungEscritorio:
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Safari/537.36',
 };
 
 function entorno(cambios: Partial<EntornoInstalacion> = {}): EntornoInstalacion {
@@ -99,6 +117,67 @@ describe('D176 · dónde se ofrece «Agregar a inicio»', () => {
     const android = { userAgent: UA.android, platform: 'Linux armv8l' };
     expect(plataformaDeInstalacion(entorno({ ...android, hayPrompt: true }))).toBe('android_prompt');
     expect(plataformaDeInstalacion(entorno({ ...android, hayPrompt: false }))).toBeNull();
+  });
+});
+
+describe('D229 · Samsung Internet', () => {
+  const samsung = { userAgent: UA.samsung, platform: 'Linux aarch64' };
+
+  it('en el teléfono, sin el evento: la guía de Samsung', () => {
+    expect(esSamsungInternet(entorno(samsung))).toBe(true);
+    expect(plataformaDeInstalacion(entorno(samsung))).toBe('samsung_guia');
+  });
+
+  it('en una tableta Android también', () => {
+    expect(plataformaDeInstalacion(entorno({ userAgent: UA.samsungTableta, platform: 'Linux aarch64' }))).toBe('samsung_guia');
+  });
+
+  it('🔴 si Samsung dispara el evento, gana la ventana nativa, como en Chrome', () => {
+    expect(plataformaDeInstalacion(entorno({ ...samsung, hayPrompt: true }))).toBe('android_prompt');
+  });
+
+  it('ya agregada: nada, con o sin evento', () => {
+    expect(plataformaDeInstalacion(entorno({ ...samsung, displayStandalone: true }))).toBeNull();
+    expect(plataformaDeInstalacion(entorno({ ...samsung, hayPrompt: true, displayStandalone: true }))).toBeNull();
+  });
+
+  it.each([
+    ['su WebView (el navegador interno de otra app)', UA.samsungWebView],
+    ['Facebook', UA.samsungFacebook],
+    ['Instagram', UA.samsungInstagram],
+    ['LINE', UA.samsungLine],
+    ['el modo escritorio (sin Android)', UA.samsungEscritorio],
+  ])('%s: nada', (_nombre, userAgent) => {
+    expect(esSamsungInternet(entorno({ userAgent, platform: 'Linux aarch64' }))).toBe(false);
+    expect(plataformaDeInstalacion(entorno({ userAgent, platform: 'Linux aarch64' }))).toBeNull();
+  });
+
+  it('Chrome de Android no es Samsung: sin evento, nada (como antes)', () => {
+    expect(esSamsungInternet(entorno({ userAgent: UA.android, platform: 'Linux armv8l' }))).toBe(false);
+  });
+
+  it('las dos plataformas con guía, y sólo ellas', () => {
+    expect(tieneGuia('ios_safari')).toBe(true);
+    expect(tieneGuia('samsung_guia')).toBe(true);
+    expect(tieneGuia('android_prompt')).toBe(false);
+    expect(tieneGuia(null)).toBe(false);
+  });
+
+  it('los pasos de cada guía, en un solo lugar', () => {
+    const t = (s: string) => s;
+    expect(textosDeLaGuia('samsung_guia', t)).toEqual({
+      pasos: [
+        { texto: 'Toca el menú', icono: 'menu' },
+        { texto: 'Toca «Agregar a»', icono: 'plus-circle' },
+        { texto: 'Elige «Pantalla de inicio»' },
+        { texto: 'Toca «Agregar»' },
+      ],
+      nota: 'Si en la barra de direcciones ves el ícono de instalar, también sirve.',
+    });
+    // iOS, como estaba.
+    expect(textosDeLaGuia('ios_safari', t)).toEqual({
+      pasos: [{ texto: 'Toca Compartir', icono: 'share' }, { texto: 'Elige «Agregar a inicio»' }],
+    });
   });
 });
 

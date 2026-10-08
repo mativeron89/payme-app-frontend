@@ -8,6 +8,10 @@
  * - **Android/Chrome** (`android_prompt`): Chrome avisa con `beforeinstallprompt`
  *   que se puede instalar; se guarda ese evento y la fila de Configuración llama
  *   `prompt()`.
+ * - **Samsung Internet en Android sin el evento** (`samsung_guia`, D229): desde
+ *   la versión 27 no dispara `beforeinstallprompt` e instala por su cuenta. Se
+ *   muestra su guía: menú → «Agregar a» → «Pantalla de inicio». Si el evento
+ *   llega (versiones viejas), gana la ventana nativa, como en Chrome.
  * - **Ya agregada** (`display-mode: standalone` o `navigator.standalone`):
  *   nada, ni aviso ni fila.
  * - Cualquier otro caso: nada.
@@ -29,7 +33,14 @@ export interface EntornoInstalacion {
   readonly hayPrompt: boolean;
 }
 
-export type Plataforma = 'ios_safari' | 'android_prompt' | null;
+export type Plataforma = 'ios_safari' | 'samsung_guia' | 'android_prompt' | null;
+
+/** Las plataformas que se resuelven con una guía de pasos, no con la ventana nativa. */
+export type PlataformaConGuia = 'ios_safari' | 'samsung_guia';
+
+export function tieneGuia(p: Plataforma): p is PlataformaConGuia {
+  return p === 'ios_safari' || p === 'samsung_guia';
+}
 
 export const CLAVE_VISTO = 'payme.app.agregar_a_inicio.v1';
 
@@ -53,6 +64,19 @@ export function esSafariIOS(e: EntornoInstalacion): boolean {
     && !/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\/|FBAN|FBAV|Instagram|Line\//.test(e.userAgent);
 }
 
+/**
+ * D229 · Samsung Internet en un teléfono o tableta Android. No cuentan:
+ * - el WebView (`; wv)`), que es el navegador interno de una app y no instala;
+ * - los navegadores internos de Facebook, Instagram y LINE, aunque corran sobre
+ *   Samsung;
+ * - el modo escritorio de Samsung, que no dice `Android`.
+ */
+export function esSamsungInternet(e: EntornoInstalacion): boolean {
+  return /SamsungBrowser\//.test(e.userAgent)
+    && /Android/.test(e.userAgent)
+    && !/; wv\)|FBAN|FBAV|Instagram|Line\//.test(e.userAgent);
+}
+
 /** Ya está agregada a inicio: la app corre en su ventana propia. */
 export function instalada(e: EntornoInstalacion): boolean {
   return e.standalone === true || e.displayStandalone;
@@ -61,7 +85,9 @@ export function instalada(e: EntornoInstalacion): boolean {
 export function plataformaDeInstalacion(e: EntornoInstalacion): Plataforma {
   if (instalada(e)) return null;
   if (esSafariIOS(e)) return 'ios_safari';
+  // El evento gana: si Samsung lo dispara, va la ventana nativa (D229).
   if (e.hayPrompt) return 'android_prompt';
+  if (esSamsungInternet(e)) return 'samsung_guia';
   return null;
 }
 

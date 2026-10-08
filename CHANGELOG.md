@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.224.0 — «Agregar a inicio» en Samsung Internet, la burbuja roja de «Amigos» y sin el cartel de «¿Cómo dividen?» (2026-10-07)
+
+Orden AF-INICIO-SAMSUNG-20261007 (6283fc82…) con sus adendas 1 (129cda0d…) y 2 (d7b7bfa2…); decisiones D229, D230 y
+D231. Plan aprobado (0c6d3f9e…): los textos de Samsung se programan ya y se ajustan con la captura del teléfono de
+prueba; la detección y las dos ramas como se plantearon; el nombre accesible con el número exacto; del cartel salen la
+fila y el toast.
+
+- **Samsung Internet (D229):** desde la versión 27 no dispara `beforeinstallprompt`, así que hasta hoy la app no le
+  ofrecía nada. Ahora, en Samsung Internet de Android (`SamsungBrowser/` y `Android`; sin su WebView, sin los navegadores
+  internos de Facebook, Instagram o LINE, y nada en su modo escritorio), sin el evento, va la guía: el mismo aviso de
+  primera vez en Inicio y la misma fila en Configuración, con la regla de «visto». Sus pasos: «Toca el menú» (≡), «Toca
+  «Agregar a»» (⊕), «Elige «Pantalla de inicio»» y «Toca «Agregar»», y la nota «Si en la barra de direcciones ves el
+  ícono de instalar, también sirve.»; sin flecha, porque en Samsung la barra se puede mover. Si el evento llega, gana la
+  ventana nativa, como en Chrome; si llega con la guía abierta, la guía se queda hasta que la cierren. Ya instalada, nada.
+  - **Los rótulos en español no están confirmados.** La fuente concreta es una guía con capturas en inglés (Cheshire West
+    and Chester Council: ≡ → «Add to» ⊕ → «Home screen» → «Add»); la documentación de Samsung sólo dice que existe el menú.
+    Los textos viven en un solo lugar, `src/instalar/textosDeLaGuia.ts`, para ajustarlos con la captura del teléfono de
+    prueba.
+  - Dos glifos nuevos en `Icon`: `menu` y `plus-circle`.
+
 ## 0.223.0 — «Unirme con código» en Mesas y la mesa del titular reorganizada, «Tu mesa» (2026-10-07)
 
 Orden AF-UNIRSE-CODIGO-20261007 (sha256 354d67d6…); decisiones D219 (a4170e87…) y D223 (6452cc9e…): turno 2 del diseño

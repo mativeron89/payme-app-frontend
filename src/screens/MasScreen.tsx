@@ -18,7 +18,7 @@ import { useSocialAuthCapability } from '../api/socialAuth';
 import { CuentasConectadas } from './CuentasConectadas';
 import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 import { GuiaAgregarAInicio, usePlataformaDeInstalacion } from '../instalar/GuiaAgregarAInicio';
-import { pedirInstalacion } from '../instalar/agregarAInicio';
+import { pedirInstalacion, tieneGuia, type PlataformaConGuia } from '../instalar/agregarAInicio';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -247,14 +247,15 @@ export function MasScreen() {
 
 /**
  * D176 · «Agregar a inicio» en Configuración, cerca de Zona horaria (antes Ubicación, D186). En Safari de
- * iOS abre la misma guía del aviso; en Android/Chrome muestra el diálogo de
- * Chrome (`beforeinstallprompt`). Ya agregada, o sin ninguna de las dos vías,
- * la fila no está.
+ * iOS y en Samsung Internet sin el evento (D229) abre la misma guía del aviso;
+ * en Android/Chrome muestra el diálogo de Chrome (`beforeinstallprompt`). Ya
+ * agregada, o sin ninguna de las vías, la fila no está.
  */
 function FilaAgregarAInicio() {
   const { t } = useIdioma();
   const plataforma = usePlataformaDeInstalacion();
-  const [guia, setGuia] = useState(false);
+  // Qué guía se abrió: queda fija aunque el evento llegue con la hoja abierta.
+  const [guia, setGuia] = useState<PlataformaConGuia | null>(null);
   const fila = useRef<HTMLButtonElement | null>(null);
   if (plataforma === null) return null;
   return (
@@ -264,7 +265,7 @@ function FilaAgregarAInicio() {
         type="button"
         className="list-row"
         onClick={() => {
-          if (plataforma === 'ios_safari') setGuia(true);
+          if (tieneGuia(plataforma)) setGuia(plataforma);
           else void pedirInstalacion();
         }}
       >
@@ -276,8 +277,9 @@ function FilaAgregarAInicio() {
       </button>
       {guia && (
         <GuiaAgregarAInicio
+          plataforma={guia}
           onCerrar={() => {
-            setGuia(false);
+            setGuia(null);
             // El foco vuelve a la fila: el lector no queda en el vacío.
             requestAnimationFrame(() => fila.current?.focus());
           }}

@@ -11,8 +11,11 @@ import {
   marcarAvisoVisto,
   plataformaDeInstalacion,
   suscribir,
+  tieneGuia,
   type Plataforma,
+  type PlataformaConGuia,
 } from './agregarAInicio';
+import { textosDeLaGuia } from './textosDeLaGuia';
 
 /** D176 · dónde se puede ofrecer agregar a inicio en este navegador; se actualiza solo. */
 export function usePlataformaDeInstalacion(): Plataforma {
@@ -24,14 +27,20 @@ export function usePlataformaDeInstalacion(): Plataforma {
  * una flecha hacia Compartir (abajo en el iPhone, arriba a la derecha en el
  * iPad). «Entendido» (el naranja de la acción) y ✕ cierran; Escape y tocar afuera, también. El foco entra
  * en «Entendido».
+ *
+ * D229 · la misma hoja para Samsung Internet, con sus cuatro pasos y una nota,
+ * y SIN flecha: en Samsung la barra se puede mover, así que una flecha fija
+ * podría señalar a la nada. Los textos viven en `textosDeLaGuia.ts`.
  */
-export function GuiaAgregarAInicio({ onCerrar }: { onCerrar: () => void }) {
+export function GuiaAgregarAInicio({ plataforma, onCerrar }: { plataforma: PlataformaConGuia; onCerrar: () => void }) {
   const { t } = useIdioma();
+  const { pasos, nota } = textosDeLaGuia(plataforma, t);
   const hoja = useRef<HTMLDivElement | null>(null);
   const entendido = useRef<HTMLButtonElement | null>(null);
   const alCerrar = useRef(onCerrar);
   alCerrar.current = onCerrar;
-  const ipad = esIPad(entornoActual());
+  const ios = plataforma === 'ios_safari';
+  const ipad = ios && esIPad(entornoActual());
   // D202 · H-04: el foco entra en «Entendido», Tab no sale de la hoja y el fondo queda inerte.
   useHojaModal(hoja, entendido, onCerrar);
 
@@ -52,20 +61,21 @@ export function GuiaAgregarAInicio({ onCerrar }: { onCerrar: () => void }) {
         </div>
         <p className="guia-inicio-intro">{t('Abre PayMe desde tu pantalla de inicio, como una app.')}</p>
         <ol className="guia-inicio-pasos">
-          <li>
-            <span className="guia-inicio-numero" aria-hidden="true">1</span>
-            <span>{t('Toca Compartir')}</span>
-            <span className="guia-inicio-icono" aria-hidden="true"><Icon name="share" size={20} /></span>
-          </li>
-          <li>
-            <span className="guia-inicio-numero" aria-hidden="true">2</span>
-            <span>{t('Elige «Agregar a inicio»')}</span>
-          </li>
+          {pasos.map((paso, i) => (
+            <li key={i}>
+              <span className="guia-inicio-numero" aria-hidden="true">{i + 1}</span>
+              <span>{paso.texto}</span>
+              {paso.icono && (
+                <span className="guia-inicio-icono" aria-hidden="true"><Icon name={paso.icono} size={20} /></span>
+              )}
+            </li>
+          ))}
         </ol>
+        {nota && <p className="guia-inicio-nota">{nota}</p>}
         <button ref={entendido} type="button" className="btn btn-primary guia-inicio-entendido" onClick={() => alCerrar.current()}>
           {t('Entendido')}
         </button>
-        {!ipad && <span className="guia-inicio-flecha abajo" aria-hidden="true" />}
+        {ios && !ipad && <span className="guia-inicio-flecha abajo" aria-hidden="true" />}
       </div>
     </div>,
     document.body,
@@ -73,17 +83,27 @@ export function GuiaAgregarAInicio({ onCerrar }: { onCerrar: () => void }) {
 }
 
 /**
- * D176 · el aviso de primera vez: sólo iPhone/iPad en Safari y sin la app
- * agregada. Se monta en Inicio, que sólo existe con la sesión iniciada: es donde
- * se llega después del login (lo fija `e2e/agregar-a-inicio.spec.ts`, «sin
- * sesión no hay guía»). Al cerrarlo no vuelve en este navegador.
+ * D176 · el aviso de primera vez: sólo donde hay guía (iPhone/iPad en Safari y,
+ * por D229, Samsung Internet sin el evento) y sin la app agregada. Se monta en
+ * Inicio, que sólo existe con la sesión iniciada: es donde se llega después del
+ * login (lo fija `e2e/agregar-a-inicio.spec.ts`, «sin sesión no hay guía»). Al
+ * cerrarlo no vuelve en este navegador.
+ *
+ * La guía que se abrió queda fija hasta que la cierren: si Samsung dispara el
+ * evento con la hoja abierta, la plataforma pasa a `android_prompt`, pero la
+ * hoja no desaparece de golpe debajo del dedo.
  */
 export function AvisoAgregarAInicio() {
   const plataforma = usePlataformaDeInstalacion();
   const [abierto, setAbierto] = useState(() => !avisoYaVisto(almacenLocal()));
-  if (plataforma !== 'ios_safari' || !abierto) return null;
+  const [fijada, setFijada] = useState<PlataformaConGuia | null>(null);
+  const actual = tieneGuia(plataforma) ? plataforma : null;
+  if (abierto && fijada === null && actual !== null) setFijada(actual);
+  const guia = fijada ?? actual;
+  if (guia === null || !abierto || plataforma === null) return null;
   return (
     <GuiaAgregarAInicio
+      plataforma={guia}
       onCerrar={() => {
         marcarAvisoVisto(almacenLocal());
         setAbierto(false);
