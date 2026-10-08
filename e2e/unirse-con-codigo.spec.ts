@@ -149,12 +149,13 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
   test('🔴 A04 · enviando: spinner, el campo fijo y UN solo pedido aunque se toque dos veces', async ({ page }) => {
     await enMesas(page, 600);
     await abrirYEscribir(page, '12345');
-    // El botón listo: naranja con texto navy (blanco sobre ese naranja no es AA).
+    // D236 · el botón listo: naranja con texto BLANCO (Mati: «La letra de la
+    // burbuja naranja tiene que ser blanca»). Era navy.
     const colores = await solicitar(page).evaluate((b) => {
       const c = getComputedStyle(b);
       return { fondo: c.backgroundColor, texto: c.color };
     });
-    expect(colores).toEqual({ fondo: 'rgb(255, 107, 53)', texto: 'rgb(16, 30, 59)' });
+    expect(colores).toEqual({ fondo: 'rgb(255, 107, 53)', texto: 'rgb(255, 255, 255)' });
     await solicitar(page).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
     await expect(page.getByRole('button', { name: 'Enviando…' })).toBeVisible();
     await expect(campo(page)).toBeDisabled();

@@ -6475,9 +6475,13 @@ button.qc-circulo::after {
 /* ─── D219 · D223 · «Unirme con código», en Mesas (turno 2 · 2.1–2.8) ───
    Una tarjeta blanca (radio 18) con la fila que se abre en el lugar: el cuadro
    navy con «#», el título y la flecha que gira. Adentro, «PA-» y cinco celdas
-   de 44×54 sobre UN input numérico; «Solicitar unirme» naranja con texto navy
-   (blanco sobre ese naranja no llega a AA). Error en --danger, límite en tinte
-   de aviso, «Cancelar» en tinte de error sin borde. */
+   de 44×54 sobre UN input numérico; «Solicitar unirme» naranja con texto
+   BLANCO (D236, Mati: «La letra de la burbuja naranja tiene que ser blanca»;
+   era navy). Blanco sobre ese naranja da 2.84:1, por debajo de AA: es la misma
+   excepción que Mati ratificó el 2026-08-08 para `--brand-fg` sobre `--brand`
+   (`designTokens.test.ts`, EXCEPCIONES_AA), y por eso va por el token. Apagado
+   no es naranja (fondo blanco con borde) y conserva su gris. Error en
+   --danger, límite en tinte de aviso, «Cancelar» en tinte de error sin borde. */
 .unirse {
   margin-bottom: var(--sp-4);
   border-radius: 18px;
@@ -6621,7 +6625,7 @@ button.qc-circulo::after {
   border: 0;
   border-radius: 999px;
   background: #ff6b35;
-  color: var(--navy);
+  color: var(--brand-fg);
   font: inherit;
   font-weight: 700;
   cursor: pointer;

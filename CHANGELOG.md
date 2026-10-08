@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.224.1 — «Solicitar unirme» con texto blanco (2026-10-07)
+
+Orden AF-TEXTO-BLANCO-UNIRME-20261008 (782605a8…); decisión D236 (421da1df…), literal de Mati: «La letra de la burbuja
+naranja tiene que ser blanca».
+
+- **«Solicitar unirme»**, listo para tocar (naranja), pasa de texto navy a **blanco**. Va por el token `--brand-fg`
+  (#ffffff), como el círculo de la barra y los CTA de marca, porque blanco sobre este naranja (2.84:1) es la excepción a
+  AA que Mati ya ratificó el 2026-08-08 para `--brand-fg` sobre `--brand`: no hace falta otra. El naranja, el tamaño y
+  los demás botones no cambian.
+- **Apagado** (código incompleto, y mientras dice «Enviando…») el botón no es naranja: es blanco con borde, y conserva su
+  texto gris. Blanco ahí no se vería.
+- **Pruebas:** la e2e A04 de `unirse-con-codigo` afirmaba navy (`rgb(16, 30, 59)`) en el botón listo; ahora afirma
+  blanco. `designTokens.test` suma dos: el texto sale de `--brand-fg` y no de un literal (ni navy), y el apagado conserva
+  su gris.
+
 ## 0.224.0 — «Agregar a inicio» en Samsung Internet, la burbuja roja de «Amigos» y sin el cartel de «¿Cómo dividen?» (2026-10-07)
 
 Orden AF-INICIO-SAMSUNG-20261007 (6283fc82…) con sus adendas 1 (129cda0d…) y 2 (d7b7bfa2…); decisiones D229, D230 y

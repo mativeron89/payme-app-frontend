@@ -371,6 +371,26 @@ function rule(selector: string): string {
   return found[1]
 }
 
+describe('D236 · «Solicitar unirme» con texto blanco', () => {
+  /**
+   * Mati: «La letra de la burbuja naranja tiene que ser blanca». Era navy. El
+   * par blanco sobre este naranja es la excepción a AA ya registrada arriba
+   * (`brand-fg` sobre `brand`, 2.84), así que el color va por ESE token: un
+   * `#fff` a mano funcionaría igual hoy y quedaría desenganchado del sistema.
+   */
+  it('el texto del botón listo sale de `--brand-fg`, no de un literal', () => {
+    const boton = rule('.unirse-solicitar')
+    expect(boton).toContain('color: var(--brand-fg)')
+    expect(boton, 'el color va por token, no hardcodeado').not.toMatch(/(^|[^-])color:\s*(#|white|black|rgb|var\(--navy\))/im)
+  })
+
+  it('apagado no es naranja y conserva su gris (blanco ahí no se vería)', () => {
+    const apagado = rule('.unirse-solicitar:disabled')
+    expect(apagado).toContain('background: var(--surface)')
+    expect(apagado).toContain('color: var(--text-muted)')
+  })
+})
+
 describe('entrada por link · SPEC_APP.md §1.2', () => {
   /**
    * El CUARTO uso del naranja es una EXCEPCIÓN ratificada (SISTEMA_DISENO.md
