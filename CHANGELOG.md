@@ -38,14 +38,20 @@ accesos de Inicio quedan fuera.
   (ya no la silueta de una tarjeta de mesa), en Mesas una fila por sección (dos, no cuatro), en Amigos «Cargando…».
 - **El toque en la barra**, sin el recuadro gris de iOS (`-webkit-tap-highlight-color: transparent`).
 - **«Enviando…» de «Solicitar unirme»:** el spinner y el texto juntos y centrados (el `margin: 0 auto` de `.spinner`).
-- **Medición** (mock de 350 ms, del toque hasta que el contenido está, mediana de 5 corridas, la misma sonda v2 sobre la
-  base y sobre esto): **segunda visita** Mesas 366 → 13 ms, Amigos 366 → 13 ms, Inicio 364 → 14 ms; en la base, con
+- **Medición** (mock de 350 ms, del toque hasta que el contenido está, mediana de 5 corridas, la misma sonda v3 sobre la
+  base y sobre esto): **segunda visita** Mesas 364 → 13 ms, Amigos 363 → 13 ms, Inicio 366 → 14 ms; en la base, con
   estado de carga en las 15 visitas, ahora en ninguna. La primera visita no cambia de tiempo (Mesas 364 → 372, Amigos
-  390 → 381): en el mock (350 ms) el esqueleto llega a asomar unos 50 ms; con los 100–200 ms reales del video, no.
+  389 → 385): en el mock (350 ms) el esqueleto llega a asomar unos 50 ms; con los 100–200 ms reales del video, no.
+  - **La sonda se corrigió dos veces, y las dos por el mismo motivo: medía otra cosa.** La v1 daba «listo» cuando no
+    había carga (con el umbral, al principio no hay ni carga ni contenido); la v2, en Inicio, miraba la primera
+    `.home-mesa`, que es la invitación «Te invitaron» y no la mesa abierta. La v3 mira el contenido de la sección de
+    la mesa. El mensaje del commit `d46833f` trae los números de la v2.
 - **Mock:** la costura `payme.app.mock.latencia.v1` (0–5000 ms) para probar los dos lados del umbral.
 - **Pruebas:** `ultimoVisto.test` (11: dueño, igual = mismo objeto, vaciar, olvidar, sin storage, quiénes lo leen);
   e2e `pestanas-sin-parpadeo` (9, con un espía de estados de carga: segunda visita, primera rápida y lenta, datos que
   cambian, cerrar sesión, cerrar una mesa, la foto, el toque); en `unirse-con-codigo` A04, el spinner centrado.
+  - Las e2e miran la sección de la mesa abierta (`aria-label="Tu mesa abierta"`), no `.home-mesa` a secas: con la
+    clase sola daban Inicio por listo con la invitación, y el mutante que apaga lo último visto en Inicio sobrevivía.
 
 ## 0.224.1 — «Solicitar unirme» con texto blanco (2026-10-07)
 

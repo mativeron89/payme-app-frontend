@@ -25,6 +25,13 @@ import { buscarTexto, cargasDesde, espiarCargas, marcaDeCargas } from './_senale
  */
 
 const LATENCIA = 'payme.app.mock.latencia.v1';
+/**
+ * La sección de la mesa abierta de Inicio. 🔴 No `.home-mesa` a secas: la
+ * invitación «Te invitaron» usa la misma clase, y una primera versión de estas
+ * pruebas daba Inicio por «listo» con la invitación mientras la mesa todavía
+ * cargaba (lo cazó el mutante que apaga lo último visto en Inicio).
+ */
+const MESA_ABIERTA = 'section.home-mesa[aria-label="Tu mesa abierta"]';
 const SOLICITUDES = 'payme.app.mock.amigos.solicitudes.v1';
 
 type Pestana = 'Inicio' | 'Mesas' | 'Amigos';
@@ -34,7 +41,7 @@ async function tocarYMedir(page: Page, pestana: Pestana): Promise<{ ms: number; 
   return page.evaluate(async (p) => {
     const listo = (): boolean => {
       if (p === 'Inicio') {
-        const s = document.querySelector('.home-mesa');
+        const s = document.querySelector('section.home-mesa[aria-label="Tu mesa abierta"]');
         return !!s && s.children.length > 0 && !s.querySelector('.sk-neutro');
       }
       if (p === 'Mesas') return !!document.querySelector('.unirse') && (document.body.textContent ?? '').includes('$224.25');
@@ -63,7 +70,7 @@ async function pasarPorLasTres(page: Page): Promise<Record<Pestana, { ms: number
 
 async function inicioListo(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-  await expect(page.locator('.home-mesa > *').first()).toBeVisible();
+  await expect(page.locator(`${MESA_ABIERTA} > :not(.sk-neutro)`).first()).toBeVisible();
 }
 
 async function captura(page: Page, nombre: string): Promise<void> {
@@ -104,7 +111,7 @@ test.describe('D237 · pestañas sin parpadeo', () => {
     await espiarCargas(page);
     await ingresar(page);
     // Inicio: una línea neutra, no la silueta de una tarjeta de mesa.
-    await expect(page.locator('.home-mesa > *').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`${MESA_ABIERTA} > :not(.sk-neutro)`).first()).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Mesas', exact: true }).click();
     await expect(page.locator('.pago-row.sk').first()).toBeVisible();
     await captura(page, 'mesas-primera-lenta-375');
@@ -130,8 +137,8 @@ test.describe('D237 · pestañas sin parpadeo', () => {
     // Inicio carga de cero y pasa el umbral de 300 ms.
     await page.evaluate(([k]) => localStorage.setItem(k!, '1500'), [LATENCIA]);
     await page.reload();
-    await expect(page.locator('.home-mesa .sk-neutro')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('.home-mesa .mesa-card.sk')).toHaveCount(0);
+    await expect(page.locator(`${MESA_ABIERTA} .sk-neutro`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`${MESA_ABIERTA} .mesa-card.sk`)).toHaveCount(0);
     await captura(page, 'inicio-primera-lenta-375');
   });
 
@@ -188,10 +195,10 @@ test.describe('D237 · pestañas sin parpadeo', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     // A Inicio por la barra (sin recargar): la mesa abierta queda vista.
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
-    await expect(page.locator('.home-mesa').getByText(mesa.code)).toBeVisible();
+    await expect(page.locator(MESA_ABIERTA).getByText(mesa.code)).toBeVisible();
 
     // A la mesa por la app, y se cierra.
-    await page.locator('.home-mesa').getByText(mesa.code).click();
+    await page.locator(MESA_ABIERTA).getByText(mesa.code).click();
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
     await page.getByRole('button', { name: 'Cerrar mesa', exact: true }).click();
     await page.getByRole('dialog', { name: '¿Cerrar la mesa?' }).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
@@ -201,7 +208,7 @@ test.describe('D237 · pestañas sin parpadeo', () => {
     const marca = await marcaDeCargas(page);
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await inicioListo(page);
-    await expect(page.locator('.home-mesa').getByText(mesa.code)).toHaveCount(0);
+    await expect(page.locator(MESA_ABIERTA).getByText(mesa.code)).toHaveCount(0);
     expect((await cargasDesde(page, marca)).filter((v) => v === `texto:${mesa.code}`)).toEqual([]);
   });
 
