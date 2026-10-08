@@ -84,3 +84,45 @@ export async function leerScrolls(page: Page): Promise<Senales> {
     return { scrolls: w.__senales?.scrolls ?? [] };
   });
 }
+
+interface VentanaConAvisos extends Window {
+  __avisos?: string[];
+}
+
+/**
+ * D231 · espía de los TOASTS, para afirmar que NO salió ninguno.
+ *
+ * 🔴 **`toHaveCount(0)` sobre el toast NO sirve de testigo, y lo cazó un
+ * mutante.** La aserción reintenta hasta 5 s, y el toast se apaga solo a los
+ * 2,4 s: con el toast de vuelta en el código, la aserción esperaba a que se
+ * fuera y pasaba en verde. Una ausencia que se afirma esperando se cumple
+ * siempre que lo prohibido sea pasajero.
+ *
+ * Por eso se anota cada texto que el toast llega a mostrar, desde que carga la
+ * página, y al final se afirma que la lista está vacía (o lo que tenga).
+ */
+export async function espiarAvisos(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as VentanaConAvisos;
+    const vistos: string[] = [];
+    w.__avisos = vistos;
+    const anotar = () => {
+      document.querySelectorAll('.toast:not(.toast-hidden)').forEach((el) => {
+        const texto = el.textContent ?? '';
+        if (texto && vistos[vistos.length - 1] !== texto) vistos.push(texto);
+      });
+    };
+    const empezar = () => {
+      new MutationObserver(anotar).observe(document.body, {
+        subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'],
+      });
+    };
+    if (document.body) empezar();
+    else document.addEventListener('DOMContentLoaded', empezar);
+  });
+}
+
+/** Los textos que mostró el toast desde que cargó la página. */
+export async function avisosVistos(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as VentanaConAvisos).__avisos ?? []);
+}

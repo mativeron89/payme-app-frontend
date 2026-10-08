@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
 import { enTuMesaConLaLista } from './_mesa';
+import { avisosVistos, espiarAvisos } from './_senales';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
@@ -240,6 +241,7 @@ test('🔴 «En partes iguales» no baja de 2, aunque el contrato lo admita', as
 test('🔴 ticket incompleto: el círculo NO se apaga, frena sin decir por qué y abre el ticket', async ({
   page,
 }) => {
+  await espiarAvisos(page);
   await hastaLaPantallaFusionada(page);
 
   // El stepper primero: si no, el CTA frena por ÉL y nunca llega a mirar el
@@ -264,6 +266,7 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena sin decir por qué 
   // ① el círculo NO nace apagado (§5 bis · E)
   const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
   await expect(continuar).toBeEnabled();
+  const avisosAntes = (await avisosVistos(page)).length;
   await continuar.click();
 
   // ② el pulso se mide antes de que `animationend` retire su clase
@@ -273,10 +276,12 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena sin decir por qué 
   // ③ NO se llegó a Garantía — la afirmación que el bypass rompe
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
   /**
-   * ④ D231 · SIN TOAST y sin fila. Se afirma sobre el `.toast` visible y sobre
-   * el texto en toda la página: el motivo no se dice en ningún lado.
+   * ④ D231 · SIN TOAST y sin fila. El toast se afirma con el espía, no con
+   * `toHaveCount(0)`: esa aserción espera, el toast se apaga solo a los 2,4 s y
+   * así pasaba en verde con el toast de vuelta (lo cazó un mutante). El pulso
+   * de ② ya se vio, así que lo que el click iba a mostrar ya se mostró.
    */
-  await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
+  expect((await avisosVistos(page)).slice(avisosAntes)).toEqual([]);
   await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toHaveCount(0);
   await expect(page.locator('.appbar-above')).toHaveCount(0);
   // ⑤ la hoja quedó abierta: el aviso lleva a donde se resuelve

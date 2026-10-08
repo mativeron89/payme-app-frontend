@@ -125,8 +125,12 @@ describe('D230 · la burbuja de «Amigos»', () => {
     expect(solicitudesPendientes()).toBe(0);
   });
 
-  it('la pantalla de Amigos no publica para una cuenta que ya no está', () => {
+  it('🔴 la pantalla de Amigos no publica para una cuenta que ya no está', () => {
     publicarSolicitudesPendientes(cuenta('B'), 2);
+    expect(solicitudesPendientes()).toBeNull();
+    // Y no queda guardado para cuando esa cuenta vuelva: sería un número viejo,
+    // de una carga que terminó con otra cuenta adentro.
+    sesion.actual = cuenta('B');
     expect(solicitudesPendientes()).toBeNull();
   });
 

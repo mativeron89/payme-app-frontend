@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { sacarFoto } from './_camara';
+import { avisosVistos, espiarAvisos } from './_senales';
 
 /**
  * AF-RECORTE-BURBUJA · D222, segunda elección de Mati: «Abajo, cerca de
@@ -133,6 +134,7 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
   for (const [ancho, alto] of [[375, 667], [390, 844]] as const) {
     test(`🔴 D231 · a ${ancho}×${alto}, con un consumo incompleto: sin cartel, y nada se superpone`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
+      await espiarAvisos(page);
       await hastaComoDividen(page);
       // Cuántos son primero: si no, «Continuar» frena por el stepper y no mira el ticket.
       await page.getByRole('button', { name: 'Un comensal más' }).click();
@@ -163,16 +165,18 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
       await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = 0; });
       await capturar(page, `burbuja-${ancho}x${alto}-incompleto`);
 
-      // «Continuar» sigue sin avanzar.
+      // «Continuar» sigue sin avanzar, y no dice por qué (sin toast: ver `espiarAvisos`).
+      const avisosAntes = (await avisosVistos(page)).length;
       await page.getByRole('button', { name: 'Continuar', exact: true }).click();
       await expect(page.locator('.ticket-title-fold')).toHaveClass(/tk-fold--pulse/);
       await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
-      await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
+      expect((await avisosVistos(page)).slice(avisosAntes)).toEqual([]);
     });
   }
 
   test('🔴 D231 · sin consumos: sin «Agrega al menos un consumo.», y «Continuar» no avanza', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
+    await espiarAvisos(page);
     await hastaComoDividen(page);
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     await page.getByRole('button', { name: /Ver el ticket/ }).click();
@@ -196,10 +200,11 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
     expect(m.pisa, JSON.stringify(m)).toBe(false);
     expect(m.limite - m.burbujaBottom, JSON.stringify(m)).toBeGreaterThanOrEqual(0);
 
+    const avisosAntes = (await avisosVistos(page)).length;
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.locator('.ticket-title-fold')).toHaveClass(/tk-fold--pulse/);
     await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
-    await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
+    expect((await avisosVistos(page)).slice(avisosAntes)).toEqual([]);
     await expect(page.getByText('Agrega al menos un consumo.')).toHaveCount(0);
   });
 });

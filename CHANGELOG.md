@@ -50,6 +50,9 @@ fila y el toast.
     abajo queda en los 26 px del círculo. Los dos textos salen de `en.ts`.
   - `division-fusionada` y `burbuja-abajo` se reescriben a lo nuevo: sin cartel con un consumo incompleto y sin
     consumos, «Continuar» no avanza y no hay toast, y nada se superpone a 375×667 y 390×844.
+  - **«No hay toast» se afirma con un espía** (`espiarAvisos` en `e2e/_senales.ts`), no con `toHaveCount(0)`: esa
+    aserción espera hasta 5 s y el toast se apaga solo a los 2,4 s, así que con el toast de vuelta en el código pasaba
+    en verde. Lo cazó un mutante.
 - **Espejo al día con lo servido (adenda 1):** contra App Backend 2.166.2 (inventario de `56359acb`, contenido
   `22e8a48`), leído con `git show` del `origin/main` del dueño, sin fetch. Siguen 125 archivos; cambian cinco
   (`contract/mesa-join-requests-v1.json`, `routes/invitations.js`, `routes/notifications.js`,
