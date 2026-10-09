@@ -78,5 +78,7 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Se divide entre los marcados. Desmarca a quien no va.': "It's split among those checked. Uncheck anyone who isn't in.",
   'Total {0}': 'Total {0}',
   'Cargaste el gasto.': 'You added the expense.',
+  'Escanear ticket para {0}': 'Scan a ticket for {0}',
+  'Ticket para {0}': 'Ticket for {0}',
   'Alguien ya no está en el viaje. Revisa entre quiénes.': 'Someone is no longer on the trip. Check who it is split among.',
 };

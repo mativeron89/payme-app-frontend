@@ -62,7 +62,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
-  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onEscanear: nada, onCargaManual: nada, onAbrirTicket: nada,
+  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onAbrirTicket: nada,
   onCerrar: nada, onSalir: nada, onMarcar: nada,
 };
 
@@ -117,10 +117,11 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('el orden: monto, Miembros, «Escanear ticket» y «Carga manual» lado a lado, «Ver balance», cerrar y salir', () => {
+  it('🔴 D250 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», cerrar y salir', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Escanear ticket Carga manual Ver balance del viaje Cerrar viaje Salir del viaje$/);
-    expect(html).toMatch(/<div class="vjv-acciones"><button[^>]*>.*?Escanear ticket<\/button><button[^>]*>.*?Carga manual<\/button><\/div>/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Cerrar viaje Salir del viaje$/);
+    expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
+    expect(leido).not.toContain('Escanear ticket');
   });
 });
 

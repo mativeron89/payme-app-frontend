@@ -9,6 +9,7 @@ import { goBack, navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
+import { circuloDelViaje } from './circuloDelViaje';
 import { metaDelTicket } from './viajeView';
 import { iconoTipoLugar, nombreDelLugar, nombreDeMiembro, parametroDeTicket } from './viajesView';
 import './viajes.css';
@@ -29,6 +30,7 @@ import './viaje.css';
 export type OpcionDeBalance = 'consumos' | 'miembros';
 
 export function BalanceScreen({ viajeId }: { viajeId: string }) {
+  const { t } = useIdioma();
   const { session } = useAuth();
   const { carga, cargar } = useDetalleViaje(viajeId);
   const [opcion, setOpcion] = useState<OpcionDeBalance>('consumos');
@@ -45,7 +47,8 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         fotoDe={fotoDe}
       />
-      <AppBottomBar active={null} />
+      {/* D250 · desde Balance de un viaje abierto, el círculo escanea para ese viaje. */}
+      <AppBottomBar active={null} center={circuloDelViaje(carga.tipo === 'listo' ? carga.viaje : null, t)} />
     </div>
   );
 }

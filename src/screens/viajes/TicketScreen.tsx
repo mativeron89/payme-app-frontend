@@ -32,6 +32,7 @@ import {
   topeDelPlato,
 } from './ticketView';
 import { iconoTipoLugar, nombreCompleto, nombreDePila, nombreDelLugar } from './viajesView';
+import { circuloDelViaje } from './circuloDelViaje';
 import './viajes.css';
 import './ticket.css';
 
@@ -193,7 +194,8 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
           onReintentar={() => cargar()}
         />
       )}
-      {!conPie && <AppBottomBar active={null} />}
+      {/* D250 · desde un ticket o gasto del viaje abierto, el círculo escanea para ese viaje. */}
+      {!conPie && <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />}
     </div>
   );
 }

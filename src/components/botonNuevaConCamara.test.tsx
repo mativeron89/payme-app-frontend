@@ -22,6 +22,14 @@ describe('D249 · «Nueva» con una cámara', () => {
     expect(html).toContain('<span class="appbar-label">Nueva</span>');
   });
 
+  it('D250 · un círculo puede decir otra cosa al lector de pantalla, con el rótulo de siempre', () => {
+    const propio = renderToStaticMarkup(<AppBottomBar center={{
+      label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026', onClick: () => undefined,
+    }} />);
+    expect(propio).toMatch(/<button type="button" class="appbar-center" aria-label="Escanear ticket para Cancún 2026">/);
+    expect(propio).toContain('<span class="appbar-label">Nueva</span>');
+  });
+
   it('una pantalla que trae su propio círculo conserva su ícono', () => {
     const propio = renderToStaticMarkup(
       <AppBottomBar center={{ label: 'Continuar', icon: 'arrow-right', onClick: () => undefined, disabled: false, busy: false }} />,

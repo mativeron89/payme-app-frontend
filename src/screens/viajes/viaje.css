@@ -660,6 +660,8 @@
   gap: var(--sp-2);
 }
 .vjv-acciones .btn { padding: 14px 8px; font-size: 14.5px; white-space: nowrap; }
+/* D250 · sin «Escanear ticket» (es el círculo de la barra), «Carga manual» a todo el ancho. */
+.vjv-acciones-una { grid-template-columns: 1fr; }
 
 /* «Ver balance del viaje»: una fila tocable con su flecha. */
 .vjv-ver-balance {

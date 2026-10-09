@@ -95,6 +95,8 @@ export interface AppBottomBarProps {
     disabled?: boolean;
     /** Expone que la acción ya está procesándose, además de deshabilitarla. */
     busy?: boolean;
+    /** D250 · lo que oye el lector de pantalla si dice más que el rótulo («Escanear ticket para Cancún»). */
+    ariaLabel?: string;
   };
   /**
    * Fila propia ARRIBA de la barra, dentro del mismo bloque. Es donde vive lo
@@ -162,7 +164,8 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
           onClick={centro.onClick}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}
-          aria-label={t(centro.label)}
+          // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.
+          aria-label={t(('ariaLabel' in centro && centro.ariaLabel) || centro.label)}
         >
           <span className="appbar-fab" aria-hidden="true">
             {/* 22px dentro del círculo de 56px medido por Diseño. */}

@@ -27,6 +27,11 @@ async function conViajes(page: Page, extra: Record<string, string> = {}): Promis
   await ingresar(page);
 }
 
+/** D250 · dentro de Cancún abierto, el círculo de la cámara escanea para el viaje. */
+function circuloDelViaje(page: Page) {
+  return page.getByRole('button', { name: 'Escanear ticket para Cancún 2026', exact: true });
+}
+
 /** Navegación de la app (sin recargar: lo escaneado vive en memoria). */
 async function ir(page: Page, ruta: string): Promise<void> {
   await page.evaluate((u) => {
@@ -138,7 +143,7 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await conViajes(page, { 'payme.app.mock.viajes.fecha.v1': '2026-10-09T14:20' });
   await ir(page, `/viaje/${CANCUN}`);
   await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$542/);
-  await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
+  await circuloDelViaje(page).click();
   await sacarFoto(page);
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket-nuevo/${CANCUN}$`));
   await expect(page.getByRole('heading', { name: 'Ticket nuevo' })).toBeVisible();
@@ -161,10 +166,49 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await expect(page.locator('.vjb-fila').filter({ hasText: 'Tú' }).locator('.vjb-cifra')).toHaveText('$1,800');
 });
 
+test('🔴 D250 · en el viaje no está «Escanear ticket»: el círculo escanea para el viaje y el escaneo lo dice', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje/${CANCUN}`);
+  await expect(page.getByRole('button', { name: 'Carga manual', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear ticket', exact: true })).toHaveCount(0);
+  const circulo = circuloDelViaje(page);
+  await expect(circulo).toHaveText('Nueva');
+  await circulo.click();
+  await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
+  await expect(page.getByRole('heading', { name: 'Ticket para Cancún 2026', level: 1 })).toBeVisible();
+});
+
+test('D250 · desde Balance, el círculo también escanea para el viaje', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje-balance/${CANCUN}`);
+  await expect(page.getByRole('heading', { name: 'Balance', level: 1 })).toBeVisible();
+  await circuloDelViaje(page).click();
+  await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
+});
+
+test('D250 · desde Inicio y con el viaje esperando pagos, el círculo de siempre', async ({ page }) => {
+  await conViajes(page);
+  const nueva = page.getByRole('button', { name: 'Nueva', exact: true });
+  await nueva.click();
+  await expect(page).toHaveURL(/\/scan$/);
+  await expect(page.getByRole('heading', { name: 'Escanea el ticket', level: 1 })).toBeVisible();
+  await ir(page, `/viaje/${MONTERREY}`);
+  await expect(page.getByText('Monterrey fin de semana', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Escanear ticket para/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await expect(page).toHaveURL(/\/scan$/);
+});
+
+test('D250 · el escaneo de un viaje recargado pide el nombre para su título', async ({ page }) => {
+  await conViajes(page);
+  await page.goto(`/scan/${CANCUN}`);
+  await expect(page.getByRole('heading', { name: 'Ticket para Cancún 2026', level: 1 })).toBeVisible();
+});
+
 test('la cámara del viaje no ofrece «Cargarlo a mano» (el ticket exige el recibo)', async ({ page }) => {
   await conViajes(page, { 'payme.app.mock.n179.ocr.v1': 'no_items' });
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
+  await circuloDelViaje(page).click();
   await sacarFoto(page);
   await expect(page.getByText('No pudimos leer el ticket', { exact: true })).toBeVisible();
   await expect(page.getByText('Prueba sacar la foto de nuevo con más luz.', { exact: true })).toBeVisible();
@@ -177,12 +221,12 @@ test('la cámara del viaje no ofrece «Cargarlo a mano» (el ticket exige el rec
 test('1k · el mismo ticket escaneado otra vez no se carga dos veces', async ({ page }) => {
   await conViajes(page, { 'payme.app.mock.viajes.huella.v1': 'h1' });
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
+  await circuloDelViaje(page).click();
   await sacarFoto(page);
   await page.getByRole('radio', { name: /Pagar el total/ }).click();
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
-  await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
+  await circuloDelViaje(page).click();
   await sacarFoto(page);
   await expect(page.getByText('Este ticket ya está en el viaje', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Elegir lo que consumí', exact: true })).toBeVisible();
@@ -343,7 +387,7 @@ test('1q · salir: con consumos no; sin consumos sí', async ({ page }) => {
 test('1h → 1i · «Por lo que pidió cada uno» lleva a elegir lo propio del ticket recién cargado', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
+  await circuloDelViaje(page).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Por lo que pidió cada uno/ })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();

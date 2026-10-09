@@ -12,7 +12,6 @@ import {
 } from '../../api/viajes';
 import { FotosDeMiembrosDeViaje } from '../../api/fotosDeMiembrosDeViaje';
 import { useAuth } from '../../auth/AuthContext';
-import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
@@ -43,6 +42,7 @@ import {
   type T,
 } from './viajesView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
+import { circuloDelViaje, recordarNombreDeViaje } from './circuloDelViaje';
 import './viajes.css';
 import './viaje.css';
 
@@ -92,6 +92,8 @@ export function useDetalleViaje(viajeId: string): {
       replaceRoute('viaje-cerrado', viajeId);
       return;
     }
+    // D250 · el escaneo de este viaje lo titula sin esperar la red.
+    recordarNombreDeViaje(v.id, v.nombre);
     setCarga({ tipo: 'listo', viaje: v });
   }, [viajeId]);
 
@@ -275,10 +277,6 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onReintentar={cargar}
         onVerViajes={() => navigate('viajes', 'abiertos')}
         onVerBalance={() => navigate('viaje-balance', viajeId)}
-        onEscanear={() => {
-          abrirCamaraNativa();
-          navigate('scan', viajeId);
-        }}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         onCargaManual={() => navigate('viaje-gasto', viajeId)}
         fotoDe={fotoDe}
@@ -286,7 +284,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
       />
-      <AppBottomBar active={null} />
+      {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}
+      <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
 
       {viaje && hoja?.tipo === 'cerrar' && (
         <HojaModal key="cerrar" etiqueta={t('¿Cerrar {0}?', nombre)} inicial={inicial} onCerrar={cerrarHoja}>
@@ -445,7 +444,6 @@ export interface ViajeVistaProps {
   readonly onReintentar: () => void;
   readonly onVerViajes: () => void;
   readonly onVerBalance: () => void;
-  readonly onEscanear: () => void;
   /** D244/D245 · «Carga manual»: la pantalla del gasto a mano. */
   readonly onCargaManual: () => void;
   /** D245 · la foto de un miembro, si la hay (si no, iniciales). */
@@ -513,17 +511,14 @@ function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
  * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
  * Consumos. «Cerrar viaje» y «Salir del viaje» siguen al pie.
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onCargaManual, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
       <MontoDeBalance cents={v.mi_balance_cents} />
       <DesplegableMiembros miembros={v.miembros} fotoDe={fotoDe} />
-      <div className="vjv-acciones">
-        <button type="button" className="btn btn-navy" onClick={onEscanear}>
-          <Icon name="scan" size={20} />
-          {t('Escanear ticket')}
-        </button>
+      {/* D250 · escanear es el círculo de la cámara de la barra; «Carga manual» queda sola, a todo el ancho. */}
+      <div className="vjv-acciones vjv-acciones-una">
         <button type="button" className="btn btn-navy" onClick={onCargaManual}>
           <Icon name="pencil" size={20} />
           {t('Carga manual')}

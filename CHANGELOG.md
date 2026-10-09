@@ -11,7 +11,10 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.231.1 — Viajes: salir después de pagar (H02) y la foto retirada que no vuelve (H04) (2026-10-09)
+## 0.232.0 — Viajes: salir después de pagar (H02), la foto retirada que no vuelve (H04), «Nueva» con cámara (D249) y escanear para el viaje con el círculo (D250) (2026-10-09)
+
+> La entrega nació como 0.231.1 (H02 y H04) y pasó a 0.232.0 con la Adenda 2 (D250), que cambia la navegación. La
+> 0.231.1 nunca se publicó: es esta misma entrega.
 
 Orden AF-VIAJES-SALIR-Y-FOTO-TARDIA-20261009 (ce427d4f…). Hallazgos H02 y H04 de la auditoría Codex (a65ca63a…);
 D242-2 y D242-1. Dueño: App Backend 2.172.1 servido (`e008080`). H01 y H03 no se tocan: esperan a Mati (D247). Lo
@@ -37,6 +40,16 @@ visible se cierra con la prueba de Mati en el iPhone (D63).
   del set propio en lugar del «+». Mati: «el boton de nueva, que te manda a el scan de la cámara cambiá el símbolo de +
   por una cámara». El rótulo, lo que hace (lleva al escaneo) y el nombre accesible quedan igual; las pantallas que
   traen su propio círculo («Continuar», «Capturar») no cambian.
+- **D250 · escanear para el viaje con el círculo** (Adenda 2, cf3a5e63…). Mati: «en viaje que te habia puesto dos
+  burbujas, una de scan y otra manual, reemplaza la del scan con justamente el circulo este, que cuando escaneas desde
+  un viaje que ese escan se contabilice al viaje».
+  - En el viaje sale «Escanear ticket»; «Carga manual» queda sola, a todo el ancho.
+  - Desde un viaje abierto (el viaje, Balance, un ticket o gasto y sus presentes), el círculo de la cámara abre el
+    escaneo de ese viaje (`/scan/<id>`, `trip_version=1`). Se ve «Nueva» y el lector oye «Escanear ticket para
+    {viaje}». En esperando pagos, cerrado o fuera de un viaje: el círculo de siempre.
+  - El escaneo de un viaje se titula «Ticket para {viaje}»: con el nombre que dejó la pantalla del viaje o, después
+    de una recarga, el que da el dueño. Sin nombre todavía, «Escanea el ticket».
+  - La barra admite un `ariaLabel` propio para el círculo; pasa por `t()` como el rótulo.
 
 ## 0.231.0 — Viajes: la pantalla del viaje más simple, Balance con Consumos y Miembros, y la carga manual (2026-10-09)
 

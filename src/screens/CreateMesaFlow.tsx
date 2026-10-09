@@ -76,6 +76,8 @@ import { InviteFriends } from '../components/InviteFriends';
 import { CardBrandChip, useToast } from '../components/ui';
 import { navigate, replaceRoute } from '../router';
 import { guardarTicketEscaneado } from './viajes/ticketEscaneado';
+import { nombreDeViajeRecordado } from './viajes/circuloDelViaje';
+import { useCapacidadViajes } from '../api/viajes';
 import { formatMXN } from '../utils/format';
 import { reservaDelMonto } from './reservaDelMonto';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
@@ -179,6 +181,17 @@ function lineTotalCents(it: EditItem): number | null {
 export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string | null } = {}) {
   const enViaje = viajeId !== null;
   const { t } = useIdioma();
+  // D250 · el escaneo de un viaje se titula «Ticket para {viaje}»: con el nombre
+  // que dejó la pantalla del viaje o, si no hay (una recarga), el que da el dueño.
+  const [nombreDelViaje, setNombreDelViaje] = useState<string | null>(() => nombreDeViajeRecordado(viajeId));
+  const capacidadViajes = useCapacidadViajes();
+  useEffect(() => {
+    // Sin la capacidad confirmada no se pide (la fachada no pide Viajes a ciegas).
+    if (viajeId === null || nombreDelViaje !== null || capacidadViajes !== 'encendida') return;
+    let vivo = true;
+    api.getViaje(viajeId).then((v) => { if (vivo) setNombreDelViaje(v.nombre); }).catch(() => undefined);
+    return () => { vivo = false; };
+  }, [viajeId, nombreDelViaje, capacidadViajes]);
   // D237 · acá pasan las acciones sobre una mesa (crear, elegir, pagar,
   // cerrar, aceptar a alguien): al salir, lo guardado de las mesas para Inicio y
   // Mesas ya no se puede dar por cierto y se borra. La próxima visita pide.
@@ -1761,7 +1774,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             {t('Volver')}
           </button>
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
-          <h1 className="camara-titulo">{t('Escanea el ticket')}</h1>
+          <h1 className="camara-titulo">
+            {enViaje && nombreDelViaje !== null ? t('Ticket para {0}', nombreDelViaje) : t('Escanea el ticket')}
+          </h1>
           <div className="camara-sub" aria-live="polite" aria-atomic="true">
             {scanning
               ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
