@@ -72,6 +72,10 @@ const registerBase = z.object({
   // a la misma respuesta opaca que un token usado o vencido. La autoridad lo
   // convierte en un hash imposible sin procesar contenido arbitrariamente largo.
   invitation_token: z.unknown().optional(),
+  // v2.173.0 · D252 · el código del link de invitación personal. `unknown` a propósito, como
+  // `invitation_token`: un código mal formado o de otro tipo NO frena el alta (se ignora en
+  // services/referidos.js) y no puede dar una forma de error distinta.
+  referral_code: z.unknown().optional(),
   // v2.129.0 · AB1 · aceptación del paquete legal 3.0.0. `unknown` a propósito:
   // con LEGAL_3_0_0_VIGENTE apagada se ignora; encendida, la forma exacta la
   // valida services/legalAcceptance.js (400 validation_error, legal_acceptance.*).
@@ -187,6 +191,8 @@ const profileName = z.string().transform((value, ctx) => {
 const externalIdToken = z.string().min(20).max(8192);
 const socialRegisterBase = z.object({
   invitation_token: z.unknown().optional(),
+  // v2.173.0 · D252 · ver registerBase.
+  referral_code: z.unknown().optional(),
   id_token: externalIdToken,
   first_name: profileName,
   last_name: profileName,
@@ -224,6 +230,8 @@ const socialLogin = z.object({ id_token: externalIdToken }).strict();
 const socialContinue = z.object({
   id_token: externalIdToken,
   invitation_token: z.unknown().optional(),
+  // v2.173.0 · D252 · ver registerBase.
+  referral_code: z.unknown().optional(),
   accepted_notice_version: z.string().regex(/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/),
   first_name: profileName.optional(),
   last_name: profileName.optional(),
@@ -237,6 +245,8 @@ const socialContinue = z.object({
 const socialRedirectSignup = z.object({
   code: z.string().min(20).max(200),
   invitation_token: z.unknown().optional(),
+  // v2.173.0 · D252 · ver registerBase.
+  referral_code: z.unknown().optional(),
   accepted_notice_version: z.string().regex(/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/),
   first_name: profileName.optional(),
   last_name: profileName.optional(),

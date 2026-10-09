@@ -46,8 +46,9 @@
     "google_register": {
       "method": "POST",
       "path": "/api/auth/google/register",
-      "request": ["invitation_token?", "email?", "id_token", "first_name", "last_name", "birth_date?"],
+      "request": ["invitation_token?", "email?", "id_token", "first_name", "last_name", "birth_date?", "referral_code?"],
       "request_notes": {
+        "referral_code": "v2.173.0 · D252 · opcional: el código del link de invitación personal (contract/invitacion-personal-v1.json). Mandarlo sólo con features.invite_link.enabled (este cuerpo es estricto). Uno que no vale se ignora: la cuenta se crea igual, sin referido, y la respuesta no cambia.",
         "invitation_token": "Obligatorio con el alta cerrada (default). Con PUBLIC_SIGNUP_ENABLED=true es opcional: si llega se valida y consume; inválido = registration_not_available.",
         "email": "Declarado por el usuario, NO verificado y NO autoridad: no enlaza, no fusiona ni recupera una cuenta existente, y un email ya registrado devuelve el mismo registration_not_available opaco. SÓLO se acepta con PUBLIC_SIGNUP_ENABLED=true (con el alta cerrada el DTO es strict y lo rechaza con validation_error). Sin invitación es la ÚNICA fuente del email de la cuenta, con el mismo parser que el alta directa; con invitación manda la invitación y un email distinto es registration_not_available. Nunca el email del proveedor: en esta versión lo escribe la persona, y prellenarlo desde la credencial del proveedor sería un cambio de contrato posterior."
       },
@@ -132,8 +133,9 @@
       "method": "POST",
       "path": "/api/auth/google/redirect/signup",
       "gated_by": "features.google_redirect_signup.enabled; apagado ⇒ el 404 not_found de siempre",
-      "request": ["code", "accepted_notice_version", "legal_acceptance?", "invitation_token?", "first_name?", "last_name?"],
+      "request": ["code", "accepted_notice_version", "legal_acceptance?", "invitation_token?", "first_name?", "last_name?", "referral_code?"],
       "request_notes": {
+        "referral_code": "v2.173.0 · D252 · opcional: el código del link de invitación personal (contract/invitacion-personal-v1.json). Mandarlo sólo con features.invite_link.enabled (este cuerpo es estricto). Uno que no vale se ignora: la cuenta se crea igual, sin referido, y la respuesta no cambia.",
         "code": "el valor del fragmento #google_signup=. Vive 10 min; se guarda sólo su sha256. Un desenlace terminal lo consume (borra la fila); 422 profile_required, 429 y 503 lo dejan vivo hasta 5 intentos.",
         "resto": "idéntico a google_continue sin id_token: la misma lógica y los mismos desenlaces, con la identidad y el perfil que verificó google_redirect_signup_start"
       },
@@ -160,8 +162,9 @@
       "method": "POST",
       "path": "/api/auth/google/continue",
       "gated_by": "features.social_auth.google_sign_in.login; la rama de alta además exige google_sign_in.registration, autoridad de alta (alta pública abierta o invitation_token válido) y fecha de nacimiento no obligatoria",
-      "request": ["id_token", "accepted_notice_version", "invitation_token?", "first_name?", "last_name?"],
+      "request": ["id_token", "accepted_notice_version", "invitation_token?", "first_name?", "last_name?", "referral_code?"],
       "request_notes": {
+        "referral_code": "v2.173.0 · D252 · opcional: el código del link de invitación personal (contract/invitacion-personal-v1.json). Mandarlo sólo con features.invite_link.enabled (este cuerpo es estricto). Uno que no vale se ignora: la cuenta se crea igual, sin referido, y la respuesta no cambia.",
         "enmienda": "Raíz v2.43 · enmienda ACOTADA a la guarda 8 del acta de identidad social del 26/08: en el alta, y sólo en el alta, se copian UNA vez nombre, apellido y correo VERIFICADO del proveedor como datos iniciales del perfil, editables después. Nada se sincroniza después y no se toma la foto ni otra claim.",
         "accepted_notice_version": "la versión del aviso de privacidad que el cliente mostró enlazada junto al botón. Si no es la vigente publicada, no se crea la cuenta (registration_not_available). La cuenta creada deja registrada versión y hash del aviso aceptado.",
         "email": "no se envía. El único correo lícito es el del proveedor y sólo con email_verified === true; sin correo verificado no se crea la cuenta.",

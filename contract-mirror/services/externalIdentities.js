@@ -7,6 +7,7 @@ const pool = require('../db/pool');
 const { generatePaymeId } = require('../utils/userId');
 const { normalizarEmailDeContrato } = require('../schemas');
 const signupInvitations = require('./signupInvitations');
+const referidos = require('./referidos');
 const paymeSessions = require('./paymeSessions');
 const legal = require('./legal');
 const legalAcceptances = require('./legalAcceptance');
@@ -85,7 +86,7 @@ function emailDeLaCuenta(invitation, email) {
 
 async function registerWithExternalIdentity({
   invitationToken, invitationTokenHash, evidence, firstName, lastName, birthDate, email,
-  legalAcceptance = null,
+  legalAcceptance = null, referralCode,
 }) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const paymeId = await generatePaymeId(firstName, lastName);
@@ -124,6 +125,8 @@ async function registerWithExternalIdentity({
             userId: user.id,
           });
         }
+        // v2.173.0 · D252 · el link de invitación, en la misma transacción (services/referidos.js).
+        await referidos.aplicarEnAlta(client, { codigo: referralCode, invitado: user });
         // Firma antes del COMMIT: una configuración JWT inválida no deja una
         // cuenta creada sin la respuesta que acredita su sesión.
         return paymeSessions.sessionResponse(user, session);
@@ -459,7 +462,7 @@ function nombresParaAlta(profile, declared) {
 }
 
 async function crearCuentaDesdeContinue(client, {
-  evidence, email, nombres, invitation, vigente, legalAcceptance = null,
+  evidence, email, nombres, invitation, vigente, legalAcceptance = null, referralCode,
 }) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const paymeId = await generatePaymeId(nombres.firstName, nombres.lastName);
@@ -491,6 +494,9 @@ async function crearCuentaDesdeContinue(client, {
           userId: user.id,
         });
       }
+      // v2.173.0 · D252 · el link de invitación, en la misma transacción (services/referidos.js). Lo comparten
+      // «Continuar con Google» y el canje del alta en la misma pestaña.
+      await referidos.aplicarEnAlta(client, { codigo: referralCode, invitado: user });
       const session = await paymeSessions.createSession({ userId: user.id, client });
       return { user, session };
     } catch (error) {
@@ -520,6 +526,7 @@ async function continuarEnTransaccion(client, {
   evidence,
   profile,
   invitationToken,
+  referralCode,
   acceptedNoticeVersion,
   declaredFirstName,
   declaredLastName,
@@ -643,7 +650,7 @@ async function continuarEnTransaccion(client, {
     }
 
     const creada = await crearCuentaDesdeContinue(client, {
-      evidence, email, nombres, invitation, vigente, legalAcceptance,
+      evidence, email, nombres, invitation, vigente, legalAcceptance, referralCode,
     });
     if (!creada) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
     return {
@@ -665,6 +672,7 @@ async function continueWithExternalIdentity({
   evidence,
   profile,
   invitationToken,
+  referralCode,
   acceptedNoticeVersion,
   declaredFirstName,
   declaredLastName,
@@ -679,6 +687,7 @@ async function continueWithExternalIdentity({
       evidence,
       profile,
       invitationToken,
+      referralCode,
       acceptedNoticeVersion,
       declaredFirstName,
       declaredLastName,

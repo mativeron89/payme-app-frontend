@@ -31,6 +31,7 @@ const logger = require('../utils/logger');
 const { loadActiveSession } = require('../middleware/auth');
 const { walletRailEnabled } = require('../services/walletRail');
 const signupInvitations = require('../services/signupInvitations');
+const referidos = require('../services/referidos');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
 const paymeSessions = require('../services/paymeSessions');
@@ -88,7 +89,7 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
   try {
     // req.body.email ya viene normalizado por el schema (P1 #4), pero
     // normalizeEmail es idempotente y lo dejamos por claridad.
-    const { email, password, first_name, last_name, invitation_token } = req.body;
+    const { email, password, first_name, last_name, invitation_token, referral_code } = req.body;
     // v2.129.0 · AB1 · con el paquete 3.0.0 vigente la fecha se retira (decisión
     // 39): se ignora si llega. La mayoría pasa a ser la declaración de la aceptación.
     const birth_date = legal.PAQUETE_300_VIGENTE ? null : req.body.birth_date;
@@ -145,6 +146,9 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
             userId: createdUser.id,
           });
         }
+        // v2.173.0 · D252 · el link de invitación: en la misma transacción, con la cuenta ya creada. Un código
+        // que no vale no hace nada y no cambia la respuesta (services/referidos.js).
+        await referidos.aplicarEnAlta(client, { codigo: referral_code, invitado: createdUser });
           return { user: createdUser, session: createdSession };
         });
       } catch (err) {

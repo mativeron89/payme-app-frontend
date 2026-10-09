@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "id": "payme.app.invitacion_personal/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) del link de invitación personal, v2.173.0. Decisión 252 de Mati: «En amigos, quiero agregar que se pueda invitar a alguien que no tiene la app […] ahora solo es el link que necesito que se genere y se pueda compartir». Eligió «Quedan amigos directo (Recomendada)».",
+    "Cada cuenta tiene un link para compartir. Quien se registra con él queda amigo aceptado de quien lo compartió, y queda anotado quién invitó a quién.",
+    "El front espeja: no arma códigos ni decide si uno vale. Claves EXACTAS en cada respuesta."
+  ],
+  "capacidad": {
+    "ruta": "GET /api/config",
+    "path": "features.invite_link",
+    "valor": { "supported": true, "enabled": true },
+    "enabled": "Constante del servicio (`services/referidos.js` HABILITADO). En false, las rutas del link no existen (el 404 de siempre) y el alta ignora `referral_code`.",
+    "cliente_viejo": "Bloque nuevo de primer nivel en `features`: un cliente que no lo conoce no ve ningún cambio."
+  },
+  "codigo": {
+    "formato": "^[A-Za-z0-9_-]{16}$",
+    "origen": "Al azar: 12 bytes (96 bits) en base64url. No lleva id, nombre ni correo de la persona.",
+    "vigentes_por_cuenta": 1,
+    "nace": "La primera vez que la cuenta pide su link.",
+    "revocar": "Marca el vigente y emite otro. El link viejo deja de sumar amigos desde ese momento.",
+    "deja_de_valer": "Revocado, o de una cuenta que ya no está activa (suspendida o dada de baja)."
+  },
+  "link": {
+    "forma": "${FRONTEND_PUBLIC_URL}/invitacion/<code>",
+    "produccion": "https://app.paymemx.com/#/invitacion/<code> (FRONTEND_PUBLIC_URL termina en `/#`, igual que el link de una mesa).",
+    "front": "La ruta `/invitacion/<code>` del front guarda el código (como `invitation_token`, en sessionStorage, también durante la vuelta por Google) y lleva al alta. Con sesión abierta no hace nada: ninguna ruta aplica un código a una cuenta que ya existe. El front no muestra quién invita: no hay ruta pública que resuelva un código a una persona."
+  },
+  "rutas": {
+    "GET /api/friends/invite-link": {
+      "sesion": "obligatoria",
+      "efecto": "Devuelve el link vigente de quien lo pide; si no tiene, nace ahora. Idempotente: el mismo link cada vez, también con pedidos simultáneos.",
+      "respuestas": {
+        "200": { "claves": ["code", "link", "created_at"] },
+        "401": { "nota": "sin sesión" },
+        "404": { "nota": "con el link apagado (capacidad en false)" }
+      }
+    },
+    "POST /api/friends/invite-link/revoke": {
+      "sesion": "obligatoria",
+      "cuerpo": "ninguno",
+      "efecto": "Revoca el link vigente y devuelve el nuevo. Dos revocaciones simultáneas devuelven el mismo link nuevo.",
+      "respuestas": {
+        "200": { "claves": ["code", "link", "created_at"] },
+        "401": { "nota": "sin sesión" },
+        "404": { "nota": "con el link apagado (capacidad en false)" },
+        "429": { "nota": "más de 10 revocaciones por minuto de la misma cuenta" }
+      }
+    }
+  },
+  "alta": {
+    "campo": "referral_code",
+    "endpoints": [
+      "POST /api/auth/register",
+      "POST /api/auth/google/register",
+      "POST /api/auth/google/continue",
+      "POST /api/auth/google/redirect/signup"
+    ],
+    "cliente": "Opcional. Mandarlo sólo con `features.invite_link.enabled`: los tres cuerpos de Google son estrictos y un backend anterior los rechazaría con 400. El alta por correo lo ignoraría.",
+    "efecto": "Si el código vale y la cuenta se crea: amistad aceptada en los dos sentidos con quien invitó, la fila de referido y el aviso a quien invitó, todo en la transacción que crea la cuenta.",
+    "codigo_que_no_vale": "Mal formado, de otro tipo, desconocido, revocado o de una cuenta que no está activa: se ignora y la cuenta se crea igual, sin referido. Nunca un error nuevo.",
+    "sin_oraculo": "Las respuestas del alta no suman claves y no cambian con el código: mismo estado y mismo cuerpo con código válido, inválido o sin código, también para un correo ya registrado.",
+    "cuenta_existente": "Ningún desenlace que no crea una cuenta aplica el código: correo ya registrado (el 403 opaco de siempre), Google con vínculo (entra), Google con un correo ya registrado (`link_required` de siempre).",
+    "una_vez": "Una cuenta queda referida una sola vez. El link vale para muchas personas: es de quien invita, no de un solo uso."
+  },
+  "aviso": {
+    "tipo": "friend_added",
+    "a": "quien invitó",
+    "texto": "{nombre} se sumó a PayMe con tu invitación. Ya son amigos.",
+    "nombre": "El nombre de la cuenta nueva.",
+    "correo": "No: `friend_added` no tiene canal de correo (services/notificationPreferences.js).",
+    "relacion": "related_entity_type `user`, related_entity_id = la cuenta nueva: si esa cuenta se da de baja, la anonimización vacía el texto."
+  },
+  "puntos": "No existen todavía. Este contrato no publica ni promete beneficios: queda anotado quién invitó a quién para cuando Mati los diseñe con los pagos.",
+  "privacidad": "El registro de quién invitó a quién y la amistad que nace del link no están descritos en el Aviso 3.0.0. Quedan bajo el riesgo aceptado de D243, extendido por la orden AB-LINK-DE-INVITACION, y anotados para el Aviso 3.1. La baja de cuenta no se toca: la fila de referido queda (dos ids y una fecha) y el código deja de valer."
+}

@@ -6,6 +6,27 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Amigos: el link de invitación · App Backend v2.173.0 · 2026-10-09
+
+Orden `AF-LINK-DE-INVITACION-20261009` (D252), Adenda 1 (`6bb16b02…`). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`168b1b2e50439e49351bdf19a356a880ccb637f8`** (v2.173.0, commit A: el link de invitación
+  personal; quien se suma queda amigo directo).
+- Inventario: el de `main` del owner en **`61744ed236bd1c1abdec7dd7297c05784734f3d7`** (servido según la Adenda 1;
+  `contract/mirror-inventory.json`, sha256 `121f50a6d4e2a7c87a72702cd85fdc4598722028983988e3682f9fa4ff2424cf`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `168b1b2`.
+- **136 archivos espejados** (antes 133).
+  - Entran tres: `contract/invitacion-personal-v1.json` (sha256
+    `344464b456daa999e4286e6b19ae3c58dd3243e3812f22ea3a84f96559125606`), `services/referidos.js` y
+    `db/migrate_referidos_v2.173.0.sql`.
+  - Cambian siete: `contract/social-auth-v1.json` (sha256
+    `87c6d4f41e06c239ed46491b605100305d024dbf80325f3aec5255fbcd03710e`, `referral_code` en las altas de Google),
+    `routes/auth.js`, `routes/config.js`, `routes/friends.js`, `routes/social-auth.js`, `schemas/index.js` y
+    `services/externalIdentities.js`.
+  - Copiados con `git show 168b1b2:<origen>`.
+- `--paridad`: espejo = inventario = fuente en `168b1b2`, 136/136.
+
 ### Viajes: salir después de pagar · App Backend v2.172.1 · 2026-10-09
 
 Orden `AF-VIAJES-SALIR-Y-FOTO-TARDIA-20261009` (H02 de la auditoría Codex, D242-2). Scope del lease con

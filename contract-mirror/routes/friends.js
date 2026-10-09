@@ -41,6 +41,7 @@ const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
 const avatarNotice = require('../services/friendAvatarNotice');
 const username = require('../services/username');
+const referidos = require('../services/referidos');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -106,6 +107,36 @@ async function hayBloqueo(client, a, b) {
   );
   return rowCount > 0;
 }
+
+// ─── Link de invitación personal (v2.173.0 · decisión 252) ──────────────────
+// El link de quien lo pide, para compartir con alguien que no tiene la app: quien se registra con él queda
+// amigo directo. La lógica vive en services/referidos.js; contrato: contract/invitacion-personal-v1.json.
+
+/** Con el link apagado, las rutas no existen: caen al 404 de siempre. */
+function soloConLink(req, res, next) {
+  return referidos.habilitado() ? next() : next('router');
+}
+
+/** Límite POR CUENTA sobre revocar: cada revocación deja una fila. */
+const revocarLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `invite:${req.user.id}`,
+});
+
+router.get('/invite-link', soloConLink, async (req, res, next) => {
+  try {
+    res.json(await referidos.miLink(req.user.id));
+  } catch (err) { next(err); }
+});
+
+router.post('/invite-link/revoke', soloConLink, revocarLimiter, async (req, res, next) => {
+  try {
+    res.json(await referidos.revocar(req.user.id));
+  } catch (err) { next(err); }
+});
 
 // ─── Amigos confirmados ─────────────────────────────────────────────────────
 

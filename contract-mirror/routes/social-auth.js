@@ -129,6 +129,8 @@ router.post('/google/register', googleDark('registration'), socialSignupRateLimi
       const evidence = await google.verifyIdToken(req.body.id_token);
       const response = await identities.registerWithExternalIdentity({
         invitationToken: req.body.invitation_token,
+        // v2.173.0 · D252 · el código del link de invitación; uno que no vale se ignora.
+        referralCode: req.body.referral_code,
         evidence,
         firstName: req.body.first_name,
         lastName: req.body.last_name,
@@ -186,6 +188,7 @@ router.post('/google/redirect/signup', async (req, res, next) => {
       const result = await googleRedirectSignup.canjear({
         code: req.body.code,
         invitationToken: req.body.invitation_token,
+        referralCode: req.body.referral_code,
         acceptedNoticeVersion: req.body.accepted_notice_version,
         declaredFirstName: req.body.first_name,
         declaredLastName: req.body.last_name,
@@ -269,6 +272,7 @@ router.post('/google/continue', googleDark('login'),
         evidence,
         profile,
         invitationToken: req.body.invitation_token,
+        referralCode: req.body.referral_code,
         acceptedNoticeVersion: req.body.accepted_notice_version,
         declaredFirstName: req.body.first_name,
         declaredLastName: req.body.last_name,

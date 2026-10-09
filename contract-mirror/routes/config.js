@@ -22,6 +22,7 @@ const {
 } = require('../services/shortfallDetails');
 const ocultamientos = require('../services/ocultamientos');
 const viajes = require('../services/viajes');
+const referidos = require('../services/referidos');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -214,6 +215,10 @@ router.get('/', (req, res) => {
       // constante del servicio (V1: false hasta que Mati apruebe el Aviso) y con ella en false las rutas no existen.
       // Contrato: contract/viajes-v1.json.
       viajes: viajes.capacidad(),
+      // v2.173.0 · D252 · el link de invitación personal. Bloque hermano de primer nivel: un cliente viejo no lo
+      // lee. Hace falta porque las tres altas de Google son estrictas: el front manda `referral_code` sólo si
+      // ve `enabled`. Contrato: contract/invitacion-personal-v1.json.
+      invite_link: referidos.capacidad(),
     },
   });
 });
