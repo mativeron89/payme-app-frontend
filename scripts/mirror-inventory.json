@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "bcf872a4fb7a3732a9ff31bef92db01a8516621c",
+  "commit": "796ea15eecd500fc42c0a17a1b52259d75ad1f70",
   "total": 133,
   "archivos": [
     {
@@ -67,8 +67,8 @@
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "826d11be37e770c5c9cbd6fbb9e9cf486cad5b4f3ee1ab2c44d652a0b275a1f8",
-      "bytes": 24824
+      "sha256": "65b374defb1fe4dcd456468d0464d4d525e3abfe14444a6b56ac690e3a22dba6",
+      "bytes": 25632
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -757,8 +757,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "bbe4993b9bc44b216f85fd4629218c935d28bf6cfff43a44eba8a1691b42967e",
-      "bytes": 76809
+      "sha256": "8fd439877f1aae97b4547e1798c0178a8e71edcee8dbf2263cd638f1ecc89dbf",
+      "bytes": 78869
     },
     {
       "origen": "services/viajesCalculo.js",

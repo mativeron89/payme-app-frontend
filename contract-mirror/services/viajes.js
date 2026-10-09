@@ -389,13 +389,29 @@ function vistaTransferencia(tr, idPublico, yo) {
     mia: tr.de_user === yo ? 'debo' : tr.a_user === yo ? 'me_deben' : null };
 }
 
+/**
+ * v2.172.1 · H02: los miembros que ven los demás. Abierto, los activos. En esperando pagos o cerrado, también quien
+ * salió después de pagar y tiene montos o transferencias en el viaje: así el balance, las transferencias y el resumen
+ * de los demás no cambian cuando alguien sale. Quien salió estando abierto no tiene montos (`salir` borra su foto en
+ * los tickets) y no aparece.
+ */
+function miembrosVisibles(d) {
+  const activos = d.miembros.filter((m) => m.estado === 'activo');
+  if (d.viaje.estado === 'abierto') return activos;
+  const conMontos = new Set([
+    ...d.tickets.flatMap((t) => [t.pagado_por, ...t.personas.map((p) => p.user_id)]),
+    ...d.transferencias.flatMap((t) => [t.de_user, t.a_user]),
+  ]);
+  return d.miembros.filter((m) => m.estado === 'activo' || (m.estado === 'salio' && conMontos.has(m.user_id)));
+}
+
 /** El detalle que ve un miembro activo. Con `version` 2 (`viaje_version=2`), los campos de D245. */
 function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
   const estado = estadoEfectivo(d);
   const cerrado = estado === 'cerrado';
   const b = balance(d);
   const idPublico = new Map(d.miembros.map((m) => [m.user_id, m.id]));
-  const activos = d.miembros.filter((m) => m.estado === 'activo');
+  const activos = miembrosVisibles(d);
   const faltaElegir = new Map();
   if (!b.congelado) {
     for (const r of b.porTicket.values()) for (const u of r.faltan) faltaElegir.set(u, (faltaElegir.get(u) || 0) + 1);
@@ -485,7 +501,7 @@ function vistaEnLista(d, yo) {
   return {
     id: d.viaje.id, nombre: d.viaje.nombre, fecha_desde: fechaDe(d.viaje.fecha_desde),
     fecha_hasta: fechaDe(d.viaje.fecha_hasta), estado,
-    personas: d.miembros.filter((m) => m.estado === 'activo').length,
+    personas: miembrosVisibles(d).length,
     mi_balance_cents: estado === 'cerrado' ? null : b.balance.get(yo) || 0,
     transferencias_pendientes: estado === 'esperando_pagos' ? pendientes(d).length : null,
     consumiste_cents: estado === 'cerrado' ? b.consumido.get(yo) || 0 : null,
@@ -769,7 +785,24 @@ async function rechazar(userId, viajeId) {
 /** POST /api/viajes/:id/salir — D242-2: sólo sin consumos. */
 async function salir(userId, viajeId) {
   return enViaje(viajeId, userId, async (client, viaje) => {
-    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    // v2.172.1 · H02 de la auditoría Codex · D242-2: «quien ya eligió sale cuando el viaje se cierra y su transferencia
+    // está pagada». Con el viaje en esperando pagos o cerrado, sale quien no tiene ninguna transferencia sin resolver,
+    // como deudor o como acreedor: resuelta es `pagada` (confirmada con «Recibí», D242-1; «Ya pagué» solo no alcanza) o
+    // anulada por una baja (la misma regla que `terminarSiCorresponde`). Salir no borra nada: su miembro pasa a `salio`
+    // y sus montos, sus filas y sus transferencias quedan.
+    if (viaje.estado !== 'abierto') {
+      const { rows: [{ pendientes }] } = await client.query(
+        `SELECT COUNT(*)::int AS pendientes FROM viaje_transferencias t
+           JOIN users ud ON ud.id = t.de_user JOIN users ua ON ua.id = t.a_user
+          WHERE t.viaje_id=$1 AND (t.de_user=$2 OR t.a_user=$2)
+            AND t.estado <> 'pagada' AND ud.status <> 'deleted' AND ua.status <> 'deleted'`, [viajeId, userId]);
+      if (pendientes > 0) return conflicto('viaje_member_transfers_pending', { pendientes });
+      await bloquearCuentas(client, [userId]);
+      await client.query(
+        `UPDATE viaje_miembros SET estado='salio', respondido_en=clock_timestamp() WHERE viaje_id=$1 AND user_id=$2`,
+        [viajeId, userId]);
+      return respuesta(200, { contract: CONTRATO, viaje_id: viajeId, estado: 'salio' });
+    }
     const { rows: [c] } = await client.query(
       `SELECT
          EXISTS (SELECT 1 FROM viaje_selecciones s JOIN viaje_ticket_items i ON i.id = s.item_id
@@ -1278,7 +1311,7 @@ async function resumen(userId, viajeId) {
   const suma = (xs) => xs.reduce((s, tr) => s + tr.monto_cents, 0);
   return respuesta(200, { contract: CONTRATO, resumen: {
     viaje_id: viajeId, nombre: d.viaje.nombre, fecha_desde: fechaDe(d.viaje.fecha_desde),
-    fecha_hasta: fechaDe(d.viaje.fecha_hasta), personas: d.miembros.filter((m) => m.estado === 'activo').length,
+    fecha_hasta: fechaDe(d.viaje.fecha_hasta), personas: miembrosVisibles(d).length,
     consumiste_cents: b.consumido.get(userId) || 0,
     pagaste_en_tickets_cents: b.pagado.get(userId) || 0,
     te_transfirieron_cents: suma(mias.filter((tr) => tr.a_user === userId)),

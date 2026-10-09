@@ -6,6 +6,21 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes: salir después de pagar · App Backend v2.172.1 · 2026-10-09
+
+Orden `AF-VIAJES-SALIR-Y-FOTO-TARDIA-20261009` (H02 de la auditoría Codex, D242-2). Scope del lease con
+`contract-mirror/**` y `scripts/mirror-inventory.json`.
+
+- Contenido: owner **`796ea15eecd500fc42c0a17a1b52259d75ad1f70`** (v2.172.1, commit A: salir con la parte pagada, H02).
+- Inventario: el de `main` del owner en **`e0080801522fb32246eb363c7b782be5029311a0`** (servido según la orden;
+  `contract/mirror-inventory.json`, sha256 `35cc70025d303e8cdedc74bc3b75078e5a8bba3ef0e9153cacaa226eda83da62`, el
+  mismo que en `bbc6384`), adoptado con `--adoptar-inventario` sin editarlo. Declara `796ea15`; `e008080` sólo cambia
+  una prueba del dueño.
+- **133 archivos espejados** (los mismos). Cambian dos: `contract/viajes-v1.json` (sha256
+  `65b374defb1fe4dcd456468d0464d4d525e3abfe14444a6b56ac690e3a22dba6`, el de la orden) y `services/viajes.js`. Copiados
+  con `git show 796ea15:<origen>`.
+- `--paridad`: espejo = inventario = fuente en `796ea15`, 133/133.
+
 ### Viajes: gasto a mano y pantalla del viaje · App Backend v2.172.0 · 2026-10-09
 
 Orden `AF-VIAJES-PANTALLA-Y-GASTO-MANUAL-20261009` (D245, D244, D246), Adenda 2 (`1d3021ce…`). Scope del lease con

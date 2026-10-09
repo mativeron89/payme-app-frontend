@@ -169,8 +169,9 @@
       "respuestas": {
         "200": { "claves": ["contract", "viaje_id", "estado"], "estado": "salio" },
         "404": { "cuerpo": { "error": "viaje_not_found" } },
-        "409": { "errores": ["viaje_not_open", "viaje_member_cannot_leave"], "reason": ["selection", "paid_ticket", "present_in_equal_split"], "nota": "D242-2: sólo sin consumos (diseño 1q)." }
-      }
+        "409": { "errores": ["viaje_member_cannot_leave", "viaje_member_transfers_pending"], "reason": ["selection", "paid_ticket", "present_in_equal_split"], "viaje_member_transfers_pending": ["error", "pendientes"], "nota": "D242-2. Abierto: sólo sin consumos (viaje_member_cannot_leave, diseño 1q). Esperando pagos o cerrado (v2.172.1, H02): sólo sin transferencias propias sin resolver, como deudor o como acreedor; resuelta es «pagada» (confirmada con «Recibí», D242-1; «Ya pagué» solo no alcanza) o «anulada_por_baja». Si falta alguna: viaje_member_transfers_pending con cuántas faltan." }
+      },
+      "despues": "Salir no borra nada: los montos, los tickets y las transferencias quedan. Para quien sale, el viaje deja de aparecer en Abiertos, en Cerrados y en GET /:id (el 404 de n325). Con el viaje en esperando pagos o cerrado, los demás lo siguen viendo en `miembros` (las mismas claves) si tiene montos o transferencias; así su balance, sus transferencias y su resumen no cambian."
     },
     "POST /api/viajes/:id/tickets/check": {
       "request": { "ocr_receipt": "el recibo del escaneo" },
