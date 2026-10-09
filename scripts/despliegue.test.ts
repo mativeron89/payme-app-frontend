@@ -629,6 +629,8 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   const PAGINAS_CON_PARAMETRO = [
     'mesa', 'transferir',
     'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
+    // D252 · el link de invitación, `/invitacion/<código>`.
+    'invitacion',
   ] as const;
   const RUTAS_APP = [...PAGES.map((p) => `/${p}`), ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`)];
   const TODAS = [...PATHS_PUBLICOS, ...RUTAS_APP];

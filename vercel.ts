@@ -62,6 +62,8 @@ const PAGINAS_APP = [
   'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
   // D244/D245 · la carga manual.
   'viaje-gasto',
+  // D252 · el link de invitación.
+  'invitacion',
 ];
 /**
  * Las que llevan un parámetro en la ruta: el código de mesa y el ID a
@@ -70,6 +72,8 @@ const PAGINAS_APP = [
 const PAGINAS_CON_PARAMETRO = [
   'mesa', 'transferir',
   'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
+  // D252 · `/invitacion/<código>`.
+  'invitacion',
 ];
 const rutasApp = [
   ...PAGINAS_APP.map((p) => `/${p}`),

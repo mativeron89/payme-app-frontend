@@ -27,6 +27,7 @@ import { podarFotosDeAmigos } from '../api/fotosEnMemoria';
 import { BuscarPorArroba } from '../components/BuscarPorArroba';
 import { arrobaCoincide, useUsernameCapability } from '../api/username';
 import { ArrobaDebajo } from '../components/ArrobaDebajo';
+import { TarjetaInvitarConLink } from './InvitarConLink';
 
 /**
  * §1.9 · La sección social — **UNA pantalla con tres pestañas**: Amigos, Grupos
@@ -473,6 +474,8 @@ export function SocialScreen() {
             />
           )}
         </MountedCard>
+        {/* AF-LINK-DE-INVITACION · D252 · invitar a quien no tiene PayMe (sin la capacidad, nada). */}
+        {tab === 'amigos' && <TarjetaInvitarConLink />}
         <FriendAvatarNotice />
 
         {/* ─── Burbuja aparte: buscador arriba, listado alfabético debajo ─── */}

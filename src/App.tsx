@@ -19,6 +19,7 @@ import { SocialScreen } from './screens/SocialScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { JoinMesaScreen } from './screens/JoinMesaScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { InvitacionConSesion, InvitacionSinSesion } from './screens/RutaDeInvitacion';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
@@ -258,6 +259,8 @@ function Shell() {
 
   // AF-VERSION-NUEVA · este ingreso (no el del link de mesa) puede recargar una
   // pestaña vieja si hay una versión publicada más nueva.
+  // AF-LINK-DE-INVITACION · D252 · el link de invitación abre el alta y guarda el código.
+  if (!session && route.page === 'invitacion') return <InvitacionSinSesion codigo={route.param} />;
   if (!session) return <LoginScreen recargaPorVersion />;
 
   if (puertaCerrada) return puertaCerrada;
@@ -368,6 +371,9 @@ function Shell() {
       // D244/D245 · la carga manual de un gasto del viaje.
       case 'viaje-gasto':
         return route.param ? <CargaManualScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
+      // D252 · con sesión, el link de invitación no cambia nada: lleva a Amigos.
+      case 'invitacion':
+        return <InvitacionConSesion />;
       /**
        * **El guard real es el `never`, no el `default`.**
        *

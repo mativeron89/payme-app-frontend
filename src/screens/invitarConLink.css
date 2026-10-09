@@ -1,0 +1,76 @@
+/* AF-LINK-DE-INVITACION · D252 · la tarjeta «Invita a alguien a PayMe» en Amigos. */
+.invitar-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 12px 0;
+}
+.invitar-link-cabeza {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+.invitar-link-icono {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--teal-l);
+  color: var(--action-2);
+}
+.invitar-link-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+.invitar-link-texto {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+/* El link a la vista, en una línea: si no entra, se corta con «…». */
+.invitar-link-url {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* «Cambiar mi link»: discreto, pero con su área táctil de 44 px. */
+.invitar-link-cambiar {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.invitar-link-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--text-muted);
+}
+.invitar-link-hoja-texto {
+  margin: 0 0 var(--sp-4);
+  color: var(--text);
+  line-height: var(--lh-body);
+}
+.invitar-link-hoja-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}

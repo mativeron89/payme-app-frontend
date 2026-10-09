@@ -107,6 +107,8 @@ export const PAGES = [
   'viaje-cerrado',
   /** D244/D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`). */
   'viaje-gasto',
+  /** D252 · el link de invitación (`/invitacion/<código>`): sin sesión, al alta con el código; con sesión, a Amigos. */
+  'invitacion',
 ] as const;
 
 export type PageId = (typeof PAGES)[number];

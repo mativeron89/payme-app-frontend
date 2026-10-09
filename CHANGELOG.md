@@ -11,6 +11,33 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.233.0 — Amigos: el link de invitación (D252) (2026-10-09)
+
+Orden AF-LINK-DE-INVITACION-20261009 (33f4608c…); decisión 252 de Mati (719de86d…): «ahora solo es el link que
+necesito que se genere y se pueda compartir para que se empiece a masificar». Plan aprobado (8e991ba3…, OK
+21:48:05Z) con las respuestas A–D. Dos tramos en un solo PR: el 1 con el mock, el 2 con App Backend 2.173.0. Los
+puntos por referido quedan para cuando haya pagos (D252): ningún texto habla de puntos ni premios. Lo visible se
+cierra con la prueba de Mati en el iPhone (D63).
+
+**Tramo 1** (con el mock)
+
+- **En Amigos**, debajo de «Nuevo amigo», la tarjeta «Invita a alguien a PayMe»:
+  - «Comparte tu link. Quien se registre con él queda como tu amigo.»;
+  - el link a la vista;
+  - «Compartir mi link», que abre la hoja de compartir del teléfono con el mensaje «Te invito a PayMe para dividir la
+    cuenta en el restaurante. Regístrate con mi link:» y el link. Sin hoja de compartir, copia el mensaje con el link
+    (respuesta B). Cerrar la hoja no copia nada.
+  - «Cambiar mi link», discreto, con confirmación («¿Cambiar tu link?»): el anterior deja de funcionar.
+- **`/invitacion/<código>`:**
+  - Sin sesión: el código queda guardado en la pestaña (sessionStorage, para mandarlo en el alta) y se abre «Crea tu
+    cuenta». Antes se espera a saber si el alta está abierta (respuesta C); con el alta cerrada, el ingreso de
+    siempre. Un código mal formado no se guarda.
+  - Con sesión: no cambia nada; lleva a Amigos.
+  - Rutas limpias `/invitacion/:param` y `/invitacion` en `vercel.ts` (respuesta D).
+- **La capacidad:** en el modo real queda apagada (sin tarjeta) hasta el contrato del dueño; en el mock la enciende
+  el seam `payme.app.mock.invite_link.v1 = encendido`, apagado por defecto. El mock da un código al azar por cuenta y
+  «Cambiar mi link» lo reemplaza.
+
 ## 0.232.0 — Viajes: salir después de pagar (H02), la foto retirada que no vuelve (H04), «Nueva» con cámara (D249) y escanear para el viaje con el círculo (D250) (2026-10-09)
 
 > La entrega nació como 0.231.1 (H02 y H04) y pasó a 0.232.0 con la Adenda 2 (D250), que cambia la navegación. La

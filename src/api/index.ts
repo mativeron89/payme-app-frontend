@@ -107,6 +107,8 @@ import {
   type VistaPreviaCierre,
 } from './viajes';
 import * as mockViajes from './mock/viajes';
+import { aplicarConfigLinkDeInvitacion, assertLinkDeInvitacion, type LinkDeInvitacion } from './linkDeInvitacion';
+import * as mockLink from './mock/linkDeInvitacion';
 import {
   applyUsernameConfig,
   decodeEstadoUsername,
@@ -623,6 +625,13 @@ export interface Api {
   cerrarViaje(id: string): Promise<DetalleViaje>;
   marcarTransferenciaDeViaje(id: string, transferenciaId: string, accion: AccionTransferencia): Promise<MarcaDeTransferencia>;
   getResumenDeViaje(id: string): Promise<ResumenDeViaje>;
+
+  // ─── AF-LINK-DE-INVITACION · D252 · tramo 1 (mock) ───
+  // Sólo con la capacidad encendida. En el modo real queda apagada hasta el
+  // contrato de App Backend 2.173.0 (tramo 2).
+  getLinkDeInvitacion(): Promise<LinkDeInvitacion>;
+  /** «Cambiar mi link»: el anterior deja de valer. */
+  cambiarLinkDeInvitacion(): Promise<LinkDeInvitacion>;
 }
 
 /** UUID v4 del navegador — para idempotency_key (8–100 chars por schema). */
@@ -665,6 +674,8 @@ const realApi: Api = {
     aplicarConfigOcultar(config);
     // AF-VIAJES · la capacidad de Viajes, igual.
     aplicarConfigViajes(config);
+    // AF-LINK-DE-INVITACION · tramo 1: apagada en el modo real.
+    aplicarConfigLinkDeInvitacion(config, false);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -1316,6 +1327,15 @@ const realApi: Api = {
     assertViajesHabilitado();
     return decodeResumenDeViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/resumen`), id);
   },
+  // Tramo 1: la capacidad real está apagada y la fachada no pide nada.
+  getLinkDeInvitacion: async () => {
+    assertLinkDeInvitacion();
+    throw new Error('invite_link_not_available');
+  },
+  cambiarLinkDeInvitacion: async () => {
+    assertLinkDeInvitacion();
+    throw new Error('invite_link_not_available');
+  },
 };
 
 const mockApi: Api = {
@@ -1329,6 +1349,7 @@ const mockApi: Api = {
     applyUsernameConfig(config);
     aplicarConfigOcultar(config);
     aplicarConfigViajes(config);
+    aplicarConfigLinkDeInvitacion(config, true);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1656,6 +1677,14 @@ const mockApi: Api = {
   getResumenDeViaje: async (id) => {
     assertViajesHabilitado();
     return decodeResumenDeViaje(await mockViajes.mockResumenDeViaje(id), id);
+  },
+  getLinkDeInvitacion: async () => {
+    assertLinkDeInvitacion();
+    return mockLink.mockLinkDeInvitacion();
+  },
+  cambiarLinkDeInvitacion: async () => {
+    assertLinkDeInvitacion();
+    return mockLink.mockCambiarLinkDeInvitacion();
   },
 };
 

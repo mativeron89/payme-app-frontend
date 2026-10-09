@@ -1257,6 +1257,18 @@ export const EN: Record<string, string> = {
   // AF-NOMBRES-CORREGIDOS · D240 punto 15 · volver a lo que decía el ticket.
   "En el ticket decía «{0}».": "The ticket said «{0}».",
   "Usar ese nombre": "Use that name",
+  // AF-LINK-DE-INVITACION · D252 · el link de invitación en Amigos (sin puntos ni premios).
+  "Invita a alguien a PayMe": "Invite someone to PayMe",
+  "Comparte tu link. Quien se registre con él queda como tu amigo.": "Share your link. Whoever signs up with it becomes your friend.",
+  "Compartir mi link": "Share my link",
+  "Cambiar mi link": "Change my link",
+  "No pudimos cargar tu link.": "We couldn't load your link.",
+  "Te invito a PayMe para dividir la cuenta en el restaurante. Regístrate con mi link:": "Join me on PayMe to split the bill at restaurants. Sign up with my link:",
+  "Copiamos tu link.": "Your link was copied.",
+  "¿Cambiar tu link?": "Change your link?",
+  "Tu link actual deja de funcionar. Quien ya se registró con él sigue siendo tu amigo.": "Your current link stops working. Anyone who already signed up with it stays your friend.",
+  "Listo: tu link es nuevo. El anterior ya no funciona.": "Done: your link is new. The old one no longer works.",
+  "No pudimos cambiar tu link. Prueba de nuevo.": "We couldn't change your link. Try again.",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.
