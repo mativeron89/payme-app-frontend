@@ -9,6 +9,8 @@ import { ingresar } from './_app';
  */
 const SEAM = 'payme.app.mock.invite_link.v1';
 const CLAVE_CODIGO = 'payme.app.mock.referral_code.v1';
+/** `codigo.formato` del contrato del dueño: 16 caracteres base64url. */
+const CODIGO = 'Ab12Cd34Ef56Gh78';
 
 async function conLink(page: Page, compartir: 'ok' | 'cancela' | 'sin' = 'sin'): Promise<void> {
   await page.addInitScript(({ seam, compartir }) => {
@@ -46,7 +48,8 @@ const espias = (page: Page) => page.evaluate(() => {
 test('D252 · con la hoja de compartir del teléfono: título, mensaje y el link, sin copiar nada', async ({ page }) => {
   await conLink(page, 'ok');
   const url = (await page.locator('.invitar-link-url').innerText()).trim();
-  expect(url).toMatch(/^app\.paymemx\.com\/invitacion\/[A-Za-z0-9]{12}$/);
+  // Como en producción: `FRONTEND_PUBLIC_URL` termina en `/#`.
+  expect(url).toMatch(/^app\.paymemx\.com\/#\/invitacion\/[A-Za-z0-9_-]{16}$/);
   await page.getByRole('button', { name: 'Compartir mi link', exact: true }).click();
   await expect.poll(async () => (await espias(page)).compartido.length).toBe(1);
   const { compartido, copiado } = await espias(page);
@@ -98,11 +101,49 @@ test('🔴 D252 · sin sesión, el link abre «Crea tu cuenta» y deja el códig
     localStorage.setItem(seam, 'encendido');
     localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
   }, SEAM);
-  await page.goto('/invitacion/abc123def456');
+  await page.goto(`/invitacion/${CODIGO}`);
   // El alta, no el login: el formulario de registro.
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toBeVisible();
   await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible();
-  expect(await page.evaluate((k) => sessionStorage.getItem(k), CLAVE_CODIGO)).toBe('abc123def456');
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), CLAVE_CODIGO)).toBe(CODIGO);
+});
+
+test('🔴 D252 · el link de producción (`/#/invitacion/<código>`) también lleva al alta con el código', async ({ page }) => {
+  await page.addInitScript((seam) => {
+    localStorage.setItem(seam, 'encendido');
+    localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
+  }, SEAM);
+  await page.goto(`/#/invitacion/${CODIGO}`);
+  await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toBeVisible();
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), CLAVE_CODIGO)).toBe(CODIGO);
+});
+
+test('🔴 D252 · el alta por correo lleva el código; con la cuenta creada, a Amigos y el código se olvida', async ({ page }) => {
+  await page.addInitScript((seam) => {
+    localStorage.setItem(seam, 'encendido');
+    localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
+  }, SEAM);
+  await page.goto(`/invitacion/${CODIGO}`);
+  await page.getByLabel('Nombre', { exact: true }).fill('Ana');
+  await page.getByLabel('Apellido', { exact: true }).fill('Invitada');
+  await page.getByLabel('Email', { exact: true }).fill('ana-invitada@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('con-link-1');
+  await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
+  await expect(page).toHaveURL(/\/amigos$/);
+  expect(await page.evaluate(() => localStorage.getItem('payme.app.mock.ultimo_referral_code.v1'))).toBe(CODIGO);
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), CLAVE_CODIGO)).toBeNull();
+});
+
+test('D252 · sin la capacidad, el alta no lleva el código (el alta de siempre)', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.public_signup.v1', 'true'));
+  await page.goto(`/invitacion/${CODIGO}`);
+  await page.getByLabel('Nombre', { exact: true }).fill('Beto');
+  await page.getByLabel('Apellido', { exact: true }).fill('SinLink');
+  await page.getByLabel('Email', { exact: true }).fill('beto-sin-link@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('sin-link-1');
+  await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
+  await expect(page).toHaveURL(/\/amigos$/);
+  expect(await page.evaluate(() => localStorage.getItem('payme.app.mock.ultimo_referral_code.v1'))).toBeNull();
 });
 
 test('D252 · sin sesión, un código mal formado no se guarda (el alta sigue igual)', async ({ page }) => {
@@ -117,7 +158,7 @@ test('D252 · sin sesión, un código mal formado no se guarda (el alta sigue ig
 test('🔴 D252 · con sesión, el link no cambia nada: lleva a Amigos y no guarda el código', async ({ page }) => {
   await conLink(page);
   await page.evaluate(() => {
-    history.pushState(null, '', '/invitacion/abc123def456');
+    history.pushState(null, '', '/invitacion/Ab12Cd34Ef56Gh78');
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(page).toHaveURL(/\/amigos$/);

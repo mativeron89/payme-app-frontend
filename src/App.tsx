@@ -20,6 +20,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { JoinMesaScreen } from './screens/JoinMesaScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { InvitacionConSesion, InvitacionSinSesion } from './screens/RutaDeInvitacion';
+import { olvidarCodigoDeInvitacion } from './api/linkDeInvitacion';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
@@ -47,6 +48,11 @@ import { leerParametroDeTicket } from './screens/viajes/viajesView';
 
 function Shell() {
   const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
+  // AF-LINK-DE-INVITACION · D252 · con sesión, el código del link ya no sirve:
+  // el alta lo mandó (o era una cuenta que ya existía). Se olvida.
+  useEffect(() => {
+    if (session) olvidarCodigoDeInvitacion();
+  }, [session]);
   // AF2 · LEGAL-3.0.0: la puerta de aceptación para quien ya tiene cuenta.
   const puerta = usePuertaLegal(session);
   /**

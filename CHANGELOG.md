@@ -38,6 +38,29 @@ cierra con la prueba de Mati en el iPhone (D63).
   el seam `payme.app.mock.invite_link.v1 = encendido`, apagado por defecto. El mock da un código al azar por cuenta y
   «Cambiar mi link» lo reemplaza.
 
+**Tramo 2** (Adenda 1, 6bb16b02…; App Backend 2.173.0 servido, `61744ed`)
+
+- **El espejo** a 2.173.0: inventario del dueño en `61744ed`, que declara `168b1b2`; paridad 136/136.
+  - Entran `contract/invitacion-personal-v1.json`, `services/referidos.js` y su migración.
+  - Cambian `contract/social-auth-v1.json` (`referral_code` en las altas de Google) y seis archivos más.
+- **La capacidad** es `features.invite_link` (`{supported, enabled}`, claves exactas). Con ella, la tarjeta; sin
+  ella, nada.
+- **Los dos endpoints:**
+  - `GET /api/friends/invite-link` y `POST /api/friends/invite-link/revoke` → `{code, link, created_at}`, con claves
+    exactas.
+  - El código: 16 caracteres base64url, el formato del contrato. La custodia también lo exige.
+  - El link es absoluto y termina en `/invitacion/<code>`; en producción, `https://app.paymemx.com/#/invitacion/<code>`.
+    La ruta vieja con `#/` lleva al mismo lugar.
+- **`referral_code` en el alta:**
+  - va en las cuatro: correo (`register`) y las tres de Google (`googleRegister`, `googleContinue`,
+    `googleRedirectSignup`);
+  - sólo con la capacidad, porque los cuerpos de Google son estrictos;
+  - lo agrega la fachada leyendo la custodia.
+  - Con sesión, el código se olvida: el alta lo mandó, o era una cuenta que ya existía.
+  - Un código que no vale no frena el alta: lo decide el dueño, sin oráculo.
+- **El mock** sirve `features.invite_link` con su seam y responde con la forma del dueño. El alta por correo del mock
+  anota el `referral_code` que recibe, para las pruebas.
+
 ## 0.232.0 — Viajes: salir después de pagar (H02), la foto retirada que no vuelve (H04), «Nueva» con cámara (D249) y escanear para el viaje con el círculo (D250) (2026-10-09)
 
 > La entrega nació como 0.231.1 (H02 y H04) y pasó a 0.232.0 con la Adenda 2 (D250), que cambia la navegación. La

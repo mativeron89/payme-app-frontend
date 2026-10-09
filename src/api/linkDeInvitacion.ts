@@ -9,16 +9,55 @@ import { useSyncExternalStore } from 'react';
  * quien lo compartió. Nada de puntos ni premios en la app (D252: los puntos
  * esperan a los pagos).
  *
- * **Tramo 1 (esta versión):** la pantalla y el recorrido con el mock. El
- * contrato del dueño (App Backend 2.173.0) todavía no se consume: en el modo
- * real la capacidad queda APAGADA y no hay tarjeta. En el mock la enciende el
- * seam `payme.app.mock.invite_link.v1 = encendido` (apagado por defecto).
+ * Contrato del dueño: App Backend 2.173.0, `contract-mirror/contract/
+ * invitacion-personal-v1.json`. El front espeja: no arma códigos ni decide si
+ * uno vale (un código que no vale, el dueño lo ignora en el alta, sin oráculo).
+ * En el mock, la capacidad la enciende el seam
+ * `payme.app.mock.invite_link.v1 = encendido` (apagado por defecto).
  */
 
+export const CONTRATO_INVITACION_PERSONAL = 'payme.app.invitacion_personal/v1';
+
 export interface LinkDeInvitacion {
-  /** El link completo para compartir. */
+  /** El link completo para compartir (en producción, `https://app.paymemx.com/#/invitacion/<código>`). */
   readonly url: string;
   readonly codigo: string;
+  readonly creadoEn: string;
+}
+
+function objetoPlano(v: unknown): v is Record<string, unknown> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+}
+
+function clavesExactas(v: Record<string, unknown>, esperadas: readonly string[]): boolean {
+  const claves = Object.keys(v).sort();
+  const quiero = [...esperadas].sort();
+  return claves.length === quiero.length && claves.every((c, i) => c === quiero[i]);
+}
+
+export class LinkDeInvitacionResponseError extends Error {
+  constructor(readonly endpoint: string) {
+    super(`invite_link_response_invalid:${endpoint}`);
+  }
+}
+
+/**
+ * `GET /api/friends/invite-link` y `POST …/revoke` → `{ code, link, created_at }`,
+ * claves EXACTAS. El link es absoluto y termina en `/invitacion/<code>`: otro
+ * link sería otra semántica y no se comparte.
+ */
+export function decodeLinkDeInvitacion(raw: unknown, endpoint = 'invite_link'): LinkDeInvitacion {
+  if (!objetoPlano(raw) || !clavesExactas(raw, ['code', 'link', 'created_at'])) throw new LinkDeInvitacionResponseError(endpoint);
+  const { code, link, created_at: creado } = raw;
+  if (!codigoValido(code) || typeof link !== 'string' || typeof creado !== 'string'
+      // Una comparación, no una ruta que se pide: concatenado, no interpolado.
+      || !/^https?:\/\/[^\s]+$/.test(link) || !link.endsWith('/invitacion/' + code)
+      || Number.isNaN(Date.parse(creado))) {
+    throw new LinkDeInvitacionResponseError(endpoint);
+  }
+  return { url: link, codigo: code, creadoEn: creado };
 }
 
 // ─── La capacidad ─────────────────────────────────────────────────────────
@@ -29,17 +68,29 @@ function leerLocal(clave: string): string | null {
   try { return localStorage.getItem(clave); } catch { return null; }
 }
 
+/** El seam del mock: `encendido` exacto. Lo lee la config del mock, como el dueño lee su constante. */
+export function linkDeInvitacionMockEncendido(): boolean {
+  return leerLocal(CLAVE_LINK_DE_INVITACION_MOCK) === 'encendido';
+}
+
+/**
+ * `features.invite_link` → `{ supported, enabled }`, claves EXACTAS. Encendida
+ * sólo con los dos en `true`; ausente o de otra forma, apagada.
+ */
+export function decodeCapacidadLinkDeInvitacion(config: unknown): boolean {
+  if (!objetoPlano(config) || !objetoPlano(config.features)) return false;
+  const raw = config.features.invite_link;
+  return objetoPlano(raw) && clavesExactas(raw, ['supported', 'enabled'])
+    && raw.supported === true && raw.enabled === true;
+}
+
 export type EstadoCapacidadLink = 'pendiente' | 'encendida' | 'apagada';
 let capacidad: EstadoCapacidadLink = 'pendiente';
 const oyentes = new Set<() => void>();
 
-/**
- * Se alimenta con la config, como Viajes. Tramo 1: en el modo real, siempre
- * apagada (el dueño todavía no la publica); en el mock, el seam.
- */
-export function aplicarConfigLinkDeInvitacion(_config: unknown, mock: boolean): boolean {
-  const siguiente: EstadoCapacidadLink = mock && leerLocal(CLAVE_LINK_DE_INVITACION_MOCK) === 'encendido'
-    ? 'encendida' : 'apagada';
+/** Se alimenta con la config, como Viajes: sin request propia. */
+export function aplicarConfigLinkDeInvitacion(config: unknown): boolean {
+  const siguiente: EstadoCapacidadLink = decodeCapacidadLinkDeInvitacion(config) ? 'encendida' : 'apagada';
   if (siguiente !== capacidad) {
     capacidad = siguiente;
     for (const oyente of [...oyentes]) oyente();
@@ -55,6 +106,10 @@ const instantanea = (): EstadoCapacidadLink => capacidad;
 
 export function useCapacidadLinkDeInvitacion(): EstadoCapacidadLink {
   return useSyncExternalStore(suscribir, instantanea, instantanea);
+}
+
+export function linkDeInvitacionHabilitado(): boolean {
+  return capacidad === 'encendida';
 }
 
 export function assertLinkDeInvitacion(): void {
@@ -77,7 +132,8 @@ export const CLAVE_CODIGO_DE_INVITACION = import.meta.env.VITE_MOCK === '1'
   ? 'payme.app.mock.referral_code.v1'
   : 'payme.app.real.referral_code.v1';
 
-const CODIGO = /^[A-Za-z0-9_-]{4,64}$/;
+/** `codigo.formato` del contrato: 16 caracteres base64url (12 bytes al azar). */
+const CODIGO = /^[A-Za-z0-9_-]{16}$/;
 
 export function codigoValido(valor: unknown): valor is string {
   return typeof valor === 'string' && CODIGO.test(valor);
@@ -109,4 +165,16 @@ export function leerCodigoDeInvitacion(): string | null {
 
 export function olvidarCodigoDeInvitacion(): void {
   try { sesionDelNavegador()?.removeItem(CLAVE_CODIGO_DE_INVITACION); } catch { /* sin almacenamiento */ }
+}
+
+/**
+ * D252 · `referral_code` en el alta (correo y las tres de Google). Sólo con la
+ * capacidad encendida: los cuerpos de Google son estrictos y un dueño anterior
+ * los rechazaría. El código se olvida cuando hay sesión (App), haya creado la
+ * cuenta o no: ninguna ruta aplica un código a una cuenta que ya existe.
+ */
+export function conReferido<T extends object>(cuerpo: T): T & { referral_code?: string } {
+  if (!linkDeInvitacionHabilitado()) return cuerpo;
+  const codigo = leerCodigoDeInvitacion();
+  return codigo === null ? cuerpo : { ...cuerpo, referral_code: codigo };
 }

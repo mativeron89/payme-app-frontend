@@ -96,6 +96,7 @@ import {
 } from './seedData';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from './store';
 import { fechaDelTicketMock, huellaDelTicketMock, viajesMockEncendido } from './viajesSeam';
+import { linkDeInvitacionMockEncendido } from '../linkDeInvitacion';
 import {
   admiteSeleccionInformativa,
   availableBalance,
@@ -631,7 +632,8 @@ export async function mockGoogleRedirectSignupLoginUri(idToken: string): Promise
   return `google_signup=${codigo}`;
 }
 
-const CLAVES_CANJE_ALTA = new Set(['code', 'accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name']);
+// v2.173.0 · D252 · `referral_code` opcional (el link de invitación).
+const CLAVES_CANJE_ALTA = new Set(['code', 'accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name', 'referral_code']);
 
 /**
  * `POST /api/auth/google/redirect/signup` · la lógica de `continue` sin el
@@ -880,6 +882,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       ...(capacidadOcultarMock() === undefined ? {} : { hide_from_app: capacidadOcultarMock() }),
       // AF-VIAJES · v2.171.0 · el bloque se sirve siempre, como el dueño; `enabled` sólo con el seam (`viajesSeam.ts`).
       viajes: { supported: true, enabled: viajesMockEncendido() },
+      // AF-LINK-DE-INVITACION · v2.173.0 · el bloque se sirve siempre, como el dueño; `enabled` sólo con el seam.
+      invite_link: { supported: true, enabled: linkDeInvitacionMockEncendido() },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -1091,7 +1095,20 @@ function paymeIdFromName(firstName: string): string {
   return `payme_mx_${plano || 'nueva'}`;
 }
 
-export async function mockRegister(data: RegisterRequest): Promise<StoredSession> {
+/**
+ * D252 · el último `referral_code` que llegó a un alta del mock, para que las
+ * pruebas vean que el código del link llegó al alta (el dueño lo aplica en la
+ * transacción de la cuenta; el mock sólo lo anota).
+ */
+export const CLAVE_ULTIMO_REFERIDO_MOCK = 'payme.app.mock.ultimo_referral_code.v1';
+
+function anotarReferido(data: { readonly referral_code?: unknown }): void {
+  if (data.referral_code === undefined) return;
+  try { localStorage.setItem(CLAVE_ULTIMO_REFERIDO_MOCK, String(data.referral_code)); } catch { /* sin almacenamiento */ }
+}
+
+export async function mockRegister(data: RegisterRequest & { readonly referral_code?: string }): Promise<StoredSession> {
+  anotarReferido(data);
   // El mock recorre la misma compuerta de superficie: sin una autoridad con
   // forma válida no hay alta. No pretende validar email/TTL/one-use —eso sólo
   // lo acredita el owner y PostgreSQL—, pero tampoco enseña un registro abierto.

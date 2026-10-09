@@ -107,7 +107,13 @@ import {
   type VistaPreviaCierre,
 } from './viajes';
 import * as mockViajes from './mock/viajes';
-import { aplicarConfigLinkDeInvitacion, assertLinkDeInvitacion, type LinkDeInvitacion } from './linkDeInvitacion';
+import {
+  aplicarConfigLinkDeInvitacion,
+  assertLinkDeInvitacion,
+  conReferido,
+  decodeLinkDeInvitacion,
+  type LinkDeInvitacion,
+} from './linkDeInvitacion';
 import * as mockLink from './mock/linkDeInvitacion';
 import {
   applyUsernameConfig,
@@ -626,9 +632,8 @@ export interface Api {
   marcarTransferenciaDeViaje(id: string, transferenciaId: string, accion: AccionTransferencia): Promise<MarcaDeTransferencia>;
   getResumenDeViaje(id: string): Promise<ResumenDeViaje>;
 
-  // ─── AF-LINK-DE-INVITACION · D252 · tramo 1 (mock) ───
-  // Sólo con la capacidad encendida. En el modo real queda apagada hasta el
-  // contrato de App Backend 2.173.0 (tramo 2).
+  // ─── AF-LINK-DE-INVITACION · D252 · App Backend 2.173.0 (`contract/invitacion-personal-v1.json`) ───
+  // Sólo con `features.invite_link` encendida: si no, no se pide nada.
   getLinkDeInvitacion(): Promise<LinkDeInvitacion>;
   /** «Cambiar mi link»: el anterior deja de valer. */
   cambiarLinkDeInvitacion(): Promise<LinkDeInvitacion>;
@@ -674,8 +679,8 @@ const realApi: Api = {
     aplicarConfigOcultar(config);
     // AF-VIAJES · la capacidad de Viajes, igual.
     aplicarConfigViajes(config);
-    // AF-LINK-DE-INVITACION · tramo 1: apagada en el modo real.
-    aplicarConfigLinkDeInvitacion(config, false);
+    // AF-LINK-DE-INVITACION · la capacidad del link de invitación, igual.
+    aplicarConfigLinkDeInvitacion(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -705,12 +710,13 @@ const realApi: Api = {
     await httpRequest<unknown>('POST', '/legal/acceptance', acceptance, expectedSession),
   ),
   login: (email, password) => httpLogin(email, password),
-  register: (data) => httpRegister(data),
+  // D252 · `referral_code` (el link de invitación) va en las cuatro altas, sólo con la capacidad.
+  register: (data) => httpRegister(conReferido(data)),
   googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
   googleRedirectRedeem: (code) => httpSocialSession('/auth/google/redirect/redeem', { code }),
-  googleRegister: (data) => httpSocialSession('/auth/google/register', data),
-  googleContinue: (data) => httpGoogleContinue('/auth/google/continue', data),
-  googleRedirectSignup: (data) => httpGoogleContinue('/auth/google/redirect/signup', data),
+  googleRegister: (data) => httpSocialSession('/auth/google/register', conReferido(data)),
+  googleContinue: (data) => httpGoogleContinue('/auth/google/continue', conReferido(data)),
+  googleRedirectSignup: (data) => httpGoogleContinue('/auth/google/redirect/signup', conReferido(data)),
   googleContinueLink: (data) => httpGoogleContinue('/auth/google/continue/link', data),
   // `private, no-store` es contrato del dueño para esta ruta: el lector
   // privado lo EXIGE, igual que para `/account/me`.
@@ -1327,14 +1333,13 @@ const realApi: Api = {
     assertViajesHabilitado();
     return decodeResumenDeViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/resumen`), id);
   },
-  // Tramo 1: la capacidad real está apagada y la fachada no pide nada.
   getLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();
-    throw new Error('invite_link_not_available');
+    return decodeLinkDeInvitacion(await httpRequest<unknown>('GET', '/friends/invite-link'), 'invite_link');
   },
   cambiarLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();
-    throw new Error('invite_link_not_available');
+    return decodeLinkDeInvitacion(await httpRequest<unknown>('POST', '/friends/invite-link/revoke'), 'invite_link.revoke');
   },
 };
 
@@ -1349,7 +1354,7 @@ const mockApi: Api = {
     applyUsernameConfig(config);
     aplicarConfigOcultar(config);
     aplicarConfigViajes(config);
-    aplicarConfigLinkDeInvitacion(config, true);
+    aplicarConfigLinkDeInvitacion(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1367,12 +1372,12 @@ const mockApi: Api = {
     await mock.mockAcceptLegal(acceptance, expectedSession),
   ),
   login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password)),
-  register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
+  register: (data) => runWithSessionStateLock(() => mock.mockRegister(conReferido(data))),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
   googleRedirectRedeem: (code) => mock.mockGoogleRedirectRedeem(code),
-  googleRegister: (data) => mock.mockGoogleRegister(data),
-  googleContinue: (data) => mock.mockGoogleContinue(data),
-  googleRedirectSignup: (data) => mock.mockGoogleRedirectSignup(data),
+  googleRegister: (data) => mock.mockGoogleRegister(conReferido(data)),
+  googleContinue: (data) => mock.mockGoogleContinue(conReferido(data)),
+  googleRedirectSignup: (data) => mock.mockGoogleRedirectSignup(conReferido(data)),
   googleContinueLink: (data) => mock.mockGoogleContinueLink(data),
   getLinkedProviders: async () => decodeLinkedProvidersResponse(await mock.mockGetLinkedProviders()),
   googleLink: async (data) => {
@@ -1680,11 +1685,11 @@ const mockApi: Api = {
   },
   getLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();
-    return mockLink.mockLinkDeInvitacion();
+    return decodeLinkDeInvitacion(await mockLink.mockLinkDeInvitacion(), 'invite_link');
   },
   cambiarLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();
-    return mockLink.mockCambiarLinkDeInvitacion();
+    return decodeLinkDeInvitacion(await mockLink.mockCambiarLinkDeInvitacion(), 'invite_link.revoke');
   },
 };
 

@@ -10,7 +10,7 @@ import { TarjetaInvitarConLink, TarjetaInvitarVista, linkVisible, mensajeDeInvit
  * masificar». Los puntos por referido quedan para cuando haya pagos.
  */
 const nada = () => undefined;
-const LINK = { url: 'https://app.paymemx.com/invitacion/abc123def456', codigo: 'abc123def456' };
+const LINK = { url: 'https://app.paymemx.com/invitacion/abc123def456', codigo: 'abc123def456', creadoEn: '2026-10-09T22:00:00.000Z' };
 const texto = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const vista = (carga: CargaDelLink) =>
   renderToStaticMarkup(<TarjetaInvitarVista carga={carga} onCompartir={nada} onCambiar={nada} onReintentar={nada} />);
