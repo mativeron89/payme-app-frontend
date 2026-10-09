@@ -273,9 +273,25 @@ describe('salir y 1q', () => {
 
   it('1q: «Todavía no puedes salir de Cancún 2026» con el motivo del dueño', () => {
     const tickets = [ticket({ id: 'a' }), ticket({ id: 'b' }), ticket({ id: 'c' }), ticket({ id: 'd' })];
-    expect(texto(renderToStaticMarkup(<HojaNoPuedeSalirVista viaje={viaje({ tickets })} motivo="selection" onEntendido={nada} />)))
+    const razon = { tipo: 'motivo', motivo: 'selection' } as const;
+    expect(texto(renderToStaticMarkup(<HojaNoPuedeSalirVista viaje={viaje({ tickets })} razon={razon} onEntendido={nada} />)))
       .toBe('Todavía no puedes salir de Cancún 2026 Ya elegiste consumos en 4 tickets. Podrás salir cuando se cierre el viaje '
-        + 'y marques tu transferencia como pagada. Entendido');
+        + 'y tus transferencias estén confirmadas. Entendido');
+  });
+
+  it('H02 · con transferencias tuyas sin confirmar, la hoja dice cuántas', () => {
+    const razon = { tipo: 'pendientes', pendientes: 2 } as const;
+    expect(texto(renderToStaticMarkup(<HojaNoPuedeSalirVista viaje={viaje()} razon={razon} onEntendido={nada} />)))
+      .toBe('Todavía no puedes salir de Cancún 2026 Tienes 2 transferencias sin confirmar. '
+        + 'Podrás salir cuando todas estén confirmadas. Entendido');
+  });
+
+  it('🔴 H02 · «Salir del viaje» también con el viaje en esperando pagos, al pie', () => {
+    const v = viaje({ estado: 'esperando_pagos', sin_repartir: [], transferencias_pendientes: 1, transferencias: [
+      tr('t1', IDS.yo, IDS.luis, 54200, 'pendiente', 'debo'),
+    ] });
+    const leido = texto(vista(listo(v)));
+    expect(leido).toMatch(/Salir del viaje$/);
   });
 });
 

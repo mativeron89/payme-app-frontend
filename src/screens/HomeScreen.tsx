@@ -32,6 +32,7 @@ import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
 import { useViajesHabilitado } from '../api/viajes';
+import { inicioPideViajes, olvidarInicioEnViajes } from './viajes/inicioEnViajes';
 import { FilaCrearViaje, ListaDeInicio, PanelViajes, useConteoDeViajes } from './viajes/PestanaViajes';
 
 /**
@@ -167,7 +168,9 @@ export function HomeScreen() {
   // vez) y el corte del viernes SÍ (`corteDePagosView`). Ver `releaseGates.ts`.
   const rail = accountRailView(walletRailEnabled, accountActivity);
   const corte = corteDePagosView(useMoneyRail());
-  const [tabElegida, setTab] = useState<TabId>('cuenta');
+  // H02 · después de salir de un viaje, Inicio abre en la pestaña Viajes (una vez).
+  const [tabElegida, setTab] = useState<TabId>(() => (inicioPideViajes() ? 'viajes' : 'cuenta'));
+  useEffect(() => { olvidarInicioEnViajes(); }, []);
   // AF-VIAJES · la tercera pestaña depende de la capacidad, que llega después
   // del primer cuadro: la elegida se traduce a la que existe.
   const conViajes = useViajesHabilitado();

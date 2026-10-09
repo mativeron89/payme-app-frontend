@@ -311,3 +311,55 @@ describe('mock · Viajes (App Backend 2.172.0): `viaje_version=2`, el gasto a ma
     expect(m.pedidosDeFotosDeViajeMock() - antes).toBe(3);
   });
 });
+
+describe('mock · Viajes (App Backend 2.172.1): salir después de pagar (H02, D242-2)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
+  it('🔴 esperando pagos con transferencias mías sin confirmar: 409 con cuántas faltan («Ya pagué» no alcanza)', async () => {
+    storage();
+    const { m, d } = await subject();
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.monterrey, V2));
+    expect(v.estado).toBe('esperando_pagos');
+    // Luis marcó «Ya pagué» y Sofía no: las dos me faltan confirmar.
+    expect(v.transferencias.filter((t) => t.mia === 'me_deben').map((t) => t.estado).sort()).toEqual(['marcada', 'pendiente']);
+    expect(await rechazo(m.mockSalirDeViaje(m.VIAJES_SEMILLA.monterrey)))
+      .toEqual({ status: 409, error: 'viaje_member_transfers_pending', extra: { pendientes: 2 } });
+    // Confirmo una: falta una.
+    const [una, otra] = v.transferencias.filter((t) => t.mia === 'me_deben');
+    await m.mockMarcarTransferencia(m.VIAJES_SEMILLA.monterrey, una!.id, 'recibi');
+    expect(await rechazo(m.mockSalirDeViaje(m.VIAJES_SEMILLA.monterrey)))
+      .toEqual({ status: 409, error: 'viaje_member_transfers_pending', extra: { pendientes: 1 } });
+    // Confirmo la otra: el viaje se cierra y salgo.
+    await m.mockMarcarTransferencia(m.VIAJES_SEMILLA.monterrey, otra!.id, 'recibi');
+    d.decodeRespuestaDeSalida(await m.mockSalirDeViaje(m.VIAJES_SEMILLA.monterrey), m.VIAJES_SEMILLA.monterrey, 'salio');
+  });
+
+  it('🔴 cerrado con todo confirmado: salgo, y el viaje deja de estar para mí (lista, detalle y resumen)', async () => {
+    storage();
+    const { m, d } = await subject();
+    const antes = d.decodeListaDeViajes(await m.mockListarViajes('cerrados'), 'cerrados');
+    expect(antes.viajes.map((x) => x.nombre)).toContain('Oaxaca puente');
+    d.decodeRespuestaDeSalida(await m.mockSalirDeViaje(m.VIAJES_SEMILLA.oaxaca), m.VIAJES_SEMILLA.oaxaca, 'salio');
+    const despues = d.decodeListaDeViajes(await m.mockListarViajes('cerrados'), 'cerrados');
+    expect(despues.viajes.map((x) => x.nombre)).not.toContain('Oaxaca puente');
+    expect(despues.counts.cerrados).toBe(antes.counts.cerrados - 1);
+    expect(await rechazo(m.mockDetalleViaje(m.VIAJES_SEMILLA.oaxaca, V2))).toMatchObject({ status: 404, error: 'viaje_not_found' });
+    expect(await rechazo(m.mockResumenDeViaje(m.VIAJES_SEMILLA.oaxaca))).toMatchObject({ status: 404, error: 'viaje_not_found' });
+  });
+
+  it('salir no borra nada: los montos y las transferencias quedan para los demás', async () => {
+    const valores = storage();
+    const { m } = await subject();
+    await m.mockSalirDeViaje(m.VIAJES_SEMILLA.oaxaca);
+    const estado = JSON.parse(valores.get('payme.app.mock.viajes.estado.v1')!) as {
+      viajes: Array<{ id: string; tickets: Array<{ personas: unknown[] }>; transferencias: unknown[]; miembros: Array<{ estado: string }> }>;
+    };
+    const oax = estado.viajes.find((x) => x.id === m.VIAJES_SEMILLA.oaxaca)!;
+    expect(oax.miembros.filter((x) => x.estado === 'salio')).toHaveLength(1);
+    expect(oax.tickets.every((t) => t.personas.length === 5)).toBe(true);
+    expect(oax.transferencias.length).toBeGreaterThan(0);
+  });
+});

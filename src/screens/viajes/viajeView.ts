@@ -93,6 +93,21 @@ export function metaDelTicket(ticket: TicketEnViaje, miembros: readonly MiembroV
 
 export type MotivoSalida = 'selection' | 'paid_ticket' | 'present_in_equal_split';
 
+/** Por qué el dueño no deja salir: abierto, con consumos (1q); esperando pagos o cerrado, transferencias sin confirmar (H02). */
+export type PorQueNoPuedeSalir =
+  | { readonly tipo: 'motivo'; readonly motivo: MotivoSalida }
+  | { readonly tipo: 'pendientes'; readonly pendientes: number };
+
+/**
+ * H02 · App Backend 2.172.1 · D242-1: con el viaje en esperando pagos o cerrado
+ * se sale con las transferencias propias confirmadas (con «Recibí»); marcar
+ * «Ya pagué» solo no alcanza.
+ */
+export function textoTransferenciasPendientes(n: number, t: T): string {
+  if (n === 1) return t('Tienes 1 transferencia sin confirmar. Podrás salir cuando esté confirmada.');
+  return t('Tienes {0} transferencias sin confirmar. Podrás salir cuando todas estén confirmadas.', n);
+}
+
 /** Los tickets «por lo que pidió cada uno» en los que ya me tocó algo. */
 export function ticketsConConsumoMio(tickets: readonly TicketEnViaje[]): number {
   return tickets.filter((tk) => tk.forma === 'consumo' && tk.te_toca_cents > 0).length;
@@ -102,9 +117,9 @@ export function textoNoPuedeSalir(motivo: MotivoSalida, tickets: readonly Ticket
   switch (motivo) {
     case 'selection': {
       const n = ticketsConConsumoMio(tickets);
-      if (n === 0) return t('Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.');
-      if (n === 1) return t('Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.');
-      return t('Ya elegiste consumos en {0} tickets. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.', n);
+      if (n === 0) return t('Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.');
+      if (n === 1) return t('Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.');
+      return t('Ya elegiste consumos en {0} tickets. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.', n);
     }
     case 'paid_ticket':
       return t('Pagaste un ticket de este viaje. Podrás salir cuando se cierre el viaje y quede todo pagado.');

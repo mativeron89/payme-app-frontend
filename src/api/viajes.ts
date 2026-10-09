@@ -738,6 +738,8 @@ export type ErrorDeViaje =
   | { readonly tipo: 'limite_miembros' }
   | { readonly tipo: 'demasiadas_invitaciones' }
   | { readonly tipo: 'no_puede_salir'; readonly motivo: 'selection' | 'paid_ticket' | 'present_in_equal_split' }
+  /** H02 · App Backend 2.172.1: esperando pagos o cerrado, con transferencias propias sin confirmar. */
+  | { readonly tipo: 'transferencias_pendientes'; readonly pendientes: number }
   | { readonly tipo: 'fraccion_excede'; readonly itemId: string | null }
   | { readonly tipo: 'limite_tickets' }
   /** D244 · alguien de los elegidos ya no está en el viaje. */
@@ -765,6 +767,10 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
   if (status === 409 && code === 'viaje_member_cannot_leave'
       && (MOTIVOS_SALIDA as readonly unknown[]).includes(extra.reason)) {
     return { tipo: 'no_puede_salir', motivo: extra.reason as (typeof MOTIVOS_SALIDA)[number] };
+  }
+  if (status === 409 && code === 'viaje_member_transfers_pending'
+      && typeof extra.pendientes === 'number' && Number.isSafeInteger(extra.pendientes) && extra.pendientes > 0) {
+    return { tipo: 'transferencias_pendientes', pendientes: extra.pendientes };
   }
   if (status === 409 && code === 'viaje_fraction_exceeds_item') {
     return { tipo: 'fraccion_excede', itemId: typeof extra.item_id === 'string' ? extra.item_id : null };

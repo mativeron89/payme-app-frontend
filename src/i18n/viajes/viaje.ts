@@ -29,12 +29,16 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Ya no vas a ver los tickets de este viaje.': "You won't see this trip's tickets anymore.",
   'Saliste de {0}.': 'You left {0}.',
   'Todavía no puedes salir de {0}': "You can't leave {0} yet",
-  'Ya elegiste consumos en {0} tickets. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.':
-    "You already chose items on {0} tickets. You'll be able to leave once the trip is closed and you mark your transfer as paid.",
-  'Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.':
-    "You already chose items on 1 ticket. You'll be able to leave once the trip is closed and you mark your transfer as paid.",
-  'Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.':
-    "You already chose items on this trip. You'll be able to leave once the trip is closed and you mark your transfer as paid.",
+  'Ya elegiste consumos en {0} tickets. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.':
+    "You already chose items on {0} tickets. You'll be able to leave once the trip is closed and your transfers are confirmed.",
+  'Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.':
+    "You already chose items on 1 ticket. You'll be able to leave once the trip is closed and your transfers are confirmed.",
+  'Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.':
+    "You already chose items on this trip. You'll be able to leave once the trip is closed and your transfers are confirmed.",
+  'Tienes 1 transferencia sin confirmar. Podrás salir cuando esté confirmada.':
+    'You have 1 unconfirmed transfer. You can leave once it is confirmed.',
+  'Tienes {0} transferencias sin confirmar. Podrás salir cuando todas estén confirmadas.':
+    'You have {0} unconfirmed transfers. You can leave once they are all confirmed.',
   'Pagaste un ticket de este viaje. Podrás salir cuando se cierre el viaje y quede todo pagado.':
     "You paid a ticket on this trip. You'll be able to leave once the trip is closed and everything is paid.",
   'Estás entre los que estuvieron en un ticket en partes iguales. Podrás salir cuando se cierre el viaje y quede todo pagado.':

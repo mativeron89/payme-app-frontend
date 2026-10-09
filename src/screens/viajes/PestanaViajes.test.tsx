@@ -104,3 +104,21 @@ describe('Inicio · la tercera pestaña depende de la capacidad', () => {
     expect(home).toMatch(/tab !== 'viajes' && \(\s*<div className="mesa-empty">\s*<div className="mesa-empty-title">\{t\('No tienes mesas abiertas'\)\}/);
   });
 });
+
+describe('H02 · después de salir, Inicio con la pestaña Viajes', () => {
+  it('el pedido se lee mientras dure y se olvida al consumirlo', async () => {
+    const m = await import('./inicioEnViajes');
+    expect(m.inicioPideViajes()).toBe(false);
+    m.pedirInicioEnViajes();
+    expect(m.inicioPideViajes()).toBe(true);
+    expect(m.inicioPideViajes()).toBe(true);
+    m.olvidarInicioEnViajes();
+    expect(m.inicioPideViajes()).toBe(false);
+  });
+
+  it('Inicio arranca en la pestaña pedida y olvida el pedido en un efecto (StrictMode no lo pierde)', () => {
+    const fuente = readFileSync(new URL('../HomeScreen.tsx', import.meta.url), 'utf8');
+    expect(fuente).toMatch(/useState<TabId>\(\(\) => \(inicioPideViajes\(\) \? 'viajes' : 'cuenta'\)\)/);
+    expect(fuente).toMatch(/useEffect\(\(\) => \{ olvidarInicioEnViajes\(\); \}, \[\]\);/);
+  });
+});

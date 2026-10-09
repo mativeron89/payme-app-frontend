@@ -237,6 +237,25 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
   });
 });
 
+describe('H02 · salir después de pagar (App Backend 2.172.1)', () => {
+  it('409 `viaje_member_transfers_pending` dice cuántas faltan; sin un número válido, reintentar', () => {
+    expect(errorDeViaje(new HttpError(409, { error: 'viaje_member_transfers_pending', pendientes: 2 })))
+      .toEqual({ tipo: 'transferencias_pendientes', pendientes: 2 });
+    expect(errorDeViaje(new MockApiError(409, 'viaje_member_transfers_pending', { pendientes: 1 })))
+      .toEqual({ tipo: 'transferencias_pendientes', pendientes: 1 });
+    for (const malo of [undefined, 0, -1, 1.5, '2']) {
+      expect(errorDeViaje(new MockApiError(409, 'viaje_member_transfers_pending', { pendientes: malo })), String(malo))
+        .toEqual({ tipo: 'reintentar' });
+    }
+  });
+
+  it('el contrato: los dos errores de salir y la nota de D242-1', () => {
+    const r = CONTRATO.rutas['POST /api/viajes/:id/salir'] as unknown as { respuestas: Record<string, Record<string, unknown>> };
+    expect(r.respuestas['409']!.errores).toEqual(['viaje_member_cannot_leave', 'viaje_member_transfers_pending']);
+    expect(r.respuestas['409']!.viaje_member_transfers_pending).toEqual(['error', 'pendientes']);
+  });
+});
+
 describe('errorDeViaje · lo que dice la pantalla', () => {
   it('el 404 es uno solo (n325), en el mock y en el real', () => {
     expect(errorDeViaje(new MockApiError(404, 'viaje_not_found'))).toEqual({ tipo: 'no_disponible' });

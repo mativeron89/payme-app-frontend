@@ -211,6 +211,20 @@ function viajeDe(id: unknown): ViajeMock | null {
 
 const miembrosEnOrden = (v: ViajeMock) => porOrden(v.miembros, (m) => m.user_id);
 const esActivo = (v: ViajeMock, u: string) => v.miembros.some((m) => m.user_id === u && m.estado === 'activo');
+/**
+ * v2.172.1 · H02 (\`miembrosVisibles\` del dueño): abierto, los activos; en
+ * esperando pagos o cerrado, también quien salió después de pagar y tiene montos
+ * o transferencias, así los números de los demás no cambian cuando alguien sale.
+ */
+function miembrosVisibles(v: ViajeMock): MiembroMock[] {
+  const activos = v.miembros.filter((m) => m.estado === 'activo');
+  if (v.estado === 'abierto') return activos;
+  const conMontos = new Set([
+    ...v.tickets.flatMap((t) => [t.pagado_por, ...t.personas.map((p) => p.user_id)]),
+    ...v.transferencias.flatMap((t) => [t.de_user, t.a_user]),
+  ]);
+  return v.miembros.filter((m) => m.estado === 'activo' || (m.estado === 'salio' && conMontos.has(m.user_id)));
+}
 const vivoUser = (v: ViajeMock, u: string) => !(v.miembros.find((m) => m.user_id === u)?.eliminada ?? false);
 
 function persona(m: MiembroMock) {
@@ -341,7 +355,7 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 = 1) {
   return {
     id: v.id, nombre: v.nombre, fecha_desde: v.fecha_desde, fecha_hasta: v.fecha_hasta, estado: est,
     creado_en: v.created_at, mi_miembro_id: ids.get(u),
-    miembros: miembrosEnOrden(v).filter((m) => m.estado === 'activo').map((m) => ({
+    miembros: porOrden(miembrosVisibles(v), (m) => m.user_id).map((m) => ({
       id: m.id, ...persona(m), es_yo: m.user_id === u,
       balance_cents: cerrado && m.user_id !== u ? null : b.balance.get(m.user_id) ?? 0,
       falta_elegir: faltaElegir.get(m.user_id) ?? 0,
@@ -395,7 +409,7 @@ function vistaEnLista(v: ViajeMock, u: string) {
   const b = balance(v);
   return {
     id: v.id, nombre: v.nombre, fecha_desde: v.fecha_desde, fecha_hasta: v.fecha_hasta, estado: est,
-    personas: v.miembros.filter((m) => m.estado === 'activo').length,
+    personas: miembrosVisibles(v).length,
     mi_balance_cents: est === 'cerrado' ? null : b.balance.get(u) ?? 0,
     transferencias_pendientes: est === 'esperando_pagos' ? pendientes(v).length : null,
     consumiste_cents: est === 'cerrado' ? b.consumido.get(u) ?? 0 : null,
@@ -608,8 +622,17 @@ export function mockRechazarViaje(id: string) {
 export function mockSalirDeViaje(id: string) {
   return ruta(() => {
     const v = miViaje(id);
-    if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     const u = yo();
+    if (v.estado !== 'abierto') {
+      // v2.172.1 · H02 · D242-2: esperando pagos o cerrado, sale quien no tiene transferencias propias sin resolver
+      // (como deudor o acreedor). Resuelta es «pagada» (confirmada con «Recibí», D242-1) o anulada por una baja.
+      // Salir no borra nada: su miembro pasa a `salio` y sus montos y transferencias quedan.
+      const pendientesMias = v.transferencias.filter((tr) => (tr.de_user === u || tr.a_user === u)
+        && tr.estado !== 'pagada' && vivoUser(v, tr.de_user) && vivoUser(v, tr.a_user)).length;
+      if (pendientesMias > 0) throw conflicto('viaje_member_transfers_pending', { pendientes: pendientesMias });
+      v.miembros.find((x) => x.user_id === u)!.estado = 'salio';
+      return { contract: CONTRATO, viaje_id: v.id, estado: 'salio' };
+    }
     const eligio = v.tickets.some((t) => t.selecciones.some((s) => s.user_id === u));
     const pago = v.tickets.some((t) => t.pagado_por === u);
     const presente = v.tickets.some((t) => t.forma === 'iguales' && t.personas.some((p) => p.user_id === u && p.presente));
@@ -1016,7 +1039,7 @@ export function mockResumenDeViaje(id: string) {
       contract: CONTRATO,
       resumen: {
         viaje_id: v.id, nombre: v.nombre, fecha_desde: v.fecha_desde, fecha_hasta: v.fecha_hasta,
-        personas: v.miembros.filter((m) => m.estado === 'activo').length,
+        personas: miembrosVisibles(v).length,
         consumiste_cents: b.consumido.get(u) ?? 0,
         pagaste_en_tickets_cents: b.pagado.get(u) ?? 0,
         te_transfirieron_cents: suma(pagadas.filter((tr) => tr.a_user === u)),

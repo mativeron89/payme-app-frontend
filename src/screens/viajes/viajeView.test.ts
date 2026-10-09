@@ -9,6 +9,7 @@ import {
   partirPlantilla,
   progresoDePagos,
   textoNoPuedeSalir,
+  textoTransferenciasPendientes,
   tramosDeTransferencias,
   vistaDePagos,
 } from './viajeView';
@@ -99,11 +100,11 @@ describe('1q · por qué no puedo salir', () => {
   it('selection cuenta los tickets por consumo donde ya me tocó algo', () => {
     const tickets = [...consumo(4), ticket({ id: 'cero', te_toca_cents: 0 }), ticket({ id: 'ig', forma: 'iguales', te_toca_cents: 5000 })];
     expect(textoNoPuedeSalir('selection', tickets, es)).toBe(
-      'Ya elegiste consumos en 4 tickets. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.');
+      'Ya elegiste consumos en 4 tickets. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.');
     expect(textoNoPuedeSalir('selection', consumo(1), es)).toBe(
-      'Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.');
+      'Ya elegiste consumos en 1 ticket. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.');
     expect(textoNoPuedeSalir('selection', [], es)).toBe(
-      'Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y marques tu transferencia como pagada.');
+      'Ya elegiste consumos en este viaje. Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas.');
   });
 
   it('paid_ticket y present_in_equal_split', () => {
@@ -112,6 +113,19 @@ describe('1q · por qué no puedo salir', () => {
     expect(textoNoPuedeSalir('present_in_equal_split', [], es)).toBe(
       'Estás entre los que estuvieron en un ticket en partes iguales. Podrás salir cuando se cierre el viaje y quede todo pagado.');
     expect(textoNoPuedeSalir('paid_ticket', [], en)).toMatch(/^You paid a ticket on this trip\./);
+  });
+
+  it('🔴 H02 · marcar «Ya pagué» solo no alcanza (D242-1): el texto pide las transferencias confirmadas', () => {
+    for (const tk of [[], consumo(1), consumo(3)]) {
+      expect(textoNoPuedeSalir('selection', tk, es)).not.toMatch(/marques|pagada/);
+    }
+  });
+
+  it('H02 · con el viaje en esperando pagos o cerrado: cuántas transferencias tuyas faltan confirmar', () => {
+    expect(textoTransferenciasPendientes(1, es)).toBe('Tienes 1 transferencia sin confirmar. Podrás salir cuando esté confirmada.');
+    expect(textoTransferenciasPendientes(2, es))
+      .toBe('Tienes 2 transferencias sin confirmar. Podrás salir cuando todas estén confirmadas.');
+    expect(textoTransferenciasPendientes(2, en)).toBe('You have 2 unconfirmed transfers. You can leave once they are all confirmed.');
   });
 });
 

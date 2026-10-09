@@ -336,6 +336,8 @@ test('1q · salir: con consumos no; sin consumos sí', async ({ page }) => {
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByText('Todavía no puedes salir de Cancún 2026', { exact: true })).toBeVisible();
+  // H02 · D242-1: marcar «Ya pagué» solo no alcanza.
+  await expect(page.getByText(/Podrás salir cuando se cierre el viaje y tus transferencias estén confirmadas\.$/)).toBeVisible();
 });
 
 test('1h → 1i · «Por lo que pidió cada uno» lleva a elegir lo propio del ticket recién cargado', async ({ page }) => {
@@ -358,8 +360,42 @@ test('1q · sin consumos se sale: la invitación aceptada y salir del viaje', as
   await ir(page, `/viaje/${MAZATLAN}`);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
-  await expect(page).toHaveURL(/\/viajes\/abiertos$/);
+  // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está.
+  await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: /Abiertos/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
   await expect(page.getByText('Mazatlán diciembre', { exact: true })).toHaveCount(0);
+});
+
+test('🔴 H02 · esperando pagos: «Salir del viaje» al pie; con transferencias mías sin confirmar, la hoja dice cuántas', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje/${MONTERREY}`);
+  await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await expect(page.getByText('Todavía no puedes salir de Monterrey fin de semana', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tienes 2 transferencias sin confirmar. Podrás salir cuando todas estén confirmadas.', { exact: true }))
+    .toBeVisible();
+  await page.getByRole('button', { name: 'Entendido', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje/${MONTERREY}$`));
+});
+
+test('🔴 H02 · con todo confirmado se sale de un viaje cerrado: Inicio › Viajes y ya no está en Cerrados', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje/${MONTERREY}`);
+  for (let i = 0; i < 2; i += 1) {
+    await page.getByRole('button', { name: 'Recibí', exact: true }).first().click();
+  }
+  await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${MONTERREY}$`));
+  await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await expect(page.getByRole('dialog').getByText('¿Salir de Monterrey fin de semana?', { exact: true })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await expect(page.getByText('Saliste de Monterrey fin de semana.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: /Cerrados/ }).click();
+  await expect(page.getByText('Oaxaca puente', { exact: true })).toBeVisible();
+  await expect(page.getByText('Monterrey fin de semana', { exact: true })).toHaveCount(0);
+  await ir(page, `/viaje-cerrado/${MONTERREY}`);
+  await expect(page.getByText('Este viaje ya no está disponible.', { exact: true })).toBeVisible();
 });
 
 test('1t · cada aviso del viaje lleva a su lugar', async ({ page }) => {

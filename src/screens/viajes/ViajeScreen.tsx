@@ -31,9 +31,10 @@ import {
   partirPlantilla,
   progresoDePagos,
   textoNoPuedeSalir,
+  textoTransferenciasPendientes,
   tramosDeTransferencias,
   vistaDePagos,
-  type MotivoSalida,
+  type PorQueNoPuedeSalir,
 } from './viajeView';
 import {
   iniciales,
@@ -41,6 +42,7 @@ import {
   parametroDeTicket,
   type T,
 } from './viajesView';
+import { pedirInicioEnViajes } from './inicioEnViajes';
 import './viajes.css';
 import './viaje.css';
 
@@ -155,7 +157,7 @@ export function useFotosDeMiembros(
 type Hoja =
   | { readonly tipo: 'cerrar'; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
   | { readonly tipo: 'salir' }
-  | { readonly tipo: 'no_puede_salir'; readonly motivo: MotivoSalida };
+  | { readonly tipo: 'no_puede_salir'; readonly razon: PorQueNoPuedeSalir };
 
 export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const { t } = useIdioma();
@@ -218,11 +220,15 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       await api.salirDeViaje(viajeId);
       setHoja(null);
       toast(t('Saliste de {0}.', nombre));
-      navigate('viajes', 'abiertos');
+      // H02 · a Inicio › Viajes: el viaje ya no está.
+      pedirInicioEnViajes();
+      navigate('home');
     } catch (err) {
       const e = errorDeViaje(err);
-      if (e.tipo === 'no_puede_salir') setHoja({ tipo: 'no_puede_salir', motivo: e.motivo });
-      else if (e.tipo === 'no_abierto') yaSeCerro();
+      if (e.tipo === 'no_puede_salir') setHoja({ tipo: 'no_puede_salir', razon: { tipo: 'motivo', motivo: e.motivo } });
+      else if (e.tipo === 'transferencias_pendientes') {
+        setHoja({ tipo: 'no_puede_salir', razon: { tipo: 'pendientes', pendientes: e.pendientes } });
+      } else if (e.tipo === 'no_abierto') yaSeCerro();
       else if (e.tipo === 'no_disponible') {
         setHoja(null);
         noDisponible();
@@ -309,7 +315,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       )}
       {viaje && hoja?.tipo === 'no_puede_salir' && (
         <HojaModal key="no_puede_salir" etiqueta={t('Todavía no puedes salir de {0}', nombre)} inicial={inicial} onCerrar={cerrarHoja}>
-          <HojaNoPuedeSalirVista viaje={viaje} motivo={hoja.motivo} inicial={inicial} onEntendido={cerrarHoja} />
+          <HojaNoPuedeSalirVista viaje={viaje} razon={hoja.razon} inicial={inicial} onEntendido={cerrarHoja} />
         </HojaModal>
       )}
     </div>
@@ -317,7 +323,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 }
 
 /** La hoja inferior: por portal, con foco atrapado y Escape (`useHojaModal`); tocar afuera la cierra. */
-function HojaModal({
+export function HojaModal({
   etiqueta,
   inicial,
   onCerrar,
@@ -597,7 +603,7 @@ export function DesplegableMiembros({ miembros, abiertoInicial = false, fotoDe }
   );
 }
 
-function EsperandoPagos({ viaje: v, marcando, onMarcar }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   const vista = vistaDePagos(v.transferencias);
   const mias = v.transferencias.filter((tr) => tr.mia === 'debo');
@@ -641,6 +647,7 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar }: ViajeVistaProps & { vi
         )}
         <p className="vjv-pie-texto">{t('Cuando todas estén pagadas, el viaje pasa a Cerrados.')}</p>
         <NotaNoMueveDinero />
+        <BotonSalir onSalir={onSalir} />
       </>
     );
   }
@@ -689,7 +696,22 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar }: ViajeVistaProps & { vi
         </>
       )}
       <NotaNoMueveDinero />
+      <BotonSalir onSalir={onSalir} />
     </>
+  );
+}
+
+/**
+ * H02 · App Backend 2.172.1 · D242-2: también con el viaje en esperando pagos se
+ * puede pedir salir; el dueño deja si las transferencias propias están
+ * confirmadas y, si no, dice cuántas faltan (la hoja de 1q).
+ */
+export function BotonSalir({ onSalir }: { onSalir: () => void }) {
+  const { t } = useIdioma();
+  return (
+    <button type="button" className="vjv-salir" onClick={onSalir}>
+      {t('Salir del viaje')}
+    </button>
   );
 }
 
@@ -900,19 +922,22 @@ export function HojaSalirVista({
   );
 }
 
-/** 1q · el dueño no deja salir (409 con su motivo). */
+/** 1q y H02 · el dueño no deja salir (409 con su motivo, o con cuántas transferencias faltan confirmar). */
 export function HojaNoPuedeSalirVista({
   viaje,
-  motivo,
+  razon,
   inicial,
   onEntendido,
 }: {
-  viaje: DetalleViaje;
-  motivo: MotivoSalida;
+  viaje: { readonly nombre: string; readonly tickets?: DetalleViaje['tickets'] };
+  razon: PorQueNoPuedeSalir;
   inicial?: RefObject<HTMLButtonElement>;
   onEntendido: () => void;
 }) {
   const { t } = useIdioma();
+  const texto = razon.tipo === 'pendientes'
+    ? textoTransferenciasPendientes(razon.pendientes, t)
+    : textoNoPuedeSalir(razon.motivo, viaje.tickets ?? [], t);
   return (
     <div className="vjv-hoja">
       <span className="vjv-hoja-asa" aria-hidden="true" />
@@ -920,7 +945,7 @@ export function HojaNoPuedeSalirVista({
         <Icon name="arrow-left" size={22} />
       </span>
       <h2 className="vjv-hoja-titulo">{t('Todavía no puedes salir de {0}', viaje.nombre)}</h2>
-      <p className="vjv-hoja-texto">{textoNoPuedeSalir(motivo, viaje.tickets, t)}</p>
+      <p className="vjv-hoja-texto">{texto}</p>
       <div className="vjv-hoja-botones">
         <button ref={inicial} type="button" className="btn btn-navy" onClick={onEntendido}>
           {t('Entendido')}

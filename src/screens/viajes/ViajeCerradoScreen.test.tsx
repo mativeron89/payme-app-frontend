@@ -12,7 +12,7 @@ import { VistaDelViajeCerrado, destinoDelError, type CargaDeResumen } from './Vi
 
 const nada = () => undefined;
 
-function html(carga: CargaDeResumen, abiertos: string[] = [], idioma: Idioma = 'es'): string {
+function html(carga: CargaDeResumen, abiertos: string[] = [], idioma: Idioma = 'es', onSalir?: () => void): string {
   const t = (s: string, ...a: unknown[]) => traducir(s, idioma, ...a);
   return renderToStaticMarkup(
     <VistaDelViajeCerrado
@@ -23,6 +23,7 @@ function html(carga: CargaDeResumen, abiertos: string[] = [], idioma: Idioma = '
       onAlternar={nada}
       onReintentar={nada}
       onVerViajes={nada}
+      onSalir={onSalir}
     />,
   );
 }
@@ -164,5 +165,17 @@ describe('AF-VIAJES · 1s · cargando, 404 y error', () => {
     const t = texto(html({ estado: 'error' }));
     expect(t).toContain('No pudimos cargar el viaje');
     expect(t).toContain('Reintentar');
+  });
+});
+
+describe('H02 · salir de un viaje cerrado', () => {
+  it('🔴 «Salir del viaje» al pie del resumen', () => {
+    const leido = texto(html({ estado: 'listo', resumen: OAXACA }, [], 'es', nada));
+    expect(leido).toMatch(/Salir del viaje$/);
+  });
+
+  it('sin el resumen no hay de qué salir', () => {
+    expect(texto(html({ estado: 'cargando' }, [], 'es', nada))).not.toContain('Salir del viaje');
+    expect(texto(html({ estado: 'no_disponible' }, [], 'es', nada))).not.toContain('Salir del viaje');
   });
 });

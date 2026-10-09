@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { extractApiError } from '../../api/errors';
 import { errorDeViaje, type ResumenDeViaje } from '../../api/viajes';
@@ -6,14 +6,19 @@ import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
+import { useToast } from '../../components/ui';
 import { useIdioma, type Idioma } from '../../i18n/idioma';
 import { goBack, navigate, replaceRoute } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { etiquetaPorcion } from '../queConsumisteView';
 import { anchoDeBarra, lineaDelViaje } from './listasView';
+import { pedirInicioEnViajes } from './inicioEnViajes';
+import { HojaModal, HojaNoPuedeSalirVista, HojaSalirVista } from './ViajeScreen';
+import type { PorQueNoPuedeSalir } from './viajeView';
 import { etiquetaTipoLugar, fechaCortaViaje, iconoTipoLugar, nombreDelLugar, type T } from './viajesView';
 import './viajes.css';
+import './viaje.css';
 import './listas.css';
 
 /**
@@ -26,7 +31,12 @@ import './listas.css';
  *
  * Si el viaje todavía no está cerrado (409 `viaje_not_closed`), la ruta pasa a
  * la del viaje abierto, que es donde vive. El 404 es uno solo (n325).
+ *
+ * H02 · App Backend 2.172.1 · D242-2: al pie, «Salir del viaje». El dueño deja
+ * salir con las transferencias propias confirmadas; salir no borra nada, y el
+ * viaje deja de aparecer para quien sale (vuelve a Inicio › Viajes).
  */
+type HojaDeSalida = { readonly tipo: 'salir' } | { readonly tipo: 'no_puede'; readonly razon: PorQueNoPuedeSalir };
 
 export type CargaDeResumen =
   | { readonly estado: 'cargando' }
@@ -48,6 +58,34 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   const [carga, setCarga] = useState<CargaDeResumen>({ estado: 'cargando' });
   const [intento, setIntento] = useState(0);
   const [abiertos, setAbiertos] = useState<ReadonlySet<string>>(() => new Set());
+  const toast = useToast();
+  const [hoja, setHoja] = useState<HojaDeSalida | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const inicial = useRef<HTMLButtonElement | null>(null);
+  const nombre = carga.estado === 'listo' ? carga.resumen.nombre : '';
+  const cerrarHoja = () => setHoja(null);
+
+  async function confirmarSalida() {
+    if (enviando) return;
+    setEnviando(true);
+    try {
+      await api.salirDeViaje(viajeId);
+      setHoja(null);
+      toast(t('Saliste de {0}.', nombre));
+      pedirInicioEnViajes();
+      navigate('home');
+    } catch (err) {
+      const e = errorDeViaje(err);
+      if (e.tipo === 'transferencias_pendientes') setHoja({ tipo: 'no_puede', razon: { tipo: 'pendientes', pendientes: e.pendientes } });
+      else if (e.tipo === 'no_puede_salir') setHoja({ tipo: 'no_puede', razon: { tipo: 'motivo', motivo: e.motivo } });
+      else if (e.tipo === 'no_disponible') {
+        setHoja(null);
+        setCarga({ estado: 'no_disponible' });
+      } else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -83,8 +121,25 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         onAlternar={alternar}
         onReintentar={() => setIntento((n) => n + 1)}
         onVerViajes={() => navigate('viajes', 'abiertos')}
+        onSalir={() => setHoja({ tipo: 'salir' })}
       />
       <AppBottomBar active={null} />
+      {carga.estado === 'listo' && hoja?.tipo === 'salir' && (
+        <HojaModal key="salir" etiqueta={t('¿Salir de {0}?', nombre)} inicial={inicial} onCerrar={cerrarHoja}>
+          <HojaSalirVista
+            nombre={nombre}
+            enviando={enviando}
+            inicial={inicial}
+            onConfirmar={() => void confirmarSalida()}
+            onCancelar={cerrarHoja}
+          />
+        </HojaModal>
+      )}
+      {carga.estado === 'listo' && hoja?.tipo === 'no_puede' && (
+        <HojaModal key="no_puede_salir" etiqueta={t('Todavía no puedes salir de {0}', nombre)} inicial={inicial} onCerrar={cerrarHoja}>
+          <HojaNoPuedeSalirVista viaje={{ nombre }} razon={hoja.razon} inicial={inicial} onEntendido={cerrarHoja} />
+        </HojaModal>
+      )}
     </div>
   );
 }
@@ -98,10 +153,14 @@ export interface VistaDelViajeCerradoProps {
   readonly onAlternar: (ticketId: string) => void;
   readonly onReintentar: () => void;
   readonly onVerViajes: () => void;
+  /** H02 · «Salir del viaje», al pie del resumen. */
+  readonly onSalir?: () => void;
 }
 
 /** La tarjeta de título y el contenido: pura, sin red ni efectos. */
-export function VistaDelViajeCerrado({ carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes }: VistaDelViajeCerradoProps) {
+export function VistaDelViajeCerrado({
+  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir,
+}: VistaDelViajeCerradoProps) {
   if (carga.estado !== 'listo') {
     return (
       <>
@@ -220,6 +279,11 @@ export function VistaDelViajeCerrado({ carga, t, idioma, abiertos, onAlternar, o
               ))}
             </ul>
           </>
+        )}
+        {onSalir && (
+          <button type="button" className="vjv-salir" onClick={onSalir}>
+            {t('Salir del viaje')}
+          </button>
         )}
       </div>
     </>

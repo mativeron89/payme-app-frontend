@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.231.1 — Viajes: salir después de pagar (H02) y la foto retirada que no vuelve (H04) (2026-10-09)
+
+Orden AF-VIAJES-SALIR-Y-FOTO-TARDIA-20261009 (ce427d4f…). Hallazgos H02 y H04 de la auditoría Codex (a65ca63a…);
+D242-2 y D242-1. Dueño: App Backend 2.172.1 servido (`e008080`). H01 y H03 no se tocan: esperan a Mati (D247). Lo
+visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **El espejo** a 2.172.1: inventario del dueño en `e008080`, que declara `796ea15`; paridad 133/133. Cambian
+  `contract/viajes-v1.json` (65b374de…, el de la orden) y `services/viajes.js`.
+- **H02 · salir después de pagar:**
+  - «Salir del viaje» también con el viaje en «esperando pagos» (al pie de la pantalla del viaje) y en Cerrados (al
+    pie del resumen), con la misma hoja de confirmación.
+  - Si el dueño contesta `viaje_member_transfers_pending`, la hoja dice cuántas faltan: «Tienes N transferencias sin
+    confirmar. Podrás salir cuando todas estén confirmadas.».
+  - Al salir: «Saliste de {viaje}.» y Inicio abre en la pestaña Viajes, donde el viaje ya no está.
+  - El texto de 1q pasa de «…y marques tu transferencia como pagada.» a «…y tus transferencias estén confirmadas.»:
+    marcar «Ya pagué» solo no alcanza (D242-1).
+  - El mock replica la regla del dueño y sus miembros visibles: quien salió después de pagar sigue para los demás.
+- **H04 · la foto retirada que volvía:**
+  - Cada clave del caché de fotos lleva su generación. `retirar` y `podar` la suben e invalidan el pedido en curso:
+    un 200 tardío ya no guarda la foto, y sólo una carga posterior puede hacerlo.
+  - `retirar` invalida aunque no haya foto guardada. Los consumidores de la mesa y del viaje la llaman siempre con
+    `has_avatar: false` (antes sólo si había foto, y la carrera seguía).
+
 ## 0.231.0 — Viajes: la pantalla del viaje más simple, Balance con Consumos y Miembros, y la carga manual (2026-10-09)
 
 Orden AF-VIAJES-PANTALLA-Y-GASTO-MANUAL-20261009 (927f67e2…); decisiones 245 (f62b4b06…) y 244 (622656ce…) de
