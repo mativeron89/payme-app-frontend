@@ -268,3 +268,80 @@ describe('E173-3 · sólo memoria (decisión 175)', () => {
     }
   });
 });
+
+describe('H04 · una respuesta tardía no vuelve a guardar una foto retirada', () => {
+  it('🔴 retirar con un pedido en curso: el 200 tardío no guarda nada', async () => {
+    const { cache, creadas } = armar();
+    const clave = claveAmigo('sofi');
+    const pedido = diferido<Blob>();
+    const enCurso = cache.cargar(ANA, clave, () => pedido.promesa);
+    cache.retirar(ANA, clave);
+    pedido.resolver(foto('A'));
+    expect(await enCurso).toBe('descartada');
+    expect(cache.ver(ANA, clave)).toBeNull();
+    expect(creadas).toEqual([]);
+  });
+
+  it('🔴 retirar durante la revalidación de una guardada: se va, y el 200 tardío no la trae de vuelta', async () => {
+    const { cache, revocadas } = armar();
+    const clave = claveAmigo('sofi');
+    await cache.cargar(ANA, clave, async () => foto('A'));
+    const pedido = diferido<Blob>();
+    const enCurso = cache.cargar(ANA, clave, () => pedido.promesa);
+    cache.retirar(ANA, clave);
+    expect(cache.ver(ANA, clave)).toBeNull();
+    pedido.resolver(foto('B'));
+    expect(await enCurso).toBe('descartada');
+    expect(cache.ver(ANA, clave)).toBeNull();
+    expect(revocadas).toEqual(['blob:foto-1']);
+  });
+
+  it('🔴 podar con un pedido en curso de una clave que sale: el 200 tardío no guarda; la que queda, sí', async () => {
+    const { cache } = armar();
+    const sale = diferido<Blob>();
+    const queda = diferido<Blob>();
+    const a = cache.cargar(ANA, claveAmigo('juan'), () => sale.promesa);
+    const b = cache.cargar(ANA, claveAmigo('sofi'), () => queda.promesa);
+    cache.podar(ANA, PREFIJO_AMIGO, new Set(['sofi']));
+    sale.resolver(foto('J'));
+    queda.resolver(foto('S'));
+    expect(await a).toBe('descartada');
+    expect(await b).toBe('guardada');
+    expect(cache.tiene(ANA, claveAmigo('juan'))).toBe(false);
+    expect(cache.tiene(ANA, claveAmigo('sofi'))).toBe(true);
+  });
+
+  it('🔴 podarFotosDeAmigos con has_avatar false y un pedido en curso: el 200 tardío no guarda', async () => {
+    const { cache } = armar();
+    const pedido = diferido<Blob>();
+    const enCurso = cache.cargar(ANA, claveAmigo('maria'), () => pedido.promesa);
+    podarFotosDeAmigos(ANA, [{ id: 'maria', has_avatar: false }], cache);
+    pedido.resolver(foto('M'));
+    expect(await enCurso).toBe('descartada');
+    expect(cache.tiene(ANA, claveAmigo('maria'))).toBe(false);
+  });
+
+  it('una carga POSTERIOR a la retirada sí guarda, con su propio pedido (no comparte el invalidado)', async () => {
+    const { cache } = armar();
+    const clave = claveAmigo('sofi');
+    let pedidos = 0;
+    const viejo = diferido<Blob>();
+    const a = cache.cargar(ANA, clave, () => { pedidos += 1; return viejo.promesa; });
+    cache.retirar(ANA, clave);
+    const b = cache.cargar(ANA, clave, async () => { pedidos += 1; return foto('nueva'); });
+    expect(await b).toBe('guardada');
+    viejo.resolver(foto('vieja'));
+    expect(await a).toBe('descartada');
+    expect(pedidos).toBe(2);
+    expect(cache.ver(ANA, clave)).toBe('blob:foto-1');
+  });
+
+  it('retirar dice si había una foto guardada (para avisar a la pantalla sólo entonces)', async () => {
+    const { cache } = armar();
+    const clave = claveAmigo('sofi');
+    expect(cache.retirar(ANA, clave)).toBe(false);
+    await cache.cargar(ANA, clave, async () => foto('A'));
+    expect(cache.retirar(BETO, clave)).toBe(false);
+    expect(cache.retirar(ANA, clave)).toBe(true);
+  });
+});

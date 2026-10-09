@@ -71,6 +71,12 @@ export class FotosEnMemoria {
   private dueno: string | null = null;
   /** Sube al vaciar: una respuesta de antes ya no puede guardarse. */
   private generacion = 0;
+  /**
+   * H04 · la generación de cada clave: sube al retirarla o podarla, así un
+   * pedido que ya estaba viajando no la vuelve a guardar. Sólo una carga
+   * posterior a la invalidación puede guardar.
+   */
+  private readonly generacionDeClave = new Map<string, number>();
   /** El orden de inserción es el de uso: la primera es la menos usada. */
   private readonly entradas = new Map<string, Entrada>();
   private readonly enCurso = new Map<string, Promise<ResultadoFoto>>();
@@ -114,12 +120,13 @@ export class FotosEnMemoria {
     const previo = this.enCurso.get(clave);
     if (previo) return previo;
     const generacion = this.generacion;
+    const deClave = this.generacionDeClave.get(clave) ?? 0;
     const pedido: Promise<ResultadoFoto> = Promise.resolve()
       .then(pedir)
       .then(
-        (blob) => this.alLlegar(clave, blob, dueno, generacion),
+        (blob) => this.alLlegar(clave, blob, dueno, generacion, deClave),
         (error: unknown): ResultadoFoto => {
-          if (!this.sigue(dueno, generacion)) return 'descartada';
+          if (!this.sigue(dueno, generacion, clave, deClave)) return 'descartada';
           if (extractApiError(error).status !== 404) return 'conservada';
           this.quitar(clave);
           return 'retirada';
@@ -132,10 +139,15 @@ export class FotosEnMemoria {
     return pedido;
   }
 
-  /** Saca una foto (p. ej., `has_avatar: false`). Sin efecto con otra sesión. */
-  retirar(sesion: IdentidadDeSesion, clave: string): void {
-    if (this.dueno !== duenoDeSesion(sesion)) return;
-    this.quitar(clave);
+  /**
+   * Saca una foto (p. ej., `has_avatar: false`) e invalida el pedido en curso de
+   * esa clave (H04): aunque no haya foto guardada, un 200 tardío ya no la guarda.
+   * Devuelve si había una guardada. Sin efecto con otra sesión.
+   */
+  retirar(sesion: IdentidadDeSesion, clave: string): boolean {
+    if (this.dueno !== duenoDeSesion(sesion)) return false;
+    this.invalidar(clave);
+    return this.quitar(clave);
   }
 
   /**
@@ -144,8 +156,12 @@ export class FotosEnMemoria {
    */
   podar(sesion: IdentidadDeSesion, prefijo: string, conservar: ReadonlySet<string>): void {
     if (this.dueno !== duenoDeSesion(sesion)) return;
-    for (const clave of [...this.entradas.keys()]) {
-      if (clave.startsWith(prefijo) && !conservar.has(clave.slice(prefijo.length))) this.quitar(clave);
+    // H04 · también las que todavía están viajando: si no, un 200 tardío las guardaría.
+    for (const clave of new Set([...this.entradas.keys(), ...this.enCurso.keys()])) {
+      if (clave.startsWith(prefijo) && !conservar.has(clave.slice(prefijo.length))) {
+        this.invalidar(clave);
+        this.quitar(clave);
+      }
     }
   }
 
@@ -153,6 +169,7 @@ export class FotosEnMemoria {
   vaciar(): void {
     this.generacion += 1;
     this.enCurso.clear();
+    this.generacionDeClave.clear();
     const habia = this.entradas.size > 0;
     for (const { url } of this.entradas.values()) this.deps.revocarUrl(url);
     this.entradas.clear();
@@ -181,22 +198,31 @@ export class FotosEnMemoria {
     return true;
   }
 
-  private sigue(dueno: string, generacion: number): boolean {
+  private sigue(dueno: string, generacion: number, clave: string, deClave: number): boolean {
     return this.generacion === generacion
+      && (this.generacionDeClave.get(clave) ?? 0) === deClave
       && this.dueno === dueno
       && this.deps.duenoVigente() === dueno;
   }
 
-  private async alLlegar(clave: string, blob: Blob, dueno: string, generacion: number): Promise<ResultadoFoto> {
+  /** H04 · ningún pedido anterior de esta clave puede guardar; el próximo `cargar` pide de nuevo. */
+  private invalidar(clave: string): void {
+    this.generacionDeClave.set(clave, (this.generacionDeClave.get(clave) ?? 0) + 1);
+    this.enCurso.delete(clave);
+  }
+
+  private async alLlegar(
+    clave: string, blob: Blob, dueno: string, generacion: number, deClave: number,
+  ): Promise<ResultadoFoto> {
     // Si la sesión cambió, `vaciar` ya sacó la previa: no hay con qué comparar.
     const previa = this.entradas.get(clave);
     if (previa && await mismosBytes(previa.blob, blob)) {
-      if (!this.sigue(dueno, generacion) || this.entradas.get(clave) !== previa) return 'descartada';
+      if (!this.sigue(dueno, generacion, clave, deClave) || this.entradas.get(clave) !== previa) return 'descartada';
       this.entradas.delete(clave);
       this.entradas.set(clave, previa);
       return 'igual';
     }
-    if (!this.sigue(dueno, generacion)) return 'descartada';
+    if (!this.sigue(dueno, generacion, clave, deClave)) return 'descartada';
     const url = this.deps.crearUrl(blob);
     const reemplazada = this.entradas.get(clave);
     this.entradas.delete(clave);
@@ -211,12 +237,13 @@ export class FotosEnMemoria {
     return 'guardada';
   }
 
-  private quitar(clave: string): void {
+  private quitar(clave: string): boolean {
     const entrada = this.entradas.get(clave);
-    if (!entrada) return;
+    if (!entrada) return false;
     this.entradas.delete(clave);
     this.deps.revocarUrl(entrada.url);
     this.avisar();
+    return true;
   }
 
   private avisar(): void {

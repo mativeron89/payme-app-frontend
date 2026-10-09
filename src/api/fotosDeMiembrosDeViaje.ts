@@ -32,10 +32,8 @@ export class FotosDeMiembrosDeViaje {
     for (const m of miembros) {
       const clave = claveMiembroDeViaje(this.viajeId, m.id);
       if (!m.has_avatar) {
-        if (this.cache.tiene(sesion, clave)) {
-          this.cache.retirar(sesion, clave);
-          this.alCambiar();
-        }
+        // H04 · siempre: también invalida un pedido en curso, aunque todavía no haya foto guardada.
+        if (this.cache.retirar(sesion, clave)) this.alCambiar();
         continue;
       }
       if (this.pedidos.has(m.id)) continue;

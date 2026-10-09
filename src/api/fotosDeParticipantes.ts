@@ -41,10 +41,8 @@ export class FotosDeParticipantes {
       if (id === null) continue;
       const clave = claveParticipante(this.mesaCode, id);
       if (!p.hasAvatar) {
-        if (this.cache.tiene(sesion, clave)) {
-          this.cache.retirar(sesion, clave);
-          this.alCambiar();
-        }
+        // H04 · siempre: también invalida un pedido en curso, aunque todavía no haya foto guardada.
+        if (this.cache.retirar(sesion, clave)) this.alCambiar();
         continue;
       }
       if (this.pedidos.has(id)) continue;

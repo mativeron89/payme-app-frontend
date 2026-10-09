@@ -92,4 +92,18 @@ describe('D245 · FotosDeMiembrosDeViaje', () => {
     expect(revocadas).toEqual(creadas);
     expect(fotos.url('m-1')).toBeNull();
   });
+
+  it('🔴 H04 · has_avatar false llega con el pedido en curso: el 200 tardío no la guarda', async () => {
+    let soltar: (b: Blob) => void = () => undefined;
+    const pedir = vi.fn(() => new Promise<Blob>((r) => { soltar = r; }));
+    const { fotos, alCambiar } = armar(pedir);
+    fotos.cargar([miembro('m-1', true)]);
+    await esperar();
+    expect(pedir).toHaveBeenCalledTimes(1);
+    fotos.cargar([miembro('m-1', false)]);
+    soltar(new Blob(['x'], { type: 'image/jpeg' }));
+    await esperar();
+    expect(fotos.url('m-1')).toBeNull();
+    expect(alCambiar).not.toHaveBeenCalled();
+  });
 });
