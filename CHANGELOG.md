@@ -33,6 +33,10 @@ visible se cierra con la prueba de Mati en el iPhone (D63).
     un 200 tardío ya no guarda la foto, y sólo una carga posterior puede hacerlo.
   - `retirar` invalida aunque no haya foto guardada. Los consumidores de la mesa y del viaje la llaman siempre con
     `has_avatar: false` (antes sólo si había foto, y la carrera seguía).
+- **D249 · «Nueva» con una cámara** (Adenda 1, 2243d7fe…): el círculo naranja de la barra lleva la cámara de línea
+  del set propio en lugar del «+». Mati: «el boton de nueva, que te manda a el scan de la cámara cambiá el símbolo de +
+  por una cámara». El rótulo, lo que hace (lleva al escaneo) y el nombre accesible quedan igual; las pantallas que
+  traen su propio círculo («Continuar», «Capturar») no cambian.
 
 ## 0.231.0 — Viajes: la pantalla del viaje más simple, Balance con Consumos y Miembros, y la carga manual (2026-10-09)
 

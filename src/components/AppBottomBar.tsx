@@ -12,7 +12,7 @@ export { textoDeLaBurbuja };
 /**
  * Barra inferior de CINCO posiciones — SISTEMA_DISENO.md §5 bis · C.
  *
- *     Inicio · Mesas · [ + ] Nueva · Amigos · Más
+ *     Inicio · Mesas · [ cámara ] Nueva · Amigos · Más
  *
  * Fijas para toda la app: ninguna pantalla inventa su propia navegación.
  *
@@ -27,7 +27,7 @@ export { textoDeLaBurbuja };
  * `.cta-float`, con call sites en Mesas y en los dos flujos de mesa.
  *
  * La posición central es CONFIGURABLE, y eso viene del SPEC, no de comodidad:
- * en Inicio es `+` "Nueva" (SPEC_APP.md §1.1), en Ticket/División/Mis ítems es
+ * en Inicio es "Nueva" (SPEC_APP.md §1.1; D249: con la cámara, no el `+`), en Ticket/División/Mis ítems es
  * `→` "Continuar" (§1.3–§1.5) y en Escanear es la cámara y dice "Capturar"
  * (§1.6). Textual del spec: *"El texto del nav item no es fijo en toda la app;
  * lo fijo es el componente y su posición."*
@@ -111,7 +111,8 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
   const pendientes = useSolicitudesPendientes();
   const centro = center ?? {
     label: t('Nueva'),
-    icon: 'plus' as IconName,
+    // D249 · Mati: «cambiá el símbolo de + por una cámara». Lleva al escaneo: la cámara lo dice.
+    icon: 'camera' as IconName,
     // D212 · «Nueva» abre la cámara nativa EN ESTE TOQUE (iOS sólo la abre
     // dentro del gesto) y la app pasa a «Escanea el ticket» debajo, que recibe
     // la foto. Si la persona cancela, ahí tiene «Sacar foto» y la galería.
