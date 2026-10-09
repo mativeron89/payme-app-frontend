@@ -10,7 +10,7 @@
   "capacidad": {
     "ruta": "GET /api/config",
     "path": "features.viajes",
-    "valor": { "supported": true, "enabled": false },
+    "valor": { "supported": true, "enabled": true },
     "enabled": "Constante del servicio (`services/viajes.js` HABILITADO). En false (V1: hasta que Mati apruebe el texto del Aviso) las rutas de /api/viajes no existen (el 404 de siempre, también sin sesión) y el OCR ignora `trip_version`. Encenderla es un commit aparte.",
     "cliente_viejo": "Bloque nuevo de primer nivel en `features`: un cliente que no lo conoce no ve ningún cambio. La clave no contiene apple_pay, google_pay ni gpay."
   },
@@ -50,6 +50,30 @@
     "marcas": "«Ya pagué» (quien debe): pendiente → marcada. «Deshacer»: marcada → pendiente. «Recibí» (quien recibe): pendiente o marcada → pagada. «No me llegó» (quien recibe): marcada → pendiente, con aviso a quien pagó (D242-1).",
     "anulada_por_baja": "Una transferencia con una cuenta dada de baja: no se marca, no suma a «faltan» y no frena el paso a Cerrados (V5).",
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
+  },
+  "negociaciones": {
+    "viaje_version_2": {
+      "since": "2.172.0",
+      "decision": "245 (la pantalla del viaje y la de Balance)",
+      "parametro": "viaje_version=2",
+      "regla": "La cadena exacta, en GET /api/viajes/:id, POST /api/viajes, POST /:id/miembros, POST /:id/aceptar y POST /:id/cerrar. Sin el parámetro, con otro valor o repetido, `viaje` sale con las claves de siempre, byte por byte: el front servido decodifica claves exactas.",
+      "miembro": ["id", "first_name", "last_name", "username", "eliminada", "es_yo", "balance_cents", "falta_elegir", "has_avatar", "pagado_cents"],
+      "ticket": ["id", "lugar", "tipo_lugar", "fecha_ticket", "hora_ticket", "cargado_en", "forma", "pagado_por", "pagaste_tu", "te_toca_cents", "falta_que_elija", "sin_repartir_cents", "monto_cents", "origen"],
+      "has_avatar": "La regla n164 de las personas de una mesa: la cuenta no está eliminada, tiene foto, la identidad de perfil está encendida y es mayor de edad conocida. Un menor va sin foto. La foto sale por GET /api/viajes/:id/miembros/:mid/avatar.",
+      "pagado_cents": "Lo que pagó de su bolsillo: la suma de los tickets y gastos a mano que cargó (D245, «Lo que pagó»). En un viaje cerrado, null para los demás, como el balance.",
+      "origen": "escaneo | manual. «Consumos» es la lista `tickets`, el más nuevo arriba; nunca la selección de nadie."
+    }
+  },
+  "gasto_manual": {
+    "since": "2.172.0",
+    "decision": "244",
+    "regla": "Descripción, monto y entre quiénes se reparte. Quien lo carga pagó. Se reparte en partes iguales entre las personas elegidas, con el residuo a las primeras en el orden de los miembros.",
+    "como_se_guarda": "Como un ticket «En partes iguales» de tipo «otro»: la descripción es el lugar y el único renglón, sin fecha (vale `cargado_en`), y las personas del ticket son los miembros activos con `presente` sólo en las elegidas. El balance, el cierre, las transferencias, Cerrados y PUT /presentes funcionan igual.",
+    "origen": "Sin migración: el ticket guarda un id propio `m~` + 20 caracteres al azar donde un ticket escaneado guarda el id de su recibo. Nunca coincide con un recibo (un recibo es base64url de 22 caracteres y `~` no es base64url) y no lo trata como recibo ninguna lectura. El origen manual sale de ese prefijo; la API nunca publica ese id.",
+    "monto_maximo_cents": 100000000,
+    "duplicados": "La regla anti-duplicado del escaneo no aplica; la idempotencia es por `idempotency_key`.",
+    "en_tickets": "En `tickets[]` de GET /api/viajes/:id llega como cualquier ticket: `lugar` = la descripción, `tipo_lugar` = «otro», `forma` = «iguales», `fecha_ticket` y `hora_ticket` en null (la fecha es `cargado_en`), `pagado_por` = quien lo cargó. Con `viaje_version=2` suma `monto_cents` (el total) y `origen` = «manual». Sin el parámetro, sus claves son las de siempre.",
+    "abre_como_ticket": "Sí: GET /api/viajes/:id/tickets/:tid lo abre como un ticket «En partes iguales», con un renglón (la descripción y el monto), `personas` con `presente` en las elegidas, `monto_cents`, `te_toca_cents`, `puedo_elegir` = false y `puedo_marcar_presentes` = true sólo para quien lo cargó (PUT /:id/tickets/:tid/presentes cambia entre quiénes se reparte). La respuesta de POST /:id/gastos es esa misma forma."
   },
   "estados_del_viaje": ["abierto", "esperando_pagos", "cerrado"],
   "tipos_de_lugar": ["restaurante", "bar", "cafe", "super", "otro"],
@@ -177,6 +201,28 @@
         "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid"] }
       }
     },
+    "POST /api/viajes/:id/gastos": {
+      "request": {
+        "descripcion": "string 1..120",
+        "monto_cents": "entero 1..100000000",
+        "presentes": "1..20 ids de miembro activo, sin repetir; quien carga puede no estar",
+        "idempotency_key": "string 8..100"
+      },
+      "respuestas": {
+        "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null, "ticket": "la forma de GET /:id/tickets/:tid" },
+        "200": { "cuando": "el reintento del mismo pedido" },
+        "400": { "error": "validation_error" },
+        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
+        "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_tickets_limit"] },
+        "422": { "error": "viaje_ticket_persona_unknown", "claves": ["error", "miembro_id"] }
+      }
+    },
+    "GET /api/viajes/:id/miembros/:mid/avatar": {
+      "respuestas": {
+        "200": { "cuerpo": "los bytes de la foto, con su Content-Type", "cabeceras": { "Cache-Control": "private, no-store" } },
+        "404": { "cuerpo": { "error": "avatar_not_found" }, "cuando": "toda negativa, igual: el viaje no existe, no sos miembro activo, el miembro no es activo de ese viaje, sin foto, menor o sin fecha (n164), cuenta eliminada" }
+      }
+    },
     "GET /api/viajes/:id/tickets/:tid": {
       "respuestas": {
         "200": {
@@ -257,7 +303,7 @@
     "tipos": {
       "viaje_invitation_received": "«{Nombre} te invitó al viaje {viaje}.»",
       "viaje_invitation_rejected": "«{Nombre} rechazó tu invitación al viaje {viaje}.»",
-      "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id.",
+      "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.»",
       "viaje_closed": "«Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»",
       "viaje_transfer_marked": "«{Nombre} marcó que te pagó {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
       "viaje_transfer_not_received": "«{Nombre} dice que no le llegó tu pago de {monto} en {viaje}.» payload: viaje_id, transferencia_id.",

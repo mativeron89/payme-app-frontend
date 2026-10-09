@@ -29,10 +29,10 @@
  *   · La API nunca publica el id interno de una cuenta: cada miembro tiene un id propio del viaje.
  *
  * ─── La capacidad (V1) ─────────────────────────────────────────────────────────────────────────────────────────
- *   `features.viajes.enabled` es la constante HABILITADO = false hasta que Mati apruebe el texto del Aviso (el 3.0.0
- *   servido no nombra viajes, @usuario ni lo que uno le debe a otro). Es la única fuente: con ella en false, las
- *   rutas de /api/viajes no existen (el 404 de siempre) y el OCR ignora `trip_version`. Encenderla es un commit de
- *   una línea. Los tests la encienden con el seam.
+ *   `features.viajes.enabled` es la constante HABILITADO. Nació en false (V1: el Aviso 3.0.0 servido no nombra viajes,
+ *   @usuario ni lo que uno le debe a otro) y desde v2.171.2 está en true por la decisión 243 de Mati, «Encender ya,
+ *   riesgo aceptado», hasta el Aviso 3.1. Es la única fuente: con ella en false, las rutas de /api/viajes no existen
+ *   (el 404 de siempre) y el OCR ignora `trip_version`. Los tests prueban el apagado con el seam.
  *
  * ─── El ticket duplicado (V2) ──────────────────────────────────────────────────────────────────────────────────
  *   Quien carga primero un ticket es quien lo pagó. Un segundo escaneo del mismo ticket devuelve el ya cargado, con
@@ -62,15 +62,30 @@
  *   recibo, por su id) → las cuentas que se escriben o reciben un aviso (`FOR SHARE`, por id) → las hijas. Todo el
  *   que escribe en un viaje toma su lock y vuelve a mirar el estado bajo el lock: «cerrar» y «elegir» se ordenan.
  *
+ * ─── v2.172.0 · el gasto a mano (D244) y la pantalla del viaje (D245) ─────────────────────────────────────────────
+ *   · `POST /:id/gastos`: descripción, monto y entre quiénes se reparte. Quien lo carga pagó. Se guarda como un ticket
+ *     «En partes iguales» de tipo «Otro» (la descripción como lugar y como único renglón; la foto de las personas son
+ *     los miembros activos, con `presente` sólo en las elegidas), así el balance, el cierre, las transferencias y
+ *     Cerrados no cambian. Sin migración: `recibo_jti` lleva un id propio, `m~` + 20 al azar, que nunca es el id de un
+ *     recibo (`verificarRecibo` exige `[A-Za-z0-9_-]{22}` y `~` no es base64url); el origen manual sale del prefijo.
+ *     El aviso, sólo a las elegidas menos quien carga, con lo que le toca a cada una.
+ *   · `viaje_version=2` (cadena exacta): el detalle suma `has_avatar` y `pagado_cents` por miembro, y `monto_cents` y
+ *     `origen` por ticket. Sin el parámetro queda byte por byte: App Frontend 0.230.0 decodifica claves exactas.
+ *   · La foto de un miembro (`GET /:id/miembros/:mid/avatar`): la regla n164 de las personas de una mesa
+ *     (`profileIdentity.fotoVisibleN164`: no eliminada, con foto, identidad de perfil encendida y mayor de edad
+ *     conocida; un menor va sin foto), sólo a un miembro activo y de un miembro activo. Riesgo anotado por D245 bajo
+ *     D243: el Aviso 3.0.0 cubre la foto sólo para amigos.
+ *
  * Cada función devuelve `{ status, body }`; la ruta sólo lo escribe. Los registros llevan ids y códigos cerrados.
  */
 'use strict';
 
-const { createHash, createHmac, hkdfSync } = require('node:crypto');
+const { createHash, createHmac, hkdfSync, randomBytes } = require('node:crypto');
 const { z } = require('zod');
 const pool = require('../db/pool');
 const notifs = require('./notifications');
 const usernameSvc = require('./username');
+const profileIdentity = require('./profileIdentity');
 const origenItems = require('./origenItems');
 const { montoEnTexto } = require('./montoEnTexto');
 const { lineTotalCents } = require('./itemClaims');
@@ -79,14 +94,21 @@ const { FRACCIONES_INFORMATIVAS } = require('./mesaPresentation');
 const { restanteDe } = require('./informativeSelections');
 const calc = require('./viajesCalculo');
 const { esFechaCalendario } = require('../utils/fechas');
+const { splitEqual } = require('../utils/money');
 const logger = require('../utils/logger');
 
-// 🔴 V1: apagado hasta que Mati apruebe el texto del Aviso. Encenderlo es cambiar esta línea.
-const HABILITADO = false;
+// 🔴 v2.171.2 · ENCENDIDO por la decisión 243 de Mati, «Encender ya, riesgo aceptado (Recomendada)»
+// (DECISION_MATI_243_ENCENDER_VIAJES_RIESGO_ACEPTADO_20261009.md, b74c8de3066d6f92d1aeba5a8d681e9d87d1800be602aee1d90b5774959cdb85).
+// Riesgo aceptado hasta el Aviso 3.1: el Aviso servido (3.0.0) no describe Viajes. Apagarlo es volver esta línea a false.
+const HABILITADO = true;
 const CONTRATO = 'payme.app.viajes/v1';
 const MAX_MIEMBROS = calc.MAX_MIEMBROS;
 const MAX_TICKETS = 200;
 const MAX_LISTA = 100;
+// v2.172.0 · D244: el tope de un gasto a mano (un millón de pesos) y el prefijo de su id propio en `recibo_jti`.
+const MAX_GASTO_CENTS = 100_000_000;
+const PREFIJO_GASTO_MANUAL = 'm~';
+const esManual = (t) => typeof t.recibo_jti === 'string' && t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL);
 const FORMAS = Object.freeze(['consumo', 'iguales', 'total']);
 const TIPOS_LUGAR = Object.freeze(['restaurante', 'bar', 'cafe', 'super', 'otro']);
 const ESTADOS = Object.freeze(['abierto', 'esperando_pagos', 'cerrado']);
@@ -204,6 +226,13 @@ const cuerpoSeleccion = z.object({
   }).strict()).max(100)
     .refine((xs) => new Set(xs.map((x) => x.item_id)).size === xs.length, 'item_id repetido'),
   listo: z.boolean(),
+}).strict();
+const cuerpoGasto = z.object({
+  descripcion: texto(120),
+  monto_cents: z.number().int().min(1).max(MAX_GASTO_CENTS),
+  presentes: z.array(uuid).min(1).max(MAX_MIEMBROS)
+    .refine((xs) => new Set(xs).size === xs.length, 'miembro repetido'),
+  idempotency_key: idempotencyKey,
 }).strict();
 const cuerpoPresentes = z.object({
   presentes: z.array(uuid).min(1).max(MAX_MIEMBROS)
@@ -340,7 +369,7 @@ function mioPorPlato(t, userId) {
   return { mio, acumulado };
 }
 
-function vistaTicketEnLista(t, d, b, yo, idPublico) {
+function vistaTicketEnLista(t, d, b, yo, idPublico, version = 1) {
   const r = b.porTicket.get(t.id);
   return {
     id: t.id, lugar: t.lugar, tipo_lugar: t.tipo_lugar, fecha_ticket: fechaDe(t.fecha_ticket),
@@ -349,6 +378,8 @@ function vistaTicketEnLista(t, d, b, yo, idPublico) {
     te_toca_cents: r.consumo.get(yo) || 0,
     falta_que_elija: b.congelado ? 0 : r.faltan.length,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
+    // v2.172.0 · D245, sólo con `viaje_version=2`: «Consumos» muestra el total y si se cargó a mano.
+    ...(version === 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
   };
 }
 
@@ -358,8 +389,8 @@ function vistaTransferencia(tr, idPublico, yo) {
     mia: tr.de_user === yo ? 'debo' : tr.a_user === yo ? 'me_deben' : null };
 }
 
-/** El detalle que ve un miembro activo. */
-function vistaViaje(d, yo) {
+/** El detalle que ve un miembro activo. Con `version` 2 (`viaje_version=2`), los campos de D245. */
+function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
   const estado = estadoEfectivo(d);
   const cerrado = estado === 'cerrado';
   const b = balance(d);
@@ -369,7 +400,9 @@ function vistaViaje(d, yo) {
   if (!b.congelado) {
     for (const r of b.porTicket.values()) for (const u of r.faltan) faltaElegir.set(u, (faltaElegir.get(u) || 0) + 1);
   }
-  const tickets = d.tickets.map((t) => vistaTicketEnLista(t, d, b, yo, idPublico)).reverse();
+  const tickets = d.tickets.map((t) => vistaTicketEnLista(t, d, b, yo, idPublico, version)).reverse();
+  // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
+  const pagadoDe = (u) => d.tickets.filter((t) => t.pagado_por === u).reduce((s, t) => s + t.monto_cents, 0);
   const sinRepartir = b.congelado ? [] : d.tickets.filter((t) => b.porTicket.get(t.id).sinRepartir > 0).map((t) => ({
     ticket_id: t.id, lugar: t.lugar, fecha_ticket: fechaDe(t.fecha_ticket),
     monto_cents: b.porTicket.get(t.id).sinRepartir,
@@ -386,6 +419,11 @@ function vistaViaje(d, yo) {
       id: m.id, ...persona(m), es_yo: m.user_id === yo,
       balance_cents: cerrado && m.user_id !== yo ? null : b.balance.get(m.user_id) || 0,
       falta_elegir: faltaElegir.get(m.user_id) || 0,
+      ...(version === 2 && {
+        has_avatar: fotos?.get(m.user_id) === true,
+        // Cerrado (D240-17): de los demás, nada, como el balance.
+        pagado_cents: cerrado && m.user_id !== yo ? null : pagadoDe(m.user_id),
+      }),
     })),
     invitados: d.miembros.filter((m) => m.estado === 'invitado' && vivo(m)).map((m) => ({ id: m.id, ...persona(m) })),
     mi_balance_cents: b.balance.get(yo) || 0,
@@ -393,6 +431,26 @@ function vistaViaje(d, yo) {
     tickets, sin_repartir: sinRepartir,
     transferencias, transferencias_pendientes: pendientes(d).length,
   };
+}
+
+/** D245 · la regla n164 para cada miembro activo: id de cuenta → si su foto se puede mostrar. */
+async function fotosDeMiembros(db, d) {
+  const activos = d.miembros.filter((m) => m.estado === 'activo');
+  const { rows } = await db.query(
+    `SELECT user_id FROM user_avatars WHERE user_id = ANY($1::uuid[])`, [activos.map((m) => m.user_id)]);
+  const conFoto = new Set(rows.map((r) => r.user_id));
+  const fotos = new Map();
+  for (const m of activos) {
+    fotos.set(m.user_id, await profileIdentity.fotoVisibleN164(
+      { userId: m.user_id, status: m.user_status, tieneFoto: conFoto.has(m.user_id) }, db));
+  }
+  return fotos;
+}
+
+/** El detalle con la versión negociada: la 2 suma la foto y lo que pagó cada uno (D245). */
+async function vistaDelViaje(d, yo, version = 1) {
+  if (version !== 2) return vistaViaje(d, yo);
+  return vistaViaje(d, yo, { version, fotos: await fotosDeMiembros(pool, d) });
 }
 
 /** El detalle de un ticket que ve un miembro activo. Nunca qué eligió otro. */
@@ -590,7 +648,7 @@ async function invitaciones(userId) {
 }
 
 /** POST /api/viajes */
-async function crear(userId, body) {
+async function crear(userId, body, { version = 1 } = {}) {
   const v = validar(cuerpoCrear, body);
   if (!v.ok) return v.res;
   const b = v.data;
@@ -625,11 +683,11 @@ async function crear(userId, body) {
   });
   if (r.res) return r.res;
   logger.audit('viaje_created', { viaje_id: r.id, replay: r.status === 200 });
-  return respuesta(r.status, { contract: CONTRATO, viaje: vistaViaje(await cargar(pool, r.id), userId) });
+  return respuesta(r.status, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, r.id), userId, version) });
 }
 
 /** GET /api/viajes/:id — y, si el viaje ya no tiene nada pendiente (V5), lo pasa a Cerrados. */
-async function detalle(userId, viajeId) {
+async function detalle(userId, viajeId, { version = 1 } = {}) {
   if (!esUuid(viajeId)) return noEncontrado();
   let d = await cargar(pool, viajeId);
   if (!d || !esActivo(d, userId)) return noEncontrado();
@@ -639,11 +697,11 @@ async function detalle(userId, viajeId) {
     });
     d = await cargar(pool, viajeId);
   }
-  return respuesta(200, { contract: CONTRATO, viaje: vistaViaje(d, userId) });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(d, userId, version) });
 }
 
 /** POST /api/viajes/:id/miembros */
-async function invitar(userId, viajeId, body) {
+async function invitar(userId, viajeId, body, { version = 1 } = {}) {
   const v = validar(cuerpoInvitar, body);
   if (!v.ok) return v.res;
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
@@ -659,11 +717,11 @@ async function invitar(userId, viajeId, body) {
     throw err;
   });
   if (r.status !== 200) return r;
-  return respuesta(200, { contract: CONTRATO, viaje: vistaViaje(await cargar(pool, viajeId), userId) });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, viajeId), userId, version) });
 }
 
 /** POST /api/viajes/:id/aceptar — la invitación propia. */
-async function aceptar(userId, viajeId) {
+async function aceptar(userId, viajeId, { version = 1 } = {}) {
   if (!esUuid(viajeId)) return noEncontrado();
   const r = await pool.tx(async (client) => {
     const viaje = await bloquearViaje(client, viajeId);
@@ -680,7 +738,7 @@ async function aceptar(userId, viajeId) {
     return respuesta(200, null);
   });
   if (r.status !== 200) return r;
-  return respuesta(200, { contract: CONTRATO, viaje: vistaViaje(await cargar(pool, viajeId), userId) });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, viajeId), userId, version) });
 }
 
 /** POST /api/viajes/:id/rechazar — avisa a quien invitó (diseño 1f). */
@@ -949,6 +1007,95 @@ async function marcarPresentes(userId, viajeId, ticketId, body) {
   return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId) });
 }
 
+// ─── El gasto a mano (D244) y la foto de un miembro (D245) ─────────────────────────────────────────────────────
+
+/**
+ * POST /api/viajes/:id/gastos — D244: un gasto a mano. Quien lo carga pagó; se reparte en partes iguales entre las
+ * personas elegidas (los presentes), con el residuo a las primeras en el orden de los miembros. Se guarda como un
+ * ticket «En partes iguales» de tipo «Otro»: ver el encabezado.
+ */
+async function cargarGasto(userId, viajeId, body) {
+  const v = validar(cuerpoGasto, body);
+  if (!v.ok) return v.res;
+  const b = v.data;
+  if (!esUuid(viajeId)) return noEncontrado();
+  const pedido = hashDe({ gasto: true, descripcion: b.descripcion, monto_cents: b.monto_cents, presentes: b.presentes });
+  const r = await enViaje(viajeId, userId, async (client, viaje) => {
+    const { rows: [previo] } = await client.query(
+      `SELECT id, pedido_hash FROM viaje_tickets WHERE viaje_id=$1 AND pagado_por=$2 AND idempotency_key=$3`,
+      [viajeId, userId, b.idempotency_key]);
+    if (previo) {
+      return previo.pedido_hash === pedido ? { ticketId: previo.id, status: 200 } : conflicto('idempotency_key_conflict');
+    }
+    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    const { rows: [{ n }] } = await client.query(`SELECT COUNT(*)::int AS n FROM viaje_tickets WHERE viaje_id=$1`, [viajeId]);
+    if (n >= MAX_TICKETS) return conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
+    const { rows: miembros } = await client.query(
+      `SELECT m.user_id, m.id AS miembro_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
+        WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
+    const porMiembro = new Map(miembros.map((m) => [m.miembro_id, m.user_id]));
+    const desconocido = b.presentes.find((id) => !porMiembro.has(id));
+    if (desconocido) return respuesta(422, { error: 'viaje_ticket_persona_unknown', miembro_id: desconocido });
+    const elegidos = new Set(b.presentes.map((id) => porMiembro.get(id)));
+    const cuentas = await bloquearCuentas(client, miembros.map((m) => m.user_id));
+    if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
+    // Un id propio que nunca es el de un recibo: `~` no es base64url (ver el encabezado).
+    const idPropio = `${PREFIJO_GASTO_MANUAL}${randomBytes(15).toString('base64url')}`;
+    const { rows: [t] } = await client.query(
+      `INSERT INTO viaje_tickets (viaje_id, pagado_por, forma, tipo_lugar, lugar, monto_cents, recibo_jti,
+                                  idempotency_key, pedido_hash)
+       VALUES ($1, $2, 'iguales', 'otro', $3, $4, $5, $6, $7) RETURNING id`,
+      [viajeId, userId, b.descripcion, b.monto_cents, idPropio, b.idempotency_key, pedido]);
+    await client.query(
+      `INSERT INTO viaje_ticket_items (ticket_id, orden, nombre, price_cents, quantity) VALUES ($1, 0, $2, $3, 1)`,
+      [t.id, b.descripcion, b.monto_cents]);
+    for (const [k, m] of miembros.entries()) {
+      await client.query(`INSERT INTO viaje_ticket_personas (ticket_id, user_id, orden, presente) VALUES ($1, $2, $3, $4)`,
+        [t.id, m.user_id, k, elegidos.has(m.user_id)]);
+    }
+    // El aviso, sólo a las elegidas menos quien carga, con su parte (el mismo reparto que el cálculo).
+    const { rows: [quien] } = await client.query(
+      `SELECT u.first_name, u.last_name, u.status AS user_status, v.nombre
+         FROM users u, viajes v WHERE u.id=$1 AND v.id=$2`, [userId, viajeId]);
+    const presentes = miembros.filter((m) => elegidos.has(m.user_id));
+    const partes = splitEqual(b.monto_cents, presentes.length);
+    for (const [k, m] of presentes.entries()) {
+      if (m.user_id === userId) continue;
+      await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
+        body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre}: ${b.descripcion}. Te toca ${montoEnTexto(partes[k])}.`,
+        payload: { viaje_id: viajeId, ticket_id: t.id } });
+    }
+    return { ticketId: t.id, status: 201 };
+  });
+  if (!r.ticketId) return r;
+  const d = await cargar(pool, viajeId);
+  const t = d.tickets.find((x) => x.id === r.ticketId);
+  logger.audit('viaje_gasto', { viaje_id: viajeId, ticket_id: r.ticketId, resultado: r.status === 201 ? 'cargado' : 'reintento' });
+  return respuesta(r.status, { contract: CONTRATO, ticket: vistaTicket(t, d, userId), ya_cargado: null });
+}
+
+// D245: toda negativa de la foto contesta lo mismo (viaje que no existe, no sos miembro, miembro ajeno o que no está
+// activo, sin foto, menor o sin fecha, cuenta eliminada).
+const SIN_FOTO = Object.freeze({ error: 'avatar_not_found' });
+
+/** GET /api/viajes/:id/miembros/:mid/avatar — `{ avatar }` o `{ res }` con el 404 de siempre. */
+async function avatarDeMiembro(viewerId, viajeId, miembroId) {
+  const no = { res: respuesta(404, SIN_FOTO) };
+  if (!esUuid(viajeId) || !esUuid(miembroId)) return no;
+  const { rows: [f] } = await pool.query(
+    `SELECT o.user_id, u.status,
+            EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = o.user_id) AS tiene_foto
+       FROM viaje_miembros yo
+       JOIN viaje_miembros o ON o.viaje_id = yo.viaje_id AND o.id = $3 AND o.estado = 'activo'
+       JOIN users u ON u.id = o.user_id
+      WHERE yo.viaje_id = $1 AND yo.user_id = $2 AND yo.estado = 'activo'`, [viajeId, viewerId, miembroId]);
+  if (!f || !(await profileIdentity.fotoVisibleN164({ userId: f.user_id, status: f.status, tieneFoto: f.tiene_foto }))) {
+    return no;
+  }
+  const avatar = await profileIdentity.obtenerAvatar(f.user_id);
+  return avatar ? { avatar } : no;
+}
+
 // ─── Cierre y transferencias ───────────────────────────────────────────────────────────────────────────────────
 
 /** Lo que pasaría al cerrar: a quién se le asigna lo no elegido (D242-4) y las transferencias. */
@@ -1005,7 +1152,7 @@ async function terminarSiCorresponde(client, viajeId) {
 }
 
 /** POST /api/viajes/:id/cerrar — D242-3: cualquier miembro, con aviso a todos. */
-async function cerrar(userId, viajeId) {
+async function cerrar(userId, viajeId, { version = 1 } = {}) {
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
     if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
     const d = await cargar(client, viajeId);
@@ -1045,7 +1192,7 @@ async function cerrar(userId, viajeId) {
   });
   if (r.status !== 200) return r;
   logger.audit('viaje_closed', { viaje_id: viajeId });
-  return respuesta(200, { contract: CONTRATO, viaje: vistaViaje(await cargar(pool, viajeId), userId) });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, viajeId), userId, version) });
 }
 
 const ACCIONES = Object.freeze({
@@ -1142,9 +1289,10 @@ async function resumen(userId, viajeId) {
 }
 
 module.exports = {
-  CONTRATO, MAX_MIEMBROS, MAX_TICKETS, FORMAS, TIPOS_LUGAR, ESTADOS, ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA,
+  CONTRATO, MAX_MIEMBROS, MAX_TICKETS, MAX_GASTO_CENTS, PREFIJO_GASTO_MANUAL, FORMAS, TIPOS_LUGAR, ESTADOS,
+  ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA,
   habilitado, forzarParaTests, capacidad, huellaDelTicket, huellaDeLectura, NO_ENCONTRADO,
   listar, invitaciones, crear, detalle, invitar, aceptar, rechazar, salir,
-  revisarTicket, cargarTicket, verTicket, elegir, marcarPresentes,
+  revisarTicket, cargarTicket, verTicket, elegir, marcarPresentes, cargarGasto, avatarDeMiembro,
   vistaPreviaCierre, cerrar, marcarTransferencia, resumen,
 };

@@ -6,6 +6,24 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes: gasto a mano y pantalla del viaje · App Backend v2.172.0 · 2026-10-09
+
+Orden `AF-VIAJES-PANTALLA-Y-GASTO-MANUAL-20261009` (D245, D244, D246), Adenda 2 (`1d3021ce…`). Scope del lease con
+`contract-mirror/**` y `scripts/mirror-inventory.json`.
+
+- Contenido: owner **`bcf872a4fb7a3732a9ff31bef92db01a8516621c`** (v2.172.0, commit A2 sobre `522df04`: `POST
+  /api/viajes/:id/gastos`, la negociación `viaje_version=2` y la foto de un miembro).
+- Inventario: el de `main` del owner en **`83e81e8b5c9623d4e4cd0ab873358037319a0a75`** (commit B2, servido según la
+  Adenda 2; `contract/mirror-inventory.json`, sha256
+  `878682f8ac1d022b27ec197cf803ca2d7d45de5561ff3f08f784ef65c780ef60`), adoptado con `--adoptar-inventario` sin
+  editarlo. Declara `bcf872a`.
+- **133 archivos espejados** (los mismos). Cambian tres: `contract/viajes-v1.json` (sha256
+  `826d11be37e770c5c9cbd6fbb9e9cf486cad5b4f3ee1ab2c44d652a0b275a1f8`), `routes/viajes.js` y `services/viajes.js`
+  (trae también `features.viajes.enabled = true` de v2.171.2). Copiados con `git show bcf872a:<origen>`.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` local del owner, sin fetch ni escrituras
+  en ese repo.
+- `--paridad`: espejo = inventario = fuente en `bcf872a`, 133/133.
+
 ### Viajes · App Backend v2.171.0 · 2026-10-09
 
 Orden `AF-VIAJES-20261009` (D242, D240 punto 17, n338). Scope del lease con `contract-mirror/**` y
