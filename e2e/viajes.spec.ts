@@ -247,6 +247,25 @@ test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y
   await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
 });
 
+test('D244 · si alguien de los elegidos salió del viaje: se avisa, se vuelve a pedir el viaje y no se borra lo escrito', async ({ page }) => {
+  await conViajes(page, { 'payme.app.mock.viajes.gasto.v1': 'alguien_salio' });
+  await ir(page, `/viaje-gasto/${CANCUN}`);
+  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toBeVisible();
+  await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
+  await page.getByLabel('Monto', { exact: true }).fill('900');
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page.getByText('Alguien ya no está en el viaje. Revisa entre quiénes.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
+  // Diego ya no está en la lista; lo escrito sigue.
+  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveCount(0);
+  await expect(page.getByLabel('Descripción', { exact: true })).toHaveValue('Gasolina');
+  await expect(page.getByLabel('Monto', { exact: true })).toHaveValue('900');
+  // Y ahora sí se carga, entre los tres que quedan.
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
+  await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
+});
+
 test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);

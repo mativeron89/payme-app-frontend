@@ -12,7 +12,7 @@ import {
   type PersonaViajeMock,
 } from './mockApi';
 import { persist as persistirStore, state as store } from './store';
-import { CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, viajesMockEncendido } from './viajesSeam';
+import { CLAVE_ESTADO_VIAJES_MOCK, alguienSalioMock, limiteDeViajesMock, viajesMockEncendido } from './viajesSeam';
 import {
   balanceDelViaje,
   precioInformativo,
@@ -759,6 +759,11 @@ export function mockCargarGasto(id: string, body: unknown) {
     }
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     if (v.tickets.length >= MAX_TICKETS) throw conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
+    if (alguienSalioMock()) {
+      // El seam: el último elegido que no soy yo salió del viaje mientras se llenaba el formulario.
+      const sale = [...miembrosEnOrden(v)].reverse().find((m) => m.estado === 'activo' && m.user_id !== u && presentes.includes(m.id));
+      if (sale) sale.estado = 'salio';
+    }
     const activos = miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada);
     const porMiembro = new Map(activos.map((m) => [m.id, m.user_id]));
     const desconocido = presentes.find((x) => !porMiembro.has(x));

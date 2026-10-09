@@ -31,6 +31,11 @@ describe('el monto tipeado, en centavos enteros', () => {
   it.each(['', '0', '0.00', 'abc', '12.345', '1.2.3', '-5', '99999999'])('«%s» no es un monto', (entrada) => {
     expect(montoTipeado(entrada)).toBeNull();
   });
+
+  it('el tope del dueño para un gasto a mano: $1,000,000 sí, un centavo más no', () => {
+    expect(montoTipeado('1,000,000')).toBe(100_000_000);
+    expect(montoTipeado('1000000.01')).toBeNull();
+  });
 });
 
 describe('D244 · la pantalla de la carga manual', () => {

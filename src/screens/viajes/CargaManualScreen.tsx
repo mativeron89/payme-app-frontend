@@ -31,7 +31,7 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
   const { t } = useIdioma();
   const { session } = useAuth();
   const toast = useToast();
-  const { carga, cargar, noDisponible } = useDetalleViaje(viajeId);
+  const { carga, cargar, refrescar, noDisponible } = useDetalleViaje(viajeId);
   const [enviando, setEnviando] = useState(false);
   const llave = useRef<{ json: string; key: string } | null>(null);
   const vivo = useRef(true);
@@ -57,9 +57,10 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
       else if (e.tipo === 'no_abierto') toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
       else if (e.tipo === 'persona_desconocida') {
-        // Alguien de la lista salió del viaje mientras tanto: se vuelve a pedir y se elige de nuevo.
+        // Alguien de la lista salió del viaje mientras tanto: se vuelve a pedir el viaje sin borrar lo
+        // escrito, y la lista queda con los que siguen.
         toast(t('Alguien ya no está en el viaje. Revisa entre quiénes.'), { sobreLaBarra: true });
-        cargar();
+        void refrescar();
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
     } finally {
       if (vivo.current) setEnviando(false);
