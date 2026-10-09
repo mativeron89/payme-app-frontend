@@ -11,6 +11,63 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.227.0 — Siete arreglos de la lista de Mati del 08/10 (2026-10-09)
+
+Orden AF-TANDA-CHICA-0810-20261008 (da78721c…); decisión D240, puntos 3, 5, 8, 12, 13, 14 y 16. Plan aprobado
+(ed3955b6…) con las respuestas A–H: A, la opción B del listado; B, la cantidad antes del nombre también al elegir;
+C, la burbuja roja con número; D, las dos hojas y «Revisar» en lugar de «Volver»; E, el tinte de error del sistema;
+F, también las flechas de «Mis tarjetas» y «Agregar a inicio»; G, 12 px; H, ni las mitades ni las mayúsculas
+distintas se juntan. Todo es front: no cambia el contrato, ni el backend, ni los pagos; el caché de `ultimoVisto`
+(0.225.0) no se toca. Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **3 · El listado al elegir** («Rediseño del listado de ítems (letra y tamaño) cuando se selecciona»). Medido a 375 en
+  0.226.0: al elegir, el nombre quedaba en 118 px y se cortaban 4 de cada 6 («Tagliatelle Bol…»). Ahora el plato va
+  en la letra del cuerpo (DM Sans) a 16 px —el mínimo de la app; iba a 15,5 en la de títulos— y el elegido en 600
+  (era 700); el precio y tu parte, a 16. El nombre ocupa hasta dos líneas y todos los renglones miden lo mismo, 56 px
+  (el propio 50 + 3 + 3; eran 48 y 44 + 3 + 3): elegir un plato de nombre largo no mueve la lista (regla 1 de D90,
+  con el número nuevo que pidió Mati en D240). Lo que eligió otro y lo pagado siguen en una línea, con «…». La
+  cantidad va **antes** del nombre, en gris y en su propio elemento («2 × Vino tinto (copa)»): la elipsis nunca la
+  corta. El nombre accesible no cambia («Vino tinto (copa) por 2», guarda n79).
+- **5 · La campana con el número.** Era un punto naranja de 8 px con el número en el DOM a `font-size: 0`. Ahora es la
+  burbuja roja de «Amigos» (D230): `--danger` con el número en blanco, «9+» desde 10, y el botón se anuncia «Avisos, 3
+  sin leer» (en inglés, "Notifications, 3 unread"). Una sola copia del marcado para Inicio y Mesas (eran dos);
+  `textoDeLaBurbuja` pasa a `components/burbuja.ts`, puro, y la barra la re-exporta. El conteo sigue saliendo de
+  `useSinLeer` (D237), sin cambios. 🔴 **El §1 de `SISTEMA_DISENO.md` (fuera del repo) queda por actualizar:** el
+  badge de no leídos deja de ser uno de los usos permitidos del naranja. El rojo sobre la banda navy mide 2,5:1 como
+  forma; el número blanco sobre el rojo, 6,6:1, y el número va también en el nombre accesible.
+- **8 · Avisar antes de que la mesa se cierre.** Una hoja antes del cierre que dice «Revisa lo que elegiste: después de
+  cerrar ya no se puede modificar.» y muestra «Lo que elegiste», con los iguales juntos («2 × Tiramisú», «Agua mineral
+  · ½»), hasta 4 y «y N más». «Revisar» (con el foco; reemplaza a «Volver») cierra la hoja, abre «Tus consumos», baja
+  hasta la lista y deja el foco ahí; el ✕, Escape y el velo salen como antes.
+  - **«Cerrar mesa»:** conserva sus tres renglones y «Sí, cerrar la mesa»; si hay algo marcado sin «Listo», la nota
+    «Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.» (antes se perdía sin aviso).
+  - **El «Listo» que completa la mesa** (decisión 80): ANTES de enviar, «Con esto se cierra la mesa» con «Guardar y
+    cerrar». Lo calcula el front con lo que el dueño publica (`seleccionCierraLaMesa`, la regla del dueño: todo plato
+    sin nada por elegir); con un dato desconocido no avisa y «La mesa se cerró» sigue siendo la red. 🔴 **D240-8
+    reemplaza a V05 en este momento.** V05 (20/09, 0.182.0) había sacado de este mismo «Listo» la hoja «Con esto se
+    cierra la mesa para todos», que repetía «Tomado/Libre»; D240-8 (08/10) pide avisar aquí para revisar lo elegido,
+    y la hoja nueva muestra «Lo que elegiste». Lo resolvió el Bibliotecario (respuesta 8B del lease, 00:35:07Z).
+  - **El mock** cierra la mesa por selección en consumo sin garantía, como el dueño (`mesas.js:1762` y `:1819-1866`):
+    antes no cerraba nunca, y el «Listo» que completaba la mesa volvía a Inicio.
+  - Avisar a los demás comensales antes del cierre necesita backend: no entra ahora (posible pedido a App Backend).
+- **12 · «Cerrar sesión» en rojo clarito:** `.btn-cerrar-sesion`, texto `--danger` sobre `--danger-tint` (6,01:1) y
+  borde tenue de 1,5 px (el tinte sobre el fondo de la app da 1,00:1: el borde lo dibuja como botón). `.btn-ghost` no
+  se toca. Quedan dos rojos clarito casi iguales: «Cerrar mesa» (D181, literales) y éste (tokens).
+- **13 · La flecha de las filas de Configuración** es la de «Zona horaria» (`arrow-right` de 16 px en navy), no el
+  carácter «→» gris: Notificaciones, Mis tarjetas y Agregar a inicio. Es decorativa: el nombre accesible vuelve a ser
+  sólo el rótulo («Notificaciones», antes «Notificaciones →»).
+- **14 · La burbuja del detalle de Mesas** queda a 12 px de la línea divisoria (iba pegada, `margin-top: 0`), igual que
+  los costados y el pie. Vale para «Tus mesas» y el historial, y para «Cargando…» y el error.
+- **16 · Los ítems iguales juntos en el detalle de Mesas:** «2 × Tiramisú $140», con la cantidad antes. Sólo al dibujar
+  (`agruparIguales`): los decodificadores y el contrato no cambian. Iguales = el mismo nombre (sin espacios de más), el
+  mismo precio por unidad y enteros; en el historial, dentro de cada pago. Las mitades y las mayúsculas distintas no se
+  juntan. La lista para elegir y el OCR siguen separando por unidad, como pidió Mati.
+- **Pruebas:** `tanda-chica-0810.spec.ts` (nueva, 21 casos a 375), `agruparIguales.test`, `antesDeCerrar.test` y
+  `tandaChica0810.test` (nuevas). Actualizadas, cada una por el cambio pedido: `que-consumiste` (48 → 56),
+  `tus-mesas` y `ajustes10-datos` («2 × Tacos al pastor»), `cerrar-mesa` y `foco-modales` («Revisar»),
+  `ajustes8-visual` (V03/V05), `informative-selections` y `mesa-compartida-d79` (completan la mesa: «Guardar y
+  cerrar»).
+
 ## 0.226.0 — El cargo por servicio aparte, visible y sin repartir (2026-10-08)
 
 Orden AF-SERVICIO-APARTE-VISIBLE-20261008 (35fe11b8…, n327); decisiones D224 («Aparte, sin repartir») y D237. Plan

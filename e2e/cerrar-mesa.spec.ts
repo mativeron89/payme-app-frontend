@@ -61,8 +61,8 @@ test.describe('AF-34 · cerrar la mesa', () => {
     expect(await pedidosDeCierre(page)).toBe(0);
     await capturar(page, 'cerrar-02-hoja-de-confirmacion');
 
-    // «Volver» no cierra nada.
-    await hoja(page).getByRole('button', { name: 'Volver', exact: true }).click();
+    // D240 punto 8 · «Revisar» (antes «Volver») no cierra nada: lleva a la lista.
+    await hoja(page).getByRole('button', { name: 'Revisar', exact: true }).click();
     await expect(hoja(page)).toHaveCount(0);
     await expect(boton(page)).toBeVisible();
     expect(await pedidosDeCierre(page)).toBe(0);

@@ -5,6 +5,7 @@ import { useToast } from './ui';
 import { Icon, type IconName } from './Icon';
 import { DiagnosticoPantalla } from './DiagnosticoPantalla';
 import { registrarToque } from '../utils/medirPantalla';
+import { textoDeLaBurbuja } from './burbuja';
 
 /**
  * Cabecera navy de borde curvo y pestañas en burbuja —
@@ -140,7 +141,9 @@ export function AppHeader({
    * No es una quinta excepción de la lista cerrada de naranjas: ocupa la MISMA
    * ranura sobre la banda navy a la que la tabla de `SISTEMA_DISENO.md` §1 ya
    * le concede `--brand` para el badge de no leídos, y esa ranura ya convive
-   * con el círculo de la barra en toda pantalla de primer nivel.
+   * con el círculo de la barra en toda pantalla de primer nivel. (D240 punto 5 ·
+   * el badge de la campana ahora es la burbuja roja de «Amigos»; esta campana
+   * de «ya estás en Avisos» sigue en `--brand`.)
    */
   bellHere?: boolean;
   /** Ajuste óptico exclusivo de las cabeceras con pestañas de Inicio/Social. */
@@ -162,18 +165,35 @@ export function AppHeader({
             <Icon name="bell" size={22} />
           </span>
         ) : identidad ? (
-          <button type="button" className="hdr-bell" onClick={openAvisos} aria-label={t('Avisos')}>
-            <Icon name="bell" size={22} />
-            {unread > 0 && (
-              <span className="hdr-badge" aria-label={t('{0} sin leer', unread)}>
-                {unread}
-              </span>
-            )}
-          </button>
+          <CampanaConAvisos unread={unread} onClick={openAvisos} />
         ) : null}
       </div>
       {tabs}
     </header>
+  );
+}
+
+/**
+ * D240 punto 5 · la campana de Inicio y de Mesas, con la cantidad de avisos sin
+ * leer. Con el mismo criterio que «Amigos» (D230): la burbuja dice hasta 9 y
+ * desde 10 «9+», y el número exacto va en el nombre accesible del botón (la
+ * burbuja es decorativa: un `aria-label` en un `span` no se anuncia). Una sola
+ * copia para las dos cabeceras: antes eran dos y podían separarse.
+ */
+function CampanaConAvisos({ unread, onClick }: { unread: number; onClick: () => void }) {
+  const { t } = useIdioma();
+  return (
+    <button
+      type="button"
+      className="hdr-bell"
+      onClick={onClick}
+      aria-label={unread > 0 ? t('Avisos, {0} sin leer', unread) : t('Avisos')}
+    >
+      <span className="hdr-bell-icono">
+        <Icon name="bell" size={22} />
+        {unread > 0 && <span className="hdr-badge" aria-hidden="true">{textoDeLaBurbuja(unread)}</span>}
+      </span>
+    </button>
   );
 }
 
@@ -213,10 +233,7 @@ export function AppHeaderBack({
             <Icon name="bell" size={22} />
           </span>
         ) : (
-          <button type="button" className="hdr-bell" onClick={openAvisos} aria-label={t('Avisos')}>
-            <Icon name="bell" size={22} />
-            {unread > 0 && <span className="hdr-badge" aria-label={t('{0} sin leer', unread)}>{unread}</span>}
-          </button>
+          <CampanaConAvisos unread={unread} onClick={openAvisos} />
         )}
       </div>
       <div className="hdr-row hdr-row-2">

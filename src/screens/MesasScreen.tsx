@@ -11,6 +11,7 @@ import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { UnirmeConCodigo } from '../components/UnirmeConCodigo';
 import { bpsLabel } from './mesaItemsView';
+import { agruparDelPago, agruparPropios, nombreConCantidad } from './agruparIguales';
 import type { TuMesa } from '../api/misMesas';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
@@ -289,13 +290,12 @@ export function MesasScreen() {
                   : 'hist-detail'}
                 aria-label={t('Lo que elegiste')}
               >
-                {m.items.map((item) => (
-                  <div key={item.itemId} className="hist-detail-row">
-                    <span className="hist-detail-frac">{item.fractionBps < 10000 ? bpsLabel(item.fractionBps) : ''}</span>
-                    <span className="hist-detail-name">
-                      {item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}
-                    </span>
-                    <span className="hist-detail-amount">{formatMXN(item.amountCents)}</span>
+                {/* D240 punto 16 · los iguales juntos, con la cantidad antes. */}
+                {agruparPropios(m.items).map((g) => (
+                  <div key={g.key} className="hist-detail-row">
+                    <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
+                    <span className="hist-detail-name">{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                    <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
                   </div>
                 ))}
               </div>
@@ -428,18 +428,19 @@ export function MesasScreen() {
                           )}
                           {Array.isArray(detalle) && detalle.map((movement, paymentIndex) => (
                             <section key={movement.id} className="hist-payment" aria-label={t('Pago {0}', paymentIndex + 1)}>
-                              {movement.items.length > 0 ? movement.items.map((item, itemIndex) => (
-                                <div key={`${movement.id}:${itemIndex}`} className="hist-detail-row">
+                              {/* D240 punto 16 · los iguales de este pago, juntos. */}
+                              {movement.items.length > 0 ? agruparDelPago(movement.id, movement.items).map((g) => (
+                                <div key={g.key} className="hist-detail-row">
                                   <span className="hist-detail-name">
-                                    <span>{item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
-                                    {item.declared_fraction_bps != null && (
+                                    <span>{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                                    {g.primero.declared_fraction_bps != null && (
                                       <span className="hist-detail-declared">
-                                        {t('Declaraste {0}', bpsLabel(item.declared_fraction_bps))}
+                                        {t('Declaraste {0}', bpsLabel(g.primero.declared_fraction_bps))}
                                       </span>
                                     )}
                                   </span>
-                                  {item.amount_cents != null && (
-                                    <span className="hist-detail-amount">{formatMXN(item.amount_cents)}</span>
+                                  {g.montoCents != null && (
+                                    <span className="hist-detail-amount">{formatMXN(g.montoCents)}</span>
                                   )}
                                 </div>
                               )) : (

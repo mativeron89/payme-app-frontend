@@ -3,11 +3,11 @@ import { useIdioma } from '../i18n/idioma';
 import { navigate, type PageId } from '../router';
 import { abrirCamaraNativa } from '../camara/camaraNativa';
 import { useSolicitudesPendientes } from '../amigos/solicitudesPendientes';
+import { textoDeLaBurbuja } from './burbuja';
 
-/** D230 · la burbuja muestra hasta 9; desde 10 dice «9+». */
-export function textoDeLaBurbuja(cantidad: number): string {
-  return cantidad > 9 ? '9+' : String(cantidad);
-}
+// D230 · la regla de la burbuja vive en `./burbuja`, compartida con la campana
+// (D240 punto 5); se re-exporta acá porque sus pruebas la importan de la barra.
+export { textoDeLaBurbuja };
 
 /**
  * Barra inferior de CINCO posiciones — SISTEMA_DISENO.md §5 bis · C.

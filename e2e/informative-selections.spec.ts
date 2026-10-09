@@ -177,6 +177,9 @@ test.describe('Listo · selección informativa v2', () => {
     // la vista de sólo lectura.
     const enMesa = await page.evaluate(() => location.pathname);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
+    await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
+      .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
     await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
     expect(await page.evaluate(() => location.pathname)).toBe(enMesa);

@@ -106,7 +106,10 @@
   /* §1 · Color — marca.
      El naranja es UNA acción, no una paleta: botón circular "Nueva", ítem
      activo de la barra inferior, badge de no leídos, y el CTA de pantalla de
-     primer contacto (cuarto uso, ratificado 2026-08-04). Nada más. */
+     primer contacto (cuarto uso, ratificado 2026-08-04). Nada más.
+     D240 punto 5 · el badge de no leídos de la campana dejó de ser naranja: es
+     la burbuja roja con número de «Amigos» (D230). El §1 de SISTEMA_DISENO.md
+     (fuera de este repo) queda por actualizar. */
   --brand: #ff6b35;
   /* 🔴 ENMIENDA RATIFICADA 2026-08-08 · el glifo sobre --brand pasa a BLANCO.
      Antes: #0f1f3d, 5.77:1, con el comentario "NUNCA blanco (2.84:1)".
@@ -586,6 +589,16 @@ html.app-de-inicio-ios .app {
   background: #fdecea;
   color: #9b3a26;
   border: 1.5px solid rgba(155, 58, 38, 0.22);
+}
+/* D240 punto 12 · Mati: «Configuracion: Boton de cerrar sesión en rojo
+   clarito». El tinte de error del sistema con su texto: --danger sobre
+   --danger-tint da 6.01:1 (AA, lo fija designTokens.test.ts). El tinte sobre el
+   fondo de la app da 1.00:1, así que el borde es lo que lo dibuja como botón.
+   Va después de `.btn` (misma especificidad: gana la última declaración). */
+.btn-cerrar-sesion {
+  background: var(--danger-tint);
+  color: var(--danger);
+  border: 1.5px solid color-mix(in srgb, var(--danger) 22%, transparent);
 }
 @media (hover: hover) {
   .btn-turquesa:not(:disabled):hover {
@@ -3463,24 +3476,35 @@ html.app-de-inicio-ios .app {
   cursor: default;
 }
 
-/* Badge de no leídos: --brand con el número BLANCO desde la enmienda del
-   2026-08-08 (antes navy). 2.84:1, riesgo aceptado. Es uno de los CINCO usos
-   permitidos del naranja como FONDO (eran tres hasta el 2026-08-09). */
+/* D240 punto 5 · Mati: «que notificaciones cuando hay, además de ponerse en
+   rojo que tenga el número de cantidad de notificaciones». La campana lleva la
+   misma burbuja que «Amigos» (D230): el rojo de error (--danger) con el número
+   en blanco (6.6:1, AA), «9+» desde 10. Antes era un punto naranja de 8 px sin
+   número (AF-REDISENO-12). El aro es del color de la banda, para despegarla del
+   glifo blanco de la campana. */
+.hdr-bell-icono {
+  position: relative;
+  display: block;
+  line-height: 0;
+}
+
 .hdr-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 8px;
-  width: 8px;
-  height: 8px;
-  padding: 0;
+  top: -6px;
+  left: 13px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: var(--r-full);
-  background: var(--brand);
-  color: var(--brand-fg);
-  font-family: var(--font-display);
-  font-size: 0;
-  line-height: 0;
+  background: var(--danger);
+  color: var(--white);
+  box-shadow: 0 0 0 2px var(--action);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
   text-align: center;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -5132,9 +5156,12 @@ html.app-de-inicio-ios .app {
    prototipo van con --sh-1: sus rgba(15,31,61,…) son el navy viejo que
    `coloresMigrados.test.ts` no deja volver.
 
-   Regla 1 · todos los renglones miden lo mismo: 48 px el normal y 44 px el
-   propio dentro de un margen de 3 px. El nombre NO envuelve (se recorta con
-   «…»): un nombre en dos líneas movería la lista. */
+   Regla 1 · todos los renglones miden lo mismo: 56 px el normal y 50 px el
+   propio dentro de un margen de 3 px (D240 punto 3; eran 48 y 44). El nombre
+   ocupa hasta DOS líneas y después se recorta con «…»: el alto común ya tiene
+   lugar para las dos, así que elegir un plato de nombre largo no mueve la lista.
+   Antes, con una línea, al elegir quedaba en 118 px a 375 y se cortaban 4 de
+   cada 6 nombres. */
 .qc-lista {
   padding: 0;
   border-radius: 22px;
@@ -5152,8 +5179,8 @@ html.app-de-inicio-ios .app {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 48px;
-  padding: 6px 14px;
+  min-height: 56px;
+  padding: var(--sp-1) 14px;
   border: 0;
   background: none;
   color: var(--text);
@@ -5197,20 +5224,60 @@ button.qc-circulo {
   cursor: pointer;
 }
 
+/* D240 punto 3 · Mati: «Rediseño del listado de ítems (letra y tamaño)
+   cuando se selecciona». La lista pasa a la letra y los tamaños del sistema
+   (§2), los mismos del ticket: el plato en la letra del cuerpo (DM Sans) a
+   16 px, que es el mínimo de la app (iba a 15.5 en la letra de títulos), y el
+   precio en la de títulos a 16/700. Lo elegido va en 600 (era 700). Lo
+   secundario (la cantidad, «Lo eligió otro») va en gris. La cantidad va ANTES
+   del nombre y en su propio elemento: la elipsis corta el nombre, nunca la
+   cantidad. */
+.qc-titulo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+}
+
+.qc-cant {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.25;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
 .qc-nombre {
   flex: 1 1 auto;
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
+  overflow-wrap: break-word;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Con una segunda línea propia («Lo eligió otro», «Pagaste ½…») el nombre
+   queda en una sola, con «…»: si no, el renglón no entra en el alto común. */
+.qc-cuerpo .qc-nombre {
+  display: block;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15.5px;
-  color: var(--text);
 }
 
 .qc-precio {
   flex: none;
   font-family: var(--font-display);
-  font-size: 15.5px;
+  font-size: var(--fs-body);
+  line-height: 1.25;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -5303,9 +5370,10 @@ button.qc-circulo::after {
 }
 
 .qc-etiqueta {
-  margin-top: 2px;
-  font-size: 12.5px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
   line-height: 1.2;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -5317,10 +5385,10 @@ button.qc-circulo::after {
 /* Regla 2 · el renglón propio: --teal-l, borde 2 px --action-2, radio 12,
    círculo marcado, píldora de porción y tu parte. No repite el precio. */
 .qc-mia {
-  min-height: 44px;
+  min-height: 50px;
   margin: 3px 4px;
   width: auto;
-  padding: 4px 10px;
+  padding: 3px 10px;
   gap: 10px;
   border: 2px solid var(--action-2);
   border-radius: 12px;
@@ -5328,7 +5396,7 @@ button.qc-circulo::after {
 }
 
 .qc-nombre--mio {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .qc-parte {
@@ -5336,7 +5404,7 @@ button.qc-circulo::after {
   min-width: 66px;
   text-align: right;
   font-family: var(--font-display);
-  font-size: 15.5px;
+  font-size: var(--fs-body);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -5587,6 +5655,50 @@ button.qc-circulo::after {
 
 .cerrar-mesa-acciones .btn {
   flex: 1;
+}
+
+/* D240 punto 8 · antes de cerrar: el aviso, lo que elegiste y la nota si hay
+   algo marcado sin «Listo». */
+.cerrar-mesa-aviso {
+  margin: 0 0 var(--sp-3);
+  font-weight: 600;
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+
+.cerrar-mesa-mios {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+
+.cerrar-mesa-mios-titulo {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.cerrar-mesa-mios ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cerrar-mesa-nada,
+.cerrar-mesa-resto {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.cerrar-mesa-sin-guardar {
+  margin: 0 0 var(--sp-3);
 }
 
 /* AF-32 · la foto usa el mismo círculo que `.avatar` (42px); el hueco de
@@ -6471,9 +6583,13 @@ button.qc-circulo::after {
 }
 
 /* Detalle owner-only de cada pago propio. Una mesa puede tener más de uno:
-   cada bloque conserva su frontera sin repetir una tarjeta entera. */
+   cada bloque conserva su frontera sin repetir una tarjeta entera.
+   D240 punto 14 · Mati: «la burbuja de información del detalle tiene que estar
+   un poco más abajo, separándola de la flecha divisoria del desplegable». La
+   burbuja iba pegada a la línea divisoria (margin-top 0); ahora la separan los
+   mismos 12 px de los costados y del pie. */
 .hist-detail {
-  margin: 0 var(--sp-3) var(--sp-3);
+  margin: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--r-md);

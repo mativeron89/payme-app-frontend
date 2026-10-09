@@ -221,8 +221,9 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await plantarAjenos(page, code);
     const libre = renglon(page, 'Risotto ai Funghi');
     const siguiente = renglon(page, 'Pizza Margherita');
-    expect(await alto(libre)).toBeCloseTo(48, 0);
-    expect(await alto(renglon(page, 'Tiramisú'))).toBeCloseTo(48, 0);
+    // D240 punto 3 · 56 (eran 48): el nombre ocupa hasta dos líneas.
+    expect(await alto(libre)).toBeCloseTo(56, 0);
+    expect(await alto(renglon(page, 'Tiramisú'))).toBeCloseTo(56, 0);
     const antes = await arriba(siguiente);
 
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
@@ -230,7 +231,8 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     const conSelector = await arriba(siguiente);
     await libre.getByRole('radio', { name: '½' }).click();
     const cerrado = await arriba(siguiente);
-    // El propio mide 44 + 3 + 3 (diseño): 2 px más que el normal de 48.
+    // El propio mide 50 + 3 + 3: lo mismo que el normal de 56 (D240 punto 3;
+    // antes 44 + 3 + 3, 2 px más que el normal de 48).
     for (const [cuando, y] of [['con el selector', conSelector], ['con la píldora', cerrado]] as const) {
       expect(Math.abs(y - antes), `el siguiente se movió ${y - antes}px ${cuando}`).toBeLessThanOrEqual(2);
     }

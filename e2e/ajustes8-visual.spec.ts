@@ -145,6 +145,13 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await capturar(page, 'v03-v05-ultimo-consumo-seleccionado');
 
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // D240 punto 8 (reemplaza a V05 en este momento): el «Listo» que completa la
+    // mesa avisa ANTES de enviar, con lo elegido para revisar; marcar sigue
+    // siendo local (arriba) y nada se registra hasta confirmar.
+    const hojaDeCierre = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
+    await expect(hojaDeCierre.locator('.cerrar-mesa-mios li')).toHaveText(['Tagliatelle Bolognese']);
+    expect(await claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(0);
+    await hojaDeCierre.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     await expect.poll(() => claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(1);
   });
 

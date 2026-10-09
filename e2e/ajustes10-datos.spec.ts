@@ -25,7 +25,8 @@ test('U08 · Historial abre únicamente el detalle propio canónico cuando vino 
   await page.goto('/#/mesas');
   const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
   await mesa.getByRole('button').click();
-  await expect(mesa.getByText('Tacos al pastor × 2')).toBeVisible();
+  // D240 punto 16 · la cantidad va antes del nombre.
+  await expect(mesa.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
   await expect(mesa).toContainText('$200');
   await expect(mesa).toContainText('Agua de jamaica');
 });

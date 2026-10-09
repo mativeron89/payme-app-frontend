@@ -28,6 +28,12 @@ import {
   restanteInformativo,
 } from './mesaItemsView';
 import { etiquetaPorcion, porcionesDisponibles, textoPlatos } from './queConsumisteView';
+import {
+  elegidosAlGuardar,
+  elegidosRegistrados,
+  lineasElegidas,
+  seleccionCierraLaMesa,
+} from './antesDeCerrar';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -314,39 +320,79 @@ export function sePuedeCerrar(mesa: Pick<MesaDetail, 'my_role' | 'guarantee_mode
 }
 
 /**
- * AF-34 · la confirmación de «Cerrar mesa»: dice qué pasa antes de pasar. Va por
- * portal con `.sheet-overlay` (la hoja con estilos; la de D-R20 usa clases sin
- * CSS y tiene su pendiente aparte). El botón de confirmar se apaga mientras viaja.
+ * AF-34 · D240 punto 8 · la hoja ANTES de que la mesa se cierre: dice qué pasa,
+ * muestra lo que elegiste y ofrece revisarlo, porque después ya no se puede
+ * modificar. La usan «Cerrar mesa» y el «Listo» que completa la mesa. Va por
+ * portal con `.sheet-overlay`. El foco entra en «Revisar», la salida segura
+ * (D202); el ✕, Escape y el velo salen sin revisar. El botón de confirmar se
+ * apaga mientras viaja.
  */
-function HojaCerrarMesa({ onConfirmar, onVolver, cerrando }: { onConfirmar: () => void; onVolver: () => void; cerrando: boolean }) {
+function HojaAntesDeCerrar({
+  titulo,
+  renglones,
+  mios,
+  sinGuardar,
+  confirmar,
+  cerrando,
+  onRevisar,
+  onSalir,
+  onConfirmar,
+}: {
+  titulo: string;
+  renglones: readonly string[];
+  mios: readonly { key: string; texto: string }[];
+  sinGuardar: boolean;
+  confirmar: string;
+  cerrando: boolean;
+  onRevisar: () => void;
+  onSalir: () => void;
+  onConfirmar: () => void;
+}) {
   const { t } = useIdioma();
   const hoja = useRef<HTMLDivElement | null>(null);
-  const volver = useRef<HTMLButtonElement | null>(null);
-  // D202 · el foco entra en «Volver», la salida segura; Tab no sale de la hoja y el fondo queda inerte.
-  useHojaModal(hoja, volver, onVolver);
+  const revisar = useRef<HTMLButtonElement | null>(null);
+  useHojaModal(hoja, revisar, onSalir);
+  // Con muchos platos, los botones no se pierden debajo: hasta 4 y «y N más».
+  const visibles = mios.slice(0, 4);
+  const resto = mios.length - visibles.length;
   return createPortal(
-    <div className="sheet-overlay" onClick={onVolver}>
+    <div className="sheet-overlay" onClick={onSalir}>
       <div
         ref={hoja}
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={t('¿Cerrar la mesa?')}
+        aria-label={titulo}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-head">
-          <span className="sheet-title">{t('¿Cerrar la mesa?')}</span>
-          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onVolver}>✕</button>
+          <span className="sheet-title">{titulo}</span>
+          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onSalir}>✕</button>
         </div>
+        <p className="cerrar-mesa-aviso">{t('Revisa lo que elegiste: después de cerrar ya no se puede modificar.')}</p>
+        <div className="cerrar-mesa-mios">
+          <p className="cerrar-mesa-mios-titulo">{t('Lo que elegiste')}</p>
+          {mios.length === 0 ? (
+            <p className="cerrar-mesa-nada">{t('Todavía no elegiste nada.')}</p>
+          ) : (
+            <ul>
+              {visibles.map((m) => <li key={m.key}>{m.texto}</li>)}
+              {resto > 0 && <li className="cerrar-mesa-resto">{t('y {0} más', resto)}</li>}
+            </ul>
+          )}
+        </div>
+        {sinGuardar && (
+          <p className="note note-amber cerrar-mesa-sin-guardar">
+            {t('Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.')}
+          </p>
+        )}
         <ul className="cerrar-mesa-lista">
-          <li>{t('La mesa se cierra para todos.')}</li>
-          <li>{t('Lo que cada quien eligió queda como su consumo.')}</li>
-          <li>{t('No se puede reabrir: para seguir, abre una mesa nueva.')}</li>
+          {renglones.map((r) => <li key={r}>{r}</li>)}
         </ul>
         <div className="cerrar-mesa-acciones">
-          <button ref={volver} type="button" className="btn btn-ghost" onClick={onVolver}>{t('Volver')}</button>
+          <button ref={revisar} type="button" className="btn btn-ghost" onClick={onRevisar}>{t('Revisar')}</button>
           <button type="button" className="btn btn-navy" onClick={onConfirmar} disabled={cerrando}>
-            {cerrando ? t('Cerrando…') : t('Sí, cerrar la mesa')}
+            {cerrando ? t('Cerrando…') : confirmar}
           </button>
         </div>
       </div>
@@ -406,9 +452,13 @@ export function MesaDetailView({
   const toast = useToast();
   /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
   const [itemsPulse, setItemsPulse] = useState(false);
-  /** AF-34 · la hoja de «¿Cerrar la mesa?», distinta de la de D-R20. */
-  const [confirmandoCerrarMesa, setConfirmandoCerrarMesa] = useState(false);
+  /**
+   * AF-34 · D240 punto 8 · la hoja antes del cierre (distinta de la de D-R20):
+   * `cerrar` la abre «Cerrar mesa»; `seleccion`, el «Listo» que completa la mesa.
+   */
+  const [hojaCierre, setHojaCierre] = useState<null | 'cerrar' | 'seleccion'>(null);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
+  const pantallaRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
   /**
    * D223 · «Tu mesa» es la del TITULAR. Quien no lo es ve la pantalla de
@@ -599,16 +649,47 @@ export function MesaDetailView({
   // tres. Compartido por «Continuar» y «Listo»: nunca se avanza sin elegir.
   const frenarSinEleccion = (): void => {
     toast(t('Elige lo que consumiste para continuar'));
-    // D223 · en «Tu mesa» la lista vive dentro de «Tus consumos», que puede
-    // estar cerrado: se abre ANTES de bajar, si no el aviso lleva a una tarjeta
-    // cerrada que no dice qué falta.
+    llevarALaLista(false);
+  };
+  /**
+   * Scroll + pulso hasta la lista. D223 · en «Tu mesa» la lista vive dentro de
+   * «Tus consumos», que puede estar cerrado: se abre ANTES de bajar, si no el
+   * aviso lleva a una tarjeta cerrada que no dice qué falta. D240 punto 8 · desde
+   * «Revisar» además deja el foco en la lista (la hoja se acaba de ir).
+   */
+  const llevarALaLista = (enfocar: boolean): void => {
+    const ir = () => {
+      itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      if (enfocar) itemsRef.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+    };
     if (esTitular && !consumosAbierto) {
       setConsumosAbierto(true);
-      requestAnimationFrame(() => itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }));
+      requestAnimationFrame(ir);
+    } else if (enfocar) {
+      requestAnimationFrame(ir);
     } else {
-      itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      ir();
     }
     setItemsPulse(true);
+  };
+  /**
+   * D240 punto 8 · ¿este «Listo» cierra la mesa? Sólo sin garantía y abierta,
+   * con algo nuevo que guardar y con lo que el dueño publica de cada plato: en
+   * consumo el borrador se suma; en «igual», con la selección guardada ya leída,
+   * la reemplaza.
+   */
+  const listoCierraLaMesa = mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo
+    ? seleccionCierraLaMesa(mesa, (item) => item.remaining_bps, () => 0, selected)
+    : guardadaLeida && !informativeSaved && informativoPublicado(mesa)
+      && seleccionCierraLaMesa(
+        mesa,
+        (item) => item.informative_remaining_bps,
+        (item) => informativasGuardadas.get(item.id) ?? 0,
+        selected,
+      ));
+  /** Vuelve el foco al círculo «Listo» (el de esta pantalla). */
+  const enfocarListo = (): void => {
+    requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('.appbar-center')?.focus());
   };
   /**
    * D223 · D (aprobado) · el encabezado de «Tus consumos»: cuántos elegiste, no
@@ -650,8 +731,16 @@ export function MesaDetailView({
       >
         {mesa.items.map((i) => <div key={i.id} className="qc-renglon" data-plato={i.name}>{(() => {
           const fullPrice = i.price_cents * i.quantity;
-          const nombre = `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`;
           const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
+          // D240 puntos 3 y 16 · la cantidad va ANTES del nombre («2 × Tiramisú»),
+          // como en el ticket y en Mesas, y en su propio elemento: la elipsis
+          // corta el nombre, nunca la cantidad.
+          const titulo = (clase: string) => (
+            <span className="qc-titulo">
+              {i.quantity > 1 && <span className="qc-cant">{i.quantity} ×</span>}
+              <span className={clase}>{i.name}</span>
+            </span>
+          );
           // En igualdad la selección sólo declara consumo y no reclama el
           // ítem. Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto
           // queda del plato (de TODOS, sin nombres): esta cuenta puede declarar
@@ -763,12 +852,10 @@ export function MesaDetailView({
                     confundir plata. Sin pago, la píldora ya dice la porción. */}
                 {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0 ? (
                   <span className="qc-cuerpo">
-                    <span className="qc-nombre qc-nombre--mio">{nombre}</span>
+                    {titulo('qc-nombre qc-nombre--mio')}
                     <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>
                   </span>
-                ) : (
-                  <span className="qc-nombre qc-nombre--mio">{nombre}</span>
-                )}
+                ) : titulo('qc-nombre qc-nombre--mio')}
                 {sel && opciones.length > 1 && !editBloqueado ? (
                   <button
                     type="button"
@@ -793,7 +880,7 @@ export function MesaDetailView({
               <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
                 <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
                 <span className="qc-cuerpo">
-                  <span className="qc-nombre qc-nombre--otro">{nombre}</span>
+                  {titulo('qc-nombre qc-nombre--otro')}
                   {tag && <span className="qc-etiqueta">{tag}</span>}
                 </span>
                 <span className="qc-precio qc-precio--otro">{formatMXN(fullPrice)}</span>
@@ -813,7 +900,7 @@ export function MesaDetailView({
               onClick={() => tomarPlato(i.id, opciones.length)}
             >
               <span className="qc-circulo" aria-hidden="true" />
-              <span className="qc-nombre">{nombre}</span>
+              {titulo('qc-nombre')}
               {queda && tag && <span className="qc-pildora qc-pildora--queda">{tag}</span>}
               <span className="qc-precio">{formatMXN(fullPrice)}</span>
             </button>
@@ -835,7 +922,7 @@ export function MesaDetailView({
   );
 
   return (
-    <div className="screen has-appbar">
+    <div ref={pantallaRef} className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
@@ -1085,7 +1172,7 @@ export function MesaDetailView({
                   ref={botonCerrarMesa}
                   type="button"
                   className="btn btn-cerrar-mesa btn-sm btn-fit"
-                  onClick={() => setConfirmandoCerrarMesa(true)}
+                  onClick={() => setHojaCierre('cerrar')}
                   disabled={cerrando}
                 >
                   <Icon name="lock" size={16} className="ico-inline" /> {t('Cerrar mesa')}
@@ -1095,18 +1182,46 @@ export function MesaDetailView({
           </>
         ) : listaDeConsumos}
       </div>
-      {confirmandoCerrarMesa && onCerrarMesa && (
-        <HojaCerrarMesa
+      {hojaCierre === 'cerrar' && onCerrarMesa && (
+        <HojaAntesDeCerrar
+          titulo={t('¿Cerrar la mesa?')}
+          renglones={[
+            t('La mesa se cierra para todos.'),
+            t('Lo que cada quien eligió queda como su consumo.'),
+            t('No se puede reabrir: para seguir, abre una mesa nueva.'),
+          ]}
+          mios={lineasElegidas(elegidosRegistrados(mesa, esConsumo, informativasGuardadas))}
+          sinGuardar={esConsumo ? selected.size > 0 : guardadaLeida && !informativeSaved}
+          confirmar={t('Sí, cerrar la mesa')}
           cerrando={cerrando}
-          onVolver={() => {
-            setConfirmandoCerrarMesa(false);
+          onRevisar={() => { setHojaCierre(null); llevarALaLista(true); }}
+          onSalir={() => {
+            setHojaCierre(null);
             // El foco vuelve al botón que abrió la hoja (un clic en Safari no lo enfoca).
             requestAnimationFrame(() => botonCerrarMesa.current?.focus());
           }}
           // La hoja queda abierta con «Cerrando…» apagado hasta que el dueño
           // contesta: un segundo toque cae en el botón apagado, no en lo que
           // hay debajo. Si se cerró, la pantalla pasa al cierre.
-          onConfirmar={() => { void onCerrarMesa().finally(() => setConfirmandoCerrarMesa(false)); }}
+          onConfirmar={() => { void onCerrarMesa().finally(() => setHojaCierre(null)); }}
+        />
+      )}
+      {hojaCierre === 'seleccion' && (
+        <HojaAntesDeCerrar
+          titulo={t('Con esto se cierra la mesa')}
+          renglones={[
+            t('Con tu selección ya se eligió todo lo de la mesa.'),
+            t('Al guardar, la mesa se cierra para todos.'),
+          ]}
+          mios={lineasElegidas(elegidosAlGuardar(mesa, esConsumo, selected))}
+          sinGuardar={false}
+          confirmar={t('Guardar y cerrar')}
+          cerrando={busy}
+          onRevisar={() => { setHojaCierre(null); llevarALaLista(true); }}
+          onSalir={() => { setHojaCierre(null); enfocarListo(); }}
+          // El guardado sigue su camino de siempre: el dueño cierra la mesa en el
+          // mismo pedido y la pantalla pasa a «La mesa se cerró» (F-2).
+          onConfirmar={() => { setHojaCierre(null); onGoToPay(); }}
         />
       )}
       {/* Con pagos apagados, Listo es el único acto explícito de persistencia.
@@ -1135,6 +1250,8 @@ export function MesaDetailView({
             // Decisión 32 · sin nada elegido ni registrado, la misma guarda
             // que el círculo hacia el pago; nunca un retorno silencioso.
             if (faltaElegirConsumos && !tengoRegistrado) { frenarSinEleccion(); return; }
+            // D240 punto 8 · si este guardado cierra la mesa, primero avisa.
+            if (listoCierraLaMesa) { setHojaCierre('seleccion'); return; }
             onGoToPay();
           },
           disabled: busy || (!esConsumo && informativeEditingBlocked),

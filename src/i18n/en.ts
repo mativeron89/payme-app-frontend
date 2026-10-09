@@ -1219,4 +1219,15 @@ export const EN: Record<string, string> = {
   // AF-E181 · D181.
   "Invitar amigos": "Invite friends",
   "Aquí aparecen tus invitaciones y los avisos de tus mesas.": "Your invitations and table notifications show up here.",
+  // AF-TANDA-CHICA-0810 · D240 · la campana con el número (punto 5).
+  "Avisos, {0} sin leer": "Notifications, {0} unread",
+  // AF-TANDA-CHICA-0810 · D240 · la hoja antes del cierre (punto 8).
+  "Revisar": "Review",
+  "Revisa lo que elegiste: después de cerrar ya no se puede modificar.": "Check what you chose: once it closes, it can't be changed.",
+  "Todavía no elegiste nada.": "You haven't chosen anything yet.",
+  "Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.": "You marked items without tapping «Done»: if you close now, they won't be saved.",
+  "Con esto se cierra la mesa": "This closes the table",
+  "Con tu selección ya se eligió todo lo de la mesa.": "With your selection, everything on the table has been chosen.",
+  "Al guardar, la mesa se cierra para todos.": "When you save, the table closes for everyone.",
+  "Guardar y cerrar": "Save and close",
 };

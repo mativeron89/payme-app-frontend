@@ -96,7 +96,8 @@ test.describe('D202 · H-04 · el foco no sale de las hojas modales', () => {
     const cerrarMesa = page.getByRole('button', { name: 'Cerrar mesa', exact: true });
     await cerrarMesa.click();
     const hoja = page.getByRole('dialog', { name: '¿Cerrar la mesa?' });
-    await expect(hoja.getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+    // D240 punto 8 · la salida segura ahora es «Revisar» (antes «Volver»).
+    await expect(hoja.getByRole('button', { name: 'Revisar', exact: true })).toBeFocused();
     await contieneElFoco(page, hoja, () => page.keyboard.press('Escape'));
     await expect(cerrarMesa).toBeFocused();
   });

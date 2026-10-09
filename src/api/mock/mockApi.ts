@@ -3136,11 +3136,33 @@ export async function mockLockItems(
     item.claims.push({ who: identity, fraction_bps: c.fraction_bps, amount_cents: null, status: 'locked' });
     item.lock_expires_at = expires;
   }
+  /**
+   * D240 punto 8 · C3 · espejo de `contract-mirror/routes/mesas.js:1762` y
+   * `:1819-1866`: en una mesa SIN garantía y en consumo, el pedido que deja todos
+   * los platos elegidos cierra la mesa en el mismo pedido, sin cobros, y la
+   * respuesta lo dice. Antes el mock no cerraba nunca por selección, y el «Listo»
+   * que completaba la mesa volvía a Inicio en vez de mostrar «La mesa se cerró».
+   */
+  const cerradaPorSeleccion = mesa.guarantee_mode === false
+    && mesa.division_mode === 'consumo'
+    && (mesa.status === 'open' || mesa.status === 'partially_paid')
+    && mesa.items.every((i) => i.claims
+      .filter((cl) => cl.status === 'locked' || cl.status === 'paid')
+      .reduce((suma, cl) => suma + cl.fraction_bps, 0) >= 10000);
+  if (cerradaPorSeleccion) {
+    mesa.status = 'expired';
+    mesa.closure_reason = 'all_items_selected';
+  }
   return delay({
     locked: claims.map((c) => c.item_id),
     claims,
     lock_token: `mock-lock-${Date.now()}`,
     lock_expires_at: expires,
+    ...(cerradaPorSeleccion && {
+      mesa_status: 'expired' as const,
+      closure_reason: 'all_items_selected' as const,
+      guarantee_mode: false as const,
+    }),
   });
 }
 

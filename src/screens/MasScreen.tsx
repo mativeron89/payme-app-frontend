@@ -138,7 +138,7 @@ export function MasScreen() {
           {/* IDIOMA · pedido de Mati el 2026-08-10: *«necesita el mismo toggle
               en "Más"»*. Configuración conserva ese mismo control local.
 
-              🔴 El segmentado va donde las otras filas ponen la flecha `→`, y es
+              🔴 El segmentado va donde las otras filas ponen su flecha, y es
               MÁS ANCHO que ella. En el panel, un control así en una fila llena
               montó la píldora sobre el nombre — y la revisión de desbordes de
               TEXTO lo dio por bueno, porque no era texto que crecía sino un
@@ -164,7 +164,7 @@ export function MasScreen() {
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
               {t('Notificaciones')}
             </div>
-            <span style={{ color: 'var(--gray-b)' }}>→</span>
+            <FlechaDeFila />
           </button>
           {corteDeclarado && (
             <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
@@ -184,7 +184,7 @@ export function MasScreen() {
               <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
                 {walletRailEnabled ? 'Saldo y tarjetas' : t('Mis tarjetas')}
               </div>
-              <span style={{ color: 'var(--gray-b)' }}>→</span>
+              <FlechaDeFila />
             </button>
           )}
           {/* §1.9 · **Amigos y Grupos salieron de acá.** No es recorte: las dos
@@ -223,8 +223,9 @@ export function MasScreen() {
             <Icon name="refresh" size={16} className="ico-inline" /> {t('Reiniciar la demo')}
           </button>
         )}
+        {/* D240 punto 12 · Mati: «Boton de cerrar sesión en rojo clarito». */}
         <button
-          className="btn btn-ghost"
+          className="btn btn-cerrar-sesion"
           onClick={() => {
             void logout();
           }}
@@ -242,6 +243,22 @@ export function MasScreen() {
           conviviendo, superpuestas. */}
       <AppBottomBar active="mas" />
     </div>
+  );
+}
+
+/**
+ * D240 punto 13 · Mati: «flecha de notificaciones misma forma que la de Zona
+ * Horaria». La flecha de las filas de Configuración es la de «Zona horaria»
+ * (`RegionSettingsPanel`): el ícono `arrow-right` de 16 px en navy, no el
+ * carácter «→» gris. El color va explícito porque estos botones no tienen
+ * regla de color y el ícono hereda `currentColor`. Es decorativa: queda fuera
+ * del nombre accesible, que vuelve a ser sólo el rótulo.
+ */
+function FlechaDeFila() {
+  return (
+    <span aria-hidden="true" style={{ color: 'var(--navy)', lineHeight: 0 }}>
+      <Icon name="arrow-right" size={16} />
+    </span>
   );
 }
 
@@ -273,7 +290,7 @@ function FilaAgregarAInicio() {
         <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
           {t('Agregar a inicio')}
         </div>
-        <span aria-hidden="true" style={{ color: 'var(--gray-b)' }}>→</span>
+        <FlechaDeFila />
       </button>
       {guia && (
         <GuiaAgregarAInicio
