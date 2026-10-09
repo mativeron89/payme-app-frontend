@@ -11,6 +11,27 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.230.0 — Los platos con las palabras corregidas, y volver a lo que decía el ticket (2026-10-09)
+
+Orden AF-NOMBRES-CORREGIDOS-20261009 (be1cbd18…); decisión 240 punto 15 de Mati («También corregir palabras»),
+Roadmap n337. Plan aprobado (01d7878d…, OK 07:52:38Z): A, sólo dentro de la edición del plato y sólo si el
+original es distinto; B, sin «Usar el corregido» de vuelta; C, los dos textos. Dueño: App Backend 2.170.0
+(`names_v1` de `contract/ocr-merchant-v2.json`; el espejo de 2.171.0 ya lo trae). Lo visible se cierra con la
+prueba de Mati en el iPhone (D63).
+
+- **La negociación:** el pedido de escaneo suma `names_version=1` (`http.ts`). Cada plato llega corregido en
+  `name` y con lo que decía el ticket en `original_name`, que el decoder admite sólo con esa negociación, en todos
+  los platos y con las reglas de `name`. Sin la negociación, la clave es desconocida y la lectura se rechaza.
+- **Se ve el corregido.** En la lista no hay ninguna marca: sin ruido.
+- **Volver al original:** en la edición del plato (el lápiz), debajo de «Consumo», si el original es distinto de
+  lo que hay en el campo: «En el ticket decía «X».» con **«Usar ese nombre»**, que pone el original en el campo.
+  Editar sigue como siempre.
+- **El recibo** firma el corregido. Volver al original con otras letras lo cuenta el dueño como edición, igual que
+  tipear: el front no decide el origen. El original no viaja al alta.
+- **Los viajes** cargan el corregido (1h no edita nombres).
+- **El mock**, como el del dueño, no corrige (original = nombre). Con el seam `payme.app.mock.ocr.nombres.v1 =
+  corregidos`, el ticket «decía» «TAGLIATELLE BOLOGNESE», «Piza Margherita», «TIRAMISU» y «Agua minral».
+
 ## 0.229.0 — Viajes: los gastos compartidos de un viaje (2026-10-09)
 
 Orden AF-VIAJES-20261009 (1a46e0bf…); decisión 242 de Mati (5ae87cec…), D240 punto 17, Roadmap n338. Plan aprobado

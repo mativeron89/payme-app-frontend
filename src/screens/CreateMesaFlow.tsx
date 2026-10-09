@@ -103,6 +103,12 @@ interface EditItem {
   confidence?: number;
   /** Señal del owner: se conserva incluso después de editar; no se finge certeza. */
   lowConfidence?: true;
+  /**
+   * AF-NOMBRES-CORREGIDOS · D240 punto 15 · lo que decía el ticket
+   * (`original_name`, App Backend 2.170.0). `name` nace con el corregido; esto
+   * se guarda para poder volver a él desde la edición del nombre.
+   */
+  originalName?: string;
 }
 
 export type TicketOpeningRoute = 'wait_for_user' | 'resolving_restaurant' | 'record_only_blocked' | 'create_without_money' | 'guarantee';
@@ -1175,6 +1181,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           ...(i.category && { category: i.category }),
           ...(i.confidence !== undefined && { confidence: i.confidence }),
           ...(i.low_confidence === true && { lowConfidence: true as const }),
+          ...(i.original_name !== undefined && { originalName: i.original_name }),
         })),
       );
       // El total impreso, para contrastarlo (§1.3). Ausente significa “no lo
@@ -2465,6 +2472,23 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             onChange={(e) => updateItem(idx, { name: e.target.value })}
                           />
                         </label>
+                        {/* AF-NOMBRES-CORREGIDOS · D240 punto 15 · volver a lo que decía el
+                            ticket: sólo dentro de la edición y sólo si es distinto de lo que
+                            hay en el campo (sin ruido en la lista). El recibo firma el
+                            corregido: volver al original con otras letras cuenta como edición
+                            para el dueño, igual que tipear. */}
+                        {it.originalName !== undefined && it.originalName !== it.name.trim() && (
+                          <div className="tk-original">
+                            <span className="tk-original-txt">{t('En el ticket decía «{0}».', it.originalName)}</span>
+                            <button
+                              type="button"
+                              className="tk-original-usar"
+                              onClick={() => updateItem(idx, { name: it.originalName })}
+                            >
+                              {t('Usar ese nombre')}
+                            </button>
+                          </div>
+                        )}
                         <label className="tk-edit-field">
                           <span className="tk-edit-lbl">{t('Precio por unidad')}</span>
                           <input

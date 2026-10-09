@@ -1072,6 +1072,12 @@ export interface OcrResponse {
     quantity: number;
     confidence?: number;
     low_confidence?: true;
+    /**
+     * AF-NOMBRES-CORREGIDOS · D240 punto 15 · sólo con `names_version=1`: lo
+     * que decía el ticket. `name` es el corregido; si no se corrigió nada, son
+     * iguales.
+     */
+    original_name?: string;
   }>;
   total_cents: number;
   /** Total IMPRESO detectado; `total_cents` es la suma de las filas. */

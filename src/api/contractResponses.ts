@@ -315,6 +315,13 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
  */
 const OCR_WARNINGS_V2: readonly OcrWarning[] = [...OCR_WARNINGS, 'no_prices_found'];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
+/**
+ * AF-NOMBRES-CORREGIDOS · D240 punto 15 · `names_v1` del dueño (2.170.0): con
+ * `names_version=1` negociado, cada plato trae además `original_name`, con las
+ * reglas de `name`. Sin la negociación la clave es desconocida y la lectura
+ * entera se rechaza, como cualquier otra forma inválida.
+ */
+const OCR_ITEM_KEYS_NOMBRES = [...OCR_ITEM_KEYS, 'original_name'];
 const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
 const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant', 'receipt', 'ticket_totals', 'ticket_adjustments'];
 const TICKET_TOTALS_KEYS = ['subtotal_cents', 'tax_cents'];
@@ -449,7 +456,10 @@ function ticketDatetimeOf(value: unknown): { date: string; time: string | null }
  * admite `ticket_datetime`. Sin el viaje, la clave es tan desconocida como
  * siempre y rompe la lectura.
  */
-export function ocrResponse(value: unknown, opciones: { readonly viaje?: boolean } = {}): OcrResponse {
+export function ocrResponse(
+  value: unknown,
+  opciones: { readonly viaje?: boolean; readonly nombres?: boolean } = {},
+): OcrResponse {
   const body = record(value);
   const version2 = body?.contract_version === 2;
   const allowed = version2
@@ -493,10 +503,15 @@ export function ocrResponse(value: unknown, opciones: { readonly viaje?: boolean
   }
 
   const items: OcrResponse['items'] = [];
+  const nombres = version2 && opciones.nombres === true;
+  const clavesDelItem = nombres ? OCR_ITEM_KEYS_NOMBRES : OCR_ITEM_KEYS;
   for (const raw of body.items) {
     const item = record(raw);
     if (!item
-        || Object.keys(item).some((key) => !OCR_ITEM_KEYS.includes(key))
+        || Object.keys(item).some((key) => !clavesDelItem.includes(key))
+        // Negociado, el original va en TODOS los platos, con las reglas de `name`.
+        || (nombres && (typeof item.original_name !== 'string'
+          || normalizedMerchantName(item.original_name) !== item.original_name))
         || typeof item.name !== 'string' || !item.name || item.name.length > 200
         || item.name !== item.name.trim()
         || !OCR_CATEGORIES.includes(item.category as OcrCategory)
@@ -516,6 +531,7 @@ export function ocrResponse(value: unknown, opciones: { readonly viaje?: boolean
       quantity: item.quantity,
       ...(item.confidence !== undefined ? { confidence: item.confidence as number } : {}),
       ...(item.low_confidence === true ? { low_confidence: true as const } : {}),
+      ...(nombres ? { original_name: item.original_name as string } : {}),
     });
   }
 

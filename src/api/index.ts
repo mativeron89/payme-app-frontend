@@ -871,7 +871,8 @@ const realApi: Api = {
     // AF-VIAJES · el viaje sólo se pide con la capacidad encendida (el dueño lo ignora si no).
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
-    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje }), { viaje });
+    // AF-NOMBRES-CORREGIDOS · el pedido siempre negocia `names_version=1`.
+    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje }), { viaje, nombres: true });
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -1421,7 +1422,7 @@ const mockApi: Api = {
   scanTicket: async (_image, _onUploadProgress, opciones) => {
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
-    return ocrResponse(await mock.mockScanTicket({ viaje }), { viaje });
+    return ocrResponse(await mock.mockScanTicket({ viaje, nombres: true }), { viaje, nombres: true });
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(

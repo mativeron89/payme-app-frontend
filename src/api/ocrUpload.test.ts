@@ -104,7 +104,9 @@ function ticket() {
   return {
     contract_version: 2,
     merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
-    items: [{ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 }],
+    // AF-NOMBRES-CORREGIDOS · el pedido negocia `names_version=1`: el dueño
+    // publica el original en todos los platos (acá, sin corrección).
+    items: [{ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1, original_name: 'Taco' }],
     total_cents: 1000,
     warnings: [],
     mock: false,
@@ -147,7 +149,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const xhr = FakeXmlHttpRequest.instances[0];
     expect(xhr).toBeDefined();
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2$/);
+    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1$/);
     // D209 · el dueño negocia `ticket_totals` sólo con el string exacto «1» y
     // UNA vez: duplicado o desconocido devuelve el contrato sin los totales.
     expect(new URL(xhr.url, 'https://payme.test').searchParams.getAll('totals_version')).toEqual(['1']);
@@ -338,5 +340,46 @@ describe('AF-VIAJES · D242 · el escaneo dentro de un viaje (`trip_version=1`)'
     const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }), undefined, { viaje: true });
     FakeXmlHttpRequest.instances[0]!.finish(200, { ...ticket(), ticket_datetime });
     await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+});
+
+describe('AF-NOMBRES-CORREGIDOS · D240 punto 15 · los nombres corregidos (`names_version=1`)', () => {
+  const conOriginal = (extra: Record<string, unknown> = {}) => ({
+    ...ticket(),
+    items: [{ name: 'Taco al pastor', category: 'mexican', price_cents: 1000, quantity: 1, original_name: 'TACO AL PASTOR', ...extra }],
+  });
+
+  it('el pedido negocia names_version=1, exacto y una sola vez', async () => {
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    const xhr = FakeXmlHttpRequest.instances[0]!;
+    expect(new URL(xhr.url, 'http://localhost').searchParams.getAll('names_version')).toEqual(['1']);
+    xhr.finish(200, conOriginal());
+    await expect(pending).resolves.toMatchObject({ items: [{ name: 'Taco al pastor', original_name: 'TACO AL PASTOR' }] });
+  });
+
+  it('🔴 negociado, un plato sin `original_name` rompe la lectura (va en todos)', async () => {
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    const { original_name: _sinOriginal, ...plato } = ticket().items[0]!;
+    FakeXmlHttpRequest.instances[0]!.finish(200, { ...ticket(), items: [plato] });
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+
+  it.each([
+    ['vacío', ''],
+    ['con espacios de más', '  TACO  AL PASTOR '],
+    ['no es texto', 7],
+    ['de más de 200', 'A'.repeat(201)],
+  ])('🔴 un `original_name` %s rompe la lectura', async (_caso, original) => {
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    FakeXmlHttpRequest.instances[0]!.finish(200, conOriginal({ original_name: original }));
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+
+  it('🔴 sin la negociación, `original_name` es una clave desconocida: falla cerrado', async () => {
+    const { ocrResponse } = await import('./contractResponses');
+    expect(() => ocrResponse(conOriginal())).toThrow('contract_response_invalid:ocr');
+    // Y sin la clave, la lectura de siempre, igual.
+    const { original_name: _sinOriginal, ...plato } = ticket().items[0]!;
+    expect(ocrResponse({ ...ticket(), items: [plato] }).items[0]).toEqual({ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 });
   });
 });

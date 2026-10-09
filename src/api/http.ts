@@ -212,10 +212,13 @@ function rawOcrUploadRequest<T>(
     // D218 · D224 · `adjustments_version=2` negocia `ticket_adjustments` con el
     // cargo por servicio, y elige la LECTURA NUEVA del ticket (App Backend
     // 2.168.0): sin ella, el cargo puede llegar como un plato (D212).
+    // AF-NOMBRES-CORREGIDOS · D240 punto 15 · `names_version=1` (App Backend
+    // 2.170.0): cada plato llega con el nombre corregido en `name` y lo que
+    // decía el ticket en `original_name`, para poder volver a él.
     // AF-VIAJES · D242 · `trip_version=1` sólo dentro de un viaje: el dueño firma
     // en el recibo la huella del ticket (el duplicado, 1k) y publica la fecha
     // impresa. Sin el viaje, el pedido de siempre, byte a byte.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2${viaje ? '&trip_version=1' : ''}`);
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

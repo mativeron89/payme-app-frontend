@@ -4980,6 +4980,33 @@ html.app-de-inicio-ios .app {
   color: var(--text);
 }
 
+/* AF-NOMBRES-CORREGIDOS · «En el ticket decía…» bajo el nombre, con su acción
+   al lado: texto chico y un enlace, sin color de alarma (no es un error). */
+.tk-original {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--sp-2);
+  margin: calc(-1 * var(--sp-2)) 0 var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.tk-original-usar {
+  min-height: var(--tap-min);
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .tk-edit-input.amt {
   font-family: var(--font-display);
   font-weight: 700;

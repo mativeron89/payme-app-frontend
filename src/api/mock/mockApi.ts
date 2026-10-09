@@ -2511,7 +2511,21 @@ async function mockOcrReceipt(
  * prueba de otros modos no lo miran). El mock del dueño no trae fecha ni
  * huella: acá salen de sus seams (`viajesSeam.ts`).
  */
-export async function mockScanTicket(opciones: { readonly viaje?: boolean } = {}): Promise<OcrResponse> {
+/** Lo que «decía el ticket» con el seam de nombres corregidos. */
+const ORIGINALES_MOCK: Readonly<Record<string, string>> = {
+  'Tagliatelle Bolognese': 'TAGLIATELLE BOLOGNESE',
+  'Pizza Margherita': 'Piza Margherita',
+  Tiramisú: 'TIRAMISU',
+  'Agua mineral': 'Agua minral',
+};
+
+function nombresCorregidosMock(): boolean {
+  return leerSeam('payme.app.mock.ocr.nombres.v1') === 'corregidos';
+}
+
+export async function mockScanTicket(
+  opciones: { readonly viaje?: boolean; readonly nombres?: boolean } = {},
+): Promise<OcrResponse> {
   // El ticket de LA PAROLACCIA del mock del backend (`routes/ocr.js`), con UNA
   // diferencia a propósito: acá «Tiramisú» es un ítem de $70.00 con cantidad 2.
   // El mock del backend imprime «Tiramisú x2 140.00» y su `parseTicket` no
@@ -2521,7 +2535,7 @@ export async function mockScanTicket(opciones: { readonly viaje?: boolean } = {}
   // el caso real de Textract, que sí trae cantidad y precio unitario: ejercita
   // la expansión en unidades del alta y el recibo que firma `[huella, 7000, 2]`.
   // El total es $840.00 en los dos.
-  const items = [
+  const leidos = [
     { name: 'Tagliatelle Bolognese', category: 'italian' as const, price_cents: 19500, quantity: 1 },
     { name: 'Risotto ai Funghi', category: 'italian' as const, price_cents: 22000, quantity: 1 },
     { name: 'Pizza Margherita', category: 'italian' as const, price_cents: 18500, quantity: 1 },
@@ -2529,6 +2543,15 @@ export async function mockScanTicket(opciones: { readonly viaje?: boolean } = {}
     { name: 'Agua mineral', category: 'other' as const, price_cents: 4000, quantity: 1 },
     { name: 'Vino tinto (copa)', category: 'other' as const, price_cents: 6000, quantity: 1 },
   ];
+  /**
+   * AF-NOMBRES-CORREGIDOS · `names_version=1` (D240 punto 15). Como el mock del
+   * dueño, no corrige: el original es el mismo nombre. Con el seam
+   * `payme.app.mock.ocr.nombres.v1 = corregidos`, el ticket «decía» otra cosa
+   * (mayúsculas, una letra de menos, sin acento) y `name` es el corregido.
+   */
+  const items = opciones.nombres === true
+    ? leidos.map((i) => ({ ...i, original_name: nombresCorregidosMock() ? ORIGINALES_MOCK[i.name] ?? i.name : i.name }))
+    : leidos;
   const total = items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
   const mode = localStorage.getItem('payme.app.mock.n179.ocr.v1');
   const attemptsKey = 'payme.app.mock.n179.ocr_attempts.v1';

@@ -1254,6 +1254,9 @@ export const EN: Record<string, string> = {
   "Esa mesa ya no está disponible.": "That table is no longer available.",
   "Ese pago ya no está disponible.": "That payment is no longer available.",
   "No pudimos borrarlo. Prueba de nuevo.": "We couldn't delete it. Try again.",
+  // AF-NOMBRES-CORREGIDOS · D240 punto 15 · volver a lo que decía el ticket.
+  "En el ticket decía «{0}».": "The ticket said «{0}».",
+  "Usar ese nombre": "Use that name",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.
