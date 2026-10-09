@@ -22,28 +22,28 @@ import {
 const IDS = { yo: 'm-ana', luis: 'm-luis', sofia: 'm-sofia', diego: 'm-diego' } as const;
 
 function miembro(id: string, first: string, last: string, extra: Partial<MiembroViaje> = {}): MiembroViaje {
-  return { id, first_name: first, last_name: last, username: null, eliminada: false, es_yo: false, balance_cents: 0, falta_elegir: 0, ...extra };
+  return { id, first_name: first, last_name: last, username: null, eliminada: false, es_yo: false, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0, ...extra };
 }
 
 const MIEMBROS: MiembroViaje[] = [
-  miembro(IDS.yo, 'Ana', 'López', { es_yo: true, balance_cents: -54200, username: 'ana.lopez' }),
-  miembro(IDS.luis, 'Luis', 'Pérez', { balance_cents: 181900, username: 'luis.perez' }),
-  miembro(IDS.sofia, 'Sofía', 'Ramírez', { balance_cents: -23000, username: 'sofia.ramirez' }),
-  miembro(IDS.diego, 'Diego', 'Torres', { balance_cents: -104700, falta_elegir: 1, username: 'diego.torres' }),
+  miembro(IDS.yo, 'Ana', 'López', { es_yo: true, balance_cents: -54200, username: 'ana.lopez', pagado_cents: 96000 }),
+  miembro(IDS.luis, 'Luis', 'Pérez', { balance_cents: 181900, username: 'luis.perez', pagado_cents: 404000, has_avatar: true }),
+  miembro(IDS.sofia, 'Sofía', 'Ramírez', { balance_cents: -23000, username: 'sofia.ramirez', pagado_cents: 128000 }),
+  miembro(IDS.diego, 'Diego', 'Torres', { balance_cents: -104700, falta_elegir: 1, username: 'diego.torres', pagado_cents: 38000 }),
 ];
 
 function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
   return {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
-    te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, ...extra,
+    te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo', ...extra,
   };
 }
 
 const TICKETS: TicketEnViaje[] = [
   ticket({}),
-  ticket({ id: 'tk-2', lugar: 'Café Caribe', tipo_lugar: 'cafe', fecha_ticket: '2026-10-07', pagado_por: IDS.diego, forma: 'total', te_toca_cents: 0, falta_que_elija: 0, sin_repartir_cents: 0 }),
-  ticket({ id: 'tk-3', lugar: null, tipo_lugar: 'bar', fecha_ticket: '2026-10-06', pagado_por: IDS.yo, pagaste_tu: true, forma: 'iguales', te_toca_cents: 24000, falta_que_elija: 0, sin_repartir_cents: 0 }),
+  ticket({ id: 'tk-2', lugar: 'Café Caribe', tipo_lugar: 'cafe', fecha_ticket: '2026-10-07', pagado_por: IDS.diego, forma: 'total', te_toca_cents: 0, falta_que_elija: 0, sin_repartir_cents: 0, monto_cents: 38000 }),
+  ticket({ id: 'tk-3', lugar: null, tipo_lugar: 'bar', fecha_ticket: '2026-10-06', pagado_por: IDS.yo, pagaste_tu: true, forma: 'iguales', te_toca_cents: 24000, falta_que_elija: 0, sin_repartir_cents: 0, monto_cents: 96000, origen: 'manual' }),
 ];
 
 function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
@@ -280,9 +280,10 @@ describe('salir y 1q', () => {
 });
 
 describe('D245 · Balance: «Consumos» y «Miembros»', () => {
-  const balance = (carga: CargaDeViaje, opcion: 'consumos' | 'miembros' = 'consumos') => renderToStaticMarkup(
-    <BalanceVista carga={carga} opcion={opcion} onOpcion={nada} onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} />,
-  );
+  const balance = (carga: CargaDeViaje, opcion: 'consumos' | 'miembros' = 'consumos', fotoDe?: (id: string) => string | null) =>
+    renderToStaticMarkup(
+      <BalanceVista carga={carga} opcion={opcion} onOpcion={nada} onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} fotoDe={fotoDe} />,
+    );
 
   it('la burbuja dice sólo «Balance»; sin la descripción ni la nota del pie', () => {
     const html = balance(listo(viaje()));
@@ -300,9 +301,12 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
 
   it('🔴 Consumos: los tickets del dueño, el más nuevo arriba, con lugar, fecha y quién pagó; nunca qué eligió nadie', () => {
     const leido = texto(balance(listo(viaje())));
-    expect(leido).toContain('Mariscos El Faro 8 oct · Pagó Luis Pérez Falta que elija 1');
-    expect(leido).toContain('Café Caribe 7 oct · Pagó Diego Torres');
-    expect(leido).toContain('Bar 6 oct · Pagaste tú');
+    // Respuesta A: el total de cada uno (`monto_cents`), no lo que me toca.
+    expect(leido).toContain('Mariscos El Faro 8 oct · Pagó Luis Pérez Falta que elija 1 $1,590');
+    expect(leido).toContain('Café Caribe 7 oct · Pagó Diego Torres $380');
+    expect(leido).toContain('Bar 6 oct · Pagaste tú $960');
+    expect(leido).not.toContain('$530');
+    expect(leido).not.toContain('$240');
     expect(leido.indexOf('Mariscos')).toBeLessThan(leido.indexOf('Café Caribe'));
     expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar 6 oct'));
     // Sin el «Debe / Le deben» de cada uno ni el aviso de «sin repartir» (respuesta C).
@@ -313,11 +317,27 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
     expect(texto(balance(listo(viaje({ tickets: [], sin_repartir: [] }))))).toContain('Todavía no hay consumos.');
   });
 
-  it('Miembros: cada uno con «Pagó» (el monto lo publica el dueño; la app no lo calcula)', () => {
+  it('Miembros: cada uno con «Pagó» y el monto del dueño (`pagado_cents`; la app no lo calcula)', () => {
     const leido = texto(balance(listo(viaje()), 'miembros'));
-    expect(leido).toContain('AL Tú Pagó');
-    expect(leido).toContain('LP Luis Pérez Pagó');
+    expect(leido).toContain('AL Tú Pagó $960');
+    expect(leido).toContain('LP Luis Pérez Pagó $4,040');
+    expect(leido).toContain('SR Sofía Ramírez Pagó $1,280');
+    expect(leido).toContain('DT Diego Torres Pagó $380');
     expect(leido).not.toContain('Mariscos');
+    // Un `null` (de los demás, sólo en un viaje cerrado) no se inventa: «—».
+    const sinDato = viaje({ miembros: MIEMBROS.map((m) => (m.es_yo ? m : { ...m, pagado_cents: null, balance_cents: null })) });
+    expect(texto(balance(listo(sinDato), 'miembros'))).toContain('LP Luis Pérez Pagó —');
+  });
+
+  it('D245 · Miembros con la foto de quien la tiene; los demás, iniciales', () => {
+    const fotoDe = (id: string) => (id === IDS.luis ? 'blob:foto-de-luis' : null);
+    const html = balance(listo(viaje()), 'miembros', fotoDe);
+    expect(html).toContain('<img class="vj-avatar-foto" src="blob:foto-de-luis" alt=""/>');
+    expect(html.match(/<img /g)).toHaveLength(1);
+    const leido = texto(html);
+    expect(leido).toContain('Luis Pérez Pagó $4,040');
+    expect(leido).not.toContain('LP Luis');
+    expect(leido).toContain('AL Tú');
   });
 
   it('404: «Este viaje ya no está disponible.»', () => {

@@ -8,7 +8,7 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
-import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, type CargaDeViaje } from './ViajeScreen';
+import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
 import { metaDelTicket } from './viajeView';
 import { iconoTipoLugar, nombreDelLugar, nombreDeMiembro, parametroDeTicket } from './viajesView';
 import './viajes.css';
@@ -20,8 +20,10 @@ import './viaje.css';
  * - **Consumos** (primero): los tickets y gastos del viaje, el más nuevo arriba,
  *   con lugar o descripción, fecha, quién pagó y el total. Al tocarlo abre el
  *   ticket como antes. Nunca qué eligió cada uno.
- * - **Miembros** (segundo): cada miembro con lo que pagó (Mati: «Lo que pagó»),
- *   que publica el dueño. La app no lo calcula.
+ * - **Miembros** (segundo): cada miembro, con su foto si la tiene, y lo que
+ *   pagó (Mati: «Lo que pagó»): `pagado_cents` del dueño. La app no lo calcula.
+ * El total de cada consumo y lo que pagó cada uno llegan con `viaje_version=2`
+ * (App Backend 2.172.0).
  * Cerrado, la ruta pasa al detalle de Cerrados (D240-17).
  */
 export type OpcionDeBalance = 'consumos' | 'miembros';
@@ -30,6 +32,7 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const { session } = useAuth();
   const { carga, cargar } = useDetalleViaje(viajeId);
   const [opcion, setOpcion] = useState<OpcionDeBalance>('consumos');
+  const fotoDe = useFotosDeMiembros(viajeId, carga.tipo === 'listo' ? carga.viaje.miembros : null);
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
@@ -40,6 +43,7 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
         onReintentar={cargar}
         onVerViajes={() => navigate('viajes', 'abiertos')}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
+        fotoDe={fotoDe}
       />
       <AppBottomBar active={null} />
     </div>
@@ -53,6 +57,7 @@ export function BalanceVista({
   onReintentar,
   onVerViajes,
   onAbrirTicket,
+  fotoDe,
 }: {
   carga: CargaDeViaje;
   opcion: OpcionDeBalance;
@@ -60,6 +65,7 @@ export function BalanceVista({
   onReintentar: () => void;
   onVerViajes: () => void;
   onAbrirTicket: (ticketId: string) => void;
+  fotoDe?: (miembroId: string) => string | null;
 }) {
   const { t } = useIdioma();
   return (
@@ -80,7 +86,7 @@ export function BalanceVista({
             <div className={`vjb-tarjeta ${opcion === 'consumos' ? 'seam-left' : 'seam-right'}`}>
               {opcion === 'consumos'
                 ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} />
-                : <Miembros viaje={carga.viaje} />}
+                : <Miembros viaje={carga.viaje} fotoDe={fotoDe} />}
             </div>
           </div>
         ) : (
@@ -109,7 +115,8 @@ function Consumos({ viaje: v, onAbrirTicket }: { viaje: DetalleViaje; onAbrirTic
                 <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
               )}
             </span>
-            <span className="vjb-consumo-monto">{formatMXN(tk.te_toca_cents)}</span>
+            {/* Respuesta A del plan: el total del ticket o del gasto (`monto_cents`). */}
+            <span className="vjb-consumo-monto">{formatMXN(tk.monto_cents)}</span>
           </button>
         </li>
       ))}
@@ -117,19 +124,20 @@ function Consumos({ viaje: v, onAbrirTicket }: { viaje: DetalleViaje; onAbrirTic
   );
 }
 
-function Miembros({ viaje: v }: { viaje: DetalleViaje }) {
+function Miembros({ viaje: v, fotoDe }: { viaje: DetalleViaje; fotoDe?: (miembroId: string) => string | null }) {
   const { t } = useIdioma();
   return (
     <ul className="vjb-miembros">
       {v.miembros.map((m) => (
         <li key={m.id} className="vjb-fila">
-          <AvatarDeViaje persona={m} />
+          <AvatarDeViaje persona={m} foto={fotoDe?.(m.id) ?? null} />
           <span className="vjb-quien">
             <span className="vjb-nombre">{nombreDeMiembro(m, t)}</span>
           </span>
           <span className="vjb-monto">
             <span className="vjb-rotulo">{t('Pagó')}</span>
-            <span className="vjb-cifra">—</span>
+            {/* `null` sólo para los demás en un viaje cerrado, que no llega acá (Cerrados es otra pantalla). */}
+            <span className="vjb-cifra">{m.pagado_cents === null ? '—' : formatMXN(m.pagado_cents)}</span>
           </span>
         </li>
       ))}

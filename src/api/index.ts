@@ -81,6 +81,7 @@ import {
   aplicarConfigViajes,
   assertViajesHabilitado,
   decodeDetalleViaje,
+  decodeGastoCargado,
   decodeInvitacionesAViajes,
   decodeListaDeViajes,
   decodeMarcaDeTransferencia,
@@ -94,6 +95,7 @@ import {
   type CargarTicketPedido,
   type CrearViajePedido,
   type DetalleViaje,
+  type GastoManualPedido,
   type Duplicado,
   type InvitacionAViaje,
   type ListaDeViajes,
@@ -610,6 +612,10 @@ export interface Api {
   /** ¿Este escaneo ya está en el viaje? (1k) `null` si no. */
   revisarTicketDeViaje(id: string, recibo: string): Promise<Duplicado | null>;
   cargarTicketDeViaje(id: string, req: CargarTicketPedido): Promise<TicketCargado>;
+  /** D244 · App Backend 2.172.0 · un gasto a mano: lo pagó quien lo carga, en partes iguales entre `presentes`. */
+  cargarGastoDeViaje(id: string, req: GastoManualPedido): Promise<TicketDelViaje>;
+  /** D245 · la foto de un miembro, sólo con `has_avatar`. Toda negativa es el mismo 404. */
+  getAvatarDeMiembroDeViaje(id: string, miembroId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   getTicketDeViaje(id: string, ticketId: string): Promise<TicketDelViaje>;
   elegirEnTicketDeViaje(id: string, ticketId: string, req: SeleccionPedido): Promise<TicketDelViaje>;
   marcarPresentesEnTicket(id: string, ticketId: string, presentes: readonly string[]): Promise<TicketDelViaje>;
@@ -1235,15 +1241,17 @@ const realApi: Api = {
   },
   crearViaje: async (req) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes', req), 'viajes.crear');
+    return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes?viaje_version=2', req), 'viajes.crear');
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}`));
+    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}?viaje_version=2`));
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/aceptar`), 'viajes.aceptar');
+    return decodeDetalleViaje(await httpRequest<unknown>(
+      'POST', `/viajes/${encodeURIComponent(id)}/aceptar?viaje_version=2`,
+    ), 'viajes.aceptar');
   },
   rechazarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1260,6 +1268,17 @@ const realApi: Api = {
   cargarTicketDeViaje: async (id, req) => {
     assertViajesHabilitado();
     return decodeTicketCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets`, req));
+  },
+  cargarGastoDeViaje: async (id, req) => {
+    assertViajesHabilitado();
+    return decodeGastoCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/gastos`, req));
+  },
+  getAvatarDeMiembroDeViaje: async (id, miembroId, expectedSession) => {
+    assertViajesHabilitado();
+    return httpPrivateAvatarRequest(
+      `/viajes/${encodeURIComponent(id)}/miembros/${encodeURIComponent(miembroId)}/avatar`,
+      expectedSession,
+    );
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
@@ -1283,7 +1302,9 @@ const realApi: Api = {
   },
   cerrarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/cerrar`), 'viajes.cerrar');
+    return decodeDetalleViaje(await httpRequest<unknown>(
+      'POST', `/viajes/${encodeURIComponent(id)}/cerrar?viaje_version=2`,
+    ), 'viajes.cerrar');
   },
   marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
     assertViajesHabilitado();
@@ -1574,15 +1595,15 @@ const mockApi: Api = {
   },
   crearViaje: async (req) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockCrearViaje(req), 'viajes.crear');
+    return decodeDetalleViaje(await mockViajes.mockCrearViaje(req, { version: 2 }), 'viajes.crear');
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id));
+    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id, { version: 2 }));
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockAceptarViaje(id), 'viajes.aceptar');
+    return decodeDetalleViaje(await mockViajes.mockAceptarViaje(id, { version: 2 }), 'viajes.aceptar');
   },
   rechazarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1599,6 +1620,14 @@ const mockApi: Api = {
   cargarTicketDeViaje: async (id, req) => {
     assertViajesHabilitado();
     return decodeTicketCargado(await mockViajes.mockCargarTicket(id, req));
+  },
+  cargarGastoDeViaje: async (id, req) => {
+    assertViajesHabilitado();
+    return decodeGastoCargado(await mockViajes.mockCargarGasto(id, req));
+  },
+  getAvatarDeMiembroDeViaje: async (id, miembroId) => {
+    assertViajesHabilitado();
+    return mockViajes.mockAvatarDeMiembro(id, miembroId);
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
@@ -1618,7 +1647,7 @@ const mockApi: Api = {
   },
   cerrarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockCerrarViaje(id), 'viajes.cerrar');
+    return decodeDetalleViaje(await mockViajes.mockCerrarViaje(id, { version: 2 }), 'viajes.cerrar');
   },
   marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
     assertViajesHabilitado();

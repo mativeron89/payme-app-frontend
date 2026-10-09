@@ -4,6 +4,7 @@ import { formatMXN } from '../../utils/format';
 import {
   MockApiError,
   amigoParaViajesMock,
+  jpegDeIniciales,
   arrobaParaViajesMock,
   latencia,
   usernameMock,
@@ -37,6 +38,16 @@ const CONTRATO = 'payme.app.viajes/v1';
 const MAX_MIEMBROS = 20;
 const MAX_TICKETS = 200;
 const MAX_LISTA = 100;
+/** D244 · App Backend 2.172.0: el tope de un gasto a mano. */
+const MAX_GASTO_CENTS = 100_000_000;
+/** D244 · el id propio de un gasto a mano, donde uno escaneado guarda el de su recibo (`~` no es base64url). */
+const PREFIJO_GASTO_MANUAL = 'm~';
+const esManual = (t: TicketMock) => t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL);
+
+/** D245 · `viaje_version=2`: sólo con la negociación el detalle suma foto, lo que pagó y el total de cada ticket. */
+interface OpcionesDeVersion {
+  readonly version?: 1 | 2;
+}
 const FORMAS = ['consumo', 'iguales', 'total'] as const;
 const TIPOS_LUGAR = ['restaurante', 'bar', 'cafe', 'super', 'otro'] as const;
 type Forma = (typeof FORMAS)[number];
@@ -300,7 +311,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string) {
+function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -317,8 +328,11 @@ function vistaViaje(v: ViajeMock, u: string) {
       te_toca_cents: r.consumo.get(u) ?? 0,
       falta_que_elija: b.congelado ? 0 : r.faltan.length,
       sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
+      ...(version === 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
     };
   }).reverse();
+  // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
+  const pagadoDe = (x: string) => v.tickets.filter((t) => t.pagado_por === x).reduce((s, t) => s + t.monto_cents, 0);
   const sinRepartir = b.congelado ? [] : ticketsEnOrden(v).filter((t) => b.porTicket.get(t.id)!.sinRepartir > 0).map((t) => ({
     ticket_id: t.id, lugar: t.lugar, fecha_ticket: t.fecha_ticket,
     monto_cents: b.porTicket.get(t.id)!.sinRepartir,
@@ -331,6 +345,11 @@ function vistaViaje(v: ViajeMock, u: string) {
       id: m.id, ...persona(m), es_yo: m.user_id === u,
       balance_cents: cerrado && m.user_id !== u ? null : b.balance.get(m.user_id) ?? 0,
       falta_elegir: faltaElegir.get(m.user_id) ?? 0,
+      ...(version === 2 && {
+        has_avatar: !m.eliminada && CON_FOTO.has(m.user_id),
+        // Cerrado (D240-17): de los demás, nada, como el balance.
+        pagado_cents: cerrado && m.user_id !== u ? null : pagadoDe(m.user_id),
+      }),
     })),
     invitados: miembrosEnOrden(v).filter((m) => m.estado === 'invitado' && !m.eliminada).map((m) => ({ id: m.id, ...persona(m) })),
     mi_balance_cents: b.balance.get(u) ?? 0,
@@ -509,7 +528,7 @@ export function mockInvitacionesAViajes() {
   });
 }
 
-export function mockCrearViaje(body: unknown) {
+export function mockCrearViaje(body: unknown, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     if (!objeto(body) || !soloClaves(body, ['nombre', 'fecha_desde', 'fecha_hasta', 'miembros', 'idempotency_key'])) throw invalido();
     const nombre = textoNormal(body.nombre, 80);
@@ -523,7 +542,7 @@ export function mockCrearViaje(body: unknown) {
     const previo = cargar().viajes.find((v) => v.creado_por === u && v.idempotency_key === body.idempotency_key);
     if (previo) {
       if (previo.pedido_hash !== pedido) throw conflicto('idempotency_key_conflict');
-      return { contract: CONTRATO, viaje: vistaViaje(previo, u) };
+      return { contract: CONTRATO, viaje: vistaViaje(previo, u, version) };
     }
     if (limiteDeViajesMock()) throw new Respuesta(429, 'viajes_rate_limited');
     const invitados = resolverMiembros(pedidos);
@@ -547,19 +566,19 @@ export function mockCrearViaje(body: unknown) {
       transferencias: [],
     };
     cargar().viajes.push(v);
-    return { contract: CONTRATO, viaje: vistaViaje(v, u) };
+    return { contract: CONTRATO, viaje: vistaViaje(v, u, version) };
   });
 }
 
-export function mockDetalleViaje(id: string) {
+export function mockDetalleViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);
     if (v.estado === 'esperando_pagos' && estadoEfectivo(v) === 'cerrado') terminarSiCorresponde(v);
-    return { contract: CONTRATO, viaje: vistaViaje(v, yo()) };
+    return { contract: CONTRATO, viaje: vistaViaje(v, yo(), version) };
   });
 }
 
-export function mockAceptarViaje(id: string) {
+export function mockAceptarViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = viajeDe(id);
     if (!v) throw noEncontrado();
@@ -569,7 +588,7 @@ export function mockAceptarViaje(id: string) {
       if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
       m.estado = 'activo';
     }
-    return { contract: CONTRATO, viaje: vistaViaje(v, yo()) };
+    return { contract: CONTRATO, viaje: vistaViaje(v, yo(), version) };
   });
 }
 
@@ -712,6 +731,86 @@ export function mockCargarTicket(id: string, body: unknown) {
   });
 }
 
+/**
+ * D244 · `POST /api/viajes/:id/gastos` (App Backend 2.172.0, `cargarGasto`):
+ * descripción, monto y entre quiénes. Lo pagó quien lo carga; se guarda como un
+ * ticket «En partes iguales» de tipo «otro», con la descripción como lugar y
+ * único renglón, y las personas activas con `presente` sólo en las elegidas.
+ * La idempotencia es por la clave; la regla anti-duplicado del escaneo no aplica.
+ */
+export function mockCargarGasto(id: string, body: unknown) {
+  return ruta(() => {
+    const claves = ['descripcion', 'monto_cents', 'presentes', 'idempotency_key'];
+    if (!objeto(body) || !soloClaves(body, claves) || Object.keys(body).length !== claves.length) throw invalido();
+    const descripcion = textoNormal(body.descripcion, 120);
+    const monto = body.monto_cents;
+    const presentes = body.presentes;
+    if (!descripcion || typeof monto !== 'number' || !Number.isInteger(monto) || monto < 1 || monto > MAX_GASTO_CENTS
+        || !Array.isArray(presentes) || presentes.length < 1 || presentes.length > MAX_MIEMBROS
+        || !presentes.every(esUuid) || new Set(presentes).size !== presentes.length
+        || !clave(body.idempotency_key)) throw invalido();
+    const v = miViaje(id);
+    const u = yo();
+    const pedido = hashDe({ gasto: true, descripcion, monto_cents: monto, presentes });
+    const previo = v.tickets.find((t) => t.pagado_por === u && t.idempotency_key === body.idempotency_key);
+    if (previo) {
+      if (previo.pedido_hash !== pedido) throw conflicto('idempotency_key_conflict');
+      return { contract: CONTRATO, ticket: vistaTicket(v, previo, u), ya_cargado: null };
+    }
+    if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
+    if (v.tickets.length >= MAX_TICKETS) throw conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
+    const activos = miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada);
+    const porMiembro = new Map(activos.map((m) => [m.id, m.user_id]));
+    const desconocido = presentes.find((x) => !porMiembro.has(x));
+    if (desconocido) throw new Respuesta(422, 'viaje_ticket_persona_unknown', { miembro_id: desconocido });
+    const elegidos = new Set(presentes.map((x) => porMiembro.get(x)));
+    const t: TicketMock = {
+      id: nuevoId(), pagado_por: u, forma: 'iguales', tipo_lugar: 'otro', lugar: descripcion,
+      fecha_ticket: null, hora_ticket: null, monto_cents: monto, created_at: ahora(), huella: null,
+      recibo_jti: `${PREFIJO_GASTO_MANUAL}${nuevoId().replace(/-/g, '').slice(0, 20)}`,
+      idempotency_key: body.idempotency_key, pedido_hash: pedido,
+      items: [{ id: nuevoId(), nombre: descripcion, price_cents: monto, quantity: 1 }],
+      personas: activos.map((m) => ({
+        user_id: m.user_id, presente: elegidos.has(m.user_id), listo_en: null, consumo_final_cents: null, asignado_cierre_cents: null,
+      })),
+      selecciones: [],
+    };
+    v.tickets.push(t);
+    return { contract: CONTRATO, ticket: vistaTicket(v, t, u), ya_cargado: null };
+  });
+}
+
+/**
+ * D245 · `GET /api/viajes/:id/miembros/:mid/avatar`: sólo a un miembro activo y
+ * de un miembro activo con foto. Toda negativa, el mismo 404. Costura de fotos
+ * del mock (`payme.app.mock.fotos.v1 = error`): 500.
+ */
+export async function mockAvatarDeMiembro(id: string, miembroId: string): Promise<{ blob: Blob }> {
+  if (!viajesMockEncendido()) throw new MockApiError(404, 'not_found');
+  pedidosDeFotosDeViaje += 1;
+  if (costuraDeFotos() === 'error') throw new MockApiError(500, 'internal_error');
+  const v = viajeDe(id);
+  const u = yo();
+  const m = v && esActivo(v, u) ? v.miembros.find((x) => x.id === miembroId && x.estado === 'activo') : undefined;
+  if (!m || m.eliminada || !CON_FOTO.has(m.user_id)) {
+    await new Promise((r) => setTimeout(r, latencia()));
+    throw new MockApiError(404, 'avatar_not_found');
+  }
+  const blob = await jpegDeIniciales(m.first_name.charAt(0) || '?');
+  await new Promise((r) => setTimeout(r, latencia()));
+  return { blob };
+}
+
+let pedidosDeFotosDeViaje = 0;
+/** Para las pruebas: cuántas fotos de miembros se pidieron. */
+export function pedidosDeFotosDeViajeMock(): number {
+  return pedidosDeFotosDeViaje;
+}
+
+function costuraDeFotos(): string | null {
+  try { return localStorage.getItem('payme.app.mock.fotos.v1'); } catch { return null; }
+}
+
 function ticketDe(v: ViajeMock, tid: unknown): TicketMock {
   const t = esUuid(tid) ? v.tickets.find((x) => x.id === tid) : undefined;
   if (!t) throw new Respuesta(404, 'viaje_ticket_not_found');
@@ -843,13 +942,13 @@ function cerrarInterno(v: ViajeMock): void {
   v.estado = 'esperando_pagos';
 }
 
-export function mockCerrarViaje(id: string) {
+export function mockCerrarViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     cerrarInterno(v);
     terminarSiCorresponde(v);
-    return { contract: CONTRATO, viaje: vistaViaje(v, yo()) };
+    return { contract: CONTRATO, viaje: vistaViaje(v, yo(), version) };
   });
 }
 
@@ -950,6 +1049,8 @@ export const VIAJES_SEMILLA = {
   cancunMariscos: 'd2000000-0000-4000-8000-000000000105',
 } as const;
 export const PERSONAS_SEMILLA = PERSONAS;
+/** D245 · quiénes tienen foto en el modo de ejemplo (como `FOTOS_MOCK` de las mesas: Luis y Sofía). */
+const CON_FOTO: ReadonlySet<string> = new Set([PERSONAS.luis.user_id, PERSONAS.sofia.user_id]);
 
 function semilla(yoMismo: PersonaViajeMock): EstadoViajesMock {
   let n = 0;

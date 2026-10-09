@@ -23,6 +23,9 @@ function storage(extra: Record<string, string> = {}) {
   return values;
 }
 
+/** D245 · la fachada pide siempre `viaje_version=2`, y el decodificador sólo acepta esa forma. */
+const V2 = { version: 2 } as const;
+
 async function subject() {
   const m = await import('./viajes');
   const d = await import('../viajes');
@@ -56,7 +59,7 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
   it('Cancún 2026: los números del prototipo en vivo (1g, 1l)', async () => {
     storage();
     const { m, d } = await subject();
-    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun));
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
     expect(v.gasto_del_grupo_cents).toBe(666000);
     expect(v.mi_balance_cents).toBe(-54200);
     const porNombre = new Map(v.miembros.map((x) => [x.first_name, x]));
@@ -87,7 +90,7 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     const previa = d.decodeVistaPreviaCierre(await m.mockVistaPreviaCierre(id));
     expect(previa.todos_eligieron).toBe(false);
     expect(previa.asignaciones).toEqual([expect.objectContaining({ lugar: 'Mariscos El Faro', monto_cents: 56500 })]);
-    const v = d.decodeDetalleViaje(await m.mockCerrarViaje(id), 'viajes.cerrar');
+    const v = d.decodeDetalleViaje(await m.mockCerrarViaje(id, V2), 'viajes.cerrar');
     expect(v.estado).toBe('esperando_pagos');
     expect(v.transferencias.map((x) => x.monto_cents).sort((a, b) => a - b)).toEqual([23000, 54200, 161200]);
     const luis = v.miembros.find((x) => x.first_name === 'Luis')!.id;
@@ -106,7 +109,7 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     storage();
     const { m, d, state } = await subject();
     const id = m.VIAJES_SEMILLA.monterrey;
-    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(id));
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(id, V2));
     const meDeben = v.transferencias.filter((x) => x.mia === 'me_deben');
     expect(meDeben.map((x) => [x.monto_cents, x.estado])).toEqual([[75000, 'marcada'], [30000, 'pendiente']]);
     const noLlego = d.decodeMarcaDeTransferencia(await m.mockMarcarTransferencia(id, meDeben[0]!.id, 'no-llego'), meDeben[0]!.id);
@@ -138,7 +141,7 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
   it('Cerrados: sólo lo propio (1s, D240-17)', async () => {
     storage();
     const { m, d } = await subject();
-    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.oaxaca));
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.oaxaca, V2));
     expect(v.estado).toBe('cerrado');
     expect(v.miembros.filter((x) => !x.es_yo).every((x) => x.balance_cents === null)).toBe(true);
     const r = d.decodeResumenDeViaje(await m.mockResumenDeViaje(m.VIAJES_SEMILLA.oaxaca), m.VIAJES_SEMILLA.oaxaca);
@@ -156,7 +159,7 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     const inv = d.decodeInvitacionesAViajes(await m.mockInvitacionesAViajes());
     expect(inv.map((x) => x.nombre)).toEqual(['Mazatlán diciembre']);
     expect(await rechazo(m.mockDetalleViaje(m.VIAJES_SEMILLA.mazatlan))).toEqual({ status: 404, error: 'viaje_not_found', extra: {} });
-    const v = d.decodeDetalleViaje(await m.mockAceptarViaje(m.VIAJES_SEMILLA.mazatlan), 'viajes.aceptar');
+    const v = d.decodeDetalleViaje(await m.mockAceptarViaje(m.VIAJES_SEMILLA.mazatlan, V2), 'viajes.aceptar');
     expect(v.miembros.some((x) => x.es_yo)).toBe(true);
     d.decodeRespuestaDeSalida(await m.mockSalirDeViaje(m.VIAJES_SEMILLA.mazatlan), m.VIAJES_SEMILLA.mazatlan, 'salio');
     expect(await rechazo(m.mockSalirDeViaje(m.VIAJES_SEMILLA.cancun)))
@@ -168,11 +171,11 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     const { m, d, state } = await subject();
     const amigo = state.friends[0]!;
     const body = { nombre: '  Puebla   2026 ', fecha_desde: null, fecha_hasta: null, miembros: [{ user_id: amigo.id }], idempotency_key: 'clave-de-prueba-1' };
-    const v = d.decodeDetalleViaje(await m.mockCrearViaje(body), 'viajes.crear');
+    const v = d.decodeDetalleViaje(await m.mockCrearViaje(body, V2), 'viajes.crear');
     expect(v.nombre).toBe('Puebla 2026');
     expect(v.miembros).toHaveLength(1);
     expect(v.invitados).toHaveLength(1);
-    expect(d.decodeDetalleViaje(await m.mockCrearViaje(body), 'viajes.crear').id).toBe(v.id);
+    expect(d.decodeDetalleViaje(await m.mockCrearViaje(body, V2), 'viajes.crear').id).toBe(v.id);
     expect(await rechazo(m.mockCrearViaje({ ...body, nombre: 'Otro' }))).toMatchObject({ status: 409, error: 'idempotency_key_conflict' });
     expect(await rechazo(m.mockCrearViaje({ ...body, idempotency_key: 'clave-de-prueba-2', miembros: [{ username: 'nadie.aca' }] })))
       .toEqual({ status: 422, error: 'viaje_member_not_found', extra: { member: { username: 'nadie.aca' } } });
@@ -200,5 +203,111 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     // En otro viaje, el mismo recibo ya está usado.
     expect(await rechazo(m.mockRevisarTicket(m.VIAJES_SEMILLA.monterrey, { ocr_receipt: ocr.receipt })))
       .toMatchObject({ status: 409, error: 'viaje_ticket_receipt_used' });
+  });
+});
+
+describe('mock · Viajes (App Backend 2.172.0): `viaje_version=2`, el gasto a mano y la foto', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
+  it('sin la negociación, el detalle de siempre; con ella, foto, lo que pagó y el total de cada ticket', async () => {
+    storage();
+    const { m, d } = await subject();
+    const crudo = (await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun)) as { viaje: { miembros: object[]; tickets: object[] } };
+    expect(Object.keys(crudo.viaje.miembros[0]!)).not.toContain('pagado_cents');
+    expect(Object.keys(crudo.viaje.miembros[0]!)).not.toContain('has_avatar');
+    expect(Object.keys(crudo.viaje.tickets[0]!)).not.toContain('monto_cents');
+    // La forma de siempre no pasa por el decodificador: la app negocia siempre.
+    expect(() => d.decodeDetalleViaje(crudo)).toThrow();
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    const porNombre = new Map(v.miembros.map((x) => [x.first_name, x]));
+    expect(porNombre.get('Luis')!.pagado_cents).toBe(404000);
+    expect(porNombre.get('Sofía')!.pagado_cents).toBe(128000);
+    expect(porNombre.get('Diego')!.pagado_cents).toBe(38000);
+    expect(v.miembros.find((x) => x.es_yo)!.pagado_cents).toBe(96000);
+    expect(v.miembros.reduce((s, x) => s + (x.pagado_cents ?? 0), 0)).toBe(v.gasto_del_grupo_cents);
+    expect(v.miembros.map((x) => x.has_avatar)).toEqual([false, true, true, false]);
+    // El más nuevo arriba: Mariscos, Café, Súper, Bar y Fonda.
+    expect(v.tickets.map((t) => t.monto_cents)).toEqual([220000, 38000, 128000, 96000, 184000]);
+    expect(new Set(v.tickets.map((t) => t.origen))).toEqual(new Set(['escaneo']));
+  });
+
+  it('🔴 cerrado: lo que pagaron los demás llega en null, como el balance (D240-17)', async () => {
+    storage();
+    const { m, d } = await subject();
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.oaxaca, V2));
+    expect(v.estado).toBe('cerrado');
+    for (const x of v.miembros) expect(x.pagado_cents === null).toBe(!x.es_yo);
+  });
+
+  it('D244 · el gasto a mano: lo pagó quien lo carga, en partes iguales entre los elegidos, el más nuevo arriba', async () => {
+    storage();
+    const { m, d } = await subject();
+    const antes = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    const yoM = antes.miembros.find((x) => x.es_yo)!;
+    const luis = antes.miembros.find((x) => x.first_name === 'Luis')!;
+    const diego = antes.miembros.find((x) => x.first_name === 'Diego')!;
+    const pedido = { descripcion: '  Gasolina   del  jueves ', monto_cents: 100001, presentes: [yoM.id, luis.id, diego.id], idempotency_key: 'gasto-de-prueba-1' };
+    const t = d.decodeGastoCargado(await m.mockCargarGasto(m.VIAJES_SEMILLA.cancun, pedido));
+    expect(t).toMatchObject({ lugar: 'Gasolina del jueves', tipo_lugar: 'otro', forma: 'iguales', monto_cents: 100001,
+      fecha_ticket: null, hora_ticket: null, pagaste_tu: true, puedo_elegir: false, puedo_marcar_presentes: true });
+    expect(t.items).toEqual([expect.objectContaining({ name: 'Gasolina del jueves', price_cents: 100001, quantity: 1 })]);
+    expect(t.personas.filter((p) => p.presente).map((p) => p.miembro_id)).toEqual([yoM.id, luis.id, diego.id]);
+    // $1,000.01 entre tres: $333.34, $333.34 y $333.33; el residuo va a los primeros en el orden de los miembros (yo, Luis).
+    expect(t.te_toca_cents).toBe(33334);
+    const despues = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    expect(despues.tickets[0]).toMatchObject({ id: t.id, origen: 'manual', monto_cents: 100001, lugar: 'Gasolina del jueves' });
+    expect(despues.miembros.find((x) => x.es_yo)!.pagado_cents).toBe(96000 + 100001);
+    expect(despues.mi_balance_cents).toBe(antes.mi_balance_cents + 100001 - 33334);
+    // El mismo pedido con la misma clave es el mismo gasto; otro pedido con esa clave, 409.
+    expect(d.decodeGastoCargado(await m.mockCargarGasto(m.VIAJES_SEMILLA.cancun, pedido)).id).toBe(t.id);
+    expect(await rechazo(m.mockCargarGasto(m.VIAJES_SEMILLA.cancun, { ...pedido, monto_cents: 5 })))
+      .toMatchObject({ status: 409, error: 'idempotency_key_conflict' });
+    const otra = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    expect(otra.tickets.filter((x) => x.origen === 'manual')).toHaveLength(1);
+  });
+
+  it('D244 · lo que el dueño rechaza: cuerpo inválido 400, alguien que no es miembro 422, cerrado 409', async () => {
+    storage();
+    const { m, d } = await subject();
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    const base = { descripcion: 'Taxi', monto_cents: 5000, presentes: [v.mi_miembro_id], idempotency_key: 'gasto-de-prueba-2' };
+    for (const malo of [
+      { ...base, descripcion: '   ' },
+      { ...base, descripcion: 'x'.repeat(121) },
+      { ...base, monto_cents: 0 },
+      { ...base, monto_cents: 100_000_001 },
+      { ...base, monto_cents: 12.5 },
+      { ...base, presentes: [] },
+      { ...base, presentes: [v.mi_miembro_id, v.mi_miembro_id] },
+      { ...base, idempotency_key: 'corta' },
+      { ...base, extra: 1 },
+      { descripcion: 'Taxi', monto_cents: 5000, presentes: [v.mi_miembro_id] },
+    ]) {
+      expect(await rechazo(m.mockCargarGasto(m.VIAJES_SEMILLA.cancun, malo)), JSON.stringify(malo))
+        .toMatchObject({ status: 400, error: 'validation_error' });
+    }
+    const ajeno = 'e9000000-0000-4000-8000-000000000001';
+    expect(await rechazo(m.mockCargarGasto(m.VIAJES_SEMILLA.cancun, { ...base, presentes: [ajeno] })))
+      .toEqual({ status: 422, error: 'viaje_ticket_persona_unknown', extra: { miembro_id: ajeno } });
+    const cerrado = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.oaxaca, V2));
+    expect(await rechazo(m.mockCargarGasto(m.VIAJES_SEMILLA.oaxaca, { ...base, presentes: [cerrado.mi_miembro_id] })))
+      .toMatchObject({ status: 409, error: 'viaje_not_open' });
+  });
+
+  it('D245 · la foto: toda negativa es el mismo 404, y cada pedido se cuenta', async () => {
+    storage();
+    const { m, d } = await subject();
+    const v = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    const diego = v.miembros.find((x) => x.first_name === 'Diego')!;
+    const antes = m.pedidosDeFotosDeViajeMock();
+    expect(await rechazo(m.mockAvatarDeMiembro(m.VIAJES_SEMILLA.cancun, diego.id))).toMatchObject({ status: 404, error: 'avatar_not_found' });
+    expect(await rechazo(m.mockAvatarDeMiembro(m.VIAJES_SEMILLA.cancun, 'e9000000-0000-4000-8000-000000000001')))
+      .toMatchObject({ status: 404, error: 'avatar_not_found' });
+    expect(await rechazo(m.mockAvatarDeMiembro('e9000000-0000-4000-8000-000000000002', diego.id)))
+      .toMatchObject({ status: 404, error: 'avatar_not_found' });
+    expect(m.pedidosDeFotosDeViajeMock() - antes).toBe(3);
   });
 });

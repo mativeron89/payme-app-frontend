@@ -37,6 +37,25 @@ Backend 2.172.0 servido. Lo visible se cierra con la prueba de Mati en el iPhone
   abiertas» ni «Toca el + para abrir una». `/viajes/abiertos|cerrados` siguen para los links directos.
 - **Limpieza:** 16 claves huérfanas y los helpers que sólo servían al balance anterior.
 
+**Tramo 2** (Adenda 2, 1d3021ce…; App Backend 2.172.0 servido, `83e81e8`)
+
+- **El espejo** a 2.172.0: inventario del dueño en `83e81e8` (declara `bcf872a`), paridad 133/133. Cambian
+  `contract/viajes-v1.json`, `routes/viajes.js` y `services/viajes.js` (trae también `enabled = true` de 2.171.2).
+- **`viaje_version=2`:** la fachada la pide siempre en las cuatro rutas que devuelven `viaje` (detalle, crear,
+  aceptar y cerrar). El decodificador sólo acepta esa forma: `has_avatar` y `pagado_cents` por miembro
+  (`pagado_cents` nulo exactamente donde el balance es nulo) y `monto_cents` y `origen` («escaneo» | «manual») por
+  ticket. La forma de siempre, sin las claves nuevas, se rechaza.
+- **Consumos** muestra el total de cada ticket o gasto (respuesta A). **Miembros** muestra «Pagó» con lo que
+  publica el dueño.
+- **La foto** de un miembro (`GET /api/viajes/:id/miembros/:mid/avatar`), sólo con `has_avatar`, en «Miembros»
+  del viaje y de Balance. Una vez por miembro, sin reintentos, en el caché de fotos de la sesión (como las de una
+  mesa). Sin foto, un 404 o un error: iniciales.
+- **«Listo» de la carga manual** manda `POST /api/viajes/:id/gastos` con una llave de idempotencia estable mientras
+  el pedido no cambie, vuelve al viaje y avisa «Cargaste el gasto.». El 422 `viaje_ticket_persona_unknown` (alguien
+  salió del viaje) avisa y vuelve a pedir el viaje. El monto tiene el tope del dueño ($1,000,000).
+- **El mock** replica 2.172.0: la negociación, el gasto a mano (con el id `m~` y su idempotencia), lo que pagó cada
+  uno y la foto de Luis y Sofía.
+
 ## 0.230.0 — Los platos con las palabras corregidas, y volver a lo que decía el ticket (2026-10-09)
 
 Orden AF-NOMBRES-CORREGIDOS-20261009 (be1cbd18…); decisión 240 punto 15 de Mati («También corregir palabras»),

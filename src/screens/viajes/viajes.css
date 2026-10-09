@@ -49,6 +49,16 @@
 }
 
 /* La fila de avatares superpuestos de la tarjeta del viaje (1g, 1m). */
+/* D245 · la foto de un miembro, cuando la hay: llena el círculo de las iniciales. */
+.vj-avatar {
+  overflow: hidden;
+}
+.vj-avatar-foto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .vj-avatares {
   display: inline-flex;
 }

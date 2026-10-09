@@ -10,6 +10,7 @@ import {
   type TransferenciaViaje,
   type VistaPreviaCierre,
 } from '../../api/viajes';
+import { FotosDeMiembrosDeViaje } from '../../api/fotosDeMiembrosDeViaje';
 import { useAuth } from '../../auth/AuthContext';
 import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import { AppBottomBar } from '../../components/AppBottomBar';
@@ -117,6 +118,40 @@ export function useDetalleViaje(viajeId: string): {
   return { carga, mostrar, cargar, refrescar, noDisponible };
 }
 
+/**
+ * D245 · las fotos de los miembros (App Backend 2.172.0): una
+ * `FotosDeMiembrosDeViaje` por viaje, que pide sólo con `has_avatar` y una vez
+ * por miembro. Devuelve la URL en memoria de cada uno, o `null` (iniciales).
+ * La sesión se lee por ref para no recrear —y re-pedir— en cada render.
+ */
+export function useFotosDeMiembros(
+  viajeId: string,
+  miembros: readonly MiembroViaje[] | null,
+): (miembroId: string) => string | null {
+  const { session } = useAuth();
+  const sesionRef = useRef(session);
+  sesionRef.current = session;
+  const fotosRef = useRef<FotosDeMiembrosDeViaje | null>(null);
+  const [, setVersion] = useState(0);
+  useEffect(() => {
+    const fotos = new FotosDeMiembrosDeViaje(
+      viajeId,
+      () => sesionRef.current,
+      async (miembroId, s) => (await api.getAvatarDeMiembroDeViaje(viajeId, miembroId, s)).blob,
+      () => setVersion((n) => n + 1),
+    );
+    fotosRef.current = fotos;
+    return () => {
+      fotos.dispose();
+      if (fotosRef.current === fotos) fotosRef.current = null;
+    };
+  }, [viajeId]);
+  useEffect(() => {
+    if (miembros) fotosRef.current?.cargar(miembros);
+  }, [miembros]);
+  return (miembroId) => fotosRef.current?.url(miembroId) ?? null;
+}
+
 type Hoja =
   | { readonly tipo: 'cerrar'; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
   | { readonly tipo: 'salir' }
@@ -133,6 +168,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const inicial = useRef<HTMLButtonElement | null>(null);
 
   const viaje = carga.tipo === 'listo' ? carga.viaje : null;
+  const fotoDe = useFotosDeMiembros(viajeId, viaje?.miembros ?? null);
   const nombre = viaje?.nombre ?? '';
 
   /** Otro miembro lo cerró mientras mirabas: se avisa y se vuelve a pedir. */
@@ -239,6 +275,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         }}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         onCargaManual={() => navigate('viaje-gasto', viajeId)}
+        fotoDe={fotoDe}
         onCerrar={pedirCierre}
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
@@ -313,10 +350,11 @@ function HojaModal({
 // ─── Vistas puras ─────────────────────────────────────────────────────────
 
 /** El avatar con iniciales (sin foto). */
-export function AvatarDeViaje({ persona }: { persona: PersonaViaje | null }) {
+/** Las iniciales, o la foto (D245) cuando el dueño dice que hay y ya llegó. */
+export function AvatarDeViaje({ persona, foto = null }: { persona: PersonaViaje | null; foto?: string | null }) {
   return (
     <span className="vj-avatar" aria-hidden="true">
-      {persona ? iniciales(persona) : ''}
+      {foto ? <img className="vj-avatar-foto" src={foto} alt="" /> : persona ? iniciales(persona) : ''}
     </span>
   );
 }
@@ -404,6 +442,8 @@ export interface ViajeVistaProps {
   readonly onEscanear: () => void;
   /** D244/D245 · «Carga manual»: la pantalla del gasto a mano. */
   readonly onCargaManual: () => void;
+  /** D245 · la foto de un miembro, si la hay (si no, iniciales). */
+  readonly fotoDe?: (miembroId: string) => string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onCerrar: () => void;
   readonly onSalir: () => void;
@@ -467,12 +507,12 @@ function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
  * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
  * Consumos. «Cerrar viaje» y «Salir del viaje» siguen al pie.
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onCargaManual, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onCargaManual, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
       <MontoDeBalance cents={v.mi_balance_cents} />
-      <DesplegableMiembros miembros={v.miembros} />
+      <DesplegableMiembros miembros={v.miembros} fotoDe={fotoDe} />
       <div className="vjv-acciones">
         <button type="button" className="btn btn-navy" onClick={onEscanear}>
           <Icon name="scan" size={20} />
@@ -517,10 +557,15 @@ export function MontoDeBalance({ cents }: { cents: number }) {
 }
 
 /**
- * D245-4 · «Miembros», cerrado con su título; abierto, las personas del viaje.
- * Con iniciales (la foto llega con App Backend 2.172.0; un menor va sin foto).
+ * D245-4 · «Miembros», cerrado con su título; abierto, las personas del viaje,
+ * con su foto si la tiene (`has_avatar`, App Backend 2.172.0; un menor nunca) y
+ * si no, sus iniciales.
  */
-export function DesplegableMiembros({ miembros, abiertoInicial = false }: { miembros: readonly MiembroViaje[]; abiertoInicial?: boolean }) {
+export function DesplegableMiembros({ miembros, abiertoInicial = false, fotoDe }: {
+  miembros: readonly MiembroViaje[];
+  abiertoInicial?: boolean;
+  fotoDe?: (miembroId: string) => string | null;
+}) {
   const { t } = useIdioma();
   const [abierto, setAbierto] = useState(abiertoInicial);
   return (
@@ -539,7 +584,7 @@ export function DesplegableMiembros({ miembros, abiertoInicial = false }: { miem
         <ul className="vjv-miembros-lista">
           {miembros.map((m) => (
             <li key={m.id} className="vjv-miembro">
-              <AvatarDeViaje persona={m} />
+              <AvatarDeViaje persona={m} foto={fotoDe?.(m.id) ?? null} />
               <span className="vjv-miembro-quien">
                 <span className="vjv-miembro-nombre">{nombreDeMiembro(m, t)}</span>
                 {m.username && <span className="vjv-miembro-arroba">@{m.username}</span>}

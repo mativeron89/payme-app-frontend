@@ -1,15 +1,17 @@
-import { useMemo, useState } from 'react';
-import type { DetalleViaje } from '../../api/viajes';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, newIdempotencyKey } from '../../api';
+import { errorDeViaje, MAX_DESCRIPCION_GASTO, MAX_GASTO_MANUAL_CENTS, type DetalleViaje, type GastoManualPedido } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppHeaderBack } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
+import { useToast } from '../../components/ui';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { stringToCents } from '../../utils/money';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { ListaDePresentes } from './TicketNuevoScreen';
-import { alternarPresente, candidatosDelViaje } from './ticketView';
+import { alternarPresente, candidatosDelViaje, idsPresentes, llaveParaPedido } from './ticketView';
 import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
 import './viajes.css';
 import './viaje.css';
@@ -20,16 +22,55 @@ import './viaje.css';
  * y listo». Quien lo carga queda como quien pagó (la regla del escaneo); se
  * reparte en partes iguales entre los marcados, con todos marcados y se
  * desmarca a quien no va. Sin tipo de lugar, fecha ni renglones.
+ *
+ * «Listo» manda `POST /api/viajes/:id/gastos` (App Backend 2.172.0) con una
+ * llave de idempotencia estable mientras el pedido no cambie (un reintento es
+ * el mismo gasto, nunca otro), y vuelve al viaje con «Cargaste el gasto.».
  */
 export function CargaManualScreen({ viajeId }: { viajeId: string }) {
   const { t } = useIdioma();
   const { session } = useAuth();
-  const { carga, cargar } = useDetalleViaje(viajeId);
+  const toast = useToast();
+  const { carga, cargar, noDisponible } = useDetalleViaje(viajeId);
+  const [enviando, setEnviando] = useState(false);
+  const llave = useRef<{ json: string; key: string } | null>(null);
+  const vivo = useRef(true);
+  useEffect(() => {
+    vivo.current = true;
+    return () => {
+      vivo.current = false;
+    };
+  }, []);
+
+  async function guardar(pedido: Omit<GastoManualPedido, 'idempotency_key'>) {
+    if (enviando) return;
+    llave.current = llaveParaPedido(llave.current, pedido, newIdempotencyKey);
+    setEnviando(true);
+    try {
+      await api.cargarGastoDeViaje(viajeId, { ...pedido, idempotency_key: llave.current.key });
+      goBack('viaje', viajeId);
+      toast(t('Cargaste el gasto.'), { sobreLaBarra: true });
+    } catch (err) {
+      if (!vivo.current) return;
+      const e = errorDeViaje(err);
+      if (e.tipo === 'no_disponible') noDisponible();
+      else if (e.tipo === 'no_abierto') toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
+      else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
+      else if (e.tipo === 'persona_desconocida') {
+        // Alguien de la lista salió del viaje mientras tanto: se vuelve a pedir y se elige de nuevo.
+        toast(t('Alguien ya no está en el viaje. Revisa entre quiénes.'), { sobreLaBarra: true });
+        cargar();
+      } else toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
+    } finally {
+      if (vivo.current) setEnviando(false);
+    }
+  }
+
   return (
     <div className="screen vj-con-pie">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
       {carga.tipo === 'listo' ? (
-        <CargaManualVista viaje={carga.viaje} />
+        <CargaManualVista viaje={carga.viaje} enviando={enviando} onListo={(pedido) => void guardar(pedido)} />
       ) : (
         <>
           <div className="title-card">
@@ -50,13 +91,17 @@ export function montoTipeado(texto: string): number | null {
   if (!/^\d{1,7}(\.\d{1,2})?$/.test(limpio)) return null;
   try {
     const c = stringToCents(limpio);
-    return Number.isSafeInteger(c) && c > 0 ? c : null;
+    return Number.isSafeInteger(c) && c > 0 && c <= MAX_GASTO_MANUAL_CENTS ? c : null;
   } catch {
     return null;
   }
 }
 
-export function CargaManualVista({ viaje }: { viaje: DetalleViaje }) {
+export function CargaManualVista({ viaje, enviando = false, onListo }: {
+  viaje: DetalleViaje;
+  enviando?: boolean;
+  onListo?: (pedido: Omit<GastoManualPedido, 'idempotency_key'>) => void;
+}) {
   const { t } = useIdioma();
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('');
@@ -77,7 +122,7 @@ export function CargaManualVista({ viaje }: { viaje: DetalleViaje }) {
             <input
               className="vjm-input"
               value={descripcion}
-              maxLength={120}
+              maxLength={MAX_DESCRIPCION_GASTO}
               placeholder={t('Por ejemplo: gasolina')}
               onChange={(e) => setDescripcion(e.target.value)}
             />
@@ -109,7 +154,15 @@ export function CargaManualVista({ viaje }: { viaje: DetalleViaje }) {
       </div>
       <div className="vj-pie">
         {cents !== null && <p className="vjm-resumen">{t('Total {0}', formatMXN(cents))}</p>}
-        <button type="button" className="btn btn-navy" disabled={!listo}>
+        <button
+          type="button"
+          className="btn btn-navy"
+          disabled={!listo || enviando}
+          onClick={() => {
+            if (cents === null) return;
+            onListo?.({ descripcion: descripcion.trim(), monto_cents: cents, presentes: idsPresentes(candidatos, ausentes) });
+          }}
+        >
           {t('Listo')}
         </button>
       </div>

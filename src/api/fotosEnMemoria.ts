@@ -248,6 +248,10 @@ export const claveParticipante = (mesaCode: string, participantId: string): stri
   `${prefijoParticipantes(mesaCode)}${participantId}`;
 export const PREFIJO_INVITADOR = 'invitador:';
 export const claveInvitador = (notificationId: string): string => `${PREFIJO_INVITADOR}${notificationId}`;
+/** D245 · la foto de un miembro de un viaje (App Backend 2.172.0), por viaje y miembro. */
+export const prefijoMiembrosDeViaje = (viajeId: string): string => `miembro-viaje:${viajeId}\u0000`;
+export const claveMiembroDeViaje = (viajeId: string, miembroId: string): string =>
+  `${prefijoMiembrosDeViaje(viajeId)}${miembroId}`;
 /** E174-3B · la misma foto, pedida por el id de la INVITACIÓN (otra ruta, otra clave). */
 export const PREFIJO_INVITADOR_DE_INVITACION = 'invitacion-invitador:';
 export const claveInvitadorDeInvitacion = (invitationId: string): string =>

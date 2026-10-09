@@ -27,6 +27,10 @@ export type FormaTicket = (typeof FORMAS_TICKET)[number];
 export const TIPOS_LUGAR = ['restaurante', 'bar', 'cafe', 'super', 'otro'] as const;
 export type TipoLugar = (typeof TIPOS_LUGAR)[number];
 
+/** D245 · de dónde salió un ticket del viaje (con `viaje_version=2`). */
+export const ORIGENES_TICKET = ['escaneo', 'manual'] as const;
+export type OrigenTicket = (typeof ORIGENES_TICKET)[number];
+
 export const ESTADOS_TRANSFERENCIA = ['pendiente', 'marcada', 'pagada', 'anulada_por_baja'] as const;
 export type EstadoTransferencia = (typeof ESTADOS_TRANSFERENCIA)[number];
 
@@ -36,6 +40,9 @@ export type AccionTransferencia = (typeof ACCIONES_TRANSFERENCIA)[number];
 /** Los límites del dueño (`limites` del contrato). */
 export const MAX_MIEMBROS_VIAJE = 20;
 export const MAX_RENGLONES_TICKET = 100;
+/** D244 · el tope del dueño para un gasto a mano (`gasto_manual.monto_maximo_cents`). */
+export const MAX_GASTO_MANUAL_CENTS = 100_000_000;
+export const MAX_DESCRIPCION_GASTO = 120;
 
 // ─── La capacidad ─────────────────────────────────────────────────────────
 
@@ -159,6 +166,10 @@ export interface MiembroViaje extends PersonaViaje {
   /** `null` para los demás cuando el viaje está cerrado (D240-17). */
   readonly balance_cents: number | null;
   readonly falta_elegir: number;
+  /** D245 · hay foto (la regla n164 del dueño: un menor nunca). Se pide aparte. */
+  readonly has_avatar: boolean;
+  /** D245 · «Lo que pagó»: lo que cargó de su bolsillo. `null` donde el balance es `null`. */
+  readonly pagado_cents: number | null;
 }
 
 export interface InvitadoViaje extends PersonaViaje {
@@ -179,6 +190,9 @@ export interface TicketEnViaje {
   readonly te_toca_cents: number;
   readonly falta_que_elija: number;
   readonly sin_repartir_cents: number;
+  /** D245 · el total del ticket (o del gasto a mano). */
+  readonly monto_cents: number;
+  readonly origen: OrigenTicket;
 }
 
 export interface SinRepartir {
@@ -347,6 +361,15 @@ export interface CargarTicketPedido {
   readonly items: readonly ItemPedido[];
 }
 
+/** D244 · `POST /api/viajes/:id/gastos`: quien lo carga pagó; se reparte en partes iguales entre `presentes`. */
+export interface GastoManualPedido {
+  readonly descripcion: string;
+  readonly monto_cents: number;
+  /** Ids de miembro (1..20, sin repetir). */
+  readonly presentes: readonly string[];
+  readonly idempotency_key: string;
+}
+
 export interface SeleccionPedido {
   readonly items: ReadonlyArray<{ readonly item_id: string; readonly fraction_bps: number }>;
   readonly listo: boolean;
@@ -486,12 +509,15 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
     && noNegativo(o.gasto_del_grupo_cents) && noNegativo(o.transferencias_pendientes), e);
   const cerrado = o.estado === 'cerrado';
   const miembros = lista(o.miembros, e, (x): MiembroViaje => {
-    const m = objeto(x, ['id', ...CLAVES_PERSONA, 'es_yo', 'balance_cents', 'falta_elegir'], e);
+    const m = objeto(x, ['id', ...CLAVES_PERSONA, 'es_yo', 'balance_cents', 'falta_elegir', 'has_avatar', 'pagado_cents'], e);
     exigir(texto(m.id) && typeof m.es_yo === 'boolean' && enteroONull(m.balance_cents) && noNegativo(m.falta_elegir)
-      // Cerrado, cada uno ve sólo lo suyo (D240-17).
-      && (m.balance_cents !== null || (cerrado && !m.es_yo)), e);
+      && typeof m.has_avatar === 'boolean' && noNegativoONull(m.pagado_cents)
+      // Cerrado, cada uno ve sólo lo suyo (D240-17); lo que pagó, igual que el balance.
+      && (m.balance_cents !== null || (cerrado && !m.es_yo))
+      && (m.pagado_cents === null) === (m.balance_cents === null), e);
     return { id: m.id as string, ...persona(m, e), es_yo: m.es_yo as boolean,
-      balance_cents: m.balance_cents as number | null, falta_elegir: m.falta_elegir as number };
+      balance_cents: m.balance_cents as number | null, falta_elegir: m.falta_elegir as number,
+      has_avatar: m.has_avatar as boolean, pagado_cents: m.pagado_cents as number | null };
   }, 40);
   exigir(miembros.filter((m) => m.es_yo).length === 1
     && miembros.find((m) => m.es_yo)?.id === o.mi_miembro_id, e);
@@ -502,11 +528,12 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   }, 40);
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
-      'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents'], e);
+      'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen'], e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
-      && noNegativo(t.sin_repartir_cents), e);
+      && noNegativo(t.sin_repartir_cents) && noNegativo(t.monto_cents)
+      && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen), e);
     return t as unknown as TicketEnViaje;
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
@@ -536,7 +563,11 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   };
 }
 
-/** `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` → `{ contract, viaje }`. */
+/**
+ * `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` → `{ contract, viaje }`.
+ * Sólo la forma de `viaje_version=2` (D245, App Backend 2.172.0): la fachada la
+ * pide SIEMPRE en esas rutas, así las claves nuevas nunca llegan sin pedirlas.
+ */
 export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle'): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);
   return viajeDetalle(b.viaje, endpoint);
@@ -610,6 +641,20 @@ export function decodeTicketCargado(raw: unknown): TicketCargado {
     ya = yaCargado(b.ya_cargado, e);
   }
   return { ticket: ticketDetalle(b.ticket, e), ya_cargado: ya };
+}
+
+/**
+ * D244 · `POST …/gastos` → `{ contract, ticket, ya_cargado: null }`. Un gasto a
+ * mano nunca es un duplicado; se guarda «En partes iguales», de tipo «Otro», y
+ * lo pagó quien lo cargó (`gasto_manual.como_se_guarda` del contrato).
+ */
+export function decodeGastoCargado(raw: unknown): TicketDelViaje {
+  const e = 'viajes.gasto';
+  const b = cuerpo(raw, ['ticket', 'ya_cargado'], e);
+  exigir(b.ya_cargado === null, e);
+  const t = ticketDetalle(b.ticket, e);
+  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro' && t.pagaste_tu, e);
+  return t;
 }
 
 /** `GET …/cierre` → la hoja 1m. */
@@ -695,6 +740,8 @@ export type ErrorDeViaje =
   | { readonly tipo: 'no_puede_salir'; readonly motivo: 'selection' | 'paid_ticket' | 'present_in_equal_split' }
   | { readonly tipo: 'fraccion_excede'; readonly itemId: string | null }
   | { readonly tipo: 'limite_tickets' }
+  /** D244 · alguien de los elegidos ya no está en el viaje. */
+  | { readonly tipo: 'persona_desconocida' }
   | { readonly tipo: 'reintentar' };
 
 const MOTIVOS_SALIDA = ['selection', 'paid_ticket', 'present_in_equal_split'] as const;
@@ -713,6 +760,7 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
   }
   if (status === 409 && code === 'viaje_members_limit') return { tipo: 'limite_miembros' };
   if (status === 409 && code === 'viaje_tickets_limit') return { tipo: 'limite_tickets' };
+  if (status === 422 && code === 'viaje_ticket_persona_unknown') return { tipo: 'persona_desconocida' };
   if (status === 429 && code === 'viajes_rate_limited') return { tipo: 'demasiadas_invitaciones' };
   if (status === 409 && code === 'viaje_member_cannot_leave'
       && (MOTIVOS_SALIDA as readonly unknown[]).includes(extra.reason)) {

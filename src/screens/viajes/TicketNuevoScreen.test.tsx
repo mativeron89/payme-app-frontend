@@ -11,7 +11,7 @@ const nada = () => undefined;
 
 const miembro = (id: string, first: string, last: string, extra: Partial<MiembroViaje> = {}): MiembroViaje => ({
   id, first_name: first, last_name: last, username: `${first.toLowerCase()}.${last.toLowerCase()}`, eliminada: false,
-  es_yo: false, balance_cents: 0, falta_elegir: 0, ...extra,
+  es_yo: false, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0, ...extra,
 });
 const MIEMBROS = [
   miembro('m-ana', 'Ana', 'López', { es_yo: true, username: 'ana.lopez' }),

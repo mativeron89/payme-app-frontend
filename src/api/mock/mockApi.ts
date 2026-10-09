@@ -3718,7 +3718,7 @@ function leerCosturaFoto(): string | null {
   try { return localStorage.getItem('payme.app.mock.fotos.v1'); } catch { return null; }
 }
 
-function jpegDeIniciales(letra: string): Promise<Blob> {
+export function jpegDeIniciales(letra: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     canvas.width = 96;

@@ -6,7 +6,7 @@ import { DesplegableMiembros } from './ViajeScreen';
 
 /** D244 · D245 · la carga manual de un gasto del viaje y el desplegable «Miembros». */
 function miembro(id: string, first: string, last: string, extra: Partial<MiembroViaje> = {}): MiembroViaje {
-  return { id, first_name: first, last_name: last, username: null, eliminada: false, es_yo: false, balance_cents: 0, falta_elegir: 0, ...extra };
+  return { id, first_name: first, last_name: last, username: null, eliminada: false, es_yo: false, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0, ...extra };
 }
 const MIEMBROS = [
   miembro('m-yo', 'Ana', 'López', { es_yo: true, username: 'ana.lopez' }),
@@ -70,5 +70,13 @@ describe('D245-4 · el desplegable «Miembros»', () => {
     const html = renderToStaticMarkup(<DesplegableMiembros miembros={MIEMBROS} />);
     expect(html).toContain('aria-expanded="false"');
     expect(texto(html)).toBe('Miembros 3');
+  });
+
+  it('D245 · con la foto de quien la tiene, en lugar de sus iniciales', () => {
+    const fotoDe = (id: string) => (id === MIEMBROS[1]!.id ? 'blob:foto-de-luis' : null);
+    const html = renderToStaticMarkup(<DesplegableMiembros miembros={MIEMBROS} abiertoInicial fotoDe={fotoDe} />);
+    expect(html).toContain('<img class="vj-avatar-foto" src="blob:foto-de-luis" alt=""/>');
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(texto(html)).toBe('Miembros 3 AL Tú @ana.lopez Luis Pérez @luis.perez SR Sofía Ramírez');
   });
 });

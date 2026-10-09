@@ -79,6 +79,8 @@ test('D245 · la pantalla del viaje: el monto en rojo con «−», «Miembros» 
   await miembros.click();
   await expect(miembros).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('Sofía Ramírez', { exact: true })).toBeVisible();
+  // D245 · con su foto quien la tiene (Luis y Sofía en el mock).
+  await expect(page.locator('.vjv-miembros-lista .vj-avatar-foto')).toHaveCount(2);
   await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
   await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
@@ -150,11 +152,13 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   // Pagué $840 y me tocan $280 (entre los tres que estuvieron): −$542 + $560 = $18 a favor, en verde.
   await expect(page.locator('.vjv-monto-a-favor')).toHaveText(/^\$18/);
   await page.getByRole('button', { name: 'Ver balance del viaje', exact: true }).click();
-  // En Consumos, el más nuevo arriba. Con Diego me tocarían $210.
+  // En Consumos, el más nuevo arriba, con su total (respuesta A).
   const primero = page.locator('.vjb-consumo').first();
   await expect(primero).toContainText('Tacos El Güero');
-  await expect(primero).toContainText('$280');
-  await expect(page.getByText('$210', { exact: true })).toHaveCount(0);
+  await expect(primero.locator('.vjb-consumo-monto')).toHaveText('$840');
+  // Y lo pagué yo: «Pagó» suma los $840 a los $960 de Bar La Ola.
+  await page.getByRole('tab', { name: 'Miembros', exact: true }).click();
+  await expect(page.locator('.vjb-fila').filter({ hasText: 'Tú' }).locator('.vjb-cifra')).toHaveText('$1,800');
 });
 
 test('la cámara del viaje no ofrece «Cargarlo a mano» (el ticket exige el recibo)', async ({ page }) => {
@@ -214,6 +218,35 @@ test('D244 · carga manual: «Listo» pide una descripción y un monto mayor que
   await expect(listo).toBeDisabled();
 });
 
+test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y el gasto aparece primero', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje/${CANCUN}`);
+  await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+  await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
+  await page.getByLabel('Monto', { exact: true }).fill('900');
+  // Diego no va: entre tres, $300 cada uno.
+  await page.getByRole('checkbox', { name: /Diego Torres/ }).click();
+  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
+  // Un doble toque es un solo gasto (la llave de idempotencia y el botón apagado mientras guarda).
+  await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();
+  await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
+  await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
+  // −$542 + $900 − $300 = $58 a favor.
+  await expect(page.locator('.vjv-monto-a-favor')).toHaveText(/^\$58/);
+  await page.getByRole('button', { name: 'Ver balance del viaje', exact: true }).click();
+  const primero = page.locator('.vjb-consumo').first();
+  await expect(primero).toContainText('Gasolina');
+  await expect(primero.locator('.vjb-consumo-monto')).toHaveText('$900');
+  await expect(page.locator('.vjb-consumo').filter({ hasText: 'Gasolina' })).toHaveCount(1);
+  await page.getByRole('tab', { name: 'Miembros', exact: true }).click();
+  await expect(page.locator('.vjb-fila').filter({ hasText: 'Tú' }).locator('.vjb-cifra')).toHaveText('$1,860');
+  // Se abre como un ticket «En partes iguales», con Diego desmarcado.
+  await page.getByRole('tab', { name: 'Consumos', exact: true }).click();
+  await primero.click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.`));
+  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
+});
+
 test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);
@@ -226,7 +259,13 @@ test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «M
   await expect(consumos.last()).toContainText('Fonda Doña Mary');
   await page.getByRole('tab', { name: 'Miembros', exact: true }).click();
   await expect(page.locator('.vjb-miembros .vjb-fila')).toHaveCount(4);
-  await expect(page.getByText('Pagó', { exact: true }).first()).toBeVisible();
+  // Lo que pagó cada uno, del dueño (`pagado_cents`): $960, $4,040, $1,280 y $380.
+  await expect(page.locator('.vjb-miembros .vjb-cifra')).toHaveText(['$960', '$4,040', '$1,280', '$380']);
+  // Luis y Sofía tienen foto en el mock; Diego y yo, iniciales.
+  const fotos = page.locator('.vjb-miembros .vj-avatar-foto');
+  await expect(fotos).toHaveCount(2);
+  for (const src of await fotos.evaluateAll((xs) => xs.map((x) => (x as HTMLImageElement).src))) expect(src).toMatch(/^blob:/);
+  await expect(page.locator('.vjb-miembros .vjb-fila').filter({ hasText: 'Diego Torres' }).locator('.vj-avatar')).toHaveText('DT');
   await page.getByRole('tab', { name: 'Consumos', exact: true }).click();
   await consumos.first().click();
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
