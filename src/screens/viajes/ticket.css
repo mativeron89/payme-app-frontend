@@ -1,0 +1,396 @@
+/* AF-VIAJES · D242 · «Ticket nuevo» (1h, presentes, 1k) y el ticket del viaje
+   (1i, 1j, partes iguales). Prefijo `vjt-`. Sólo tokens: nada de colores
+   sueltos. La lista de «¿Qué consumiste?» usa las clases `qc-*` de la mesa
+   (global.css): acá sólo se la encaja en la tarjeta. */
+
+.vjt-crece {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── La cabeza del ticket (1h) y el resumen de 1k ─── */
+
+.vjt-cabeza,
+.vjt-resumen {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.vjt-resumen {
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: left;
+}
+
+.vjt-icono {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.vjt-icono--centro {
+  align-self: center;
+}
+
+.vjt-lugar {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vjt-sub {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.vjt-monto {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.vjt-monto--grande {
+  font-size: var(--fs-h2);
+}
+
+.vjt-div {
+  margin: var(--sp-3) 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* «Lo pagaste tú»: el tilde y la palabra, no sólo el verde. */
+.vjt-pagaste {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) 10px;
+  border-radius: var(--r-full);
+  background: var(--success-tint);
+  color: var(--success);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vjt-texto {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.vjt-texto--ayuda {
+  margin: var(--sp-1) 0 var(--sp-3);
+}
+
+/* El rótulo en mayúsculas («TIPO DE LUGAR», «QUIÉN YA ELIGIÓ»). Etiqueta, nunca dato. */
+.vjt-rotulo {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.vjt-rotulo--arriba {
+  margin-top: 0;
+}
+
+.vjt-card-titulo {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-legacy-lg);
+  line-height: 1.3;
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* ─── «Tipo de lugar»: chips (propuesta C aprobada) ─── */
+
+.vjt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 36 px a la vista; el blanco táctil llega a 44 con el pseudoelemento. */
+.vjt-chip {
+  position: relative;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.vjt-chip::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: var(--tap-min);
+  transform: translateY(-50%);
+}
+
+.vjt-chip[aria-checked='true'] {
+  border-color: var(--action-2);
+  background: var(--teal-l);
+}
+
+/* ─── «¿Cómo lo dividen?» y «¿Quiénes estuvieron?» ─── */
+
+.vjt-opciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* Elegida = punto en el círculo + borde teal de 2 px: nunca sólo el color. El
+   borde mide 2 px siempre (gris sin elegir) para que elegir no mueva nada. */
+.vjt-opcion {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vjt-opcion[aria-checked='true'] {
+  border-color: var(--action-2);
+}
+
+.vjt-opcion[aria-disabled='true'] {
+  cursor: default;
+}
+
+.vjt-opcion:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.vjt-radio {
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--text-muted);
+  border-radius: var(--r-full);
+  background: var(--surface);
+}
+
+[aria-checked='true'] > .vjt-radio {
+  border-color: var(--action-2);
+}
+
+[aria-checked='true'] > .vjt-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: var(--r-full);
+  background: var(--text);
+}
+
+.vjt-opcion-titulo {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.vjt-opcion-sub {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.vjt-chip:focus-visible,
+.vjt-opcion:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* ─── Avisos: sin escaneo, recibo usado/inválido, cerrado, 1k y 1j ─── */
+
+.vjt-aviso {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+  text-align: center;
+}
+
+.vjt-aviso-icono {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.vjt-aviso-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-legacy-lg);
+  line-height: 1.3;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.vjt-aviso-texto {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── «Total del ticket» y «Te toca» (1j, iguales) ─── */
+
+.vjt-total-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.vjt-total-rotulo {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.vjt-total-monto {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.vjt-total-fila--toca .vjt-total-rotulo {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.vjt-total-fila--toca .vjt-total-monto {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+}
+
+.vjt-guardar {
+  margin-top: var(--sp-3);
+}
+
+/* ─── «Quién ya eligió» (1i): el tilde o el reloj, y la palabra ─── */
+
+.vjt-eligio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) 10px;
+  border-radius: var(--r-full);
+  background: var(--success-tint);
+  color: var(--success);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vjt-eligio--falta {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+
+/* ─── «¿Qué consumiste?»: la lista de la mesa, de borde a borde de la tarjeta ─── */
+
+/* `overflow: hidden` recorta los fondos de los renglones en las esquinas; en una
+   columna flex también deja que la tarjeta se ENCOJA y corte la lista: por eso
+   no se encoge. */
+.vjt-consumos {
+  flex-shrink: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.qc-lista.vjt-lista {
+  margin: 0 calc(var(--sp-4) * -1);
+  border-radius: 0;
+}
+
+/* ─── El pie de 1i: «Te toca» y «Listo» ─── */
+
+.vjt-pie-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.vjt-pie-rotulo {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* El pie de 1i mide más que el de un solo botón. */
+.vj-con-pie.vjt-pie-alto .vj-scroll {
+  padding-bottom: 176px;
+}
+
+.vjt-centrado {
+  margin: 0 auto;
+}

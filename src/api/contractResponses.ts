@@ -426,11 +426,35 @@ function normalizedMerchantName(value: unknown): string | null {
     : null;
 }
 
-/** Replica el validador publicado por el owner, sin inferir señales ausentes. */
-export function ocrResponse(value: unknown): OcrResponse {
+/**
+ * AF-VIAJES · D242 · `ticket_datetime` (`trip_v1` de `ocr-merchant-v2.json`):
+ * `{date: 'YYYY-MM-DD' de calendario, time: 'HH:MM' | null}`, claves exactas.
+ * `null` = no cumple; sin la clave, `undefined`.
+ */
+function ticketDatetimeOf(value: unknown): { date: string; time: string | null } | null | undefined {
+  if (value === undefined) return undefined;
+  const raw = record(value);
+  if (!raw || Object.keys(raw).sort().join() !== 'date,time' || typeof raw.date !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)
+      || new Date(`${raw.date}T00:00:00Z`).toISOString().slice(0, 10) !== raw.date
+      || (raw.time !== null && !(typeof raw.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time)))) {
+    return null;
+  }
+  return { date: raw.date, time: raw.time as string | null };
+}
+
+/**
+ * Replica el validador publicado por el owner, sin inferir señales ausentes.
+ * AF-VIAJES · `viaje`: el escaneo pidió `trip_version=1`, y sólo entonces se
+ * admite `ticket_datetime`. Sin el viaje, la clave es tan desconocida como
+ * siempre y rompe la lectura.
+ */
+export function ocrResponse(value: unknown, opciones: { readonly viaje?: boolean } = {}): OcrResponse {
   const body = record(value);
   const version2 = body?.contract_version === 2;
-  const allowed = version2 ? OCR_V2_KEYS : OCR_V1_KEYS;
+  const allowed = version2
+    ? (opciones.viaje === true ? [...OCR_V2_KEYS, 'ticket_datetime'] : OCR_V2_KEYS)
+    : OCR_V1_KEYS;
   if (!body || (version2 && Object.keys(body).some((key) => !allowed.includes(key)))
       || (!version2 && body.contract_version !== undefined)
       || !Array.isArray(body.items)
@@ -496,6 +520,8 @@ export function ocrResponse(value: unknown): OcrResponse {
   }
 
   const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
+  const ticketDatetime = version2 && opciones.viaje === true ? ticketDatetimeOf(body.ticket_datetime) : undefined;
+  if (ticketDatetime === null) throw new ContractResponseError('ocr');
   // En v1 las claves ni siquiera están permitidas (arriba).
   // D218 · primero los descuentos: `ticket_totals` puede depender de ellos.
   const ticketAdjustments = version2 ? ticketAdjustmentsOf(body.ticket_adjustments) : undefined;
@@ -533,6 +559,7 @@ export function ocrResponse(value: unknown): OcrResponse {
       : {}),
     ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
     ...(ticketAdjustments ? { ticket_adjustments: ticketAdjustments } : {}),
+    ...(ticketDatetime ? { ticket_datetime: ticketDatetime } : {}),
     warnings: [...body.warnings] as OcrWarning[],
     mock: body.mock,
     ...(receipt !== undefined ? { receipt } : {}),

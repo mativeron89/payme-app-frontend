@@ -1,0 +1,97 @@
+/* AF-VIAJES · D242 · lo que comparten las pantallas de Viajes. Cada pantalla
+   suma lo suyo en su propio archivo (`listas.css`, `crear.css`, `viaje.css`,
+   `ticket.css`). Sólo tokens: nada de colores sueltos. */
+
+/* La columna de una pantalla de Viajes: el aire lateral en longhands, para no
+   pisar el padding-bottom de `.has-appbar .scroll` (ver global.css). */
+.vj-scroll {
+  padding-left: var(--sp-4);
+  padding-right: var(--sp-4);
+  padding-top: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* La tarjeta blanca de las pantallas de Viajes (1g, 1h, 1l…). */
+.vj-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  padding: var(--sp-4);
+}
+
+/* El rótulo de sección en mayúsculas («TICKETS · 5»). Etiqueta, nunca dato. */
+.vj-seccion {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* El avatar con iniciales (sin foto: no hay regla para mostrarla a quien no es amigo). */
+.vj-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--teal-l);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* La fila de avatares superpuestos de la tarjeta del viaje (1g, 1m). */
+.vj-avatares {
+  display: inline-flex;
+}
+.vj-avatares .vj-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+  border: 2px solid var(--surface);
+}
+.vj-avatares .vj-avatar + .vj-avatar {
+  margin-left: -6px;
+}
+
+/* El aviso informativo («PayMe no mueve dinero…»). */
+.vj-nota {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--info-tint);
+  color: var(--info);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* El botón de la acción principal, al pie y fijo (1d, 1h, 1i): sin la barra de cinco. */
+.vj-pie {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -4px 16px rgba(16, 30, 59, 0.08);
+}
+.vj-pie .btn {
+  width: 100%;
+}
+/* Aire para que el pie fijo no tape la última fila. */
+.vj-con-pie .vj-scroll {
+  padding-bottom: 112px;
+}

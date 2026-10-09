@@ -43,6 +43,14 @@
  * acciones distintas mostrando dos mensajes. Las cuatro frases nuevas están
  * marcadas «ES corregido» en el documento de Diseño.
  */
+import { EN_VIAJES_AVISOS } from './viajes/avisos';
+import { EN_VIAJES_CERRADO } from './viajes/cerrado';
+import { EN_VIAJES_COMUN } from './viajes/comun';
+import { EN_VIAJES_CREAR } from './viajes/crear';
+import { EN_VIAJES_LISTAS } from './viajes/listas';
+import { EN_VIAJES_TICKET } from './viajes/ticket';
+import { EN_VIAJES_VIAJE } from './viajes/viaje';
+
 export const EN: Record<string, string> = {
   // D165 · Ubicación real, Turno3/2a; sin datos/personas/clave demo.
   // D186 · «Ubicación» pasa a llamarse «Zona horaria»: no usa la posición, sólo la zona del teléfono.
@@ -1246,4 +1254,14 @@ export const EN: Record<string, string> = {
   "Esa mesa ya no está disponible.": "That table is no longer available.",
   "Ese pago ya no está disponible.": "That payment is no longer available.",
   "No pudimos borrarlo. Prueba de nuevo.": "We couldn't delete it. Try again.",
+  // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
+  // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
+  // clave de Viajes pise una de arriba ni se repita entre archivos.
+  ...EN_VIAJES_COMUN,
+  ...EN_VIAJES_LISTAS,
+  ...EN_VIAJES_CREAR,
+  ...EN_VIAJES_VIAJE,
+  ...EN_VIAJES_TICKET,
+  ...EN_VIAJES_AVISOS,
+  ...EN_VIAJES_CERRADO,
 };

@@ -42,6 +42,16 @@ const TYPES = {
   // política de correo (`notificationPreferences.CHANNEL_POLICY`).
   join_request_received: { title: 'Quieren unirse a tu mesa' },
   join_request_accepted: { title: 'Te aceptaron en la mesa' },
+  // v2.171.0 · decisión 242 · Viajes. Sólo en la app (no están en la política de correo). Ninguno reutiliza
+  // `invitation_*` ni `transfer_*`: el riel wallet suprime `transfer_*` y la campana trata `invitation_received`
+  // como una invitación a mesa. Los textos los arma services/viajes.js.
+  viaje_invitation_received: { title: 'Te invitaron a un viaje' },
+  viaje_invitation_rejected: { title: 'Rechazaron tu invitación' },
+  viaje_ticket_added: { title: 'Ticket nuevo en tu viaje' },
+  viaje_closed: { title: 'Se cerró un viaje' },
+  viaje_transfer_marked: { title: 'Te marcaron un pago' },
+  viaje_transfer_not_received: { title: 'Un pago no llegó' },
+  viaje_finished: { title: 'Viaje cerrado' },
 };
 
 /**

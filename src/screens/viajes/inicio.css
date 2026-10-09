@@ -1,0 +1,92 @@
+/* AF-VIAJES · D242 · la pestaña «Viajes» de Inicio (1a, 1b). */
+
+/* Cuántos hay, debajo del rótulo del acceso («2 viajes»). */
+.launch-sub {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+/* 1b · sin viajes, la tarjeta de la pestaña es el estado vacío. */
+.vj-inicio-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-4) var(--sp-4);
+  text-align: center;
+}
+.vj-inicio-vacio-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+.vj-inicio-vacio-titulo {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+.vj-inicio-vacio-texto {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* 1a · la fila «Crear viaje» debajo de la tarjeta. */
+.vj-crear-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: calc(100% - 2 * var(--sp-4));
+  margin: var(--sp-3) var(--sp-4) 0;
+  min-height: 64px;
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.vj-crear-fila-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+.vj-crear-fila-texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vj-crear-fila-titulo {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.vj-crear-fila-sub {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.vj-crear-fila-chev {
+  display: inline-flex;
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+}

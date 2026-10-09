@@ -205,6 +205,19 @@ const ESPERADO: Record<PageId, Esperado> = {
     marcador: { rol: 'heading', nombre: '¿Qué consumiste?', nivel: 1 },
     paramEnStore: true,
   },
+
+  /**
+   * AF-VIAJES · D242 · con la capacidad `features.viajes` APAGADA —el default
+   * del mock, como el dueño hoy— las rutas de Viajes no existen: vuelven a
+   * Inicio (`viajesRouteGuard.ts`). Encendidas, las monta `viajes.spec.ts`.
+   */
+  viajes: { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-nuevo': { tipo: 'redirige', a: /:\d+\/home$/ },
+  viaje: { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-ticket-nuevo': { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-ticket': { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-balance': { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-cerrado': { tipo: 'redirige', a: /:\d+\/home$/ },
 };
 
 function ubicar(page: Page, m: Marcador) {

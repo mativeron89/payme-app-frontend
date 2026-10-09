@@ -36,7 +36,28 @@ import {
 import { useAceptarInvitacion } from './InvitacionEnInicio';
 import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
-import { iconoDeCategoriaRestaurante, mesaDelAviso } from '../utils/labels';
+import {
+  claveDeDestino,
+  destinoDeMesa,
+  iconoDeCategoriaRestaurante,
+  mesaDelAviso,
+  type DestinoDeAviso,
+} from '../utils/labels';
+import { errorDeViaje, useViajesHabilitado, type InvitacionAViaje } from '../api/viajes';
+import {
+  destinoDeAvisoDeViaje,
+  esAvisoDeViaje,
+  estadoDeInvitacionAViaje,
+  hayInvitacionAViaje,
+  invitacionesPorViaje,
+  lineaDeInvitacionAViaje,
+  llevaRevisar,
+  negritaDeInvitacionAViaje,
+  viajeDelAviso,
+  type EstadoInvitacionAViaje,
+  type RespuestaAViaje,
+} from './viajes/avisosDeViaje';
+import { ResponderInvitacionAViaje, RevisarPagoDeViaje } from './viajes/avisosDeViajeVista';
 import { useShortfallDetailCapability } from '../api/privateFeatures';
 import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
@@ -124,16 +145,24 @@ const NOTIF_ICON: Record<string, IconName> = {
   // te aceptaron en la que pediste.
   join_request_received: 'users',
   join_request_accepted: 'check-circle',
+  // AF-VIAJES · D242 · v2.171.0 · los siete avisos de un viaje.
+  viaje_invitation_received: 'users',
+  viaje_invitation_rejected: 'x-circle',
+  viaje_ticket_added: 'receipt',
+  viaje_closed: 'archive',
+  viaje_transfer_marked: 'cash',
+  viaje_transfer_not_received: 'warning',
+  viaje_finished: 'check-circle',
 };
 
-/** La fila principal de un aviso: un botón si lleva a una mesa, un div si no. */
+/** La fila principal de un aviso: un botón si lleva a algún lado (una mesa o un viaje), un div si no. */
 function AvisoPrincipal({
   destino,
   onOpen,
   disabled = false,
   children,
 }: {
-  destino: string | null;
+  destino: DestinoDeAviso | null;
   onOpen?: () => void;
   disabled?: boolean;
   children: ReactNode;
@@ -201,20 +230,25 @@ function HojaBorrarTodas({
 /**
  * Una carrera 404 no es éxito. Sólo autoriza continuar si un GET propio
  * posterior confirma que ESA fila ya está leída y conserva el mismo destino.
+ *
+ * AF-VIAJES · `destinationOf` dice cómo se calcula el destino de la fila
+ * refrescada; por defecto, la mesa, como siempre. La pantalla pasa la clave
+ * `página/parámetro` (`claveDeDestino`), que cubre mesas y viajes.
  */
 export function reconciledReadDestination(
   notifications: readonly AppNotification[],
   notificationId: string,
   expectedDestination: string,
+  destinationOf: (notification: AppNotification) => string | null = mesaDelAviso,
 ): string | null {
   const current = notifications.find((notification) => notification.id === notificationId);
-  return current?.read_at && mesaDelAviso(current) === expectedDestination
+  return current?.read_at && destinationOf(current) === expectedDestination
     ? expectedDestination
     : null;
 }
 
 export function AvisosScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const toast = useToast();
   const { session } = useAuth();
   const shortfallCapability = useShortfallDetailCapability();
@@ -228,6 +262,15 @@ export function AvisosScreen() {
   const [confirmarBorrarTodas, setConfirmarBorrarTodas] = useState(false);
   const [borrandoTodas, setBorrandoTodas] = useState(false);
   const botonBorrarTodas = useRef<HTMLButtonElement | null>(null);
+  // AF-VIAJES · 1f · las invitaciones a viajes pendientes, por viaje: se piden
+  // UNA vez y sólo si la bandeja trae alguna y Viajes está encendido. `null`
+  // mientras no se sabe (sin pedir, cargando o error): sin botones ni destino.
+  const viajesHabilitado = useViajesHabilitado();
+  const [invitacionesAViajes, setInvitacionesAViajes] = useState<ReadonlyMap<string, InvitacionAViaje> | null>(null);
+  const [respuestasAViajes, setRespuestasAViajes] = useState<ReadonlyMap<string, RespuestaAViaje>>(() => new Map());
+  const [respondiendoViaje, setRespondiendoViaje] = useState<string | null>(null);
+  const pidioInvitacionesAViajes = useRef(false);
+  const hayInvitacionesAViajes = hayInvitacionAViaje(notifs);
 
   /**
    * E174-3 · al traer la lista, salen de memoria las fotos de invitadores de
@@ -259,6 +302,18 @@ export function AvisosScreen() {
       .catch(() => undefined);
   }
   useEffect(load, []);
+
+  function cargarInvitacionesAViajes() {
+    api.getInvitacionesAViajes()
+      .then((lista) => setInvitacionesAViajes(invitacionesPorViaje(lista)))
+      .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    if (!viajesHabilitado || !hayInvitacionesAViajes || pidioInvitacionesAViajes.current) return;
+    pidioInvitacionesAViajes.current = true;
+    cargarInvitacionesAViajes();
+  }, [viajesHabilitado, hayInvitacionesAViajes]);
 
   // AF-INVITACION-INICIO · decisión 109 · aceptar es la MISMA función que usa la
   // burbuja de Inicio (`aceptarInvitacion`): acepta, avisa y entra a la mesa; sin
@@ -311,9 +366,46 @@ export function AvisosScreen() {
     }
   }
 
-  async function openNotification(notification: AppNotification, destino: string) {
+  /**
+   * AF-VIAJES · 1f · aceptar o rechazar una invitación a un viaje desde su
+   * aviso. Bien ⇒ la fila dice «Aceptaste» / «Rechazaste» (y, aceptada, lleva
+   * al viaje). Un 404 dice que el viaje ya no está; un 409, que ya no estaba
+   * pendiente: en los dos casos se vuelve a pedir la lista, para que la fila
+   * no ofrezca lo que ya no se puede.
+   */
+  async function responderInvitacionAViaje(viajeId: string, respuesta: RespuestaAViaje) {
+    if (respondiendoViaje !== null) return;
+    setRespondiendoViaje(viajeId);
+    try {
+      if (respuesta === 'aceptada') await api.aceptarViaje(viajeId);
+      else await api.rechazarViaje(viajeId);
+      setRespuestasAViajes((actual) => new Map(actual).set(viajeId, respuesta));
+    } catch (err) {
+      const { tipo } = errorDeViaje(err);
+      if (tipo === 'no_disponible') toast(t('Este viaje ya no está disponible.'));
+      else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
+      if (tipo === 'no_disponible' || tipo === 'no_abierto') cargarInvitacionesAViajes();
+    } finally {
+      setRespondiendoViaje(null);
+    }
+  }
+
+  function estadoDeInvitacion(n: AppNotification): EstadoInvitacionAViaje {
+    return estadoDeInvitacionAViaje(viajeDelAviso(n), invitacionesAViajes, respuestasAViajes);
+  }
+
+  /**
+   * Adónde lleva tocar un aviso. Los de un viaje van primero y por su cuenta
+   * (`avisosDeViaje.ts`); para cualquier otro tipo, la mesa de siempre.
+   */
+  function destinoDelAviso(n: AppNotification): DestinoDeAviso | null {
+    if (esAvisoDeViaje(n.type)) return destinoDeAvisoDeViaje(n, viajesHabilitado, estadoDeInvitacion(n));
+    return destinoDeMesa(n);
+  }
+
+  async function openNotification(notification: AppNotification, destino: DestinoDeAviso) {
     if (notification.read_at) {
-      navigate('mesa', destino);
+      navigate(destino.page, destino.param);
       return;
     }
     if (openingNotificationId !== null) return;
@@ -327,7 +419,7 @@ export function AvisosScreen() {
       setNotifs((current) => current?.map((item) => (
         item.id === notification.id ? { ...item, read_at: readAt } : item
       )) ?? current);
-      navigate('mesa', destino);
+      navigate(destino.page, destino.param);
     } catch (err) {
       const { status } = extractApiError(err);
       if (status === 404) {
@@ -337,10 +429,11 @@ export function AvisosScreen() {
           const reconciled = reconciledReadDestination(
             refreshed.notifications,
             notification.id,
-            destino,
+            claveDeDestino(destino) ?? '',
+            (fila) => claveDeDestino(destinoDelAviso(fila)),
           );
           if (reconciled !== null) {
-            navigate('mesa', reconciled);
+            navigate(destino.page, destino.param);
             return;
           }
         } catch {
@@ -495,7 +588,13 @@ export function AvisosScreen() {
         <div className="avisos-lista">
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
-            const destino = mesaDelAviso(n);
+            const destino = destinoDelAviso(n);
+            // AF-VIAJES · sólo con Viajes encendido una fila de viaje agrega algo; si no, es una fila quieta más.
+            const deViaje = viajesHabilitado && esAvisoDeViaje(n.type);
+            const viajeId = deViaje ? viajeDelAviso(n) : null;
+            const invitacionAViaje = deViaje && n.type === 'viaje_invitation_received' ? estadoDeInvitacion(n) : null;
+            const lineaDeViaje = invitacionAViaje && lineaDeInvitacionAViaje(invitacionAViaje, n.created_at, idioma, t);
+            const negritaDeViaje = invitacionAViaje && negritaDeInvitacionAViaje(n.body, invitacionAViaje, t);
             const shortfallDisclosure = readShortfallNotificationDisclosure(n);
             const inviterName = n.type === 'invitation_received' && typeof n.payload?.inviter_name === 'string'
               ? n.payload.inviter_name.trim()
@@ -541,7 +640,10 @@ export function AvisosScreen() {
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div id={tituloId} className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
-                        {invitationSuffix !== null ? (
+                        {negritaDeViaje ? (
+                          // AF-VIAJES · 1f · como la invitación a una mesa: el nombre de quien invita en negrita.
+                          <><strong>{negritaDeViaje.nombre}</strong>{negritaDeViaje.resto}</>
+                        ) : invitationSuffix !== null ? (
                           <><strong>{inviterName}</strong>{invitationSuffix}</>
                         ) : n.type === 'join_request_accepted' && n.title ? (
                           // D219 · X08 · título y cuerpo del dueño, tal cual: «Te
@@ -549,7 +651,7 @@ export function AvisosScreen() {
                           <><strong>{n.title}</strong><br />{n.body}</>
                         ) : n.body}
                       </div>
-                      <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
+                      <div className="aviso-time">{lineaDeViaje || relTime(n.created_at, undefined, t)}</div>
                     </div>
                   </AvisoPrincipal>
                   <button
@@ -563,6 +665,21 @@ export function AvisosScreen() {
                     <Icon name="trash" size={18} />
                   </button>
                 </div>
+                {invitacionAViaje?.tipo === 'pendiente' && viajeId !== null && (
+                  <ResponderInvitacionAViaje
+                    tituloId={tituloId}
+                    ocupada={respondiendoViaje !== null}
+                    onAceptar={() => responderInvitacionAViaje(viajeId, 'aceptada')}
+                    onRechazar={() => responderInvitacionAViaje(viajeId, 'rechazada')}
+                  />
+                )}
+                {deViaje && destino !== null && llevaRevisar(n.type, destino) && (
+                  <RevisarPagoDeViaje
+                    tituloId={tituloId}
+                    deshabilitado={openingNotificationId !== null}
+                    onRevisar={() => openNotification(n, destino)}
+                  />
+                )}
                 {shortfallCapability.enabled && session && shortfallDisclosure && (
                   <ShortfallDisclosure session={session} disclosure={shortfallDisclosure} />
                 )}

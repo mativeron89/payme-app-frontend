@@ -31,6 +31,8 @@ import { InvitacionEnInicio } from './InvitacionEnInicio';
 import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
+import { useViajesHabilitado } from '../api/viajes';
+import { FilaCrearViaje, PanelViajes, useConteoDeViajes } from './viajes/PestanaViajes';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -63,8 +65,12 @@ import { useSinLeer } from '../components/useSinLeer';
  * viven en `InvitacionEnInicio.tsx`; aceptar es la misma función que Avisos.
  */
 
-/** Las tres de §1.11. `asociadas` existe y no tiene interior: ver abajo. */
-type TabId = 'cuenta' | 'estadisticas' | 'asociadas';
+/**
+ * Las tres de §1.11. `asociadas` existe y no tiene interior: ver abajo.
+ * AF-VIAJES · D242 · con la capacidad de Viajes, la tercera es «Viajes» en
+ * lugar de «Asociadas» (1a); sin ella, Inicio queda exactamente como antes.
+ */
+type TabId = 'cuenta' | 'estadisticas' | 'asociadas' | 'viajes';
 
 /** Español a propósito: constante de módulo, se traduce al renderizar
  *  (ver el `.map` que las pasa a `BubbleTabs`). Sin `t` en este ámbito. */
@@ -161,7 +167,14 @@ export function HomeScreen() {
   // vez) y el corte del viernes SÍ (`corteDePagosView`). Ver `releaseGates.ts`.
   const rail = accountRailView(walletRailEnabled, accountActivity);
   const corte = corteDePagosView(useMoneyRail());
-  const [tab, setTab] = useState<TabId>('cuenta');
+  const [tabElegida, setTab] = useState<TabId>('cuenta');
+  // AF-VIAJES · la tercera pestaña depende de la capacidad, que llega después
+  // del primer cuadro: la elegida se traduce a la que existe.
+  const conViajes = useViajesHabilitado();
+  const tab: TabId = tabElegida === 'asociadas' && conViajes ? 'viajes'
+    : tabElegida === 'viajes' && !conViajes ? 'asociadas' : tabElegida;
+  const pestanas = conViajes ? TABS.filter((x) => x.id !== 'asociadas') : TABS;
+  const { conteo: conteoViajes, reintentar: reintentarViajes } = useConteoDeViajes(tab === 'viajes');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
   // D237 · lo último visto de esta cuenta, si hay: al volver a Inicio la mesa
@@ -242,7 +255,14 @@ export function HomeScreen() {
         alignChrome
         unread={unread}
         onBell={() => navigate('avisos')}
-        tabs={<BubbleTabs tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} active={tab} onSelect={(id) => setTab(id as TabId)} />}
+        tabs={<BubbleTabs
+          tabs={[
+            ...pestanas.map((x) => ({ ...x, label: t(x.label) })),
+            ...(conViajes ? [{ id: 'viajes', label: t('Viajes') }] : []),
+          ]}
+          active={tab}
+          onSelect={(id) => setTab(id as TabId)}
+        />}
       />
 
       <div className="scroll">
@@ -254,7 +274,7 @@ export function HomeScreen() {
         )}
         {/* La tarjeta cuadra la esquina que coincide con una pestaña extrema;
             la pestaña central conserva ambos radios (§5 bis · B). */}
-        <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
+        <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === (conViajes ? 'viajes' : TABS.at(-1)!.id) ? 'right' : undefined}>
           {/* Decisiones 98 y 99 de Mati: la pestaña «Cuenta» ofrece dos accesos
               lado a lado, del mismo tamaño y composición que el de «Estadísticas»:
               - «Ver pagos» lleva a Mesas mientras los pagos estén apagados (la ruta
@@ -300,6 +320,9 @@ export function HomeScreen() {
            * *"una pantalla que ya existe es mucho más difícil de discutir que
            * una que todavía no"*.
            */}
+          {/* AF-VIAJES · D242 · 1a/1b: Abiertos y Cerrados, o el vacío. */}
+          {tab === 'viajes' && <PanelViajes conteo={conteoViajes} onReintentar={reintentarViajes} />}
+
           {tab === 'asociadas' && (
             <div className="launch-stack home-tab-panel home-tab-panel-empty">
               <div className="state-unknown">
@@ -311,6 +334,7 @@ export function HomeScreen() {
             </div>
           )}
         </MountedCard>
+        {tab === 'viajes' && <FilaCrearViaje conteo={conteoViajes} />}
         {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}

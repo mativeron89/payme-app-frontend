@@ -11,7 +11,9 @@ describe('M04 · Avisos', () => {
     const handler = SOURCE.match(/async function openNotification[\s\S]*?\n  }\n\n  const hasUnread/)?.[0] ?? '';
     const patch = handler.indexOf('await api.markNotificationRead(notification.id)');
     const update = handler.indexOf('setNotifs');
-    const navigation = handler.lastIndexOf("navigate('mesa', destino)");
+    // AF-VIAJES · el destino es `{ page, param }`: para una mesa, `destinoDeMesa`
+    // = `{ page: 'mesa', param: mesaDelAviso(n) }` (lo fija `labels.test.ts`).
+    const navigation = handler.lastIndexOf('navigate(destino.page, destino.param)');
 
     expect(patch).toBeGreaterThanOrEqual(0);
     expect(update).toBeGreaterThan(patch);
@@ -39,6 +41,33 @@ describe('M04 · Avisos', () => {
     expect(reconciledReadDestination([{ ...row, read_at: null }], 'n-1', 'PA-1099')).toBeNull();
     expect(reconciledReadDestination([row], 'n-ajena', 'PA-1099')).toBeNull();
     expect(reconciledReadDestination([row], 'n-1', 'PA-0000')).toBeNull();
+  });
+
+  it('AF-VIAJES · cualquier aviso que no es de un viaje sigue yendo a su mesa, como antes', () => {
+    const destino = SOURCE.match(/function destinoDelAviso[\s\S]*?\n  }\n/)?.[0] ?? '';
+    expect(destino).toContain('if (esAvisoDeViaje(n.type)) return destinoDeAvisoDeViaje(');
+    expect(destino.trim().endsWith('return destinoDeMesa(n);\n  }')).toBe(true);
+    // La fila usa ese destino, y la reconciliación compara página y parámetro.
+    expect(SOURCE).toContain('const destino = destinoDelAviso(n);');
+    expect(SOURCE).toContain('(fila) => claveDeDestino(destinoDelAviso(fila))');
+  });
+
+  it('AF-VIAJES · la carrera 404 de un aviso de viaje también exige mismo destino', () => {
+    const row: AppNotification = {
+      id: 'n-2',
+      type: 'viaje_finished',
+      title: 'Viaje cerrado',
+      body: 'Oaxaca puente quedó cerrado. Todos pagaron y ya está en Cerrados.',
+      payload: { viaje_id: 'v-1' },
+      related_entity_type: 'viaje',
+      related_entity_id: 'v-1',
+      read_at: '2026-10-09T12:00:00.000Z',
+      created_at: '2026-10-09T11:00:00.000Z',
+    };
+    const clave = (n: AppNotification) => (n.payload?.viaje_id === 'v-1' ? 'viaje-cerrado/v-1' : null);
+    expect(reconciledReadDestination([row], 'n-2', 'viaje-cerrado/v-1', clave)).toBe('viaje-cerrado/v-1');
+    expect(reconciledReadDestination([{ ...row, read_at: null }], 'n-2', 'viaje-cerrado/v-1', clave)).toBeNull();
+    expect(reconciledReadDestination([{ ...row, payload: { viaje_id: 'v-2' } }], 'n-2', 'viaje-cerrado/v-1', clave)).toBeNull();
   });
 
   it('muestra restaurante / ID sólo con ambos datos y separa título de contenido', () => {

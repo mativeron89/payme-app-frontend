@@ -1,0 +1,587 @@
+/* AF-VIAJES · D242 · el viaje abierto (1g), el cierre (1m), la salida (1q),
+   los pagos (1n, 1o, 1p) y el balance en vivo (1l). Sólo tokens. */
+
+/* ─── La tarjeta de título del viaje ─── */
+.vjv-titulo-personas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+/* Sobre el teal de la tarjeta, los avatares van en blanco (diseño 1g). */
+.vjv-titulo-personas .vj-avatar {
+  background: var(--surface);
+}
+.vjv-titulo-nombres {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-titulo-chip {
+  align-self: center;
+  margin-top: var(--sp-2);
+}
+
+/* ─── Chips: el texto siempre dice el estado, el color acompaña ─── */
+.vjv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: fit-content;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.vjv-chip-aviso {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.vjv-chip-info {
+  background: var(--surface);
+  color: var(--teal-txt);
+}
+.vjv-chip-ok {
+  background: var(--success-tint);
+  color: var(--success);
+}
+
+/* ─── 1g · Tu balance ─── */
+.vjv-balance-rotulo {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-balance-monto {
+  margin-top: 2px;
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjv-balance-gasto {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-balance-gasto strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjv-enlace {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: var(--sp-1);
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--teal-txt);
+  text-align: left;
+  cursor: pointer;
+}
+.vjv-chev {
+  transform: rotate(-90deg);
+}
+
+/* ─── 1g · los tickets ─── */
+.vjv-tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.vjv-ticket {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 72px;
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.vjv-ticket-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+.vjv-ticket-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.vjv-ticket-lugar {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.vjv-ticket-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-ticket-main .vjv-chip {
+  margin-top: var(--sp-1);
+}
+.vjv-ticket-toca {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.vjv-ticket-toca-lbl {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.vjv-ticket-toca-monto {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.vjv-vacio {
+  margin: 0;
+  padding: var(--sp-4);
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-salir {
+  align-self: center;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-4);
+  border: none;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ─── 1n · 1o · las transferencias ─── */
+.vjv-tr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+/* La mía (o la que me pide confirmar): borde teal de 2px, nunca sólo color —
+   la frase empieza con «Tú» o trae la nota. */
+.vjv-tr-destacada {
+  border: 2px solid var(--action-2);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+.vjv-tr-blanca {
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+.vjv-tr-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.vjv-tr-frase {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  color: var(--text);
+}
+.vjv-tr-frase strong {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.vjv-tr-ayuda {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-tr-anulada {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+.vjv-tr-persona {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.vjv-tr-quien {
+  flex: 1;
+  min-width: 0;
+}
+.vjv-tr-nombre {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.vjv-tr-arroba {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.vjv-tr-monto {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjv-tr-botones {
+  display: flex;
+  gap: var(--sp-2);
+}
+.vjv-tr-botones > .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.vjv-tr-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.vjv-tr-pie .btn {
+  min-height: var(--tap-min);
+}
+/* Varias en una tarjeta (1o): divididas por la línea de siempre. */
+.vjv-tr-grupo {
+  gap: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.vjv-tr-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.vjv-tr-grupo > .vjv-tr-item {
+  padding: var(--sp-4) 0;
+}
+.vjv-tr-grupo > .vjv-tr-item + .vjv-tr-item {
+  border-top: 1px solid var(--border);
+}
+.vjv-nota-sola {
+  margin: 0;
+}
+.vjv-nota-sola > span {
+  flex: 1;
+}
+
+/* ─── 1p · cuántas faltan ─── */
+.vjv-progreso-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.vjv-progreso-fila strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  color: var(--text);
+}
+.vjv-progreso-fila span {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.vjv-partes {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--sp-3);
+}
+.vjv-parte {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--border);
+}
+.vjv-parte-llena {
+  background: var(--success);
+}
+.vj-card.vjv-lista {
+  list-style: none;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.vjv-lista-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-3) 0;
+}
+.vjv-lista-fila + .vjv-lista-fila {
+  border-top: 1px solid var(--border);
+}
+.vjv-lista-quien {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.35;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.vjv-lista-quien strong {
+  font-weight: 700;
+}
+.vjv-lista-der {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+.vjv-lista-der strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjv-pie-texto {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── Las hojas (1m, 1q y la confirmación de salir) ─── */
+.vjv-sheet {
+  max-height: 85vh;
+  padding-bottom: calc(var(--sp-6) + env(safe-area-inset-bottom));
+}
+.vjv-hoja {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+  text-align: center;
+}
+.vjv-hoja-asa {
+  align-self: center;
+  width: 40px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--border);
+}
+.vjv-hoja-icono {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.vjv-hoja-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.vjv-hoja-texto {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjv-hoja-aviso {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--warning-tint);
+  color: var(--warning);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  text-align: left;
+}
+.vjv-hoja-aviso.ok {
+  background: var(--success-tint);
+  color: var(--success);
+}
+.vjv-hoja-aviso > svg {
+  margin-top: 1px;
+}
+.vjv-hoja-pie {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.vjv-hoja-botones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.vjv-hoja .state-error {
+  text-align: left;
+}
+
+/* ─── 1l · el balance en vivo ─── */
+.vj-card.vjb-lista {
+  list-style: none;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.vjb-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-3) 0;
+}
+.vjb-fila + .vjb-fila {
+  border-top: 1px solid var(--border);
+}
+.vjb-quien {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vjb-nombre {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.vjb-falta {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--warning);
+}
+.vjb-monto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.vjb-rotulo {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.vjb-rotulo.debe {
+  color: var(--warning);
+}
+.vjb-rotulo.le_deben {
+  color: var(--success);
+}
+.vjb-cifra {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjb-aviso {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--warning-tint);
+  color: var(--warning);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.vjb-aviso > svg {
+  margin-top: 1px;
+}

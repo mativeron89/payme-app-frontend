@@ -29,6 +29,8 @@ const {
 // v2.145.0 · decisión 141: recibo firmado de lo que se leyó (emisión APAGADA hasta que el AF lo
 // tolere; ver services/origenItems.js). Se llama por el módulo para que el seam de tests alcance.
 const origenItems = require('../services/origenItems');
+// v2.171.0 · D242: la huella del ticket de un viaje y la capacidad (V1).
+const viajes = require('../services/viajes');
 
 const router = express.Router();
 
@@ -221,6 +223,12 @@ router.post('/', (req, res, next) => {
   // servicio aparte (`service_charge`). Sin él, la lectura de siempre, byte por byte.
   const ajustes = req.ocrContractVersion === 2 ? req.query.adjustments_version : undefined;
   req.ocrAdjustmentsVersion = ajustes === '1' ? 1 : ajustes === '2' ? 2 : undefined;
+  // v2.170.0 · AB-OCR-PAGOS-ORTOGRAFIA · D240 punto 15: `names_version=1` pide los nombres corregidos con el
+  // diccionario propio y el original en `original_name`. Misma regla exacta: sin él, los nombres de siempre.
+  req.ocrNamesVersion = req.ocrContractVersion === 2 && req.query.names_version === '1' ? 1 : undefined;
+  // v2.171.0 · AB-VIAJES · D242 (V2): `trip_version=1` (con v2 y el recibo) firma en el recibo la huella del ticket y
+  // publica la fecha y la hora impresas (`ticket_datetime`). Sólo con Viajes encendido (V1); si no, se ignora.
+  req.ocrTripVersion = req.ocrReceiptRequested && req.query.trip_version === '1' && viajes.habilitado() ? 1 : undefined;
   next();
 }, parseImageUpload, async (req, res, next) => {
   try {
@@ -290,15 +298,24 @@ router.post('/', (req, res, next) => {
       // devolver lo utilizable (acá: nada + warning) para que el usuario
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
-        const result = await ocrTextract.analyzeExpense(req.file.buffer, { servicioAparte: req.ocrAdjustmentsVersion === 2 });
-        const respuesta = respuestaOcr(result, {
+        // v2.170.0 · D240: la lectura nueva (`adjustments_version=2`) también deja afuera los renglones de pago.
+        const result = await ocrTextract.analyzeExpense(req.file.buffer, {
+          servicioAparte: req.ocrAdjustmentsVersion === 2, ...(req.ocrNamesVersion === 1 && { nombresCorregidos: true }),
+        });
+        // v2.171.0 · D242: la identidad del ticket (folio, fecha, hora) vive sólo en memoria; con `trip_version=1`
+        // la fecha y la hora salen para mostrarse y la huella va firmada en el recibo.
+        const identidad = req.ocrTripVersion === 1 ? result[ocrTextract.IDENTIDAD] : null;
+        const respuesta = respuestaOcr(identidad?.fecha
+          ? { ...result, ticket_datetime: { date: identidad.fecha, time: identidad.hora ?? null } } : result, {
           mock: false, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
           warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion,
+          namesVersion: req.ocrNamesVersion, tripVersion: req.ocrTripVersion,
         });
         // El recibo lleva los totales del resultado del servidor aunque el cliente no los negocie.
         const cuerpo = req.ocrReceiptRequested
           ? origenItems.conRecibo(respuesta, req.user.id, { logger, totales: result.ticket_totals,
-            ajustes: result.ticket_adjustments }) : respuesta;
+            ajustes: result.ticket_adjustments,
+            ...(req.ocrTripVersion === 1 && { huella: viajes.huellaDeLectura(result, identidad) }) }) : respuesta;
         // Se cuenta lo que la persona recibe: si armar la respuesta falla, el catch lo cuenta UNA vez,
         // como la respuesta de proveedor no disponible que ve.
         contarSiReal(ticketMetrics.eventoDeLectura(result, result[ocrTextract.METRICAS]));
@@ -333,13 +350,16 @@ router.post('/', (req, res, next) => {
       }
     }
 
-    const items = matching.parseTicket(mockTicketText());
+    const leidos = matching.parseTicket(mockTicketText());
+    // v2.170.0 · D240 punto 15: el mock no corrige; con `names_version=1` publica el mismo nombre como original.
+    const items = req.ocrNamesVersion === 1 ? leidos.map((i) => ({ name: i.name, original_name: i.name, ...i })) : leidos;
     const respuesta = respuestaOcr({
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
     }, { mock: true, contractVersion: req.ocrContractVersion, totalsVersion: req.ocrTotalsVersion,
-      warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion });
+      warningsVersion: req.ocrWarningsVersion, adjustmentsVersion: req.ocrAdjustmentsVersion,
+      namesVersion: req.ocrNamesVersion });
     res.json(req.ocrReceiptRequested
       ? origenItems.conRecibo(respuesta, req.user.id, { logger }) : respuesta);
   } catch (err) {

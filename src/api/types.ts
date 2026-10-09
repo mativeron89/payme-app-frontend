@@ -265,6 +265,8 @@ export interface AppConfig {
      * persona). Se decodifica cerrado en `ocultar.ts`; ausente = sin gesto.
      */
     hide_from_app?: unknown;
+    /** AF-VIAJES · D242 · v2.171.0 · `{ supported, enabled }`; se decodifica cerrado en `viajes.ts`. */
+    viajes?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *
@@ -1086,6 +1088,11 @@ export interface OcrResponse {
    * agregado)` es el impreso.
    */
   ticket_adjustments?: TicketAdjustment[];
+  /**
+   * AF-VIAJES · D242 · sólo con `trip_version=1` (dentro de un viaje): la fecha
+   * impresa del ticket y, si se leyó, la hora. Sin fecha leída, ausente.
+   */
+  ticket_datetime?: { date: string; time: string | null };
   warnings: OcrWarning[];
   mock: boolean;
   /**

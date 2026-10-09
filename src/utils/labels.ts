@@ -1,5 +1,6 @@
 import type { MesaStatus, WalletTxType } from '../api/types';
 import type { IconName } from '../components/Icon';
+import type { PageId } from '../router';
 
 /**
  * Traducción de los enums del contrato a lenguaje de usuario.
@@ -290,4 +291,28 @@ export function mesaDelAviso(n: { readonly type: string; readonly payload: Recor
   if (typeof code !== 'string') return null;
   const limpio = code.trim();
   return limpio.length > 0 && limpio.length <= 32 ? limpio : null;
+}
+
+/**
+ * AF-VIAJES · adónde lleva tocar un aviso: la pantalla y su parámetro. Hasta
+ * Viajes era siempre una mesa (`navigate('mesa', code)`); los avisos de un
+ * viaje llevan a sus pantallas (`src/screens/viajes/avisosDeViaje.ts`).
+ */
+export interface DestinoDeAviso {
+  readonly page: PageId;
+  readonly param: string;
+}
+
+/** El destino de un aviso de mesa: exactamente `mesaDelAviso`, en la página `mesa`. */
+export function destinoDeMesa(n: { readonly type: string; readonly payload: Record<string, unknown> | null }): DestinoDeAviso | null {
+  const code = mesaDelAviso(n);
+  return code === null ? null : { page: 'mesa', param: code };
+}
+
+/**
+ * Un destino como texto comparable (`mesa/PA-1099`): la reconciliación de la
+ * carrera 404 compara destinos, y dos objetos iguales no son `===`.
+ */
+export function claveDeDestino(d: DestinoDeAviso | null): string | null {
+  return d === null ? null : `${d.page}/${d.param}`;
 }

@@ -32,6 +32,16 @@ import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 import { CartelVersionNueva } from './components/CartelVersionNueva';
 import { RegionProvider } from './preferences/RegionProvider';
+import { useCapacidadViajes } from './api/viajes';
+import { enforceViajesRouteGuard, esPaginaDeViajes } from './screens/viajes/viajesRouteGuard';
+import { ViajesScreen } from './screens/viajes/ViajesScreen';
+import { CrearViajeScreen } from './screens/viajes/CrearViajeScreen';
+import { ViajeScreen } from './screens/viajes/ViajeScreen';
+import { TicketNuevoScreen } from './screens/viajes/TicketNuevoScreen';
+import { TicketScreen } from './screens/viajes/TicketScreen';
+import { BalanceScreen } from './screens/viajes/BalanceScreen';
+import { ViajeCerradoScreen } from './screens/viajes/ViajeCerradoScreen';
+import { leerParametroDeTicket } from './screens/viajes/viajesView';
 
 function Shell() {
   const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
@@ -126,6 +136,17 @@ function Shell() {
   useEffect(() => {
     enforceCorteRouteGuard(route.page, moneyRail);
   }, [moneyRail, route.page]);
+
+  /**
+   * AF-VIAJES · D242 · sin la capacidad `features.viajes`, las rutas de Viajes
+   * no existen: vuelven a Inicio (`viajesRouteGuard.ts`). Mientras la capacidad
+   * viaja no se monta ni se redirige: el lugar queda vacío un instante.
+   */
+  const capacidadViajes = useCapacidadViajes();
+  const rutaDeViajes = esPaginaDeViajes(route.page) && capacidadViajes !== 'encendida';
+  useEffect(() => {
+    enforceViajesRouteGuard(capacidadViajes, route.page);
+  }, [capacidadViajes, route.page]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.
@@ -244,6 +265,7 @@ function Shell() {
   // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
   if (rutaDelRielSaldo) return null;
   if (rutaCortada) return null;
+  if (rutaDeViajes) return null;
 
   const screen = (() => {
     switch (route.page) {
@@ -252,7 +274,11 @@ function Shell() {
       case 'mesas':
         return <MesasScreen />;
       case 'scan':
-        return <CreateMesaFlow />;
+        // AF-VIAJES · `/scan/<viaje>`: la cámara de siempre, para un ticket del
+        // viaje. Sin la capacidad, el parámetro se ignora (como hoy).
+        return route.param && capacidadViajes === 'encendida'
+          ? <CreateMesaFlow key={`viaje:${route.param}`} viajeId={route.param} />
+          : <CreateMesaFlow />;
       case 'mesa':
         return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
       /**
@@ -319,6 +345,25 @@ function Shell() {
         return <AvisosScreen />;
       case 'notificaciones':
         return <NotificacionesScreen />;
+      // AF-VIAJES · D242 · sólo con la capacidad (arriba `rutaDeViajes`).
+      case 'viajes':
+        return <ViajesScreen key={route.param ?? 'abiertos'} estado={route.param === 'cerrados' ? 'cerrados' : 'abiertos'} />;
+      case 'viaje-nuevo':
+        return <CrearViajeScreen />;
+      case 'viaje':
+        return route.param ? <ViajeScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
+      case 'viaje-ticket-nuevo':
+        return route.param ? <TicketNuevoScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
+      case 'viaje-ticket': {
+        const ticket = leerParametroDeTicket(route.param);
+        return ticket
+          ? <TicketScreen key={route.param} viajeId={ticket.viajeId} ticketId={ticket.ticketId} />
+          : <ViajesScreen estado="abiertos" />;
+      }
+      case 'viaje-balance':
+        return route.param ? <BalanceScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
+      case 'viaje-cerrado':
+        return route.param ? <ViajeCerradoScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="cerrados" />;
       /**
        * **El guard real es el `never`, no el `default`.**
        *

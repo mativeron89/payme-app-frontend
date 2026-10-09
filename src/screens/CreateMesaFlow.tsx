@@ -74,7 +74,8 @@ import {
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
 import { CardBrandChip, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { navigate, replaceRoute } from '../router';
+import { guardarTicketEscaneado } from './viajes/ticketEscaneado';
 import { formatMXN } from '../utils/format';
 import { reservaDelMonto } from './reservaDelMonto';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
@@ -162,7 +163,15 @@ function lineTotalCents(it: EditItem): number | null {
   return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : null;
 }
 
-export function CreateMesaFlow() {
+/**
+ * AF-VIAJES · D242 · con `viajeId`, la cámara de siempre escanea un ticket del
+ * viaje: pide `trip_version=1`, no resuelve restaurante, no ofrece «Cargarlo a
+ * mano» (el ticket del viaje exige el recibo del escaneo) y lo leído va, en
+ * memoria, a «Ticket nuevo» (`ticketEscaneado.ts`). Sin `viajeId`, la mesa de
+ * siempre, sin un solo cambio.
+ */
+export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string | null } = {}) {
+  const enViaje = viajeId !== null;
   const { t } = useIdioma();
   // D237 · acá pasan las acciones sobre una mesa (crear, elegir, pagar,
   // cerrar, aceptar a alguien): al salir, lo guardado de las mesas para Inicio y
@@ -1118,7 +1127,9 @@ export function CreateMesaFlow() {
     // motivo por el que falló la vez pasada tiene que seguir en pantalla.
     setScanIssue(null);
     try {
-      const r = await api.scanTicket(image, setUploadProgress);
+      const r = enViaje
+        ? await api.scanTicket(image, setUploadProgress, { viaje: true })
+        : await api.scanTicket(image, setUploadProgress);
       // D202 · una respuesta de un intento abandonado no toca nada: ni el
       // recibo, ni el restaurante, ni el paso.
       if (intento !== intentoLecturaRef.current) return;
@@ -1126,8 +1137,8 @@ export function CreateMesaFlow() {
       ocrReceiptRef.current = r.receipt ?? null;
       setOcrMerchant(r.merchant);
       // Resolver no crea la mesa. Sólo prepara la identidad privada/pública
-      // para que el CTA posterior pueda abrirla sin QR.
-      if (!restaurantIdRef.current) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
+      // para que el CTA posterior pueda abrirla sin QR. En un viaje no hay mesa.
+      if (!enViaje && !restaurantIdRef.current) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
       const decision = decideOcrScan(r);
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
@@ -1141,6 +1152,19 @@ export function CreateMesaFlow() {
         setScannedTotals(null);
     setScannedAdjustments(null);
         setScanIssue(decision.kind);
+        return;
+      }
+      // AF-VIAJES · lo leído va, en memoria, a «Ticket nuevo» del viaje. Sin
+      // recibo no hay ticket del viaje: el dueño lo exige.
+      if (enViaje && viajeId !== null) {
+        if (!decision.response.receipt) {
+          setScanIssue('ocr');
+          return;
+        }
+        guardarTicketEscaneado(viajeId, decision.response);
+        // Reemplaza a la cámara en el historial: «Volver» desde «Ticket nuevo»
+        // va al viaje, no a una cámara negra.
+        replaceRoute('viaje-ticket-nuevo', viajeId);
         return;
       }
       setEditItems(
@@ -1670,7 +1694,7 @@ export function CreateMesaFlow() {
       toast(t('Tienes una apertura sin confirmar: reinténtala antes de cambiar la mesa'));
       return;
     }
-    if (step === 'scan') return navigate('home');
+    if (step === 'scan') return enViaje && viajeId !== null ? navigate('viaje', viajeId) : navigate('home');
     if (step === 'ticket') {
       // Volver a cámara inicia OTRO ticket. Sólo acá rota el fallback; los
       // reintentos dentro de Scan conservan el UUID del intento actual.
@@ -1796,9 +1820,9 @@ export function CreateMesaFlow() {
           )}
           {/* La apertura congelada avisa DESDE ACÁ, con su salida al lado: es
               el paso al que vuelve la app después de una recarga. */}
-          {avisoApertura()}
+          {!enViaje && avisoApertura()}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
-          {restaurantError && <div className="note note-orange">{restaurantError}</div>}
+          {!enViaje && restaurantError && <div className="note note-orange">{restaurantError}</div>}
             {(scanIssue === 'budget_exhausted' || scanIssue === 'budget_unavailable') && (
               <div className="state-error" role="alert">
                 <div className="state-error-row">
@@ -1806,16 +1830,20 @@ export function CreateMesaFlow() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
                     <p className="state-error-body">
-                      {scanIssue === 'budget_exhausted'
-                        ? t('Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.')
-                        : t('El servicio de lectura no está disponible. Puedes cargar los consumos a mano.')}
+                      {enViaje
+                        ? t('Prueba de nuevo más tarde.')
+                        : scanIssue === 'budget_exhausted'
+                          ? t('Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.')
+                          : t('El servicio de lectura no está disponible. Puedes cargar los consumos a mano.')}
                     </p>
                   </div>
                 </div>
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                    {t('Cargarlo a mano')}
-                  </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1834,9 +1862,11 @@ export function CreateMesaFlow() {
                   <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                     {t('Reintentar')}
                   </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                    {t('Cargarlo a mano')}
-                  </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1847,7 +1877,9 @@ export function CreateMesaFlow() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
                     <p className="state-error-body">
-                      {t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
+                      {enViaje
+                        ? t('Prueba sacar la foto de nuevo con más luz.')
+                        : t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
                     </p>
                   </div>
                 </div>
@@ -1855,9 +1887,11 @@ export function CreateMesaFlow() {
                   <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                     {t('Reintentar')}
                   </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                    {t('Cargarlo a mano')}
-                  </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1899,9 +1933,11 @@ export function CreateMesaFlow() {
                   <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                     {t('Reintentar')}
                   </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                    {t('Cargarlo a mano')}
-                  </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1920,9 +1956,11 @@ export function CreateMesaFlow() {
                   <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                     {t('Sacar otra foto')}
                   </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                    {t('Cargarlo a mano')}
-                  </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

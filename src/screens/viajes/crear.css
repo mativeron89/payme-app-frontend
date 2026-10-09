@@ -1,0 +1,248 @@
+/* AF-VIAJES · D242 · 1d «Crear viaje» y 1e «buscar por @usuario». Lo común
+   (tarjeta, rótulo de sección, avatar, pie fijo) vive en `viajes.css`. Sólo
+   tokens: nada de colores sueltos. */
+
+/* El pie lleva el error encima del botón: un poco más de aire que el común. */
+.vjc.vj-con-pie .vj-scroll {
+  padding-bottom: 168px;
+}
+
+/* El rótulo de cada tarjeta («Nombre del viaje», «Fechas», «Miembros»). */
+.vjc-etiqueta {
+  display: block;
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 700;
+  color: var(--text);
+}
+.vjc-etiqueta-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.vjc-etiqueta-fila .vjc-etiqueta {
+  margin: 0;
+}
+
+/* «Opcional»: una etiqueta, no un dato. */
+.vjc-opcional {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+}
+
+/* Los campos de la pantalla: el `.input` de siempre, sin su margen de formulario. */
+.vjc-input {
+  margin-bottom: 0;
+  border-radius: var(--r-sm);
+  border-color: var(--border);
+  min-height: 50px;
+}
+.vjc-input:focus {
+  outline: none;
+  border-color: var(--action-2);
+  box-shadow: 0 0 0 1px var(--action-2);
+}
+
+/* Del / Al lado a lado. En iOS un `type="date"` vacío colapsa su alto y
+   centra el texto: se le quita la apariencia nativa y se alinea a la izquierda. */
+.vjc-fechas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+.vjc-fecha {
+  min-width: 0;
+}
+.vjc-sub {
+  display: block;
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 700;
+  color: var(--text);
+}
+.vjc-input[type='date'] {
+  display: block;
+  width: 100%;
+  padding-left: var(--sp-3);
+  padding-right: var(--sp-3);
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface);
+  text-align: left;
+}
+.vjc-input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* El buscador con la lupa adentro. */
+.vjc-buscar {
+  position: relative;
+}
+.vjc-buscar-icono {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.vjc-buscar-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-left: 40px;
+  padding-right: 10px;
+}
+/* A 375 px el texto de ayuda entero no entra a 16 px (mide 274 y hay 259): va
+   a 14, el piso del sistema. Lo que se escribe sigue en 16 (sin zoom de iOS). */
+.vjc-buscar-input::placeholder {
+  font-size: var(--fs-sm);
+}
+
+/* Las filas de persona: yo, los agregados y los resultados. */
+.vjc-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.vjc-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 60px;
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.vjc-fila:last-child {
+  border-bottom: none;
+}
+.vjc-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: var(--fs-sm);
+}
+.vjc-quien {
+  flex: 1;
+  min-width: 0;
+}
+.vjc-nombre {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vjc-arroba {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* «Creas el viaje»: el chip de mi fila. */
+.vjc-creas {
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+}
+
+/* «Quitar»: 44×44, sólo la cruz a la vista; el nombre accesible lo da el aria-label. */
+.vjc-quitar {
+  flex-shrink: 0;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin-right: calc(var(--sp-2) * -1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.vjc-quitar:active {
+  background: var(--bg);
+}
+
+/* «Agregar»: el teal de la acción secundaria, con el mínimo táctil. */
+.vjc-agregar {
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+
+/* Los resultados de la búsqueda (1e). */
+.vjc-resultados {
+  margin-top: var(--sp-2);
+}
+.vjc-resultados .vj-seccion {
+  margin: var(--sp-3) 0 var(--sp-1);
+}
+.vjc-ayuda {
+  margin: var(--sp-3) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Las notas: «Les llega una invitación…» y el tope de 20. */
+.vjc-nota {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vj-scroll > .vjc-nota {
+  margin: 0 var(--sp-1);
+}
+
+/* Un error junto a lo que lo causó (las fechas, la búsqueda). */
+.vjc-error {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* El error al crear, arriba del botón fijo: siempre a la vista. */
+.vjc-error-pie {
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}

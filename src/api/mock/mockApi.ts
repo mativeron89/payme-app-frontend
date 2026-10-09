@@ -95,6 +95,7 @@ import {
   MOCK_USER,
 } from './seedData';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from './store';
+import { fechaDelTicketMock, huellaDelTicketMock, viajesMockEncendido } from './viajesSeam';
 import {
   admiteSeleccionInformativa,
   availableBalance,
@@ -132,7 +133,7 @@ const LATENCY_MS = 350;
  * (0–5000). Las e2e de «pestañas sin parpadeo» la fijan a un lado y al otro del
  * umbral de 300 ms del esqueleto. Sin costura, los 350 ms de siempre.
  */
-function latencia(): number {
+export function latencia(): number {
   try {
     const valor = localStorage.getItem('payme.app.mock.latencia.v1');
     if (valor !== null && /^\d{1,4}$/.test(valor) && Number(valor) <= 5000) return Number(valor);
@@ -877,6 +878,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       username: { supported: true, enabled: usernameMock() },
       // AF-BORRAR-MESAS · v2.169.0 · seam `payme.app.mock.ocultar.v1` (`apagado`, `ausente`).
       ...(capacidadOcultarMock() === undefined ? {} : { hide_from_app: capacidadOcultarMock() }),
+      // AF-VIAJES · v2.171.0 · el bloque se sirve siempre, como el dueño; `enabled` sólo con el seam (`viajesSeam.ts`).
+      viajes: { supported: true, enabled: viajesMockEncendido() },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -2468,6 +2471,8 @@ async function mockOcrReceipt(
   totales?: { subtotal_cents: number; tax_cents?: number },
   descuentos?: readonly number[],
   servicios?: readonly number[],
+  /** AF-VIAJES · `{ h }`: la huella del ticket que el dueño firma con `trip_version=1`. */
+  extra?: Readonly<Record<string, unknown>>,
 ): Promise<string | undefined> {
   if (items.length < 1 || items.length > 100) return undefined;
   const b64url = (bytes: Uint8Array) =>
@@ -2494,12 +2499,19 @@ async function mockOcrReceipt(
       : descuentos
         ? { d: [...descuentos], t: totales ? [totales.subtotal_cents, totales.tax_cents ?? null] : null }
         : totales ? { t: [totales.subtotal_cents, totales.tax_cents] } : {}),
+    ...(extra ?? {}),
   };
   const cuerpo = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   return `or1.${cuerpo}.${b64url(crypto.getRandomValues(new Uint8Array(32)))}`;
 }
 
-export async function mockScanTicket(): Promise<OcrResponse> {
+/**
+ * AF-VIAJES · `viaje`: el escaneo pide `trip_version=1`. Como el dueño, cuenta
+ * sólo con Viajes encendido y sólo en la lectura de siempre (los seams de
+ * prueba de otros modos no lo miran). El mock del dueño no trae fecha ni
+ * huella: acá salen de sus seams (`viajesSeam.ts`).
+ */
+export async function mockScanTicket(opciones: { readonly viaje?: boolean } = {}): Promise<OcrResponse> {
   // El ticket de LA PAROLACCIA del mock del backend (`routes/ocr.js`), con UNA
   // diferencia a propósito: acá «Tiramisú» es un ítem de $70.00 con cantidad 2.
   // El mock del backend imprime «Tiramisú x2 140.00» y su `parseTicket` no
@@ -2657,7 +2669,10 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       ...(conServicio ? { receipt: conServicio } : {}),
     });
   }
-  const receipt = await mockOcrReceipt(items);
+  const conViaje = opciones.viaje === true && viajesMockEncendido();
+  const huellaViaje = conViaje ? huellaDelTicketMock() : null;
+  const receipt = await mockOcrReceipt(items, undefined, undefined, undefined, huellaViaje ? { h: huellaViaje } : undefined);
+  const fechaViaje = conViaje ? fechaDelTicketMock() : undefined;
   if (mode === 'no_merchant') {
     return delay({
       contract_version: 2,
@@ -2674,6 +2689,7 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
       items,
       total_cents: total,
+      ...(fechaViaje ? { ticket_datetime: fechaViaje } : {}),
       warnings: [],
       mock: true,
       ...(receipt ? { receipt } : {}),
@@ -5667,4 +5683,56 @@ export async function mockDeleteGroup(groupId: string): Promise<void> {
   if (!state.groups.some((g) => g.id === groupId)) return fail(404, 'group_not_found');
   state.groups = state.groups.filter((g) => g.id !== groupId);
   return delay(undefined);
+}
+
+// ─── AF-VIAJES · lo que el mock de Viajes toma del de siempre ─────────────
+
+export interface PersonaViajeMock {
+  readonly user_id: string;
+  readonly first_name: string;
+  readonly last_name: string;
+  /** El @, con la función encendida; si no, `null` (como el dueño). */
+  readonly username: string | null;
+}
+
+/** Quién soy yo en el mock, con mi @ (el que eligió la cuenta demo). */
+export function yoParaViajesMock(): PersonaViajeMock {
+  return {
+    user_id: state.user.id,
+    first_name: state.user.first_name,
+    last_name: state.user.last_name,
+    username: usernameMock() ? usernamePropioMock(state.user.id)?.username ?? null : null,
+  };
+}
+
+/** Un amigo aceptado por su id, o `null` (el dueño: «sólo un amigo aceptado y activo»). */
+export function amigoParaViajesMock(userId: string): PersonaViajeMock | null {
+  const f = state.friends.find((x) => x.id === userId);
+  if (!f || state.blockedUserIds.includes(f.id)) return null;
+  return {
+    user_id: f.id,
+    first_name: f.first_name,
+    last_name: f.last_name,
+    username: usernameMock() ? arrobaPorPaymeMock(f.payme_id) : null,
+  };
+}
+
+/**
+ * Lo que mostraría la búsqueda por @ (D119): con la función encendida, alguien
+ * del directorio, que no soy yo y sin bloqueo. Si es una persona del store, su
+ * id es el de siempre; si no, uno fijo por su @.
+ */
+export function arrobaParaViajesMock(raw: string): PersonaViajeMock | null {
+  if (!usernameMock()) return null;
+  const u = normalizarUsernameMock(raw);
+  const i = DIRECTORIO_ARROBA_MOCK.findIndex((d) => d.username === u);
+  const d = DIRECTORIO_ARROBA_MOCK[i];
+  if (!d || d.username === usernamePropioMock(state.user.id)?.username || bloqueadoPorArrobaMock(d)) return null;
+  const delStore = d.payme ? [...state.friends, ...state.directory].find((p) => p.payme_id === d.payme) : undefined;
+  return {
+    user_id: delStore?.id ?? `e0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+    first_name: d.first_name,
+    last_name: d.last_name,
+    username: d.username,
+  };
 }

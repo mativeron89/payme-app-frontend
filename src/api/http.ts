@@ -202,6 +202,7 @@ function rawOcrUploadRequest<T>(
   body: FormData,
   token: string,
   onProgress?: UploadProgressListener,
+  viaje = false,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -211,7 +212,10 @@ function rawOcrUploadRequest<T>(
     // D218 · D224 · `adjustments_version=2` negocia `ticket_adjustments` con el
     // cargo por servicio, y elige la LECTURA NUEVA del ticket (App Backend
     // 2.168.0): sin ella, el cargo puede llegar como un plato (D212).
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2`);
+    // AF-VIAJES · D242 · `trip_version=1` sólo dentro de un viaje: el dueño firma
+    // en el recibo la huella del ticket (el duplicado, 1k) y publica la fecha
+    // impresa. Sin el viaje, el pedido de siempre, byte a byte.
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2${viaje ? '&trip_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -349,9 +353,10 @@ export async function httpRequest<T>(
 export async function httpOcrUploadRequest<T>(
   body: FormData,
   onProgress?: UploadProgressListener,
+  opciones: { readonly viaje?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(undefined, (session) => (
-    rawOcrUploadRequest<T>(body, session.access_token, onProgress)
+    rawOcrUploadRequest<T>(body, session.access_token, onProgress, opciones.viaje === true)
   ));
 }
 

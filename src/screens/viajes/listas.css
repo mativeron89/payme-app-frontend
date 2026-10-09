@@ -1,0 +1,398 @@
+/* AF-VIAJES · D242 · Abiertos (1c), Cerrados (1r) y el detalle cerrado (1s).
+   `vjl-*` son las listas; `vjd-*`, el detalle. Sólo tokens: nada de colores
+   sueltos. Lo común (`.vj-card`, `.vj-seccion`) vive en `viajes.css`. */
+
+/* ─── Las listas (1c, 1r) ─────────────────────────────────────────────── */
+
+.vjl-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.vjl-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* La tarjeta entera es el botón: abre el viaje. */
+.vjl-fila {
+  width: 100%;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+.vjl-fila:active {
+  transform: scale(0.99);
+}
+.vjl-fila.sk {
+  cursor: default;
+}
+.vjl-fila.sk .sk-line {
+  margin-bottom: var(--sp-2);
+}
+
+.vjl-ico {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+.vjl-cuerpo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.vjl-nombre {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.vjl-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* El chip de estado (1c). El texto lo dice siempre; el color acompaña. */
+.vjl-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--sp-1);
+  padding: 2px 10px;
+  border-radius: var(--r-full);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.vjl-chip--debes {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.vjl-chip--te-deben {
+  background: var(--success-tint);
+  color: var(--success);
+}
+.vjl-chip--a-mano {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.vjl-chip--esperando {
+  background: var(--info-tint);
+  color: var(--info);
+}
+
+/* El chevron hacia la derecha: el ícono es el de abajo, girado. */
+.vjl-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+}
+
+/* «Gastaste» sobre el monto (1r). */
+.vjl-gasto {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+.vjl-gasto-rotulo {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjl-gasto-monto {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* «Crear viaje» al pie de Abiertos: secundario, blanco con borde (1c). */
+.vjl-crear.btn-ghost {
+  min-height: 52px;
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+}
+
+/* Abiertos vacío: lo mismo que la pestaña vacía de Inicio (1b). */
+.vjl-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+}
+.vjl-vacio-titulo {
+  margin-top: var(--sp-1);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+}
+.vjl-vacio-texto {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── El detalle cerrado (1s) ─────────────────────────────────────────── */
+
+.vjd-resumen {
+  margin: 0;
+}
+.vjd-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-1) 0;
+}
+.vjd-fila dt {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjd-fila dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjd-fila--total {
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.vjd-fila--total dt {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+.vjd-fila--total dd {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+}
+
+/* «Por tipo de lugar»: el rótulo va dentro de la tarjeta. */
+.vjd-tipos .vj-seccion {
+  margin: 0 0 var(--sp-3);
+}
+.vjd-tipos-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.vjd-tipo-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
+}
+.vjd-tipo-nombre {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+.vjd-tipo-monto {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* Sólo dibujo: el monto va escrito al lado. */
+.vjd-barra {
+  display: block;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--bg);
+  overflow: hidden;
+}
+.vjd-barra-relleno {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+}
+
+/* «Lugares visitados»: un renglón por ticket. */
+.vjd-lugares {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.vjd-lugar {
+  padding: 0;
+  overflow: hidden;
+}
+.vjd-lugar-cabeza {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+}
+button.vjd-lugar-cabeza {
+  cursor: pointer;
+}
+.vjd-lugar-ico {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+.vjd-lugar-cuerpo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vjd-lugar-nombre {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.vjd-lugar-sub {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.vjd-lugar-monto {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.vjd-lugar-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.vjd-lugar-cabeza[aria-expanded='true'] .vjd-lugar-chevron {
+  transform: rotate(180deg);
+}
+/* Sin platos que mostrar, el renglón no se despliega: el lugar del chevron queda vacío. */
+.vjd-lugar-chevron--vacio {
+  width: 18px;
+}
+
+/* Lo que elegiste en ese ticket: sólo lo propio (D240-17). */
+.vjd-items {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-4) var(--sp-3) calc(var(--sp-4) + 40px + var(--sp-3));
+  border-top: 1px solid var(--border);
+}
+.vjd-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-1) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+.vjd-item-monto {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.vjd-asignado {
+  margin: 0;
+  padding: 0 var(--sp-4) var(--sp-3) calc(var(--sp-4) + 40px + var(--sp-3));
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Este viaje ya no está disponible (404). */
+.vjd-no-disponible {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  text-align: center;
+}
+.vjd-no-disponible-texto {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}

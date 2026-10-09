@@ -624,8 +624,12 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   /**
    * n130 · las rutas normales de la app: una por página de `PAGES` más
    * `/mesa/:param` y `/transferir/:param`. EXACTAS, ninguna global.
+   * AF-VIAJES · más el viaje (y el escaneo dentro de un viaje, `/scan/:param`).
    */
-  const PAGINAS_CON_PARAMETRO = ['mesa', 'transferir'] as const;
+  const PAGINAS_CON_PARAMETRO = [
+    'mesa', 'transferir',
+    'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
+  ] as const;
   const RUTAS_APP = [...PAGES.map((p) => `/${p}`), ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`)];
   const TODAS = [...PATHS_PUBLICOS, ...RUTAS_APP];
   /**

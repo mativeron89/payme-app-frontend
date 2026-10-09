@@ -1,6 +1,17 @@
 /** Contrato autoritativo de `POST /api/ocr`. No llama al proveedor. */
 'use strict';
 
+/**
+ * v2.171.0 · ¿Es una fecha de calendario REAL 'YYYY-MM-DD'? Sin require: este módulo se espeja al front y corre solo
+ * (tests/ocr-response-contract.test.js). La misma regla que utils/fechas.js `esFechaCalendario`.
+ */
+function esFechaCalendario(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 function normalizeName(value) {
   if (typeof value !== 'string') return null;
   const name = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
@@ -108,16 +119,27 @@ const OCR_ERROR_STATUS = Object.freeze({
 const OCR_ITEM_FIELDS = Object.freeze([
   'name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence',
 ]);
+/**
+ * v2.170.0 · AB-OCR-PAGOS-ORTOGRAFIA · D240 punto 15: `names_version=1` publica el nombre corregido en `name` y el
+ * leído del ticket en `original_name`, en todos los platos. La lista base NO cambia: el decoder del AF servido tiene
+ * claves exactas, y un plato con una clave que no conoce rompe la lectura entera.
+ */
+const OCR_ITEM_FIELDS_NAMES_V1 = Object.freeze([...OCR_ITEM_FIELDS, 'original_name']);
 const OCR_CATEGORIES = Object.freeze(['italian', 'japanese', 'mexican', 'cafe', 'other']);
 
 function enteroSeguroNoNegativo(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-function assertItem(item) {
+function assertItem(item, { namesVersion } = {}) {
   const keys = item && typeof item === 'object' ? Object.keys(item) : [];
-  if (keys.some((key) => !OCR_ITEM_FIELDS.includes(key))) {
+  const campos = namesVersion === 1 ? OCR_ITEM_FIELDS_NAMES_V1 : OCR_ITEM_FIELDS;
+  if (keys.some((key) => !campos.includes(key))) {
     throw new Error('ocr_response_item_extra_field');
+  }
+  // v2.170.0 · D240 punto 15: negociado, el original va en todos los platos y con las reglas de `name`.
+  if (namesVersion === 1 && (typeof item.original_name !== 'string' || normalizeName(item.original_name) !== item.original_name)) {
+    throw new Error('ocr_response_item_original_name_invalid');
   }
   if (!item || typeof item !== 'object'
       || typeof item.name !== 'string' || !item.name || item.name.length > 200
@@ -144,9 +166,12 @@ function assertItem(item) {
  * cosa. `confidence`/`low_confidence` son opcionales porque el mock histórico
  * no los inventa; Textract sí los entrega por ítem.
  */
-function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warningsVersion, adjustmentsVersion }) {
+function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warningsVersion, adjustmentsVersion, namesVersion,
+  tripVersion }) {
   if (!payload || !Array.isArray(payload.items)) throw new Error('ocr_response_items_invalid');
-  payload.items.forEach(assertItem);
+  // v2.170.0 · D240 punto 15: `original_name` sólo con la negociación exacta (v2 + `names_version=1`).
+  const nombres = contractVersion === 2 && namesVersion === 1 ? 1 : undefined;
+  payload.items.forEach((item) => assertItem(item, { namesVersion: nombres }));
   if (!enteroSeguroNoNegativo(payload.total_cents)) {
     throw new Error('ocr_response_total_invalid');
   }
@@ -208,6 +233,18 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warni
         .some((x) => payload.total_cents + neto + x === payload.total_detected_cents);
     if (!cierra) throw new Error('ocr_response_ticket_adjustments_invalid');
   }
+  // v2.171.0 · AB-VIAJES · D242: la fecha y la hora impresas, sólo para quien negocia `trip_version=1` (con v2 y el
+  // recibo): la pantalla «Ticket nuevo» del viaje las muestra. Nunca el folio. Sin fecha leída, la clave no sale.
+  let ticketDatetime;
+  if (contractVersion === 2 && tripVersion === 1 && payload.ticket_datetime !== undefined) {
+    const f = payload.ticket_datetime;
+    if (!f || typeof f !== 'object' || Array.isArray(f) || Object.keys(f).sort().join() !== 'date,time'
+        || typeof f.date !== 'string' || !esFechaCalendario(f.date)
+        || (f.time !== null && !(typeof f.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time)))) {
+      throw new Error('ocr_response_ticket_datetime_invalid');
+    }
+    ticketDatetime = { date: f.date, time: f.time };
+  }
   return {
     ...(contractVersion === 2 ? { contract_version: 2, ...(merchant && { merchant }) } : {}),
     items: payload.items,
@@ -217,6 +254,7 @@ function respuestaOcr(payload, { mock, contractVersion = 1, totalsVersion, warni
       : {}),
     ...(ticketTotals ? { ticket_totals: ticketTotals } : {}),
     ...(ticketAdjustments ? { ticket_adjustments: ticketAdjustments } : {}),
+    ...(ticketDatetime ? { ticket_datetime: ticketDatetime } : {}),
     warnings,
     mock: !!mock,
   };
@@ -249,6 +287,7 @@ module.exports = {
   OCR_WARNING_CODES_V2,
   OCR_ERROR_STATUS,
   OCR_ITEM_FIELDS,
+  OCR_ITEM_FIELDS_NAMES_V1,
   OCR_CATEGORIES,
   respuestaOcr,
   respuestaProveedorNoDisponible,

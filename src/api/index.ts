@@ -78,6 +78,34 @@ import {
   type MesaOcultada,
 } from './ocultar';
 import {
+  aplicarConfigViajes,
+  assertViajesHabilitado,
+  decodeDetalleViaje,
+  decodeInvitacionesAViajes,
+  decodeListaDeViajes,
+  decodeMarcaDeTransferencia,
+  decodeRespuestaDeSalida,
+  decodeResumenDeViaje,
+  decodeRevisionDeTicket,
+  decodeTicketCargado,
+  decodeTicketDelViaje,
+  decodeVistaPreviaCierre,
+  type AccionTransferencia,
+  type CargarTicketPedido,
+  type CrearViajePedido,
+  type DetalleViaje,
+  type Duplicado,
+  type InvitacionAViaje,
+  type ListaDeViajes,
+  type MarcaDeTransferencia,
+  type ResumenDeViaje,
+  type SeleccionPedido,
+  type TicketCargado,
+  type TicketDelViaje,
+  type VistaPreviaCierre,
+} from './viajes';
+import * as mockViajes from './mock/viajes';
+import {
   applyUsernameConfig,
   decodeEstadoUsername,
   decodeResultadosArroba,
@@ -393,7 +421,15 @@ export interface Api {
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
   getInformativeSelection(code: string): Promise<InformativeSelectionResponse>;
   replaceInformativeSelection(code: string, req: ReplaceInformativeSelectionRequest): Promise<InformativeSelectionResponse>;
-  scanTicket(image?: Blob, onUploadProgress?: (progress: UploadProgress) => void): Promise<OcrResponse>;
+  /**
+   * AF-VIAJES · `opciones.viaje`: el escaneo de un ticket dentro de un viaje
+   * pide `trip_version=1` (la huella del duplicado y la fecha impresa).
+   */
+  scanTicket(
+    image?: Blob,
+    onUploadProgress?: (progress: UploadProgress) => void,
+    opciones?: { readonly viaje?: boolean },
+  ): Promise<OcrResponse>;
   createMesa(req: CreateMesaRequest, intent: MonetaryIntentHandle): Promise<CreateMesaResponse>;
   /**
    * ORDEN 2A · `GET /mesas/creations/:idempotency_key` (backend v2.47.0).
@@ -561,6 +597,26 @@ export interface Api {
   addGroupMember(groupId: string, friendId: string): Promise<void>;
   removeGroupMember(groupId: string, friendId: string): Promise<void>;
   deleteGroup(groupId: string): Promise<void>;
+
+  // ─── AF-VIAJES · D242 · App Backend 2.171.0 (`contract/viajes-v1.json`) ───
+  // Sólo con `features.viajes` encendida: si no, no se pide nada.
+  getViajes(estado: 'abiertos' | 'cerrados'): Promise<ListaDeViajes>;
+  getInvitacionesAViajes(): Promise<InvitacionAViaje[]>;
+  crearViaje(req: CrearViajePedido): Promise<DetalleViaje>;
+  getViaje(id: string): Promise<DetalleViaje>;
+  aceptarViaje(id: string): Promise<DetalleViaje>;
+  rechazarViaje(id: string): Promise<void>;
+  salirDeViaje(id: string): Promise<void>;
+  /** ¿Este escaneo ya está en el viaje? (1k) `null` si no. */
+  revisarTicketDeViaje(id: string, recibo: string): Promise<Duplicado | null>;
+  cargarTicketDeViaje(id: string, req: CargarTicketPedido): Promise<TicketCargado>;
+  getTicketDeViaje(id: string, ticketId: string): Promise<TicketDelViaje>;
+  elegirEnTicketDeViaje(id: string, ticketId: string, req: SeleccionPedido): Promise<TicketDelViaje>;
+  marcarPresentesEnTicket(id: string, ticketId: string, presentes: readonly string[]): Promise<TicketDelViaje>;
+  getCierreDeViaje(id: string): Promise<VistaPreviaCierre>;
+  cerrarViaje(id: string): Promise<DetalleViaje>;
+  marcarTransferenciaDeViaje(id: string, transferenciaId: string, accion: AccionTransferencia): Promise<MarcaDeTransferencia>;
+  getResumenDeViaje(id: string): Promise<ResumenDeViaje>;
 }
 
 /** UUID v4 del navegador — para idempotency_key (8–100 chars por schema). */
@@ -601,6 +657,8 @@ const realApi: Api = {
     applyUsernameConfig(config);
     // AF-BORRAR-MESAS · la capacidad de borrar de la app, sin request propia.
     aplicarConfigOcultar(config);
+    // AF-VIAJES · la capacidad de Viajes, igual.
+    aplicarConfigViajes(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -803,14 +861,17 @@ const realApi: Api = {
   replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
     await httpRequest<unknown>('PUT', `/mesas/${encodeURIComponent(code)}/informative-selection`, req),
   ),
-  async scanTicket(image, onUploadProgress) {
+  async scanTicket(image, onUploadProgress, opciones) {
     // POST /api/ocr es multipart (campo `image`). Usa XHR sólo acá para medir
     // el upload; auth/refresh/timeout/HttpError siguen compartiendo la misma
     // maquinaria que el resto, sin cambiar el fetch del riel monetario.
     if (!image || image.size <= 0 || image.size > MAX_TICKET_IMAGE_BYTES) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
-    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress));
+    // AF-VIAJES · el viaje sólo se pide con la capacidad encendida (el dueño lo ignora si no).
+    const viaje = opciones?.viaje === true;
+    if (viaje) assertViajesHabilitado();
+    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje }), { viaje });
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -1161,13 +1222,91 @@ const realApi: Api = {
   deleteGroup: async (groupId) => {
     await httpRequest('DELETE', `/groups/${encodeURIComponent(groupId)}`);
   },
+
+  // ─── AF-VIAJES ───
+  getViajes: async (estado) => {
+    assertViajesHabilitado();
+    return decodeListaDeViajes(await httpRequest<unknown>('GET', `/viajes?estado=${encodeURIComponent(estado)}`), estado);
+  },
+  getInvitacionesAViajes: async () => {
+    assertViajesHabilitado();
+    return decodeInvitacionesAViajes(await httpRequest<unknown>('GET', '/viajes/invitaciones'));
+  },
+  crearViaje: async (req) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes', req), 'viajes.crear');
+  },
+  getViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}`));
+  },
+  aceptarViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/aceptar`), 'viajes.aceptar');
+  },
+  rechazarViaje: async (id) => {
+    assertViajesHabilitado();
+    decodeRespuestaDeSalida(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/rechazar`), id, 'rechazado');
+  },
+  salirDeViaje: async (id) => {
+    assertViajesHabilitado();
+    decodeRespuestaDeSalida(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/salir`), id, 'salio');
+  },
+  revisarTicketDeViaje: async (id, recibo) => {
+    assertViajesHabilitado();
+    return decodeRevisionDeTicket(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets/check`, { ocr_receipt: recibo }));
+  },
+  cargarTicketDeViaje: async (id, req) => {
+    assertViajesHabilitado();
+    return decodeTicketCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets`, req));
+  },
+  getTicketDeViaje: async (id, ticketId) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}`));
+  },
+  elegirEnTicketDeViaje: async (id, ticketId, req) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await httpRequest<unknown>(
+      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/seleccion`, req,
+    ), 'viajes.seleccion');
+  },
+  marcarPresentesEnTicket: async (id, ticketId, presentes) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await httpRequest<unknown>(
+      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/presentes`, { presentes },
+    ), 'viajes.presentes');
+  },
+  getCierreDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeVistaPreviaCierre(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/cierre`));
+  },
+  cerrarViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/cerrar`), 'viajes.cerrar');
+  },
+  marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
+    assertViajesHabilitado();
+    return decodeMarcaDeTransferencia(await httpRequest<unknown>(
+      'POST', `/viajes/${encodeURIComponent(id)}/transferencias/${encodeURIComponent(transferenciaId)}/${encodeURIComponent(accion)}`,
+    ), transferenciaId);
+  },
+  getResumenDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeResumenDeViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/resumen`), id);
+  },
 };
 
 const mockApi: Api = {
   getConfig: async () => {
+    // AF-VIAJES · con el seam de Viajes encendido, sus avisos (1t) se siembran
+    // ANTES de cualquier lectura de la bandeja: si se sembraran al volver la
+    // config, una visita rápida a Avisos leería la bandeja sin ellos (carrera
+    // medida en e2e). Idempotente; sin el seam, no hace nada.
+    mockViajes.sembrarViajesMock();
     const config = await mock.mockGetConfig();
     applyUsernameConfig(config);
     aplicarConfigOcultar(config);
+    aplicarConfigViajes(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1279,7 +1418,11 @@ const mockApi: Api = {
   replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
     await mock.mockReplaceInformativeSelection(code, req),
   ),
-  scanTicket: async () => ocrResponse(await mock.mockScanTicket()),
+  scanTicket: async (_image, _onUploadProgress, opciones) => {
+    const viaje = opciones?.viaje === true;
+    if (viaje) assertViajesHabilitado();
+    return ocrResponse(await mock.mockScanTicket({ viaje }), { viaje });
+  },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
       'create_mesa',
@@ -1355,13 +1498,19 @@ const mockApi: Api = {
   createSetupIntent: async (idempotencyKey) => setupIntentResponse(await mock.mockCreateSetupIntent(idempotencyKey)),
   attachPaymentMethod: async (pmId, setAsDefault) => attachPaymentMethodResponse(await mock.mockAttachPaymentMethod(pmId, setAsDefault), pmId),
 
-  getNotifications: () => mock.mockNotifications(),
+  getNotifications: () => {
+    mockViajes.sembrarViajesMock();
+    return mock.mockNotifications();
+  },
   getShortfallDetail: async (mesaCode, expectedShortfallCents) => {
     assertShortfallDetailEnabled();
     const detail = await mock.mockShortfallDetail(mesaCode);
     return decodeShortfallDetailResponse({ shortfall_detail: detail }, expectedShortfallCents);
   },
-  getUnreadCount: () => mock.mockUnreadCount(),
+  getUnreadCount: () => {
+    mockViajes.sembrarViajesMock();
+    return mock.mockUnreadCount();
+  },
   markNotificationRead: (id) => mock.mockMarkNotificationRead(id),
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
   deleteNotification: (id) => mock.mockDeleteNotification(id),
@@ -1412,6 +1561,72 @@ const mockApi: Api = {
   addGroupMember: (groupId, friendId) => mock.mockAddGroupMember(groupId, friendId),
   removeGroupMember: (groupId, friendId) => mock.mockRemoveGroupMember(groupId, friendId),
   deleteGroup: (groupId) => mock.mockDeleteGroup(groupId),
+
+  // ─── AF-VIAJES · el mock responde lo que el dueño; se decodifica igual ───
+  getViajes: async (estado) => {
+    assertViajesHabilitado();
+    return decodeListaDeViajes(await mockViajes.mockListarViajes(estado), estado);
+  },
+  getInvitacionesAViajes: async () => {
+    assertViajesHabilitado();
+    return decodeInvitacionesAViajes(await mockViajes.mockInvitacionesAViajes());
+  },
+  crearViaje: async (req) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await mockViajes.mockCrearViaje(req), 'viajes.crear');
+  },
+  getViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id));
+  },
+  aceptarViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await mockViajes.mockAceptarViaje(id), 'viajes.aceptar');
+  },
+  rechazarViaje: async (id) => {
+    assertViajesHabilitado();
+    decodeRespuestaDeSalida(await mockViajes.mockRechazarViaje(id), id, 'rechazado');
+  },
+  salirDeViaje: async (id) => {
+    assertViajesHabilitado();
+    decodeRespuestaDeSalida(await mockViajes.mockSalirDeViaje(id), id, 'salio');
+  },
+  revisarTicketDeViaje: async (id, recibo) => {
+    assertViajesHabilitado();
+    return decodeRevisionDeTicket(await mockViajes.mockRevisarTicket(id, { ocr_receipt: recibo }));
+  },
+  cargarTicketDeViaje: async (id, req) => {
+    assertViajesHabilitado();
+    return decodeTicketCargado(await mockViajes.mockCargarTicket(id, req));
+  },
+  getTicketDeViaje: async (id, ticketId) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await mockViajes.mockVerTicket(id, ticketId));
+  },
+  elegirEnTicketDeViaje: async (id, ticketId, req) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await mockViajes.mockElegirEnTicket(id, ticketId, req), 'viajes.seleccion');
+  },
+  marcarPresentesEnTicket: async (id, ticketId, presentes) => {
+    assertViajesHabilitado();
+    return decodeTicketDelViaje(await mockViajes.mockMarcarPresentes(id, ticketId, { presentes }), 'viajes.presentes');
+  },
+  getCierreDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeVistaPreviaCierre(await mockViajes.mockVistaPreviaCierre(id));
+  },
+  cerrarViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await mockViajes.mockCerrarViaje(id), 'viajes.cerrar');
+  },
+  marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
+    assertViajesHabilitado();
+    return decodeMarcaDeTransferencia(await mockViajes.mockMarcarTransferencia(id, transferenciaId, accion), transferenciaId);
+  },
+  getResumenDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodeResumenDeViaje(await mockViajes.mockResumenDeViaje(id), id);
+  },
 };
 
 export const api: Api = IS_MOCK ? mockApi : realApi;

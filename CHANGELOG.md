@@ -11,6 +11,41 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.229.0 — Viajes: los gastos compartidos de un viaje (2026-10-09)
+
+Orden AF-VIAJES-20261009 (1a46e0bf…); decisión 242 de Mati (5ae87cec…), D240 punto 17, Roadmap n338. Plan aprobado
+(9963ecd5…, OK 05:29:00Z) con las respuestas A–F: rutas de un solo parámetro; «recibí» y «consumí» en la primera
+persona de la guarda de voseo; el tipo de lugar con chips en 1h; «Aceptaste»/«Rechazaste» al responder; la lista
+con el aspecto de la mesa; el encendido lo coordina el Bibliotecario. Dueño: App Backend 2.171.0
+(`contract/viajes-v1.json`, 31c5245b…). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **Apagado hasta que el dueño lo encienda.** Todo cuelga de `features.viajes` (`api/viajes.ts`, decodificada
+  cerrada: `{supported, enabled}` exactos). Hoy el dueño la publica en `false` (V1, hasta el Aviso): Inicio sigue
+  con «Asociadas», las rutas de Viajes vuelven a Inicio (`viajesRouteGuard.ts`, sin dejar entrada en el historial)
+  y el escaneo no pide `trip_version`. La fachada además no pide nada sin la capacidad.
+- **PayMe no mueve dinero.** La app muestra lo que calcula el dueño (balance, lo que te toca, las transferencias
+  mínimas): no calcula nada. Nunca «saldo». Montos con el formato de D181.
+- **Pantallas (diseño App-Viajes, textos literales):** la pestaña «Viajes» en Inicio (1a, 1b); Abiertos y
+  Cerrados (1c, 1r); crear e invitar desde Amigos o por @usuario (1d, 1e); el viaje abierto con tu balance, el gasto
+  del grupo y los tickets (1g); escanear un ticket dentro del viaje con la cámara de siempre (quien escanea, pagó),
+  el tipo de lugar, las tres formas de dividir y la pantalla nueva «¿Quiénes estuvieron?» (1h); el ticket ya
+  cargado (1k); elegir lo que consumiste con la lista de la mesa (1i); «Pagar el total» (1j); el balance en vivo
+  (1l); cerrar con quien no eligió (1m); las transferencias sugeridas, «Ya pagué», «Deshacer», «Recibí» y «No me
+  llegó» (1n, 1o, 1p); salir con y sin consumos (1q); el cerrado con sólo lo propio (1s); los avisos del viaje con
+  su destino y la invitación con «Aceptar» y «Rechazar» (1f, 1t, más «rechazó» y «no le llegó»).
+- **El escaneo dentro de un viaje** (`/scan/<viaje>`): `CreateMesaFlow` con `viajeId` pide `trip_version=1`, no
+  resuelve restaurante, no ofrece «Cargarlo a mano» (el ticket exige el recibo) y lleva lo leído, en memoria, a
+  «Ticket nuevo». Sin `viajeId`, la mesa de siempre.
+- **Rutas nuevas** (`router.ts`, `vercel.ts`): `/viajes/abiertos|cerrados`, `/viaje-nuevo`, `/viaje/<id>`,
+  `/viaje-ticket-nuevo/<id>`, `/viaje-ticket/<id>.<ticket>`, `/viaje-balance/<id>`, `/viaje-cerrado/<id>`, y
+  `/scan/<id>`.
+- **El mock** replica las 14 rutas del dueño con su cálculo (`mock/viajesCalculo.ts`, centavos enteros, las
+  transferencias mínimas exactas: `[+3, −3, +3, +2, +2, −7]` son 4, no 5) y siembra el viaje del prototipo
+  («Cancún 2026», $6,660; Debes $542; al cerrar, $565 a Diego y tres transferencias a Luis). Seam
+  `payme.app.mock.viajes.v1=encendido`; apagado por defecto, como el dueño.
+- **Espejo:** 128 → 133 archivos, App Backend 2.171.0 (`1c6b0a8`, inventario `106b4b1`).
+- **Inglés:** el diseño no trae inglés; lo escribió App Frontend (`src/i18n/viajes/`).
+
 ## 0.228.0 — Borrar de la app mesas terminadas y pagos (2026-10-09)
 
 Orden AF-BORRAR-MESAS-20261009 (c64747c8…); decisiones D238 («borrar una mesa y el historial en la app; PayMe

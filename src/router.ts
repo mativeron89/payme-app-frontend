@@ -88,6 +88,23 @@ export const PAGES = [
   /** Completion público; el token vive sólo en memoria y nunca en PageId/query. */
   'recovery',
   'mesa',
+  /**
+   * AF-VIAJES · D242 · las pantallas de Viajes (App Backend 2.171.0). Sin la
+   * capacidad `features.viajes` encendida no se montan: vuelven a Inicio
+   * (`viajesRouteGuard.ts`). Un solo parámetro por ruta: el ticket va como
+   * `<viaje>.<ticket>` (un UUID no tiene puntos).
+   *   /viajes/abiertos|cerrados · /viaje-nuevo · /viaje/<id> ·
+   *   /viaje-ticket-nuevo/<id> · /viaje-ticket/<id>.<ticket> ·
+   *   /viaje-balance/<id> · /viaje-cerrado/<id>
+   * El escaneo dentro de un viaje es `/scan/<id>`, la cámara de siempre.
+   */
+  'viajes',
+  'viaje-nuevo',
+  'viaje',
+  'viaje-ticket-nuevo',
+  'viaje-ticket',
+  'viaje-balance',
+  'viaje-cerrado',
 ] as const;
 
 export type PageId = (typeof PAGES)[number];

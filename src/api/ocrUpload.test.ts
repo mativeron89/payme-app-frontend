@@ -298,3 +298,45 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     await expect(malformed).rejects.toThrow('contract_response_invalid:ocr');
   });
 });
+
+const viajes = await import('./viajes');
+
+describe('AF-VIAJES · D242 · el escaneo dentro de un viaje (`trip_version=1`)', () => {
+  afterEach(() => viajes.reiniciarViajesParaTests());
+
+  it('🔴 sin la capacidad no se pide: ni una subida', async () => {
+    await expect(api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }), undefined, { viaje: true }))
+      .rejects.toThrow('viajes_not_available');
+    expect(FakeXmlHttpRequest.instances).toHaveLength(0);
+  });
+
+  it('con la capacidad, pide trip_version=1 una sola vez y admite la fecha impresa', async () => {
+    viajes.aplicarConfigViajes({ features: { viajes: { supported: true, enabled: true } } });
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }), undefined, { viaje: true });
+    const xhr = FakeXmlHttpRequest.instances[0]!;
+    expect(new URL(xhr.url, 'http://localhost').searchParams.getAll('trip_version')).toEqual(['1']);
+    xhr.finish(200, { ...ticket(), receipt: 'or1.r', ticket_datetime: { date: '2026-10-09', time: '14:20' } });
+    await expect(pending).resolves.toMatchObject({ ticket_datetime: { date: '2026-10-09', time: '14:20' } });
+  });
+
+  it('sin el viaje, el pedido de siempre: sin trip_version, y `ticket_datetime` es una clave desconocida', async () => {
+    viajes.aplicarConfigViajes({ features: { viajes: { supported: true, enabled: true } } });
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    const xhr = FakeXmlHttpRequest.instances[0]!;
+    expect(new URL(xhr.url, 'http://localhost').searchParams.has('trip_version')).toBe(false);
+    xhr.finish(200, { ...ticket(), ticket_datetime: { date: '2026-10-09', time: null } });
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+
+  it.each([
+    { date: '2026-02-30', time: null },
+    { date: '2026-10-09', time: '24:00' },
+    { date: '2026-10-09' },
+    { date: '2026-10-09', time: null, folio: 'A1' },
+  ])('una fecha impresa que no cumple rompe la lectura: %j', async (ticket_datetime) => {
+    viajes.aplicarConfigViajes({ features: { viajes: { supported: true, enabled: true } } });
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }), undefined, { viaje: true });
+    FakeXmlHttpRequest.instances[0]!.finish(200, { ...ticket(), ticket_datetime });
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+});

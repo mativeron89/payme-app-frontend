@@ -58,9 +58,17 @@ const PAGINAS_APP = [
   'home', 'cuenta', 'tarjetas', 'pagos', 'estadisticas', 'restaurantes', 'platos',
   'evolucion', 'cargar', 'transferir', 'amigos', 'mesas', 'scan', 'mas', 'avisos',
   'notificaciones', 'recovery', 'mesa',
+  // AF-VIAJES · D242.
+  'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
 ];
-/** Las que llevan un parámetro en la ruta: el código de mesa y el ID a transferir. */
-const PAGINAS_CON_PARAMETRO = ['mesa', 'transferir'];
+/**
+ * Las que llevan un parámetro en la ruta: el código de mesa y el ID a
+ * transferir; AF-VIAJES, el viaje (y `scan`, el escaneo dentro de un viaje).
+ */
+const PAGINAS_CON_PARAMETRO = [
+  'mesa', 'transferir',
+  'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
+];
 const rutasApp = [
   ...PAGINAS_APP.map((p) => `/${p}`),
   ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`),

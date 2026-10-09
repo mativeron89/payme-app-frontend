@@ -8,6 +8,8 @@ import {
   personasEnMesa,
   tuMesaEnCurso,
   mesaDelAviso,
+  destinoDeMesa,
+  claveDeDestino,
 } from './labels';
 
 /**
@@ -137,6 +139,30 @@ describe('AF-34 · mesaDelAviso · a qué mesa lleva el aviso', () => {
     expect(mesaDelAviso({ type: 'join_request_accepted', payload: { mesa_code: 'PA-12345' } })).toBe('PA-12345');
     expect(mesaDelAviso({ type: 'join_request_accepted', payload: {} })).toBeNull();
     expect(mesaDelAviso({ type: 'join_request_received', payload: { join_request_id: 'x' } })).toBeNull();
+  });
+});
+
+describe('AF-VIAJES · destinoDeMesa · el destino de un aviso de mesa no cambia', () => {
+  it('🔴 es `mesaDelAviso` en la página `mesa`, caso por caso', () => {
+    const casos = [
+      { type: 'mesa_expired', payload: { mesa_code: 'PA-1099' } },
+      { type: 'join_request_received', payload: { mesa_code: 'PA-12345' } },
+      { type: 'join_request_accepted', payload: { mesa_code: 'PA-7' } },
+      { type: 'mesa_expired', payload: null },
+      { type: 'payment_failed', payload: { mesa_code: 'PA-1099' } },
+      // Un aviso de viaje nunca lleva a una mesa, aunque traiga un código.
+      { type: 'viaje_closed', payload: { viaje_id: 'v-1', mesa_code: 'PA-1' } },
+    ];
+    for (const n of casos) {
+      const mesa = mesaDelAviso(n);
+      expect(destinoDeMesa(n), n.type).toEqual(mesa === null ? null : { page: 'mesa', param: mesa });
+    }
+  });
+
+  it('la clave compara página y parámetro', () => {
+    expect(claveDeDestino({ page: 'mesa', param: 'PA-1' })).toBe('mesa/PA-1');
+    expect(claveDeDestino({ page: 'viaje', param: 'PA-1' })).not.toBe(claveDeDestino({ page: 'mesa', param: 'PA-1' }));
+    expect(claveDeDestino(null)).toBeNull();
   });
 });
 

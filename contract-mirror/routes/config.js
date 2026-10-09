@@ -21,6 +21,7 @@ const {
   SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
 } = require('../services/shortfallDetails');
 const ocultamientos = require('../services/ocultamientos');
+const viajes = require('../services/viajes');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -209,6 +210,10 @@ router.get('/', (req, res) => {
       // de primer nivel: un cliente viejo no lo lee. `hideable_mesa_statuses` es la regla del dueño (las nueve
       // terminadas); el front la espeja en vez de inventarla. Contrato: contract/ocultamientos-v1.json.
       hide_from_app: ocultamientos.capacidad(),
+      // v2.171.0 · D242 · Viajes. Bloque hermano de primer nivel: un cliente viejo no lo lee. `enabled` es la
+      // constante del servicio (V1: false hasta que Mati apruebe el Aviso) y con ella en false las rutas no existen.
+      // Contrato: contract/viajes-v1.json.
+      viajes: viajes.capacidad(),
     },
   });
 });

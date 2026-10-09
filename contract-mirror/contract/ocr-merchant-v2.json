@@ -79,6 +79,42 @@
     "mesa_detail": "GET /api/mesas/:code?adjustments_version=2 (exact) adds mesa.ticket_adjustments (both kinds) and mesa.ticket_totals {subtotal_cents, tax_cents?} from a version 2 row, only when the row is valid and mesa.total_cents equals items_total_cents (not edited). Version 1 rows publish their discounts with 1 and with 2. A version 2 row with adjustments_version=1, or any request without 2, publishes neither key: byte for byte as before.",
     "client": "App Frontend (another order, after this is served): add adjustments_version=2 to the scan request and to GET /api/mesas/:code, accept the service_charge kind, show it apart in «Ver el ticket» with the subtotal and tax, and never distribute it among the people (decision 224)."
   },
+  "payment_rows_v2": {
+    "since": "2.170.0",
+    "decision": "240 (item 2)",
+    "order": "AB-OCR-PAGOS-ORTOGRAFIA-20261009",
+    "negotiation": "No new parameter and no new key: it is part of the NEW READING that adjustments_version=2 already selects (App Frontend 0.226.0 asks for it). Missing, 1, unknown or duplicate adjustments_version keep the reading of always byte for byte, payment rows included (tests/ocr-lectura-de-siempre.test.js; the payment corpus pins its own reading of always in tests/corpus-ocr-pagos/siempre.huellas.json). The new reading of the 194 corpus cases is pinned too (tests/ocr-lectura-nueva.test.js, frozen on be3fcaf) and does not change.",
+    "reading": "services/ocrTextract.js, only with the new reading. A row is a PAYMENT when every word belongs to the payment vocabulary and at least one names the payment (EFECTIVO, TARJETA, VISA, MASTER CARD, AMEX, DEBITO, CREDITO, TC/TD, VALES, SPEI, PAGO, PAGADO, RECIBIDO, CAMBIO, VUELTO, AUT, TERMINAL...); the others may come along (SU, CON, DE, TOTAL, IMPORTE, MXN, a card mask or a number). A payment row is never an item nor the name of another item, with or without amount, in any interpretation (also with a doubtful service charge). A TOTAL field whose label is a payment (TOTAL PAGADO, EFECTIVO, IMPORTE RECIBIDO) is not the ticket total. NOT payments: TOTAL A PAGAR, POR PAGAR, SALDO, PROPINA and PROPINA PAGADA (a charge, decision 212), and rows that name something else (CAMBIO DE GUARNICION, CAMBIO A PAPAS, TARJETA DE REGALO, PAGO DE SERVICIO, MC FLURRY, CAFE AMERICANO).",
+    "client": "Nothing to change: the 0.226.0 decoder already accepts it. Old tabs without adjustments_version=2 keep the reading of always (the payment may still show up as an item)."
+  },
+  "names_v1": {
+    "since": "2.170.0",
+    "decision": "240 (item 15)",
+    "order": "AB-OCR-PAGOS-ORTOGRAFIA-20261009",
+    "shape": "Every item gets original_name: the name as read from the ticket (NFC trim/collapse <=200, same rules as name). name is the corrected name; when nothing was corrected both are equal.",
+    "item_fields": [
+      "name",
+      "category",
+      "price_cents",
+      "quantity",
+      "confidence",
+      "low_confidence",
+      "original_name"
+    ],
+    "negotiation": "HTTP requires contract_version=2 AND names_version=1 (exact scalar string). Missing, unknown, empty or duplicate names_version keep name and the item keys of always, byte for byte; an item with original_name without the negotiation fails closed (ocr_response_item_extra_field). v1 never emits it. The mock does not correct: with the negotiation, original_name equals name.",
+    "correction": "services/ortografiaPlatos.js with the own dictionary services/diccionarioPlatos.json (food and drink of Mexico, curated for PayMe, no network, no dependency). High confidence only: an ALL CAPS name becomes a sentence only when every word is known (all or nothing); a known word with anomalous capitals takes its canonical form; accents and ñ only when the unaccented word leads to one form; a letter only when one is missing, one is extra or two are transposed, the word has 5 letters or more (6 when one is missing or extra) and its single neighbour at distance 1 is a common word. A changed letter is never corrected. Unknown words (proper names, unknown brands), abbreviations, units, numbers and words glued to a number or a sign are never touched. category is still computed from the original name.",
+    "receipt": "The receipt signs the published (corrected) name: an unedited item stays ocr_real. Restoring original_name with other letters counts as an edit.",
+    "client": "App Frontend: add names_version=1 to the scan request, add original_name to OCR_ITEM_KEYS (only with this negotiation), show name and keep original_name for the person to restore it; the person can still edit the name."
+  },
+  "trip_v1": {
+    "since": "2.171.0",
+    "decision": "242 (V2, plan OK 2026-10-09T03:31:25Z)",
+    "order": "AB-VIAJES-20261009",
+    "negotiation": "HTTP requires contract_version=2 AND receipt_version=1 AND trip_version=1 (exact scalar string), and Viajes enabled (features.viajes.enabled, contract/viajes-v1.json). Missing, unknown, empty or duplicate trip_version, or Viajes off, keep the response and the receipt of always, byte for byte.",
+    "response": "Adds ticket_datetime: {date: 'YYYY-MM-DD', time: 'HH:MM' | null} when the printed date (Textract INVOICE_RECEIPT_DATE, day/month/year) is a real calendar date; the time comes from the same field or from a field labelled HORA. Without a date the key is absent. The folio never leaves the server.",
+    "receipt": "The signed receipt (opaque to the client) adds h: the ticket fingerprint of Viajes (HMAC-SHA256 with an HKDF key derived from JWT_SECRET, label payme/viajes/huella/v1). With folio: RFC + folio + total + date; without folio: RFC + full date and time + total + lines (price and quantity). No RFC (or the generic XAXX010101000 / XEXX010101000), or neither folio nor date and time: no h. POST /api/mesas accepts and ignores h.",
+    "mock": "The mock has no RFC, folio or date: no ticket_datetime and no h."
+  },
   "origin_receipt": {
     "since": "2.145.0",
     "source": "services/origenItems.js",

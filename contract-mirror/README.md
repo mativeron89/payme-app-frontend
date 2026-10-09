@@ -6,6 +6,28 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes · App Backend v2.171.0 · 2026-10-09
+
+Orden `AF-VIAJES-20261009` (D242, D240 punto 17, n338). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`1c6b0a895ea437a3092d34da3d052326dc4bdb03`** (v2.171.0, commit A: los gastos compartidos de un
+  viaje, `features.viajes` apagada hasta el Aviso, 14 rutas en `/api/viajes`, `trip_version=1` del OCR).
+- Inventario: el de `main` del owner en **`106b4b109646e71add2d9c7f471710e4578f6331`** (commit B, sólo regenera el
+  inventario; `contract/mirror-inventory.json`, sha256
+  `00452ef22ebcf473f3273e2c423f72ee6dbd04a5488f23f99a6fade56a843023`), adoptado con `--adoptar-inventario` sin
+  editarlo. Declara `1c6b0a8`. El `origin/main` del owner siguió a `13b2df4` (v2.171.1, OCR por dentro): no toca el
+  espejo y su inventario es el mismo.
+- **133 archivos espejados** (antes 128). Entran cinco: `contract/viajes-v1.json` (sha256
+  `31c5245bdfbb947af63c1aadfb53f62756a6746d4d1e2d00e294b95a022a0a8d`, el de la orden), `routes/viajes.js`,
+  `services/viajes.js`, `services/viajesCalculo.js` y `db/migrate_viajes_v2.171.0.sql`. Cambian cinco:
+  `contract/ocr-merchant-v2.json`, `routes/config.js`, `routes/ocr.js`, `services/notifications.js` y
+  `services/ocrResponseContract.js`. Copiados con `git show 1c6b0a8:<origen>` y con el sha256 que declara el
+  inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni escrituras en
+  ese repo.
+- `--paridad`: espejo = inventario = fuente en `1c6b0a8`, 133/133.
+
 ### Borrar de la app mesas y pagos · App Backend v2.169.0 · 2026-10-09
 
 Orden `AF-BORRAR-MESAS-20261009` (n334, D238, D239). Scope del lease con `contract-mirror/**` y

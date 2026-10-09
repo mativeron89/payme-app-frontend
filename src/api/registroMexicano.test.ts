@@ -148,6 +148,12 @@ const ESPANOL_LEGITIMO = new Set([
   'mié',
   // Pretéritos de primera persona (aparecen en prosa de tests).
   'sumé', 'bloqueé', 'tomé', 'encontré', 'entré', 'pagué',
+  // AF-VIAJES · D242-1 y el diseño de Viajes (texto decidido): «Recibí» (quien
+  // recibe una transferencia) y «Elegir lo que consumí». Primera persona, no voseo.
+  'recibí', 'consumí',
+  // AF-VIAJES · 1q (texto decidido): «Podrás salir cuando se cierre el viaje…».
+  // Futuro de tú, no voseo.
+  'podrás',
   // AF2 · futuro de tercera persona del texto aprobado de la puerta (decisión
   // 46): «se mostrará a tus amigos». No es voseo.
   'mostrará',
