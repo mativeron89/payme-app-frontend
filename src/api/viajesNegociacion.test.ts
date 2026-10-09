@@ -41,7 +41,7 @@ let pedidos: Array<{ method: string; url: URL; body: unknown }> = [];
 beforeEach(() => {
   expect(IS_MOCK).toBe(false);
   saveSession({
-    access_token: 'access-viajes', refresh_token: 'refresh-viajes', family_id: 'family-viajes', principal_id: 'user-viajes',
+    access_token: 'a', refresh_token: 'r', family_id: 'family-viajes', principal_id: 'user-viajes',
     user: { id: 'user-viajes', payme_id: 'payme_mx_viajes', email: 'viajes@example.com', first_name: 'Yo', last_name: 'Prueba' },
   });
   aplicarConfigViajes({ features: { viajes: { supported: true, enabled: true } } });
