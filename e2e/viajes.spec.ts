@@ -54,6 +54,13 @@ test('1a · D246 · Inicio: «Viajes» reemplaza a «Asociadas»; Abiertos y Cer
   await expect(page.locator('.vj-inicio-fila').first()).toContainText('Gastaste$2,230');
   await expect(page.getByText('Cancún 2026', { exact: true })).toHaveCount(0);
   expect(page.url()).toBe(inicio);
+  // En otra pestaña la lista no está; al volver a Viajes, de nuevo Abiertos.
+  await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
+  await expect(page.getByText('Oaxaca puente', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
+  await expect(abiertos).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
+  await cerrados.click();
   // Tocar un viaje lo abre.
   await page.getByText('Oaxaca puente', { exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${OAXACA}$`));
@@ -187,6 +194,24 @@ test('1i · elegir lo que consumí cambia el balance; nunca se ve qué eligió o
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   // $542 + $285 de los tacos, en rojo con el «−».
   await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$827/);
+});
+
+test('D244 · carga manual: «Listo» pide una descripción y un monto mayor que cero', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje-gasto/${CANCUN}`);
+  const listo = page.getByRole('button', { name: 'Listo', exact: true });
+  const descripcion = page.getByLabel('Descripción', { exact: true });
+  const monto = page.getByLabel('Monto', { exact: true });
+  await expect(listo).toBeDisabled();
+  await descripcion.fill('Gasolina');
+  await expect(listo).toBeDisabled();
+  await monto.fill('0');
+  await expect(listo).toBeDisabled();
+  await monto.fill('1,250.50');
+  await expect(listo).toBeEnabled();
+  await expect(page.getByText('Total $1,250.50', { exact: true })).toBeVisible();
+  await descripcion.fill('   ');
+  await expect(listo).toBeDisabled();
 });
 
 test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
