@@ -875,6 +875,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       // AF-USUARIO-ARROBA · forma exacta del dueño v2.137.0: el bloque se sirve
       // siempre, y `enabled` es `true` sólo con el seam en `'true'` exacto.
       username: { supported: true, enabled: usernameMock() },
+      // AF-BORRAR-MESAS · v2.169.0 · seam `payme.app.mock.ocultar.v1` (`apagado`, `ausente`).
+      ...(capacidadOcultarMock() === undefined ? {} : { hide_from_app: capacidadOcultarMock() }),
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -1906,7 +1908,9 @@ export async function mockHistory(params?: {
   const limit = Math.min(params?.limit ?? 20, 100);
   // `offset` espeja `historyQuery` del emisor: entero, mínimo 0, default 0.
   const offset = Math.max(0, Math.trunc(params?.offset ?? 0));
-  let sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
+  // AF-BORRAR-MESAS · ni el pago suelto oculto ni los de una mesa oculta con su historial.
+  let sorted = [...state.history].filter((h) => pagoEnHistorialMock(h.id, h.mesa_code))
+    .sort((a, b) => b.date.localeCompare(a.date));
   if (params?.from) sorted = sorted.filter((h) => h.date >= params.from!);
   if (params?.to) sorted = sorted.filter((h) => h.date <= params.to!);
   /**
@@ -1928,6 +1932,9 @@ export async function mockHistory(params?: {
 export async function mockMovement(id: string): Promise<MovementDetailResponse> {
   const detail = state.movementDetails[id];
   if (!detail) return fail(404, 'movement_not_found');
+  // AF-BORRAR-MESAS · el pago oculto da el mismo 404 (matriz del contrato).
+  const pago = state.history.find((h) => h.id === id);
+  if (pago && !pagoEnHistorialMock(id, pago.mesa_code)) return fail(404, 'movement_not_found');
   return delay(structuredClone(detail));
 }
 
@@ -2103,6 +2110,20 @@ function mineDeMockMesa(m: MockMesa, withItems: boolean): {
 export async function mockMisMesas(params?: { cursor?: string; limit?: number; detail?: 'items' }): Promise<unknown> {
   const seam = leerSeam(CLAVE_MIS_MESAS);
   if (seam === 'error') return fail(500, 'internal_error');
+  // AF-BORRAR-MESAS · la mesa borrada de la app (M o MH) no se lista.
+  const ocultas = ocultasDelUsuario();
+  const todas = todasMisMesasMock(params?.detail === 'items').filter((m) => !(m.code in ocultas.mesas));
+  const limit = Math.min(Math.max(params?.limit ?? 20, 1), 50);
+  const desde = params?.cursor ? Number(atob(params.cursor)) || 0 : 0;
+  const pagina = todas.slice(desde, desde + limit);
+  const siguiente = desde + limit < todas.length ? btoa(String(desde + limit)) : null;
+  return delay({ mesas: pagina, page: { limit, next_cursor: siguiente } });
+}
+
+/** Todas las mesas de `/mesas/mine` (con los fixtures del seam), sin filtrar lo oculto ni paginar. */
+function todasMisMesasMock(withItems: boolean) {
+  const seam = leerSeam(CLAVE_MIS_MESAS);
+  const params = withItems ? { detail: 'items' as const } : undefined;
   state.mesas.forEach(settleIfExpired);
   const propias = seam === 'vacio' ? [] : state.mesas
     .filter((m) => m.openedByUser || state.joinedMesaCodes.includes(m.code))
@@ -2156,13 +2177,100 @@ export async function mockMisMesas(params?: { cursor?: string; limit?: number; d
       ] } : {}),
     },
   })) : [];
-  const todas = [...(seam === 'muchas' ? [] : propias), ...fixtures]
+  return [...(seam === 'muchas' ? [] : propias), ...fixtures]
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const limit = Math.min(Math.max(params?.limit ?? 20, 1), 50);
-  const desde = params?.cursor ? Number(atob(params.cursor)) || 0 : 0;
-  const pagina = todas.slice(desde, desde + limit);
-  const siguiente = desde + limit < todas.length ? btoa(String(desde + limit)) : null;
-  return delay({ mesas: pagina, page: { limit, next_cursor: siguiente } });
+}
+
+// ─── AF-BORRAR-MESAS · D238/D239 · réplica de App Backend v2.169.0 ─────────
+// `contract-mirror/contract/ocultamientos-v1.json` y `services/ocultamientos.js`.
+// Ocultar por persona, nunca borrar. Seam `payme.app.mock.ocultar.v1`:
+// `apagado` (la capacidad con `enabled: false`) o `ausente` (sin el bloque).
+
+const CLAVE_OCULTAR_MOCK = 'payme.app.mock.ocultar.v1';
+const MESA_ESTADOS_OCULTABLES = ['fully_paid', 'expired', 'settling', 'settled', 'dispersing', 'completed', 'auth_failed', 'cancelled', 'dispersed'] as const;
+
+export function capacidadOcultarMock(): unknown {
+  const seam = leerSeam(CLAVE_OCULTAR_MOCK);
+  if (seam === 'ausente') return undefined;
+  return { supported: true, enabled: seam !== 'apagado', hideable_mesa_statuses: [...MESA_ESTADOS_OCULTABLES] };
+}
+
+function ocultasDelUsuario(): { mesas: Record<string, boolean>; pagos: string[] } {
+  const uid = state.user?.id ?? 'anon';
+  if (!state.ocultamientos) state.ocultamientos = {};
+  if (!state.ocultamientos[uid]) state.ocultamientos[uid] = { mesas: {}, pagos: [] };
+  return state.ocultamientos[uid];
+}
+
+/** El pago sigue en el historial: ni suelto oculto (P) ni de una mesa oculta con su historial (MH). */
+function pagoEnHistorialMock(pagoId: string, mesaCode: string): boolean {
+  const o = ocultasDelUsuario();
+  return !o.pagos.includes(pagoId) && o.mesas[mesaCode] !== true;
+}
+
+/** La mesa que el usuario ve en alguna superficie propia (la «huella»), con su estado; si no, `null` (404). */
+function mesaConHuellaMock(code: string): { code: string; status: string } | null {
+  const lista = todasMisMesasMock(false).find((m) => m.code === code);
+  if (lista) return { code: lista.code, status: lista.status };
+  const pago = state.history.find((h) => h.mesa_code === code);
+  if (pago) {
+    const viva = state.mesas.find((m) => m.code === code);
+    return { code, status: viva ? viva.status : pago.mesa_status };
+  }
+  return null;
+}
+
+export async function mockOcultarMesa(code: string, body: { include_history: boolean }): Promise<unknown> {
+  if (typeof body?.include_history !== 'boolean') return fail(400, 'validation_error', { issues: [] });
+  const mesa = mesaConHuellaMock(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (!(MESA_ESTADOS_OCULTABLES as readonly string[]).includes(mesa.status)) {
+    return fail(409, 'mesa_not_finished', { mesa_status: mesa.status });
+  }
+  const o = ocultasDelUsuario();
+  // El alcance sólo se amplía: include_history = anterior OR pedido.
+  o.mesas[code] = o.mesas[code] === true || body.include_history;
+  persist();
+  return delay({ mesa_code: code, hidden: true, include_history: o.mesas[code] });
+}
+
+export async function mockMostrarMesa(code: string): Promise<unknown> {
+  if (!mesaConHuellaMock(code)) return fail(404, 'mesa_not_found');
+  delete ocultasDelUsuario().mesas[code];
+  persist();
+  return delay({ mesa_code: code, hidden: false, include_history: false });
+}
+
+export async function mockOcultarPago(id: string): Promise<unknown> {
+  const pago = state.history.find((h) => h.id === id);
+  if (!pago) return fail(404, 'movement_not_found');
+  const viva = state.mesas.find((m) => m.code === pago.mesa_code);
+  const status = viva ? viva.status : pago.mesa_status;
+  if (!(MESA_ESTADOS_OCULTABLES as readonly string[]).includes(status)) {
+    return fail(409, 'movement_not_hideable', { mesa_status: status });
+  }
+  const o = ocultasDelUsuario();
+  if (!o.pagos.includes(id)) o.pagos.push(id);
+  persist();
+  return delay({ id, hidden: true });
+}
+
+export async function mockMostrarPago(id: string): Promise<unknown> {
+  if (!state.history.some((h) => h.id === id)) return fail(404, 'movement_not_found');
+  const o = ocultasDelUsuario();
+  o.pagos = o.pagos.filter((p) => p !== id);
+  persist();
+  return delay({ id, hidden: false });
+}
+
+/** El aviso sigue a la vista: su mesa no está oculta (M o MH). Réplica de `avisoVisibleSql`. */
+function avisoVisibleMock(n: { related_entity_type?: string | null; related_entity_id?: string | null }): boolean {
+  const o = ocultasDelUsuario();
+  if (Object.keys(o.mesas).length === 0) return true;
+  let code: string | undefined;
+  if (n.related_entity_type === 'mesa') code = state.mesas.find((m) => m.id === n.related_entity_id || m.code === n.related_entity_id)?.code;
+  if (n.related_entity_type === 'payment_attempt') code = state.history.find((h) => h.id === n.related_entity_id)?.mesa_code;
+  return code === undefined || !(code in o.mesas);
 }
 
 export async function mockOpenMesas(): Promise<OpenMesasResponse> {
@@ -4233,8 +4341,10 @@ export async function mockAttachPaymentMethod(
 // ─── Notifications / invitaciones in-app ───────────────────
 
 export async function mockNotifications(): Promise<NotificationsResponse> {
-  const unread = state.notifications.filter((n) => !n.read_at).length;
-  return delay({ notifications: [...avisosDeMesaVencidaMock(), ...state.notifications], unread_count: unread, limit: 20, offset: 0 });
+  // AF-BORRAR-MESAS · lista y campana con el mismo filtro (los avisos de una mesa oculta salen).
+  const visibles = state.notifications.filter(avisoVisibleMock);
+  const unread = visibles.filter((n) => !n.read_at).length;
+  return delay({ notifications: [...avisosDeMesaVencidaMock().filter(avisoVisibleMock), ...visibles], unread_count: unread, limit: 20, offset: 0 });
 }
 
 /* Estado efímero exclusivo de la costura e2e: permite que su aviso sintético
@@ -4326,7 +4436,7 @@ function avisosDeUnirseMock(): NotificationsResponse['notifications'] {
 }
 
 export async function mockUnreadCount(): Promise<{ unread_count: number }> {
-  return delay({ unread_count: state.notifications.filter((n) => !n.read_at).length });
+  return delay({ unread_count: state.notifications.filter(avisoVisibleMock).filter((n) => !n.read_at).length });
 }
 
 /** PATCH /notifications/:id/read: una fila propia, sólo si seguía sin leer. */

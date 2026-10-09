@@ -72,6 +72,12 @@ import { guaranteeOutcome } from './paymentStatus';
 import { loadSession, type SessionStateWitness, type StoredSession } from './storage';
 import { decodeFacebookStartResponse } from './facebookAuthFlow';
 import {
+  aplicarConfigOcultar,
+  decodeMesaOcultada,
+  decodePagoOcultado,
+  type MesaOcultada,
+} from './ocultar';
+import {
   applyUsernameConfig,
   decodeEstadoUsername,
   decodeResultadosArroba,
@@ -408,6 +414,16 @@ export interface Api {
   /** AF-34 · n98 · el organizador cierra la mesa sin garantía. La confirmación la pide la pantalla. */
   closeMesa(code: string): Promise<MesaCerrada>;
   /**
+   * AF-BORRAR-MESAS · D238/D239 · borrar de la app una mesa terminada
+   * (`PUT /mesas/:code/hidden`, `{ include_history }`) y deshacerlo (`DELETE`).
+   * Es ocultar por persona: el servidor conserva todo.
+   */
+  ocultarMesa(code: string, incluirHistorial: boolean): Promise<MesaOcultada>;
+  mostrarMesa(code: string): Promise<MesaOcultada>;
+  /** AF-BORRAR-MESAS · borrar de la app un pago del historial y deshacerlo. */
+  ocultarPago(id: string): Promise<void>;
+  mostrarPago(id: string): Promise<void>;
+  /**
    * AF-25 · n72 · quiénes se sumaron. SÓLO el organizador: a un no-organizador
    * la pantalla ni lo pide (403 `not_mesa_organizer`).
    */
@@ -583,6 +599,8 @@ const realApi: Api = {
   getConfig: async () => {
     const config = await httpPublicRequest<AppConfig>('GET', '/config');
     applyUsernameConfig(config);
+    // AF-BORRAR-MESAS · la capacidad de borrar de la app, sin request propia.
+    aplicarConfigOcultar(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -889,6 +907,20 @@ const realApi: Api = {
     ),
   closeMesa: async (code) =>
     decodeMesaCerrada(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/close`)),
+  ocultarMesa: async (code, incluirHistorial) => decodeMesaOcultada(
+    await httpRequest<unknown>('PUT', `/mesas/${encodeURIComponent(code)}/hidden`, { include_history: incluirHistorial }),
+    { code, hidden: true },
+  ),
+  mostrarMesa: async (code) => decodeMesaOcultada(
+    await httpRequest<unknown>('DELETE', `/mesas/${encodeURIComponent(code)}/hidden`),
+    { code, hidden: false },
+  ),
+  ocultarPago: async (id) => {
+    decodePagoOcultado(await httpRequest<unknown>('PUT', `/account/movements/${encodeURIComponent(id)}/hidden`), { id, hidden: true });
+  },
+  mostrarPago: async (id) => {
+    decodePagoOcultado(await httpRequest<unknown>('DELETE', `/account/movements/${encodeURIComponent(id)}/hidden`), { id, hidden: false });
+  },
   requestJoin: async (code) => decodePedirUnirse(await httpRequest<unknown>('POST', '/join-requests', { code })),
   getJoinRequest: async (id) =>
     decodeSolicitudPropia(await httpRequest<unknown>('GET', `/join-requests/${encodeURIComponent(id)}`), id),
@@ -1135,6 +1167,7 @@ const mockApi: Api = {
   getConfig: async () => {
     const config = await mock.mockGetConfig();
     applyUsernameConfig(config);
+    aplicarConfigOcultar(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1269,6 +1302,11 @@ const mockApi: Api = {
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
   closeMesa: async (code) => decodeMesaCerrada(await mock.mockCloseMesa(code, 'user')),
+  ocultarMesa: async (code, incluirHistorial) =>
+    decodeMesaOcultada(await mock.mockOcultarMesa(code, { include_history: incluirHistorial }), { code, hidden: true }),
+  mostrarMesa: async (code) => decodeMesaOcultada(await mock.mockMostrarMesa(code), { code, hidden: false }),
+  ocultarPago: async (id) => { decodePagoOcultado(await mock.mockOcultarPago(id), { id, hidden: true }); },
+  mostrarPago: async (id) => { decodePagoOcultado(await mock.mockMostrarPago(id), { id, hidden: false }); },
   requestJoin: async (code) => decodePedirUnirse(await mock.mockRequestJoin(code)),
   getJoinRequest: async (id) => decodeSolicitudPropia(await mock.mockGetJoinRequest(id), id),
   cancelJoinRequest: async (id) => decodeCancelarSolicitud(await mock.mockCancelJoinRequest(id), id),

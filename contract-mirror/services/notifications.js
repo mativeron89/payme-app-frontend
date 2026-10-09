@@ -15,6 +15,8 @@
 const pool = require('../db/pool');
 const logger = require('../utils/logger');
 const { MESA_ESTADOS_VIVOS } = require('../utils/stateMachine');
+// v2.169.0 · D238: los avisos de una mesa borrada de la app (services/ocultamientos.js).
+const ocultamientos = require('./ocultamientos');
 
 const TYPES = {
   invitation_received:  { title: 'Te invitaron a una mesa' },
@@ -141,9 +143,10 @@ async function markRead(notif_id, user_id) {
 }
 
 async function markAllRead(user_id) {
+  // v2.169.0 · D238 (D3): «Marcar todo leído» actúa sobre lo visible; lo oculto queda como estaba.
   const { rowCount } = await pool.query(
-    `UPDATE notifications SET read_at = NOW()
-      WHERE user_id = $1 AND read_at IS NULL`,
+    `UPDATE notifications n SET read_at = NOW()
+      WHERE n.user_id = $1 AND n.read_at IS NULL AND ${ocultamientos.avisoVisibleSql('n')}`,
     [user_id]
   );
   return rowCount;
@@ -161,6 +164,8 @@ async function unreadCount(user_id, db = pool) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS c FROM notifications n
       WHERE n.user_id = $1 AND n.read_at IS NULL
+        -- v2.169.0 · D238: el MISMO fragmento que el listado (los avisos de una mesa borrada de la app).
+        AND ${ocultamientos.avisoVisibleSql('n')}
         AND NOT (n.type = 'invitation_received' AND n.related_entity_type = 'invitation'
                  AND EXISTS (SELECT 1 FROM invitations i JOIN mesas m ON m.id = i.mesa_id
                               WHERE i.id = n.related_entity_id
@@ -176,7 +181,10 @@ async function unreadCount(user_id, db = pool) {
  * en NULL (FK `ON DELETE SET NULL`).
  */
 async function borrarTodas(userId, db = pool) {
-  const { rowCount } = await db.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+  // v2.169.0 · D238 (D3): «Borrar todas» borra lo que la persona VE. Los avisos de una mesa que ocultó no se
+  // borran físicamente: si deshace, vuelven.
+  const { rowCount } = await db.query(
+    `DELETE FROM notifications n WHERE n.user_id = $1 AND ${ocultamientos.avisoVisibleSql('n')}`, [userId]);
   return rowCount;
 }
 

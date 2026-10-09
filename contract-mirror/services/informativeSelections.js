@@ -9,6 +9,7 @@ const CONTRACT = 'payme.app.informative-selections/v2';
 const { FRACTION_VALUES, COMPLETING_TOLERANCE_BPS } = require('./itemClaims');
 const mesaPresentation = require('./mesaPresentation');
 const { avisarMesaVencida } = require('./avisoMesaVencida');
+const ocultamientos = require('./ocultamientos');   // v2.169.0 · D238: el historial sin lo borrado
 // Misma participación que el middleware y misma frontera de mesa privada.
 const ACCESS_SQL = `(
   m.opener_user_id=$2 OR EXISTS (SELECT 1 FROM mesa_participants p
@@ -202,6 +203,8 @@ async function history({ userId, limit, offset }) {
        JOIN restaurants r ON r.id=m.restaurant_id
        WHERE s.user_id=$2 AND m.division_mode='igual' AND m.guarantee_mode=false
          AND m.metadata->>'sin_garantia'='true' AND ${ACCESS_SQL}
+         -- v2.169.0 · D238: aparte de ACCESS_SQL, que es también la regla de acceso a la mesa y no se toca.
+         AND ${ocultamientos.mesaVisibleSql('m.id', '$2')}
        GROUP BY m.id ORDER BY MAX(s.updated_at) DESC,m.id DESC LIMIT $1 OFFSET $3`, [limit, userId, offset]);
     const selections = await ownSelectionsForMesas({ mesaIds: rows.map(m => m.id), userId, client });
     return { contract: CONTRACT, history: rows.filter(m => selections.has(m.id)).map(m => ({

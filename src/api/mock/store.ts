@@ -267,6 +267,12 @@ export interface MockState {
     items: InformativeSelectionItem[];
     updated_at: string | null;
   }>;
+  /**
+   * AF-BORRAR-MESAS · D238 · v2.169.0 · lo que cada persona borró de su app
+   * (ocultar, nunca borrar): por usuario, mesas por código con su
+   * `include_history`, y pagos sueltos por id.
+   */
+  ocultamientos: Record<string, { mesas: Record<string, boolean>; pagos: string[] }>;
 }
 
 let seq = 0;
@@ -959,6 +965,7 @@ function seedState(): MockState {
     restaurantResolutions: {},
     idempotency: {},
     informativeSelections: {},
+    ocultamientos: {},
     transfers: [
       {
         id: mockId('f'),
@@ -1327,6 +1334,10 @@ function loadPersisted(): MockState | null {
     if (!parsed.informativeSelections || typeof parsed.informativeSelections !== 'object'
         || Array.isArray(parsed.informativeSelections)) {
       parsed.informativeSelections = {};
+    }
+    // AF-BORRAR-MESAS · nació después que el storage.
+    if (!parsed.ocultamientos || typeof parsed.ocultamientos !== 'object' || Array.isArray(parsed.ocultamientos)) {
+      parsed.ocultamientos = {};
     }
     // OLA 3C: `friendRequests` y `blockedUserIds` nacieron después que el
     // storage. Un estado persistido de antes los trae `undefined` y la pantalla

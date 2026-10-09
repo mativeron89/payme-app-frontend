@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { HistoryEntry, MovementDetailResponse } from '../api/types';
@@ -10,10 +11,15 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { UnirmeConCodigo } from '../components/UnirmeConCodigo';
+import { FilaDeslizable } from '../components/FilaDeslizable';
+import { useHojaModal } from '../components/useHojaModal';
+import { useToast } from '../components/ui';
+import { extractApiError } from '../api/errors';
+import { resultadoDeOcultar, sePuedeOcultar, useCapacidadOcultar } from '../api/ocultar';
 import { bpsLabel } from './mesaItemsView';
 import { agruparDelPago, agruparPropios, nombreConCantidad } from './agruparIguales';
 import type { TuMesa } from '../api/misMesas';
-import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
+import { olvidarLoDeMesas, ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
 import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
 import { useRegion } from '../preferences/RegionProvider';
@@ -26,6 +32,7 @@ import {
   traerDetallesMovimientos,
   traerHistorialCompleto,
   type Franja,
+  type HistorialMesa,
 } from './historialView';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
@@ -208,6 +215,87 @@ export function MesasScreen() {
     cargarHistorial(false);
   }, [cargarHistorial]);
 
+  // ─── AF-BORRAR-MESAS · D238/D239 · borrar de la app ──────────────────────
+  // Es ocultar por persona: el servidor conserva todo. Sin la capacidad del
+  // dueño no hay gesto.
+  const capacidad = useCapacidadOcultar();
+  const toast = useToast();
+  /** La única tarjeta con «Eliminar» a la vista: de qué lista y qué mesa. */
+  const [deslizada, setDeslizada] = useState<TarjetaDeslizada | null>(null);
+  /** La mesa que espera la respuesta a «¿Borrar también su historial?». */
+  const [preguntaMesa, setPreguntaMesa] = useState<TuMesa | null>(null);
+  /** El aviso con «Deshacer»: el gesto se puede disparar sin querer. */
+  const [aviso, setAviso] = useState<{ texto: string; deshacer: () => void } | null>(null);
+  useEffect(() => {
+    if (!aviso) return undefined;
+    const reloj = window.setTimeout(() => setAviso(null), AVISO_DESHACER_MS);
+    return () => window.clearTimeout(reloj);
+  }, [aviso]);
+
+  /**
+   * Después de borrar o deshacer: lo guardado de las mesas (Tus mesas, el
+   * historial, Inicio) y la campana se olvidan —el aviso de una mesa borrada
+   * también sale—, y las listas se vuelven a pedir: el dueño ya las filtra.
+   */
+  const olvidarYRecargar = useCallback(() => {
+    olvidarLoDeMesas();
+    ultimoVisto.olvidar('sinLeer');
+    cargarMisMesas(false);
+    cargarHistorial(false);
+  }, [cargarMisMesas, cargarHistorial]);
+
+  const cerrarDeslizada = useCallback((tarjeta: TarjetaDeslizada) => {
+    setDeslizada((actual) => (mismaTarjeta(actual, tarjeta) ? null : actual));
+  }, []);
+
+  const fallaAlBorrar = useCallback((err: unknown, que: 'mesa' | 'pago') => {
+    const { status, code } = extractApiError(err);
+    const r = resultadoDeOcultar(status, code);
+    toast(r === 'en_curso'
+      ? t('Esta mesa volvió a estar en curso: todavía no se puede borrar.')
+      : r === 'no_esta'
+        ? (que === 'mesa' ? t('Esa mesa ya no está disponible.') : t('Ese pago ya no está disponible.'))
+        : t('No pudimos borrarlo. Prueba de nuevo.'));
+    olvidarYRecargar();
+  }, [olvidarYRecargar, t, toast]);
+
+  const deshacer = useCallback((texto: string, accion: () => Promise<unknown>) => {
+    setAviso(null);
+    accion()
+      .then(() => { olvidarYRecargar(); toast(t('Volvió a tu app.')); })
+      // Si falla, el aviso vuelve con su «Deshacer» para reintentar.
+      .catch(() => setAviso({ texto: t('No pudimos deshacerlo.'), deshacer: () => deshacer(texto, accion) }));
+  }, [olvidarYRecargar, t, toast]);
+
+  const borrarMesa = useCallback((m: TuMesa, incluirHistorial: boolean) => {
+    setPreguntaMesa(null);
+    setDeslizada(null);
+    // Se saca de la vista enseguida; la lista que vuelve del dueño manda.
+    setMisMesas((actual) => actual?.filter((x) => x.code !== m.code) ?? actual);
+    if (incluirHistorial) setPagos((actual) => actual?.filter((p) => p.mesa_code !== m.code) ?? actual);
+    api.ocultarMesa(m.code, incluirHistorial)
+      .then(() => {
+        olvidarYRecargar();
+        const texto = t('Borraste la mesa de tu app.');
+        setAviso({ texto, deshacer: () => deshacer(texto, () => api.mostrarMesa(m.code)) });
+      })
+      .catch((err: unknown) => fallaAlBorrar(err, 'mesa'));
+  }, [deshacer, fallaAlBorrar, olvidarYRecargar, t]);
+
+  /** Un pago del historial: la tarjeta junta los pagos propios de esa mesa; se borran todos. */
+  const borrarPagos = useCallback((h: HistorialMesa) => {
+    setDeslizada(null);
+    const ids = [...h.payment_ids];
+    setPagos((actual) => actual?.filter((p) => !ids.includes(p.id)) ?? actual);
+    Promise.all(ids.map((id) => api.ocultarPago(id)))
+      .then(() => {
+        olvidarYRecargar();
+        const texto = ids.length > 1 ? t('Borraste los pagos de tu app.') : t('Borraste el pago de tu app.');
+        setAviso({ texto, deshacer: () => deshacer(texto, () => Promise.all(ids.map((id) => api.mostrarPago(id)))) });
+      })
+      .catch((err: unknown) => fallaAlBorrar(err, 'pago'));
+  }, [deshacer, fallaAlBorrar, olvidarYRecargar, t]);
+
   // D237 · la primera carga muestra sus esqueletos sólo si tarda más de 300 ms.
   const esperaTusMesasVisible = useEsperaVisible(misMesas === null && !falloMesas);
   const esperaHistorialVisible = useEsperaVisible(pagos === null && !fallo);
@@ -266,8 +354,17 @@ export function MesasScreen() {
             )}
           </>
         );
+        const claveGesto = tarjetaDeTusMesas(m.code);
         return (
           <div key={m.id} className={`hist-item tu-mesa ${detalleAbierto ? 'on' : ''}`}>
+            <ConGesto
+              activo={sePuedeOcultar(capacidad, m.status)}
+              abierta={mismaTarjeta(deslizada, claveGesto)}
+              onAbrir={() => setDeslizada(claveGesto)}
+              onCerrar={() => cerrarDeslizada(claveGesto)}
+              nombre={m.restaurante ?? t('Mesa {0}', m.code)}
+              onEliminar={() => setPreguntaMesa(m)}
+            >
             {conDetalle ? (
               <button
                 type="button"
@@ -300,6 +397,7 @@ export function MesasScreen() {
                 ))}
               </div>
             )}
+            </ConGesto>
           </div>
         );
       })}
@@ -376,8 +474,17 @@ export function MesasScreen() {
                   const franja = franjaDe(m.date, presentationZone);
                   const on = abierta === m.mesa_code;
                   const detalle = detalles[m.mesa_code];
+                  const claveGesto = tarjetaDelHistorial(m.mesa_code);
                   return (
                     <div key={m.mesa_code} className={`hist-item ${on ? 'on' : ''}`}>
+                      <ConGesto
+                        activo={sePuedeOcultar(capacidad, m.mesa_status)}
+                        abierta={mismaTarjeta(deslizada, claveGesto)}
+                        onAbrir={() => setDeslizada(claveGesto)}
+                        onCerrar={() => cerrarDeslizada(claveGesto)}
+                        nombre={m.restaurant}
+                        onEliminar={() => borrarPagos(m)}
+                      >
                       <button
                         type="button"
                         className="hist-row"
@@ -456,6 +563,7 @@ export function MesasScreen() {
                           ))}
                         </div>
                       )}
+                      </ConGesto>
                     </div>
                   );
                 })}
@@ -467,7 +575,91 @@ export function MesasScreen() {
 
       </div>
 
+      {preguntaMesa && (
+        <HojaBorrarMesa
+          onSi={() => borrarMesa(preguntaMesa, true)}
+          onNo={() => borrarMesa(preguntaMesa, false)}
+          onCancelar={() => { setPreguntaMesa(null); setDeslizada(null); }}
+        />
+      )}
+      {aviso && (
+        <div className="aviso-deshacer" role="status">
+          <span>{aviso.texto}</span>
+          <button type="button" className="aviso-deshacer-boton" onClick={aviso.deshacer}>{t('Deshacer')}</button>
+        </div>
+      )}
       <AppBottomBar active="mesas" />
     </div>
+  );
+}
+
+/** AF-BORRAR-MESAS · qué tarjeta tiene «Eliminar» a la vista (una sola a la vez). */
+interface TarjetaDeslizada {
+  readonly lista: 'tusMesas' | 'historial';
+  readonly code: string;
+}
+
+const tarjetaDeTusMesas = (code: string): TarjetaDeslizada => ({ lista: 'tusMesas', code });
+const tarjetaDelHistorial = (code: string): TarjetaDeslizada => ({ lista: 'historial', code });
+
+function mismaTarjeta(a: TarjetaDeslizada | null, b: TarjetaDeslizada): boolean {
+  return a !== null && a.lista === b.lista && a.code === b.code;
+}
+
+/** AF-BORRAR-MESAS · lo que dura a la vista el aviso con «Deshacer». */
+const AVISO_DESHACER_MS = 8000;
+
+/** El gesto sólo donde se puede borrar; si no, la tarjeta de siempre. */
+function ConGesto({
+  activo,
+  children,
+  ...props
+}: {
+  activo: boolean;
+  abierta: boolean;
+  onAbrir: () => void;
+  onCerrar: () => void;
+  nombre: string;
+  onEliminar: () => void;
+  children: ReactNode;
+}) {
+  return activo ? <FilaDeslizable {...props}>{children}</FilaDeslizable> : <>{children}</>;
+}
+
+/**
+ * AF-BORRAR-MESAS · D238 · al borrar una mesa, la pregunta por su historial. El
+ * texto dice «de tu app» y que PayMe conserva el registro: nunca que PayMe
+ * borró el dato. El foco entra en «No, sólo la mesa», la que borra menos; el ✕,
+ * Escape y el velo no borran nada.
+ */
+function HojaBorrarMesa({ onSi, onNo, onCancelar }: { onSi: () => void; onNo: () => void; onCancelar: () => void }) {
+  const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement | null>(null);
+  const no = useRef<HTMLButtonElement | null>(null);
+  useHojaModal(hoja, no, onCancelar);
+  return createPortal(
+    <div className="sheet-overlay" onClick={onCancelar}>
+      <div
+        ref={hoja}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('¿Borrar también su historial?')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-head">
+          <span className="sheet-title">{t('¿Borrar también su historial?')}</span>
+          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onCancelar}>✕</button>
+        </div>
+        <p className="ocultar-mesa-texto">
+          {t('La mesa se borra de tu app; PayMe conserva el registro. Su historial son tus pagos de esa mesa.')}
+        </p>
+        <div className="ocultar-mesa-acciones">
+          <button type="button" className="btn btn-navy" onClick={onSi}>{t('Sí, también el historial')}</button>
+          <button ref={no} type="button" className="btn btn-ghost" onClick={onNo}>{t('No, sólo la mesa')}</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

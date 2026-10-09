@@ -261,6 +261,11 @@ export interface AppConfig {
     /** AF-USUARIO-ARROBA · v2.137.0 · el @usuario; se decodifica en `username.ts`. */
     username?: unknown;
     /**
+     * AF-BORRAR-MESAS · D238/D239 · v2.169.0 · «borrar de la app» (ocultar por
+     * persona). Se decodifica cerrado en `ocultar.ts`; ausente = sin gesto.
+     */
+    hide_from_app?: unknown;
+    /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *
      * Tiparla como `{ enabled: boolean; account_activity: boolean }` haría que

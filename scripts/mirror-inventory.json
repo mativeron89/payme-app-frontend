@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "b551d843669338a6a9eb82c663bf79fd9acac3c8",
-  "total": 125,
+  "commit": "ac5e0dab50c0c3ef15d602ba2c682ba5e9f18a86",
+  "total": 128,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -45,6 +45,12 @@
       "destino": "contract/ocr-merchant-v2.json",
       "sha256": "379ef9d045b281cd931867d8a7e1c31c39c98d44e4947edaa8a5735333baef2f",
       "bytes": 15268
+    },
+    {
+      "origen": "contract/ocultamientos-v1.json",
+      "destino": "contract/ocultamientos-v1.json",
+      "sha256": "aebeabee65931124a7ec5ad4fc91ec017a05152474f07c5c6b522a1afce47d65",
+      "bytes": 6644
     },
     {
       "origen": "contract/restaurant-resolution-v1.json",
@@ -201,6 +207,12 @@
       "destino": "db/migrate_notification_preferences_v2.128.0.sql",
       "sha256": "b2ff05145b45e71d9a770233ef80076c9a1be8ce5f17f3764b57a6643c0d173d",
       "bytes": 585
+    },
+    {
+      "origen": "db/migrate_ocultamientos_v2.169.0.sql",
+      "destino": "db/migrate_ocultamientos_v2.169.0.sql",
+      "sha256": "ff129124a5387d4e214d8aef14ef96263a69a36351e8c4c3eb545d9342b0cfa7",
+      "bytes": 2183
     },
     {
       "origen": "db/migrate_outbox_etapa2_v2.14.sql",
@@ -373,8 +385,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "4407e14e5daf5909bbaf99a338f184ffea54a2ae8c33310ddeb2eab7fc9b6701",
-      "bytes": 54047
+      "sha256": "a92ed4c82f5c49d3b10b9ce7af3be9de566fe1b566d676fb2b9093fbf8755a83",
+      "bytes": 56940
     },
     {
       "origen": "routes/auth.js",
@@ -385,8 +397,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "c7dae4d62121506f934716274683d8099192c41d53611328688044d933c5d6d3",
-      "bytes": 11542
+      "sha256": "2587cee80e636f4f1da269a0c4cb21c65e93aef907eb6abb351b4d42987bd60e",
+      "bytes": 11986
     },
     {
       "origen": "routes/connect.js",
@@ -427,8 +439,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "58a88dc37abc01c62fcb36ee451fcfb3b507645590edc0981c2e479f829001d1",
-      "bytes": 200077
+      "sha256": "ce997ec3a648b76b50d7cb146a71935d69a7418f4ffa0d449cb42254809efaba",
+      "bytes": 202094
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -439,8 +451,8 @@
     {
       "origen": "routes/notifications.js",
       "destino": "routes/notifications.js",
-      "sha256": "8339e6d4b8181c94d96ef7875373dd0bcfa813cc3e3a211c0a934b77b3888949",
-      "bytes": 4775
+      "sha256": "cd069d53a137d091408a6beb018ed3f9e4c7e78bd2af733e13f8cd528097e607",
+      "bytes": 5278
     },
     {
       "origen": "routes/ocr.js",
@@ -577,8 +589,8 @@
     {
       "origen": "services/informativeSelections.js",
       "destino": "services/informativeSelections.js",
-      "sha256": "d440aba75453ad1257d5952e3067be77da8d5149c2e41c6333d58e92f10310b1",
-      "bytes": 12272
+      "sha256": "6b9daba7dd5620d79c5ee541419d7199a70a23ca69289f242fa7e2e1cad20c6d",
+      "bytes": 12543
     },
     {
       "origen": "services/invitationAuthority.js",
@@ -631,8 +643,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "f7a02698a1d2726c857e9a29495c56b4e716bfcd7c2a0b38d4cb74db1629a664",
-      "bytes": 11539
+      "sha256": "6d2d2913dd8bc2807e5a691d17b3dd456b631a5eea3f50ad0a484856bcbb2b33",
+      "bytes": 12202
     },
     {
       "origen": "services/ocrRail.js",
@@ -645,6 +657,12 @@
       "destino": "services/ocrResponseContract.js",
       "sha256": "4f0fcb576961afb1e877cdceb8a66c46bacbce1d81a2e1351c5bff3dbef8f5e7",
       "bytes": 13156
+    },
+    {
+      "origen": "services/ocultamientos.js",
+      "destino": "services/ocultamientos.js",
+      "sha256": "48c2063d4d984de48485dd3f953bab21f511257fc5e5fa85b6a3d94c211ab953",
+      "bytes": 10373
     },
     {
       "origen": "services/paymentAttemptReconciler.js",

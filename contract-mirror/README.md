@@ -6,6 +6,26 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Borrar de la app mesas y pagos · App Backend v2.169.0 · 2026-10-09
+
+Orden `AF-BORRAR-MESAS-20261009` (n334, D238, D239). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`ac5e0dab50c0c3ef15d602ba2c682ba5e9f18a86`** (v2.169.0: ocultar por persona una mesa terminada
+  o un pago, `features.hide_from_app`, `PUT`/`DELETE /api/mesas/:code/hidden` y
+  `/api/account/movements/:id/hidden`; el servidor conserva todo).
+- Inventario: el de `main` del owner en **`be3fcaf4930bf7fe44b70ad2ed0603de2a0cd84c`**, la versión servida
+  (`contract/mirror-inventory.json`, sha256
+  `d72ef0322455a936b0f6b375cb823546915d028f24e4c578afd8a42ecc6e16fc`), adoptado con
+  `--adoptar-inventario` sin editarlo. Declara `ac5e0da`; `be3fcaf` sólo regenera el inventario.
+- **128 archivos espejados** (antes 125). Entran tres: `contract/ocultamientos-v1.json`, `services/ocultamientos.js`
+  y `db/migrate_ocultamientos_v2.169.0.sql`. Cambian seis: `routes/account.js`, `routes/config.js`, `routes/mesas.js`,
+  `routes/notifications.js`, `services/informativeSelections.js` y `services/notifications.js`. Copiados con
+  `git show ac5e0da:<origen>` y con el sha256 que declara el inventario.
+- El inventario y el contenido se leyeron con `git show` del `origin/main` del owner, sin fetch ni escrituras en
+  ese repo.
+- `--paridad`: espejo = inventario = fuente en `ac5e0da`, 128/128.
+
 ### El cargo por servicio aparte, al día con lo servido · App Backend v2.168.1 · 2026-10-08
 
 Orden `AF-SERVICIO-APARTE-VISIBLE-20261008` (n327, D224, D237); respuesta E del plan: el espejo va contra lo SERVIDO

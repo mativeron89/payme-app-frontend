@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.228.0 — Borrar de la app mesas terminadas y pagos (2026-10-09)
+
+Orden AF-BORRAR-MESAS-20261009 (c64747c8…); decisiones D238 («borrar una mesa y el historial en la app; PayMe
+conserva todo») y D239 («que se desplace hacia la izquierda la burbuja y aparezca el botón de eliminar en rojo»);
+Roadmap n334. Plan aprobado (1e4b22b6…) con las respuestas A–D: el pago borra los de su tarjeta; los textos; 8 s
+para «Deshacer»; el botón en el orden de tabulación como alternativa. Dueño: App Backend 2.169.0 (`hide_from_app`).
+Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **El gesto (D239):** en Mesas, deslizar a la izquierda una tarjeta de «Tus mesas» terminada o un pago del historial
+  la corre 96 px y deja ver **«Eliminar» en rojo** (`--danger` con texto blanco). Pasada la mitad queda abierta;
+  deslizar de vuelta, tocar la tarjeta o tocar afuera la cierra. Una sola abierta a la vez. El arrastre no abre el
+  detalle. `touch-action: pan-y`: el scroll vertical sigue siendo del navegador. Nuevo `components/FilaDeslizable.tsx`.
+- **Dónde:** sólo con la capacidad del dueño (`features.hide_from_app`, decodificada cerrada en `api/ocultar.ts`) y
+  en los estados que publica (`hideable_mesa_statuses`). Sin la capacidad, o mal formada, no hay gesto ni botón.
+- **La mesa (D238):** «Eliminar» pregunta **«¿Borrar también su historial?»** («La mesa se borra de tu app; PayMe
+  conserva el registro. Su historial son tus pagos de esa mesa.»), con «Sí, también el historial» y «No, sólo la
+  mesa» (con el foco: es la que borra menos); el ✕, Escape y el velo no borran nada. Es el `include_history`.
+- **El pago:** «Eliminar» borra los pagos de esa tarjeta (casi siempre uno), sin preguntar.
+- **Deshacer:** «Borraste la mesa de tu app.» / «Borraste el pago de tu app.» con **«Deshacer»** durante 8 s, arriba
+  de la barra (el DELETE del dueño; «Volvió a tu app.»). Si falla, el aviso vuelve con su «Deshacer».
+- **El texto es honesto:** dice «de tu app» y que PayMe conserva el registro; nunca que PayMe borró el dato.
+- **La caché de lo último visto (0.225.0):** después de borrar o deshacer se olvidan las listas de Mesas e Inicio
+  (`olvidarLoDeMesas`) y la campana (`sinLeer`): los avisos de una mesa borrada también salen, y lo borrado no
+  reaparece ni un cuadro. Las listas se vuelven a pedir: el dueño ya las filtra.
+- **Errores:** 409 (la mesa volvió a estar en curso) «Esta mesa volvió a estar en curso: todavía no se puede borrar.»;
+  404 «Esa mesa ya no está disponible.» / «Ese pago ya no está disponible.»; otro, «No pudimos borrarlo. Prueba de
+  nuevo.». En los tres se vuelve a pedir la lista.
+- **La alternativa sin gesto:** el botón «Eliminar» está siempre en el orden de tabulación con el nombre de la
+  tarjeta («Eliminar La Parolaccia»); al recibir el foco, la tarjeta se abre y se ve. Cerrada queda en opacidad 0
+  (no oculta: seguiría fuera del teclado), y así tampoco asoma el rojo por las esquinas.
+- **API:** `api.ocultarMesa`, `mostrarMesa`, `ocultarPago` y `mostrarPago` (`PUT`/`DELETE …/hidden`), con las
+  respuestas de claves exactas.
+- **Mock:** réplica de 2.169.0 por usuario: `/mesas/mine`, `/account/history`, `/account/movements/:id` y los avisos
+  (lista y campana) filtran según la matriz del contrato (M, MH, P); el alcance sólo se amplía; 404 sin huella y
+  409 en curso. Seam `payme.app.mock.ocultar.v1` (`apagado`, `ausente`). No replica Estadísticas ni Tus
+  restaurantes (no los usa esta pantalla; el dueño sí los filtra).
+- **Espejo** contra App Backend 2.169.0 servido (inventario de `be3fcaf`, contenido `ac5e0da`): 128 archivos (antes
+  125). Entran `contract/ocultamientos-v1.json`, `services/ocultamientos.js` y `db/migrate_ocultamientos_v2.169.0.sql`;
+  cambian seis.
+- **No cambia:** la mesa abierta, el acceso por código (excepción declarada del dueño) ni los pagos.
+- **Pruebas:** `borrar-de-la-app.spec.ts` (nueva, 15 casos a 375), `ocultar.test` y `mock/mockOcultar.test`
+  (nuevas).
+
 ## 0.227.0 — Siete arreglos de la lista de Mati del 08/10 (2026-10-09)
 
 Orden AF-TANDA-CHICA-0810-20261008 (da78721c…); decisión D240, puntos 3, 5, 8, 12, 13, 14 y 16. Plan aprobado

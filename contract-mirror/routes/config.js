@@ -20,6 +20,7 @@ const { PROFILE_IDENTITY_CAPABILITY } = require('../services/profileIdentity');
 const {
   SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
 } = require('../services/shortfallDetails');
+const ocultamientos = require('../services/ocultamientos');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -204,6 +205,10 @@ router.get('/', (req, res) => {
       // Activo y owner-only bajo aviso 2.3.0. Las identidades no canónicas se
       // mantienen en el residual sin asignar; nunca se infieren nombres.
       settlement_shortfall_detail: SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
+      // v2.169.0 · D238/D239 · borrar de la app una mesa terminada o un pago (ocultar por persona). Bloque hermano
+      // de primer nivel: un cliente viejo no lo lee. `hideable_mesa_statuses` es la regla del dueño (las nueve
+      // terminadas); el front la espeja en vez de inventarla. Contrato: contract/ocultamientos-v1.json.
+      hide_from_app: ocultamientos.capacidad(),
     },
   });
 });

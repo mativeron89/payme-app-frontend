@@ -23,6 +23,8 @@ const { proveedoresVinculados } = require('../services/externalIdentities');
 const consumoPropio = require('../services/consumoPropio');
 const username = require('../services/username');
 const clasificadorPlatos = require('../services/clasificadorPlatos');
+// v2.169.0 · D238: lo que cada persona borró de SU app. Sólo filtra superficies propias (la matriz vive allá).
+const ocultamientos = require('../services/ocultamientos');
 const {
   inicioDeMesMxSql, rangoDePeriodoMxSql, rangoDeMesAtrasMxSql, filtroDeRango,
 } = require('../services/inicioDeMes');
@@ -395,6 +397,7 @@ router.get('/movements', validateQuery(movementsQuery), async (req, res, next) =
          JOIN restaurants r ON r.id = m.restaurant_id
     LEFT JOIN payment_methods pm ON pm.id = pa.payment_method_id
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${ocultamientos.pagoEnHistorialSql('pa', '$1')}
         ORDER BY pa.created_at DESC
         LIMIT $2 OFFSET $3`,
       [req.user.id, limit, offset]
@@ -430,7 +433,9 @@ router.get('/movements/:id', marcarRespuestaPrivada,
          JOIN mesas m ON m.id = pa.mesa_id
          JOIN restaurants r ON r.id = m.restaurant_id
     LEFT JOIN payment_methods pm ON pm.id = pa.payment_method_id
-        WHERE pa.id = $1 AND pa.user_id = $2`,
+        WHERE pa.id = $1 AND pa.user_id = $2
+          -- v2.169.0 · D238: un pago oculto (suelto o con el historial de su mesa) da el mismo 404.
+          AND ${ocultamientos.pagoEnHistorialSql('pa', '$2')}`,
       [req.params.id, req.user.id]
     );
     const a = aRows[0];
@@ -469,6 +474,27 @@ router.get('/movements/:id', marcarRespuestaPrivada,
       fee_amount_cents: Number(a.fee_amount_cents),
       status: a.status,
     });
+  } catch (err) { next(err); }
+});
+
+// v2.169.0 · AB-OCULTAR-MESAS · decisiones 238 y 239: borrar de la app un pago propio de una mesa terminada.
+// Es ocultar por persona: el pago sigue entero en el servidor (services/ocultamientos.js).
+//   · 400 si el id no es un UUID; 404 `movement_not_found`, el mismo de arriba, si no existe o no es propio;
+//   · 409 `movement_not_hideable` con el estado de la mesa si está en curso. Idempotente; DELETE deshace.
+const PAGO_NO_ENCONTRADO = Object.freeze({ error: 'movement_not_found' });
+router.put('/movements/:id/hidden', validateParams(uuidIdParam), async (req, res, next) => {
+  try {
+    const r = await ocultamientos.ocultarPago({ id: req.params.id, userId: req.user.id });
+    if (r.estado === 'no_encontrado') return res.status(404).json(PAGO_NO_ENCONTRADO);
+    if (r.estado === 'en_curso') return res.status(409).json({ error: 'movement_not_hideable', mesa_status: r.mesaStatus });
+    res.json({ id: r.id, hidden: true });
+  } catch (err) { next(err); }
+});
+router.delete('/movements/:id/hidden', validateParams(uuidIdParam), async (req, res, next) => {
+  try {
+    const r = await ocultamientos.mostrarPago({ id: req.params.id, userId: req.user.id });
+    if (r.estado === 'no_encontrado') return res.status(404).json(PAGO_NO_ENCONTRADO);
+    res.json({ id: r.id, hidden: false });
   } catch (err) { next(err); }
 });
 
@@ -518,7 +544,9 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
   try {
     const { category, from, to, limit, offset } = req.validatedQuery;
     const params = [req.user.id];
-    let where = `pa.user_id = $1 AND pa.status IN ('succeeded','processed')`;
+    // v2.169.0 · D238: sin lo oculto, en SQL y antes del LIMIT (el front pagina por página llena).
+    let where = `pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+                 AND ${ocultamientos.pagoEnHistorialSql('pa', '$1')}`;
     if (category) { params.push(category); where += ` AND r.category = $${params.length}`; }
     if (from)     { params.push(from);     where += ` AND pa.created_at >= $${params.length}`; }
     if (to)       { params.push(to);       where += ` AND pa.created_at <= $${params.length}`; }
@@ -616,6 +644,7 @@ async function categoriasPagadas(userId, rango) {
           GROUP BY payment_attempt_id
        ) rf ON rf.payment_attempt_id = pa.id
       WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         AND ${filtroDeRango('pa.created_at', rango)}
       GROUP BY r.category`, [userId]
   );
@@ -654,7 +683,10 @@ function bloqueDeConsumo(basis, categorias, total, visitas) {
 // La frontera de acceso informativa es UNA sola definición; acá el usuario es $1.
 const ACCESO_INFORMATIVO = informativeSelections.ACCESS_SQL.replaceAll('$2', '$1');
 function seleccionPropiaSql(rango) {
+  // v2.169.0 · D238: una mesa borrada de la app deja de contar (M y MH). Este es el único punto de la base
+  // consumo: la carga y el tope previo salen del mismo conjunto.
   return `${filtroDeRango('m.created_at', rango)}
+        AND ${ocultamientos.mesaVisibleSql('m.id', '$1')}
         AND (
               EXISTS (
                 SELECT 1 FROM mesa_item_claims c
@@ -703,6 +735,7 @@ async function excedeTopeAntes(userId, rango, maximo) {
   const { rows: [r] } = await pool.query(dineroHabilitado()
     ? `SELECT COUNT(DISTINCT pa.mesa_id)::int AS n FROM payment_attempts pa
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
           AND ${filtroDeRango('pa.created_at', rango)}`
     : `SELECT COUNT(*)::int AS n FROM mesas m WHERE ${seleccionPropiaSql(rango)}`,
   [userId]);
@@ -831,6 +864,7 @@ async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
           GROUP BY payment_attempt_id
        ) rf ON rf.payment_attempt_id = pa.id
       WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         AND ${filtroDeRango('pa.created_at', rango)}
       GROUP BY m.id, m.code, m.division_mode, m.created_at, r.id, r.name, r.category`,
     [userId]
@@ -843,6 +877,8 @@ async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
        JOIN payment_attempts pa ON pa.id = pai.payment_attempt_id
        JOIN mesa_items mi ON mi.id = pai.mesa_item_id
       WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        -- Las DOS consultas: si sólo filtrara la de arriba, los platos del pago oculto seguirían en Qué comés.
+        AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         AND ${filtroDeRango('pa.created_at', rango)}
       GROUP BY pa.mesa_id, pai.mesa_item_id, mi.name, mi.created_at
       ORDER BY mi.created_at ASC, pai.mesa_item_id ASC`,
@@ -1152,6 +1188,8 @@ router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => 
                    ELSE 0 END AS avg_per_visit
          FROM payment_attempts
         WHERE user_id = $1 AND status IN ('succeeded','processed')
+          -- v2.169.0 · D238: lo borrado de la app deja de contar en todo /stats, en los dos modos.
+          AND ${ocultamientos.pagoEnEstadisticasSql('payment_attempts', '$1')}
           AND created_at >= ${INICIO_DE_MES}`, [req.user.id]
     );
     const { rows: topR } = await pool.query(
@@ -1163,6 +1201,7 @@ router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => 
               COUNT(*)::int AS visits
          FROM payment_attempts pa JOIN mesas m ON m.id = pa.mesa_id JOIN restaurants r ON r.id = m.restaurant_id
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         GROUP BY r.id, r.name, r.status ORDER BY visits DESC LIMIT 3`, [req.user.id]
     );
     const { rows: topD } = await pool.query(
@@ -1171,12 +1210,14 @@ router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => 
          JOIN payment_attempts pa ON pa.id = pai.payment_attempt_id
          JOIN mesa_items mi ON mi.id = pai.mesa_item_id
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         GROUP BY mi.name ORDER BY times DESC LIMIT 1`, [req.user.id]
     );
     const { rows: topCat } = await pool.query(
       `SELECT r.category, COUNT(*)::int AS visits
          FROM payment_attempts pa JOIN mesas m ON m.id = pa.mesa_id JOIN restaurants r ON r.id = m.restaurant_id
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
         GROUP BY r.category ORDER BY visits DESC LIMIT 1`, [req.user.id]
     );
     // v2.98.0 · G-09 (Roadmap n77) · gasto del mes por categoría, calculado en

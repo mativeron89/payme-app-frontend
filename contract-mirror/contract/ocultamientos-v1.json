@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "id": "payme.app.ocultamientos/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de «borrar de la app» una mesa terminada o un pago, v2.169.0. Decisiones 238 y 239 de Mati.",
+    "Es OCULTAR por persona, nunca borrar: el servidor conserva todo para los demás participantes, el agente, OPS, el outbox,",
+    "la contabilidad y la garantía. El texto de la app no debe decir que PayMe eliminó el dato (D238).",
+    "El front espeja: no infiere qué mesa se puede borrar; usa `hideable_mesa_statuses` de la capacidad. Claves EXACTAS en cada respuesta."
+  ],
+  "capacidad": {
+    "ruta": "GET /api/config",
+    "path": "features.hide_from_app",
+    "valor": {
+      "supported": true,
+      "enabled": true,
+      "hideable_mesa_statuses": ["fully_paid", "expired", "settling", "settled", "dispersing", "completed", "auth_failed", "cancelled", "dispersed"]
+    },
+    "cliente_viejo": "Bloque nuevo de primer nivel en `features`: un cliente que no lo conoce no ve ningún cambio."
+  },
+  "terminada": {
+    "regla": "Toda mesa que muestra «Tus mesas» (lectura literal de D238): los 12 estados de la FSM menos los tres en curso. Un estado desconocido no se oculta.",
+    "estados_ocultables": ["fully_paid", "expired", "settling", "settled", "dispersing", "completed", "auth_failed", "cancelled", "dispersed"],
+    "estados_en_curso": ["pending_auth", "open", "partially_paid"],
+    "si_revive": "Una mesa `fully_paid` puede volver a `open` por un reembolso: sigue oculta en las listas, pero aparece en Inicio (`GET /api/mesas/open` nunca filtra)."
+  },
+  "huella": {
+    "regla": "Puede ocultar una mesa quien la ve en alguna superficie propia: titular, participante activo, claim propio (cualquier estado), casillero propio, selección informativa propia o pago propio (cualquier estado).",
+    "sin_huella": "El mismo 404 que un código que no existe (n325)."
+  },
+  "historial_de_una_mesa": {
+    "definicion": "Todos los intentos de pago de esa persona en esa mesa (`payment_attempts.user_id` y `mesa_id`), en cualquier estado, también los que cambien después (un intento en vuelo que se cobra, un pago tardío).",
+    "se_guarda_como": "Alcance (persona, mesa) con `include_history`, no como lista de ids.",
+    "sin_dinero": "Con el dinero apagado no hay pagos: «con historial» y «sin historial» se ven idénticos."
+  },
+  "rutas": {
+    "PUT /api/mesas/:code/hidden": {
+      "request": { "include_history": "boolean, obligatorio; ninguna otra clave" },
+      "orden": "401/403 de la sesión, 400 del cuerpo ANTES de buscar la mesa, 404, 409, 200",
+      "respuestas": {
+        "200": { "claves": ["mesa_code", "hidden", "include_history"], "hidden": true, "nota": "Idempotente. El alcance sólo se amplía: `include_history` = anterior OR pedido." },
+        "400": { "error": "validation_error", "claves": ["error", "issues"] },
+        "401": { "cuando": "sin sesión" },
+        "403": { "error": "user_suspended" },
+        "404": { "cuerpo": { "error": "mesa_not_found" }, "cuando": "el código no existe o la persona no tiene huella; byte por byte igual en los dos casos" },
+        "409": { "error": "mesa_not_finished", "claves": ["error", "mesa_status"], "cuando": "la mesa está en curso" }
+      }
+    },
+    "DELETE /api/mesas/:code/hidden": {
+      "uso": "Deshacer. Borra sólo la preferencia; nunca un dato.",
+      "respuestas": {
+        "200": { "claves": ["mesa_code", "hidden", "include_history"], "hidden": false, "include_history": false, "nota": "Idempotente, también si no estaba oculta; no mira el estado." },
+        "404": { "cuerpo": { "error": "mesa_not_found" }, "cuando": "igual que en PUT" }
+      }
+    },
+    "PUT /api/account/movements/:id/hidden": {
+      "request": "sin cuerpo",
+      "respuestas": {
+        "200": { "claves": ["id", "hidden"], "hidden": true, "nota": "Idempotente." },
+        "400": { "error": "validation_error", "cuando": "el id no es un UUID" },
+        "404": { "cuerpo": { "error": "movement_not_found" }, "cuando": "no existe o no es propio; el mismo 404 de GET /api/account/movements/:id" },
+        "409": { "error": "movement_not_hideable", "claves": ["error", "mesa_status"], "cuando": "la mesa del pago está en curso" }
+      }
+    },
+    "DELETE /api/account/movements/:id/hidden": {
+      "uso": "Deshacer.",
+      "respuestas": {
+        "200": { "claves": ["id", "hidden"], "hidden": false, "nota": "Idempotente." },
+        "404": { "cuerpo": { "error": "movement_not_found" } }
+      }
+    }
+  },
+  "matriz": {
+    "_leyenda": "M = mesa oculta sin historial, MH = mesa oculta con su historial, P = pago suelto oculto. «sale» = no aparece / no cuenta. Igual sea cual sea el modo de dinero.",
+    "GET /api/mesas/mine": { "M": "sale", "MH": "sale", "P": "queda (lo elegido no cambia)" },
+    "GET /api/account/history, GET /api/account/movements, GET /api/account/movements/:id (404)": { "M": "queda", "MH": "sale", "P": "sale" },
+    "GET /api/account/stats (todos sus bloques), /stats/restaurants, /stats/dishes, /stats/dayparts, /stats/ingredients, /stats/evolution y el tope 413": { "M": "sale", "MH": "sale", "P": "sale" },
+    "GET /api/account/informative-history": { "M": "sale", "MH": "sale", "P": "no aplica" },
+    "GET /api/notifications, GET /api/notifications/unread-count": { "M": "sale", "MH": "sale", "P": "no aplica", "nota": "Lista y campana con el mismo fragmento. «Marcar todo leído» y «Borrar todas» actúan sólo sobre lo visible: si se deshace, los avisos vuelven." }
+  },
+  "residual_declarado": "Con el dinero apagado (base consumo), un pago suelto oculto heredado sigue contando en Estadísticas por sus claims. Con el dinero encendido rige la base pagos, donde sí sale. Hoy no hay pagos en producción (D193).",
+  "excepciones": [
+    { "ruta": "GET /api/mesas/:code", "regla": "No filtra: es una regla de acceso, no un listado. Quien ocultó una mesa la puede abrir tecleando su código (n325 intacto). Incluye sus satélites (informative-selection, participants, join-requests, shortfall-detail)." },
+    { "ruta": "POST /api/join-requests", "regla": "Quien ya participa recibe `already_participant` con el código, como antes." },
+    { "ruta": "GET /api/mesas/open", "regla": "Sólo mesas en curso, que nunca se ocultan; no filtra." }
+  ],
+  "no_cambia": [
+    "el agente (exportación D142 y análisis D206)",
+    "las métricas y contadores de OPS",
+    "los eventos y el outbox hacia el dashboard",
+    "la liquidación, la garantía, los reembolsos, las disputas y la conciliación",
+    "lo que ven los demás participantes de la misma mesa",
+    "el correo de los avisos"
+  ]
+}

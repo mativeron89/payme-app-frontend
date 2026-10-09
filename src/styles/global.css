@@ -6503,6 +6503,122 @@ button.qc-circulo::after {
   overflow: hidden;
 }
 
+/* AF-BORRAR-MESAS · D239 · deslizar a la izquierda deja ver «Eliminar» en rojo.
+   El frente (la tarjeta) tapa el botón; al correrse, lo muestra. El rojo es el
+   de error de la app con el texto blanco (6.6:1). La tarjeta recorta las
+   esquinas del botón (`.hist-item` con `overflow: hidden`). `pan-y`: el scroll
+   vertical sigue siendo del navegador y el arrastre horizontal, del gesto. */
+.deslizable {
+  position: relative;
+  /* La tarjeta recorta lo suyo: sin esto, mientras otra se anima, Chromium
+     pintaba la capa transformada sin las esquinas redondeadas. */
+  border-radius: inherit;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.deslizable-frente {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  touch-action: pan-y;
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+
+.deslizable-frente--arrastrando {
+  transition: none;
+}
+
+.deslizable-eliminar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  border: 0;
+  background: var(--danger);
+  color: var(--white);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deslizable:not(.deslizable--mostrando) .deslizable-eliminar {
+  /* Cerrada: transparente pero en el orden de tabulación (al recibir el foco,
+     la tarjeta se abre y se ve). `visibility` lo sacaría del teclado. */
+  opacity: 0;
+}
+
+.deslizable-eliminar:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: -4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deslizable-frente {
+    transition: none;
+  }
+}
+
+/* AF-BORRAR-MESAS · el aviso con «Deshacer», arriba de la barra de abajo. Dura
+   más que un aviso común (8 s) porque tiene una acción. */
+.aviso-deshacer {
+  position: fixed;
+  left: 50%;
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 9999;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px 8px 6px 16px;
+  border-radius: 12px;
+  background: var(--slate);
+  color: var(--white);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  box-shadow: 0 4px 16px rgba(16, 30, 59, 0.24);
+}
+
+.aviso-deshacer-boton {
+  flex: none;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: none;
+  color: var(--white);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* La pregunta al borrar una mesa: el texto honesto y las dos respuestas, una
+   debajo de la otra (los rótulos son largos a 375). */
+.ocultar-mesa-texto {
+  margin: 0 0 var(--sp-4);
+  color: var(--text);
+  line-height: var(--lh-body);
+}
+
+.ocultar-mesa-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
 /* Botón entero —área táctil de todo el renglón—, como .inv-group. */
 .hist-row {
   display: flex;

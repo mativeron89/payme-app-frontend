@@ -8,6 +8,8 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { notificationsQuery, validateQuery } = require('../schemas');
 const notifs = require('../services/notifications');
+// v2.169.0 · D238: los avisos de una mesa que la persona borró de su app no se listan.
+const ocultamientos = require('../services/ocultamientos');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -16,13 +18,15 @@ router.get('/', validateQuery(notificationsQuery), async (req, res, next) => {
   try {
     const { unread_only, limit, offset } = req.validatedQuery;
     const params = [req.user.id, limit, offset];
-    let where = `user_id = $1`;
-    if (unread_only) where += ` AND read_at IS NULL`;
+    // v2.169.0 · D238: el MISMO fragmento que la campana (`notifs.unreadCount`), dentro del WHERE y antes del
+    // LIMIT: la página sigue llena y las dos cuentas no se separan.
+    let where = `n.user_id = $1 AND ${ocultamientos.avisoVisibleSql('n')}`;
+    if (unread_only) where += ` AND n.read_at IS NULL`;
     const { rows } = await pool.query(
-      `SELECT id, type, title, body, payload,
-              related_entity_type, related_entity_id, read_at, created_at
-         FROM notifications WHERE ${where}
-        ORDER BY created_at DESC LIMIT $2 OFFSET $3`, params
+      `SELECT n.id, n.type, n.title, n.body, n.payload,
+              n.related_entity_type, n.related_entity_id, n.read_at, n.created_at
+         FROM notifications n WHERE ${where}
+        ORDER BY n.created_at DESC LIMIT $2 OFFSET $3`, params
     );
     // La misma cuenta que la campana (`notifs.unreadCount`, v2.166.2 · decisión 228).
     const unread = await notifs.unreadCount(req.user.id);
@@ -59,6 +63,7 @@ router.patch('/read-all', async (req, res, next) => {
 /**
  * v2.148.0 · E174-2 · decisión 174 («Una por una y todas»): borra TODAS las notificaciones propias.
  * Responde `{ deleted_count }`, también 0. Nunca toca las de otro usuario.
+ * v2.169.0 · D238: «todas» son las que la persona ve; las de una mesa que borró de su app quedan.
  */
 router.delete('/', async (req, res, next) => {
   try {

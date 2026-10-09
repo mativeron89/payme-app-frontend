@@ -61,6 +61,7 @@ const origenItems = require('../services/origenItems');   // v2.145.0 · decisi�
 const informativeSelections = require('../services/informativeSelections');
 const usernameSvc = require('../services/username');
 const joinRequests = require('../services/joinRequests');   // v2.166.0 · decisión 219: unirse con el código
+const ocultamientos = require('../services/ocultamientos');   // v2.169.0 · D238: borrar de la app
 const router = express.Router();
 const { validateBody, validateParams } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
@@ -1134,6 +1135,8 @@ router.get('/mine', requireAuth, async (req, res, next) => {
                       AND inv.status='pending' AND inv.superseded_by_id IS NULL AND inv.expires_at>NOW()
                   ))))
               )
+          -- v2.169.0 · D238: lo que la persona borró de su app no se lista (antes del LIMIT y del cursor).
+          AND ${ocultamientos.mesaVisibleSql('m.id', '$1')}
           AND ($2::timestamptz IS NULL
                OR (m.created_at, m.id) < ($2::timestamptz, $3::uuid))
         ORDER BY m.created_at DESC, m.id DESC
@@ -1385,6 +1388,32 @@ router.put('/:code/informative-selection', informativePrivate, requireAuth, priv
       next(err);
     }
   });
+// v2.169.0 · AB-OCULTAR-MESAS · decisiones 238 y 239: borrar de la app una mesa terminada, y si se pide
+// también su historial. Es ocultar por persona: ninguna fila existente se toca (services/ocultamientos.js).
+//   · 400 por el cuerpo ANTES de buscar la mesa: responde igual exista o no el código;
+//   · 404 `mesa_not_found` byte por byte, igual que n325, si el código no existe o la persona no tiene huella;
+//   · 409 `mesa_not_finished` con su estado si está en curso (sólo lo ve quien tiene huella: no es un oráculo).
+// El middleware de acceso no se usa ni se toca: la huella decide quién puede ocultar.
+const MESA_NO_ENCONTRADA = Object.freeze({ error: 'mesa_not_found' });
+router.put('/:code/hidden', requireAuth, validateBody(ocultamientos.cuerpoOcultarMesa), async (req, res, next) => {
+  try {
+    const r = await ocultamientos.ocultarMesa({
+      code: req.params.code, userId: req.user.id, includeHistory: req.body.include_history,
+    });
+    if (r.estado === 'no_encontrada') return res.status(404).json(MESA_NO_ENCONTRADA);
+    if (r.estado === 'en_curso') return res.status(409).json({ error: 'mesa_not_finished', mesa_status: r.mesaStatus });
+    res.json({ mesa_code: r.mesaCode, hidden: true, include_history: r.includeHistory });
+  } catch (err) { next(err); }
+});
+// Deshacer: vuelve a mostrarla. Idempotente; sin mirar el estado.
+router.delete('/:code/hidden', requireAuth, async (req, res, next) => {
+  try {
+    const r = await ocultamientos.mostrarMesa({ code: req.params.code, userId: req.user.id });
+    if (r.estado === 'no_encontrada') return res.status(404).json(MESA_NO_ENCONTRADA);
+    res.json({ mesa_code: r.mesaCode, hidden: false, include_history: false });
+  } catch (err) { next(err); }
+});
+
 // v2.168.1 · n325 (D237): a quien no participa, la misma respuesta que a un código que no existe (404
 // `mesa_not_found`), para no decir qué códigos existen. Quién entra no cambia.
 router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipantSinRevelar, async (req, res, next) => {
