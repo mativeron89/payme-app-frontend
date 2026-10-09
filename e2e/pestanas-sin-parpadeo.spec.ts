@@ -73,6 +73,28 @@ async function inicioListo(page: Page): Promise<void> {
   await expect(page.locator(`${MESA_ABIERTA} > :not(.sk-neutro)`).first()).toBeVisible();
 }
 
+/**
+ * Anota si alguna vez se dibujó algo que cumple cada selector (un
+ * MutationObserver desde el primer cuadro). Un estado de carga dura unos pocos
+ * cientos de milisegundos: afirmarlo con `toBeVisible` depende de que uno de los
+ * sondeos de Playwright caiga en esa ventana, y bajo carga (CI con corridas en
+ * paralelo, 37877762937) no cae. El espía lo ve siempre.
+ */
+async function espiarSelectores(page: Page, selectores: readonly string[]): Promise<void> {
+  await page.addInitScript((sels: string[]) => {
+    const w = window as unknown as { __selectoresVistos: Record<string, boolean> };
+    w.__selectoresVistos = {};
+    const anotar = () => {
+      for (const s of sels) if (document.querySelector(s)) w.__selectoresVistos[s] = true;
+    };
+    const empezar = () => new MutationObserver(anotar).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    if (document.body) empezar(); else document.addEventListener('DOMContentLoaded', empezar);
+  }, [...selectores]);
+}
+
+const selectoresVistos = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __selectoresVistos: Record<string, boolean> }).__selectoresVistos ?? {});
+
 async function captura(page: Page, nombre: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
   if (dir) await page.screenshot({ path: `${dir}/${nombre}.png` });
@@ -112,13 +134,20 @@ test.describe('D237 · pestañas sin parpadeo', () => {
     await ingresar(page);
     // Inicio: una línea neutra, no la silueta de una tarjeta de mesa.
     await expect(page.locator(`${MESA_ABIERTA} > :not(.sk-neutro)`).first()).toBeVisible({ timeout: 10_000 });
+    // El esqueleto y «Cargando amigos…» se afirman con el espía, no con
+    // `toBeVisible`: duran unos 500 ms y el sondeo los perdía bajo carga (CI
+    // 37877762937; local, 6 de 48 con 8 workers, también en la base).
+    const antesDeMesas = await marcaDeCargas(page);
     await page.getByRole('button', { name: 'Mesas', exact: true }).click();
-    await expect(page.locator('.pago-row.sk').first()).toBeVisible();
-    await captura(page, 'mesas-primera-lenta-375');
+    // La captura, si llega a tiempo (no es una aserción).
+    await page.locator('.pago-row.sk').first().waitFor({ state: 'visible', timeout: 2000 })
+      .then(() => captura(page, 'mesas-primera-lenta-375'), () => undefined);
     await expect(page.getByText('$224.25')).toBeVisible({ timeout: 10_000 });
+    expect((await cargasDesde(page, antesDeMesas)).some((v) => v.startsWith('filas-sk:'))).toBe(true);
+    const antesDeAmigos = await marcaDeCargas(page);
     await page.getByRole('button', { name: /^Amigos/ }).click();
-    await expect(page.getByText('Cargando amigos…')).toBeVisible();
     await expect(page.locator('.friend-row').first()).toBeVisible({ timeout: 10_000 });
+    expect(await cargasDesde(page, antesDeAmigos)).toContain('cargando:Cargando amigos…');
 
     const vistas = await cargasDesde(page, 0);
     // Ni una vez la tarjeta de mesa como esqueleto.
@@ -131,15 +160,21 @@ test.describe('D237 · pestañas sin parpadeo', () => {
 
   test('Inicio lento: lo que se ve mientras carga es la línea neutra', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
+    await espiarSelectores(page, [`${MESA_ABIERTA} .sk-neutro`, `${MESA_ABIERTA} .mesa-card.sk`]);
     await ingresar(page);
     await inicioListo(page);
     // Se recarga con el mock lento: la memoria se va con la recarga, así que
     // Inicio carga de cero y pasa el umbral de 300 ms.
     await page.evaluate(([k]) => localStorage.setItem(k!, '1500'), [LATENCIA]);
     await page.reload();
-    await expect(page.locator(`${MESA_ABIERTA} .sk-neutro`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(`${MESA_ABIERTA} .mesa-card.sk`)).toHaveCount(0);
-    await captura(page, 'inicio-primera-lenta-375');
+    await page.locator(`${MESA_ABIERTA} .sk-neutro`).waitFor({ state: 'visible', timeout: 3000 })
+      .then(() => captura(page, 'inicio-primera-lenta-375'), () => undefined);
+    await expect(page.locator(`${MESA_ABIERTA} > :not(.sk-neutro)`).first()).toBeVisible({ timeout: 10_000 });
+    // Con el espía (desde la recarga): la línea neutra se dibujó, y la silueta
+    // de la tarjeta de mesa nunca, ni un cuadro.
+    const vistos = await selectoresVistos(page);
+    expect(vistos[`${MESA_ABIERTA} .sk-neutro`]).toBe(true);
+    expect(vistos[`${MESA_ABIERTA} .mesa-card.sk`]).toBeUndefined();
   });
 
   test('🔴 si los datos cambiaron, la segunda visita muestra lo último y lo reemplaza, sin pasar por la carga', async ({ page }) => {
