@@ -224,6 +224,10 @@ describe('1p · lo mío ya está', () => {
   const html = vista(listo(v));
   const leido = texto(html);
 
+  it('H02 · también acá, con lo mío ya confirmado, «Salir del viaje» al pie', () => {
+    expect(leido).toMatch(/Salir del viaje$/);
+  });
+
   it('«Faltan 2 de 3 transferencias» con la barra partida y sin chip repetido en el título', () => {
     expect(leido).toContain('Cancún 2026 Gasto del grupo $6,660 Faltan 2 de 3 transferencias');
     expect(leido).not.toContain('Esperando pagos · faltan');
