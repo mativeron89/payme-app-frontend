@@ -121,7 +121,8 @@ test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () 
     await ingresar(page);
     await page.goto('/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
-    await mesa.getByRole('button').click();
+    // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
+    await mesa.locator('button.hist-row').click();
     const detalle = mesa.locator('.hist-detail');
     await expect(detalle).toContainText('Quesadilla');
     const filas = await detalle.locator('.hist-detail-row').evaluateAll((rs) => rs.map((r) => {
@@ -154,7 +155,8 @@ test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () 
     await ingresar(page);
     await page.goto('/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Mesa de prueba 1' }).first();
-    await mesa.getByRole('button').click();
+    // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
+    await mesa.locator('button.hist-row').click();
     const fila = mesa.locator('.hist-detail-row').first();
     await expect(fila).toBeVisible();
     const m = await fila.evaluate((r) => {

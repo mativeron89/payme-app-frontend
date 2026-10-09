@@ -78,6 +78,12 @@ const tarjetaDelPago = (page: Page) => page.locator('.hist-item').filter({ hasTe
 const pregunta = (page: Page) => page.getByRole('dialog', { name: '¿Borrar también su historial?' });
 const abierta = (tarjeta: Locator) => tarjeta.locator('.deslizable--abierta');
 
+/** Cerrada y quieta: la transición de cierre terminó (si no, un toque puede caer en el rojo). */
+async function cerradaYQuieta(tarjeta: Locator): Promise<void> {
+  await expect(abierta(tarjeta)).toHaveCount(0);
+  await expect(tarjeta.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+}
+
 /** Arrastra la tarjeta con el puntero (dx < 0: a la izquierda). */
 async function deslizar(page: Page, tarjeta: Locator, dx: number, desdeDerecha = true): Promise<void> {
   const caja = (await tarjeta.boundingBox())!;
@@ -118,11 +124,11 @@ test.describe('D239 · el gesto', () => {
     const pago = tarjetaDelPago(page);
     await deslizar(page, mesa, -120);
     await deslizar(page, mesa, 120, false);
-    await expect(abierta(mesa)).toHaveCount(0);
+    await cerradaYQuieta(mesa);
 
     await deslizar(page, mesa, -120);
     await mesa.locator('.hist-main').click();
-    await expect(abierta(mesa)).toHaveCount(0);
+    await cerradaYQuieta(mesa);
 
     // Tocar afuera, con el foco fuera de la tarjeta: si no, la cerraría el
     // `blur` del botón rojo y no el toque (deslizar de vuelta lo enfoca).

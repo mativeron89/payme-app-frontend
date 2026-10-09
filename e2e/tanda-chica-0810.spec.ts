@@ -476,7 +476,8 @@ test.describe('D240 punto 14 · la burbuja del detalle, separada de la línea', 
     await ingresar(page);
     await page.goto('/#/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
-    await mesa.getByRole('button').click();
+    // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
+    await mesa.locator('button.hist-row').click();
     await expect(mesa.locator('.hist-detail')).toBeVisible();
     doceEnLosCuatroLados(await separacion(mesa));
     await expect(mesa.locator('.hist-row')).toHaveCSS('border-bottom-style', 'solid');

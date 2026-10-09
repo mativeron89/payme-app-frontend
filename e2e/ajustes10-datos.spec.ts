@@ -24,7 +24,8 @@ test('U08 · Historial abre únicamente el detalle propio canónico cuando vino 
   await ingresar(page);
   await page.goto('/#/mesas');
   const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
-  await mesa.getByRole('button').click();
+  // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
+  await mesa.locator('button.hist-row').click();
   // D240 punto 16 · la cantidad va antes del nombre.
   await expect(mesa.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
   await expect(mesa).toContainText('$200');

@@ -56,7 +56,8 @@ test('las mesas cerradas sin cobro aparecen con lo que elegiste y cómo terminar
   const guero = seccion(page).locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
   await expect(guero).toContainText('Cerró sin cobro');
   await expect(guero).toContainText('Elegiste 3 ítems · $450');
-  await guero.getByRole('button').click();
+  // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
+  await guero.locator('button.hist-row').click();
   // D240 punto 16 · la cantidad va antes del nombre.
   await expect(guero.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
   await expect(guero).toContainText('$200');
