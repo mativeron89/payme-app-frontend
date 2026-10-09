@@ -173,9 +173,20 @@ test('🔴 D250 · en el viaje no está «Escanear ticket»: el círculo escanea
   await expect(page.getByRole('button', { name: 'Escanear ticket', exact: true })).toHaveCount(0);
   const circulo = circuloDelViaje(page);
   await expect(circulo).toHaveText('Nueva');
+  // El título no espera la red: con el dueño lento, el nombre que dejó el viaje ya está.
+  await page.evaluate(() => localStorage.setItem('payme.app.mock.latencia.v1', '5000'));
   await circulo.click();
   await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
-  await expect(page.getByRole('heading', { name: 'Ticket para Cancún 2026', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ticket para Cancún 2026', level: 1 })).toBeVisible({ timeout: 1500 });
+});
+
+test('D250 · desde un ticket del viaje abierto, el círculo también escanea para el viaje', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje-balance/${CANCUN}`);
+  await page.locator('.vjb-consumo').filter({ hasText: 'Bar La Ola' }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.`));
+  await circuloDelViaje(page).click();
+  await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
 });
 
 test('D250 · desde Balance, el círculo también escanea para el viaje', async ({ page }) => {
