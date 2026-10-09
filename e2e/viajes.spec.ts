@@ -396,6 +396,9 @@ test('🔴 H02 · con todo confirmado se sale de un viaje cerrado: Inicio › Vi
   await expect(page.getByText('Monterrey fin de semana', { exact: true })).toHaveCount(0);
   await ir(page, `/viaje-cerrado/${MONTERREY}`);
   await expect(page.getByText('Este viaje ya no está disponible.', { exact: true })).toBeVisible();
+  // El pedido de la pestaña es de una sola vez: la próxima vez, Inicio abre como siempre.
+  await ir(page, '/');
+  await expect(page.getByRole('tab', { name: 'Cuenta', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('1t · cada aviso del viaje lleva a su lugar', async ({ page }) => {
