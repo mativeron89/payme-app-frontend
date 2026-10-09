@@ -120,6 +120,21 @@ describe('mock · Viajes (App Backend 2.171.0)', () => {
     expect(cerrados.viajes.map((x) => x.nombre)).toContain('Monterrey fin de semana');
   });
 
+  it('🔴 nunca por encima del entero: lo de los demás más lo mío no pasa del plato (decisión 81)', async () => {
+    storage();
+    const { m, d } = await subject();
+    const t = d.decodeTicketDelViaje(await m.mockVerTicket(m.VIAJES_SEMILLA.cancun, m.VIAJES_SEMILLA.cancunMariscos));
+    const margarita = t.items.find((i) => i.name === 'Margarita')!;
+    // Luis ya tiene 1/4: subir lo mío a entero pasa del plato.
+    expect(await rechazo(m.mockElegirEnTicket(m.VIAJES_SEMILLA.cancun, m.VIAJES_SEMILLA.cancunMariscos,
+      { items: [{ item_id: margarita.id, fraction_bps: 10000 }], listo: true })))
+      .toEqual({ status: 409, error: 'viaje_fraction_exceeds_item', extra: { item_id: margarita.id, remaining_bps: 7500 } });
+    // Tres cuartos sí entran.
+    const r = d.decodeTicketDelViaje(await m.mockElegirEnTicket(m.VIAJES_SEMILLA.cancun, m.VIAJES_SEMILLA.cancunMariscos,
+      { items: [{ item_id: margarita.id, fraction_bps: 7500 }], listo: true }), 'viajes.seleccion');
+    expect(r.items.find((i) => i.name === 'Margarita')!.my_bps).toBe(7500);
+  });
+
   it('Cerrados: sólo lo propio (1s, D240-17)', async () => {
     storage();
     const { m, d } = await subject();

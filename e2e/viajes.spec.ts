@@ -111,6 +111,9 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   await expect(page.getByText('Tickets · 6', { exact: false })).toBeVisible();
+  // $840 entre los tres que estuvieron (sin Diego): a mí me tocan $280. Con Diego serían $210.
+  await expect(page.getByText('$280', { exact: true })).toBeVisible();
+  await expect(page.getByText('$210', { exact: true })).toHaveCount(0);
 });
 
 test('la cámara del viaje no ofrece «Cargarlo a mano» (el ticket exige el recibo)', async ({ page }) => {

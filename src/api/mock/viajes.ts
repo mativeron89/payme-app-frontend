@@ -1095,4 +1095,3 @@ export function sembrarViajesMock(): void {
   for (const a of avisos) avisarme(a);
   guardar();
 }
-
