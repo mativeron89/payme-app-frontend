@@ -60,6 +60,8 @@ const PAGINAS_APP = [
   'notificaciones', 'recovery', 'mesa',
   // AF-VIAJES · D242.
   'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
+  // D244/D245 · la carga manual.
+  'viaje-gasto',
 ];
 /**
  * Las que llevan un parámetro en la ruta: el código de mesa y el ID a
@@ -67,7 +69,7 @@ const PAGINAS_APP = [
  */
 const PAGINAS_CON_PARAMETRO = [
   'mesa', 'transferir',
-  'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
+  'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
 ];
 const rutasApp = [
   ...PAGINAS_APP.map((p) => `/${p}`),

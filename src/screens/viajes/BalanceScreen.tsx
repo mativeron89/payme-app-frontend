@@ -1,32 +1,46 @@
+import { useState } from 'react';
 import type { DetalleViaje } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
-import { AppHeaderBack } from '../../components/AppHeader';
+import { AppHeaderBack, BubbleTabs } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, type CargaDeViaje } from './ViajeScreen';
-import { avisoSinRepartir, faltaElegirEn, rotuloDeBalance, tonoDeBalance } from './viajeView';
-import { nombreDeMiembro } from './viajesView';
+import { metaDelTicket } from './viajeView';
+import { iconoTipoLugar, nombreDelLugar, nombreDeMiembro, parametroDeTicket } from './viajesView';
 import './viajes.css';
 import './viaje.css';
 
 /**
- * AF-VIAJES · D242 · el balance en vivo (1l, `/viaje-balance/<id>`): una fila
- * por miembro con «Debe» / «Le deben» y su monto, tal como lo publica el dueño.
- * Nunca qué eligió otro: sólo cuánto debe o le deben. Lo que nadie eligió
- * todavía va en una nota aparte. Cerrado, el balance de los demás no se ve
- * (D240-17): la ruta pasa al detalle de Cerrados.
+ * D245-6 · Balance (`/viaje-balance/<id>`): la burbuja dice sólo «Balance» y
+ * debajo dos opciones, como las burbujas de Inicio (el mismo `BubbleTabs`):
+ * - **Consumos** (primero): los tickets y gastos del viaje, el más nuevo arriba,
+ *   con lugar o descripción, fecha, quién pagó y el total. Al tocarlo abre el
+ *   ticket como antes. Nunca qué eligió cada uno.
+ * - **Miembros** (segundo): cada miembro con lo que pagó (Mati: «Lo que pagó»),
+ *   que publica el dueño. La app no lo calcula.
+ * Cerrado, la ruta pasa al detalle de Cerrados (D240-17).
  */
+export type OpcionDeBalance = 'consumos' | 'miembros';
+
 export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const { session } = useAuth();
   const { carga, cargar } = useDetalleViaje(viajeId);
+  const [opcion, setOpcion] = useState<OpcionDeBalance>('consumos');
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
-      <BalanceVista carga={carga} onReintentar={cargar} onVerViajes={() => navigate('viajes', 'abiertos')} />
+      <BalanceVista
+        carga={carga}
+        opcion={opcion}
+        onOpcion={setOpcion}
+        onReintentar={cargar}
+        onVerViajes={() => navigate('viajes', 'abiertos')}
+        onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
+      />
       <AppBottomBar active={null} />
     </div>
   );
@@ -34,24 +48,41 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
 
 export function BalanceVista({
   carga,
+  opcion,
+  onOpcion,
   onReintentar,
   onVerViajes,
+  onAbrirTicket,
 }: {
   carga: CargaDeViaje;
+  opcion: OpcionDeBalance;
+  onOpcion: (o: OpcionDeBalance) => void;
   onReintentar: () => void;
   onVerViajes: () => void;
+  onAbrirTicket: (ticketId: string) => void;
 }) {
   const { t } = useIdioma();
-  const viaje = carga.tipo === 'listo' ? carga.viaje : null;
   return (
     <>
       <div className="title-card">
         <h1 className="title-card-title">{t('Balance')}</h1>
-        {viaje && <div className="title-card-sub">{t('{0} · se actualiza con cada ticket', viaje.nombre)}</div>}
       </div>
       <div className="scroll vj-scroll">
         {carga.tipo === 'listo' ? (
-          <ListaDeBalance viaje={carga.viaje} />
+          <div>
+            <div className="vjb-banda">
+              <BubbleTabs
+                tabs={[{ id: 'consumos', label: t('Consumos') }, { id: 'miembros', label: t('Miembros') }]}
+                active={opcion}
+                onSelect={(id) => onOpcion(id as OpcionDeBalance)}
+              />
+            </div>
+            <div className={`vjb-tarjeta ${opcion === 'consumos' ? 'seam-left' : 'seam-right'}`}>
+              {opcion === 'consumos'
+                ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} />
+                : <Miembros viaje={carga.viaje} />}
+            </div>
+          </div>
         ) : (
           <EstadoSinViaje carga={carga} onReintentar={onReintentar} onVerViajes={onVerViajes} />
         )}
@@ -60,41 +91,48 @@ export function BalanceVista({
   );
 }
 
-function ListaDeBalance({ viaje: v }: { viaje: DetalleViaje }) {
+function Consumos({ viaje: v, onAbrirTicket }: { viaje: DetalleViaje; onAbrirTicket: (ticketId: string) => void }) {
   const { t, idioma } = useIdioma();
+  if (v.tickets.length === 0) return <p className="vjb-vacio">{t('Todavía no hay consumos.')}</p>;
   return (
-    <>
-      <ul className="vj-card vjb-lista">
-        {v.miembros.map((m) => {
-          const rotulo = rotuloDeBalance(m, t);
-          const falta = faltaElegirEn(m.falta_elegir, t);
-          return (
-            <li key={m.id} className="vjb-fila">
-              <AvatarDeViaje persona={m} />
-              <span className="vjb-quien">
-                <span className="vjb-nombre">{nombreDeMiembro(m, t)}</span>
-                {falta && <span className="vjb-falta">{falta}</span>}
-              </span>
-              {rotulo !== null && m.balance_cents !== null && (
-                <span className="vjb-monto">
-                  <span className={`vjb-rotulo ${tonoDeBalance(m.balance_cents)}`}>{rotulo}</span>
-                  {m.balance_cents !== 0 && <span className="vjb-cifra">{formatMXN(Math.abs(m.balance_cents))}</span>}
-                </span>
+    <ul className="vjb-consumos">
+      {v.tickets.map((tk) => (
+        <li key={tk.id}>
+          <button type="button" className="vjb-consumo" onClick={() => onAbrirTicket(tk.id)}>
+            <span className="vjv-ticket-icono">
+              <Icon name={iconoTipoLugar(tk.tipo_lugar)} size={22} />
+            </span>
+            <span className="vjb-consumo-main">
+              <span className="vjb-consumo-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
+              <span className="vjb-consumo-meta">{metaDelTicket(tk, v.miembros, t, idioma)}</span>
+              {tk.falta_que_elija > 0 && (
+                <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
               )}
-            </li>
-          );
-        })}
-      </ul>
-      {v.sin_repartir.map((s) => (
-        <p key={s.ticket_id} className="vjb-aviso">
-          <Icon name="warning" size={18} />
-          <span>{avisoSinRepartir(s, v, t, idioma, formatMXN)}</span>
-        </p>
+            </span>
+            <span className="vjb-consumo-monto">{formatMXN(tk.te_toca_cents)}</span>
+          </button>
+        </li>
       ))}
-      <p className="vj-nota vjv-nota-sola">
-        <Icon name="info" size={18} />
-        <span>{t('Ves cuánto debe o le deben a cada uno. Lo que eligió cada quien solo lo ve esa persona.')}</span>
-      </p>
-    </>
+    </ul>
+  );
+}
+
+function Miembros({ viaje: v }: { viaje: DetalleViaje }) {
+  const { t } = useIdioma();
+  return (
+    <ul className="vjb-miembros">
+      {v.miembros.map((m) => (
+        <li key={m.id} className="vjb-fila">
+          <AvatarDeViaje persona={m} />
+          <span className="vjb-quien">
+            <span className="vjb-nombre">{nombreDeMiembro(m, t)}</span>
+          </span>
+          <span className="vjb-monto">
+            <span className="vjb-rotulo">{t('Pagó')}</span>
+            <span className="vjb-cifra">—</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

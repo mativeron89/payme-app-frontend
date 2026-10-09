@@ -35,17 +35,47 @@ async function ir(page: Page, ruta: string): Promise<void> {
   }, ruta);
 }
 
-test('1a · Inicio: «Viajes» reemplaza a «Asociadas» y lanza Abiertos, Cerrados y Crear viaje', async ({ page }) => {
+test('1a · D246 · Inicio: «Viajes» reemplaza a «Asociadas»; Abiertos y Cerrados se eligen y la lista va debajo de «Crear viaje»', async ({ page }) => {
   await conViajes(page);
   await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Abiertos\s*2 viajes/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Cerrados\s*2 viajes/ })).toBeVisible();
-  await page.getByRole('button', { name: /Abiertos/ }).click();
-  await expect(page).toHaveURL(/\/viajes\/abiertos$/);
+  const inicio = page.url();
+  const abiertos = page.getByRole('button', { name: /Abiertos\s*2 viajes/ });
+  const cerrados = page.getByRole('button', { name: /Cerrados\s*2 viajes/ });
+  // Al entrar, Abiertos, con su lista en la misma pantalla.
+  await expect(abiertos).toHaveAttribute('aria-pressed', 'true');
+  await expect(cerrados).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
-  await expect(page.getByText('Debes $542', { exact: true })).toBeVisible();
   await expect(page.getByText('Esperando pagos · faltan 2', { exact: true })).toBeVisible();
+  expect(page.url()).toBe(inicio);
+  await cerrados.click();
+  await expect(cerrados).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Oaxaca puente', { exact: true })).toBeVisible();
+  await expect(page.locator('.vj-inicio-fila').first()).toContainText('Gastaste$2,230');
+  await expect(page.getByText('Cancún 2026', { exact: true })).toHaveCount(0);
+  expect(page.url()).toBe(inicio);
+  // Tocar un viaje lo abre.
+  await page.getByText('Oaxaca puente', { exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${OAXACA}$`));
+});
+
+test('D245 · la pantalla del viaje: el monto en rojo con «−», «Miembros» se abre y los dos botones', async ({ page }) => {
+  await conViajes(page);
+  await ir(page, `/viaje/${CANCUN}`);
+  await expect(page.getByRole('heading', { name: 'Cancún 2026', level: 1 })).toBeVisible();
+  await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$542/);
+  await expect(page.getByText('Tu balance', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Mariscos El Faro', { exact: true })).toHaveCount(0);
+  const miembros = page.getByRole('button', { name: /^Miembros/ });
+  await expect(miembros).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('Sofía Ramírez', { exact: true })).toHaveCount(0);
+  await miembros.click();
+  await expect(miembros).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Sofía Ramírez', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
+  await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
+  await expect(page.getByText('¿Entre quiénes?', { exact: true })).toBeVisible();
 });
 
 test('1d/1e · crear e invitar desde Amigos y por @usuario', async ({ page }) => {
@@ -98,7 +128,7 @@ test('1f · rechazar la invitación no suma: el viaje da el 404 de siempre', asy
 test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async ({ page }) => {
   await conViajes(page, { 'payme.app.mock.viajes.fecha.v1': '2026-10-09T14:20' });
   await ir(page, `/viaje/${CANCUN}`);
-  await expect(page.getByText('Debes $542', { exact: true })).toBeVisible();
+  await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$542/);
   await page.getByRole('button', { name: 'Escanear ticket', exact: true }).click();
   await sacarFoto(page);
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket-nuevo/${CANCUN}$`));
@@ -110,9 +140,13 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
-  await expect(page.getByText('Tickets · 6', { exact: false })).toBeVisible();
-  // $840 entre los tres que estuvieron (sin Diego): a mí me tocan $280. Con Diego serían $210.
-  await expect(page.getByText('$280', { exact: true })).toBeVisible();
+  // Pagué $840 y me tocan $280 (entre los tres que estuvieron): −$542 + $560 = $18 a favor, en verde.
+  await expect(page.locator('.vjv-monto-a-favor')).toHaveText(/^\$18/);
+  await page.getByRole('button', { name: 'Ver balance del viaje', exact: true }).click();
+  // En Consumos, el más nuevo arriba. Con Diego me tocarían $210.
+  const primero = page.locator('.vjb-consumo').first();
+  await expect(primero).toContainText('Tacos El Güero');
+  await expect(primero).toContainText('$280');
   await expect(page.getByText('$210', { exact: true })).toHaveCount(0);
 });
 
@@ -151,15 +185,26 @@ test('1i · elegir lo que consumí cambia el balance; nunca se ve qué eligió o
   await page.getByText('Tacos de pescado (3)', { exact: true }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
-  // $542 + $285 de los tacos.
-  await expect(page.getByText('Debes $827', { exact: true })).toBeVisible();
+  // $542 + $285 de los tacos, en rojo con el «−».
+  await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$827/);
 });
 
-test('1l · el balance en vivo y lo que falta repartir', async ({ page }) => {
+test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);
-  await expect(page.getByText('Falta elegir en 1 ticket', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Quedan \$565 sin repartir en Mariscos El Faro del 8 oct\. Se suman cuando Diego/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Balance', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Consumos', exact: true })).toHaveAttribute('aria-selected', 'true');
+  const consumos = page.locator('.vjb-consumo');
+  await expect(consumos).toHaveCount(5);
+  await expect(consumos.first()).toContainText('Mariscos El Faro');
+  await expect(consumos.first()).toContainText('Falta que elija 1');
+  await expect(consumos.last()).toContainText('Fonda Doña Mary');
+  await page.getByRole('tab', { name: 'Miembros', exact: true }).click();
+  await expect(page.locator('.vjb-miembros .vjb-fila')).toHaveCount(4);
+  await expect(page.getByText('Pagó', { exact: true }).first()).toBeVisible();
+  await page.getByRole('tab', { name: 'Consumos', exact: true }).click();
+  await consumos.first().click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
 });
 
 test('1m/1n · cerrar con alguien sin elegir y el ida y vuelta de «Ya pagué»', async ({ page }) => {

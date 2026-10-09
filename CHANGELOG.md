@@ -11,6 +11,32 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.231.0 — Viajes: la pantalla del viaje más simple, Balance con Consumos y Miembros, y la carga manual (2026-10-09)
+
+Orden AF-VIAJES-PANTALLA-Y-GASTO-MANUAL-20261009 (927f67e2…); decisiones 245 (f62b4b06…) y 244 (622656ce…) de
+Mati, y la Adenda 1 (d2e9f753…) con la decisión 246 (84d4ca82…). Plan aprobado (c4f82aa3…, OK 16:09:07Z) con las
+respuestas A–E. Dos tramos en un solo PR: el 1 sobre el contrato servido (App Backend 2.171.2); el 2, con App
+Backend 2.172.0 servido. Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+**Tramo 1**
+
+- **El viaje (D245):** la burbuja dice sólo el nombre. Debajo, el monto: en verde si te deben, en rojo con «−» si
+  debes y «$0» en negro (el lector de pantalla oye «A favor: …» / «Debes …»). Salen «Tu balance», «Todavía no hay
+  tickets…» y «Tickets: N». «Miembros» se despliega con la gente del viaje. Dos botones lado a lado: «Escanear
+  ticket» y «Carga manual». Después, «Ver balance del viaje».
+- **Balance (D245):** la burbuja dice sólo «Balance»; sin «Ves cuánto debe…». Dos opciones como las de Inicio,
+  sobre la franja navy con la tarjeta pegada: **Consumos** (todos los gastos, el más nuevo arriba; cada uno abre su
+  ticket y conserva «Falta que elija N») y **Miembros**. Salen «Debe / Le deben» y el aviso de «sin repartir»
+  (respuesta C). Hasta el tramo 2, el consumo muestra lo que te toca (respuesta A) y «Pagó» queda en «—».
+- **Carga manual (D244, `/viaje-gasto/<id>`):** la burbuja dice sólo «Carga manual» (respuesta D). Descripción,
+  monto y «¿Entre quiénes?», con todos marcados; lo pagaste tú. «Listo» se habilita con descripción y un monto
+  válido. Ruta nueva en `vercel.ts`, `despliegue.test.ts`, la guarda de rutas de Viajes y el censo e2e.
+- **Inicio › Viajes (D246):** «Abiertos» y «Cerrados» ya no navegan: se eligen (borde teal de 2 px, «Abiertos» al
+  entrar) y la lista aparece en una burbuja debajo de «Crear viaje». En Cerrados, «Gastaste {monto}». Vacías: «No
+  tienes viajes abiertos» / «No tienes viajes cerrados». En la pestaña Viajes no aparecen «No tienes mesas
+  abiertas» ni «Toca el + para abrir una». `/viajes/abiertos|cerrados` siguen para los links directos.
+- **Limpieza:** 16 claves huérfanas y los helpers que sólo servían al balance anterior.
+
 ## 0.230.0 — Los platos con las palabras corregidas, y volver a lo que decía el ticket (2026-10-09)
 
 Orden AF-NOMBRES-CORREGIDOS-20261009 (be1cbd18…); decisión 240 punto 15 de Mati («También corregir palabras»),

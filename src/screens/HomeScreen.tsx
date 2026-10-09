@@ -32,7 +32,7 @@ import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
 import { useViajesHabilitado } from '../api/viajes';
-import { FilaCrearViaje, PanelViajes, useConteoDeViajes } from './viajes/PestanaViajes';
+import { FilaCrearViaje, ListaDeInicio, PanelViajes, useConteoDeViajes } from './viajes/PestanaViajes';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -174,7 +174,8 @@ export function HomeScreen() {
   const tab: TabId = tabElegida === 'asociadas' && conViajes ? 'viajes'
     : tabElegida === 'viajes' && !conViajes ? 'asociadas' : tabElegida;
   const pestanas = conViajes ? TABS.filter((x) => x.id !== 'asociadas') : TABS;
-  const { conteo: conteoViajes, reintentar: reintentarViajes } = useConteoDeViajes(tab === 'viajes');
+  const { conteo: conteoViajes, elegida: listaDeViajes, elegir: elegirListaDeViajes, reintentar: reintentarViajes } =
+    useConteoDeViajes(tab === 'viajes');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
   // D237 · lo último visto de esta cuenta, si hay: al volver a Inicio la mesa
@@ -321,7 +322,9 @@ export function HomeScreen() {
            * una que todavía no"*.
            */}
           {/* AF-VIAJES · D242 · 1a/1b: Abiertos y Cerrados, o el vacío. */}
-          {tab === 'viajes' && <PanelViajes conteo={conteoViajes} onReintentar={reintentarViajes} />}
+          {tab === 'viajes' && (
+            <PanelViajes conteo={conteoViajes} elegida={listaDeViajes} onElegir={elegirListaDeViajes} onReintentar={reintentarViajes} />
+          )}
 
           {tab === 'asociadas' && (
             <div className="launch-stack home-tab-panel home-tab-panel-empty">
@@ -335,6 +338,8 @@ export function HomeScreen() {
           )}
         </MountedCard>
         {tab === 'viajes' && <FilaCrearViaje conteo={conteoViajes} />}
+        {/* D246 · la lista elegida, debajo de «Crear viaje». */}
+        {tab === 'viajes' && <ListaDeInicio conteo={conteoViajes} elegida={listaDeViajes} />}
         {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}
@@ -431,10 +436,13 @@ export function HomeScreen() {
             /* Vacío REAL: sin borde —es el único estado que no lo lleva— y sin
                botón propio. La acción ya está en el círculo naranja de la barra,
                a un centímetro: duplicarla sería competirle. */
-            <div className="mesa-empty">
-              <div className="mesa-empty-title">{t('No tienes mesas abiertas')}</div>
-              <p className="mesa-empty-body">{t('Toca el + para abrir una')}</p>
-            </div>
+            /* D246 · con la pestaña Viajes, el vacío de mesas no se muestra. */
+            tab !== 'viajes' && (
+              <div className="mesa-empty">
+                <div className="mesa-empty-title">{t('No tienes mesas abiertas')}</div>
+                <p className="mesa-empty-body">{t('Toca el + para abrir una')}</p>
+              </div>
+            )
           )}
         </section>
 

@@ -62,7 +62,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
-  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onEscanear: nada, onAbrirTicket: nada,
+  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onEscanear: nada, onCargaManual: nada, onAbrirTicket: nada,
   onCerrar: nada, onSalir: nada, onMarcar: nada,
 };
 
@@ -83,46 +83,44 @@ function texto(html: string): string {
 const vista = (carga: CargaDeViaje, marcando: string | null = null) =>
   renderToStaticMarkup(<ViajeVista carga={carga} marcando={marcando} {...ACCIONES} />);
 
-describe('1g · el viaje abierto', () => {
+describe('D245 · el viaje abierto, más simple', () => {
   const html = vista(listo(viaje()));
   const leido = texto(html);
 
-  it('la tarjeta del viaje: nombre, fechas, avatares y «Tú, Luis, Sofía y Diego»', () => {
-    expect(html).toContain('<h1 class="title-card-title">Cancún 2026</h1>');
-    expect(leido).toContain('5–11 oct');
-    expect(leido).toContain('AL LP SR DT');
-    expect(leido).toContain('Tú, Luis, Sofía y Diego');
+  it('la burbuja dice sólo el nombre: sin fechas, sin avatares, sin «Tú, Luis…»', () => {
+    expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Cancún 2026<\/h1><\/div>/);
+    expect(leido).not.toContain('5–11 oct');
+    expect(leido).not.toContain('Tú, Luis');
   });
 
-  it('«Tu balance» con «Debes $542», el gasto del grupo y el enlace al balance', () => {
-    expect(leido).toContain('Tu balance Debes $542 Gasto del grupo $6,660 Ver balance del viaje');
+  it('🔴 enseguida el balance como monto: la deuda en rojo con «−», sin «Debes» a la vista', () => {
+    expect(html).toContain('<p class="vjv-monto vjv-monto-deuda"><span aria-hidden="true">\u2212$542</span><span class="vj-oculto">Debes $542</span></p>');
+    expect(leido.indexOf('\u2212$542')).toBeLessThan(leido.indexOf('Miembros'));
   });
 
-  it('«Escanear ticket», «Tickets · 3» y una fila por ticket, en el orden del dueño', () => {
-    expect(leido).toContain('Escanear ticket Tickets · 3');
-    expect(leido).toContain('Mariscos El Faro 8 oct · Pagó Luis Pérez Falta que elija 1 Te toca $530');
-    expect(leido).toContain('Café Caribe 7 oct · Pagó Diego Torres Te toca $0');
-    expect(leido).toContain('Bar 6 oct · Pagaste tú Te toca $240');
-    expect(leido.indexOf('Mariscos')).toBeLessThan(leido.indexOf('Café Caribe'));
+  it('🔴 a favor en verde y cero en negro; el lector de pantalla oye «a favor»', () => {
+    expect(vista(listo(viaje({ mi_balance_cents: 120000 }))))
+      .toContain('<p class="vjv-monto vjv-monto-a-favor"><span aria-hidden="true">$1,200</span><span class="vj-oculto">A favor: $1,200</span></p>');
+    expect(vista(listo(viaje({ mi_balance_cents: 0 }))))
+      .toContain('<p class="vjv-monto vjv-monto-cero"><span aria-hidden="true">$0</span><span class="vj-oculto">$0</span></p>');
   });
 
-  it('el chip «Falta que elija» sólo donde falta alguien', () => {
-    expect(html.match(/Falta que elija/g)).toHaveLength(1);
+  it('se van «Tu balance», «Gasto del grupo», «Tickets · N» y la lista de tickets', () => {
+    for (const fuera of ['Tu balance', 'Gasto del grupo', 'Tickets ·', 'Todavía no hay tickets', 'Mariscos El Faro', 'Te toca', 'Estás a mano', 'Te deben']) {
+      expect(leido, fuera).not.toContain(fuera);
+    }
   });
 
-  it('al pie «Cerrar viaje» y «Salir del viaje»; sin transferencias todavía', () => {
-    expect(leido).toMatch(/Cerrar viaje Salir del viaje$/);
-    expect(leido).not.toContain('Transferencias sugeridas');
+  it('«Miembros» cerrado: el título y cuántos, sin la lista', () => {
+    expect(html).toContain('aria-expanded="false"');
+    expect(leido).toContain('Miembros 4');
+    expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('sin tickets: «Todavía no hay tickets. Escanea el primero.»', () => {
-    const vacio = texto(vista(listo(viaje({ tickets: [], sin_repartir: [] }))));
-    expect(vacio).toContain('Tickets · 0 Todavía no hay tickets. Escanea el primero.');
-  });
-
-  it('a mano y cuando te deben', () => {
-    expect(texto(vista(listo(viaje({ mi_balance_cents: 0 }))))).toContain('Tu balance Estás a mano');
-    expect(texto(vista(listo(viaje({ mi_balance_cents: 181900 }))))).toContain('Tu balance Te deben $1,819');
+  it('el orden: monto, Miembros, «Escanear ticket» y «Carga manual» lado a lado, «Ver balance», cerrar y salir', () => {
+    // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Escanear ticket Carga manual Ver balance del viaje Cerrar viaje Salir del viaje$/);
+    expect(html).toMatch(/<div class="vjv-acciones"><button[^>]*>.*?Escanear ticket<\/button><button[^>]*>.*?Carga manual<\/button><\/div>/);
   });
 });
 
@@ -281,35 +279,45 @@ describe('salir y 1q', () => {
   });
 });
 
-describe('1l · el balance en vivo', () => {
-  const balance = (carga: CargaDeViaje) => renderToStaticMarkup(<BalanceVista carga={carga} onReintentar={nada} onVerViajes={nada} />);
+describe('D245 · Balance: «Consumos» y «Miembros»', () => {
+  const balance = (carga: CargaDeViaje, opcion: 'consumos' | 'miembros' = 'consumos') => renderToStaticMarkup(
+    <BalanceVista carga={carga} opcion={opcion} onOpcion={nada} onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} />,
+  );
 
-  it('una fila por miembro con su rótulo y el monto; «Falta elegir en 1 ticket»', () => {
+  it('la burbuja dice sólo «Balance»; sin la descripción ni la nota del pie', () => {
+    const html = balance(listo(viaje()));
+    expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Balance<\/h1><\/div>/);
+    expect(texto(html)).not.toContain('se actualiza con cada ticket');
+    expect(texto(html)).not.toContain('Ves cuánto debe');
+  });
+
+  it('las dos opciones con el BubbleTabs de Inicio: «Consumos» primero y elegida', () => {
+    const html = balance(listo(viaje()));
+    expect(html).toContain('role="tablist"');
+    expect(texto(html)).toMatch(/^Balance Consumos Miembros/);
+    expect(html).toMatch(/<button type="button" role="tab" aria-selected="true" class="btab on">Consumos<\/button>/);
+  });
+
+  it('🔴 Consumos: los tickets del dueño, el más nuevo arriba, con lugar, fecha y quién pagó; nunca qué eligió nadie', () => {
     const leido = texto(balance(listo(viaje())));
-    expect(leido).toContain('Balance Cancún 2026 · se actualiza con cada ticket');
-    expect(leido).toContain('AL Tú Debes $542');
-    expect(leido).toContain('LP Luis Pérez Le deben $1,819');
-    expect(leido).toContain('SR Sofía Ramírez Debe $230');
-    expect(leido).toContain('DT Diego Torres Falta elegir en 1 ticket Debe $1,047');
+    expect(leido).toContain('Mariscos El Faro 8 oct · Pagó Luis Pérez Falta que elija 1');
+    expect(leido).toContain('Café Caribe 7 oct · Pagó Diego Torres');
+    expect(leido).toContain('Bar 6 oct · Pagaste tú');
+    expect(leido.indexOf('Mariscos')).toBeLessThan(leido.indexOf('Café Caribe'));
+    expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar 6 oct'));
+    // Sin el «Debe / Le deben» de cada uno ni el aviso de «sin repartir» (respuesta C).
+    expect(leido).not.toMatch(/Le deben|Debe \$|sin repartir/);
   });
 
-  it('lo que nadie eligió y la nota de privacidad', () => {
-    const leido = texto(balance(listo(viaje())));
-    expect(leido).toContain('Quedan $565 sin repartir en Mariscos El Faro del 8 oct. Se suman cuando Diego elija.');
-    expect(leido).toMatch(/Ves cuánto debe o le deben a cada uno\. Lo que eligió cada quien solo lo ve esa persona\.$/);
+  it('sin consumos: «Todavía no hay consumos.»', () => {
+    expect(texto(balance(listo(viaje({ tickets: [], sin_repartir: [] }))))).toContain('Todavía no hay consumos.');
   });
 
-  it('🔴 un balance que el dueño no publica (null) no se muestra', () => {
-    const v = viaje({ miembros: MIEMBROS.map((m) => (m.es_yo ? m : { ...m, balance_cents: null })) });
-    const leido = texto(balance(listo(v)));
-    expect(leido).not.toContain('Le deben');
-    expect(leido).not.toMatch(/Debe \$/);
-    expect(leido).toContain('Luis Pérez SR Sofía Ramírez');
-  });
-
-  it('a mano: el rótulo sin «$0»', () => {
-    const v = viaje({ miembros: [{ ...MIEMBROS[0]!, balance_cents: 0 }] });
-    expect(texto(balance(listo(v)))).toContain('AL Tú Estás a mano Quedan');
+  it('Miembros: cada uno con «Pagó» (el monto lo publica el dueño; la app no lo calcula)', () => {
+    const leido = texto(balance(listo(viaje()), 'miembros'));
+    expect(leido).toContain('AL Tú Pagó');
+    expect(leido).toContain('LP Luis Pérez Pagó');
+    expect(leido).not.toContain('Mariscos');
   });
 
   it('404: «Este viaje ya no está disponible.»', () => {
@@ -318,7 +326,7 @@ describe('1l · el balance en vivo', () => {
 });
 
 describe('los textos de estas pantallas', () => {
-  const fuentes = ['./ViajeScreen.tsx', './BalanceScreen.tsx', './viajeView.ts', '../../i18n/viajes/viaje.ts']
+  const fuentes = ['./ViajeScreen.tsx', './BalanceScreen.tsx', './CargaManualScreen.tsx', './viajeView.ts', '../../i18n/viajes/viaje.ts']
     .map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n');
 
   it('nunca «saldo» (D242: PayMe no guarda ni mueve dinero)', () => {

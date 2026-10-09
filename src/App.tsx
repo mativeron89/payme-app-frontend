@@ -41,6 +41,7 @@ import { TicketNuevoScreen } from './screens/viajes/TicketNuevoScreen';
 import { TicketScreen } from './screens/viajes/TicketScreen';
 import { BalanceScreen } from './screens/viajes/BalanceScreen';
 import { ViajeCerradoScreen } from './screens/viajes/ViajeCerradoScreen';
+import { CargaManualScreen } from './screens/viajes/CargaManualScreen';
 import { leerParametroDeTicket } from './screens/viajes/viajesView';
 
 function Shell() {
@@ -364,6 +365,9 @@ function Shell() {
         return route.param ? <BalanceScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
       case 'viaje-cerrado':
         return route.param ? <ViajeCerradoScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="cerrados" />;
+      // D244/D245 · la carga manual de un gasto del viaje.
+      case 'viaje-gasto':
+        return route.param ? <CargaManualScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
       /**
        * **El guard real es el `never`, no el `default`.**
        *

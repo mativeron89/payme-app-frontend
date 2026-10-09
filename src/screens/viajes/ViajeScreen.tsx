@@ -24,7 +24,6 @@ import { fullName } from '../../utils/identity';
 import {
   avisosDeCierre,
   estadoDeTransferencia,
-  metaDelTicket,
   miembroPorId,
   nombreCompletoDeId,
   nombreDePilaDeId,
@@ -36,14 +35,9 @@ import {
   type MotivoSalida,
 } from './viajeView';
 import {
-  iconoTipoLugar,
   iniciales,
-  listaDeNombres,
-  nombreDelLugar,
   nombreDeMiembro,
   parametroDeTicket,
-  rangoDeFechas,
-  textoDeMiBalance,
   type T,
 } from './viajesView';
 import './viajes.css';
@@ -244,6 +238,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
           navigate('scan', viajeId);
         }}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
+        onCargaManual={() => navigate('viaje-gasto', viajeId)}
         onCerrar={pedirCierre}
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
@@ -400,8 +395,6 @@ function Frase({ plantilla, partes }: { plantilla: string; partes: readonly Reac
   return <>{nodos}</>;
 }
 
-const MAX_AVATARES = 5;
-
 export interface ViajeVistaProps {
   readonly carga: CargaDeViaje;
   readonly marcando: string | null;
@@ -409,6 +402,8 @@ export interface ViajeVistaProps {
   readonly onVerViajes: () => void;
   readonly onVerBalance: () => void;
   readonly onEscanear: () => void;
+  /** D244/D245 · «Carga manual»: la pantalla del gasto a mano. */
+  readonly onCargaManual: () => void;
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onCerrar: () => void;
   readonly onSalir: () => void;
@@ -444,7 +439,7 @@ export function ViajeVista(props: ViajeVistaProps) {
 }
 
 function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
-  const { t, idioma } = useIdioma();
+  const { t } = useIdioma();
   if (v.estado !== 'abierto') {
     const conChip = vistaDePagos(v.transferencias) !== 'resto';
     return (
@@ -457,74 +452,41 @@ function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
       </div>
     );
   }
-  const fechas = rangoDeFechas(v.fecha_desde, v.fecha_hasta, idioma);
-  const visibles = v.miembros.slice(0, MAX_AVATARES);
-  const resto = v.miembros.length - visibles.length;
+  // D245-2 · la burbuja dice sólo el nombre del viaje: sin fechas ni avatares.
   return (
     <div className="title-card">
       <h1 className="title-card-title">{v.nombre}</h1>
-      {fechas && <div className="title-card-sub">{fechas}</div>}
-      <div className="vjv-titulo-personas">
-        <span className="vj-avatares" aria-hidden="true">
-          {visibles.map((m) => <AvatarDeViaje key={m.id} persona={m} />)}
-          {resto > 0 && <span className="vj-avatar">+{resto}</span>}
-        </span>
-        <span className="vjv-titulo-nombres">{listaDeNombres(v.miembros, t)}</span>
-      </div>
     </div>
   );
 }
 
-function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onAbrirTicket, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
-  const { t, idioma } = useIdioma();
+/**
+ * D245 · la pantalla del viaje abierto, más simple (pedido de Mati, 6 puntos):
+ * el balance como monto enseguida de la burbuja (verde a favor, rojo con «−» la
+ * deuda, «$0» en negro), el desplegable «Miembros», «Escanear ticket» y «Carga
+ * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
+ * Consumos. «Cerrar viaje» y «Salir del viaje» siguen al pie.
+ */
+function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onCargaManual, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+  const { t } = useIdioma();
   return (
     <>
-      <section className="vj-card" aria-label={t('Tu balance')}>
-        <div className="vjv-balance-rotulo">{t('Tu balance')}</div>
-        <div className="vjv-balance-monto">{textoDeMiBalance(v.mi_balance_cents, t, formatMXN)}</div>
-        <div className="vjv-balance-gasto">
-          <span>{t('Gasto del grupo')}</span>
-          <strong>{formatMXN(v.gasto_del_grupo_cents)}</strong>
-        </div>
-        <button type="button" className="vjv-enlace" onClick={onVerBalance}>
-          {t('Ver balance del viaje')}
-          <Icon name="chevron-down" size={18} className="vjv-chev" />
+      <MontoDeBalance cents={v.mi_balance_cents} />
+      <DesplegableMiembros miembros={v.miembros} />
+      <div className="vjv-acciones">
+        <button type="button" className="btn btn-navy" onClick={onEscanear}>
+          <Icon name="scan" size={20} />
+          {t('Escanear ticket')}
         </button>
-      </section>
-
-      <button type="button" className="btn btn-navy" onClick={onEscanear}>
-        <Icon name="scan" size={20} />
-        {t('Escanear ticket')}
+        <button type="button" className="btn btn-navy" onClick={onCargaManual}>
+          <Icon name="pencil" size={20} />
+          {t('Carga manual')}
+        </button>
+      </div>
+      <button type="button" className="vj-card vjv-ver-balance" onClick={onVerBalance}>
+        <span>{t('Ver balance del viaje')}</span>
+        <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
-
-      <h2 className="vj-seccion">{t('Tickets · {0}', v.tickets.length)}</h2>
-      {v.tickets.length === 0 ? (
-        <p className="vjv-vacio">{t('Todavía no hay tickets. Escanea el primero.')}</p>
-      ) : (
-        <ul className="vjv-tickets">
-          {v.tickets.map((tk) => (
-            <li key={tk.id}>
-              <button type="button" className="vjv-ticket" onClick={() => onAbrirTicket(tk.id)}>
-                <span className="vjv-ticket-icono">
-                  <Icon name={iconoTipoLugar(tk.tipo_lugar)} size={22} />
-                </span>
-                <span className="vjv-ticket-main">
-                  <span className="vjv-ticket-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
-                  <span className="vjv-ticket-meta">{metaDelTicket(tk, v.miembros, t, idioma)}</span>
-                  {tk.falta_que_elija > 0 && (
-                    <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
-                  )}
-                </span>
-                <span className="vjv-ticket-toca">
-                  <span className="vjv-ticket-toca-lbl">{t('Te toca')}</span>
-                  <span className="vjv-ticket-toca-monto">{formatMXN(tk.te_toca_cents)}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
       <button type="button" className="btn btn-ghost" onClick={onCerrar}>
         {t('Cerrar viaje')}
       </button>
@@ -532,6 +494,61 @@ function ViajeAbierto({ viaje: v, onVerBalance, onEscanear, onAbrirTicket, onCer
         {t('Salir del viaje')}
       </button>
     </>
+  );
+}
+
+/**
+ * D245-3 · el balance propio como monto: a favor en verde («$1,200»), deuda en
+ * rojo con signo menos («−$542») y cero en negro («$0»). Sin «Debes», «Te deben»
+ * ni «Estás a mano» a la vista; el color nunca va solo: el lector de pantalla
+ * oye «a favor» o «debes».
+ */
+export function MontoDeBalance({ cents }: { cents: number }) {
+  const { t } = useIdioma();
+  const tono = cents > 0 ? 'a-favor' : cents < 0 ? 'deuda' : 'cero';
+  const visible = cents < 0 ? `\u2212${formatMXN(-cents)}` : formatMXN(cents);
+  const dicho = cents > 0 ? t('A favor: {0}', formatMXN(cents)) : cents < 0 ? t('Debes {0}', formatMXN(-cents)) : formatMXN(0);
+  return (
+    <p className={`vjv-monto vjv-monto-${tono}`}>
+      <span aria-hidden="true">{visible}</span>
+      <span className="vj-oculto">{dicho}</span>
+    </p>
+  );
+}
+
+/**
+ * D245-4 · «Miembros», cerrado con su título; abierto, las personas del viaje.
+ * Con iniciales (la foto llega con App Backend 2.172.0; un menor va sin foto).
+ */
+export function DesplegableMiembros({ miembros, abiertoInicial = false }: { miembros: readonly MiembroViaje[]; abiertoInicial?: boolean }) {
+  const { t } = useIdioma();
+  const [abierto, setAbierto] = useState(abiertoInicial);
+  return (
+    <section className="vj-card vjv-miembros">
+      <button
+        type="button"
+        className="vjv-miembros-cabeza"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((a) => !a)}
+      >
+        <span className="vjv-miembros-titulo">{t('Miembros')}</span>
+        <span className="vjv-miembros-cuantos">{miembros.length}</span>
+        <Icon name="chevron-down" size={18} className={`vjv-miembros-chev ${abierto ? 'abierto' : ''}`} />
+      </button>
+      {abierto && (
+        <ul className="vjv-miembros-lista">
+          {miembros.map((m) => (
+            <li key={m.id} className="vjv-miembro">
+              <AvatarDeViaje persona={m} />
+              <span className="vjv-miembro-quien">
+                <span className="vjv-miembro-nombre">{nombreDeMiembro(m, t)}</span>
+                {m.username && <span className="vjv-miembro-arroba">@{m.username}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

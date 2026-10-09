@@ -89,13 +89,6 @@ export function textoDeMiBalance(cents: number, t: T, monto: (c: number) => stri
   return t('Estás a mano');
 }
 
-/** El balance de otro miembro (1l): «Debe» o «Le deben», con el monto aparte. */
-export function rotuloDeBalanceAjeno(cents: number, t: T): string {
-  if (cents < 0) return t('Debe');
-  if (cents > 0) return t('Le deben');
-  return t('Está a mano');
-}
-
 /**
  * El tipo de lugar, ya traducido: «Restaurante» o, para «Por tipo de lugar»
  * (1s), «Restaurantes». Cada texto es un `t('…')` literal a propósito: así el

@@ -585,3 +585,169 @@
 .vjb-aviso > svg {
   margin-top: 1px;
 }
+
+/* ══ D245 · la pantalla del viaje más simple ══════════════════════════════ */
+
+/* El balance como monto, enseguida de la burbuja: verde a favor, rojo con «−»
+   la deuda, negro el cero. */
+.vjv-monto {
+  margin: var(--sp-2) 0 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: 1.1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.vjv-monto-a-favor { color: var(--success); }
+.vjv-monto-deuda { color: var(--danger); }
+.vjv-monto-cero { color: var(--text); }
+
+/* «Miembros»: el título cierra y abre la lista. */
+.vjv-miembros { padding: 0; }
+.vjv-miembros-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+}
+.vjv-miembros-titulo {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.vjv-miembros-cuantos {
+  min-width: 24px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-align: center;
+}
+.vjv-miembros-chev { color: var(--text-muted); transition: transform 0.15s; }
+.vjv-miembros-chev.abierto { transform: rotate(180deg); }
+.vjv-miembros-lista {
+  margin: 0;
+  padding: 0 var(--sp-4) var(--sp-2);
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+.vjv-miembro {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 52px;
+}
+.vjv-miembro + .vjv-miembro { border-top: 1px solid var(--border); }
+.vjv-miembro-quien { display: flex; flex-direction: column; min-width: 0; }
+.vjv-miembro-nombre { font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600; color: var(--text); }
+.vjv-miembro-arroba { font-family: var(--font-body); font-size: var(--fs-sm); color: var(--text-muted); }
+
+/* «Escanear ticket» y «Carga manual», uno al lado del otro. */
+.vjv-acciones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+.vjv-acciones .btn { padding: 14px 8px; font-size: 14.5px; white-space: nowrap; }
+
+/* «Ver balance del viaje»: una fila tocable con su flecha. */
+.vjv-ver-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 56px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--link);
+  text-align: left;
+}
+.vjv-ver-balance .vjv-chev { transform: rotate(-90deg); }
+
+/* ══ D245-6 · Balance: «Consumos» y «Miembros», como las burbujas de Inicio ══ */
+.vjb-banda {
+  padding: var(--sp-2) var(--sp-2) 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--navy);
+}
+.vjb-banda .btabs {
+  top: 0;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.vjb-tarjeta {
+  background: var(--surface);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  box-shadow: var(--sh-1);
+  padding: var(--sp-2) var(--sp-4);
+}
+.vjb-consumos, .vjb-miembros { margin: 0; padding: 0; list-style: none; }
+.vjb-consumos li + li { border-top: 1px solid var(--border); }
+.vjb-consumo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--sp-2) 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.vjb-consumo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.vjb-consumo-lugar { font-family: var(--font-display); font-size: var(--fs-body); font-weight: 700; }
+.vjb-consumo-meta { font-family: var(--font-body); font-size: var(--fs-sm); color: var(--text-muted); }
+.vjb-consumo-monto { font-family: var(--font-display); font-size: var(--fs-body); font-weight: 800; font-variant-numeric: tabular-nums; }
+.vjb-vacio { margin: 0; padding: var(--sp-4) 0; text-align: center; color: var(--text-muted); font-family: var(--font-body); }
+
+/* ══ D244 · la carga manual ══ */
+.vjm-campos { display: flex; flex-direction: column; gap: var(--sp-3); }
+.vjm-campo { display: block; }
+.vjm-rotulo { display: block; margin-bottom: var(--sp-1); font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.vjm-input {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+.vjm-input:focus { outline: none; border-color: var(--action-2); }
+.vjm-monto { font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
+.vjm-pago {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: flex-start;
+  margin: 0;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--success-tint);
+  color: var(--success);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.vjm-titulo { margin: 0 0 var(--sp-1); font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--text); }
+.vjm-ayuda { margin: 0 0 var(--sp-3); font-family: var(--font-body); font-size: var(--fs-sm); color: var(--text-muted); }
+.vjm-resumen { margin: 0 0 var(--sp-2); text-align: center; font-family: var(--font-display); font-weight: 700; color: var(--text); }

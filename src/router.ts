@@ -105,6 +105,8 @@ export const PAGES = [
   'viaje-ticket',
   'viaje-balance',
   'viaje-cerrado',
+  /** D244/D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`). */
+  'viaje-gasto',
 ] as const;
 
 export type PageId = (typeof PAGES)[number];

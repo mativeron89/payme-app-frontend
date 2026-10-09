@@ -3,16 +3,12 @@ import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, Vis
 import { traducir } from '../../i18n/idioma';
 import { formatMXN } from '../../utils/format';
 import {
-  avisoSinRepartir,
   avisosDeCierre,
   estadoDeTransferencia,
-  faltaElegirEn,
   metaDelTicket,
   partirPlantilla,
   progresoDePagos,
-  rotuloDeBalance,
   textoNoPuedeSalir,
-  tonoDeBalance,
   tramosDeTransferencias,
   vistaDePagos,
 } from './viajeView';
@@ -168,43 +164,6 @@ describe('1m · la hoja de cierre', () => {
     expect(avisosDeCierre(p, viaje(), en, 'en', formatMXN)).toEqual([
       "Diego Torres hasn't chosen yet at Mariscos El Faro on Oct 8. If you close now, the remaining $565 is assigned to Diego.",
     ]);
-  });
-});
-
-describe('1l · el balance en vivo', () => {
-  it('mío: «Debes» / «Te deben» / «Estás a mano»; de otros: «Debe» / «Le deben» / «Está a mano»', () => {
-    expect(rotuloDeBalance(MIEMBROS[0]!, es)).toBe('Debes');
-    expect(rotuloDeBalance({ ...MIEMBROS[0]!, balance_cents: 100 }, es)).toBe('Te deben');
-    expect(rotuloDeBalance({ ...MIEMBROS[0]!, balance_cents: 0 }, es)).toBe('Estás a mano');
-    expect(rotuloDeBalance(MIEMBROS[1]!, es)).toBe('Le deben');
-    expect(rotuloDeBalance(MIEMBROS[2]!, es)).toBe('Debe');
-    expect(rotuloDeBalance({ ...MIEMBROS[2]!, balance_cents: 0 }, es)).toBe('Está a mano');
-  });
-
-  it('🔴 sin balance publicado (cerrado, D240-17) no hay rótulo', () => {
-    expect(rotuloDeBalance({ ...MIEMBROS[1]!, balance_cents: null }, es)).toBeNull();
-  });
-
-  it('el tono sigue al signo del dueño (positivo = le deben)', () => {
-    expect(tonoDeBalance(-1)).toBe('debe');
-    expect(tonoDeBalance(1)).toBe('le_deben');
-    expect(tonoDeBalance(0)).toBe('a_mano');
-  });
-
-  it('«Falta elegir en 1 ticket» / «… en 2 tickets» / nada', () => {
-    expect(faltaElegirEn(1, es)).toBe('Falta elegir en 1 ticket');
-    expect(faltaElegirEn(2, es)).toBe('Falta elegir en 2 tickets');
-    expect(faltaElegirEn(0, es)).toBeNull();
-  });
-
-  it('lo que nadie eligió todavía, con quién falta', () => {
-    const s = { ticket_id: 'tk-1', lugar: 'Mariscos El Faro', fecha_ticket: '2026-10-08', monto_cents: 56500, faltan: [IDS.diego] };
-    expect(avisoSinRepartir(s, viaje(), es, 'es', formatMXN))
-      .toBe('Quedan $565 sin repartir en Mariscos El Faro del 8 oct. Se suman cuando Diego elija.');
-    expect(avisoSinRepartir({ ...s, faltan: [IDS.yo] }, viaje(), es, 'es', formatMXN))
-      .toBe('Quedan $565 sin repartir en Mariscos El Faro del 8 oct. Se suman cuando elijas.');
-    expect(avisoSinRepartir({ ...s, faltan: [IDS.yo, IDS.diego, IDS.sofia] }, viaje(), es, 'es', formatMXN))
-      .toBe('Quedan $565 sin repartir en Mariscos El Faro del 8 oct. Se suman cuando Diego, Sofía y tú elijan.');
   });
 });
 

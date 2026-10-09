@@ -218,6 +218,7 @@ const ESPERADO: Record<PageId, Esperado> = {
   'viaje-ticket': { tipo: 'redirige', a: /:\d+\/home$/ },
   'viaje-balance': { tipo: 'redirige', a: /:\d+\/home$/ },
   'viaje-cerrado': { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-gasto': { tipo: 'redirige', a: /:\d+\/home$/ },
 };
 
 function ubicar(page: Page, m: Marcador) {

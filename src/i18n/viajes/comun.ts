@@ -9,9 +9,6 @@ export const EN_VIAJES_COMUN: Record<string, string> = {
   'Debes {0}': 'You owe {0}',
   'Te deben {0}': 'You are owed {0}',
   'Estás a mano': "You're even",
-  'Debe': 'Owes',
-  'Le deben': 'Is owed',
-  'Está a mano': 'Is even',
   'Bar': 'Bar',
   'Súper': 'Grocery',
   'Restaurantes': 'Restaurants',
@@ -29,6 +26,9 @@ export const EN_VIAJES_COMUN: Record<string, string> = {
   'Ponle nombre y suma a tus amigos': 'Name it and add your friends',
   'Todavía no tienes viajes': "You don't have any trips yet",
   'No pudimos cargar tus viajes': "We couldn't load your trips",
+  // D246 · la lista elegida en Inicio › Viajes.
+  'No tienes viajes abiertos': "You don't have open trips",
+  'No tienes viajes cerrados': "You don't have closed trips",
   'Crea uno, suma a tus amigos y escaneen los tickets del viaje. PayMe va calculando quién le debe a quién.':
     'Create one, add your friends and scan the trip receipts. PayMe keeps track of who owes whom.',
   // Los estados de error que comparten las pantallas de Viajes (propuestos en el plan).

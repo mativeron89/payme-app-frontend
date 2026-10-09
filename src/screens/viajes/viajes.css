@@ -95,3 +95,16 @@
 .vj-con-pie .vj-scroll {
   padding-bottom: 112px;
 }
+
+/* Texto sólo para el lector de pantalla (D245-3: el color del monto nunca va solo). */
+.vj-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -15,7 +15,7 @@ import { replaceRoute, type PageId } from '../../router';
  * verlo ejecutarse (sin librería de render los efectos no corren en la suite).
  */
 export const PAGINAS_DE_VIAJES: ReadonlySet<PageId> = new Set<PageId>([
-  'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
+  'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
 ]);
 
 export function esPaginaDeViajes(page: PageId): boolean {

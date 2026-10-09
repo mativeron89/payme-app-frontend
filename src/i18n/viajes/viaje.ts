@@ -5,12 +5,8 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Escanear ticket': 'Scan ticket',
   'Pagó {0}': 'Paid by {0}',
   'Te toca': 'Your share',
-  'Tu balance': 'Your balance',
-  'Gasto del grupo': 'Group spending',
   'Ver balance del viaje': 'See trip balance',
-  'Tickets · {0}': 'Tickets · {0}',
   'Falta que elija {0}': '{0} still to choose',
-  'Todavía no hay tickets. Escanea el primero.': 'No tickets yet. Scan the first one.',
   'Cerrar viaje': 'Close trip',
   'Salir del viaje': 'Leave trip',
   // 1m · cerrar.
@@ -65,17 +61,16 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   '{0} quedó cerrado. Todos pagaron y ya está en Cerrados.': '{0} is closed. Everyone paid and it is now in Closed.',
   // 1l · el balance en vivo.
   'Balance': 'Balance',
-  '{0} · se actualiza con cada ticket': '{0} · updates with every ticket',
-  'Debes': 'You owe',
-  'Te deben': "You're owed",
-  'Falta elegir en {0} ticket': 'Still to choose on {0} ticket',
-  'Falta elegir en {0} tickets': 'Still to choose on {0} tickets',
-  'Quedan {0} sin repartir en {1} del {2}. Se suman cuando {3} elija.':
-    '{0} is still unassigned at {1} on {2}. It gets added once {3} chooses.',
-  'Quedan {0} sin repartir en {1} del {2}. Se suman cuando {3} elijan.':
-    '{0} is still unassigned at {1} on {2}. It gets added once {3} choose.',
-  'Quedan {0} sin repartir en {1} del {2}. Se suman cuando elijas.':
-    '{0} is still unassigned at {1} on {2}. It gets added once you choose.',
-  'Ves cuánto debe o le deben a cada uno. Lo que eligió cada quien solo lo ve esa persona.':
-    'You see how much each person owes or is owed. What each person chose is only visible to them.',
+  // D245 · la pantalla del viaje y Balance, más simples; D244 · la carga manual.
+  'Carga manual': 'Add manually',
+  'A favor: {0}': 'In your favor: {0}',
+  'Consumos': 'Expenses',
+  'Todavía no hay consumos.': 'No expenses yet.',
+  'Pagó': 'Paid',
+  'Descripción': 'Description',
+  'Por ejemplo: gasolina': 'For example: gas',
+  'Monto': 'Amount',
+  '¿Entre quiénes?': 'Split between',
+  'Se divide entre los marcados. Desmarca a quien no va.': "It's split among those checked. Uncheck anyone who isn't in.",
+  'Total {0}': 'Total {0}',
 };

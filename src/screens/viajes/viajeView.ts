@@ -2,12 +2,11 @@ import type { Idioma } from '../../i18n/idioma';
 import type {
   DetalleViaje,
   MiembroViaje,
-  SinRepartir,
   TicketEnViaje,
   TransferenciaViaje,
   VistaPreviaCierre,
 } from '../../api/viajes';
-import { fechaCortaViaje, nombreCompleto, nombreDePila, nombreDelLugar, rotuloDeBalanceAjeno, type T } from './viajesView';
+import { fechaCortaViaje, nombreCompleto, nombreDePila, nombreDelLugar, type T } from './viajesView';
 
 /**
  * AF-VIAJES · D242 · lo puro del viaje abierto (1g), el cierre (1m), la salida
@@ -188,47 +187,6 @@ export function avisosDeCierre(
     return t('{0} todavía no eligieron en {1} del {2}. Si cierras ahora, los {3} que faltan se reparten en partes iguales entre {4}.',
       sujetos(viaje, g.ids, t), lugar, fecha, monto(g.cents), complementos(viaje, g.ids, t));
   });
-}
-
-// ─── 1l · el balance en vivo ──────────────────────────────────────────────
-
-export type TonoDeBalance = 'debe' | 'le_deben' | 'a_mano';
-
-export function tonoDeBalance(cents: number): TonoDeBalance {
-  return cents < 0 ? 'debe' : cents > 0 ? 'le_deben' : 'a_mano';
-}
-
-/**
- * El rótulo sobre el monto: mío «Debes» / «Te deben» / «Estás a mano»; de otro
- * «Debe» / «Le deben» / «Está a mano». `null` si el dueño no lo publica
- * (cerrado: el balance de los demás no se ve, D240-17).
- */
-export function rotuloDeBalance(m: MiembroViaje, t: T): string | null {
-  const c = m.balance_cents;
-  if (c === null) return null;
-  if (!m.es_yo) return rotuloDeBalanceAjeno(c, t);
-  if (c < 0) return t('Debes');
-  if (c > 0) return t('Te deben');
-  return t('Estás a mano');
-}
-
-export function faltaElegirEn(n: number, t: T): string | null {
-  if (n <= 0) return null;
-  if (n === 1) return t('Falta elegir en {0} ticket', n);
-  return t('Falta elegir en {0} tickets', n);
-}
-
-/** «Quedan $565 sin repartir en Mariscos El Faro del 8 oct. Se suman cuando Diego elija.» */
-export function avisoSinRepartir(s: SinRepartir, viaje: DetalleViaje, t: T, idioma: Idioma, monto: Monto): string {
-  const { lugar, fecha } = lugarDelTicket(viaje, s.ticket_id, s.lugar, s.fecha_ticket, t, idioma);
-  const soloYo = s.faltan.length === 1 && s.faltan[0] === viaje.mi_miembro_id;
-  if (soloYo) return t('Quedan {0} sin repartir en {1} del {2}. Se suman cuando elijas.', monto(s.monto_cents), lugar, fecha);
-  if (s.faltan.length <= 1) {
-    return t('Quedan {0} sin repartir en {1} del {2}. Se suman cuando {3} elija.',
-      monto(s.monto_cents), lugar, fecha, nombreDePilaDeId(viaje.miembros, s.faltan[0] ?? null, t));
-  }
-  return t('Quedan {0} sin repartir en {1} del {2}. Se suman cuando {3} elijan.',
-    monto(s.monto_cents), lugar, fecha, complementos(viaje, s.faltan, t));
 }
 
 // ─── 1n · 1o · 1p · esperando pagos ───────────────────────────────────────

@@ -90,3 +90,35 @@
   color: var(--text-muted);
   transform: rotate(-90deg);
 }
+
+/* D246 · Abiertos y Cerrados se eligen: lo elegido con borde 2px teal (no sólo color). */
+.vj-lanzador { border: 2px solid transparent; border-radius: var(--r-md); }
+.vj-lanzador--elegido { border-color: var(--action-2); background: var(--teal-l); }
+
+/* D246 · la lista elegida, en una burbuja debajo de «Crear viaje». */
+.vj-inicio-lista {
+  margin: var(--sp-3) var(--sp-4) 0;
+  padding: var(--sp-1) var(--sp-4);
+  list-style: none;
+}
+.vj-inicio-lista li + li { border-top: 1px solid var(--border); }
+.vj-inicio-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--sp-2) 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.vj-inicio-lista-vacia {
+  padding: var(--sp-4);
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
