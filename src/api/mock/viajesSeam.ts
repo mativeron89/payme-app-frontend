@@ -20,9 +20,10 @@ export const CLAVE_HUELLA_TICKET_MOCK = 'payme.app.mock.viajes.huella.v1';
 /** `429` exacto: crear e invitar contestan `viajes_rate_limited`. */
 export const CLAVE_LIMITE_VIAJES_MOCK = 'payme.app.mock.viajes.limite.v1';
 /**
- * D244 · `alguien_salio` exacto: al cargar un gasto a mano, el último elegido que
- * no soy yo «sale del viaje» justo antes, y el dueño contesta su 422
- * `viaje_ticket_persona_unknown` (una sola vez: el seam se consume).
+ * D244 · el gasto a mano, una sola vez (el seam se consume):
+ * - `alguien_salio`: el último elegido que no soy yo «sale del viaje» justo
+ *   antes, y el dueño contesta su 422 `viaje_ticket_persona_unknown`;
+ * - `respuesta_perdida`: el dueño lo guarda y la respuesta no llega (500).
  */
 export const CLAVE_GASTO_MOCK = 'payme.app.mock.viajes.gasto.v1';
 
@@ -52,9 +53,9 @@ export function limiteDeViajesMock(): boolean {
   return leer(CLAVE_LIMITE_VIAJES_MOCK) === '429';
 }
 
-/** Lee y consume el seam del gasto a mano: `true` una sola vez si vale `alguien_salio`. */
-export function alguienSalioMock(): boolean {
-  if (leer(CLAVE_GASTO_MOCK) !== 'alguien_salio') return false;
+/** Lee y consume el seam del gasto a mano: `true` una sola vez si vale `valor`. */
+export function seamDeGastoMock(valor: 'alguien_salio' | 'respuesta_perdida'): boolean {
+  if (leer(CLAVE_GASTO_MOCK) !== valor) return false;
   try { localStorage.removeItem(CLAVE_GASTO_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
   return true;
 }

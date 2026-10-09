@@ -12,7 +12,7 @@ import {
   type PersonaViajeMock,
 } from './mockApi';
 import { persist as persistirStore, state as store } from './store';
-import { CLAVE_ESTADO_VIAJES_MOCK, alguienSalioMock, limiteDeViajesMock, viajesMockEncendido } from './viajesSeam';
+import { CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeGastoMock, viajesMockEncendido } from './viajesSeam';
 import {
   balanceDelViaje,
   precioInformativo,
@@ -759,7 +759,7 @@ export function mockCargarGasto(id: string, body: unknown) {
     }
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     if (v.tickets.length >= MAX_TICKETS) throw conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
-    if (alguienSalioMock()) {
+    if (seamDeGastoMock('alguien_salio')) {
       // El seam: el último elegido que no soy yo salió del viaje mientras se llenaba el formulario.
       const sale = [...miembrosEnOrden(v)].reverse().find((m) => m.estado === 'activo' && m.user_id !== u && presentes.includes(m.id));
       if (sale) sale.estado = 'salio';
@@ -781,6 +781,8 @@ export function mockCargarGasto(id: string, body: unknown) {
       selecciones: [],
     };
     v.tickets.push(t);
+    // El seam: quedó guardado y la respuesta se perdió. El reintento con la misma llave es el mismo gasto.
+    if (seamDeGastoMock('respuesta_perdida')) throw new Respuesta(500, 'internal_error');
     return { contract: CONTRATO, ticket: vistaTicket(v, t, u), ya_cargado: null };
   });
 }

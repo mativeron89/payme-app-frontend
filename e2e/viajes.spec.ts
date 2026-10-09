@@ -266,6 +266,21 @@ test('D244 · si alguien de los elegidos salió del viaje: se avisa, se vuelve a
   await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
 });
 
+test('D244 · si la respuesta se pierde, reintentar es el mismo gasto (la misma llave), nunca otro', async ({ page }) => {
+  await conViajes(page, { 'payme.app.mock.viajes.gasto.v1': 'respuesta_perdida' });
+  await ir(page, `/viaje-gasto/${CANCUN}`);
+  await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
+  await page.getByLabel('Monto', { exact: true }).fill('900');
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page.getByText('No pudimos guardarlo. Prueba de nuevo.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
+  await page.getByRole('button', { name: 'Ver balance del viaje', exact: true }).click();
+  await expect(page.locator('.vjb-consumo').first()).toContainText('Gasolina');
+  await expect(page.locator('.vjb-consumo').filter({ hasText: 'Gasolina' })).toHaveCount(1);
+});
+
 test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);
