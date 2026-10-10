@@ -205,16 +205,19 @@ for (const desfase of DESFASES_MEDIDOS) {
 /**
  * El caso del panel de Mati, en su iPhone (393 × 852, insets 59/34, desfase 59): en la base el `.scroll` mide 598 de
  * alto (como en el panel) y, con un solo miembro, el contenido entra (`scrollHeight` = `clientHeight` = 598): no hay
- * scroll y el miembro queda detrás del pie. Los insets se emulan con CDP: sólo Chromium.
+ * scroll y el miembro queda detrás del pie. Los insets se emulan con CDP, que sólo tiene Chromium (la CI). En otro
+ * navegador (la corrida local en WebKit) corre sin ellos: lo que se afirma no depende de los insets. Sin `test.skip`:
+ * la guarda del corte sólo admite el del corte de pagos (`corteGuard.test.ts`).
  */
 test.describe('🔴 D256 · el caso del panel de Mati: Carga manual, 393 × 852, insets 59/34, desfase 59', () => {
   test.use({ viewport: { width: 393, height: 852 } });
   test('el contenido que «entra» igual se alcanza: el miembro no queda detrás del pie', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'los insets se emulan con CDP');
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
-      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
-    });
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+      });
+    }
     await comoAppDeInicio(page, 59);
     await sembrar(page, { soloYo: true });
     await ir(page, `/viaje/${CANCUN}`);
