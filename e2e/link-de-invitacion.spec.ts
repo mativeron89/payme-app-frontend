@@ -12,88 +12,81 @@ const CLAVE_CODIGO = 'payme.app.mock.referral_code.v1';
 /** `codigo.formato` del contrato del dueño: 16 caracteres base64url. */
 const CODIGO = 'Ab12Cd34Ef56Gh78';
 
-async function conLink(page: Page, compartir: 'ok' | 'cancela' | 'sin' = 'sin'): Promise<void> {
-  await page.addInitScript(({ seam, compartir }) => {
+/** La burbuja de Amigos: toda ella es el botón (D255-4). */
+const BURBUJA = 'button.invitar-link';
+
+async function conLink(page: Page, opciones: { portapapeles?: 'ok' | 'falla'; error?: boolean } = {}): Promise<void> {
+  await page.addInitScript(({ seam, portapapeles, error }) => {
     localStorage.setItem(seam, 'encendido');
-    // La hoja de compartir del teléfono, espiada; o ninguna.
+    if (error) localStorage.setItem('payme.app.mock.invite_link.estado.v1', 'error');
+    // La hoja de compartir existe y se espía: D255-4 ya no la usa.
     const w = window as unknown as { __compartido: unknown[]; __copiado: string[] };
     w.__compartido = [];
     w.__copiado = [];
-    if (compartir === 'sin') {
-      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
-    } else {
-      Object.defineProperty(navigator, 'share', {
-        configurable: true,
-        value: async (datos: unknown) => {
-          w.__compartido.push(datos);
-          if (compartir === 'cancela') throw new DOMException('cancelado', 'AbortError');
-        },
-      });
-    }
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (datos: unknown) => { w.__compartido.push(datos); },
+    });
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: async (s: string) => { w.__copiado.push(s); } },
+      value: {
+        writeText: async (s: string) => {
+          if (portapapeles === 'falla') throw new DOMException('no', 'NotAllowedError');
+          w.__copiado.push(s);
+        },
+      },
     });
-  }, { seam: SEAM, compartir });
+  }, { seam: SEAM, portapapeles: opciones.portapapeles ?? 'ok', error: opciones.error ?? false });
   await ingresar(page);
   await page.getByRole('button', { name: 'Amigos', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Invita a alguien a PayMe' })).toBeVisible();
+  await expect(page.locator(BURBUJA)).toBeVisible();
+  // Mientras el link carga, tocar no hace nada (a propósito): se espera a que esté.
+  await expect(page.locator(BURBUJA)).not.toHaveAttribute('aria-busy', 'true');
 }
 
 const espias = (page: Page) => page.evaluate(() => {
-  const w = window as unknown as { __compartido: Array<{ title?: string; text?: string; url?: string }>; __copiado: string[] };
+  const w = window as unknown as { __compartido: unknown[]; __copiado: string[] };
   return { compartido: w.__compartido, copiado: w.__copiado };
 });
 
-test('D252 · con la hoja de compartir del teléfono: título, mensaje y el link, sin copiar nada', async ({ page }) => {
-  await conLink(page, 'ok');
-  const url = (await page.locator('.invitar-link-url').innerText()).trim();
-  // Como en producción: `FRONTEND_PUBLIC_URL` termina en `/#`.
-  expect(url).toMatch(/^app\.paymemx\.com\/#\/invitacion\/[A-Za-z0-9_-]{16}$/);
-  await page.getByRole('button', { name: 'Compartir mi link', exact: true }).click();
-  await expect.poll(async () => (await espias(page)).compartido.length).toBe(1);
-  const { compartido, copiado } = await espias(page);
-  expect(compartido[0]).toEqual({
-    title: 'PayMe',
-    text: 'Te invito a PayMe para dividir la cuenta en el restaurante. Regístrate con mi link:',
-    url: `https://${url}`,
-  });
-  expect(copiado).toEqual([]);
-});
-
-test('D252 · si la persona cierra la hoja de compartir, no se copia nada', async ({ page }) => {
-  await conLink(page, 'cancela');
-  await page.getByRole('button', { name: 'Compartir mi link', exact: true }).click();
-  await expect.poll(async () => (await espias(page)).compartido.length).toBe(1);
-  await page.waitForTimeout(300);
-  expect((await espias(page)).copiado).toEqual([]);
-  await expect(page.getByText('Copiamos tu link.', { exact: true })).toHaveCount(0);
-});
-
-test('D252 · sin la hoja de compartir, se copia el mensaje con el link y se avisa', async ({ page }) => {
-  await conLink(page, 'sin');
-  const url = (await page.locator('.invitar-link-url').innerText()).trim();
-  await page.getByRole('button', { name: 'Compartir mi link', exact: true }).click();
-  await expect(page.getByText('Copiamos tu link.', { exact: true })).toBeVisible();
-  expect((await espias(page)).copiado).toEqual([
-    `Te invito a PayMe para dividir la cuenta en el restaurante. Regístrate con mi link: https://${url}`,
-  ]);
-});
-
-test('D252 · «Cambiar mi link»: con confirmación, el link cambia; «Cancelar» no cambia nada', async ({ page }) => {
+test('🔴 D255-4 · tocar la burbuja copia el link (sólo el link) y avisa «Link copiado»; no abre la hoja de compartir', async ({ page }) => {
   await conLink(page);
-  const antes = (await page.locator('.invitar-link-url').innerText()).trim();
-  await page.getByRole('button', { name: 'Cambiar mi link', exact: true }).click();
-  const hoja = page.getByRole('dialog', { name: '¿Cambiar tu link?' });
-  await expect(hoja).toContainText('Tu link actual deja de funcionar. Quien ya se registró con él sigue siendo tu amigo.');
-  await expect(hoja.getByRole('button', { name: 'Cancelar', exact: true })).toBeFocused();
-  await hoja.getByRole('button', { name: 'Cancelar', exact: true }).click();
-  await expect(hoja).toHaveCount(0);
-  expect((await page.locator('.invitar-link-url').innerText()).trim()).toBe(antes);
-  await page.getByRole('button', { name: 'Cambiar mi link', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Cambiar mi link', exact: true }).click();
-  await expect(page.getByText('Listo: tu link es nuevo. El anterior ya no funciona.', { exact: true })).toBeVisible();
-  await expect(page.locator('.invitar-link-url')).not.toHaveText(antes);
+  await page.locator(BURBUJA).click();
+  await expect(page.getByText('Link copiado', { exact: true })).toBeVisible();
+  const { compartido, copiado } = await espias(page);
+  // Como en producción: `FRONTEND_PUBLIC_URL` termina en `/#`.
+  expect(copiado).toHaveLength(1);
+  expect(copiado[0]).toMatch(/^https:\/\/app\.paymemx\.com\/#\/invitacion\/[A-Za-z0-9_-]{16}$/);
+  expect(compartido).toEqual([]);
+});
+
+test('🔴 D255-4 · una sola burbuja con su nombre: sin el texto, el link a la vista, «Compartir» ni «Cambiar mi link»', async ({ page }) => {
+  await conLink(page);
+  await expect(page.getByRole('button', { name: 'Invita a alguien a PayMe', exact: true })).toHaveCount(1);
+  const amigos = page.locator('.scroll');
+  for (const fuera of ['Comparte tu link', 'Compartir mi link', 'Cambiar mi link', 'app.paymemx.com']) {
+    await expect(amigos.getByText(fuera)).toHaveCount(0);
+  }
+});
+
+test('D255-4 · si el navegador no deja copiar, lo dice', async ({ page }) => {
+  await conLink(page, { portapapeles: 'falla' });
+  await page.locator(BURBUJA).click();
+  await expect(page.getByText('No se pudo copiar: tu navegador no habilitó el portapapeles', { exact: true })).toBeVisible();
+  await expect(page.getByText('Link copiado', { exact: true })).toHaveCount(0);
+});
+
+test('D255-4 · si el link no cargó, tocar lo dice y lo vuelve a pedir; ya cargado, copia', async ({ page }) => {
+  await conLink(page, { error: true });
+  await page.evaluate(() => localStorage.removeItem('payme.app.mock.invite_link.estado.v1'));
+  await page.locator(BURBUJA).click();
+  await expect(page.getByText('No pudimos cargar tu link. Prueba de nuevo.', { exact: true })).toBeVisible();
+  expect((await espias(page)).copiado).toEqual([]);
+  // El segundo pedido ya anda: la burbuja copia.
+  await expect(page.locator(BURBUJA)).not.toHaveAttribute('aria-busy', 'true');
+  await page.locator(BURBUJA).click();
+  await expect(page.getByText('Link copiado', { exact: true })).toBeVisible();
+  expect((await espias(page)).copiado).toHaveLength(1);
 });
 
 test('🔴 D252 · sin sesión, el link abre «Crea tu cuenta» y deja el código guardado para el alta', async ({ page }) => {
@@ -169,5 +162,6 @@ test('🔴 D252 · sin la capacidad no hay tarjeta', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Amigos', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nuevo amigo' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Invita a alguien a PayMe' })).toHaveCount(0);
+  await expect(page.locator(BURBUJA)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Invita a alguien a PayMe' })).toHaveCount(0);
 });

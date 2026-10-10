@@ -212,6 +212,8 @@ export interface VistaDeBusqueda {
   readonly amigos: readonly FilaDePersona[];
   readonly otros: readonly FilaDePersona[];
   readonly yaAgregados: readonly FilaDePersona[];
+  /** D255-8 · Configuración: quienes ya están en el viaje (por su @), sin «Agregar». */
+  readonly enElViaje?: readonly FilaDePersona[];
   readonly fase: FaseDeBusqueda;
   /** Una «@» con menos de 3 letras: todavía no se busca. */
   readonly arrobaCorta: boolean;
@@ -219,6 +221,7 @@ export interface VistaDeBusqueda {
 
 /** ¿No hay nada que mostrar para lo escrito? (Ni mientras se busca ni si la búsqueda falló.) */
 export function sinResultados(b: VistaDeBusqueda): boolean {
-  return b.amigos.length === 0 && b.otros.length === 0 && b.yaAgregados.length === 0 && !b.arrobaCorta
+  return b.amigos.length === 0 && b.otros.length === 0 && b.yaAgregados.length === 0
+    && (b.enElViaje?.length ?? 0) === 0 && !b.arrobaCorta
     && (b.fase === 'quieta' || b.fase === 'lista');
 }

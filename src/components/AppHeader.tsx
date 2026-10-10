@@ -225,7 +225,7 @@ export function AppHeaderBack({
   const identidad = userName?.trim() || undefined;
   const openAvisos = onBell ?? (() => navigate('avisos'));
   return (
-    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
+    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed hdr-con-volver' : ''}`}>
       <div className="hdr-row">
         <HeaderIdentityConDiagnostico userName={identidad} />
         {bellHere ? (
@@ -377,7 +377,8 @@ export function BubbleTabs({
 }) {
   const { t } = useIdioma();
   return (
-    <div className="btabs" role="tablist">
+    // D255-3 · con dos pestañas (Balance) van a medias, no en tercios.
+    <div className={`btabs ${tabs.length === 2 ? 'btabs-2' : ''}`} role="tablist">
       {tabs.map((tab) => {
         const on = tab.id === active;
         return (

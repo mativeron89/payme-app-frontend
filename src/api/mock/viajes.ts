@@ -584,6 +584,43 @@ export function mockCrearViaje(body: unknown, { version = 1 }: OpcionesDeVersion
   });
 }
 
+/**
+ * D255-8 · `POST /api/viajes/:id/miembros`, como el dueño (`invitar`): 1..19 como
+ * al crear; quien ya es miembro o está invitado se ignora y a quien rechazó o
+ * salió se lo vuelve a invitar. Sólo con el viaje abierto.
+ */
+export function mockInvitarAlViaje(id: string, body: unknown, { version = 1 }: OpcionesDeVersion = {}) {
+  return ruta(() => {
+    if (!objeto(body) || !soloClaves(body, ['miembros'])) throw invalido();
+    const pedidos = miembrosPedidos(body.miembros);
+    const v = miViaje(id);
+    if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
+    if (limiteDeViajesMock()) throw new Respuesta(429, 'viajes_rate_limited');
+    const resueltos = resolverMiembros(pedidos);
+    const u = yo();
+    const porUsuario = new Map(v.miembros.map((m) => [m.user_id, m]));
+    const nuevos = resueltos.filter((p) => !['activo', 'invitado'].includes(porUsuario.get(p.user_id)?.estado ?? ''));
+    const ocupados = v.miembros.filter((m) => ['activo', 'invitado'].includes(m.estado) && !m.eliminada).length;
+    if (ocupados + nuevos.length > MAX_MIEMBROS) throw conflicto('viaje_members_limit', { limit: MAX_MIEMBROS });
+    const t0 = Date.now();
+    nuevos.forEach((p, i) => {
+      const en = new Date(t0 + i).toISOString();
+      const previo = porUsuario.get(p.user_id);
+      if (previo) {
+        previo.estado = 'invitado';
+        previo.invitado_por = u;
+        previo.invitado_en = en;
+      } else {
+        v.miembros.push({
+          id: nuevoId(), user_id: p.user_id, estado: 'invitado', invitado_por: u, invitado_en: en, created_at: en,
+          first_name: p.first_name, last_name: p.last_name, username: p.username, eliminada: false,
+        });
+      }
+    });
+    return { contract: CONTRATO, viaje: vistaViaje(v, u, version) };
+  });
+}
+
 export function mockDetalleViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);

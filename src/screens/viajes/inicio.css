@@ -91,9 +91,29 @@
   transform: rotate(-90deg);
 }
 
-/* D246 · Abiertos y Cerrados se eligen: lo elegido con borde 2px teal (no sólo color). */
-.vj-lanzador { border: 2px solid transparent; border-radius: var(--r-md); }
-.vj-lanzador--elegido { border-color: var(--action-2); background: var(--teal-l); }
+/* D246 · Abiertos y Cerrados se eligen: lo elegido con borde 2px teal (no sólo color).
+   D255-2 · en negrita, y el recuadro de lo elegido es la MITAD de la tarjeta:
+   sin borde propio ni radio menor, sigue las esquinas de la tarjeta (con la
+   esquina cuadrada de la pestaña) y llega hasta la línea del medio. Antes el
+   borde transparente de 2px y el radio propio dejaban la esquina cortada y un
+   espacio entre las dos (captura 2 de Mati). */
+.vj-lanzadores {
+  border-radius: inherit;
+  overflow: hidden;
+}
+.vj-lanzador .launch-label { font-weight: 700; }
+.vj-lanzador:first-child {
+  border-top-left-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+.vj-lanzador:last-child {
+  border-top-right-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+.vj-lanzador--elegido {
+  background: var(--teal-l);
+  box-shadow: inset 0 0 0 2px var(--action-2);
+}
 
 /* D246 · la lista elegida, en una burbuja debajo de «Crear viaje». */
 .vj-inicio-lista {
@@ -114,6 +134,32 @@
   cursor: pointer;
   text-align: left;
   color: var(--text);
+}
+/* D255-6 · la inicial en su círculo y el nombre; en el tramo 2, foto y color. */
+.vj-insignia {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  color: var(--teal-txt);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 800;
+}
+.vj-inicio-nombre {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.vj-inicio-chev {
+  color: var(--text-muted);
+  transform: rotate(-90deg);
 }
 .vj-inicio-lista-vacia {
   padding: var(--sp-4);

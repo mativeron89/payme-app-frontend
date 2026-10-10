@@ -64,7 +64,6 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Cuando todas estén pagadas, el viaje pasa a Cerrados.': 'Once they are all paid, the trip moves to Closed.',
   '{0} quedó cerrado. Todos pagaron y ya está en Cerrados.': '{0} is closed. Everyone paid and it is now in Closed.',
   // 1l · el balance en vivo.
-  'Balance': 'Balance',
   // D245 · la pantalla del viaje y Balance, más simples; D244 · la carga manual.
   'Carga manual': 'Add manually',
   'A favor: {0}': 'In your favor: {0}',
@@ -81,4 +80,14 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Escanear ticket para {0}': 'Scan a ticket for {0}',
   'Ticket para {0}': 'Ticket for {0}',
   'Alguien ya no está en el viaje. Revisa entre quiénes.': 'Someone is no longer on the trip. Check who it is split among.',
+  // D255-8 · Configuración del viaje.
+  'Agregar miembros': 'Add members',
+  'Ya están en el viaje': 'Already on the trip',
+  'Le mandamos la invitación a {0}.': 'We sent {0} an invitation.',
+  'Invitados': 'Invited',
+  'Falta que acepte': "Hasn't accepted yet",
+  'El viaje': 'The trip',
+  'Nombre y fechas': 'Name and dates',
+  'Color': 'Color',
+  'Foto': 'Photo',
 };

@@ -363,3 +363,58 @@ describe('mock · Viajes (App Backend 2.172.1): salir después de pagar (H02, D2
     expect(oax.transferencias.length).toBeGreaterThan(0);
   });
 });
+
+describe('🔴 mock · D255-8 · «Agregar miembros» (`POST /api/viajes/:id/miembros`, como el dueño)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
+  it('invita a un amigo: queda entre los invitados; repetirlo no lo duplica (el dueño lo ignora)', async () => {
+    storage();
+    const { m, d, state } = await subject();
+    const amigo = state.friends[0]!;
+    const antes = d.decodeDetalleViaje(await m.mockDetalleViaje(m.VIAJES_SEMILLA.cancun, V2));
+    const v = d.decodeDetalleViaje(await m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [{ user_id: amigo.id }] }, V2), 'viajes.invitar');
+    expect(v.invitados).toHaveLength(antes.invitados.length + 1);
+    expect(v.invitados.at(-1)).toMatchObject({ first_name: amigo.first_name });
+    expect(v.miembros).toHaveLength(antes.miembros.length);
+    const otraVez = d.decodeDetalleViaje(await m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [{ user_id: amigo.id }] }, V2), 'viajes.invitar');
+    expect(otraVez.invitados).toHaveLength(v.invitados.length);
+  });
+
+  it('lo que el dueño rechaza: cuerpo con otra clave 400, @ desconocido 422, viaje no abierto 409, el seam 429', async () => {
+    storage();
+    const { m, state } = await subject();
+    const amigo = state.friends[0]!;
+    expect(await rechazo(m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [{ user_id: amigo.id }], idempotency_key: 'x-12345678' })))
+      .toMatchObject({ status: 400 });
+    expect(await rechazo(m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [] }))).toMatchObject({ status: 400 });
+    expect(await rechazo(m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [{ username: 'nadie.aca' }] })))
+      .toEqual({ status: 422, error: 'viaje_member_not_found', extra: { member: { username: 'nadie.aca' } } });
+    expect(await rechazo(m.mockInvitarAlViaje(m.VIAJES_SEMILLA.monterrey, { miembros: [{ user_id: amigo.id }] })))
+      .toMatchObject({ status: 409, error: 'viaje_not_open' });
+    expect(await rechazo(m.mockInvitarAlViaje('d1000000-0000-4000-8000-0000000000ff', { miembros: [{ user_id: amigo.id }] })))
+      .toMatchObject({ status: 404 });
+  });
+
+  it('🔴 quien ya está invitado no cuenta dos veces para el tope de 20 (el dueño sólo suma a los nuevos)', async () => {
+    storage();
+    const { m, d, state } = await subject();
+    const arrobas = ['valentina.rios', 'nicolas.salas', 'mariana', 'marcos_d', 'mario.g', 'marcelo', 'marta.s', 'sofi.fernandez', 'juan.lopez', 'maria.ruiz'];
+    const miembros = [...state.friends.map((f) => ({ user_id: f.id })), ...arrobas.map((username) => ({ username }))].slice(0, 19);
+    const creado = d.decodeDetalleViaje(await m.mockCrearViaje(
+      { nombre: 'Tope', fecha_desde: null, fecha_hasta: null, miembros, idempotency_key: 'clave-tope-0001' }, V2), 'viajes.crear');
+    // Hacen falta 10 o más para que contarlos dos veces pase de 20.
+    expect(creado.invitados.length).toBeGreaterThanOrEqual(10);
+    const otraVez = d.decodeDetalleViaje(await m.mockInvitarAlViaje(creado.id, { miembros }, V2), 'viajes.invitar');
+    expect(otraVez.invitados).toHaveLength(creado.invitados.length);
+  });
+
+  it('el seam de límite: 429 `viajes_rate_limited`', async () => {
+    storage({ 'payme.app.mock.viajes.limite.v1': '429' });
+    const { m, state } = await subject();
+    expect(await rechazo(m.mockInvitarAlViaje(m.VIAJES_SEMILLA.cancun, { miembros: [{ user_id: state.friends[0]!.id }] })))
+      .toMatchObject({ status: 429, error: 'viajes_rate_limited' });
+  });
+});

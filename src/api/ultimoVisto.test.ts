@@ -186,7 +186,7 @@ describe('🔴 T-01 · la respuesta tardía de otra cuenta no se guarda ni se mu
     expect(cache.leer('sinLeer')).toBe(5);
   });
 
-  it('🔴 lo que B ya pidió llega aunque la caché tuviera todavía lo de A: su pantalla no queda esperando', () => {
+  it('🔴 lo que B ya pidió llega aunque la memoria tuviera todavía lo de A: su pantalla no queda esperando', () => {
     const { cache, estado, guardarYa } = conDueno('A');
     guardarYa('amigos.grupos', ['Familia de A']);
     estado.dueno = 'B';

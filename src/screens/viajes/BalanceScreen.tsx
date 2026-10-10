@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { DetalleViaje } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
-import { AppHeaderBack, BubbleTabs } from '../../components/AppHeader';
+import { AppHeaderBack, BubbleTabs, MountedCard } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
@@ -16,8 +16,11 @@ import './viajes.css';
 import './viaje.css';
 
 /**
- * D245-6 · Balance (`/viaje-balance/<id>`): la burbuja dice sólo «Balance» y
- * debajo dos opciones, como las burbujas de Inicio (el mismo `BubbleTabs`):
+ * D245-6 · Balance (`/viaje-balance/<id>`): dos opciones, como las burbujas de
+ * Inicio (el mismo `BubbleTabs`).
+ * D255-3 · sin la burbuja «Balance»: Consumos y Miembros van en la cabecera,
+ * como Cuenta · Estadísticas · Viajes en Inicio, y su contenido en la tarjeta
+ * blanca montada debajo:
  * - **Consumos** (primero): los tickets y gastos del viaje, el más nuevo arriba,
  *   con lugar o descripción, fecha, quién pagó y el total. Al tocarlo abre el
  *   ticket como antes. Nunca qué eligió cada uno.
@@ -37,11 +40,14 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const fotoDe = useFotosDeMiembros(viajeId, carga.tipo === 'listo' ? carga.viaje.miembros : null);
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
+      <AppHeaderBack
+        userName={fullName(session) ?? undefined}
+        onBack={() => goBack('viaje', viajeId)}
+        tabs={<PestanasDeBalance opcion={opcion} onOpcion={setOpcion} />}
+      />
       <BalanceVista
         carga={carga}
         opcion={opcion}
-        onOpcion={setOpcion}
         onReintentar={cargar}
         onVerViajes={() => navigate('viajes', 'abiertos')}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
@@ -53,10 +59,20 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   );
 }
 
+export function PestanasDeBalance({ opcion, onOpcion }: { opcion: OpcionDeBalance; onOpcion: (o: OpcionDeBalance) => void }) {
+  const { t } = useIdioma();
+  return (
+    <BubbleTabs
+      tabs={[{ id: 'consumos', label: t('Consumos') }, { id: 'miembros', label: t('Miembros') }]}
+      active={opcion}
+      onSelect={(id) => onOpcion(id as OpcionDeBalance)}
+    />
+  );
+}
+
 export function BalanceVista({
   carga,
   opcion,
-  onOpcion,
   onReintentar,
   onVerViajes,
   onAbrirTicket,
@@ -64,39 +80,23 @@ export function BalanceVista({
 }: {
   carga: CargaDeViaje;
   opcion: OpcionDeBalance;
-  onOpcion: (o: OpcionDeBalance) => void;
   onReintentar: () => void;
   onVerViajes: () => void;
   onAbrirTicket: (ticketId: string) => void;
   fotoDe?: (miembroId: string) => string | null;
 }) {
-  const { t } = useIdioma();
   return (
-    <>
-      <div className="title-card">
-        <h1 className="title-card-title">{t('Balance')}</h1>
-      </div>
-      <div className="scroll vj-scroll">
+    <div className="scroll">
+      <MountedCard seam={opcion === 'consumos' ? 'left' : 'right'} className="vjb-tarjeta">
         {carga.tipo === 'listo' ? (
-          <div>
-            <div className="vjb-banda">
-              <BubbleTabs
-                tabs={[{ id: 'consumos', label: t('Consumos') }, { id: 'miembros', label: t('Miembros') }]}
-                active={opcion}
-                onSelect={(id) => onOpcion(id as OpcionDeBalance)}
-              />
-            </div>
-            <div className={`vjb-tarjeta ${opcion === 'consumos' ? 'seam-left' : 'seam-right'}`}>
-              {opcion === 'consumos'
-                ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} />
-                : <Miembros viaje={carga.viaje} fotoDe={fotoDe} />}
-            </div>
-          </div>
+          opcion === 'consumos'
+            ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} />
+            : <Miembros viaje={carga.viaje} fotoDe={fotoDe} />
         ) : (
           <EstadoSinViaje carga={carga} onReintentar={onReintentar} onVerViajes={onVerViajes} />
         )}
-      </div>
-    </>
+      </MountedCard>
+    </div>
   );
 }
 

@@ -90,11 +90,27 @@ describe('fachada real · Viajes con App Backend 2.172.0', () => {
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros/m%2F1/avatar`);
   });
 
+  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=2` con sólo `{ miembros }`', async () => {
+    const v = await api.invitarAlViaje(VIAJE, [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }]);
+    expect(v.id).toBe(VIAJE);
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]!.method).toBe('POST');
+    expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros`);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['2']);
+    expect(pedidos[0]!.body).toEqual({ miembros: [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }] });
+  });
+
+  it('D255-8 · el id del viaje va codificado en la ruta de «Agregar miembros»', async () => {
+    await api.invitarAlViaje('a/b', [{ username: 'leo.paz' }]);
+    expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/miembros');
+  });
+
   it('con Viajes apagado no se pide nada', async () => {
     aplicarConfigViajes({ features: { viajes: { supported: true, enabled: false } } });
     await expect(api.cargarGastoDeViaje(VIAJE, { descripcion: 'x', monto_cents: 1, presentes: ['m1'], idempotency_key: 'gasto-de-prueba-2' }))
       .rejects.toThrow('viajes_not_available');
     await expect(api.getAvatarDeMiembroDeViaje(VIAJE, 'm1', loadSession()!)).rejects.toThrow('viajes_not_available');
+    await expect(api.invitarAlViaje(VIAJE, [{ username: 'leo.paz' }])).rejects.toThrow('viajes_not_available');
     expect(pedidos).toHaveLength(0);
   });
 });

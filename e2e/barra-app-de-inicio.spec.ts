@@ -86,7 +86,8 @@ test.describe('en la app de inicio de iOS (simulada con los números de Mati)', 
     expect(m.posicion).toBe('relative');
     expect(m.appTop).toBe(0);
     expect(m.barraAbajo).toBe(m.appAbajo);
-    expect(m.barraAlto).toBe(90);
+    // D255-1 · Mati: «bajarla un poco, está muy alta». Con el inset de 34, 56 + (34 − 12) = 78; antes 90.
+    expect(m.barraAlto).toBe(78);
     expect(m.desbordeX).toBeLessThanOrEqual(0);
   });
 
@@ -119,4 +120,6 @@ test('en la computadora tampoco hay clase', async ({ page }) => {
   const m = await medir(page);
   expect(m.clase).toBe(false);
   expect(m.app).toBe(m.dvh);
+  // D255-1 · sin inset la barra no cambia: 56 + 8.
+  expect(m.barraAlto).toBe(64);
 });

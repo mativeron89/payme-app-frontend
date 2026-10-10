@@ -43,6 +43,7 @@ import {
 } from './viajesView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
 import { circuloDelViaje, recordarNombreDeViaje } from './circuloDelViaje';
+import { ConfiguracionDelViaje } from './ConfiguracionDelViaje';
 import './viajes.css';
 import './viaje.css';
 
@@ -169,6 +170,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const [hoja, setHoja] = useState<Hoja | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [marcando, setMarcando] = useState<string | null>(null);
+  /** D255-8 · Configuración, una vista dentro del viaje (no una ruta). */
+  const [configuracion, setConfiguracion] = useState(false);
   const inicial = useRef<HTMLButtonElement | null>(null);
 
   const viaje = carga.tipo === 'listo' ? carga.viaje : null;
@@ -268,6 +271,24 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     if (!enviando) setHoja(null);
   };
 
+  if (configuracion && viaje?.estado === 'abierto') {
+    return (
+      <div className="screen has-appbar">
+        <ConfiguracionDelViaje
+          viaje={viaje}
+          userName={fullName(session) ?? undefined}
+          onVolver={() => setConfiguracion(false)}
+          onActualizado={mostrar}
+          onYaSeCerro={() => {
+            setConfiguracion(false);
+            yaSeCerro();
+          }}
+        />
+        <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
+      </div>
+    );
+  }
+
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viajes', 'abiertos')} />
@@ -279,6 +300,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onVerBalance={() => navigate('viaje-balance', viajeId)}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         onCargaManual={() => navigate('viaje-gasto', viajeId)}
+        onConfiguracion={() => setConfiguracion(true)}
         fotoDe={fotoDe}
         onCerrar={pedirCierre}
         onSalir={() => setHoja({ tipo: 'salir' })}
@@ -446,6 +468,8 @@ export interface ViajeVistaProps {
   readonly onVerBalance: () => void;
   /** D244/D245 · «Carga manual»: la pantalla del gasto a mano. */
   readonly onCargaManual: () => void;
+  /** D255-8 · «Configuración» del viaje abierto. */
+  readonly onConfiguracion: () => void;
   /** D245 · la foto de un miembro, si la hay (si no, iniciales). */
   readonly fotoDe?: (miembroId: string) => string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
@@ -475,7 +499,7 @@ export function ViajeVista(props: ViajeVistaProps) {
       <TarjetaDeTitulo viaje={v} />
       {/* La clave por estado: al cerrarse el viaje la pantalla es otra y
           arranca arriba, no donde estaba el botón «Cerrar viaje». */}
-      <div key={v.estado} className="scroll vj-scroll">
+      <div key={v.estado} className={`scroll vj-scroll ${v.estado === 'abierto' ? 'vjv-scroll-abierto' : ''}`}>
         {v.estado === 'abierto' ? <ViajeAbierto viaje={v} {...props} /> : <EsperandoPagos viaje={v} {...props} />}
       </div>
     </>
@@ -509,9 +533,12 @@ function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
  * el balance como monto enseguida de la burbuja (verde a favor, rojo con «−» la
  * deuda, «$0» en negro), el desplegable «Miembros», «Escanear ticket» y «Carga
  * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
- * Consumos. «Cerrar viaje» y «Salir del viaje» siguen al pie.
+ * Consumos.
+ * D255-7 · el monto centrado entre la burbuja y «Miembros»; debajo de «Ver
+ * balance del viaje», «Configuración»; «Cerrar viaje» (burbuja rojo clarito) y
+ * «Salir del viaje» van abajo, un poco por encima de la barra.
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
@@ -528,12 +555,21 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, fotoDe, onCerrar,
         <span>{t('Ver balance del viaje')}</span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
-      <button type="button" className="btn btn-ghost" onClick={onCerrar}>
-        {t('Cerrar viaje')}
+      <button type="button" className="vj-card vjv-ver-balance vjv-configuracion" onClick={onConfiguracion}>
+        <span className="vjv-configuracion-texto">
+          <Icon name="settings" size={20} />
+          {t('Configuración')}
+        </span>
+        <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
-      <button type="button" className="vjv-salir" onClick={onSalir}>
-        {t('Salir del viaje')}
-      </button>
+      <div className="vjv-pie-abierto">
+        <button type="button" className="vjv-cerrar" onClick={onCerrar}>
+          {t('Cerrar viaje')}
+        </button>
+        <button type="button" className="vjv-salir" onClick={onSalir}>
+          {t('Salir del viaje')}
+        </button>
+      </div>
     </>
   );
 }

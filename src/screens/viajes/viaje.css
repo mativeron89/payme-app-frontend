@@ -681,21 +681,9 @@
 .vjv-ver-balance .vjv-chev { transform: rotate(-90deg); }
 
 /* ══ D245-6 · Balance: «Consumos» y «Miembros», como las burbujas de Inicio ══ */
-.vjb-banda {
-  padding: var(--sp-2) var(--sp-2) 0;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  background: var(--navy);
-}
-.vjb-banda .btabs {
-  top: 0;
-  margin: 0;
-  padding: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+/* D255-3 · las dos pestañas van en la cabecera (`BubbleTabs` de dos, a medias)
+   y el contenido en la tarjeta montada, como Inicio. */
 .vjb-tarjeta {
-  background: var(--surface);
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-  box-shadow: var(--sh-1);
   padding: var(--sp-2) var(--sp-4);
 }
 .vjb-consumos, .vjb-miembros { margin: 0; padding: 0; list-style: none; }
@@ -753,3 +741,88 @@
 .vjm-titulo { margin: 0 0 var(--sp-1); font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--text); }
 .vjm-ayuda { margin: 0 0 var(--sp-3); font-family: var(--font-body); font-size: var(--fs-sm); color: var(--text-muted); }
 .vjm-resumen { margin: 0 0 var(--sp-2); text-align: center; font-family: var(--font-display); font-weight: 700; color: var(--text); }
+
+/* ══ D255-7 · el viaje abierto ══
+   «Cerrar viaje» y «Salir del viaje» van abajo, un poco por encima de la barra:
+   el pie toma el espacio que sobra (`margin-top: auto`) y el aire de abajo se
+   mide contra el círculo de la barra, que sobresale 26 px. */
+.has-appbar .scroll.vjv-scroll-abierto {
+  padding-bottom: calc(56px + var(--appbar-pie) + 26px + var(--sp-3));
+}
+/* El monto, centrado entre la burbuja del encabezado y «Miembros»: arriba el
+   padding del scroll (16), abajo el gap (12) + 4. Antes sumaba 8 más arriba. */
+.vjv-scroll-abierto .vjv-monto {
+  margin: 0 0 var(--sp-1);
+}
+.vjv-configuracion-texto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.vjv-pie-abierto {
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+/* «Cerrar viaje», burbuja rojo clarito (Mati, D255-8). 6.4:1 sobre --red-l. */
+.vjv-cerrar {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: var(--r-lg);
+  background: var(--red-l);
+  color: var(--danger);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+.vjv-cerrar:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* ══ D255-8 · Configuración del viaje ══ */
+.vjcfg-filas { margin: 0; padding: 0; list-style: none; }
+.vjcfg-filas li + li { border-top: 1px solid var(--border); }
+.vjcfg-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--sp-2) 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+.vjcfg-fila:disabled { cursor: default; opacity: 0.55; }
+.vjcfg-fila-rotulo {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.vjcfg-fila-valor {
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.vjcfg-muestra {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.vjcfg-chev { color: var(--text-muted); transform: rotate(-90deg); }

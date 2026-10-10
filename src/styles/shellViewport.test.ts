@@ -73,8 +73,19 @@ describe('E173-2 · la barra inferior nunca queda fuera de lo visible', () => {
 
   it('captura 6 · el inset de abajo reemplaza los 8 px de la barra, no se suma', () => {
     const barra = regla('.appbar');
-    expect(efectivo(barra, 'height')).toBe('calc(56px + max(8px, env(safe-area-inset-bottom)))');
-    expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) max(8px, env(safe-area-inset-bottom))');
+    expect(efectivo(barra, 'height')).toBe('calc(56px + var(--appbar-pie))');
+    expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) var(--appbar-pie)');
+  });
+
+  /**
+   * D255-1 · Mati (0.233.0): «la barra inferior … bajarla un poco, está muy
+   * alta». Con el indicador de inicio la barra usa el inset MENOS 12 (90 → 78);
+   * sin inset sigue en 8. Una sola variable para la barra y para las pantallas
+   * que la miden: si alguna repite la cuenta vieja, mediría otra barra.
+   */
+  it('🔴 D255-1 · la barra usa el inset menos 12, con un mínimo de 8, en una sola variable', () => {
+    expect(efectivo(regla(':root'), '--appbar-pie')).toBe('max(8px, calc(env(safe-area-inset-bottom) - 12px))');
+    expect(sinComentarios(CSS)).not.toContain('max(8px, env(safe-area-inset-bottom))');
   });
 
   it('🔴 D179 · E179b · en la app de inicio de iOS la cadena html → body → #root → `.app` mide 100lvh', () => {

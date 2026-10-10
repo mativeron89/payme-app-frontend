@@ -11,6 +11,58 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.234.0 — La caché por cuenta (T-01) y los ajustes del 10/10 (D255) (2026-10-10)
+
+Orden AF-CACHE-Y-AJUSTES-1010-20261010 (e761c8ed…). Fuentes:
+- T-01 de la auditoría Codex total (98ac9cf8…);
+- decisión 255 de Mati (bc86b278…), los ajustes que pidió al probar 0.233.0 en su iPhone.
+
+Plan aprobado (d6c649a5…, OK 01:16:34Z) con las respuestas A–D y un ajuste: Configuración con un solo título. Dos
+tramos en un solo PR: el 1 con el contrato servido hoy, el 2 con App Backend D255. Lo visible se cierra con la prueba
+de Mati en el iPhone (D63).
+
+**Tramo 1**
+
+- **T-01 · lo último visto toma la cuenta AL PEDIR (privacidad, ALTA).**
+  - Antes, `ultimoVisto.guardar` tomaba la cuenta vigente cuando llegaba la respuesta: una respuesta tardía de la
+    cuenta A se guardaba y se mostraba con la cuenta B.
+  - Ahora quien pide saca un `turno()` (cuenta y generación) justo antes del pedido. La respuesta se descarta, sin
+    guardarse ni mostrarse, si la cuenta cambió o hubo un «vaciar».
+  - Un error tardío de otra cuenta tampoco borra ni vacía nada.
+  - La clase: los 8 llamados de los 5 lectores (Inicio, invitaciones, Mesas, Amigos, sin leer). Las fotos, el @
+    propio y el aviso de foto ya tomaban la cuenta al pedir.
+- **D255-1 · la barra de abajo, más baja.** Con el indicador de inicio usa el inset menos 12: mide 78 en vez de 90, y
+  los íconos bajan 12 px sin tocar el indicador. Sin indicador no cambia (64). Es una sola variable, `--appbar-pie`,
+  para la barra y las pantallas que la miden.
+- **D255-2 · Inicio › Viajes:**
+  - Abiertos y Cerrados en negrita.
+  - Lo elegido es la mitad exacta de la tarjeta: sigue sus esquinas y llega a la línea del medio, sin el recuadro
+    cortado ni el espacio entre las dos (captura 2 de Mati).
+- **D255-3 · Balance:** sin la burbuja «Balance». Consumos y Miembros van en la cabecera, como Cuenta · Estadísticas
+  · Viajes en Inicio, a medias, y el contenido en la tarjeta montada. Logo y «Volver» no saltan al entrar desde el
+  viaje.
+- **D255-4 · Amigos:**
+  - Una sola burbuja: «Invita a alguien a PayMe», con su ícono.
+  - Tocarla copia el link (sólo el link, respuesta B) y avisa «Link copiado».
+  - Se fueron el texto, el link a la vista, «Compartir mi link» y «Cambiar mi link». La fachada de cambiar queda,
+    sin pantalla.
+- **D255-5 · al arrastrar:** en toda pantalla con pestañas en la cabecera (Inicio, Amigos, Balance), el scroll no
+  rebota, y la tarjeta ya no se separa de la pestaña (captura 5).
+- **D255-6 · Abiertos y Cerrados de Inicio:** cada viaje con sólo la inicial y el nombre. La pantalla aparte
+  `/viajes`, de respaldo, sigue con su detalle (respuesta C).
+- **D255-7 · el viaje:**
+  - el monto, centrado entre la burbuja y «Miembros»;
+  - debajo de «Ver balance del viaje», «Configuración»;
+  - «Cerrar viaje», una burbuja rojo clarito;
+  - «Cerrar viaje» y «Salir del viaje», abajo, sobre el círculo de la barra.
+- **D255-8 · Configuración** (una vista dentro del viaje, sin ruta nueva, respuesta A):
+  - «Agregar miembros», con el buscador del alta del viaje, ahora compartido (`BuscadorDeMiembros`).
+  - Usa la ruta que ya existe, `POST /api/viajes/:id/miembros?viaje_version=2`, con la fachada nueva
+    `invitarAlViaje` (real y mock).
+  - Cada «Agregar» invita en el acto («Le mandamos la invitación a …»).
+  - Quien ya está en el viaje, por su @, va en «Ya están en el viaje», sin botón; debajo, «Invitados».
+  - El lugar de nombre, fechas, color y foto queda armado y apagado hasta el tramo 2.
+
 ## 0.233.0 — Amigos: el link de invitación (D252) (2026-10-09)
 
 Orden AF-LINK-DE-INVITACION-20261009 (33f4608c…); decisión 252 de Mati (719de86d…): «ahora solo es el link que

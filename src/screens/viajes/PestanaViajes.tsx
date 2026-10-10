@@ -4,9 +4,6 @@ import type { ListaDeViajes, ViajeEnLista } from '../../api/viajes';
 import { Icon, type IconName } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { navigate } from '../../router';
-import { formatMXN } from '../../utils/format';
-import { etiquetaDelViaje, lineaDelViaje, tonoDeBalance } from './listasView';
-import { textoDeMiBalance } from './viajesView';
 import './viajes.css';
 import './listas.css';
 import './inicio.css';
@@ -131,7 +128,7 @@ export function PanelViajes({ conteo, elegida, onElegir, onReintentar }: {
     );
   }
   return (
-    <div className="launch-pair home-tab-panel">
+    <div className="launch-pair home-tab-panel vj-lanzadores">
       <LanzadorConConteo icon="briefcase" label={t('Abiertos')} sub={cuantos(abiertos)} elegido={elegida === 'abiertos'} onClick={() => onElegir('abiertos')} />
       <LanzadorConConteo icon="archive" label={t('Cerrados')} sub={cuantos(cerrados)} elegido={elegida === 'cerrados'} onClick={() => onElegir('cerrados')} />
     </div>
@@ -159,12 +156,29 @@ export function FilaCrearViaje({ conteo }: { conteo: ConteoDeViajes }) {
 }
 
 /**
+ * D255-6 · la inicial del viaje, en su círculo. En el tramo 2 lleva la foto y
+ * el color del viaje; sin foto, la inicial.
+ */
+export function inicialDelViaje(nombre: string): string {
+  const primera = Array.from(nombre.trim())[0];
+  return primera ? primera.toLocaleUpperCase('es-MX') : '·';
+}
+
+export function InsigniaDelViaje({ nombre }: { nombre: string }) {
+  return (
+    <span className="vj-insignia" aria-hidden="true">{inicialDelViaje(nombre)}</span>
+  );
+}
+
+/**
  * D246 · la lista elegida, en una burbuja debajo de «Crear viaje» (antes
- * Abiertos y Cerrados navegaban a otra pantalla). Tocar un viaje lo abre. En
- * Cerrados, «Gastaste» con lo que consumí (1r).
+ * Abiertos y Cerrados navegaban a otra pantalla). Tocar un viaje lo abre.
+ * D255-6 · cada fila lleva sólo la inicial y el nombre del viaje (Mati: «no hace
+ * falta poner toda la descripción»): sin fechas, personas, balance, «Esperando
+ * pagos» ni «Gastaste». El detalle está adentro del viaje.
  */
 export function ListaDeInicio({ conteo, elegida }: { conteo: ConteoDeViajes; elegida: ListaElegida }) {
-  const { t, idioma } = useIdioma();
+  const { t } = useIdioma();
   if (conteo.estado !== 'listo' || conteo.counts.abiertos + conteo.counts.cerrados === 0) return null;
   if (conteo.viajes.length === 0) {
     return (
@@ -175,30 +189,15 @@ export function ListaDeInicio({ conteo, elegida }: { conteo: ConteoDeViajes; ele
   }
   return (
     <ul className="vj-card vj-inicio-lista">
-      {conteo.viajes.map((v) => {
-        const etiqueta = etiquetaDelViaje(v);
-        return (
-          <li key={v.id}>
-            <button type="button" className="vj-inicio-fila" onClick={() => navigate(v.estado === 'cerrado' ? 'viaje-cerrado' : 'viaje', v.id)}>
-              <span className="vjl-cuerpo">
-                <span className="vjl-nombre">{v.nombre}</span>
-                <span className="vjl-meta">{lineaDelViaje(v, idioma, t)}</span>
-                {etiqueta.tipo === 'esperando' ? (
-                  <span className="vjl-chip vjl-chip--esperando">{t('Esperando pagos · faltan {0}', etiqueta.faltan)}</span>
-                ) : etiqueta.tipo === 'balance' ? (
-                  <span className={`vjl-chip vjl-chip--${tonoDeBalance(etiqueta.cents)}`}>{textoDeMiBalance(etiqueta.cents, t, formatMXN)}</span>
-                ) : null}
-              </span>
-              {v.consumiste_cents !== null && (
-                <span className="vjl-gasto">
-                  <span className="vjl-gasto-rotulo">{t('Gastaste')}</span>
-                  <span className="vjl-gasto-monto">{formatMXN(v.consumiste_cents)}</span>
-                </span>
-              )}
-            </button>
-          </li>
-        );
-      })}
+      {conteo.viajes.map((v) => (
+        <li key={v.id}>
+          <button type="button" className="vj-inicio-fila" onClick={() => navigate(v.estado === 'cerrado' ? 'viaje-cerrado' : 'viaje', v.id)}>
+            <InsigniaDelViaje nombre={v.nombre} />
+            <span className="vj-inicio-nombre">{v.nombre}</span>
+            <Icon name="chevron-down" size={18} className="vj-inicio-chev" />
+          </button>
+        </li>
+      ))}
     </ul>
   );
 }

@@ -51,12 +51,13 @@ test('1a · D246 · Inicio: «Viajes» reemplaza a «Asociadas»; Abiertos y Cer
   await expect(abiertos).toHaveAttribute('aria-pressed', 'true');
   await expect(cerrados).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
-  await expect(page.getByText('Esperando pagos · faltan 2', { exact: true })).toBeVisible();
+  // D255-6 · cada fila, sólo la inicial y el nombre.
+  await expect(page.locator('.vj-inicio-fila')).toHaveText(['CCancún 2026', 'MMonterrey fin de semana']);
   expect(page.url()).toBe(inicio);
   await cerrados.click();
   await expect(cerrados).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Oaxaca puente', { exact: true })).toBeVisible();
-  await expect(page.locator('.vj-inicio-fila').first()).toContainText('Gastaste$2,230');
+  await expect(page.locator('.vj-inicio-fila').first()).toHaveText('OOaxaca puente');
   await expect(page.getByText('Cancún 2026', { exact: true })).toHaveCount(0);
   expect(page.url()).toBe(inicio);
   // En otra pestaña la lista no está; al volver a Viajes, de nuevo Abiertos.
@@ -192,7 +193,7 @@ test('D250 · desde un ticket del viaje abierto, el círculo también escanea pa
 test('D250 · desde Balance, el círculo también escanea para el viaje', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);
-  await expect(page.getByRole('heading', { name: 'Balance', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Consumos', exact: true })).toBeVisible();
   await circuloDelViaje(page).click();
   await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
 });
@@ -339,8 +340,9 @@ test('D244 · si la respuesta se pierde, reintentar es el mismo gasto (la misma 
 test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «Miembros»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-balance/${CANCUN}`);
-  await expect(page.getByRole('heading', { name: 'Balance', level: 1 })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Consumos', exact: true })).toHaveAttribute('aria-selected', 'true');
+  // D255-3 · sin la burbuja «Balance»: las pestañas en la cabecera.
+  await expect(page.getByRole('heading', { name: 'Balance' })).toHaveCount(0);
+  await expect(page.locator('header.hdr').getByRole('tab', { name: 'Consumos', exact: true })).toHaveAttribute('aria-selected', 'true');
   const consumos = page.locator('.vjb-consumo');
   await expect(consumos).toHaveCount(5);
   await expect(consumos.first()).toContainText('Mariscos El Faro');

@@ -94,6 +94,7 @@ import {
   type AccionTransferencia,
   type CargarTicketPedido,
   type CrearViajePedido,
+  type MiembroPedido,
   type DetalleViaje,
   type GastoManualPedido,
   type Duplicado,
@@ -613,6 +614,11 @@ export interface Api {
   getViajes(estado: 'abiertos' | 'cerrados'): Promise<ListaDeViajes>;
   getInvitacionesAViajes(): Promise<InvitacionAViaje[]>;
   crearViaje(req: CrearViajePedido): Promise<DetalleViaje>;
+  /**
+   * D255-8 · «Agregar miembros» desde Configuración (`POST /api/viajes/:id/miembros`,
+   * 1..19 como al crear). Quien ya es miembro o está invitado se ignora.
+   */
+  invitarAlViaje(id: string, miembros: readonly MiembroPedido[]): Promise<DetalleViaje>;
   getViaje(id: string): Promise<DetalleViaje>;
   aceptarViaje(id: string): Promise<DetalleViaje>;
   rechazarViaje(id: string): Promise<void>;
@@ -1260,6 +1266,12 @@ const realApi: Api = {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes?viaje_version=2', req), 'viajes.crear');
   },
+  invitarAlViaje: async (id, miembros) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await httpRequest<unknown>(
+      'POST', `/viajes/${encodeURIComponent(id)}/miembros?viaje_version=2`, { miembros },
+    ), 'viajes.invitar');
+  },
   getViaje: async (id) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}?viaje_version=2`));
@@ -1622,6 +1634,10 @@ const mockApi: Api = {
   crearViaje: async (req) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await mockViajes.mockCrearViaje(req, { version: 2 }), 'viajes.crear');
+  },
+  invitarAlViaje: async (id, miembros) => {
+    assertViajesHabilitado();
+    return decodeDetalleViaje(await mockViajes.mockInvitarAlViaje(id, { miembros }, { version: 2 }), 'viajes.invitar');
   },
   getViaje: async (id) => {
     assertViajesHabilitado();

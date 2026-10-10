@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
-import { BalanceVista } from './BalanceScreen';
+import { BalanceVista, PestanasDeBalance } from './BalanceScreen';
 import {
   HojaCerrarVista,
   HojaNoPuedeSalirVista,
@@ -62,7 +62,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
-  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onAbrirTicket: nada,
+  onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onConfiguracion: nada, onAbrirTicket: nada,
   onCerrar: nada, onSalir: nada, onMarcar: nada,
 };
 
@@ -117,11 +117,17 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('🔴 D250 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», cerrar y salir', () => {
+  it('🔴 D250 · D255-7 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Configuración», cerrar y salir', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Cerrar viaje Salir del viaje$/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Configuración Cerrar viaje Salir del viaje$/);
     expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
+  });
+
+  it('🔴 D255-7 · «Cerrar viaje» (burbuja rojo clarito) y «Salir del viaje» van juntos en el pie; el scroll lleva su aire', () => {
+    expect(html).toMatch(/<div class="vjv-pie-abierto"><button type="button" class="vjv-cerrar">Cerrar viaje<\/button><button type="button" class="vjv-salir">Salir del viaje<\/button><\/div>/);
+    expect(html).toContain('class="scroll vj-scroll vjv-scroll-abierto"');
+    expect(html).not.toContain('btn btn-ghost');
   });
 });
 
@@ -303,21 +309,29 @@ describe('salir y 1q', () => {
 describe('D245 · Balance: «Consumos» y «Miembros»', () => {
   const balance = (carga: CargaDeViaje, opcion: 'consumos' | 'miembros' = 'consumos', fotoDe?: (id: string) => string | null) =>
     renderToStaticMarkup(
-      <BalanceVista carga={carga} opcion={opcion} onOpcion={nada} onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} fotoDe={fotoDe} />,
+      <BalanceVista carga={carga} opcion={opcion} onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} fotoDe={fotoDe} />,
     );
 
-  it('la burbuja dice sólo «Balance»; sin la descripción ni la nota del pie', () => {
+  it('🔴 D255-3 · sin la burbuja «Balance»: el contenido va en la tarjeta montada, pegada a la pestaña elegida', () => {
     const html = balance(listo(viaje()));
-    expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Balance<\/h1><\/div>/);
+    expect(html).not.toContain('title-card');
+    expect(texto(html)).not.toMatch(/^Balance/);
+    expect(html).toMatch(/^<div class="scroll"><div class="mounted-card seam-left vjb-tarjeta">/);
+    expect(balance(listo(viaje()), 'miembros')).toMatch(/^<div class="scroll"><div class="mounted-card seam-right vjb-tarjeta">/);
     expect(texto(html)).not.toContain('se actualiza con cada ticket');
     expect(texto(html)).not.toContain('Ves cuánto debe');
   });
 
-  it('las dos opciones con el BubbleTabs de Inicio: «Consumos» primero y elegida', () => {
-    const html = balance(listo(viaje()));
-    expect(html).toContain('role="tablist"');
-    expect(texto(html)).toMatch(/^Balance Consumos Miembros/);
+  it('🔴 D255-3 · las dos opciones son el BubbleTabs de Inicio, a medias: «Consumos» primero y elegida', () => {
+    const html = renderToStaticMarkup(<PestanasDeBalance opcion="consumos" onOpcion={nada} />);
+    expect(html).toMatch(/^<div class="btabs btabs-2" role="tablist">/);
+    expect(texto(html)).toBe('Consumos Miembros');
     expect(html).toMatch(/<button type="button" role="tab" aria-selected="true" class="btab on">Consumos<\/button>/);
+  });
+
+  it('🔴 D255-3 · la pantalla lleva las pestañas en la cabecera con «Volver», no en el contenido', () => {
+    const fuente = readFileSync(new URL('./BalanceScreen.tsx', import.meta.url), 'utf8');
+    expect(fuente).toMatch(/<AppHeaderBack\s+userName=\{[^}]+\}\s+onBack=\{[^}]+\}\s+tabs=\{<PestanasDeBalance opcion=\{opcion\} onOpcion=\{setOpcion\} \/>\}/);
   });
 
   it('🔴 Consumos: los tickets del dueño, el más nuevo arriba, con lugar, fecha y quién pagó; nunca qué eligió nadie', () => {
@@ -362,7 +376,7 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
   });
 
   it('404: «Este viaje ya no está disponible.»', () => {
-    expect(texto(balance({ tipo: 'no_disponible' }))).toBe('Balance Este viaje ya no está disponible. Ver tus viajes');
+    expect(texto(balance({ tipo: 'no_disponible' }))).toBe('Este viaje ya no está disponible. Ver tus viajes');
   });
 });
 

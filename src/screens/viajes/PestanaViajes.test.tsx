@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ViajeEnLista } from '../../api/viajes';
-import { FilaCrearViaje, ListaDeInicio, PanelViajes, type ConteoDeViajes } from './PestanaViajes';
+import { FilaCrearViaje, ListaDeInicio, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
 
 /** AF-VIAJES · D242 · la pestaña «Viajes» de Inicio (1a, 1b); D246 · la lista elegida debajo de «Crear viaje». */
 const nada = () => undefined;
@@ -63,25 +63,33 @@ describe('la pestaña Viajes', () => {
 });
 
 describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
-  it('Abiertos: cada viaje con su línea y su balance o los pagos que faltan', () => {
+  /** Lo que se lee de una fila, sin etiquetas: el texto del botón. */
+  const filas = (html: string) => [...html.matchAll(/<button type="button" class="vj-inicio-fila">([\s\S]*?)<\/button>/g)]
+    .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+
+  it('🔴 D255-6 · Abiertos: cada fila es sólo la inicial y el nombre, en orden', () => {
     const html = renderToStaticMarkup(<ListaDeInicio conteo={listo(2, 0, [
       enLista({}),
       enLista({ id: 'v-2', nombre: 'Monterrey', estado: 'esperando_pagos', mi_balance_cents: 105000, transferencias_pendientes: 2 }),
     ])} elegida="abiertos" />);
-    expect(html).toContain('Cancún 2026');
-    expect(html).toContain('5–11 oct · 4 personas');
-    expect(html).toContain('Debes $542');
-    expect(html).toContain('Esperando pagos · faltan 2');
-    expect(html.indexOf('Cancún')).toBeLessThan(html.indexOf('Monterrey'));
+    expect(filas(html)).toEqual(['C Cancún 2026', 'M Monterrey']);
+    // Ni fechas, ni personas, ni balance, ni pagos que faltan.
+    for (const fuera of ['5–11 oct', '4 personas', 'Debes', 'Esperando pagos', 'vjl-']) expect(html).not.toContain(fuera);
   });
 
-  it('Cerrados: «Gastaste» con lo que consumí (1r)', () => {
+  it('🔴 D255-6 · Cerrados: también sólo la inicial y el nombre, sin «Gastaste»', () => {
     const html = renderToStaticMarkup(<ListaDeInicio conteo={listo(1, 1, [
-      enLista({ id: 'v-3', nombre: 'Oaxaca puente', estado: 'cerrado', mi_balance_cents: null, consumiste_cents: 223000, terminado_en: '2026-08-20T15:00:00.000Z' }),
+      enLista({ id: 'v-3', nombre: 'oaxaca puente', estado: 'cerrado', mi_balance_cents: null, consumiste_cents: 223000, terminado_en: '2026-08-20T15:00:00.000Z' }),
     ])} elegida="cerrados" />);
-    expect(html).toContain('Oaxaca puente');
-    expect(html).toContain('Gastaste');
-    expect(html).toContain('$2,230');
+    expect(filas(html)).toEqual(['O oaxaca puente']);
+    expect(html).not.toContain('Gastaste');
+    expect(html).not.toContain('$2,230');
+  });
+
+  it('la inicial: la primera letra en mayúscula, también con acento o emoji; sin nombre, un punto', () => {
+    expect(inicialDelViaje('  ébano')).toBe('É');
+    expect(inicialDelViaje('🏖️ Playa')).toBe('🏖');
+    expect(inicialDelViaje('   ')).toBe('·');
   });
 
   it('lista vacía: «No tienes viajes abiertos» o «No tienes viajes cerrados»', () => {

@@ -1,26 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import { api, newIdempotencyKey } from '../../api';
 import { extractApiError } from '../../api/errors';
-import { isCurrentSession } from '../../api/storage';
-import type { Friend } from '../../api/types';
-import {
-  publicarArrobaPropia,
-  useArrobaPropia,
-  useUsernameCapability,
-  type ResultadoArroba,
-} from '../../api/username';
 import { errorDeViaje } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppHeaderBack } from '../../components/AppHeader';
-import { ESPERA_MS } from '../../components/BuscarPorArroba';
-import { Icon } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
-import { RequestEpoch } from '../../utils/requestEpoch';
 import { fullName } from '../../utils/identity';
+import { CampoDeBusqueda, FilaPersona, ResultadosDeBusqueda, useBuscadorDeMiembros } from './BuscadorDeMiembros';
 import {
-  arrobaCorta,
-  consultaDe,
   contenidoDelPedido,
   fechasInvertidas,
   filaDe,
@@ -28,8 +16,6 @@ import {
   MAX_AGREGADOS,
   mensajeAlCrear,
   puedeCrear,
-  seccionesDeBusqueda,
-  sinResultados,
   type Candidato,
   type FilaDePersona,
   type LlaveDelPedido,
@@ -53,89 +39,18 @@ import './crear.css';
  * `features.username` encendida. De nadie se ve el correo.
  */
 
-type BusquedaPorArroba =
-  | { readonly fase: 'quieta' }
-  | { readonly fase: 'buscando' }
-  /** Con la consulta que la trajo: una lista de otra consulta no se muestra. */
-  | { readonly fase: 'lista'; readonly q: string; readonly resultados: readonly ResultadoArroba[] }
-  | { readonly fase: 'limite' }
-  | { readonly fase: 'error' };
-
 export function CrearViajeScreen() {
   const { t } = useIdioma();
   const { session } = useAuth();
-  const { enabled: arrobaHabilitada } = useUsernameCapability();
-  const principal = session?.principal_id ?? '';
-  const miArroba = useArrobaPropia(principal);
 
   const [nombre, setNombre] = useState('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
-  const [texto, setTexto] = useState('');
-  const [amigos, setAmigos] = useState<readonly Friend[]>([]);
-  const [busqueda, setBusqueda] = useState<BusquedaPorArroba>({ fase: 'quieta' });
   const [agregados, setAgregados] = useState<readonly Candidato[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const llave = useRef<LlaveDelPedido | null>(null);
-  const epoca = useRef(new RequestEpoch());
-
-  // Los amigos aceptados, una vez. Si no llegan, se puede sumar gente por @.
-  useEffect(() => {
-    let vivo = true;
-    api.getFriends()
-      .then((r) => { if (vivo) setAmigos(r.friends); })
-      .catch(() => undefined);
-    return () => { vivo = false; };
-  }, []);
-
-  // Mi @ para la fila «Tú». Si nadie lo leyó todavía en esta sesión, una
-  // lectura (`GET /api/account/username`, la de Configuración) y se publica en
-  // el store de siempre. Un fallo deja la fila sin @.
-  useEffect(() => {
-    if (!arrobaHabilitada || !session || miArroba !== null) return undefined;
-    let vivo = true;
-    api.getUsername(session)
-      .then((e) => { if (vivo && isCurrentSession(session)) publicarArrobaPropia(session.principal_id, e.username); })
-      .catch(() => undefined);
-    return () => { vivo = false; };
-  }, [arrobaHabilitada, session, miArroba]);
-
-  const consulta = consultaDe(texto);
-  const buscarPorArroba = arrobaHabilitada && consulta.consultable && session !== null;
-
-  useEffect(() => {
-    // Cada tecla invalida lo que estaba en vuelo: una respuesta vieja no pisa a una más nueva.
-    const mia = epoca.current.next();
-    if (!buscarPorArroba || !session) {
-      setBusqueda({ fase: 'quieta' });
-      return undefined;
-    }
-    setBusqueda({ fase: 'buscando' });
-    const q = consulta.arroba;
-    const espera = window.setTimeout(() => {
-      if (!isCurrentSession(session)) return;
-      api.searchUsernames(q, session)
-        .then((resultados) => {
-          if (epoca.current.isCurrent(mia)) setBusqueda({ fase: 'lista', q, resultados });
-        })
-        .catch((err: unknown) => {
-          if (!epoca.current.isCurrent(mia)) return;
-          setBusqueda({ fase: extractApiError(err).status === 429 ? 'limite' : 'error' });
-        });
-    }, ESPERA_MS);
-    return () => window.clearTimeout(espera);
-  }, [consulta.arroba, buscarPorArroba, session]);
-
-  const resultados = busqueda.fase === 'lista' && busqueda.q === consulta.arroba ? busqueda.resultados : [];
-  const secciones = seccionesDeBusqueda({
-    consulta,
-    amigos,
-    resultados,
-    agregados,
-    arrobaHabilitada,
-    miUsername: miArroba ? miArroba.replace(/^@/, '') : null,
-  });
+  const { texto, setTexto, secciones, vista: busquedaVista, arrobaHabilitada, miArroba } = useBuscadorDeMiembros(agregados);
 
   function cambio() {
     setError(null);
@@ -173,18 +88,6 @@ export function CrearViajeScreen() {
   }
 
   const u = session?.user;
-  const busquedaVista: VistaDeBusqueda | null = consulta.texto
-    ? {
-      texto: consulta.texto,
-      amigos: secciones.amigos.map((c) => filaDe(c, arrobaHabilitada)),
-      otros: secciones.otros.map((c) => filaDe(c, arrobaHabilitada)),
-      yaAgregados: secciones.yaAgregados.map((c) => filaDe(c, arrobaHabilitada)),
-      // Lo que se ve sigue a lo escrito AHORA, no al último efecto: sin consulta
-      // por @ no se busca, y una lista de otra consulta todavía no llegó.
-      fase: !buscarPorArroba ? 'quieta' : busqueda.fase === 'lista' && busqueda.q !== consulta.arroba ? 'buscando' : busqueda.fase,
-      arrobaCorta: arrobaHabilitada && arrobaCorta(consulta),
-    }
-    : null;
 
   return (
     <CrearViajeView
@@ -309,68 +212,11 @@ export function CrearViajeView(p: CrearViajeVistaProps) {
 
         <section className="vj-card" aria-labelledby="vjc-miembros">
           <h2 className="vjc-etiqueta" id="vjc-miembros">{t('Miembros')}</h2>
-          <div className="vjc-buscar">
-            <span className="vjc-buscar-icono"><Icon name="search" size={18} /></span>
-            <input
-              className="input vjc-input vjc-buscar-input"
-              type="search"
-              value={p.texto}
-              placeholder={t('Busca en Amigos o escribe @usuario')}
-              aria-label={t('Busca en Amigos o escribe @usuario')}
-              autoCapitalize="none"
-              autoCorrect="off"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={60}
-              onChange={(e) => p.onTexto(e.target.value)}
-            />
-          </div>
+          <CampoDeBusqueda texto={p.texto} onTexto={p.onTexto} />
           {p.lleno && <p className="vjc-nota">{t('Un viaje admite hasta 20 personas.')}</p>}
 
           {b ? (
-            <div className="vjc-resultados" aria-live="polite">
-              {b.amigos.length > 0 && (
-                <>
-                  <h3 className="vj-seccion">{t('En tus amigos')}</h3>
-                  <ul className="vjc-lista">
-                    {b.amigos.map((x) => (
-                      <FilaPersona key={x.clave} persona={x}>
-                        <BotonAgregar disabled={p.lleno} onClick={() => p.onAgregar(x.clave)} />
-                      </FilaPersona>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {(b.otros.length > 0 || b.fase === 'buscando' || b.fase === 'limite' || b.fase === 'error') && (
-                <>
-                  <h3 className="vj-seccion">{t('Otros usuarios de PayMe')}</h3>
-                  {b.fase === 'buscando' && <p className="vjc-ayuda">{t('Buscando…')}</p>}
-                  {b.fase === 'limite' && (
-                    <p className="vjc-error">{t('Hiciste muchas búsquedas seguidas. Espera un momento.')}</p>
-                  )}
-                  {b.fase === 'error' && <p className="vjc-error">{t('No pudimos buscar. Prueba de nuevo.')}</p>}
-                  {b.otros.length > 0 && (
-                    <ul className="vjc-lista">
-                      {b.otros.map((x) => (
-                        <FilaPersona key={x.clave} persona={x}>
-                          <BotonAgregar disabled={p.lleno} onClick={() => p.onAgregar(x.clave)} />
-                        </FilaPersona>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              {b.yaAgregados.length > 0 && (
-                <>
-                  <h3 className="vj-seccion">{t('Ya agregaste')}</h3>
-                  <ul className="vjc-lista">
-                    {b.yaAgregados.map((x) => <FilaPersona key={x.clave} persona={x} />)}
-                  </ul>
-                </>
-              )}
-              {b.arrobaCorta && <p className="vjc-ayuda">{t('Escribe al menos 3 letras de su @.')}</p>}
-              {sinResultados(b) && <p className="vjc-ayuda">{t('No encontramos a {0}. Revísalo.', b.texto)}</p>}
-            </div>
+            <ResultadosDeBusqueda b={b} lleno={p.lleno} onAgregar={p.onAgregar} />
           ) : (
             <ul className="vjc-lista">
               <li className="vjc-fila">
@@ -410,27 +256,5 @@ export function CrearViajeView(p: CrearViajeVistaProps) {
         </button>
       </div>
     </div>
-  );
-}
-
-function FilaPersona({ persona, children }: { readonly persona: FilaDePersona; readonly children?: ReactNode }) {
-  return (
-    <li className="vjc-fila">
-      <span className="vj-avatar vjc-avatar" aria-hidden="true">{persona.iniciales}</span>
-      <div className="vjc-quien">
-        <div className="vjc-nombre">{persona.nombre}</div>
-        {persona.arroba && <div className="vjc-arroba">{persona.arroba}</div>}
-      </div>
-      {children}
-    </li>
-  );
-}
-
-function BotonAgregar({ disabled, onClick }: { readonly disabled: boolean; readonly onClick: () => void }) {
-  const { t } = useIdioma();
-  return (
-    <button type="button" className="btn btn-teal btn-sm btn-fit vjc-agregar" disabled={disabled} onClick={onClick}>
-      {t('Agregar')}
-    </button>
   );
 }

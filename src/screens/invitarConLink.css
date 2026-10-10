@@ -1,14 +1,26 @@
-/* AF-LINK-DE-INVITACION · D252 · la tarjeta «Invita a alguien a PayMe» en Amigos. */
+/* AF-LINK-DE-INVITACION · D252 · D255-4 · una sola burbuja en Amigos: el
+   ícono, «Invita a alguien a PayMe» y, a la derecha, el de copiar. Toda la
+   burbuja es el botón. */
 .invitar-link {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--sp-3);
-  margin: 12px 0;
+  /* Los márgenes de las demás tarjetas de Amigos: 16 a los lados. */
+  width: calc(100% - 2 * var(--sp-4));
+  min-height: 64px;
+  margin: var(--sp-3) var(--sp-4) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
 }
-.invitar-link-cabeza {
-  display: flex;
-  gap: var(--sp-3);
-  align-items: flex-start;
+.invitar-link:active { transform: scale(0.99); }
+.invitar-link:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
 }
 .invitar-link-icono {
   width: 40px;
@@ -22,55 +34,10 @@
   color: var(--action-2);
 }
 .invitar-link-titulo {
-  margin: 0;
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 700;
-  color: var(--text);
 }
-.invitar-link-texto {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  line-height: var(--lh-body);
-}
-/* El link a la vista, en una línea: si no entra, se corta con «…». */
-.invitar-link-url {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* «Cambiar mi link»: discreto, pero con su área táctil de 44 px. */
-.invitar-link-cambiar {
-  align-self: center;
-  min-height: 44px;
-  padding: 0 12px;
-  background: none;
-  border: 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.invitar-link-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  color: var(--text-muted);
-}
-.invitar-link-hoja-texto {
-  margin: 0 0 var(--sp-4);
-  color: var(--text);
-  line-height: var(--lh-body);
-}
-.invitar-link-hoja-acciones {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
+.invitar-link-copiar { color: var(--text-muted); }

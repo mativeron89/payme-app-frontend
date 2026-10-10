@@ -88,6 +88,14 @@
 }
 
 :root {
+  /* D255-1 · lo que la barra de abajo deja debajo de los íconos. Mati, en su
+     iPhone (0.233.0): «bajarla un poco, está muy alta». Con el indicador de
+     inicio (inset 34) la barra medía 90 y dejaba 34 de blanco bajo las
+     etiquetas; ahora usa el inset menos 12 (22), así íconos y etiquetas bajan
+     12 px y siguen arriba del indicador. Sin inset (Safari, computadora) no
+     cambia: 8. Una sola variable: la barra y las pantallas que la miden. */
+  --appbar-pie: max(8px, calc(env(safe-area-inset-bottom) - 12px));
+
   /* ══════════════════════════════════════════════════════════════════════
      SISTEMA DE DISEÑO · tokens de ../diseno/SISTEMA_DISENO.md §1–§3
      Fuente: v1 2026-08-03, con la enmienda del cuarto uso del naranja
@@ -3069,8 +3077,8 @@ html.app-de-inicio-ios .app {
      quedaban con ~52 pt de blanco debajo. Ahora el inset reemplaza a esos 8 px
      en vez de sumarse: los íconos bajan 8 px y siguen fuera de la zona del
      indicador. En Safari, con inset 0, la barra no cambia: 64 px y 8 px. */
-  height: calc(56px + max(8px, env(safe-area-inset-bottom)));
-  padding: 8px var(--sp-2) max(8px, env(safe-area-inset-bottom));
+  height: calc(56px + var(--appbar-pie));
+  padding: 8px var(--sp-2) var(--appbar-pie);
 }
 
 .appbar-item,
@@ -3239,6 +3247,15 @@ html.app-de-inicio-ios .app {
    la fila. `CreateMesaFlow` la lleva a veces y queda declarado aparte. */
 .has-appbar .scroll.con-fila-sobre-barra {
   padding-bottom: 132px;
+}
+
+/* D255-5 · con pestañas en la cabecera, la tarjeta montada vive en el `.scroll`
+   y las pestañas no: en el iPhone, al tirar hacia abajo el rebote movía la
+   tarjeta y la burbuja se partía (captura 5 de Mati, Amigos). Sin rebote en ese
+   `.scroll`, pestaña y tarjeta siguen siendo una pieza. Vale para toda pantalla
+   con pestañas (Inicio, Amigos, Balance), no pantalla por pantalla. */
+.hdr-tabbed ~ .scroll {
+  overscroll-behavior-y: none;
 }
 
 /* §1.9 · paso 3 · el gemelo de `.has-nav .action-bar`, y existe por la misma
@@ -3557,6 +3574,10 @@ html.app-de-inicio-ios .app {
   padding: 0 var(--sp-4);
 }
 
+.btabs.btabs-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .btab {
   position: relative;
   display: flex;
@@ -3649,6 +3670,18 @@ html.app-de-inicio-ios .app {
    que es quien sabe si tiene pestañas o no. */
 .hdr-tabbed + .scroll {
   margin-top: -42px;
+}
+
+/* D255-3 · Balance: «Volver» y las pestañas en la misma banda. La banda crece
+   lo que mide la fila de «Volver» (10 + 40) más los 10 que la primera fila
+   recupera: logo y «Volver» quedan donde están en la pantalla del viaje (sin
+   salto al entrar) y las pestañas, pegadas a la tarjeta como en Inicio. */
+.hdr-tabbed.hdr-con-volver {
+  height: calc(214px + env(safe-area-inset-top));
+}
+.hdr-tabbed.hdr-con-volver > .hdr-row:first-child {
+  height: auto;
+  min-height: var(--tap-min);
 }
 
 .hdr-tabbed + .scroll > .mounted-card {
@@ -9160,7 +9193,7 @@ h1.pay-title-lbl {
 .has-appbar .scroll.ticket-flow-scroll {
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 26px);
+  padding-bottom: calc(56px + var(--appbar-pie) + 26px);
 }
 
 /* En columna, un hijo con `overflow: hidden` (la burbuja es una `.card`) se
@@ -9989,7 +10022,7 @@ h1.pay-title-lbl {
    que sobresale (26), más aire: 104 en Safari (barra de 64). En la app de
    inicio la barra suma el indicador (56 + 34): el mismo cálculo sigue la barra. */
 .has-appbar .scroll.est-scroll {
-  padding: 14px 16px calc(96px + max(8px, env(safe-area-inset-bottom)));
+  padding: 14px 16px calc(96px + var(--appbar-pie));
 }
 
 /* §3 · «Tu consumo por tipo de cocina». */
