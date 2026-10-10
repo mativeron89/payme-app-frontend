@@ -11,6 +11,50 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.236.0 — Viajes: deslizar para eliminar un ticket o un gasto, y el scroll de D256 (2026-10-10)
+
+Orden AF-VIAJES-ELIMINAR-TICKET-20261010 (22187cb9…). Fuente: D256 (a76c9d5f…), con el pedido literal de Mati y dos
+reglas: «Quien lo cargó o quien pagó» y «Se elimina igual y se avisa a todos».
+
+Dueño: App Backend 2.175.0 (`d920b13` servido; el espejo, de `54dc31a`). Plan en el ESTADO, sin cambio de navegación.
+Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **D256 · el scroll: NO REPRODUCIDO fuera del iPhone.** Mati: app de inicio, «Entrando a un ticket ya cargado», «No se
+  movía nada». Una guarda, un arreglo defensivo y un instrumento para medirlo en su teléfono:
+  - **`useHojaModal`:** `.app` es inerte mientras haya alguna hoja abierta (un registro), no restaurando lo que cada
+    hoja vio al abrir. Con dos hojas cerradas fuera de orden, `.app` quedaba inerte para siempre, sin toques ni
+    scroll. Es demostrable por lectura; no se encontró un camino de Viajes que lo dispare.
+  - **El panel de diagnóstico** (5 toques en el logo) suma «al abrir», medido antes de que su hoja deje `.app`
+    inerte: qué hay en el centro de la pantalla, el contenedor que scrollea y si desborda, los ancestros con `inert`,
+    `pointer-events` o `touch-action`, el `overflow` de `body` y `html`, los `[inert]` y las hojas abiertas.
+  - **La guarda e2e** (`e2e/d256-scroll.spec.ts`), con la app de inicio emulada, a 375 y con un ticket largo:
+    - **caminos:** Balance › Consumos, el aviso, después del panel, después de escanear y cargar, y el mismo ticket
+      escaneado otra vez («Elegir lo que consumí»);
+    - **mide:** sin bloqueos residuales; un arrastre táctil por CDP mueve la lista; el pie no tapa el último renglón,
+      que se elige.
+    - Corre en Chromium (la CI instala sólo Chromium); en WebKit local pasó, con rueda en vez de dedo.
+    - En la base `de09e20` el scroll también pasa: sólo el panel da rojo.
+- **D256 · eliminar.** En Balance › Consumos, deslizar a la izquierda un ticket o un gasto deja ver «Eliminar» en
+  rojo, como en Mesas (`FilaDeslizable`), sólo donde el dueño dice `puede_eliminar`.
+  - Se elimina sin otra confirmación, la pantalla toma el viaje de la respuesta (la cuenta recalculada) y avisa
+    «Ticket eliminado» o «Gasto eliminado».
+  - **Los errores:**
+    - el 404 del ticket refresca y dice «Ya no estaba»;
+    - el 409, «El viaje ya no está abierto»;
+    - el 403 explica que sólo pueden quien lo cargó o quien lo pagó;
+    - el 404 del viaje sigue el camino de siempre.
+  - La pantalla del viaje no lista tickets desde D255: el gesto vive en Consumos.
+- **`viaje_version=4`** en todas las rutas de viaje, también la lista (el dueño la sirve como la 3) y `DELETE`.
+  - El decodificador del detalle exige `puede_eliminar` en cada ticket.
+- **El aviso `viaje_ticket_removed`** se ve en Notificaciones con el texto del dueño y abre el viaje. Antes un `viaje_*`
+  desconocido ya se mostraba, como fila quieta.
+- **El mock:**
+  - `puede_eliminar` es de quien cargó o pagó, con el viaje abierto;
+  - `DELETE` responde con los errores del dueño en su orden;
+  - un seam de una vez (`ya_no_estaba`, `cerrado`, `prohibido`, `sin_viaje`) y otro que siembra el aviso.
+- **El espejo** de 2.175.0 trae además `routes/invitations.js` de 2.174.1 (C-02: un tercero recibe 404). Este front
+  no distingue esos 403 por código.
+
 ## 0.235.0 — Viajes: quién pagó, nombre, fechas, color y foto (D255 tramo 2), C-06 y C-07 (2026-10-10)
 
 Orden AF-VIAJES-QUIEN-PAGO-Y-CONFIGURACION-20261010 (ba694666…). Fuentes:

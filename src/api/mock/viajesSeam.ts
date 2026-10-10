@@ -59,3 +59,25 @@ export function seamDeGastoMock(valor: 'alguien_salio' | 'respuesta_perdida'): b
   try { localStorage.removeItem(CLAVE_GASTO_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
   return true;
 }
+
+/**
+ * D256 · eliminar un ticket o un gasto, una sola vez (el seam se consume):
+ * - `ya_no_estaba`: otro lo eliminó justo antes; se elimina y el dueño contesta 404 `viaje_ticket_not_found`;
+ * - `cerrado`: el viaje ya no está abierto; 409 `viaje_not_open`;
+ * - `prohibido`: el dueño contesta 403 `viaje_ticket_delete_forbidden`;
+ * - `sin_viaje`: ya no es miembro; el 404 del viaje (n325).
+ */
+export const CLAVE_ELIMINAR_MOCK = 'payme.app.mock.viajes.eliminar.v1';
+/** D256 · `encendido` exacto: al sembrar los avisos de los viajes se suma uno de `viaje_ticket_removed`. */
+export const CLAVE_AVISO_ELIMINADO_MOCK = 'payme.app.mock.viajes.aviso_eliminado.v1';
+
+/** Lee y consume el seam de eliminar: `true` una sola vez si vale `valor`. */
+export function seamDeEliminarMock(valor: 'ya_no_estaba' | 'cerrado' | 'prohibido' | 'sin_viaje'): boolean {
+  if (leer(CLAVE_ELIMINAR_MOCK) !== valor) return false;
+  try { localStorage.removeItem(CLAVE_ELIMINAR_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
+  return true;
+}
+
+export function avisoEliminadoMock(): boolean {
+  return leer(CLAVE_AVISO_ELIMINADO_MOCK) === 'encendido';
+}

@@ -191,11 +191,7 @@ test('🔴 D256 · después del panel de diagnóstico (una hoja): al cerrarlo no
   await seDesplaza(page, { largo: true });
 });
 
-/**
- * El camino de cargar un ticket nuevo (TicketNuevo → `replaceRoute`). «Elegir lo que consumí», cuando el ticket ya lo
- * había cargado otro, entra por el mismo `replaceRoute`; con la cámara del mock no se puede producir: en modo de
- * ejemplo no hay huella, y un segundo escaneo carga otro ticket.
- */
+/** El camino de cargar un ticket nuevo: TicketNuevo → `replaceRoute` a elegir. */
 test('🔴 D256 · después de escanear y cargar un ticket nuevo, al entrar a elegir: sin bloqueos', async ({ page }) => {
   await comoAppDeInicio(page);
   await ir(page, `/viaje/${CANCUN}`);
@@ -205,6 +201,32 @@ test('🔴 D256 · después de escanear y cargar un ticket nuevo, al entrar a el
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
   // Por consumo, al cargarlo entra a elegir.
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.`));
+  await expect(page.locator('.qc-fila').first()).toBeVisible();
+  await seDesplaza(page, { largo: false });
+});
+
+/**
+ * El camino exacto de «un ticket ya cargado»: el mismo ticket escaneado otra vez. El seam de la huella fija hace que
+ * los dos escaneos sean «el mismo ticket» (1k); el segundo muestra el duplicado al escanear y «Elegir lo que
+ * consumí» entra a elegir en el que ya estaba.
+ */
+test('🔴 D256 · el mismo ticket escaneado otra vez: «Elegir lo que consumí» entra al ya cargado, sin bloqueos', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.viajes.huella.v1', 'huella-d256'));
+  await comoAppDeInicio(page);
+  const circulo = page.getByRole('button', { name: 'Escanear ticket para Cancún 2026', exact: true });
+  await ir(page, `/viaje/${CANCUN}`);
+  await circulo.click();
+  await sacarFoto(page);
+  await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.`));
+  const cargado = page.url();
+  await ir(page, `/viaje/${CANCUN}`);
+  await circulo.click();
+  await sacarFoto(page);
+  // Con la huella, el duplicado se ve al escanear: «Este ticket ya está en el viaje».
+  await expect(page.getByText('Este ticket ya está en el viaje', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Elegir lo que consumí', exact: true }).click();
+  await expect(page).toHaveURL(cargado);
   await expect(page.locator('.qc-fila').first()).toBeVisible();
   await seDesplaza(page, { largo: false });
 });

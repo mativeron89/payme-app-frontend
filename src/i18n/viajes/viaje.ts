@@ -69,6 +69,13 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'A favor: {0}': 'In your favor: {0}',
   'Consumos': 'Expenses',
   'Todavía no hay consumos.': 'No expenses yet.',
+  // D256 · eliminar un ticket o un gasto desde Consumos.
+  'Ticket eliminado': 'Receipt deleted',
+  'Gasto eliminado': 'Expense deleted',
+  'Ya no estaba': 'It was already gone',
+  'El viaje ya no está abierto': 'The trip is no longer open',
+  'Sólo pueden eliminarlo quien lo cargó o quien lo pagó.': 'Only the person who added it or who paid can delete it.',
+  'No pudimos eliminarlo. Prueba de nuevo.': "We couldn't delete it. Try again.",
   'Pagó': 'Paid',
   'Descripción': 'Description',
   'Por ejemplo: gasolina': 'For example: gas',

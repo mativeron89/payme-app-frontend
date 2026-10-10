@@ -12,6 +12,7 @@ import {
   decodeMarcaDeTransferencia,
   decodeRevisionDeTicket,
   decodeTicketDelViaje,
+  errorAlEliminar,
   errorDeViaje,
   reiniciarViajesParaTests,
   viajesHabilitado,
@@ -30,12 +31,15 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
   negociaciones: {
     viaje_version_2: { parametro: string; miembro: string[]; ticket: string[] };
     viaje_version_3: { parametro: string; detalle_suma: string[]; lista_suma: string[] };
+    viaje_version_4: { parametro: string; ticket_suma: string[] };
   };
   colores: Record<string, string>;
 };
 const V2 = CONTRATO.negociaciones.viaje_version_2;
 /** D255 · App Backend 2.174.0: la 2 más `color` y `has_photo`, en el detalle y en la lista. */
 const V3 = CONTRATO.negociaciones.viaje_version_3;
+/** D256 · App Backend 2.175.0: la 3 más `puede_eliminar` en cada ticket del detalle. */
+const V4 = CONTRATO.negociaciones.viaje_version_4;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -87,20 +91,21 @@ const detalle = (cambios: Record<string, unknown> = {}) => ({
   invitados: [], mi_balance_cents: -100, gasto_del_grupo_cents: 200,
   tickets: [{ id: 't1', lugar: null, tipo_lugar: 'bar', fecha_ticket: null, hora_ticket: null,
     cargado_en: '2026-10-02T00:00:00.000Z', forma: 'consumo', pagado_por: 'm2', pagaste_tu: false,
-    te_toca_cents: 100, falta_que_elija: 1, sin_repartir_cents: 0, monto_cents: 200, origen: 'escaneo' }],
+    te_toca_cents: 100, falta_que_elija: 1, sin_repartir_cents: 0, monto_cents: 200, origen: 'escaneo', puede_eliminar: false }],
   sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
   color: null, has_photo: false,
   ...cambios,
 });
 
 describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', () => {
-  it('el detalle de un viaje: las claves del contrato con `viaje_version=3`, ni una más', () => {
+  it('el detalle de un viaje: las claves del contrato con `viaje_version=4`, ni una más', () => {
     const claves = CONTRATO.rutas['GET /api/viajes/:id']!.respuestas['200']!.viaje as string[];
     expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma].sort());
     expect(V2.parametro).toBe('viaje_version=2');
     expect(V3.parametro).toBe('viaje_version=3');
+    expect(V4.parametro).toBe('viaje_version=4');
     expect(Object.keys(detalle().miembros[0]!).sort()).toEqual([...V2.miembro].sort());
-    expect(Object.keys(detalle().tickets[0]!).sort()).toEqual([...V2.ticket].sort());
+    expect(Object.keys(detalle().tickets[0]!).sort()).toEqual([...V2.ticket, ...V4.ticket_suma].sort());
     const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle() });
     expect(v.miembros.map((m) => m.first_name)).toEqual(['Yo', 'Luis']);
     expect(() => decodeDetalleViaje({ contract: 'otro/v1', viaje: detalle() })).toThrow();
@@ -367,5 +372,49 @@ describe('🔴 D255 · `viaje_version=3`: color y foto del viaje (App Backend 2.
       [422, 'avatar_dimensions_exceeded']] as const) {
       expect(errorDeViaje(err(s, c))).toEqual({ tipo: 'foto_invalida' });
     }
+  });
+});
+
+describe('🔴 D256 · `viaje_version=4`: eliminar un ticket o un gasto (App Backend 2.175.0)', () => {
+  const sinClave = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+  const conTicket = (cambios: Record<string, unknown>) => {
+    const v = detalle();
+    return { ...v, tickets: [{ ...v.tickets[0], ...cambios }] };
+  };
+
+  it('lo que suma la 4 es `puede_eliminar`, sólo en los tickets del detalle', () => {
+    expect(V4.ticket_suma).toEqual(['puede_eliminar']);
+  });
+
+  it('sin `puede_eliminar` (la forma de la 3) no se acepta: la app pide la 4 siempre', () => {
+    const v = detalle();
+    const sin = { ...v, tickets: v.tickets.map((x) => sinClave(x, 'puede_eliminar')) };
+    expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: sin })).toThrow();
+  });
+
+  it('`puede_eliminar` es un booleano', () => {
+    for (const malo of ['true', 1, null]) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: conTicket({ puede_eliminar: malo }) }), String(malo)).toThrow();
+    }
+    expect(decodeDetalleViaje({ contract: CONTRATO.id, viaje: conTicket({ puede_eliminar: true }) }).tickets[0]!.puede_eliminar).toBe(true);
+    expect(decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle() }).tickets[0]!.puede_eliminar).toBe(false);
+  });
+
+  it('las respuestas de `DELETE …/tickets/:tid` son las del contrato', () => {
+    const r = (CONTRATO.rutas['DELETE /api/viajes/:id/tickets/:tid'] as unknown as { respuestas: Record<string, { errores?: string[] }> }).respuestas;
+    expect(r['403']!.errores).toEqual(['viaje_ticket_delete_forbidden', 'user_suspended']);
+    expect(r['404']!.errores).toEqual(['viaje_not_found', 'viaje_ticket_not_found']);
+    expect(r['409']!.errores).toEqual(['viaje_not_open']);
+  });
+
+  it('🔴 errorAlEliminar: el 403 y el 404 del ticket son propios; el 404 del viaje y el 409, los de siempre', () => {
+    const e = (status: number, error: string, extra: Record<string, unknown> = {}) => new HttpError(status, { error, ...extra });
+    expect(errorAlEliminar(e(403, 'viaje_ticket_delete_forbidden'))).toEqual({ tipo: 'eliminar_prohibido' });
+    expect(errorAlEliminar(e(404, 'viaje_ticket_not_found'))).toEqual({ tipo: 'ticket_no_encontrado' });
+    expect(errorAlEliminar(e(404, 'viaje_not_found'))).toEqual({ tipo: 'no_disponible' });
+    expect(errorAlEliminar(e(409, 'viaje_not_open', { estado: 'esperando_pagos' }))).toEqual({ tipo: 'no_abierto' });
+    expect(errorAlEliminar(e(503, 'service_unavailable'))).toEqual({ tipo: 'reintentar' });
+    // En las demás pantallas, el 404 del ticket sigue siendo «no disponible».
+    expect(errorDeViaje(e(404, 'viaje_ticket_not_found'))).toEqual({ tipo: 'no_disponible' });
   });
 });

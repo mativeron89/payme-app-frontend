@@ -213,6 +213,11 @@ export interface TicketEnViaje {
   /** D245 · el total del ticket (o del gasto a mano). */
   readonly monto_cents: number;
   readonly origen: OrigenTicket;
+  /**
+   * D256 · `viaje_version=4` (App Backend 2.175.0): si quien mira puede eliminarlo. Con el viaje abierto, quien lo cargó
+   * o quien lo pagó (Mati: «Quien lo cargó o quien pagó»). Es a quien se le muestra «Eliminar».
+   */
+  readonly puede_eliminar: boolean;
 }
 
 export interface SinRepartir {
@@ -574,12 +579,13 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   }, 40);
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
-      'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen'], e);
+      'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
+      'puede_eliminar'], e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
       && noNegativo(t.sin_repartir_cents) && noNegativo(t.monto_cents)
-      && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen), e);
+      && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen) && typeof t.puede_eliminar === 'boolean', e);
     return t as unknown as TicketEnViaje;
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
@@ -816,6 +822,26 @@ export function decodeFotoDeViaje(raw: unknown): FotoDeViaje {
   exigir(noNegativo(f.revision) && noNegativo(f.width) && noNegativo(f.height)
     && typeof f.updated_at === 'string' && !Number.isNaN(Date.parse(f.updated_at)), e);
   return f as unknown as FotoDeViaje;
+}
+
+/**
+ * D256 · lo que dice la pantalla al eliminar un ticket o un gasto
+ * (`DELETE /api/viajes/:id/tickets/:tid`). Dos casos propios; el resto, como siempre:
+ * - 403 `viaje_ticket_delete_forbidden`: no lo cargó ni lo pagó;
+ * - 404 `viaje_ticket_not_found`: ya no estaba (otro lo eliminó). En las demás pantallas ese 404 es «no disponible»;
+ *   acá el viaje sigue y se refresca.
+ * El 404 del viaje (n325), el 409 `viaje_not_open` y lo demás siguen a `errorDeViaje`.
+ */
+export type ErrorAlEliminar =
+  | { readonly tipo: 'eliminar_prohibido' }
+  | { readonly tipo: 'ticket_no_encontrado' }
+  | ErrorDeViaje;
+
+export function errorAlEliminar(err: unknown): ErrorAlEliminar {
+  const { status, code } = extractApiError(err);
+  if (status === 403 && code === 'viaje_ticket_delete_forbidden') return { tipo: 'eliminar_prohibido' };
+  if (status === 404 && code === 'viaje_ticket_not_found') return { tipo: 'ticket_no_encontrado' };
+  return errorDeViaje(err);
 }
 
 export function errorDeViaje(err: unknown): ErrorDeViaje {

@@ -47,6 +47,14 @@ describe('AF-VIAJES · avisos de viaje · destino', () => {
     expect(d('viaje_finished')).toEqual({ page: 'viaje-cerrado', param: V });
   });
 
+  it('🔴 D256 · «eliminó un ticket» (App Backend 2.175.0) lleva al viaje: el ticket ya no existe', () => {
+    expect(TIPOS_AVISO_VIAJE).toContain('viaje_ticket_removed');
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_removed'), true, NO_PENDIENTE)).toEqual({ page: 'viaje', param: V });
+    // Aunque viniera un ticket_id, no se abre: lo eliminaron.
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_removed', { viaje_id: V, ticket_id: TK }), true, NO_PENDIENTE))
+      .toEqual({ page: 'viaje', param: V });
+  });
+
   it('🔴 sin Viajes, ninguno navega: la fila queda quieta', () => {
     for (const type of TIPOS_AVISO_VIAJE) {
       expect(destinoDeAvisoDeViaje(aviso(type, { viaje_id: V, ticket_id: TK }), false, NO_PENDIENTE), type).toBeNull();

@@ -21,6 +21,8 @@ export const TIPOS_AVISO_VIAJE = [
   'viaje_invitation_received',
   'viaje_invitation_rejected',
   'viaje_ticket_added',
+  // D256 · App Backend 2.175.0: alguien eliminó un ticket o un gasto. Lleva al viaje.
+  'viaje_ticket_removed',
   'viaje_closed',
   'viaje_transfer_marked',
   'viaje_transfer_not_received',
@@ -113,6 +115,7 @@ export function destinoDeAvisoDeViaje(
       return ticket === null ? { page: 'viaje', param: viaje } : { page: 'viaje-ticket', param: parametroDeTicket(viaje, ticket) };
     }
     case 'viaje_invitation_rejected':
+    case 'viaje_ticket_removed':
     case 'viaje_closed':
     case 'viaje_transfer_marked':
     case 'viaje_transfer_not_received':

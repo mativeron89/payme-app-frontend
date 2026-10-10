@@ -149,6 +149,8 @@ const NOTIF_ICON: Record<string, IconName> = {
   viaje_invitation_received: 'users',
   viaje_invitation_rejected: 'x-circle',
   viaje_ticket_added: 'receipt',
+  // D256 · v2.175.0 · se eliminó un ticket o un gasto del viaje. No la papelera: ésa es «borrar el aviso», en la misma fila.
+  viaje_ticket_removed: 'receipt',
   viaje_closed: 'archive',
   viaje_transfer_marked: 'cash',
   viaje_transfer_not_received: 'warning',

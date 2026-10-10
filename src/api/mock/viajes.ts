@@ -12,7 +12,9 @@ import {
   type PersonaViajeMock,
 } from './mockApi';
 import { persist as persistirStore, state as store } from './store';
-import { CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeGastoMock, viajesMockEncendido } from './viajesSeam';
+import {
+  avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeEliminarMock, seamDeGastoMock, viajesMockEncendido,
+} from './viajesSeam';
 import {
   balanceDelViaje,
   precioInformativo,
@@ -46,8 +48,8 @@ const esManual = (t: TicketMock) => t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL
 
 /** D245 · `viaje_version=2`: sólo con la negociación el detalle suma foto, lo que pagó y el total de cada ticket. */
 interface OpcionesDeVersion {
-  /** 2: D245 (2.172.0); 3: la 2 más `color` y `has_photo` (D255, 2.174.0). */
-  readonly version?: 1 | 2 | 3;
+  /** 2: D245 (2.172.0); 3: la 2 más `color` y `has_photo` (D255, 2.174.0); 4: la 3 más `puede_eliminar` (D256, 2.175.0). */
+  readonly version?: 1 | 2 | 3 | 4;
 }
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
@@ -340,7 +342,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 = 1) {
+function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -358,6 +360,8 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 = 1) {
       falta_que_elija: b.congelado ? 0 : r.faltan.length,
       sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
       ...(version >= 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
+      // D256 · con la 4: quien lo cargó o quien pagó, con el viaje abierto (el estado guardado, como el dueño).
+      ...(version >= 4 && { puede_eliminar: v.estado === 'abierto' && (t.pagado_por === u || cargadoPor(t) === u) }),
     };
   }).reverse();
   // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
@@ -389,7 +393,7 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 = 1) {
       .filter((tr) => !cerrado || tr.de_user === u || tr.a_user === u)
       .map((tr) => vistaTransferencia(v, tr, u)),
     transferencias_pendientes: pendientes(v).length,
-    ...(version === 3 && { color: v.color ?? null, has_photo: !!v.foto }),
+    ...(version >= 3 && { color: v.color ?? null, has_photo: !!v.foto }),
   };
 }
 
@@ -430,7 +434,7 @@ function vistaEnLista(v: ViajeMock, u: string, version: 1 | 3 = 1) {
     transferencias_pendientes: est === 'esperando_pagos' ? pendientes(v).length : null,
     consumiste_cents: est === 'cerrado' ? b.consumido.get(u) ?? 0 : null,
     terminado_en: v.terminado_en,
-    ...(version === 3 && { color: v.color ?? null, has_photo: !!v.foto }),
+    ...(version >= 3 && { color: v.color ?? null, has_photo: !!v.foto }),
   };
 }
 
@@ -447,6 +451,7 @@ const TITULOS: Record<string, string> = {
   viaje_invitation_received: 'Te invitaron a un viaje',
   viaje_invitation_rejected: 'Rechazaron tu invitación',
   viaje_ticket_added: 'Ticket nuevo en tu viaje',
+  viaje_ticket_removed: 'Se eliminó un ticket de tu viaje',
   viaje_closed: 'Se cerró un viaje',
   viaje_transfer_marked: 'Te marcaron un pago',
   viaje_transfer_not_received: 'Un pago no llegó',
@@ -517,7 +522,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -525,7 +530,8 @@ export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { versio
     const abiertos: Array<ReturnType<typeof vistaEnLista>> = [];
     const cerrados: Array<ReturnType<typeof vistaEnLista>> = [];
     for (const v of mios) {
-      const item = vistaEnLista(v, u, version);
+      // D256 · en la lista la 4 sale como la 3 (como el dueño).
+      const item = vistaEnLista(v, u, version >= 3 ? 3 : 1);
       (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
     }
     cerrados.sort((a, b) => (b.fecha_desde || b.terminado_en || '').localeCompare(a.fecha_desde || a.terminado_en || ''));
@@ -1125,6 +1131,38 @@ function cerrarInterno(v: ViajeMock): void {
   v.estado = 'esperando_pagos';
 }
 
+/**
+ * D256 · `DELETE /api/viajes/:id/tickets/:tid` (App Backend 2.175.0): eliminar un ticket escaneado o un gasto a mano.
+ * El orden del dueño: no miembro → 404 del viaje (n325); el ticket no es del viaje → 404 `viaje_ticket_not_found`; el
+ * viaje no está abierto → 409; no lo cargó ni lo pagó → 403. Se elimina aunque otros hayan elegido, y la cuenta se
+ * recalcula al leer. El aviso `viaje_ticket_removed` va a los demás, que en el mock no tienen bandeja.
+ */
+export function mockEliminarTicket(id: string, ticketId: string, { version = 1 }: OpcionesDeVersion = {}) {
+  return ruta(() => {
+    const v = miViaje(id);
+    if (seamDeEliminarMock('sin_viaje')) throw noEncontrado();
+    const u = yo();
+    const i = v.tickets.findIndex((t) => t.id === ticketId);
+    if (i >= 0 && seamDeEliminarMock('ya_no_estaba')) {
+      // El seam: otro lo eliminó justo antes.
+      v.tickets.splice(i, 1);
+      guardar();
+      throw new Respuesta(404, 'viaje_ticket_not_found');
+    }
+    if (i < 0) throw new Respuesta(404, 'viaje_ticket_not_found');
+    if (v.estado !== 'abierto' || seamDeEliminarMock('cerrado')) {
+      throw conflicto('viaje_not_open', { estado: v.estado === 'abierto' ? 'esperando_pagos' : v.estado });
+    }
+    const t = v.tickets[i]!;
+    if ((t.pagado_por !== u && cargadoPor(t) !== u) || seamDeEliminarMock('prohibido')) {
+      throw new Respuesta(403, 'viaje_ticket_delete_forbidden');
+    }
+    v.tickets.splice(i, 1);
+    guardar();
+    return { contract: CONTRATO, viaje: vistaViaje(v, u, version) };
+  });
+}
+
 export function mockCerrarViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);
@@ -1375,6 +1413,10 @@ export function sembrarViajesMock(): void {
       payload: { viaje_id: VIAJES_SEMILLA.monterrey, transferencia_id: marcada.id } }] : []),
     { type: 'viaje_invitation_received', viajeId: VIAJES_SEMILLA.mazatlan, porPersona: sofia.user_id, en: hace(5),
       body: 'Sofía Ramírez te invitó al viaje Mazatlán diciembre.', payload: { viaje_id: VIAJES_SEMILLA.mazatlan } },
+    // D256 · sólo con su seam (no cambia la bandeja de las demás pruebas).
+    ...(avisoEliminadoMock() ? [{ type: 'viaje_ticket_removed', viajeId: VIAJES_SEMILLA.cancun, porPersona: luis.user_id,
+      en: hace(30), body: 'Luis Pérez eliminó un gasto de Cancún 2026: Taxi al aeropuerto.',
+      payload: { viaje_id: VIAJES_SEMILLA.cancun } }] : []),
   ];
   for (const a of avisos) avisarme(a);
   guardar();

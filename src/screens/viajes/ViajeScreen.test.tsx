@@ -36,7 +36,8 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
   return {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
-    te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo', ...extra,
+    te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
+    puede_eliminar: false, ...extra,
   };
 }
 
@@ -360,6 +361,35 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
     expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar 6 oct'));
     // Sin el «Debe / Le deben» de cada uno ni el aviso de «sin repartir» (respuesta C).
     expect(leido).not.toMatch(/Le deben|Debe \$|sin repartir/);
+  });
+
+  it('🔴 D256 · deslizar para eliminar sólo donde el dueño dice `puede_eliminar`; las demás filas no se deslizan', () => {
+    const v = viaje({ tickets: TICKETS.map((tk) => (tk.id === 'tk-3' ? { ...tk, puede_eliminar: true } : tk)) });
+    const deslizar = { abierta: null, onAbrir: nada, onCerrar: nada, onEliminar: nada };
+    const html = renderToStaticMarkup(
+      <BalanceVista carga={listo(v)} opcion="consumos" onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} deslizar={deslizar} />,
+    );
+    // Una sola fila con el gesto, la del bar que pagué, y su «Eliminar» con el nombre del lugar.
+    expect(html.match(/class="deslizable[ "]/g)).toHaveLength(1);
+    expect(html.match(/aria-label="Eliminar [^"]*"/g)).toEqual(['aria-label="Eliminar Bar"']);
+    const filas = html.split('<li>').slice(1);
+    expect(filas.map((f) => f.includes('deslizable'))).toEqual([false, false, true]);
+    // Abierta, la marca la pantalla (una sola a la vez).
+    const abierta = renderToStaticMarkup(
+      <BalanceVista carga={listo(v)} opcion="consumos" onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada}
+        deslizar={{ ...deslizar, abierta: 'tk-3' }} />,
+    );
+    expect(abierta).toContain('deslizable deslizable--abierta');
+  });
+
+  it('control · sin `puede_eliminar` en ninguno, o sin el gesto, ninguna fila se desliza', () => {
+    const deslizar = { abierta: null, onAbrir: nada, onCerrar: nada, onEliminar: nada };
+    const sin = renderToStaticMarkup(
+      <BalanceVista carga={listo(viaje())} opcion="consumos" onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} deslizar={deslizar} />,
+    );
+    expect(sin).not.toContain('deslizable');
+    const todos = viaje({ tickets: TICKETS.map((tk) => ({ ...tk, puede_eliminar: true })) });
+    expect(balance(listo(todos))).not.toContain('deslizable');
   });
 
   it('sin consumos: «Todavía no hay consumos.»', () => {

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * D245 · D244 · la fachada real contra App Backend 2.172.0: `viaje_version=2`
- * en TODAS las rutas que devuelven `viaje` (el decodificador sólo acepta esa
- * forma), el gasto a mano y la foto de un miembro, con sus rutas exactas.
+ * D245 · D244 · la fachada real contra el dueño: `viaje_version` en TODAS las
+ * rutas que devuelven `viaje` (el decodificador sólo acepta esa forma; hoy la 4,
+ * App Backend 2.175.0), el gasto a mano y la foto de un miembro, con sus rutas exactas.
  */
 class MemoryStorage {
   values = new Map<string, string>();
@@ -70,8 +70,8 @@ afterEach(() => {
   reiniciarViajesParaTests();
 });
 
-describe('fachada real · Viajes con App Backend 2.174.0', () => {
-  it('🔴 D255 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=3`, una sola vez y exacta', async () => {
+describe('fachada real · Viajes con App Backend 2.175.0', () => {
+  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=4`, una sola vez y exacta', async () => {
     const v = await api.getViaje(VIAJE);
     expect(v).toMatchObject({ color: 'azul', has_photo: true });
     await api.crearViaje({ nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, miembros: [], idempotency_key: 'clave-de-prueba-1' });
@@ -84,7 +84,7 @@ describe('fachada real · Viajes con App Backend 2.174.0', () => {
       `GET /api/viajes/${VIAJE}`, 'POST /api/viajes', `POST /api/viajes/${VIAJE}/aceptar`, `POST /api/viajes/${VIAJE}/cerrar`,
       `PATCH /api/viajes/${VIAJE}`, 'GET /api/viajes',
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['3']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['4']);
     expect(pedidos.at(-1)!.url.searchParams.getAll('estado')).toEqual(['abiertos']);
   });
 
@@ -134,14 +134,25 @@ describe('fachada real · Viajes con App Backend 2.174.0', () => {
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros/m%2F1/avatar`);
   });
 
-  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=3` con sólo `{ miembros }`', async () => {
+  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=4` con sólo `{ miembros }`', async () => {
     const v = await api.invitarAlViaje(VIAJE, [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }]);
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('POST');
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros`);
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['3']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['4']);
     expect(pedidos[0]!.body).toEqual({ miembros: [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }] });
+  });
+
+  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=4`, sin cuerpo, y devuelve el viaje', async () => {
+    const v = await api.eliminarTicketDeViaje('a/b', 't/1');
+    expect(v.id).toBe(VIAJE);
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]!.method).toBe('DELETE');
+    expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/tickets/t%2F1');
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['4']);
+    expect([...pedidos[0]!.url.searchParams.keys()]).toEqual(['viaje_version']);
+    expect(pedidos[0]!.body).toBeUndefined();
   });
 
   it('D255-8 · el id del viaje va codificado en la ruta de «Agregar miembros»', async () => {
@@ -159,6 +170,7 @@ describe('fachada real · Viajes con App Backend 2.174.0', () => {
     await expect(api.subirFotoDeViaje(VIAJE, new Blob(['x'], { type: 'image/jpeg' }))).rejects.toThrow('viajes_not_available');
     await expect(api.quitarFotoDeViaje(VIAJE, loadSession()!)).rejects.toThrow('viajes_not_available');
     await expect(api.getFotoDeViaje(VIAJE, loadSession()!)).rejects.toThrow('viajes_not_available');
+    await expect(api.eliminarTicketDeViaje(VIAJE, 't')).rejects.toThrow('viajes_not_available');
     expect(pedidos).toHaveLength(0);
   });
 });
