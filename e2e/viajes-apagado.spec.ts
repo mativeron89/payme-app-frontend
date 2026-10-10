@@ -20,6 +20,9 @@ test('Inicio sigue con «Asociadas» y sin «Viajes»', async ({ page }) => {
   await ingresar(page);
   await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveCount(0);
+  // D265 · sin Viajes, ni las burbujas de los viajes abiertos.
+  await expect(page.locator('.viaje-card')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Tus viajes abiertos' })).toHaveCount(0);
 });
 
 for (const ruta of [

@@ -48,6 +48,7 @@ import { ConfiguracionDelViaje } from './ConfiguracionDelViaje';
 import { InsigniaDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import './viajes.css';
 import './viaje.css';
+import { olvidarLoDeViajes } from '../../api/ultimoVisto';
 
 /**
  * AF-VIAJES · D242 · el viaje (`/viaje/<id>`): abierto (1g) con su hoja de
@@ -209,6 +210,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     setEnviando(true);
     try {
       const v = await api.cerrarViaje(viajeId);
+      // D265 · su burbuja de Inicio pasa a «Esperando pagos».
+      olvidarLoDeViajes();
       setHoja(null);
       mostrar(v);
     } catch (err) {
@@ -228,6 +231,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     setEnviando(true);
     try {
       await api.salirDeViaje(viajeId);
+      // D265 · su burbuja de Inicio se va.
+      olvidarLoDeViajes();
       setHoja(null);
       toast(t('Saliste de {0}.', nombre));
       // H02 · a Inicio › Viajes: el viaje ya no está.

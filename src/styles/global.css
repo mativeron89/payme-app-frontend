@@ -3691,6 +3691,10 @@ html.app-de-inicio-ios .app {
 .hdr-con-volver .btab {
   font-weight: 700;
 }
+/* D265 · Mati: «Las letras de la pantalla de inicio (Cuenta, Estadisticas y Viajes) tienen que estar en negrita». */
+.btabs--negrita .btab {
+  font-weight: 700;
+}
 .hdr-tabbed.hdr-con-volver > .hdr-row:first-child {
   height: auto;
   min-height: var(--tap-min);

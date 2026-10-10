@@ -14,6 +14,40 @@ function conDueno(inicial: string | null) {
   return { cache, estado, guardarYa, sinLeerYa };
 }
 
+describe('🔴 D265 · los viajes abiertos de Inicio, con la regla de T-01 y C-07', () => {
+  const viaje = { viajes: [{ id: 'v-1', nombre: 'Cancún 2026' }], counts: { abiertos: 1, cerrados: 0 } };
+
+  it('lo de una cuenta no lo ve otra, y una respuesta tardía de la anterior no se guarda', () => {
+    const { cache, estado, guardarYa } = conDueno('A');
+    guardarYa('inicio.viajesAbiertos', viaje);
+    expect(cache.leer('inicio.viajesAbiertos')).toEqual(viaje);
+    const turnoDeA = cache.turno();
+    estado.dueno = 'B';
+    expect(cache.leer('inicio.viajesAbiertos')).toBeUndefined();
+    expect(cache.guardar(turnoDeA, 'inicio.viajesAbiertos', viaje)).toBeNull();
+    expect(cache.leer('inicio.viajesAbiertos')).toBeUndefined();
+  });
+
+  it('C-07 · al cambiar la sesión se vacía con todo lo demás', () => {
+    const { cache, estado, guardarYa } = conDueno('A');
+    let avisar: () => void = () => undefined;
+    cache.vigilarSesion((oyente) => { avisar = oyente; return () => undefined; });
+    guardarYa('inicio.viajesAbiertos', viaje);
+    estado.dueno = 'B';
+    avisar();
+    expect(cache.tamano()).toBe(0);
+  });
+
+  it('no es de las mesas: subir el sin leer no lo borra (los viajes se olvidan después de sus acciones)', () => {
+    const { cache, guardarYa, sinLeerYa } = conDueno('A');
+    sinLeerYa(1);
+    guardarYa('inicio.viajesAbiertos', viaje);
+    sinLeerYa(5);
+    expect(cache.leer('inicio.viajesAbiertos')).toEqual(viaje);
+    expect(CLAVES_DE_MESAS).not.toContain('inicio.viajesAbiertos');
+  });
+});
+
 describe('D237 · lo último visto, en memoria y por cuenta', () => {
   it('sin nada guardado no hay nada', () => {
     const { cache } = conDueno('A');
@@ -266,8 +300,8 @@ describe('🔴 D237 · guardas: memoria sola, y sólo para mostrar', () => {
         expect(cuerpo[0]!.trim(), `${ruta}:${i + 2}`).toBe('if (!ultimoVisto.esDeAhora(turno)) return;');
       });
     }
-    // Inicio, invitaciones, tus mesas, historial, amigos y grupos.
-    expect(vistos).toBe(6);
+    // Inicio, invitaciones, tus mesas, historial, amigos, grupos y (D265) los viajes abiertos de Inicio.
+    expect(vistos).toBe(7);
   });
 
   it('ni la mesa, ni el alta, ni la cámara, ni Avisos lo leen', () => {

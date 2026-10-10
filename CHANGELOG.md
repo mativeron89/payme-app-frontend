@@ -11,6 +11,52 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.237.1 — El viaje abierto en Inicio, con su balance; la pestaña Viajes con «Crear viaje» y «Cerrados» (D265, D266, D267) (2026-10-10)
+
+Orden AF-VIAJE-EN-INICIO-Y-PESTANA-VIAJES-20261010 (12201970…), con las adendas D265, D266 y D267 (b9859fe0…). Lo
+visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **D265 · D267 · cada viaje abierto, en Inicio, como una mesa abierta.** Mati: «que aparezca en la pantalla principal
+  como una burbuja grande» y «tiene que tener tres cosas, la foto, el nombre y la posición de saldo (con el color
+  dependiendo cuál sea la posición)».
+  - Va debajo de las mesas abiertas, en todas las pestañas, sólo con Viajes encendido. Hay una burbuja por viaje, y
+    al tocarla se abre el viaje.
+  - Cada burbuja lleva «Tu viaje abierto», la foto o la inicial sobre el color del viaje, el nombre, el balance y
+    «Ver viaje →».
+  - El balance usa los textos de la app («Te deben $X», «Debes $X», «Estás a mano») y los colores del balance del
+    viaje (D245): verde, rojo o el del texto. Nunca dice «saldo».
+  - Esperando pagos: «Esperando pagos · faltan N», sin monto, como en la lista de `/viajes`. En ese estado el balance
+    está congelado al cerrar y no baja con las transferencias.
+  - El color del viaje queda en el círculo; el del balance, en su texto. La tarjeta es blanca, como la de una mesa.
+  - Los datos son `GET /api/viajes?estado=abiertos`.
+    - Siguen la regla de cuentas de T-01 y C-07 en `ultimoVisto` (`inicio.viajesAbiertos`): el turno se saca al
+      pedir, y un error tardío de otra cuenta no borra nada.
+    - Lo guardado se olvida al crear, aceptar, salir o cerrar un viaje.
+    - Sin poder preguntar: «No pudimos cargar tus viajes», con «Reintentar».
+- **D265 · las pestañas de Inicio (Cuenta, Estadísticas y Viajes) en negrita,** la elegida también. `BubbleTabs`
+  recibe `negrita`, y sólo Inicio la pide. Amigos no cambia.
+- **D266 · Inicio › Viajes: «Crear viaje» y «Cerrados».** Mati: «en vez de Abiertos y Cerrados dejas Cerrados pero
+  cambias el de Abiertos por Crear Viaje».
+  - «Crear viaje» abre el alta. «Cerrados» muestra y oculta la lista de cerrados debajo, y arranca oculta.
+  - «Crear viaje» queda uno solo. Salieron:
+    - «Abiertos»;
+    - la fila aparte;
+    - el vacío con su botón;
+    - el CSS y los textos que quedaron sin uso («Abiertos», «Ponle nombre y suma a tus amigos», «No tienes viajes
+      abiertos»).
+  - La pestaña ya no pide los abiertos. C-06 (`ConsultaDeViajes`) sigue en pie para los cerrados: el reintento, salir
+    y volver, y desmontar.
+- **Pruebas:**
+  - rojo en la base `3a4e3f1`: 15 unitarias, más el archivo nuevo, que no carga, y 9 e2e;
+  - mutantes: 16 de 17 mueren, cada uno por la prueba que lo vigila;
+    - mueren: el balance y su color, esperando pagos, las burbujas sin Viajes, el error tardío de otra cuenta, el
+      olvido al crear, la negrita (en la app y en el CSS), la pestaña que pidiera abiertos, «Crear viaje» con
+      `aria-pressed`, C-06, la lista que no se oculta, el error que no se dice, la foto sin `has_photo` y el toque;
+    - **sobrevive uno, equivalente:** un cerrado que navegara a `viaje` en vez de `viaje-cerrado`. La pantalla del
+      viaje lo reemplaza por `viaje-cerrado` (`replaceRoute`), así que la URL y el historial terminan iguales; cambia
+      sólo una carga intermedia;
+  - e2e a 375 con capturas.
+
 ## 0.237.0 — Viajes: varios pagaron, el ticket del viaje desde Estadísticas y Crear viaje sin la ayuda (D263, D260, D264) (2026-10-10)
 
 Orden AF-VIAJES-VARIOS-PAGARON-Y-ESTADISTICAS-20261010 (e1313862…). Contra App Backend 2.177.0, que incluye 2.176.0.

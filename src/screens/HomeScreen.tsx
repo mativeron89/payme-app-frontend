@@ -31,9 +31,10 @@ import { InvitacionEnInicio } from './InvitacionEnInicio';
 import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
-import { useViajesHabilitado } from '../api/viajes';
+import { useViajesHabilitado, type ListaDeViajes } from '../api/viajes';
 import { inicioPideViajes, olvidarInicioEnViajes } from './viajes/inicioEnViajes';
-import { FilaCrearViaje, ListaDeInicio, PanelViajes, useConteoDeViajes } from './viajes/PestanaViajes';
+import { ListaDeCerrados, PanelViajes, useCerradosDeViajes } from './viajes/PestanaViajes';
+import { ViajesAbiertosEnInicio } from './viajes/ViajesEnInicio';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -177,8 +178,9 @@ export function HomeScreen() {
   const tab: TabId = tabElegida === 'asociadas' && conViajes ? 'viajes'
     : tabElegida === 'viajes' && !conViajes ? 'asociadas' : tabElegida;
   const pestanas = conViajes ? TABS.filter((x) => x.id !== 'asociadas') : TABS;
-  const { conteo: conteoViajes, elegida: listaDeViajes, elegir: elegirListaDeViajes, reintentar: reintentarViajes } =
-    useConteoDeViajes(tab === 'viajes');
+  // D266 · la pestaña Viajes pide sólo los cerrados: los abiertos están en la pantalla principal (D265).
+  const { conteo: cerradosDeViajes, abierta: listaDeCerradosAbierta, alternar: alternarCerrados, reintentar: reintentarViajes } =
+    useCerradosDeViajes(tab === 'viajes');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
   // D237 · lo último visto de esta cuenta, si hay: al volver a Inicio la mesa
@@ -187,6 +189,11 @@ export function HomeScreen() {
     () => ultimoVisto.leer<OpenMesasResponse>('inicio.mesasAbiertas') ?? null,
   );
   const [mesasFallaron, setMesasFallaron] = useState(false);
+  // D265 · los viajes abiertos, como burbujas debajo de las mesas: lo último visto de esta cuenta, si hay.
+  const [viajesAbiertos, setViajesAbiertos] = useState<ListaDeViajes | null>(
+    () => ultimoVisto.leer<ListaDeViajes>('inicio.viajesAbiertos') ?? null,
+  );
+  const [viajesFallaron, setViajesFallaron] = useState(false);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const unread = useSinLeer();
   // D237 · la primera carga muestra su esqueleto sólo si tarda más de 300 ms.
@@ -227,6 +234,31 @@ export function HomeScreen() {
   useEffect(() => {
     void cargarMesas(false);
   }, [cargarMesas]);
+
+  /**
+   * D265 · los viajes abiertos, con la misma regla de la mesa (T-01): el turno se saca al pedir, lo que llega de otra
+   * cuenta ni se guarda ni se muestra, y un error tardío de otra cuenta no borra nada. Sin Viajes, no se piden.
+   */
+  const cargarViajes = useCallback(() => {
+    setViajesFallaron(false);
+    const turno = ultimoVisto.turno();
+    return api
+      .getViajes('abiertos')
+      .then((r) => {
+        const g = ultimoVisto.guardar(turno, 'inicio.viajesAbiertos', r);
+        if (g) setViajesAbiertos(g.valor);
+      })
+      .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
+        ultimoVisto.olvidar('inicio.viajesAbiertos');
+        setViajesAbiertos(null);
+        setViajesFallaron(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (conViajes) void cargarViajes();
+  }, [conViajes, cargarViajes]);
 
   /**
    * ⚠️ EL RIEL VA EN SU PROPIO EFECTO, Y LA DEPENDENCIA NO ES OPCIONAL.
@@ -272,6 +304,8 @@ export function HomeScreen() {
           ]}
           active={tab}
           onSelect={(id) => setTab(id as TabId)}
+          // D265 · Mati: «Las letras de la pantalla de inicio (Cuenta, Estadisticas y Viajes) tienen que estar en negrita».
+          negrita
         />}
       />
 
@@ -330,9 +364,14 @@ export function HomeScreen() {
            * *"una pantalla que ya existe es mucho más difícil de discutir que
            * una que todavía no"*.
            */}
-          {/* AF-VIAJES · D242 · 1a/1b: Abiertos y Cerrados, o el vacío. */}
+          {/* D266 · «Crear viaje» y «Cerrados». */}
           {tab === 'viajes' && (
-            <PanelViajes conteo={conteoViajes} elegida={listaDeViajes} onElegir={elegirListaDeViajes} onReintentar={reintentarViajes} />
+            <PanelViajes
+              conteo={cerradosDeViajes}
+              cerradosAbierta={listaDeCerradosAbierta}
+              onCerrados={alternarCerrados}
+              onReintentar={reintentarViajes}
+            />
           )}
 
           {tab === 'asociadas' && (
@@ -346,9 +385,8 @@ export function HomeScreen() {
             </div>
           )}
         </MountedCard>
-        {tab === 'viajes' && <FilaCrearViaje conteo={conteoViajes} />}
-        {/* D246 · la lista elegida, debajo de «Crear viaje». */}
-        {tab === 'viajes' && <ListaDeInicio conteo={conteoViajes} elegida={listaDeViajes} />}
+        {/* D246 · D266 · la lista de cerrados, debajo de la tarjeta, al tocar «Cerrados». */}
+        {tab === 'viajes' && listaDeCerradosAbierta && <ListaDeCerrados conteo={cerradosDeViajes} />}
         {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}
@@ -454,6 +492,15 @@ export function HomeScreen() {
             )
           )}
         </section>
+
+        {/* D265 · D267 · cada viaje abierto, como una mesa abierta: foto o inicial, nombre y balance. */}
+        {conViajes && (
+          <ViajesAbiertosEnInicio
+            viajes={viajesAbiertos?.viajes ?? null}
+            fallo={viajesFallaron}
+            onReintentar={() => void cargarViajes()}
+          />
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════
             RIEL DE SALDO · DURMIENTE. Los DOS bloques de abajo están gateados

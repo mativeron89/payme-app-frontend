@@ -32,7 +32,9 @@ test.describe('D255 · tramo 1', () => {
   test('🔴 2 · Viajes: lo elegido es la mitad exacta de la tarjeta, sin espacio con la otra, y en negrita', async ({ page }) => {
     await conViajes(page);
     await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
-    for (const i of [0, 1]) {
+    // D266 · se elige sólo «Cerrados» (la segunda): «Crear viaje» abre el alta y no lleva `aria-pressed`.
+    await expect(page.locator('button.vj-lanzador').nth(0)).not.toHaveAttribute('aria-pressed', /.*/);
+    for (const i of [1]) {
       await page.locator('button.vj-lanzador').nth(i).click();
       await expect(page.locator('button.vj-lanzador').nth(i)).toHaveAttribute('aria-pressed', 'true');
       const m = await page.evaluate((elegido) => {

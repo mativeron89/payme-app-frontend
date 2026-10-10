@@ -24,6 +24,7 @@ import {
 import { iniciales } from './viajesView';
 import './viajes.css';
 import './crear.css';
+import { olvidarLoDeViajes } from '../../api/ultimoVisto';
 
 /**
  * AF-VIAJES · D242 · 1d «Crear viaje» y 1e «buscar por @usuario»
@@ -78,6 +79,8 @@ export function CrearViajeScreen() {
     setError(null);
     try {
       const viaje = await api.crearViaje({ ...contenido, idempotency_key: actual.clave });
+      // D265 · un viaje abierto más: Inicio no muestra lo guardado sin él.
+      olvidarLoDeViajes();
       navigate('viaje', viaje.id);
     } catch (err) {
       // Defensivo: si el dueño dice que esta llave ya es de otro pedido, la próxima es nueva.

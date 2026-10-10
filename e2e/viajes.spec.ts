@@ -45,32 +45,33 @@ async function ir(page: Page, ruta: string): Promise<void> {
   }, ruta);
 }
 
-test('1a · D246 · Inicio: «Viajes» reemplaza a «Asociadas»; Abiertos y Cerrados se eligen y la lista va debajo de «Crear viaje»', async ({ page }) => {
+test('1a · D266 · Inicio: «Viajes» reemplaza a «Asociadas»; «Crear viaje» y «Cerrados», con los cerrados debajo', async ({ page }) => {
   await conViajes(page);
   await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
   const inicio = page.url();
-  const abiertos = page.getByRole('button', { name: /Abiertos\s*2 viajes/ });
   const cerrados = page.getByRole('button', { name: /Cerrados\s*2 viajes/ });
-  // Al entrar, Abiertos, con su lista en la misma pantalla.
-  await expect(abiertos).toHaveAttribute('aria-pressed', 'true');
+  // Sin «Abiertos» ni un segundo «Crear viaje»: los abiertos están en la pantalla principal (D265).
+  await expect(page.locator('button.vj-lanzador')).toHaveText(['Crear viaje', 'Cerrados2 viajes']);
+  await expect(page.getByRole('button', { name: /Abiertos/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Crear viaje/ })).toHaveCount(1);
+  // Al entrar, la lista de cerrados oculta; «Cerrados» la muestra.
   await expect(cerrados).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
-  // D255-6 · cada fila, sólo la inicial y el nombre.
-  await expect(page.locator('.vj-inicio-fila')).toHaveText(['CCancún 2026', 'MMonterrey fin de semana']);
-  expect(page.url()).toBe(inicio);
+  await expect(page.locator('.vj-inicio-fila')).toHaveCount(0);
   await cerrados.click();
   await expect(cerrados).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Oaxaca puente', { exact: true })).toBeVisible();
-  await expect(page.locator('.vj-inicio-fila').first()).toHaveText('OOaxaca puente');
-  await expect(page.getByText('Cancún 2026', { exact: true })).toHaveCount(0);
+  // D255-6 · cada fila, sólo la inicial y el nombre.
+  await expect(page.locator('.vj-inicio-fila')).toHaveText(['OOaxaca puente', 'VValle de Bravo']);
   expect(page.url()).toBe(inicio);
-  // En otra pestaña la lista no está; al volver a Viajes, de nuevo Abiertos.
+  // Y la oculta.
+  await cerrados.click();
+  await expect(page.locator('.vj-inicio-fila')).toHaveCount(0);
+  // En otra pestaña la lista no está; al volver a Viajes, de nuevo oculta.
+  await cerrados.click();
   await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
   await expect(page.getByText('Oaxaca puente', { exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
-  await expect(abiertos).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
+  await expect(cerrados).toHaveAttribute('aria-pressed', 'false');
   await cerrados.click();
   // Tocar un viaje lo abre.
   await page.getByText('Oaxaca puente', { exact: true }).click();
@@ -425,10 +426,9 @@ test('1q · sin consumos se sale: la invitación aceptada y salir del viaje', as
   await ir(page, `/viaje/${MAZATLAN}`);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
-  // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está.
+  // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está: ni su burbuja (D265) ni en la pestaña.
   await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('button', { name: /Abiertos/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Cancún 2026', { exact: true })).toBeVisible();
+  await expect(page.locator('.viaje-card').filter({ hasText: 'Cancún 2026' })).toBeVisible();
   await expect(page.getByText('Mazatlán diciembre', { exact: true })).toHaveCount(0);
 });
 

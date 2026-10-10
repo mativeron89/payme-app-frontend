@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ViajeEnLista } from '../../api/viajes';
-import { FilaCrearViaje, ListaDeInicioVista, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
+import { ListaDeCerradosVista, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
 
-/** AF-VIAJES · D242 · la pestaña «Viajes» de Inicio (1a, 1b); D246 · la lista elegida debajo de «Crear viaje». */
+/** AF-VIAJES · D242 · la pestaña «Viajes» de Inicio; D266 · «Crear viaje» y «Cerrados», con los cerrados debajo. */
 const nada = () => undefined;
 
 function enLista(extra: Partial<ViajeEnLista>): ViajeEnLista {
@@ -18,84 +18,74 @@ function enLista(extra: Partial<ViajeEnLista>): ViajeEnLista {
 const listo = (abiertos: number, cerrados: number, viajes: ViajeEnLista[] = []): ConteoDeViajes =>
   ({ estado: 'listo', counts: { abiertos, cerrados }, viajes });
 
-const panel = (conteo: ConteoDeViajes, elegida: 'abiertos' | 'cerrados' = 'abiertos') =>
-  renderToStaticMarkup(<PanelViajes conteo={conteo} elegida={elegida} onElegir={nada} onReintentar={nada} />);
+const panel = (conteo: ConteoDeViajes, cerradosAbierta = false) =>
+  renderToStaticMarkup(<PanelViajes conteo={conteo} cerradosAbierta={cerradosAbierta} onCerrados={nada} onReintentar={nada} />);
 
-describe('la pestaña Viajes', () => {
-  it('1a · Abiertos y Cerrados lado a lado, con cuántos hay (el conteo del dueño)', () => {
+/** Lo que se lee de cada lanzador: su rótulo y, si tiene, su bajada. */
+const lanzadores = (html: string) => [...html.matchAll(/<button type="button" class="launch vj-lanzador[^"]*"[^>]*>([\s\S]*?)<\/button>/g)]
+  .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+
+describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () => {
+  it('las dos burbujas, lado a lado: «Crear viaje» sin conteo y «Cerrados» con cuántos hay (el conteo del dueño)', () => {
     const html = panel(listo(2, 1));
-    expect(html).toContain('Abiertos');
-    expect(html).toContain('2 viajes');
-    expect(html).toContain('Cerrados');
-    expect(html).toContain('1 viaje<');
+    expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados 1 viaje']);
+    expect(lanzadores(panel(listo(1, 3)))).toEqual(['Crear viaje', 'Cerrados 3 viajes']);
     expect(html).toContain('launch-pair');
-    expect(html).not.toContain('Todavía no tienes viajes');
   });
 
-  it('🔴 D246 · se eligen: lo elegido con `aria-pressed` y el borde (no sólo color); al entrar, Abiertos', () => {
-    const abiertos = panel(listo(2, 1));
-    expect(abiertos.match(/aria-pressed="true"/g)).toHaveLength(1);
-    expect(abiertos).toMatch(/class="launch vj-lanzador vj-lanzador--elegido" aria-pressed="true"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Abiertos/);
-    const cerrados = panel(listo(2, 1), 'cerrados');
-    expect(cerrados).toMatch(/vj-lanzador--elegido" aria-pressed="true"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Cerrados/);
+  it('🔴 sin «Abiertos», ni un segundo «Crear viaje», ni el vacío con su botón; aunque no haya ningún viaje', () => {
+    for (const conteo of [listo(2, 1), listo(0, 0)]) {
+      const html = panel(conteo);
+      expect(html).not.toContain('Abiertos');
+      expect(html.match(/Crear viaje/g)).toHaveLength(1);
+      expect(html).not.toContain('Todavía no tienes viajes');
+      expect(html).not.toContain('btn btn-navy');
+    }
+    expect(lanzadores(panel(listo(0, 0)))).toEqual(['Crear viaje', 'Cerrados 0 viajes']);
   });
 
-  it('1b · sin viajes, la tarjeta es el vacío con «Crear viaje», y no hay fila ni lista aparte', () => {
-    const html = panel(listo(0, 0));
-    expect(html).toContain('Todavía no tienes viajes');
-    expect(html).toContain('PayMe va calculando quién le debe a quién.');
-    expect(renderToStaticMarkup(<FilaCrearViaje conteo={listo(0, 0)} />)).toBe('');
-    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(0, 0)} elegida="abiertos" />)).toBe('');
-  });
-
-  it('1a · con viajes, la fila «Crear viaje» va debajo de la tarjeta', () => {
-    const html = renderToStaticMarkup(<FilaCrearViaje conteo={listo(1, 0)} />);
-    expect(html).toContain('Crear viaje');
-    expect(html).toContain('Ponle nombre y suma a tus amigos');
+  it('🔴 «Crear viaje» es un botón común; «Cerrados» se elige con `aria-pressed` y el borde (no sólo color)', () => {
+    const cerrada = panel(listo(2, 1));
+    expect(cerrada).toMatch(/<button type="button" class="launch vj-lanzador "><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Crear viaje<\/span><\/button>/);
+    expect(cerrada).toMatch(/aria-pressed="false"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Cerrados/);
+    expect(cerrada).not.toContain('aria-pressed="true"');
+    const abierta = panel(listo(2, 1), true);
+    expect(abierta).toMatch(/class="launch vj-lanzador vj-lanzador--elegido" aria-pressed="true"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Cerrados/);
+    expect(abierta.match(/aria-pressed/g)).toHaveLength(1);
   });
 
   it('un error de red no se muestra como vacío: dice que no pudo y ofrece reintentar', () => {
     const html = panel({ estado: 'error' });
     expect(html).toContain('No pudimos cargar tus viajes');
     expect(html).toContain('Reintentar');
-    expect(html).not.toContain('Todavía no tienes viajes');
-    expect(renderToStaticMarkup(<FilaCrearViaje conteo={{ estado: 'error' }} />)).toBe('');
+    expect(html).not.toContain('Crear viaje');
   });
 });
 
-describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
+describe('D246 · D266 · los cerrados, debajo de la tarjeta', () => {
   /** Lo que se lee de una fila, sin etiquetas: el texto del botón. */
   const filas = (html: string) => [...html.matchAll(/<button type="button" class="vj-inicio-fila">([\s\S]*?)<\/button>/g)]
     .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+  const cerrado = (extra: Partial<ViajeEnLista>) => enLista({ estado: 'cerrado', mi_balance_cents: null, consumiste_cents: 223000,
+    terminado_en: '2026-08-20T15:00:00.000Z', ...extra });
 
-  it('🔴 D255-6 · Abiertos: cada fila es sólo la inicial y el nombre, en orden', () => {
-    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0, [
-      enLista({}),
-      enLista({ id: 'v-2', nombre: 'Monterrey', estado: 'esperando_pagos', mi_balance_cents: 105000, transferencias_pendientes: 2 }),
-    ])} elegida="abiertos" />);
-    expect(filas(html)).toEqual(['C Cancún 2026', 'M Monterrey']);
-    // Ni fechas, ni personas, ni balance, ni pagos que faltan.
-    for (const fuera of ['5–11 oct', '4 personas', 'Debes', 'Esperando pagos', 'vjl-']) expect(html).not.toContain(fuera);
+  it('🔴 D255-6 · cada fila es sólo la inicial y el nombre, en orden, sin «Gastaste»', () => {
+    const html = renderToStaticMarkup(<ListaDeCerradosVista conteo={listo(1, 2, [
+      cerrado({ id: 'v-3', nombre: 'oaxaca puente' }), cerrado({ id: 'v-4', nombre: 'Valle de Bravo' }),
+    ])} />);
+    expect(filas(html)).toEqual(['O oaxaca puente', 'V Valle de Bravo']);
+    for (const fuera of ['Gastaste', '$2,230', '4 personas']) expect(html).not.toContain(fuera);
   });
 
-  it('🔴 D255-6 · Cerrados: también sólo la inicial y el nombre, sin «Gastaste»', () => {
-    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(1, 1, [
-      enLista({ id: 'v-3', nombre: 'oaxaca puente', estado: 'cerrado', mi_balance_cents: null, consumiste_cents: 223000, terminado_en: '2026-08-20T15:00:00.000Z' }),
-    ])} elegida="cerrados" />);
-    expect(filas(html)).toEqual(['O oaxaca puente']);
-    expect(html).not.toContain('Gastaste');
-    expect(html).not.toContain('$2,230');
-  });
-
-  it('🔴 D255 · la tarjeta con el color del viaje (texto blanco) y, si tiene, su foto en vez de la inicial', () => {
-    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0, [
-      enLista({ color: 'violeta', has_photo: true }),
-      enLista({ id: 'v-2', nombre: 'Monterrey', color: 'verde' }),
-    ])} elegida="abiertos" fotoDe={(id) => (id === 'v-1' ? 'blob:foto-cancun' : null)} />);
+  it('🔴 D255 · la insignia con el color del viaje (texto blanco) y, si tiene, su foto en vez de la inicial', () => {
+    const html = renderToStaticMarkup(<ListaDeCerradosVista conteo={listo(0, 2, [
+      cerrado({ color: 'violeta', has_photo: true }),
+      cerrado({ id: 'v-2', nombre: 'Monterrey', color: 'verde' }),
+    ])} fotoDe={(id) => (id === 'v-1' ? 'blob:foto-cancun' : null)} />);
     expect(html).toContain('<span class="vj-insignia vj-insignia--color" style="background:#6D28D9" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-cancun" alt=""/></span>');
     expect(html).toContain('<span class="vj-insignia vj-insignia--color" style="background:#15803D" aria-hidden="true">M</span>');
     // Sin foto (`has_photo: false`) no se pide ni se muestra, aunque hubiera una guardada.
-    const sinFoto = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(1, 0, [enLista({})])} elegida="abiertos" fotoDe={() => 'blob:vieja'} />);
+    const sinFoto = renderToStaticMarkup(<ListaDeCerradosVista conteo={listo(0, 1, [cerrado({})])} fotoDe={() => 'blob:vieja'} />);
     expect(sinFoto).not.toContain('<img');
     expect(sinFoto).toContain('<span class="vj-insignia" aria-hidden="true">C</span>');
   });
@@ -106,9 +96,10 @@ describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
     expect(inicialDelViaje('   ')).toBe('·');
   });
 
-  it('lista vacía: «No tienes viajes abiertos» o «No tienes viajes cerrados»', () => {
-    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(0, 2)} elegida="abiertos" />)).toContain('No tienes viajes abiertos');
-    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0)} elegida="cerrados" />)).toContain('No tienes viajes cerrados');
+  it('sin cerrados: «No tienes viajes cerrados»; cargando o con error, nada', () => {
+    expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={listo(2, 0)} />)).toContain('No tienes viajes cerrados');
+    expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={{ estado: 'cargando' }} />)).toBe('');
+    expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={{ estado: 'error' }} />)).toBe('');
   });
 });
 
@@ -119,7 +110,17 @@ describe('Inicio · la tercera pestaña depende de la capacidad', () => {
     expect(home).toMatch(/const conViajes = useViajesHabilitado\(\);/);
     expect(home).toMatch(/const pestanas = conViajes \? TABS\.filter\(\(x\) => x\.id !== 'asociadas'\) : TABS;/);
     expect(home).toMatch(/\.\.\.\(conViajes \? \[\{ id: 'viajes', label: t\('Viajes'\) \}\] : \[\]\)/);
-    expect(home).toMatch(/\{tab === 'viajes' && \(\s*<PanelViajes /);
+    expect(home).toMatch(/\{tab === 'viajes' && \(\s*<PanelViajes/);
+  });
+
+  it('🔴 D266 · la pestaña pide sólo los cerrados, y la fila aparte «Crear viaje» ya no existe', () => {
+    const pestana = readFileSync(new URL('./PestanaViajes.tsx', import.meta.url), 'utf8');
+    expect(pestana).toContain("new ConsultaDeViajes(() => api.getViajes('cerrados'), setConteo)");
+    expect(pestana).not.toMatch(/getViajes\('abiertos'\)/);
+    for (const viejo of ['FilaCrearViaje', 'vj-crear-fila', 'vj-inicio-vacio']) {
+      expect(pestana, viejo).not.toContain(viejo);
+      expect(home, viejo).not.toContain(viejo);
+    }
   });
 
   it('🔴 D246 · con la pestaña Viajes no se ve «No tienes mesas abiertas»', () => {

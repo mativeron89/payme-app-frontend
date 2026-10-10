@@ -38,6 +38,8 @@ export interface TurnoDeUltimoVisto {
 
 export type ClaveUltimoVisto =
   | 'inicio.mesasAbiertas'
+  /** D265 · los viajes abiertos, como burbujas en Inicio. */
+  | 'inicio.viajesAbiertos'
   | 'inicio.invitaciones'
   | 'inicio.avisoFoto'
   | 'sinLeer'
@@ -206,6 +208,14 @@ export function vigilarUltimoVistoConLaSesion(): () => void {
 /** Borra todo lo que depende de las mesas (después de una acción sobre una mesa). */
 export function olvidarLoDeMesas(): void {
   ultimoVisto.olvidar(...CLAVES_DE_MESAS);
+}
+
+/**
+ * D265 · borra los viajes abiertos de Inicio después de crear, aceptar, salir o cerrar un viaje: son las acciones que
+ * agregan, sacan o cambian de estado una burbuja.
+ */
+export function olvidarLoDeViajes(): void {
+  ultimoVisto.olvidar('inicio.viajesAbiertos');
 }
 
 /** Borra todo lo de Amigos (después de responder, bloquear o tocar grupos). */

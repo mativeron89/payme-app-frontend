@@ -18,19 +18,20 @@ export const EN_VIAJES_COMUN: Record<string, string> = {
   'Prueba sacar la foto de nuevo con más luz.': 'Try taking the photo again with more light.',
   // Inicio · la pestaña Viajes (1a, 1b).
   'Viajes': 'Trips',
-  'Abiertos': 'Open',
   'Cerrados': 'Closed',
   '{0} viaje': '{0} trip',
   '{0} viajes': '{0} trips',
   'Crear viaje': 'Create trip',
-  'Ponle nombre y suma a tus amigos': 'Name it and add your friends',
   'Todavía no tienes viajes': "You don't have any trips yet",
   'No pudimos cargar tus viajes': "We couldn't load your trips",
   // D246 · la lista elegida en Inicio › Viajes.
-  'No tienes viajes abiertos': "You don't have open trips",
   'No tienes viajes cerrados': "You don't have closed trips",
   'Crea uno, suma a tus amigos y escaneen los tickets del viaje. PayMe va calculando quién le debe a quién.':
     'Create one, add your friends and scan the trip receipts. PayMe keeps track of who owes whom.',
+  // D265 · D267 · cada viaje abierto en Inicio, como una mesa abierta.
+  'Tus viajes abiertos': 'Your open trips',
+  'Tu viaje abierto': 'Your open trip',
+  'Ver viaje →': 'See trip →',
   // Los estados de error que comparten las pantallas de Viajes (propuestos en el plan).
   'Este viaje ya no está disponible.': 'This trip is no longer available.',
   'Ver tus viajes': 'See your trips',

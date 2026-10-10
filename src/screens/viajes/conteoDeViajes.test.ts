@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * C-06 (auditoría Codex completa, MEDIA) · un reintento tardío de Abiertos no
- * pisa la lista de Cerrados. Se prueba el HOOK REAL (`useConteoDeViajes`) con un
+ * C-06 (auditoría Codex completa, MEDIA) · un pedido tardío no pisa a uno
+ * posterior. D266 · la pestaña pide sólo los cerrados: la protección sigue para
+ * el reintento y para salir y volver a la pestaña. Se prueba el HOOK REAL
+ * (`useCerradosDeViajes`) con un
  * ciclo de React mínimo: `useState`, `useRef`, `useCallback` y `useEffect` con
  * sus dependencias y limpiezas, como lo hizo la auditoría. No reemplaza una
  * medición en el navegador; sí fija el orden de llegada, que el navegador no
@@ -79,63 +81,63 @@ vi.mock('../../api', () => ({
 
 const lista = (nombre: string) => ({
   counts: { abiertos: 1, cerrados: 1 },
-  viajes: [{ id: nombre, nombre, fecha_desde: null, fecha_hasta: null, estado: nombre === 'Oaxaca' ? 'cerrado' : 'abierto', personas: 2,
-    mi_balance_cents: null, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null }],
+  viajes: [{ id: nombre, nombre, fecha_desde: null, fecha_hasta: null, estado: 'cerrado', personas: 2,
+    mi_balance_cents: null, transferencias_pendientes: null, consumiste_cents: 1000, terminado_en: null }],
 });
 const tanda = () => new Promise((r) => setTimeout(r, 0));
 
+let activa = true;
 async function montar() {
-  const { useConteoDeViajes } = await import('./PestanaViajes');
-  const m = new Montaje(() => useConteoDeViajes(true));
+  const { useCerradosDeViajes } = await import('./PestanaViajes');
+  const m = new Montaje(() => useCerradosDeViajes(activa));
   m.render();
   return m;
 }
 
-/** Abiertos falla, «Reintentar» (queda en vuelo), se elige Cerrados. */
-async function hastaElegirCerrados() {
+/** El primero falla, «Reintentar» (queda en vuelo), se sale de la pestaña y se vuelve (otro pedido). */
+async function hastaVolverALaPestana() {
   const m = await montar();
-  expect(pedidos.map((p) => p.lista)).toEqual(['abiertos']);
+  expect(pedidos.map((p) => p.lista)).toEqual(['cerrados']);
   pedidos[0]!.rechazar(new Error('red'));
   await tanda();
   m.render();
   expect(m.resultado.conteo).toEqual({ estado: 'error' });
   m.resultado.reintentar();
   m.render();
-  m.resultado.elegir('cerrados');
-  m.render();
-  expect(pedidos.map((p) => p.lista)).toEqual(['abiertos', 'abiertos', 'cerrados']);
+  activa = false; m.render();
+  activa = true; m.render();
+  expect(pedidos.map((p) => p.lista)).toEqual(['cerrados', 'cerrados', 'cerrados']);
   return m;
 }
 
 const nombres = (m: Montaje<{ conteo: { estado: string; viajes?: ReadonlyArray<{ nombre: string }> } }>) =>
   m.resultado.conteo.estado === 'listo' ? m.resultado.conteo.viajes!.map((v) => v.nombre) : m.resultado.conteo.estado;
 
-describe('🔴 C-06 · el reintento de Abiertos no pisa Cerrados', () => {
-  beforeEach(() => { pedidos.length = 0; vi.resetModules(); });
+describe('🔴 C-06 · D266 · un pedido tardío de los cerrados no pisa al de ahora', () => {
+  beforeEach(() => { pedidos.length = 0; activa = true; vi.resetModules(); });
 
-  it('responde Cerrados y DESPUÉS llega el reintento de Abiertos: queda Cerrados con su lista', async () => {
-    const m = await hastaElegirCerrados();
+  it('responde el de ahora y DESPUÉS llega el reintento viejo: queda el de ahora', async () => {
+    const m = await hastaVolverALaPestana();
     pedidos[2]!.resolver(lista('Oaxaca'));
     await tanda(); m.render();
     expect(nombres(m)).toEqual(['Oaxaca']);
-    pedidos[1]!.resolver(lista('Cancún'));
-    await tanda(); m.render();
-    expect(m.resultado.elegida).toBe('cerrados');
-    expect(nombres(m)).toEqual(['Oaxaca']);
-  });
-
-  it('llega ANTES el reintento de Abiertos y después Cerrados: tampoco se ve Abiertos', async () => {
-    const m = await hastaElegirCerrados();
-    pedidos[1]!.resolver(lista('Cancún'));
-    await tanda(); m.render();
-    expect(nombres(m)).not.toEqual(['Cancún']);
-    pedidos[2]!.resolver(lista('Oaxaca'));
+    pedidos[1]!.resolver(lista('Viejo'));
     await tanda(); m.render();
     expect(nombres(m)).toEqual(['Oaxaca']);
   });
 
-  it('el reintento que falla tarde tampoco pone «error» sobre Cerrados', async () => {
-    const m = await hastaElegirCerrados();
+  it('llega ANTES el reintento viejo y después el de ahora: tampoco se ve el viejo', async () => {
+    const m = await hastaVolverALaPestana();
+    pedidos[1]!.resolver(lista('Viejo'));
+    await tanda(); m.render();
+    expect(nombres(m)).not.toEqual(['Viejo']);
+    pedidos[2]!.resolver(lista('Oaxaca'));
+    await tanda(); m.render();
+    expect(nombres(m)).toEqual(['Oaxaca']);
+  });
+
+  it('el reintento que falla tarde tampoco pone «error» sobre la lista', async () => {
+    const m = await hastaVolverALaPestana();
     pedidos[2]!.resolver(lista('Oaxaca'));
     await tanda(); m.render();
     pedidos[1]!.rechazar(new Error('red'));
@@ -146,18 +148,35 @@ describe('🔴 C-06 · el reintento de Abiertos no pisa Cerrados', () => {
   it('desmontado, nada de lo que estaba en vuelo publica', async () => {
     const m = await montar();
     m.desmontar();
-    pedidos[0]!.resolver(lista('Cancún'));
+    pedidos[0]!.resolver(lista('Oaxaca'));
     await tanda(); m.render();
     expect(m.resultado.conteo).toEqual({ estado: 'cargando' });
   });
 
-  it('control · sin cambiar de lista, el reintento sí publica', async () => {
+  it('control · sin salir de la pestaña, el reintento sí publica', async () => {
     const m = await montar();
     pedidos[0]!.rechazar(new Error('red'));
     await tanda(); m.render();
     m.resultado.reintentar(); m.render();
-    pedidos[1]!.resolver(lista('Cancún'));
+    pedidos[1]!.resolver(lista('Oaxaca'));
     await tanda(); m.render();
-    expect(nombres(m)).toEqual(['Cancún']);
+    expect(nombres(m)).toEqual(['Oaxaca']);
+  });
+
+  it('«Cerrados» muestra y oculta la lista; al salir de la pestaña, vuelve a ocultarse', async () => {
+    const m = await montar();
+    expect(m.resultado.abierta).toBe(false);
+    m.resultado.alternar(); m.render();
+    expect(m.resultado.abierta).toBe(true);
+    m.resultado.alternar(); m.render();
+    expect(m.resultado.abierta).toBe(false);
+    m.resultado.alternar(); m.render();
+    activa = false; m.render(); m.render();
+    expect(m.resultado.abierta).toBe(false);
+  });
+
+  it('🔴 sólo pide los cerrados: los abiertos están en la pantalla principal (D265)', async () => {
+    await hastaVolverALaPestana();
+    expect(pedidos.every((p) => p.lista === 'cerrados')).toBe(true);
   });
 });

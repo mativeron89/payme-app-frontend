@@ -8,90 +8,7 @@
   color: var(--text-muted);
 }
 
-/* 1b · sin viajes, la tarjeta de la pestaña es el estado vacío. */
-.vj-inicio-vacio {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-4) var(--sp-4) var(--sp-4);
-  text-align: center;
-}
-.vj-inicio-vacio-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--teal-l);
-  color: var(--teal-txt);
-}
-.vj-inicio-vacio-titulo {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text);
-}
-.vj-inicio-vacio-texto {
-  margin: 0 0 var(--sp-2);
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-
-/* 1a · la fila «Crear viaje» debajo de la tarjeta. */
-.vj-crear-fila {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: calc(100% - 2 * var(--sp-4));
-  margin: var(--sp-3) var(--sp-4) 0;
-  min-height: 64px;
-  padding: var(--sp-3) var(--sp-4);
-  border: none;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--sh-1);
-  text-align: left;
-  cursor: pointer;
-  color: var(--text);
-}
-.vj-crear-fila-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--teal-l);
-  color: var(--teal-txt);
-}
-.vj-crear-fila-texto {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.vj-crear-fila-titulo {
-  font-family: var(--font-display);
-  font-size: var(--fs-body);
-  font-weight: 700;
-}
-.vj-crear-fila-sub {
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-}
-.vj-crear-fila-chev {
-  display: inline-flex;
-  color: var(--text-muted);
-  transform: rotate(-90deg);
-}
-
-/* D246 · Abiertos y Cerrados se eligen: lo elegido con borde 2px teal (no sólo color).
+/* D246 · D266 · «Cerrados» se elige: lo elegido con borde 2px teal (no sólo color).
    D255-2 · en negrita, y el recuadro de lo elegido es la MITAD de la tarjeta:
    sin borde propio ni radio menor, sigue las esquinas de la tarjeta (con la
    esquina cuadrada de la pestaña) y llega hasta la línea del medio. Antes el
@@ -115,7 +32,7 @@
   box-shadow: inset 0 0 0 2px var(--action-2);
 }
 
-/* D246 · la lista elegida, en una burbuja debajo de «Crear viaje». */
+/* D246 · D266 · los cerrados, en una burbuja debajo de la tarjeta. */
 .vj-inicio-lista {
   margin: var(--sp-3) var(--sp-4) 0;
   padding: var(--sp-1) var(--sp-4);
@@ -155,3 +72,39 @@
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+
+/* ══ D265 · D267 · cada viaje abierto en Inicio, como una mesa abierta (`.mesa-card`) ══
+   El color del viaje queda en el círculo de la insignia; el del balance, sólo en su texto. La tarjeta es blanca. */
+.home-viajes {
+  display: block;
+  margin: var(--sp-3) var(--sp-4) 0;
+}
+.viaje-card-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.viaje-card-nombre {
+  min-width: 0;
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+/* Los textos y colores del balance del viaje (D245, `.vjv-monto-*`): el texto lo dice siempre; el color acompaña. */
+.viaje-card-balance {
+  margin-top: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: 1.25;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.viaje-card-balance--a-favor { color: var(--success); }
+.viaje-card-balance--deuda { color: var(--danger); }
+.viaje-card-balance--cero { color: var(--text); }
+.viaje-card-balance--esperando {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--info);
+}
+.viaje-card-ir { margin-left: auto; }

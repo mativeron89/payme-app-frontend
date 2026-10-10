@@ -61,6 +61,7 @@ import { ResponderInvitacionAViaje, RevisarPagoDeViaje } from './viajes/avisosDe
 import { useShortfallDetailCapability } from '../api/privateFeatures';
 import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
+import { olvidarLoDeViajes } from '../api/ultimoVisto';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
@@ -379,8 +380,11 @@ export function AvisosScreen() {
     if (respondiendoViaje !== null) return;
     setRespondiendoViaje(viajeId);
     try {
-      if (respuesta === 'aceptada') await api.aceptarViaje(viajeId);
-      else await api.rechazarViaje(viajeId);
+      if (respuesta === 'aceptada') {
+        await api.aceptarViaje(viajeId);
+        // D265 · un viaje abierto más: Inicio no muestra lo guardado sin él.
+        olvidarLoDeViajes();
+      } else await api.rechazarViaje(viajeId);
       setRespuestasAViajes((actual) => new Map(actual).set(viajeId, respuesta));
     } catch (err) {
       const { tipo } = errorDeViaje(err);
