@@ -28,6 +28,8 @@ por el pie «Listo», y no desplazaba. Lo visible se cierra con la prueba de Mat
     `documentElement.clientHeight` 793 (el bloque inicial, donde se ancla lo fijo: 59 pt). En «al abrir», el `.scroll`
     tenía `clientHeight` = `scrollHeight` = 598: el contenido entraba y no había nada que desplazar. No había `inert`,
     hojas abiertas ni `touch-action`.
+  - **Un segundo panel**, desde el ticket ya cargado de un restaurante, dio lo mismo: 793 contra 852, y el `.scroll` con
+    578 = 578.
 - **El arreglo, un solo patrón:** el pie va en el flujo de `.screen`, debajo del `.scroll`, y termina donde termina
   `.app`, como la barra. Ya no lo cubre ningún aire de compensación: se retiran los `padding-bottom` de 112, 168 y
   176 px.
@@ -39,11 +41,12 @@ por el pie «Listo», y no desplazaba. Lo visible se cierra con la prueba de Mat
   - **el modelo:** un `transform` en `#root`, de alto `100lvh − desfase`, hace de viewport corto para lo `fixed`.
     No es el iPhone. El desfase se prueba con los dos medidos en el de Mati, 58 y 59.
   - **los casos:** las cuatro pantallas en 375 × 667, 390 × 844 y 430 × 932, con 21 miembros y un ticket largo; y el
-    caso del panel (393 × 852, insets 59/34, 1 miembro), que en la base da el mismo 598 = 598 del panel;
+    los casos de los dos paneles (393 × 852, insets 59/34): Carga manual con 1 miembro y el ticket ya cargado con 4
+    renglones, que en la base dan `scrollHeight` = `clientHeight` (598 y 597), como los paneles;
   - **mide:** el pie termina con `.app`; el último elemento queda entero arriba del pie y recibe el toque; y lo largo
     desborda el contenedor (`scrollHeight > clientHeight`);
   - **el control:** sin desfase.
-  - En la base `e84a764`: 25 rojos de 29, con los 4 controles verdes. En WebKit local, 12 de 16 con la primera
+  - En la base `e84a764`: 26 rojos de 30, con los 4 controles verdes. En WebKit local, 12 de 16 con la primera
     versión de la guarda.
   - Mutantes 3/3: volver a `fixed`, `absolute` encima del contenido y el pie montado sobre el final.
 - `vjt-pie-alto` sale de la pantalla del ticket: sólo existía para el aire.

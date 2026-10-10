@@ -60,21 +60,30 @@ async function ir(page: Page, ruta: string): Promise<void> {
 }
 
 /**
- * Cancún con 21 miembros y «Mariscos El Faro» con 20 renglones de más; con `soloYo`, Cancún sólo conmigo (los demás
- * salieron), el caso corto del panel. El mock lee su estado al cargar: se recarga.
+ * Cancún con 21 miembros y «Mariscos El Faro» con 20 renglones de más. Los casos cortos de los paneles: con `soloYo`,
+ * Cancún sólo conmigo (los demás salieron); con `ticketCorto`, «Mariscos El Faro» con sus 4 primeros renglones. El mock
+ * lee su estado al cargar: se recarga.
  */
-async function sembrar(page: Page, { soloYo = false }: { soloYo?: boolean } = {}): Promise<void> {
+async function sembrar(page: Page, { soloYo = false, ticketCorto = false }: { soloYo?: boolean; ticketCorto?: boolean } = {}): Promise<void> {
   await ir(page, `/viaje/${CANCUN}`);
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
-  const ok = await page.evaluate(({ viajeId, ticketId, soloYo: corto }) => {
+  const ok = await page.evaluate(({ viajeId, ticketId, soloYo: corto, ticketCorto: pocos }) => {
     const k = 'payme.app.mock.viajes.estado.v1';
     const e = JSON.parse(localStorage.getItem(k) ?? 'null') as
-      { viajes: Array<{ id: string; miembros: Array<Record<string, unknown>>; tickets: Array<{ id: string; items: Array<Record<string, unknown>> }> }> } | null;
+      { viajes: Array<{ id: string; miembros: Array<Record<string, unknown>>;
+        tickets: Array<{ id: string; items: Array<Record<string, unknown>>; selecciones: Array<{ item_id: string }> }> }> } | null;
     const v = e?.viajes.find((x) => x.id === viajeId);
     const t = v?.tickets.find((x) => x.id === ticketId);
     if (!e || !v || !t) return false;
     if (corto) {
       for (const m of v.miembros.filter((x) => x.estado === 'activo').slice(1)) m.estado = 'salio';
+      localStorage.setItem(k, JSON.stringify(e));
+      return true;
+    }
+    if (pocos) {
+      t.items = t.items.slice(0, 4);
+      const ids = new Set(t.items.map((i) => i.id));
+      t.selecciones = t.selecciones.filter((x) => ids.has(x.item_id));
       localStorage.setItem(k, JSON.stringify(e));
       return true;
     }
@@ -89,7 +98,7 @@ async function sembrar(page: Page, { soloYo = false }: { soloYo?: boolean } = {}
     }
     localStorage.setItem(k, JSON.stringify(e));
     return true;
-  }, { viajeId: CANCUN, ticketId: MARISCOS, soloYo });
+  }, { viajeId: CANCUN, ticketId: MARISCOS, soloYo, ticketCorto });
   expect(ok).toBe(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
@@ -106,13 +115,16 @@ interface Medida {
   nombre: string;
 }
 
-/** Desplaza hasta el final y mide el último elemento que se toca, contra el pie. */
+/**
+ * Desplaza hasta el final y mide el último elemento, contra el pie: lo último que se toca o el último renglón de un
+ * ticket (`.qc-fila`; «Lo eligió otro» no se toca, pero tiene que verse).
+ */
 async function alFinal(page: Page): Promise<Medida> {
   await page.locator('.app .scroll').first().evaluate((s) => { s.scrollTop = s.scrollHeight; });
   await page.waitForTimeout(150);
   return page.evaluate(() => {
     const s = document.querySelector('.app .scroll')!;
-    const sel = 'button, input, select, textarea, [role="checkbox"], [role="radio"]';
+    const sel = 'button, input, select, textarea, [role="checkbox"], [role="radio"], .qc-fila';
     const todos = [...s.querySelectorAll<HTMLElement>(sel)].filter((x) => x.getBoundingClientRect().height > 0);
     const ultimo = todos[todos.length - 1]!;
     const r = ultimo.getBoundingClientRect();
@@ -209,7 +221,7 @@ for (const desfase of DESFASES_MEDIDOS) {
  * navegador (la corrida local en WebKit) corre sin ellos: lo que se afirma no depende de los insets. Sin `test.skip`:
  * la guarda del corte sólo admite el del corte de pagos (`corteGuard.test.ts`).
  */
-test.describe('🔴 D256 · el caso del panel de Mati: Carga manual, 393 × 852, insets 59/34, desfase 59', () => {
+test.describe('🔴 D256 · los casos de los paneles de Mati: 393 × 852, insets 59/34, desfase 59', () => {
   test.use({ viewport: { width: 393, height: 852 } });
   test('el contenido que «entra» igual se alcanza: el miembro no queda detrás del pie', async ({ page, browserName }) => {
     if (browserName === 'chromium') {
@@ -223,6 +235,25 @@ test.describe('🔴 D256 · el caso del panel de Mati: Carga manual, 393 × 852,
     await ir(page, `/viaje/${CANCUN}`);
     await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
     await expect(page.getByRole('checkbox')).toHaveCount(1);
+    seAlcanza(await alFinal(page));
+  });
+
+  /**
+   * El segundo panel de Mati: el ticket ya cargado de un restaurante, con pocos renglones. En la base el `.scroll` mide
+   * 597 y el contenido entra (`scrollHeight` = `clientHeight`, como el 578 = 578 del panel): no hay scroll, y el cuarto
+   * renglón termina detrás del pie («Te toca / Listo»).
+   */
+  test('el ticket ya cargado con pocos renglones: el último renglón no queda detrás del pie', async ({ page, browserName }) => {
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+      });
+    }
+    await comoAppDeInicio(page, 59);
+    await sembrar(page, { ticketCorto: true });
+    await ir(page, `/viaje-ticket/${CANCUN}.${MARISCOS}`);
+    await expect(page.locator('.qc-fila')).toHaveCount(4);
     seAlcanza(await alFinal(page));
   });
 });
