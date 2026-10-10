@@ -26,10 +26,13 @@ async function preparar(page: Page): Promise<void> {
     const mockRoute = '/src/api/mock/mockApi.ts';
     const decoderRoute = '/src/api/tusRestaurantes.ts';
     const { api } = await import(/* @vite-ignore */ apiRoute) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
-    const mock = await import(/* @vite-ignore */ mockRoute) as { mockStatsRestaurants: (p?: string) => Promise<unknown> };
+    // D260 · como la fachada: con `stats_version=2` (la visita trae `viaje_id`, que el decodificador exige).
+    const mock = await import(/* @vite-ignore */ mockRoute) as {
+      mockStatsRestaurants: (p?: string, o?: { statsVersion?: 1 | 2 }) => Promise<unknown>;
+    };
     const { decodeTusRestaurantes } = await import(/* @vite-ignore */ decoderRoute) as { decodeTusRestaurantes: (raw: unknown) => unknown };
     api.getStatsRestaurants = async (period?: unknown) => {
-      const raw = structuredClone(await mock.mockStatsRestaurants(period as string | undefined)) as {
+      const raw = structuredClone(await mock.mockStatsRestaurants(period as string | undefined, { statsVersion: 2 })) as {
         restaurants: Array<{ name: string; visits: Array<{ items: Array<{ fraction_bps: number }> }> }>;
       };
       const hanzo = raw.restaurants.find((r) => r.name === 'Hanzo Sushi');

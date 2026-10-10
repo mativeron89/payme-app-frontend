@@ -150,6 +150,9 @@ function seAlcanza(m: Medida): void {
   expect(m.tocable, `«${m.nombre}» no recibe el toque`).toBe(true);
 }
 
+/** D263 · «¿Quién pagó?» también tiene casillas con los nombres: la de «¿Quiénes estuvieron?», por su grupo. */
+const presentes = (page: Page) => page.getByRole('group', { name: '¿Quiénes estuvieron?', exact: true });
+
 const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => Promise<void> }> = [
   {
     nombre: 'Carga manual con 21 miembros',
@@ -157,7 +160,7 @@ const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => 
     abrir: async (page) => {
       await ir(page, `/viaje/${CANCUN}`);
       await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
-      await expect(page.getByRole('checkbox', { name: /Persona 17/ })).toBeAttached();
+      await expect(presentes(page).getByRole('checkbox', { name: /Persona 17/ })).toBeAttached();
     },
   },
   {
@@ -178,7 +181,7 @@ const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => 
       await sacarFoto(page);
       await expect(page).toHaveURL(new RegExp(`/viaje-ticket-nuevo/${CANCUN}$`));
       await page.getByRole('radio', { name: /En partes iguales/ }).click();
-      await expect(page.getByRole('checkbox', { name: /Persona 17/ })).toBeAttached();
+      await expect(presentes(page).getByRole('checkbox', { name: /Persona 17/ })).toBeAttached();
     },
   },
   {
@@ -234,7 +237,7 @@ test.describe('🔴 D256 · los casos de los paneles de Mati: 393 × 852, insets
     await sembrar(page, { soloYo: true });
     await ir(page, `/viaje/${CANCUN}`);
     await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
-    await expect(page.getByRole('checkbox')).toHaveCount(1);
+    await expect(presentes(page).getByRole('checkbox')).toHaveCount(1);
     seAlcanza(await alFinal(page));
   });
 
