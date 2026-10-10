@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { medirPantalla, textoDelDiagnostico, type FilaDiagnostico } from '../utils/medirPantalla';
+import { medirScroll } from '../utils/medirScroll';
 import { useToast } from './ui';
-import { useHojaModal } from './useHojaModal';
+import { hojasAbiertas, useHojaModal } from './useHojaModal';
 
 /**
  * E173-2 · el diagnóstico de pantalla, oculto: se abre con 5 toques en el logo
@@ -19,6 +20,9 @@ export function DiagnosticoPantalla({ onCerrar }: { onCerrar: () => void }) {
   const { t } = useIdioma();
   const toast = useToast();
   const [filas, setFilas] = useState<FilaDiagnostico[]>(() => medirPantalla());
+  // D256 · lo que puede frenar un arrastre, medido UNA vez al abrir: en el render, antes de que la hoja
+  // de este panel deje `.app` inerte y se ponga en el centro. «Volver a medir» no lo cambia.
+  const [alAbrir] = useState<FilaDiagnostico[]>(() => medirScroll(window, hojasAbiertas()));
   const hoja = useRef<HTMLDivElement | null>(null);
   const cerrar = useRef<HTMLButtonElement | null>(null);
   const alCerrar = useRef(onCerrar);
@@ -42,7 +46,7 @@ export function DiagnosticoPantalla({ onCerrar }: { onCerrar: () => void }) {
 
   async function copiar() {
     try {
-      await navigator.clipboard.writeText(textoDelDiagnostico(filas));
+      await navigator.clipboard.writeText(textoDelDiagnostico([...filas, ...alAbrir]));
       toast(t('Copiado'));
     } catch {
       toast(t('No se pudo copiar. Haz una captura de pantalla.'));
@@ -65,7 +69,7 @@ export function DiagnosticoPantalla({ onCerrar }: { onCerrar: () => void }) {
         </div>
         <p className="diag-nota">{t('Sólo lectura: estos números no salen del teléfono.')}</p>
         <dl className="diag-lista">
-          {filas.map(([clave, valor]) => (
+          {[...filas, ...alAbrir].map(([clave, valor]) => (
             <div key={clave} className="diag-fila">
               <dt>{clave}</dt>
               <dd>{valor}</dd>
