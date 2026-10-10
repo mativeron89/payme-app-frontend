@@ -46,12 +46,14 @@ const item = (id: string, line: number, extra: Partial<ItemDelTicket> = {}): Ite
 });
 
 function ticket(extra: Partial<TicketDelViaje> = {}): TicketDelViaje {
-  return {
+  const t = {
     id: 'tk', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false,
     items: [], personas: [persona('m-luis'), persona('m-ana'), persona('m-sofia'), persona('m-diego', false)],
     te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, ...extra,
-  };
+  } as const;
+  // D263 · con un solo pagador, uno con el total.
+  return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
 }
 
 const ocr = (extra: Partial<OcrResponse> = {}): OcrResponse => ({

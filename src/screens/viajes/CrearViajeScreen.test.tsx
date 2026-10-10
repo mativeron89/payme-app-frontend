@@ -55,7 +55,9 @@ describe('AF-VIAJES · 1d · Crear viaje', () => {
     expect(html).toContain('@luis.perez');
     expect(html).toContain('Sofía Ramírez');
     expect(contar(html, 'aria-label="Quitar"')).toBe(2);
-    expect(html).toContain('Les llega una invitación. Entran al viaje cuando la aceptan.');
+    // D264 · sin «Les llega una invitación…».
+    expect(html).not.toContain('Les llega una invitación');
+    expect(html).not.toContain('Entran al viaje cuando la aceptan');
     // Sin barra de cinco: el botón fijo al pie.
     expect(html).not.toContain('appbar-item');
     expect(html).toMatch(/<div class="vj-pie"><button type="button" class="btn btn-navy">Crear viaje<\/button><\/div>/);

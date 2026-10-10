@@ -34,11 +34,36 @@ export interface TicketParaCalculo {
   readonly forma: 'consumo' | 'iguales' | 'total';
   readonly pagado_por: string;
   readonly monto_cents: number;
+  /** D263 · lo que pagó cada uno, en el orden en que se cargaron. Sin la lista, `pagado_por` pagó todo. */
+  readonly pagadores?: ReadonlyArray<{ readonly user_id: string; readonly monto_cents: number }>;
   readonly items: ReadonlyArray<{ readonly id: string; readonly line_cents: number }>;
   /** En el orden de los miembros. */
   readonly personas: ReadonlyArray<{ readonly user_id: string; readonly presente: boolean; readonly listo: boolean; readonly vivo: boolean }>;
   /** En el orden (created_at, user_id). */
   readonly selecciones: ReadonlyArray<{ readonly item_id: string; readonly user_id: string; readonly fraction_bps: number }>;
+}
+
+/** D263 · los pagadores de un ticket con lo que pagó cada uno (como `pagadoresDe` del dueño). */
+export function pagadoresDe(t: Pick<TicketParaCalculo, 'pagado_por' | 'monto_cents' | 'pagadores'>):
+  ReadonlyArray<{ readonly user_id: string; readonly monto_cents: number }> {
+  const lista = t.pagadores && t.pagadores.length ? t.pagadores : [{ user_id: t.pagado_por, monto_cents: t.monto_cents }];
+  if (lista.reduce((s, p) => s + p.monto_cents, 0) !== t.monto_cents) throw new Error('viaje_ticket_pagadores_no_cuadran');
+  return lista;
+}
+
+/**
+ * D263 · `total` en proporción a `pesos` (enteros > 0), en centavos enteros: a cada uno el piso de su parte y lo que
+ * sobra, de a un centavo, a los primeros (como `repartirProporcional` del dueño, con BigInt).
+ */
+export function repartirProporcional(total: number, pesos: readonly number[]): number[] {
+  const suma = BigInt(pesos.reduce((s, p) => s + p, 0));
+  const partes = pesos.map((p) => Number((BigInt(total) * BigInt(p)) / suma));
+  let resto = total - partes.reduce((s, x) => s + x, 0);
+  for (let i = 0; resto > 0; i = (i + 1) % partes.length) {
+    partes[i]! += 1;
+    resto -= 1;
+  }
+  return partes;
 }
 
 export interface ConsumoDelTicket {
@@ -55,7 +80,8 @@ export function consumoDelTicket(t: TicketParaCalculo, { cierre = false } = {}):
   const asignado = new Map<string, number>();
   if (!Number.isSafeInteger(t.monto_cents) || t.monto_cents <= 0) throw new Error('viaje_ticket_monto_invalido');
   if (t.forma === 'total') {
-    sumar(consumo, t.pagado_por, t.monto_cents);
+    // D263: con varios pagadores, cada uno consumió lo que pagó.
+    for (const p of pagadoresDe(t)) sumar(consumo, p.user_id, p.monto_cents);
     return { consumo, asignado, sinRepartir: 0, faltan: [] };
   }
   if (t.forma === 'iguales') {
@@ -112,8 +138,13 @@ export function balanceDelViaje(miembros: readonly string[], tickets: readonly T
     gasto += t.monto_cents;
     // A quien pagó se le acredita lo asignado: en vivo, lo no elegido no es de nadie.
     const acreditado = t.monto_cents - r.sinRepartir;
-    sumar(pagado, t.pagado_por, acreditado);
-    balance.set(t.pagado_por, (balance.get(t.pagado_por) ?? 0) + acreditado);
+    // D263: con varios, en proporción a lo que pagó cada uno.
+    const pagadores = pagadoresDe(t);
+    const partes = repartirProporcional(acreditado, pagadores.map((p) => p.monto_cents));
+    pagadores.forEach((p, i) => {
+      sumar(pagado, p.user_id, partes[i]!);
+      balance.set(p.user_id, (balance.get(p.user_id) ?? 0) + partes[i]!);
+    });
     for (const [u, c] of r.consumo) {
       sumar(consumido, u, c);
       balance.set(u, (balance.get(u) ?? 0) - c);

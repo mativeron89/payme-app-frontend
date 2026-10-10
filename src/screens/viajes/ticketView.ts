@@ -175,12 +175,14 @@ export function quienPago(ticket: Pick<TicketDelViaje, 'pagado_por'>, miembros: 
   return miembros.find((m) => m.id === ticket.pagado_por) ?? null;
 }
 
-/** «Pagaste tú» o «Pagó Luis Pérez». */
+/** «Pagaste tú», «Pagó Luis Pérez» o, con varios (D263), «Pagaron 3 personas». */
 export function textoDelPago(
-  ticket: Pick<TicketDelViaje, 'pagado_por' | 'pagaste_tu'>,
+  ticket: Pick<TicketDelViaje, 'pagado_por' | 'pagaste_tu' | 'pagadores'>,
   miembros: readonly MiembroViaje[],
   t: T,
 ): string {
+  // Con varios, `pagaste_tu` dice que estás entre ellos, no que pagaste tú solo.
+  if (ticket.pagadores.length > 1) return t('Pagaron {0} personas', ticket.pagadores.length);
   if (ticket.pagaste_tu) return t('Pagaste tú');
   const m = quienPago(ticket, miembros);
   return t('Pagó {0}', m ? nombreCompleto(m, t) : t('Cuenta eliminada'));
@@ -188,7 +190,7 @@ export function textoDelPago(
 
 /** «8 oct · Pagó Luis Pérez», y con `forma`, «… · Por lo que pidió cada uno». */
 export function subtituloDelTicket(
-  ticket: Pick<TicketDelViaje, 'fecha_ticket' | 'pagado_por' | 'pagaste_tu' | 'forma'>,
+  ticket: Pick<TicketDelViaje, 'fecha_ticket' | 'pagado_por' | 'pagaste_tu' | 'pagadores' | 'forma'>,
   miembros: readonly MiembroViaje[],
   idioma: Idioma,
   t: T,
@@ -199,6 +201,29 @@ export function subtituloDelTicket(
     textoDelPago(ticket, miembros, t),
     conForma ? textoDeLaForma(ticket.forma, t) : null,
   ].filter(Boolean).join(' · ');
+}
+
+export interface PagadorEnLista {
+  readonly clave: string;
+  readonly nombre: string;
+  readonly monto_cents: number;
+}
+
+/** D263 · quiénes pagaron y cuánto, en el orden del dueño (el primero es `pagado_por`): «Tú» o el nombre completo. */
+export function pagadoresDelTicket(
+  ticket: Pick<TicketDelViaje, 'pagadores'>,
+  miembros: readonly MiembroViaje[],
+  t: T,
+): PagadorEnLista[] {
+  const porId = new Map(miembros.map((m) => [m.id, m]));
+  return ticket.pagadores.map((p, i) => {
+    const m = p.miembro_id ? porId.get(p.miembro_id) : undefined;
+    return {
+      clave: p.miembro_id ?? `sin-${i}`,
+      nombre: m ? (m.es_yo ? t('Tú') : nombreCompleto(m, t)) : t('Cuenta eliminada'),
+      monto_cents: p.monto_cents,
+    };
+  });
 }
 
 export interface ChipDeEleccion {

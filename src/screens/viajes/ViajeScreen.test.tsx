@@ -33,12 +33,14 @@ const MIEMBROS: MiembroViaje[] = [
 ];
 
 function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
-  return {
+  const t = {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
     puede_eliminar: false, ...extra,
-  };
+  } as const;
+  // D263 · con un solo pagador, uno con el total.
+  return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
 }
 
 const TICKETS: TicketEnViaje[] = [

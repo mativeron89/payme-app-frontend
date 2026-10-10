@@ -54,15 +54,19 @@ describe('D244 · la pantalla de la carga manual', () => {
     expect(leido).toContain('¿Entre quiénes? Se divide entre los marcados. Desmarca a quien no va.');
   });
 
-  it('🔴 D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto y los demás miembros, sin mí', () => {
-    expect(leido).toContain('¿Quién pagó?');
-    const opciones = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]);
-    expect(opciones).toEqual([['', 'Lo pagaste tú'], ['m-luis', 'Luis Pérez'], ['m-sofia', 'Sofía Ramírez']]);
-    expect(html).toMatch(/<option value="" selected="">Lo pagaste tú<\/option>/);
+  it('🔴 D263 · «¿Quién pagó?»: casillas, «Tú» primero y marcado; los demás sin marcar; ya no un selector', () => {
+    const quien = html.slice(html.indexOf('¿Quién pagó?'), html.indexOf('¿Entre quiénes?'));
+    expect(texto(quien)).toBe('¿Quién pagó? Tú Luis Pérez Sofía Ramírez');
+    expect([...quien.matchAll(/role="checkbox" aria-checked="(true|false)"/g)].map((m) => m[1])).toEqual(['true', 'false', 'false']);
+    // Uno solo: sin partes ni «Ajustar montos».
+    expect(quien).not.toContain('Ajustar montos');
+    expect(html).not.toContain('<select');
+    expect(leido).not.toContain('Lo pagaste tú');
   });
 
   it('todos marcados al empezar, «Tú» primero', () => {
-    expect(html.match(/aria-checked="true"/g)).toHaveLength(3);
+    const presentes = html.slice(html.indexOf('¿Entre quiénes?'));
+    expect(presentes.match(/aria-checked="true"/g)).toHaveLength(3);
     const lista = leido.slice(leido.indexOf('¿Entre quiénes?'));
     expect(lista.indexOf('Tú')).toBeLessThan(lista.indexOf('Luis Pérez'));
   });

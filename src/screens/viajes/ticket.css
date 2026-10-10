@@ -242,6 +242,97 @@
   outline-offset: 2px;
 }
 
+/* ─── D263 · «¿Quién pagó?» con varios: la parte de cada uno, «Ajustar montos» y el aviso ─── */
+
+.vjq-parte {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.vjq-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.vjq-pie > .vjq-ajustar:only-child {
+  margin-left: auto;
+}
+
+.vjq-texto {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.vjq-ajustar {
+  flex: none;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-1);
+  border: none;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.vjq-ajustar:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.vjq-montos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.vjq-monto {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.vjq-monto-nombre {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.vjq-monto-input {
+  flex: none;
+  width: 9.5em;
+  text-align: right;
+}
+
+.vjq-aviso {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* En el pie, junto al botón que queda apagado. */
+.vjq-aviso--pie {
+  margin: 0 0 var(--sp-2);
+  text-align: center;
+}
+
 /* ─── Avisos: sin escaneo, recibo usado/inválido, cerrado, 1k y 1j ─── */
 
 .vjt-aviso {
@@ -301,6 +392,24 @@
   font-size: var(--fs-body);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* D263 · «Quiénes pagaron»: cada uno con lo que pagó. */
+.vjt-pagadores {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vjt-pagador {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
   color: var(--text);
 }
 

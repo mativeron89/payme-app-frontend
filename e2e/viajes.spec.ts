@@ -28,6 +28,11 @@ async function conViajes(page: Page, extra: Record<string, string> = {}): Promis
 }
 
 /** D250 · dentro de Cancún abierto, el círculo de la cámara escanea para el viaje. */
+/** D263 · «¿Quién pagó?» también tiene casillas con los nombres: la de «¿Quiénes estuvieron?», por su grupo. */
+function presente(page: Page, nombre: RegExp) {
+  return page.getByRole('group', { name: '¿Quiénes estuvieron?', exact: true }).getByRole('checkbox', { name: nombre });
+}
+
 function circuloDelViaje(page: Page) {
   return page.getByRole('button', { name: 'Escanear ticket para Cancún 2026', exact: true });
 }
@@ -148,12 +153,14 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await sacarFoto(page);
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket-nuevo/${CANCUN}$`));
   await expect(page.getByRole('heading', { name: 'Ticket nuevo' })).toBeVisible();
-  // D255-6 · «¿Quién pagó?», con «Lo pagaste tú» por defecto.
-  await expect(page.getByLabel('¿Quién pagó?', { exact: true })).toHaveValue('');
+  // D255-6 · D263 · «¿Quién pagó?», con «Tú» marcado por defecto y sólo «Tú».
+  const quienPago = page.getByRole('group', { name: '¿Quién pagó?', exact: true });
+  await expect(quienPago.getByRole('checkbox', { name: 'Tú', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await expect(quienPago.locator('[role="checkbox"][aria-checked="true"]')).toHaveCount(1);
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await expect(page.getByText('Se divide entre los marcados. Desmarca a quien no estuvo.')).toBeVisible();
-  await page.getByRole('checkbox', { name: /Diego Torres/ }).click();
-  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
+  await presente(page, /Diego Torres/).click();
+  await expect(presente(page, /Diego Torres/)).toHaveAttribute('aria-checked', 'false');
   await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   // Pagué $840 y me tocan $280 (entre los tres que estuvieron): −$542 + $560 = $18 a favor, en verde.
@@ -282,8 +289,8 @@ test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
   // Diego no va: entre tres, $300 cada uno.
-  await page.getByRole('checkbox', { name: /Diego Torres/ }).click();
-  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveAttribute('aria-checked', 'false');
+  await presente(page, /Diego Torres/).click();
+  await expect(presente(page, /Diego Torres/)).toHaveAttribute('aria-checked', 'false');
   // Un doble toque es un solo gasto (la llave de idempotencia y el botón apagado mientras guarda).
   await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
@@ -307,14 +314,14 @@ test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y
 test('D244 · si alguien de los elegidos salió del viaje: se avisa, se vuelve a pedir el viaje y no se borra lo escrito', async ({ page }) => {
   await conViajes(page, { 'payme.app.mock.viajes.gasto.v1': 'alguien_salio' });
   await ir(page, `/viaje-gasto/${CANCUN}`);
-  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toBeVisible();
+  await expect(presente(page, /Diego Torres/)).toBeVisible();
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByText('Alguien ya no está en el viaje. Revisa entre quiénes.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
   // Diego ya no está en la lista; lo escrito sigue.
-  await expect(page.getByRole('checkbox', { name: /Diego Torres/ })).toHaveCount(0);
+  await expect(presente(page, /Diego Torres/)).toHaveCount(0);
   await expect(page.getByLabel('Descripción', { exact: true })).toHaveValue('Gasolina');
   await expect(page.getByLabel('Monto', { exact: true })).toHaveValue('900');
   // Y ahora sí se carga, entre los tres que quedan.

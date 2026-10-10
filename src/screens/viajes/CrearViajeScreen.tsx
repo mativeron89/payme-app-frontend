@@ -239,8 +239,7 @@ export function CrearViajeView(p: CrearViajeVistaProps) {
             </ul>
           )}
         </section>
-
-        <p className="vjc-nota">{t('Les llega una invitación. Entran al viaje cuando la aceptan.')}</p>
+        {/* D264 · Mati: sin la ayuda «Les llega una invitación…», como en Configuración (D259). */}
       </div>
 
       <div className="vj-pie">

@@ -207,16 +207,13 @@
   color: var(--text-muted);
 }
 
-/* Las notas: «Les llega una invitación…» y el tope de 20. */
+/* La nota del tope de 20. */
 .vjc-nota {
   margin: var(--sp-2) 0 0;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--text-muted);
-}
-.vj-scroll > .vjc-nota {
-  margin: 0 var(--sp-1);
 }
 
 /* Un error junto a lo que lo causó (las fechas, la búsqueda). */

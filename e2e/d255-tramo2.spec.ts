@@ -25,6 +25,17 @@ async function ir(page: Page, ruta: string): Promise<void> {
 /** Un PNG de 1×1, real (el mock mira el tipo y el tamaño). */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==', 'base64');
 
+/** D263 · «¿Quién pagó?»: marca a `nombre` y desmarca «Tú» (marcado por defecto). */
+async function pagoSolo(page: Page, nombre: string): Promise<void> {
+  const grupo = page.getByRole('group', { name: '¿Quién pagó?', exact: true });
+  // Con dos marcados, el nombre accesible suma la parte («Tú $450»): por el comienzo.
+  const casilla = (quien: string) => grupo.getByRole('checkbox', { name: new RegExp(`^${quien}( |$)`) });
+  await expect(casilla('Tú')).toHaveAttribute('aria-checked', 'true');
+  await casilla(nombre).click();
+  await casilla('Tú').click();
+  await expect(grupo.locator('[role="checkbox"][aria-checked="true"]')).toHaveText([nombre]);
+}
+
 async function abrirConfiguracion(page: Page): Promise<void> {
   await ir(page, `/viaje/${CANCUN}`);
   await page.getByRole('button', { name: 'Configuración' }).click();
@@ -42,9 +53,7 @@ test.describe('D255 · tramo 2', () => {
     await ir(page, `/viaje-gasto/${CANCUN}`);
     await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
     await page.getByLabel('Monto', { exact: true }).fill('900');
-    const selector = page.getByLabel('¿Quién pagó?', { exact: true });
-    await expect(selector).toHaveValue('');
-    await selector.selectOption({ label: 'Luis Pérez' });
+    await pagoSolo(page, 'Luis Pérez');
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
     await ir(page, `/viaje-balance/${CANCUN}`);
@@ -67,7 +76,7 @@ test.describe('D255 · tramo 2', () => {
     await sacarFoto(page);
     await expect(page.getByRole('heading', { name: 'Ticket nuevo' })).toBeVisible();
     const total = centavos((await page.locator('.vjt-cabeza .vjt-monto').innerText()).trim());
-    await page.getByLabel('¿Quién pagó?', { exact: true }).selectOption({ label: 'Sofía Ramírez' });
+    await pagoSolo(page, 'Sofía Ramírez');
     await page.getByRole('radio', { name: /Pagar el total/ }).click();
     await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));

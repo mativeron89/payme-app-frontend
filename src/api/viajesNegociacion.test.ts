@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * D245 · D244 · la fachada real contra el dueño: `viaje_version` en TODAS las
- * rutas que devuelven `viaje` (el decodificador sólo acepta esa forma; hoy la 4,
- * App Backend 2.175.0), el gasto a mano y la foto de un miembro, con sus rutas exactas.
+ * rutas que devuelven `viaje` (el decodificador sólo acepta esa forma; hoy la 5,
+ * App Backend 2.177.0, también en las de ticket), el gasto a mano y la foto de un miembro, con sus rutas exactas.
  */
 class MemoryStorage {
   values = new Map<string, string>();
@@ -30,7 +30,7 @@ const enLista = { id: VIAJE, nombre: 'Cancún', fecha_desde: null, fecha_hasta: 
 const foto = { revision: 2, width: 512, height: 512, updated_at: '2026-10-10T03:00:00.000Z' };
 const ticket = {
   id: 't', lugar: 'Taxi', tipo_lugar: 'otro', fecha_ticket: null, hora_ticket: null, cargado_en: null, forma: 'iguales',
-  monto_cents: 5000, pagado_por: 'm1', pagaste_tu: true,
+  monto_cents: 5000, pagado_por: 'm1', pagaste_tu: true, pagadores: [{ miembro_id: 'm1', monto_cents: 5000 }],
   items: [{ id: 'i', name: 'Taxi', price_cents: 5000, quantity: 1, line_cents: 5000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
   personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
   te_toca_cents: 5000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
@@ -54,6 +54,11 @@ beforeEach(() => {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body;
     pedidos.push({ method: init?.method ?? 'GET', url, body });
     if (url.pathname.endsWith('/gastos')) return json({ contract: CONTRATO_VIAJES, ticket, ya_cargado: null }, 201);
+    // D263 · las rutas de ticket (menos eliminar, que devuelve el viaje).
+    if (url.pathname.endsWith('/tickets') && init?.method === 'POST') return json({ contract: CONTRATO_VIAJES, ticket, ya_cargado: null }, 201);
+    if (/\/tickets\/[^/]+(\/(seleccion|presentes))?$/.test(url.pathname) && init?.method !== 'DELETE') {
+      return json({ contract: CONTRATO_VIAJES, ticket });
+    }
     if (url.pathname.endsWith('/avatar')) return json({ error: 'avatar_not_found' }, 404);
     if (url.pathname.endsWith('/foto') && init?.method === 'PUT') return json({ foto }, 201);
     if (url.pathname.endsWith('/foto') && init?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -70,8 +75,8 @@ afterEach(() => {
   reiniciarViajesParaTests();
 });
 
-describe('fachada real · Viajes con App Backend 2.175.0', () => {
-  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=4`, una sola vez y exacta', async () => {
+describe('fachada real · Viajes con App Backend 2.177.0', () => {
+  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=5`, una sola vez y exacta', async () => {
     const v = await api.getViaje(VIAJE);
     expect(v).toMatchObject({ color: 'azul', has_photo: true });
     await api.crearViaje({ nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, miembros: [], idempotency_key: 'clave-de-prueba-1' });
@@ -84,7 +89,7 @@ describe('fachada real · Viajes con App Backend 2.175.0', () => {
       `GET /api/viajes/${VIAJE}`, 'POST /api/viajes', `POST /api/viajes/${VIAJE}/aceptar`, `POST /api/viajes/${VIAJE}/cerrar`,
       `PATCH /api/viajes/${VIAJE}`, 'GET /api/viajes',
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['4']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['5']);
     expect(pedidos.at(-1)!.url.searchParams.getAll('estado')).toEqual(['abiertos']);
   });
 
@@ -117,6 +122,36 @@ describe('fachada real · Viajes con App Backend 2.175.0', () => {
     expect(pedidos[0]!.body).not.toHaveProperty('pagado_por');
   });
 
+  it('🔴 D263 · las rutas de ticket también piden `viaje_version=5`, una sola vez y exacta', async () => {
+    await api.cargarTicketDeViaje(VIAJE, {
+      ocr_receipt: 'or1.x.y', idempotency_key: 'ticket-de-prueba-1', forma: 'iguales', tipo_lugar: 'otro', lugar: 'Taxi',
+      fecha_ticket: null, hora_ticket: null, items: [{ name: 'Taxi', price_cents: 5000, quantity: 1 }],
+    });
+    await api.cargarGastoDeViaje(VIAJE, { descripcion: 'Taxi', monto_cents: 5000, presentes: ['m1'], idempotency_key: 'gasto-de-prueba-5' });
+    const t = await api.getTicketDeViaje(VIAJE, 't');
+    expect(t.pagadores).toEqual([{ miembro_id: 'm1', monto_cents: 5000 }]);
+    await api.elegirEnTicketDeViaje(VIAJE, 't', { items: [], listo: true });
+    await api.marcarPresentesEnTicket(VIAJE, 't', ['m1']);
+    expect(pedidos.map((p) => `${p.method} ${p.url.pathname}`)).toEqual([
+      `POST /api/viajes/${VIAJE}/tickets`, `POST /api/viajes/${VIAJE}/gastos`, `GET /api/viajes/${VIAJE}/tickets/t`,
+      `PUT /api/viajes/${VIAJE}/tickets/t/seleccion`, `PUT /api/viajes/${VIAJE}/tickets/t/presentes`,
+    ]);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['5']);
+  });
+
+  it('🔴 D263 · el gasto con varios lleva `pagadores` tal cual, sin `pagado_por`', async () => {
+    const otro = { ...ticket, pagadores: [{ miembro_id: 'm1', monto_cents: 3000 }, { miembro_id: 'm2', monto_cents: 2000 }] };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      pedidos.push({ method: init?.method ?? 'GET', url: new URL(String(input), 'http://localhost'), body: JSON.parse(String(init?.body)) });
+      return json({ contract: CONTRATO_VIAJES, ticket: otro, ya_cargado: null }, 201);
+    }));
+    const pedido = { descripcion: 'Taxi', monto_cents: 5000, presentes: ['m1'], idempotency_key: 'gasto-de-prueba-6',
+      pagadores: [{ miembro_id: 'm1', monto_cents: 3000 }, { miembro_id: 'm2', monto_cents: 2000 }] };
+    expect((await api.cargarGastoDeViaje(VIAJE, pedido)).pagadores).toEqual(otro.pagadores);
+    expect(pedidos[0]!.body).toEqual(pedido);
+    expect(pedidos[0]!.body).not.toHaveProperty('pagado_por');
+  });
+
   it('D244 · el gasto a mano va a `POST /api/viajes/:id/gastos` con el cuerpo exacto', async () => {
     const pedido = { descripcion: 'Taxi', monto_cents: 5000, presentes: ['m1'], idempotency_key: 'gasto-de-prueba-1' };
     const t = await api.cargarGastoDeViaje(VIAJE, pedido);
@@ -134,23 +169,23 @@ describe('fachada real · Viajes con App Backend 2.175.0', () => {
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros/m%2F1/avatar`);
   });
 
-  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=4` con sólo `{ miembros }`', async () => {
+  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=5` con sólo `{ miembros }`', async () => {
     const v = await api.invitarAlViaje(VIAJE, [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }]);
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('POST');
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros`);
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['4']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['5']);
     expect(pedidos[0]!.body).toEqual({ miembros: [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }] });
   });
 
-  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=4`, sin cuerpo, y devuelve el viaje', async () => {
+  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=5`, sin cuerpo, y devuelve el viaje', async () => {
     const v = await api.eliminarTicketDeViaje('a/b', 't/1');
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('DELETE');
     expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/tickets/t%2F1');
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['4']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['5']);
     expect([...pedidos[0]!.url.searchParams.keys()]).toEqual(['viaje_version']);
     expect(pedidos[0]!.body).toBeUndefined();
   });

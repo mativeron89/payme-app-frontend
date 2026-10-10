@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTusRestaurantes, ordenDeCocinas, visitasDelMes } from './tusRestaurantes';
+import { decodeTusRestaurantes, ordenDeCocinas, rutaDeTusRestaurantes, visitasDelMes } from './tusRestaurantes';
 
 const VISITA = {
   code: 'PA-12345',
@@ -7,6 +7,8 @@ const VISITA = {
   division_mode: 'consumo',
   amount_cents: 9167,
   items: [{ name: 'Plato 0', fraction_bps: 3333, amount_cents: 1167 }],
+  // D260 · con `stats_version=2`: una mesa, `null`.
+  viaje_id: null as string | null,
 };
 
 const BUENO = {
@@ -77,6 +79,36 @@ describe('AF-29 · decodeTusRestaurantes · claves exactas', () => {
       conCambio((b) => { b.restaurants[0].visits[0].items[0].fraction_bps = 0; return b; }),
       conCambio((b) => { b.restaurants[0].visits[0].items[0].fraction_bps = 10001; return b; }),
       conCambio((b) => { b.restaurants[1].id = 'r-1'; return b; }),
+    ]) {
+      expect(() => decodeTusRestaurantes(malo)).toThrow('stats_restaurants_response_malformed');
+    }
+  });
+});
+
+describe('🔴 D260 · `stats_version=2`: el viaje de cada visita (App Backend 2.176.0)', () => {
+  const VIAJE = 'd1000000-0000-4000-8000-000000000001';
+  const TICKET = 'd2000000-0000-4000-8000-000000000105';
+
+  it('la app lo pide siempre, con el período o sin él', () => {
+    expect(rutaDeTusRestaurantes()).toBe('/account/stats/restaurants?stats_version=2');
+    expect(rutaDeTusRestaurantes('last_month')).toBe('/account/stats/restaurants?period=last_month&stats_version=2');
+  });
+
+  it('una mesa: `null`; un ticket de viaje: el id del viaje, y `code` es el del ticket', () => {
+    const r = decodeTusRestaurantes(conCambio((b) => {
+      b.restaurants[0].visits[1] = { ...b.restaurants[0].visits[1]!, code: TICKET, viaje_id: VIAJE };
+      return b;
+    }));
+    expect(r.restaurants[0].visits[0]!.viajeId).toBeNull();
+    expect(r.restaurants[0].visits[1]).toMatchObject({ code: TICKET, viajeId: VIAJE });
+  });
+
+  it('🔴 sin `viaje_id` (la forma de antes) o con otro tipo: no se acepta', () => {
+    for (const malo of [
+      conCambio((b) => { delete (b.restaurants[0].visits[0] as Record<string, unknown>).viaje_id; return b; }),
+      conCambio((b) => { (b.restaurants[0].visits[0] as Record<string, unknown>).viaje_id = ''; return b; }),
+      conCambio((b) => { (b.restaurants[0].visits[0] as Record<string, unknown>).viaje_id = 7; return b; }),
+      conCambio((b) => { (b.restaurants[0].visits[0] as Record<string, unknown>).viaje_id = { id: VIAJE }; return b; }),
     ]) {
       expect(() => decodeTusRestaurantes(malo)).toThrow('stats_restaurants_response_malformed');
     }

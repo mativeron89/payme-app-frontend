@@ -20,7 +20,16 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate, replaceRoute } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
-import { conQuienPago, pagadorVigente, SelectorDeQuienPago } from './QuienPago';
+import {
+  avisoDeQuienPago,
+  conQuienPago,
+  opcionesDeQuienPago,
+  QUIEN_PAGO_INICIAL,
+  repartoDeQuienPago,
+  SelectorDeQuienPago,
+  type OpcionDeQuienPago,
+  type QuienPagoElegido,
+} from './QuienPago';
 import { olvidarTicketEscaneado, ticketEscaneadoDe } from './ticketEscaneado';
 import {
   alternarPresente,
@@ -71,8 +80,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
   const [tipo, setTipo] = useState<TipoLugar>('restaurante');
   const [forma, setForma] = useState<FormaTicket>('consumo');
   const [ausentes, setAusentes] = useState<Set<string>>(() => new Set());
-  /** D255-6 · `null` = lo pagué yo. */
-  const [pagador, setPagador] = useState<string | null>(null);
+  /** D255-6 · D263 · quién pagó: por defecto, yo. */
+  const [quienPago, setQuienPago] = useState<QuienPagoElegido>(QUIEN_PAGO_INICIAL);
   const [enviando, setEnviando] = useState(false);
   const llave = useRef<{ json: string; key: string } | null>(null);
   const vivo = useRef(true);
@@ -119,6 +128,7 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
   useEffect(() => { cargar(); }, [cargar]);
 
   const candidatos = useMemo(() => (viaje ? candidatosDelViaje(viaje.miembros, t) : []), [viaje, t]);
+  const opciones = useMemo(() => (viaje ? opcionesDeQuienPago(viaje.miembros, t) : []), [viaje, t]);
 
   const escanearOtro = () => {
     abrirCamaraNativa();
@@ -128,8 +138,11 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
 
   async function compartir() {
     if (!ocr || enviando) return;
-    // D255-6 · `pagado_por` sólo si pagó otro; entra en la llave (otro pagador es otro pedido).
-    const pedido = conQuienPago(pedidoDeCarga(ocr, forma, tipo), pagadorVigente(pagador, viaje?.miembros ?? []));
+    // D255-6 · D263 · `pagado_por` sólo si pagó otro, `pagadores` si fueron varios; entran en la llave (otros
+    // pagadores son otro pedido).
+    const reparto = repartoDeQuienPago(quienPago, opciones, totalDelEscaneo(ocr.items));
+    if (!reparto.valido) return;
+    const pedido = conQuienPago(pedidoDeCarga(ocr, forma, tipo), reparto);
     llave.current = llaveParaPedido(llave.current, pedido, newIdempotencyKey);
     setEnviando(true);
     try {
@@ -163,8 +176,9 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
       else if (e.tipo === 'no_abierto') setFase({ tipo: 'aviso', aviso: 'cerrado' });
       else if (e.tipo === 'no_disponible') setFase({ tipo: 'no_disponible' });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
+      else if (e.tipo === 'pagadores_no_suman') toast(t('Los montos no suman el total. Revísalos.'), { sobreLaBarra: true });
       else if (e.tipo === 'pagador_desconocido') {
-        // Quien pagó salió del viaje: el viaje de nuevo, y el selector vuelve a «Lo pagaste tú».
+        // Alguien que pagó salió del viaje: el viaje de nuevo, y el selector queda con los que siguen (sin ninguno, tú).
         toast(t('Quien pagó ya no está en el viaje. Elige de nuevo.'), { sobreLaBarra: true });
         api.getViaje(viajeId).then((v) => { if (vivo.current) setViaje(v); }, () => undefined);
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
@@ -181,9 +195,9 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
       {fase.tipo === 'nuevo' && ocr && viaje ? (
         <TicketNuevoVista
           viajeNombre={viaje.nombre}
-          miembros={viaje.miembros}
-          pagador={pagador}
-          onPagador={setPagador}
+          opciones={opciones}
+          quienPago={quienPago}
+          onQuienPago={setQuienPago}
           ocr={ocr}
           tipo={tipo}
           forma={forma}
@@ -404,13 +418,13 @@ export function ListaDePresentes({ candidatos, ausentes, onAlternar, deshabilita
 
 /** 1h · el ticket recién escaneado, cómo se divide y (en partes iguales) quiénes estuvieron. */
 export function TicketNuevoVista({
-  viajeNombre, miembros, pagador, onPagador, ocr, tipo, forma, candidatos, ausentes, enviando, onTipo, onForma, onPresente, onCompartir,
+  viajeNombre, opciones, quienPago, onQuienPago, ocr, tipo, forma, candidatos, ausentes, enviando, onTipo, onForma, onPresente, onCompartir,
 }: {
   viajeNombre: string;
-  /** D255-6 · para «¿Quién pagó?». */
-  miembros: readonly MiembroViaje[];
-  pagador: string | null;
-  onPagador: (pagador: string | null) => void;
+  /** D255-6 · D263 · «¿Quién pagó?». */
+  opciones: readonly OpcionDeQuienPago[];
+  quienPago: QuienPagoElegido;
+  onQuienPago: (elegido: QuienPagoElegido) => void;
   ocr: OcrResponse;
   tipo: TipoLugar;
   forma: FormaTicket;
@@ -424,6 +438,9 @@ export function TicketNuevoVista({
 }) {
   const { t, idioma } = useIdioma();
   const fecha = fechaDelEscaneo(ocr.ticket_datetime, idioma);
+  const total = totalDelEscaneo(ocr.items);
+  const reparto = repartoDeQuienPago(quienPago, opciones, total);
+  const aviso = avisoDeQuienPago(reparto, total, t);
   return (
     <>
       <TituloTicketNuevo escanear={false} viajeNombre={viajeNombre} />
@@ -435,12 +452,13 @@ export function TicketNuevoVista({
               <span className="vjt-lugar">{ocr.merchant?.name ?? etiquetaTipoLugar(tipo, t)}</span>
               {fecha && <span className="vjt-sub">{fecha}</span>}
             </span>
-            <span className="vjt-monto vjt-monto--grande">{formatMXN(totalDelEscaneo(ocr.items))}</span>
+            <span className="vjt-monto vjt-monto--grande">{formatMXN(total)}</span>
           </div>
           <hr className="vjt-div" />
           {/* D255-6 · reemplaza «quien escanea primero pagó» (D240-17): quien carga elige quién pagó. */}
-          <SelectorDeQuienPago miembros={miembros} valor={pagador} onCambio={onPagador} deshabilitado={enviando} />
-          <p className="vjt-texto">{t('El pago completo queda a nombre de quien pagó.')}</p>
+          <SelectorDeQuienPago opciones={opciones} elegido={quienPago} total={total} onCambio={onQuienPago} deshabilitado={enviando} />
+          {/* Con varios, la parte de cada uno ya está a la vista. */}
+          {reparto.pagadores.length === 1 && <p className="vjt-texto">{t('El pago completo queda a nombre de quien pagó.')}</p>}
           <h2 id="vjt-tipo-lugar" className="vjt-rotulo">{t('Tipo de lugar')}</h2>
           <div className="vjt-chips" role="radiogroup" aria-labelledby="vjt-tipo-lugar">
             {TIPOS_LUGAR.map((x) => (
@@ -503,10 +521,11 @@ export function TicketNuevoVista({
         )}
       </div>
       <div className="vj-pie">
+        {aviso && <p className="vjq-aviso vjq-aviso--pie" role="status">{aviso}</p>}
         <button
           type="button"
           className="btn btn-navy"
-          disabled={enviando}
+          disabled={enviando || !reparto.valido}
           aria-busy={enviando || undefined}
           onClick={onCompartir}
         >

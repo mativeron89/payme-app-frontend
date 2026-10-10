@@ -34,6 +34,7 @@ const MARISCOS: TicketDelViaje = {
   ],
   personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', false)],
   te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false,
+  pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
 };
 
 function render(ticket: TicketDelViaje, extra: Partial<TicketVistaProps> = {}) {
@@ -126,7 +127,7 @@ describe('AF-VIAJES · 1i · elegir lo que consumí', () => {
 describe('AF-VIAJES · 1j · «Pagar el total»', () => {
   const CAFE: TicketDelViaje = {
     ...MARISCOS, lugar: 'Café Caribe', tipo_lugar: 'cafe', fecha_ticket: '2026-10-07', forma: 'total', monto_cents: 38000,
-    pagado_por: 'm-diego', items: [], te_toca_cents: 0, puedo_elegir: false,
+    pagado_por: 'm-diego', items: [], te_toca_cents: 0, puedo_elegir: false, pagadores: [{ miembro_id: 'm-diego', monto_cents: 38000 }],
   };
 
   it('invita quien pagó: su nombre de pila, el total y «Te toca» $0', () => {
@@ -153,6 +154,7 @@ describe('AF-VIAJES · «En partes iguales»', () => {
     ...MARISCOS, lugar: 'Bar La Ola', tipo_lugar: 'bar', forma: 'iguales', monto_cents: 96000, pagado_por: 'm-ana',
     pagaste_tu: true, items: [], te_toca_cents: 24000, puedo_elegir: false,
     personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', true, false)],
+    pagadores: [{ miembro_id: 'm-ana', monto_cents: 96000 }],
   };
 
   it('entre quiénes se divide, el total y lo que te toca', () => {
@@ -171,6 +173,46 @@ describe('AF-VIAJES · «En partes iguales»', () => {
     expect(html).toMatch(/<button type="button" class="btn btn-navy vjt-guardar" disabled="">Guardar<\/button>/);
     const cambiado = render({ ...BAR, puedo_marcar_presentes: true }, { ausentes: new Set() });
     expect(cambiado).toMatch(/<button type="button" class="btn btn-navy vjt-guardar">Guardar<\/button>/);
+  });
+});
+
+describe('🔴 D263 · al entrar a un ticket que pagaron varios', () => {
+  const leer = (html: string) => html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const tarjeta = (html: string) => (html.includes('Quiénes pagaron')
+    ? leer(html.slice(html.indexOf('Quiénes pagaron'), html.indexOf('</section>', html.indexOf('Quiénes pagaron')))) : null);
+  const VARIOS: TicketDelViaje = {
+    ...MARISCOS, pagado_por: 'm-luis', pagaste_tu: true,
+    pagadores: [{ miembro_id: 'm-luis', monto_cents: 120000 }, { miembro_id: 'm-ana', monto_cents: 70000 }, { miembro_id: null, monto_cents: 30000 }],
+  };
+
+  it('la línea de arriba dice cuántos pagaron, no «Pagaste tú» ni «Pagó Luis»', () => {
+    const html = render(VARIOS);
+    expect(html).toContain('8 oct · Pagaron 3 personas · Por lo que pidió cada uno');
+    expect(html).not.toContain('Pagaste tú');
+    expect(html).not.toContain('Pagó Luis');
+  });
+
+  it('«Quiénes pagaron»: cada uno con lo que pagó, en el orden del dueño; yo como «Tú» y una cuenta que ya no está', () => {
+    expect(tarjeta(render(VARIOS))).toBe('Quiénes pagaron Luis Perez $1,200 Tú $700 Cuenta eliminada $300');
+  });
+
+  it('también en partes iguales y en «Pagar el total»', () => {
+    const iguales = render({ ...VARIOS, forma: 'iguales', items: [], puedo_elegir: false });
+    expect(tarjeta(iguales)).toBe('Quiénes pagaron Luis Perez $1,200 Tú $700 Cuenta eliminada $300');
+    const total = render({ ...VARIOS, forma: 'total', items: [], puedo_elegir: false, te_toca_cents: 70000 });
+    expect(tarjeta(total)).toBe('Quiénes pagaron Luis Perez $1,200 Tú $700 Cuenta eliminada $300');
+    expect(total).toContain('Invitan quienes pagaron');
+    expect(total).toContain('Cada uno pone lo que pagó. Nadie les debe nada.');
+    expect(total).not.toContain('Invita Luis');
+    const sinMi = render({ ...VARIOS, forma: 'total', items: [], puedo_elegir: false, pagaste_tu: false, te_toca_cents: 0,
+      pagadores: [{ miembro_id: 'm-luis', monto_cents: 120000 }, { miembro_id: 'm-sofia', monto_cents: 100000 }] });
+    expect(sinMi).toContain('Cada uno pone lo que pagó. No te toca nada.');
+  });
+
+  it('control · uno solo: sin la tarjeta, la línea de siempre', () => {
+    const html = render(MARISCOS);
+    expect(tarjeta(html)).toBeNull();
+    expect(html).toContain('Pagó Luis Perez');
   });
 });
 

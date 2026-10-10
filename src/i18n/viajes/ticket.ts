@@ -2,11 +2,25 @@
 export const EN_VIAJES_TICKET: Record<string, string> = {
   // Ticket nuevo (1h) y «¿Quiénes estuvieron?» (la pantalla nueva de presentes).
   'Ticket nuevo': 'New ticket',
-  'Lo pagaste tú': 'You paid it',
   // D255-6 · quien carga elige quién pagó (reemplaza «quien escanea primero pagó»).
   '¿Quién pagó?': 'Who paid?',
   'El pago completo queda a nombre de quien pagó.': 'The full payment goes under whoever paid.',
   'Quien pagó ya no está en el viaje. Elige de nuevo.': "Whoever paid is no longer on the trip. Choose again.",
+  // D263 · pagaron varios: partes iguales o «Ajustar montos».
+  'Ajustar montos': 'Adjust amounts',
+  'Volver a partes iguales': 'Back to equal parts',
+  'Suman {0} de {1}': 'Adds up to {0} of {1}',
+  'Cuánto pagaste tú': 'How much you paid',
+  'Cuánto pagó {0}': 'How much {0} paid',
+  'Los montos tienen que sumar {0}. Ahora suman {1}.': 'The amounts have to add up to {0}. Right now they add up to {1}.',
+  'Escribe cuánto pagó cada uno. Tienen que sumar {0}.': 'Enter how much each one paid. They have to add up to {0}.',
+  'Los montos no suman el total. Revísalos.': "The amounts don't add up to the total. Check them.",
+  // D263 · al entrar a un ticket que pagaron varios.
+  'Pagaron {0} personas': '{0} people paid',
+  'Quiénes pagaron': 'Who paid',
+  'Invitan quienes pagaron': "It's on those who paid",
+  'Cada uno pone lo que pagó. Nadie les debe nada.': 'Each one covers what they paid. Nobody owes them anything.',
+  'Cada uno pone lo que pagó. No te toca nada.': "Each one covers what they paid. You don't owe anything.",
   'Tipo de lugar': 'Type of place',
   '¿Cómo lo dividen?': 'How do you split it?',
   'Cada uno elige lo suyo': 'Everyone picks their own',

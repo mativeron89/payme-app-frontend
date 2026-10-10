@@ -27,6 +27,7 @@ import {
   porcionesDelPlato,
   quienPago,
   seleccionGuardada,
+  pagadoresDelTicket,
   subtituloDelTicket,
   teTocaConSeleccion,
   topeDelPlato,
@@ -303,23 +304,50 @@ function Totales({ ticket }: { ticket: TicketDelViaje }) {
   );
 }
 
-/** 1j · «Pagar el total»: invita quien lo pagó. */
+/** D263 · con varios, quiénes pagaron y cuánto cada uno. Con uno solo, ya lo dice la línea de arriba. */
+function QuienesPagaron({ ticket, miembros }: { ticket: TicketDelViaje; miembros: readonly MiembroViaje[] }) {
+  const { t } = useIdioma();
+  if (ticket.pagadores.length < 2) return null;
+  return (
+    <section className="vj-card" aria-labelledby="vjt-quienes-pagaron">
+      <h2 id="vjt-quienes-pagaron" className="vjt-card-titulo">{t('Quiénes pagaron')}</h2>
+      <ul className="vjt-pagadores">
+        {pagadoresDelTicket(ticket, miembros, t).map((p) => (
+          <li key={p.clave} className="vjt-total-fila">
+            <span className="vjt-pagador">{p.nombre}</span>
+            <span className="vjt-total-monto">{formatMXN(p.monto_cents)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** 1j · «Pagar el total»: invita quien lo pagó; con varios (D263), cada uno pone lo que pagó. */
 function TotalVista({ ticket, miembros }: { ticket: TicketDelViaje; miembros: readonly MiembroViaje[] }) {
   const { t } = useIdioma();
   const pago = quienPago(ticket, miembros);
   const completo = pago ? nombreCompleto(pago, t) : t('Cuenta eliminada');
   const pila = pago ? nombreDePila(pago, t) : t('Cuenta eliminada');
+  const varios = ticket.pagadores.length > 1;
   return (
     <div className="scroll vj-scroll">
       <section className="vj-card vjt-aviso">
         <span className="vjt-icono vjt-icono--centro" aria-hidden="true"><Icon name={iconoTipoLugar(ticket.tipo_lugar)} size={20} /></span>
-        <h2 className="vjt-aviso-titulo">{ticket.pagaste_tu ? t('Invitas tú') : t('Invita {0}', pila)}</h2>
+        <h2 className="vjt-aviso-titulo">
+          {varios ? t('Invitan quienes pagaron') : ticket.pagaste_tu ? t('Invitas tú') : t('Invita {0}', pila)}
+        </h2>
         <p className="vjt-aviso-texto">
-          {ticket.pagaste_tu
-            ? t('Pagaste el total de este ticket. Nadie te debe nada.')
-            : t('{0} pagó el total de este ticket. No te toca nada.', completo)}
+          {varios
+            ? ticket.pagaste_tu
+              ? t('Cada uno pone lo que pagó. Nadie les debe nada.')
+              : t('Cada uno pone lo que pagó. No te toca nada.')
+            : ticket.pagaste_tu
+              ? t('Pagaste el total de este ticket. Nadie te debe nada.')
+              : t('{0} pagó el total de este ticket. No te toca nada.', completo)}
         </p>
       </section>
+      <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
     </div>
   );
@@ -337,6 +365,7 @@ function IgualesVista({ ticket, miembros, ausentes, guardando, onPresente, onGua
         <h2 className="vjt-card-titulo">{t('Se divide entre los que estuvieron')}</h2>
         <p className="vjt-texto">{nombresPresentes(ticket.personas, miembros, t)}</p>
       </section>
+      <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
       {ticket.puedo_marcar_presentes && (
         <section className="vj-card" aria-labelledby="vjt-quienes">
@@ -381,6 +410,7 @@ function ConsumoVista(props: TicketVistaProps) {
           <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
           <ListaParaElegir {...props} />
         </section>
+        <QuienesPagaron ticket={ticket} miembros={miembros} />
         {!ticket.puedo_elegir && <Totales ticket={ticket} />}
       </div>
       {ticket.puedo_elegir && (

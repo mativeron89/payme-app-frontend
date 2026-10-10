@@ -4815,7 +4815,28 @@ interface VisitaMock {
   readonly created_at: string;
   readonly amount_cents: number;
   readonly items: ReadonlyArray<{ name: string; fraction_bps: number; amount_cents: number }>;
+  /** D260 · el viaje, si la visita es un ticket de viaje (`code` es el id del ticket). */
+  readonly viajeId?: string;
 }
+
+/**
+ * D260 · App Backend 2.176.0: los tickets de viaje suman a las estadísticas, con lo que consumió cada uno. Con Viajes
+ * encendido, «Mariscos El Faro» de Cancún 2026 es una visita de este mes en el modelo único (así las sumas de 2a, 2b y
+ * 2c coinciden): lo que la semilla me asigna (Aguachile, ½ Guacamole y ¼ de las Margaritas, $530). Un restaurante
+ * propio, «otra cocina», como el dueño cuando el nombre no coincide con el de una mesa.
+ */
+const VISITA_DE_VIAJE_MOCK = {
+  viajeId: 'd1000000-0000-4000-8000-000000000001',
+  code: 'd2000000-0000-4000-8000-000000000105',
+  restaurantId: 'viaje:3b8f0c51d2a94e67',
+  restaurant: 'Mariscos El Faro',
+  category: 'other',
+  items: [
+    { name: 'Aguachile', fraction_bps: 10000, amount_cents: 31000 },
+    { name: 'Guacamole', fraction_bps: 5000, amount_cents: 8000 },
+    { name: 'Margarita', fraction_bps: 2500, amount_cents: 14000 },
+  ],
+} as const;
 
 /**
  * Inicio del mes `mes` del modelo (5 = el actual, 0 = hace cinco) como lo publica
@@ -4874,6 +4895,18 @@ function visitasDelModelo(): VisitaMock[] {
           items,
         });
       });
+    });
+  }
+  if (viajesMockEncendido()) {
+    const inicio = inicioDeMes(5, ahora);
+    const { items, ...visita } = VISITA_DE_VIAJE_MOCK;
+    visitas.push({
+      ...visita,
+      mes: 5,
+      // Hace un día y medio, sin salir del mes.
+      created_at: new Date(Math.max(inicio.getTime() + 60_000, ahora.getTime() - 36 * 3_600_000)).toISOString(),
+      amount_cents: items.reduce((s, i) => s + i.amount_cents, 0),
+      items: items.map((i) => ({ ...i })),
     });
   }
   return visitas;
@@ -5000,7 +5033,8 @@ function fallaDeRuta(clave: string, error413: string): Promise<never> | null {
 }
 
 /** AF-29 · `GET /account/stats/restaurants` (v2.104.0), con `?period=` desde v2.106.0. */
-export async function mockStatsRestaurants(period?: string): Promise<unknown> {
+/** D260 · `statsVersion: 2` (`stats_version=2`) suma `viaje_id` a cada visita: el viaje, o `null` en una mesa. */
+export async function mockStatsRestaurants(period?: string, { statsVersion = 1 }: { readonly statsVersion?: 1 | 2 } = {}): Promise<unknown> {
   const falla = fallaDeRuta('payme.app.mock.restaurantes.v1', 'stats_month_too_large');
   if (falla) return falla;
   const resuelto = resolverPeriodo(period);
@@ -5025,6 +5059,7 @@ export async function mockStatsRestaurants(period?: string): Promise<unknown> {
           division_mode: 'consumo',
           amount_cents: v.amount_cents,
           items: v.items.map((it) => ({ ...it })),
+          ...(statsVersion === 2 && { viaje_id: v.viajeId ?? null }),
         })),
       };
     })

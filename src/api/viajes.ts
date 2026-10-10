@@ -218,6 +218,17 @@ export interface TicketEnViaje {
    * o quien lo pagó (Mati: «Quien lo cargó o quien pagó»). Es a quien se le muestra «Eliminar».
    */
   readonly puede_eliminar: boolean;
+  /** D263 · `viaje_version=5` (App Backend 2.177.0): quiénes pagaron y cuánto. Con uno solo, uno con el total. */
+  readonly pagadores: readonly PagadorDelTicket[];
+}
+
+/**
+ * D263 · un pagador de un ticket, en el orden en que se cargaron. `pagado_por` es el primero. `miembro_id` es `null`
+ * si su cuenta ya no está (como `pagado_por`). Los montos suman el total del ticket.
+ */
+export interface PagadorDelTicket {
+  readonly miembro_id: string | null;
+  readonly monto_cents: number;
 }
 
 export interface SinRepartir {
@@ -296,6 +307,8 @@ export interface TicketDelViaje {
   readonly sin_repartir_cents: number;
   readonly puedo_elegir: boolean;
   readonly puedo_marcar_presentes: boolean;
+  /** D263 · `viaje_version=5`: también en el detalle de un ticket. */
+  readonly pagadores: readonly PagadorDelTicket[];
 }
 
 /** Quién cargó (y pagó) un ticket que ya estaba en el viaje (diseño 1k). */
@@ -389,6 +402,17 @@ export interface CargarTicketPedido {
   readonly items: readonly ItemPedido[];
   /** D255-6 · un id de miembro activo, sólo si pagó OTRO; sin él, quien carga. */
   readonly pagado_por?: string;
+  /** D263 · o varios (nunca junto a `pagado_por`). */
+  readonly pagadores?: readonly PagadorPedido[];
+}
+
+/**
+ * D263 · un pagador pedido: de 1 a 20, sin repetir, todos con monto o ninguno. Sin montos, el dueño reparte en partes
+ * iguales (el centavo de más a los primeros); con montos, tienen que sumar el total.
+ */
+export interface PagadorPedido {
+  readonly miembro_id: string;
+  readonly monto_cents?: number;
 }
 
 /** D244 · `POST /api/viajes/:id/gastos`: quien lo carga pagó; se reparte en partes iguales entre `presentes`. */
@@ -400,6 +424,8 @@ export interface GastoManualPedido {
   readonly idempotency_key: string;
   /** D255-6 · un id de miembro activo, sólo si pagó OTRO; sin él, quien carga. */
   readonly pagado_por?: string;
+  /** D263 · o varios (nunca junto a `pagado_por`). */
+  readonly pagadores?: readonly PagadorPedido[];
 }
 
 /** D255 · `PATCH /api/viajes/:id`: al menos uno; `null` borra una fecha o el color. */
@@ -580,13 +606,14 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
       'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
-      'puede_eliminar'], e);
+      'puede_eliminar', 'pagadores'], e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
       && noNegativo(t.sin_repartir_cents) && noNegativo(t.monto_cents)
       && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen) && typeof t.puede_eliminar === 'boolean', e);
-    return t as unknown as TicketEnViaje;
+    const pagadores = pagadoresDe(t.pagadores, t.monto_cents as number, t.pagado_por, e);
+    return { ...(t as unknown as TicketEnViaje), pagadores };
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
     const s = objeto(x, ['ticket_id', 'lugar', 'fecha_ticket', 'monto_cents', 'faltan'], e);
@@ -653,10 +680,23 @@ export function decodeRevisionDeTicket(raw: unknown): Duplicado | null {
   return { ticket_id: b.duplicado.ticket_id as string, ...yaCargado(b.duplicado, e) };
 }
 
+/**
+ * D263 · `pagadores` de la 5: de 1 a 20, claves exactas, los montos suman el total y el primero es `pagado_por`.
+ */
+function pagadoresDe(raw: unknown, montoCents: number, pagadoPor: unknown, e: string): readonly PagadorDelTicket[] {
+  const xs = lista(raw, e, (x): PagadorDelTicket => {
+    const p = objeto(x, ['miembro_id', 'monto_cents'], e);
+    exigir(textoONull(p.miembro_id) && noNegativo(p.monto_cents), e);
+    return p as unknown as PagadorDelTicket;
+  }, 20);
+  exigir(xs.length >= 1 && xs.reduce((s, p) => s + p.monto_cents, 0) === montoCents && xs[0]!.miembro_id === pagadoPor, e);
+  return xs;
+}
+
 function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
   const t = objeto(raw, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
     'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
-    'puedo_elegir', 'puedo_marcar_presentes'], e);
+    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores'], e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
     && textoONull(t.pagado_por) && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents)
@@ -674,7 +714,8 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
     exigir(textoONull(p.miembro_id) && typeof p.ya_eligio === 'boolean' && typeof p.presente === 'boolean', e);
     return p as unknown as PersonaDelTicket;
   }, 40);
-  return { ...(t as unknown as TicketDelViaje), items, personas };
+  const pagadores = pagadoresDe(t.pagadores, t.monto_cents as number, t.pagado_por, e);
+  return { ...(t as unknown as TicketDelViaje), items, personas, pagadores };
 }
 
 /** `GET …/tickets/:tid`, `PUT …/seleccion`, `PUT …/presentes` → `{ contract, ticket }`. */
@@ -703,17 +744,26 @@ export function decodeTicketCargado(raw: unknown): TicketCargado {
  * lo pagó quien lo cargó (`gasto_manual.como_se_guarda` del contrato).
  */
 /**
- * `POST …/gastos` → el gasto como ticket. D255-6 · `pagadoPor` es lo que se
- * pidió: sin él, lo pagó quien carga (`pagaste_tu`); con el id de otro, ese
- * miembro y no yo.
+ * `POST …/gastos` → el gasto como ticket, contra lo que se pidió:
+ * - D255-6 · sin `pagado_por`, lo pagó quien carga (`pagaste_tu`); con el id de otro, ese miembro y no yo;
+ * - D263 · con `pagadores`, los mismos y en el mismo orden, con los montos pedidos si se pidieron.
  */
-export function decodeGastoCargado(raw: unknown, pagadoPor?: string): TicketDelViaje {
+export function decodeGastoCargado(
+  raw: unknown,
+  pedido: Pick<GastoManualPedido, 'pagado_por' | 'pagadores'> = {},
+): TicketDelViaje {
   const e = 'viajes.gasto';
   const b = cuerpo(raw, ['ticket', 'ya_cargado'], e);
   exigir(b.ya_cargado === null, e);
   const t = ticketDetalle(b.ticket, e);
-  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro'
-    && (pagadoPor === undefined ? t.pagaste_tu : !t.pagaste_tu && t.pagado_por === pagadoPor), e);
+  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro', e);
+  if (pedido.pagadores) {
+    const pedidos = pedido.pagadores;
+    exigir(t.pagadores.length === pedidos.length && t.pagadores.every((p, i) => p.miembro_id === pedidos[i]!.miembro_id
+      && (pedidos[i]!.monto_cents === undefined || p.monto_cents === pedidos[i]!.monto_cents)), e);
+  } else {
+    exigir(pedido.pagado_por === undefined ? t.pagaste_tu : !t.pagaste_tu && t.pagado_por === pedido.pagado_por, e);
+  }
   return t;
 }
 
@@ -806,6 +856,8 @@ export type ErrorDeViaje =
   | { readonly tipo: 'persona_desconocida' }
   /** D255-6 · quien pagó ya no es un miembro activo con cuenta. */
   | { readonly tipo: 'pagador_desconocido' }
+  /** D263 · 422 `viaje_ticket_payers_total_mismatch`: los montos no suman el total (`monto_cents`). */
+  | { readonly tipo: 'pagadores_no_suman'; readonly totalCents: number | null }
   /** D255 · la foto: muchas seguidas, o el dueño la está procesando. */
   | { readonly tipo: 'foto_ocupada' }
   /** D255 · la foto: el tipo, el tamaño o la imagen no sirven (los `avatar_*` de la foto de perfil). */
@@ -860,6 +912,9 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
   if (status === 409 && code === 'viaje_tickets_limit') return { tipo: 'limite_tickets' };
   if (status === 422 && code === 'viaje_ticket_persona_unknown') return { tipo: 'persona_desconocida' };
   if (status === 422 && code === 'viaje_ticket_payer_unknown') return { tipo: 'pagador_desconocido' };
+  if (status === 422 && code === 'viaje_ticket_payers_total_mismatch') {
+    return { tipo: 'pagadores_no_suman', totalCents: noNegativo(extra.monto_cents) ? extra.monto_cents : null };
+  }
   if (status === 429 && (code === 'viaje_photo_rate_limited' || code === 'avatar_processing_busy')) return { tipo: 'foto_ocupada' };
   if ((status === 400 || status === 413 || status === 415 || status === 422) && code.startsWith('avatar_')) return { tipo: 'foto_invalida' };
   if (status === 429 && code === 'viajes_rate_limited') return { tipo: 'demasiadas_invitaciones' };

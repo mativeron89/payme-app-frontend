@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { OcrResponse } from '../../api/types';
 import type { FormaTicket, MiembroViaje, TicketDelViaje, TipoLugar, YaCargado } from '../../api/viajes';
 import { traducir } from '../../i18n/idioma';
+import { opcionesDeQuienPago, QUIEN_PAGO_INICIAL, type QuienPagoElegido } from './QuienPago';
 import { AvisoDeEscaneoVista, DuplicadoVista, EstadoDeCargaVista, ListaDePresentes, TicketNuevoVista } from './TicketNuevoScreen';
 import { candidatosDelViaje } from './ticketView';
 
@@ -30,13 +31,13 @@ const OCR: OcrResponse = {
   ticket_datetime: { date: '2026-10-09', time: '14:20' },
 };
 
-function nuevo(forma: FormaTicket = 'consumo', opciones: { tipo?: TipoLugar; ocr?: OcrResponse; ausentes?: Set<string>; pagador?: string | null } = {}) {
+function nuevo(forma: FormaTicket = 'consumo', opciones: { tipo?: TipoLugar; ocr?: OcrResponse; ausentes?: Set<string>; quienPago?: QuienPagoElegido } = {}) {
   return renderToStaticMarkup(
     <TicketNuevoVista
       viajeNombre="Cancún 2026"
-      miembros={MIEMBROS}
-      pagador={opciones.pagador ?? null}
-      onPagador={nada}
+      opciones={opcionesDeQuienPago(MIEMBROS, t)}
+      quienPago={opciones.quienPago ?? QUIEN_PAGO_INICIAL}
+      onQuienPago={nada}
       ocr={opciones.ocr ?? OCR}
       tipo={opciones.tipo ?? 'restaurante'}
       forma={forma}
@@ -54,6 +55,10 @@ function nuevo(forma: FormaTicket = 'consumo', opciones: { tipo?: TipoLugar; ocr
 /** Los `role="radio"`/`checkbox` con su `aria-checked`, en orden. */
 const marcas = (html: string, rol: 'radio' | 'checkbox') =>
   [...html.matchAll(new RegExp(`role="${rol}" aria-checked="(true|false)"`, 'g'))].map((m) => m[1] === 'true');
+/** El bloque de «¿Quién pagó?» (hasta «Tipo de lugar») y la lista de «¿Quiénes estuvieron?». */
+const quienPago = (html: string) => html.slice(html.indexOf('¿Quién pagó?'), html.indexOf('Tipo de lugar'));
+const presentes = (html: string) => html.slice(html.indexOf('¿Quiénes estuvieron?'));
+const leer = (html: string) => html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('AF-VIAJES · 1h · Ticket nuevo', () => {
   it('título, viaje, el lugar (sin comercio, el tipo), «9 oct · 14:20» y el total del escaneo', () => {
@@ -67,16 +72,54 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     expect(html).toContain('Compartir con el viaje');
   });
 
-  it('🔴 D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto y los demás miembros; ya no «quien escanea primero»', () => {
+  it('🔴 D263 · «¿Quién pagó?»: casillas, «Tú» por defecto y los demás miembros; ya no «quien escanea primero»', () => {
     const html = nuevo();
-    expect(html).toContain('¿Quién pagó?');
-    const opciones = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]);
-    expect(opciones).toEqual([['', 'Lo pagaste tú'], ['m-luis', 'Luis Perez'], ['m-sofia', 'Sofia Ramirez'], ['m-diego', 'Diego Torres']]);
-    expect(html).toMatch(/<option value="" selected="">Lo pagaste tú<\/option>/);
-    expect(html).toContain('El pago completo queda a nombre de quien pagó.');
+    expect(leer(quienPago(html))).toBe('¿Quién pagó? Tú Luis Perez Sofia Ramirez Diego Torres El pago completo queda a nombre de quien pagó.');
+    expect(marcas(quienPago(html), 'checkbox')).toEqual([true, false, false, false]);
+    // El único marcado no se desmarca.
+    expect(quienPago(html).match(/aria-disabled="true"/g)).toHaveLength(1);
+    expect(html).not.toContain('<select');
     expect(html).not.toContain('Como lo escaneaste primero');
-    // Elegido Luis, el selector lo muestra.
-    expect(nuevo('consumo', { pagador: 'm-luis' })).toMatch(/<option value="m-luis" selected="">Luis Perez<\/option>/);
+    // Elegido Luis, sólo él.
+    expect(marcas(quienPago(nuevo('consumo', { quienPago: { marcados: new Set(['m-luis']), montos: null } })), 'checkbox'))
+      .toEqual([false, true, false, false]);
+  });
+
+  it('🔴 D263 · dos pagaron, en partes iguales: la parte de cada uno, «Ajustar montos» y se puede compartir', () => {
+    const html = nuevo('consumo', { quienPago: { marcados: new Set(['m-ana', 'm-sofia']), montos: null } });
+    // $1,020 entre dos.
+    expect(leer(quienPago(html))).toBe('¿Quién pagó? Tú $510 Luis Perez Sofia Ramirez $510 Diego Torres En partes iguales Ajustar montos');
+    expect(marcas(quienPago(html), 'checkbox')).toEqual([true, false, true, false]);
+    // Con varios, la frase de uno solo no va.
+    expect(html).not.toContain('El pago completo queda a nombre de quien pagó.');
+    expect(html).toMatch(/<button type="button" class="btn btn-navy">Compartir con el viaje<\/button>/);
+  });
+
+  it('🔴 D263 · tres pagaron: el centavo de más a los primeros de la lista', () => {
+    const ocr: OcrResponse = { ...OCR, items: [{ ...OCR.items[0]!, price_cents: 10001 }] };
+    const html = nuevo('consumo', { ocr, quienPago: { marcados: new Set(['m-diego', 'm-luis', 'm-ana']), montos: null } });
+    expect(leer(quienPago(html))).toContain('Tú $33.34 Luis Perez $33.34 Sofia Ramirez Diego Torres $33.33');
+  });
+
+  it('🔴 D263 · montos ajustados que suman: un campo por pagador y se puede compartir', () => {
+    const html = nuevo('consumo', { quienPago: { marcados: new Set(['m-ana', 'm-luis']), montos: new Map([['m-ana', '1000'], ['m-luis', '20']]) } });
+    const quien = quienPago(html);
+    expect(quien).toContain('aria-label="Cuánto pagaste tú" value="1000"');
+    expect(quien).toContain('aria-label="Cuánto pagó Luis Perez" value="20"');
+    expect(html).not.toContain('Los montos tienen que sumar');
+    expect(leer(quien)).toContain('Suman $1,020 de $1,020 Volver a partes iguales');
+    expect(html).toMatch(/<button type="button" class="btn btn-navy">Compartir con el viaje<\/button>/);
+  });
+
+  it('🔴 D263 · montos que no suman: el aviso con el total y lo que suman, y «Compartir» apagado', () => {
+    const html = nuevo('consumo', { quienPago: { marcados: new Set(['m-ana', 'm-luis']), montos: new Map([['m-ana', '1000'], ['m-luis', '10']]) } });
+    expect(leer(quienPago(html))).toContain('Suman $1,010 de $1,020');
+    // El aviso va junto al botón apagado.
+    expect(html).toMatch(/<div class="vj-pie"><p class="vjq-aviso vjq-aviso--pie" role="status">Los montos tienen que sumar \$1,020\. Ahora suman \$1,010\.<\/p><button type="button" class="btn btn-navy" disabled="">Compartir con el viaje<\/button>/);
+    const vacio = nuevo('consumo', { quienPago: { marcados: new Set(['m-ana', 'm-luis']), montos: new Map([['m-ana', '1000'], ['m-luis', '']]) } });
+    expect(leer(vacio)).toContain('Escribe cuánto pagó cada uno. Tienen que sumar $1,020.');
+    expect(leer(quienPago(vacio))).not.toContain('Suman');
+    expect(vacio).toMatch(/<button type="button" class="btn btn-navy" disabled="">Compartir con el viaje<\/button>/);
   });
 
   it('con el comercio leído, su nombre; sin fecha leída, ninguna fecha', () => {
@@ -109,9 +152,9 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     const html = nuevo('iguales');
     expect(html).toContain('¿Quiénes estuvieron?');
     expect(html).toContain('Se divide entre los marcados. Desmarca a quien no estuvo.');
-    expect(marcas(html, 'checkbox')).toEqual([true, true, true, true]);
+    expect(marcas(presentes(html), 'checkbox')).toEqual([true, true, true, true]);
     // En la lista de presentes (el selector de quién pagó, arriba, también nombra a Luis).
-    const lista = html.slice(html.indexOf('¿Quiénes estuvieron?'));
+    const lista = presentes(html);
     expect(lista.indexOf('>Tú<')).toBeLessThan(lista.indexOf('Luis Perez'));
     expect(html).toContain('@ana.lopez');
     expect(html).toContain('@diego.torres');
@@ -119,7 +162,7 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
 
   it('desmarcado Diego: su casilla dice «no»', () => {
     const html = nuevo('iguales', { ausentes: new Set(['m-diego']) });
-    expect(marcas(html, 'checkbox')).toEqual([true, true, true, false]);
+    expect(marcas(presentes(html), 'checkbox')).toEqual([true, true, true, false]);
   });
 });
 
@@ -140,6 +183,7 @@ describe('AF-VIAJES · 1k · el ticket ya estaba en el viaje', () => {
     id: 'tk', lugar: null, tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40', cargado_en: instante,
     forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false, items: [], personas: [],
     te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false,
+    pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
   } satisfies TicketDelViaje;
 
   const render = (d: YaCargado, ticket: TicketDelViaje | null = tk) => renderToStaticMarkup(

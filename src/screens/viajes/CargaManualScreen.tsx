@@ -9,7 +9,15 @@ import { goBack, navigate } from '../../router';
 import { stringToCents } from '../../utils/money';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
-import { conQuienPago, pagadorVigente, SelectorDeQuienPago } from './QuienPago';
+import {
+  avisoDeQuienPago,
+  conQuienPago,
+  opcionesDeQuienPago,
+  QUIEN_PAGO_INICIAL,
+  repartoDeQuienPago,
+  SelectorDeQuienPago,
+  type QuienPagoElegido,
+} from './QuienPago';
 import { ListaDePresentes } from './TicketNuevoScreen';
 import { alternarPresente, candidatosDelViaje, idsPresentes, llaveParaPedido } from './ticketView';
 import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
@@ -21,7 +29,7 @@ import './viaje.css';
  * Mati: «muy sencillo: Descripción, monto, selección de personas a distribuir
  * y listo». Se reparte en partes iguales entre los marcados, con todos marcados
  * y se desmarca a quien no va. Sin tipo de lugar, fecha ni renglones.
- * D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto, o uno de los demás.
+ * D255-6 · D263 · «¿Quién pagó?»: tú por defecto, otro o varios (en partes iguales o con «Ajustar montos»).
  *
  * «Listo» manda `POST /api/viajes/:id/gastos` (App Backend 2.172.0) con una
  * llave de idempotencia estable mientras el pedido no cambie (un reintento es
@@ -56,8 +64,10 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
       if (e.tipo === 'no_disponible') noDisponible();
       else if (e.tipo === 'no_abierto') toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
+      else if (e.tipo === 'pagadores_no_suman') toast(t('Los montos no suman el total. Revísalos.'), { sobreLaBarra: true });
       else if (e.tipo === 'pagador_desconocido') {
-        // Quien pagó salió del viaje mientras tanto: se vuelve a pedir el viaje y el selector vuelve a «Lo pagaste tú».
+        // Alguien que pagó salió del viaje mientras tanto: se vuelve a pedir el viaje y el selector queda con los que
+        // siguen (sin ninguno, tú).
         toast(t('Quien pagó ya no está en el viaje. Elige de nuevo.'), { sobreLaBarra: true });
         void refrescar();
       } else if (e.tipo === 'persona_desconocida') {
@@ -111,10 +121,14 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('');
   const [ausentes, setAusentes] = useState<ReadonlySet<string>>(new Set());
-  const [pagador, setPagador] = useState<string | null>(null);
+  const [quienPago, setQuienPago] = useState<QuienPagoElegido>(QUIEN_PAGO_INICIAL);
   const candidatos = useMemo(() => candidatosDelViaje(viaje.miembros, t), [viaje.miembros, t]);
+  const opciones = useMemo(() => opcionesDeQuienPago(viaje.miembros, t), [viaje.miembros, t]);
   const cents = montoTipeado(monto);
-  const listo = descripcion.trim().length > 0 && cents !== null;
+  const reparto = repartoDeQuienPago(quienPago, opciones, cents);
+  // D263 · con montos ajustados que no suman el total, «Listo» espera (el aviso lo dice arriba).
+  const listo = descripcion.trim().length > 0 && cents !== null && reparto.valido;
+  const aviso = avisoDeQuienPago(reparto, cents, t);
   return (
     <>
       <div className="title-card">
@@ -143,7 +157,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
               onChange={(e) => setMonto(e.target.value.replace(/[^0-9.,$]/g, ''))}
             />
           </label>
-          <SelectorDeQuienPago miembros={viaje.miembros} valor={pagador} onCambio={setPagador} deshabilitado={enviando} />
+          <SelectorDeQuienPago opciones={opciones} elegido={quienPago} total={cents} onCambio={setQuienPago} deshabilitado={enviando} />
         </section>
         <section className="vj-card">
           <h2 className="vjm-titulo">{t('¿Entre quiénes?')}</h2>
@@ -157,15 +171,16 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
       </div>
       <div className="vj-pie">
         {cents !== null && <p className="vjm-resumen">{t('Total {0}', formatMXN(cents))}</p>}
+        {aviso && <p className="vjq-aviso vjq-aviso--pie" role="status">{aviso}</p>}
         <button
           type="button"
           className="btn btn-navy"
           disabled={!listo || enviando}
           onClick={() => {
-            if (cents === null) return;
+            if (cents === null || !reparto.valido) return;
             onListo?.(conQuienPago(
               { descripcion: descripcion.trim(), monto_cents: cents, presentes: idsPresentes(candidatos, ausentes) },
-              pagadorVigente(pagador, viaje.miembros),
+              reparto,
             ));
           }}
         >

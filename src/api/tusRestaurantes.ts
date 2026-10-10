@@ -13,10 +13,23 @@
  * suma de sus visitas (el handoff lo declara y un test del dueño lo exige), y
  * `visits_count` es cuántas visitas vienen. Los ítems NO se suman contra la
  * visita: en base `payments` la visita incluye la propina y los ítems no.
+ *
+ * D260 · App Backend 2.176.0: la app pide siempre `stats_version=2`, y cada
+ * visita trae `viaje_id`: el viaje de un ticket de viaje (su `code` es el id del
+ * ticket) o `null` en una mesa. «Ver ticket completo» abre el ticket del viaje.
  */
 
 import type { BaseDeConsumo } from './consumoDelMes';
-import { decodePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
+import { decodePeriodo, rutaConPeriodo, type ClavePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
+
+/** D260 · la negociación: la cadena exacta, sólo en esta ruta. */
+export const STATS_VERSION = 'stats_version=2';
+
+/** `/account/stats/restaurants`, con su período si lo hay, y siempre con `stats_version=2`. */
+export function rutaDeTusRestaurantes(period?: ClavePeriodo): string {
+  const ruta = rutaConPeriodo('/account/stats/restaurants', period);
+  return ruta + (ruta.includes('?') ? '&' : '?') + STATS_VERSION;
+}
 
 export interface ItemDeVisita {
   readonly name: string;
@@ -30,6 +43,8 @@ export interface Visita {
   readonly divisionMode: 'consumo' | 'igual';
   readonly amountCents: number;
   readonly items: readonly ItemDeVisita[];
+  /** D260 · el viaje, si la visita es un ticket de viaje (y `code` es el id del ticket); `null` en una mesa. */
+  readonly viajeId: string | null;
 }
 
 export interface RestauranteDelMes {
@@ -88,11 +103,11 @@ function item(raw: unknown): ItemDeVisita {
 }
 
 function visita(raw: unknown): Visita {
-  if (!objetoPlano(raw) || !claves(raw, ['code', 'created_at', 'division_mode', 'amount_cents', 'items'])) malo();
-  const { code, created_at: c, division_mode: d, amount_cents: a, items } = raw;
+  if (!objetoPlano(raw) || !claves(raw, ['code', 'created_at', 'division_mode', 'amount_cents', 'items', 'viaje_id'])) malo();
+  const { code, created_at: c, division_mode: d, amount_cents: a, items, viaje_id: viaje } = raw;
   if (!texto(code) || !fecha(c) || (d !== 'consumo' && d !== 'igual') || !entero(a) || a === 0) malo();
-  if (!Array.isArray(items)) malo();
-  return { code, createdAt: c, divisionMode: d, amountCents: a, items: items.map(item) };
+  if (!Array.isArray(items) || (viaje !== null && !texto(viaje))) malo();
+  return { code, createdAt: c, divisionMode: d, amountCents: a, items: items.map(item), viajeId: viaje };
 }
 
 function restaurante(raw: unknown): RestauranteDelMes {

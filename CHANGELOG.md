@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.237.0 — Viajes: varios pagaron, el ticket del viaje desde Estadísticas y Crear viaje sin la ayuda (D263, D260, D264) (2026-10-10)
+
+Orden AF-VIAJES-VARIOS-PAGARON-Y-ESTADISTICAS-20261010 (e1313862…). Contra App Backend 2.177.0, que incluye 2.176.0.
+Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **Espejo 2.177.0:** `e78a7bd`. Paridad 138/138, con cinco archivos cambiados.
+- **D263 · «¿Quién pagó?» con varios,** en Carga manual y en Ticket nuevo. Mati: «que "quién pagó" permita
+  multisección». Eligió «Partes iguales, y se puede ajustar» y «En los dos».
+  - **El control:** el `<select>` se reemplaza por casillas, con el aspecto de «¿Quiénes estuvieron?».
+    - «Tú» va primero y marcado por defecto; el último marcado no se desmarca.
+    - En la lista, mi fila dice «Tú» y no «Lo pagaste tú»: con casillas, la frase no encaja junto a los nombres.
+      Sale su EN.
+  - **Con dos o más:** cada uno muestra su parte igual, con el reparto del dueño: el piso, y el centavo de más a los
+    primeros de la lista.
+  - **«Ajustar montos»:** un campo por pagador, que empieza con su parte igual, y «Volver a partes iguales».
+    - Mientras los montos no sumen el total, «Listo» (o «Compartir con el viaje») queda apagado.
+    - El aviso va en el pie, junto al botón: «Los montos tienen que sumar $T. Ahora suman $S.».
+    - Abajo de los montos queda la línea «Suman $S de $T».
+  - **Lo que se manda:**
+    - sólo yo: nada;
+    - otro: `pagado_por`;
+    - varios: `pagadores`, en el orden de la lista, con `monto_cents` sólo si se ajustó.
+  - **Errores:**
+    - el 422 `viaje_ticket_payers_total_mismatch` dice «Los montos no suman el total. Revísalos.»;
+    - si alguien que pagó salió del viaje, la lista queda con los que siguen y, si no queda nadie, «Tú».
+  - «El pago completo queda a nombre de quien pagó.» se ve sólo con un pagador.
+- **Al entrar a un ticket que pagaron varios:**
+  - la línea de arriba dice «Pagaron N personas» en vez de «Pagó…» o «Pagaste tú»;
+  - una tarjeta, «Quiénes pagaron», lista a cada uno con lo que pagó, en el orden del dueño;
+  - en «Pagar el total», el aviso dice «Invitan quienes pagaron» y «Cada uno pone lo que pagó.»;
+  - con uno solo, como antes.
+- **`viaje_version=5`, con claves exactas,** en todas las rutas de viaje y también en las de ticket: `GET` de un
+  ticket, `POST` de tickets y de gastos, y `PUT` de selección y de presentes.
+  - `pagadores` es obligatorio. Va de 1 a 20, los montos suman el total y el primero es `pagado_por`.
+  - El gasto cargado se verifica contra lo pedido: los mismos pagadores, en el mismo orden y con los montos pedidos.
+- **D260 · Estadísticas:**
+  - «Tus restaurantes» pide `stats_version=2`, y cada visita trae `viaje_id`, con claves exactas.
+  - En una visita de viaje, «Ver ticket completo» abre el ticket del viaje en vez del recibo de una mesa. Atrás
+    vuelve a «Tus restaurantes».
+- **D264 · Crear viaje:** sale «Les llega una invitación. Entran al viaje cuando la aceptan.», con su EN y la regla CSS
+  que sólo usaba esa nota.
+- **Mock:**
+  - `pagadores` con las validaciones y el reparto del dueño;
+  - la cuenta acredita a cada pagador lo suyo, y «Pagar el total» lo consume cada uno en lo que pagó;
+  - eliminar y presentes valen para cualquier pagador;
+  - las vistas de la 5;
+  - con Viajes encendido, «Mariscos El Faro» (Cancún) es una visita de este mes en el modelo único, con lo que la
+    semilla me asigna ($530). `viaje_id` sale sólo con `stats_version=2`.
+- **Pruebas:**
+  - rojo en la base `444c80d`: 85 unitarias y 4 de 5 e2e (el control de un solo pagador, verde);
+  - mutantes 23/23, cada uno muerto por la prueba que lo vigila (dos, en e2e): el reparto (en la app y en el mock), lo
+    que se manda, «Listo» y «Compartir» con montos que no suman, el decodificador de la 5, las rutas de ticket con la 4,
+    `stats_version`, `viaje_id`, abrir el recibo de mesa en vez del ticket del viaje, la cuenta por pagador y la ayuda de
+    Crear viaje;
+  - e2e a 375 con capturas.
+
 ## 0.236.2 — Configuración y Balance del viaje: menos textos, menos franja, pestañas en negrita (D259, D261, D262) (2026-10-10)
 
 Orden AF-CONFIGURACION-SIN-TEXTOS-20261010 (a7075561…). Lo visible se cierra con la prueba de Mati en el iPhone (D63).

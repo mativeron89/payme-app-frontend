@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { goBack } from '../router';
+import { goBack, navigate } from '../router';
 import { colorDeFila } from '../utils/anillo';
 import { partesDeFecha } from '../utils/fechaCorta';
 import { formatMXN } from '../utils/format';
@@ -18,6 +18,7 @@ import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
 import { useRegion } from '../preferences/RegionProvider';
 import { personalZoneCaption } from '../utils/personalDates';
+import { parametroDeTicket } from './viajes/viajesView';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -32,6 +33,9 @@ import { personalZoneCaption } from '../utils/personalDates';
  * ticket completo de la mesa se abre con su botón, «Ver ticket completo», dentro
  * de la visita desplegada: antes el mismo toque abría los dos y el modal tapaba
  * lo propio («no me dice qué consumí yo, está el ticket entero», Mati).
+ *
+ * D260 · una visita que es un ticket de viaje (`viajeId`) abre, con el mismo
+ * botón, el ticket del viaje: el recibo de una mesa no lo tiene.
  *
  * El rótulo sale de `basis`, como en 2a. En base `payments` la visita incluye la
  * propina y los platos no: se dice con una línea al pie, sólo en esa base.
@@ -192,17 +196,27 @@ export function TusRestaurantesScreen() {
                             {abiertaV && (
                               <>
                                 <LoConsumido visita={v} />
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-sm rest-visita-ticket"
-                                  aria-haspopup="dialog"
-                                  onClick={(event) => {
-                                    ticketTriggerRef.current = event.currentTarget;
-                                    setTicketCode(v.code);
-                                  }}
-                                >
-                                  {t('Ver ticket completo')}
-                                </button>
+                                {v.viajeId !== null ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm rest-visita-ticket"
+                                    onClick={() => navigate('viaje-ticket', parametroDeTicket(v.viajeId!, v.code))}
+                                  >
+                                    {t('Ver ticket completo')}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm rest-visita-ticket"
+                                    aria-haspopup="dialog"
+                                    onClick={(event) => {
+                                      ticketTriggerRef.current = event.currentTarget;
+                                      setTicketCode(v.code);
+                                    }}
+                                  >
+                                    {t('Ver ticket completo')}
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>

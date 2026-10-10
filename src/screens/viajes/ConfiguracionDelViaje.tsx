@@ -214,7 +214,7 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
           <h2 className="vjc-etiqueta" id="vjcfg-agregar">{t('Agregar miembros')}</h2>
           <CampoDeBusqueda texto={p.texto} onTexto={p.onTexto} />
           {p.lleno && <p className="vjc-nota">{t('Un viaje admite hasta 20 personas.')}</p>}
-          {/* D259 · Mati: sin la ayuda «Les llega una invitación…» (sigue en Crear viaje). */}
+          {/* D259 · Mati: sin la ayuda «Les llega una invitación…» (D264: tampoco en Crear viaje). */}
           {p.busqueda && <ResultadosDeBusqueda b={p.busqueda} lleno={p.lleno} ocupado={p.ocupado} onAgregar={p.onAgregar} />}
           {!p.busqueda && p.invitados.length > 0 && (
             <>
