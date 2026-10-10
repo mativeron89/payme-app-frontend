@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
  * y la app lleva a «Crea tu cuenta con Google» (decisión 73). Hasta 0.199.0 ese
  * paso creaba con los datos del formulario y el botón en POPUP, el que falla en
  * iPhone. Con `google_redirect_signup` encendido, el paso usa el MISMO alta en
- * un toque que «Crea tu cuenta»: redirect con `state` `alta:`, canje al volver.
+ * un toque que «Crea tu cuenta»: redirect con `state` `crear:<challenge>` (D268; `alta:` sin el binding), canje al volver.
  * Apagado, igual que antes.
  *
  * Costuras del mock: `payme.app.mock.google_redirect.v1` (fase 1),
@@ -78,7 +78,8 @@ async function marcarCasillas(page: Page): Promise<void> {
 async function entrarSinCuenta(page: Page): Promise<void> {
   await page.goto('/');
   await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
-  await expect(google(page)).not.toHaveAttribute('data-state', /.*/);
+  // D268 · S-02 · «Entrar» lleva `entrar:<challenge>`, no el de alta.
+  await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
   await google(page).click();
   await expect(paso(page)).toBeVisible();
 }
@@ -90,10 +91,10 @@ test.describe('AF-HIGIENE-ALTA · alta con Google después de «Entrar» sin cue
     await entrarSinCuenta(page);
 
     // El botón del paso es el alta en un toque: redirect, el MISMO login_uri y
-    // state `alta:<id>`. No pide datos: los pone Google.
+    // state `crear:<challenge>` (D268). No pide datos: los pone Google.
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
     await expect(google(page)).toHaveAttribute('data-login-uri', LOGIN_URI);
-    await expect(google(page)).toHaveAttribute('data-state', /^alta:[0-9a-f-]{36}$/);
+    await expect(google(page)).toHaveAttribute('data-state', /^crear:[A-Za-z0-9_-]{43}$/);
     // `exact`: sin él, el texto viejo «Revisa tus datos y toca…» lo contiene y
     // el testigo pasaría por el vecino (mutante P4-L).
     await expect(page.getByText('Toca «Continuar con Google» otra vez para crear tu cuenta.', { exact: true }))
@@ -157,7 +158,7 @@ test.describe('AF-HIGIENE-ALTA · alta con Google después de «Entrar» sin cue
     for (const campo of ['Nombre', 'Apellido', 'Email']) {
       await expect(page.getByLabel(campo, { exact: true }), campo).toHaveCount(0);
     }
-    await expect(google(page)).toHaveAttribute('data-state', /^alta:[0-9a-f-]{36}$/, { timeout: 15_000 });
+    await expect(google(page)).toHaveAttribute('data-state', /^crear:[A-Za-z0-9_-]{43}$/, { timeout: 15_000 });
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
   });
 
@@ -170,7 +171,8 @@ test.describe('AF-HIGIENE-ALTA · alta con Google después de «Entrar» sin cue
     )).toBeVisible();
     await page.getByLabel('Nombre', { exact: true }).fill('Ana');
     await page.getByLabel('Apellido', { exact: true }).fill('Pérez');
-    await page.getByLabel('Email', { exact: true }).fill('ana.perez@example.com');
+    // 🔴 D268 · S-01 · sin correo: el alta con Google usa el verificado de Google.
+    await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
     await expect(google(page)).toBeVisible();
     await expect(google(page)).not.toHaveAttribute('data-ux-mode', /.*/);
     await expect(google(page)).not.toHaveAttribute('data-state', /.*/);

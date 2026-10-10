@@ -341,7 +341,8 @@ export interface GoogleButtonOptions {
    */
   readonly redirect?: {
     readonly loginUri: string;
-    readonly simularEnMock: (credential: string) => void;
+    /** D268 · con el `state` del botón, como lo recibe el dueño en el POST al `login_uri`. */
+    readonly simularEnMock: (credential: string, state?: string) => void;
     /**
      * AF-GOOGLE-ALTA-REDIRECT · el `state` del botón. Sin él, el de siempre
      * (fase 1, «Entrar»). Con `alta:<id>`, el dueño lo toma como «Crea tu
@@ -439,7 +440,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
       }
       if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord || mockDelivered) return;
       mockDelivered = true;
-      redirect.simularEnMock(credencialMock());
+      redirect.simularEnMock(credencialMock(), redirect.state);
     });
     options.container.append(button);
     mountPromise = Promise.resolve();

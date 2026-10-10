@@ -83,8 +83,8 @@ describe('D-FF-1 · cableado owner→formulario', () => {
 
     // AF-GOOGLE-ALTA-REDIRECT · el quinto: el canje del alta en la misma
     // pestaña (decisión 102). La invitación viaja en el contexto guardado y se
-    // suelta SÓLO si la cuenta nació, después de la sesión.
-    const altaSend = login.indexOf('googleRedirectSignup({ code, ...ctx })');
+    // suelta SÓLO si la cuenta nació, después de la sesión. D268 · con el verifier del inicio.
+    const altaSend = login.indexOf('googleRedirectSignup({ code, ...ctx, ...verifierDe(inicio) })');
     const altaClear = login.indexOf(
       'if (created && ctx.invitation_token !== undefined) clearSignupInvitation();',
       altaSend,

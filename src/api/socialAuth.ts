@@ -106,6 +106,14 @@ export interface SocialAuthState {
    * dueño (wire §1). Apagado ⇒ el vínculo en popup de hoy.
    */
   readonly googleRedirectLink: GoogleRedirectCapability;
+  /**
+   * D268 · S-02 · `features.google_redirect_binding` (App Backend 2.178.0): el
+   * canje del redirect atado al navegador que lo empezó (`entrar:`/`crear:` +
+   * challenge y `verifier` al canjear). Bloque hermano, claves exactas
+   * `['supported']`, `supported === true`. Ausente o con otra forma ⇒ `false`:
+   * el redirect de antes, con el registro «sin binding».
+   */
+  readonly googleRedirectBinding: boolean;
 }
 
 const GOOGLE_CONTINUE_OFF: GoogleContinueCapability = { supported: false, oneTapSignup: false };
@@ -142,6 +150,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     googleRedirect: GOOGLE_REDIRECT_OFF,
     googleRedirectSignup: GOOGLE_REDIRECT_OFF,
     googleRedirectLink: GOOGLE_REDIRECT_OFF,
+    googleRedirectBinding: false,
   };
 }
 
@@ -295,6 +304,13 @@ function decodeGoogleRedirect(raw: unknown): GoogleRedirectCapability {
   return { enabled: raw.enabled === true };
 }
 
+/** D268 · la clave exacta de `features.google_redirect_binding` (v2.178.0). */
+const GOOGLE_REDIRECT_BINDING_KEYS = ['supported'] as const;
+
+function decodeGoogleRedirectBinding(raw: unknown): boolean {
+  return plainObject(raw) && exactKeys(raw, GOOGLE_REDIRECT_BINDING_KEYS) && raw.supported === true;
+}
+
 /** Decodifica toda la capability como conjunto cerrado y conserva password. */
 export function readSocialAuthCapability(config: unknown): SocialAuthState {
   if (!plainObject(config)) return closed('malformed');
@@ -353,6 +369,7 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     googleRedirectLink: google.linking && decodeGoogleRedirect(features.google_redirect).enabled
       ? decodeGoogleRedirect(features.google_redirect_link)
       : GOOGLE_REDIRECT_OFF,
+    googleRedirectBinding: decodeGoogleRedirectBinding(features.google_redirect_binding),
   };
 }
 
@@ -487,6 +504,8 @@ export interface GoogleContinueRequest {
  */
 export interface GoogleRedirectSignupRequest {
   readonly code: string;
+  /** D268 · S-02 · el verifier del par, si el alta empezó con `crear:<challenge>`. */
+  readonly verifier?: string;
   readonly accepted_notice_version: string;
   readonly legal_acceptance?: LegalAcceptanceRequest;
   readonly invitation_token?: string;

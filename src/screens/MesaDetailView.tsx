@@ -77,6 +77,12 @@ export type SolicitudesDeUnirse =
 
 export interface MesaDetailViewProps {
   mesa: MesaDetail;
+  /**
+   * D268 · S-05 · el dueño respondió `403 invitation_not_accepted`: la invitación
+   * a esta mesa sigue pendiente. Se dice y se ofrece ir a Avisos, donde se acepta.
+   */
+  invitacionPendiente?: boolean;
+  onVerAvisos?: () => void;
   code: string;
   /** Nombre completo editable de la sesión, para la fila 1 de la cabecera. */
   userName?: string;
@@ -403,6 +409,8 @@ function HojaAntesDeCerrar({
 
 export function MesaDetailView({
   mesa,
+  invitacionPendiente = false,
+  onVerAvisos,
   code,
   userName,
   isGuest,
@@ -971,6 +979,16 @@ export function MesaDetailView({
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
         {avisoPagoCongelado}
+        {invitacionPendiente && (
+          <div className="note note-orange" role="alert" style={{ marginBottom: 12 }}>
+            {t('Primero acepta la invitación a esta mesa.')}
+            {onVerAvisos && (
+              <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onVerAvisos}>
+                {t('Ver avisos')}
+              </button>
+            )}
+          </div>
+        )}
         {!esConsumo && informativeReadOnly && (
           <div className="note note-teal" style={{ marginBottom: 12 }}>
             {informativeClosedWithoutCharges && (

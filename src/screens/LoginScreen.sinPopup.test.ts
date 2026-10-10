@@ -28,7 +28,7 @@ describe('AF-ALTA-POPUP-D106 · qué botón abre Google en una ventana aparte', 
     ['el alta con los datos del formulario (siempre popup)', {
       ...base,
       purpose: 'register',
-      alta: { tipo: 'publica', email: 'ana@example.com' },
+      alta: { tipo: 'publica' },
       firstName: 'Ana',
       lastName: 'Demo',
     }, true],

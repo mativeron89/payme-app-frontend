@@ -446,7 +446,6 @@ export const EN: Record<string, string> = {
   // invitación, porque con el alta abierta puede no haber ninguna.
   "No pudimos crear la cuenta. Prueba de nuevo en un momento.": "We couldn't create the account. Try again in a moment.",
   "No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.": "We couldn't create the account. If you already have one, sign in or reset your password.",
-  "Escribe tu correo aquí arriba para continuar con Google.": "Enter your email above to continue with Google.",
   "No pudimos verificar la garantía. Reintenta esta misma confirmación; no abras otra mesa.": "We couldn't verify the guarantee. Retry this same confirmation; don't open another table.",
   "No pudimos verificar una identidad segura para esta garantía.": "We couldn't verify a secure identity for this guarantee.",
   "No pudimos verificar una identidad segura para este pago.": "We couldn't verify a secure identity for this payment.",
@@ -713,6 +712,9 @@ export const EN: Record<string, string> = {
   "Volver": "Back",
   "Volver a editar": "Go back and edit",
   "Ya no quedan partes por pagar en esta mesa.": "There are no shares left to pay on this table.",
+  // D268 · S-05 · la invitación a la mesa sigue pendiente (403 invitation_not_accepted).
+  "Primero acepta la invitación a esta mesa.": "First accept the invitation to this table.",
+  "Ver avisos": "See notifications",
   "Ya pagaste": "You already paid",
   "Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.": "We already know how it turned out: you can resend it as-is from the button below.",
   "Ya tengo cuenta · Entrar": "I already have an account · Log in",

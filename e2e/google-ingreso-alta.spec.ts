@@ -85,7 +85,9 @@ test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adent
   // id_token): sugerencia, no autoridad.
   await expect(page.getByLabel('Nombre', { exact: true })).toHaveValue('Ana');
   await expect(page.getByLabel('Apellido', { exact: true })).toHaveValue('Demo');
-  await expect(page.getByLabel('Email', { exact: true })).toHaveValue('ana.demo@payme.local');
+  // 🔴 D268 · S-01 · el correo no se pide ni se muestra: la cuenta toma el
+  // verificado de Google (App Backend 2.178.0).
+  await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
   await capturar(page, '02-crea-tu-cuenta-con-google');
 
   // Si falta un dato, el botón de Google espera y la pantalla dice qué falta
@@ -97,7 +99,6 @@ test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adent
   // Editable: lo que la persona escribe gana sobre la sugerencia.
   await page.getByLabel('Nombre', { exact: true }).fill('Nora');
   await page.getByLabel('Apellido', { exact: true }).fill('Nueva');
-  await page.getByLabel('Email', { exact: true }).fill('nora@ejemplo.mx');
   await capturar(page, '03-datos-completos');
 
   // El token del ingreso fallido ya está consumido en el dueño: un toque más.
@@ -151,7 +152,8 @@ test('«Crea tu cuenta» empieza por Google: un toque, datos confirmados y adent
   // persona sólo confirma.
   await expect(page.getByLabel('Nombre', { exact: true })).toHaveValue('Ana');
   await expect(page.getByLabel('Apellido', { exact: true })).toHaveValue('Demo');
-  await expect(page.getByLabel('Email', { exact: true })).toHaveValue('ana.demo@payme.local');
+  // 🔴 D268 · S-01 · sin campo de correo: el de Google, verificado.
+  await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
   await expect(crear).toBeEnabled();
   // Sugerencia, no autoridad: sin nombre no se puede crear, y lo editado gana.
   await page.getByLabel('Nombre', { exact: true }).fill('');

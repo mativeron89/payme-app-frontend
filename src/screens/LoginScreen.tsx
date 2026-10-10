@@ -20,12 +20,18 @@ import {
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
-import { GOOGLE_REDIRECT_LOGIN_URI, simularIdaYVueltaMock } from '../api/googleRedirect';
+import { GOOGLE_REDIRECT_LOGIN_URI, simularIdaYVueltaMock, vueltaGoogleRedirectSnapshot } from '../api/googleRedirect';
+import {
+  borrarInicioGoogle,
+  iniciarIngresoGoogle,
+  leerInicioGoogle,
+  verifierDe,
+  type FlujoGoogle,
+} from '../api/googleRedirectInicio';
 import {
   borrarContextoAlta,
   canjearAltaGoogle,
   codigoSigueVivo,
-  estadoDeAlta,
   guardarContextoAlta,
   hayCodigoAlta,
   leerContextoAlta,
@@ -281,8 +287,14 @@ export interface SocialActionEligibility {
   readonly legalReady: boolean;
   readonly firstName: string;
   readonly lastName: string;
-  /** D-R16 · sin invitación es la única fuente del email de la cuenta. */
+  /** D-R16 · sin invitación es la única fuente del email de la cuenta (con Facebook). */
   readonly email: string;
+  /**
+   * D268 · S-01 · Google: el correo de la cuenta es el VERIFICADO de Google
+   * (App Backend 2.178.0 ignora el `email` del cuerpo de `/google/register`). La
+   * persona no escribe ninguno: «Alta con Google en un toque», del 18/09.
+   */
+  readonly correoVerificadoDelProveedor: boolean;
   /**
    * 🔴 El proveedor exige invitación por CONTRATO, no por configuración.
    * Facebook es el caso: su `register/start` conserva `invitation_token`
@@ -301,9 +313,9 @@ export function socialActionEligible(input: SocialActionEligibility): boolean {
   if (input.requiereInvitacion && input.autoridad.tipo !== 'invitacion') return false;
   if (!input.legalReady) return false;
   if (input.firstName.trim().length === 0 || input.lastName.trim().length === 0) return false;
-  // Con alta pública el email lo escribe la persona y es la única fuente
-  // (D-R16); con invitación lo aporta la autoridad y no se pide acá.
-  if (input.autoridad.tipo === 'publica' && input.email.trim().length === 0) return false;
+  // Con alta pública y Facebook el email lo escribe la persona (D-R16); con
+  // invitación lo aporta la autoridad; con Google (D268 · S-01), Google.
+  if (input.autoridad.tipo === 'publica' && !input.correoVerificadoDelProveedor && input.email.trim().length === 0) return false;
   return true;
 }
 
@@ -393,14 +405,13 @@ export type GoogleActionAuthority =
       readonly clientId: string;
       readonly locale: 'es' | 'en';
       /**
-       * Exactamente UNA de las dos, nunca las dos ni ninguna: es el tipo el que
-       * hace imposible mandar `email` junto a una invitación —que el dueño
-       * resolvería como `registration_not_available`— y mandar un alta pública
-       * sin email, que es su única fuente.
+       * Con invitación, la invitación; con el alta pública, nada más: D268 ·
+       * S-01 · el correo de la cuenta es el verificado de Google, y el front no
+       * manda ninguno (el tipo hace imposible mandarlo).
        */
       readonly alta:
         | { readonly tipo: 'invitacion'; readonly invitationToken: string }
-        | { readonly tipo: 'publica'; readonly email: string };
+        | { readonly tipo: 'publica' };
       readonly firstName: string;
       readonly lastName: string;
     };
@@ -580,7 +591,6 @@ export function LoginScreen({
 
   const autoridad = autoridadDeAlta(signup, social.publicRegistration);
   const signupAvailable = autoridad !== null;
-  const altaPublica = autoridad?.tipo === 'publica';
   /**
    * El paso «Crea tu cuenta con Google» pide SÓLO lo que el dueño exige para
    * `google_register`: sin contraseña ni «Registrarme». Se deriva —no se
@@ -674,6 +684,7 @@ export function LoginScreen({
       firstName,
       lastName,
       email,
+      correoVerificadoDelProveedor: true,
       requiereInvitacion: false,
     }) && social.google.webClientId !== null));
   const facebookEligible = !pasoGoogle && socialActionEligible({
@@ -685,38 +696,13 @@ export function LoginScreen({
     firstName,
     lastName,
     email,
+    correoVerificadoDelProveedor: false,
     // Facebook conserva `invitation_token` OBLIGATORIO en su register/start:
     // no entra al alta pública aunque el dueño la abra.
     requiereInvitacion: true,
   });
 
-  /**
-   * 🔴 D-R16 · el botón de Google vive ARRIBA del campo de correo, y con el alta
-   * pública ese correo es requisito. Sin este aviso la persona ve desaparecer el
-   * botón y no tiene forma de saber por qué: es el callejón sin salida clásico
-   * —un requisito que no se explica donde se necesita—.
-   *
-   * Se calcula preguntando por lo mismo que gatea el botón, con el email como
-   * única diferencia: si con un correo cualquiera sería elegible, entonces lo
-   * único que falta es el correo y eso es exactamente lo que se dice.
-   */
-  const faltaCorreoParaAltaSocial = pasoGoogle
-    && !tieneCredencial
-    && !pasoGoogleRedirect
-    && !perfilActivo
-    && altaPublica
-    && email.trim().length === 0
-    && social.google.webClientId !== null
-    && socialActionEligible({
-      mode,
-      providerActionEnabled: social.google.enabled && social.google.registration,
-      autoridad,
-      legalReady,
-      firstName,
-      lastName,
-      email: 'x@x.x',
-      requiereInvitacion: false,
-    });
+  // D268 · S-01 · Google ya no pide el correo: no hay aviso de correo que falte.
 
   const autoridadSinGuarda = useMemo<GoogleActionAuthority | null>(() => {
     const clientId = social.google.webClientId;
@@ -764,8 +750,7 @@ export function LoginScreen({
     if (!autoridad || legal.status !== 'ready') return null;
     const alta = autoridad.tipo === 'invitacion'
       ? { tipo: 'invitacion' as const, invitationToken: autoridad.token }
-      : { tipo: 'publica' as const, email: email.trim() };
-    if (alta.tipo === 'publica' && alta.email.length === 0) return null;
+      : { tipo: 'publica' as const };
     return {
       purpose: 'register',
       clientId,
@@ -887,30 +872,71 @@ export function LoginScreen({
     );
   }, [vueltaGoogle, descartarVueltaGoogle, social.status, t]);
 
+  /**
+   * D268 · S-02 · el `state` del botón en redirect, fabricado ANTES de dibujarlo:
+   * con el binding del dueño, el par PKCE (`entrar:`/`crear:` + challenge, y el
+   * verifier en `sessionStorage`); sin él, el de antes. Cada remonte del botón
+   * (`googleGeneration`) fabrica uno nuevo. Hasta tenerlo, el botón no se dibuja.
+   */
+  const flujoRedirect: FlujoGoogle | null = googleAuthority?.purpose === 'login' && googleAuthority.redirect ? 'entrar'
+    : googleAuthority?.purpose === 'continue' && googleAuthority.redirectAlta ? 'crear' : null;
+  const conBinding = social.googleRedirectBinding;
+  const [estadoRedirect, setEstadoRedirect] = useState<{
+    readonly flujo: FlujoGoogle;
+    readonly binding: boolean;
+    readonly generacion: number;
+    readonly state: string | undefined;
+  } | null>(null);
+  useEffect(() => {
+    if (!flujoRedirect) return undefined;
+    // Con una vuelta de ese flujo todavía viva, NO se fabrica otro par: pisaría el
+    // verifier del ingreso en curso (el alta reintenta con el MISMO código).
+    if (flujoRedirect === 'crear' ? hayCodigoAlta() : vueltaGoogleRedirectSnapshot().estado === 'codigo') return undefined;
+    let vivo = true;
+    iniciarIngresoGoogle(flujoRedirect, conBinding).then(
+      (state) => { if (vivo) setEstadoRedirect({ flujo: flujoRedirect, binding: conBinding, generacion: googleGeneration, state }); },
+      () => {
+        if (!vivo) return;
+        setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+        setGoogleLoadFailed(true);
+      },
+    );
+    return () => { vivo = false; };
+  }, [flujoRedirect, conBinding, googleGeneration, t, vueltaGoogle.fase]);
+  const estadoListo = estadoRedirect !== null && estadoRedirect.flujo === flujoRedirect
+    && estadoRedirect.binding === conBinding && estadoRedirect.generacion === googleGeneration
+    ? estadoRedirect
+    : null;
+
   useEffect(() => {
     googleHandle.current?.dispose();
     googleHandle.current = null;
     const container = googleContainer;
     const authority = googleAuthority;
     if (!authority || !container || googleLoadFailed) return;
+    // D268 · en redirect, el botón espera su `state` (el par del binding).
+    if (flujoRedirect !== null && estadoListo === null) return;
     let active = true;
     let handle: GoogleButtonHandle;
     // RM-182 · 5a · diagnóstico sin PII del popup que no vuelve (Safari).
     let vigia: VigiaPopupGoogle | null = null;
     // AF-GOOGLE-REDIRECT · en la misma pestaña Google vuelve por el `login_uri`
     // y el canje ocurre al volver (AuthContext): acá no llega ninguna credencial.
-    const redirect = authority.purpose === 'login' && authority.redirect
+    // D268 · S-02 · con el binding, `entrar:<challenge>`; sin él, sin `state` (el de siempre).
+    const redirect = authority.purpose === 'login' && authority.redirect && estadoListo
       ? {
           loginUri: GOOGLE_REDIRECT_LOGIN_URI,
-          simularEnMock: (credencial: string) => { void simularIdaYVueltaMock(credencial); },
+          ...(estadoListo.state !== undefined ? { state: estadoListo.state } : {}),
+          simularEnMock: (credencial: string, state?: string) => { void simularIdaYVueltaMock(credencial, state); },
         }
       // AF-GOOGLE-ALTA-REDIRECT · el mismo `login_uri`, con el `state` de alta
-      // (wire D102 §2). El canje ocurre al volver (`canjearAlta`).
-      : authority.purpose === 'continue' && authority.redirectAlta
+      // (wire D102 §2): D268 `crear:<challenge>` con el binding, `alta:<id>` sin él.
+      // El canje ocurre al volver (`canjearAlta`).
+      : authority.purpose === 'continue' && authority.redirectAlta && estadoListo?.state !== undefined
         ? {
             loginUri: GOOGLE_REDIRECT_LOGIN_URI,
-            state: estadoDeAlta(),
-            simularEnMock: (credencial: string) => { void simularIdaYVueltaAltaMock(credencial); },
+            state: estadoListo.state,
+            simularEnMock: (credencial: string, state?: string) => { void simularIdaYVueltaAltaMock(credencial, state); },
           }
         : undefined;
     try {
@@ -994,16 +1020,15 @@ export function LoginScreen({
               if (authority.purpose === 'login') {
                 await googleLogin(credential);
               } else {
-                // 🔴 El body es condicional a la autoridad, y es el ÚNICO de
-                // todo el alta que lo es: el DTO social del dueño acepta `email`
-                // SÓLO con el alta abierta y es `strict` con el alta cerrada.
+                // D268 · S-01 · sin `email`: el dueño usa el verificado de Google.
+                // Con invitación, la invitación.
                 await googleRegister({
                   id_token: credential,
                   first_name: authority.firstName,
                   last_name: authority.lastName,
                   ...(authority.alta.tipo === 'invitacion'
                     ? { invitation_token: authority.alta.invitationToken }
-                    : { email: authority.alta.email }),
+                    : {}),
                   ...conAceptacion(),
                 });
                 // Sólo hay algo que soltar si se usó una invitación.
@@ -1080,7 +1105,7 @@ export function LoginScreen({
       handle.dispose();
       if (googleHandle.current === handle) googleHandle.current = null;
     };
-  }, [googleAuthority, googleContainer, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t]);
+  }, [googleAuthority, googleContainer, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t, flujoRedirect, estadoListo]);
 
   /**
    * 🔴 AF-17 · un toque en «Continuar con Google». El dueño decide si entra o
@@ -1392,9 +1417,13 @@ export function LoginScreen({
     setError(null);
     setAltaVuelta('canjeando');
     try {
-      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx }));
+      // D268 · S-02 · sólo si este navegador empezó el alta: con su verifier, o «sin binding».
+      const inicio = leerInicioGoogle('crear');
+      if (!inicio) throw new Error('google_signup_no_iniciado');
+      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx, ...verifierDe(inicio) }));
       olvidarCodigoAlta();
       borrarContextoAlta();
+      borrarInicioGoogle('crear');
       contextoAlta.current = null;
       setAltaVuelta('nada');
       // La invitación se consume sólo si la cuenta NACIÓ con ella.
@@ -1424,6 +1453,7 @@ export function LoginScreen({
       }
       olvidarCodigoAlta();
       borrarContextoAlta();
+      borrarInicioGoogle('crear');
       contextoAlta.current = null;
       setAltaVuelta('nada');
       const actual = socialAuthSnapshot();
@@ -1465,6 +1495,14 @@ export function LoginScreen({
   // haya un código en memoria.
   useEffect(() => {
     if (altaVuelta !== 'canjeando' || !hayCodigoAlta()) return;
+    // D268 · S-02 · sin el registro de inicio, este navegador no empezó el alta: no se canjea.
+    if (!leerInicioGoogle('crear')) {
+      olvidarCodigoAlta();
+      borrarContextoAlta();
+      setAltaVuelta('nada');
+      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      return;
+    }
     const ctx = leerContextoAlta();
     if (ctx) {
       void canjearAlta(ctx);
@@ -1518,6 +1556,7 @@ export function LoginScreen({
   function abandonarAlta() {
     olvidarCodigoAlta();
     borrarContextoAlta();
+    borrarInicioGoogle('crear');
     contextoAlta.current = null;
     setAltaVuelta('nada');
     setError(null);
@@ -1576,6 +1615,7 @@ export function LoginScreen({
       firstName,
       lastName,
       email,
+      correoVerificadoDelProveedor: true,
       requiereInvitacion: false,
     })) return;
     if (!tryAcquireAuthAction()) return;
@@ -1588,9 +1628,8 @@ export function LoginScreen({
         id_token: credential,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        ...(autoridad.tipo === 'invitacion'
-          ? { invitation_token: autoridad.token }
-          : { email: email.trim() }),
+        // D268 · S-01 · sin `email`: el dueño usa el verificado de Google.
+        ...(autoridad.tipo === 'invitacion' ? { invitation_token: autoridad.token } : {}),
         ...conAceptacion(),
       });
       if (autoridad.tipo === 'invitacion') clearSignupInvitation();
@@ -1684,10 +1723,8 @@ export function LoginScreen({
   const faltanDatosParaGoogle = pasoGoogle
     && !tieneCredencial
     && legal.status === 'ready'
-    && !googleEligible
-    && !faltaCorreoParaAltaSocial;
-  const haySocial = (googleEligible && !capturaGoogle) || facebookEligible
-    || faltaCorreoParaAltaSocial || faltanDatosParaGoogle;
+    && !googleEligible;
+  const haySocial = (googleEligible && !capturaGoogle) || facebookEligible || faltanDatosParaGoogle;
 
   /**
    * El contenedor de GIS existe UNA sola vez en la pantalla: arriba en «Crea tu
@@ -1997,7 +2034,9 @@ export function LoginScreen({
               no se pide, porque no viaja. */}
           {/* AF-17 · en el reintento de `profile_required` tampoco: el correo
               es el verificado de Google, `continue` no acepta otro. */}
-          {!(pasoGoogle && (autoridad?.tipo === 'invitacion' || perfilActivo || pasoGoogleRedirect)) && (
+          {/* D268 · S-01 · en el paso de Google, nunca: el correo de la cuenta es
+              el verificado de Google, y no se escribe a mano. */}
+          {!pasoGoogle && (
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Email')}</span>
             <input
@@ -2096,6 +2135,7 @@ export function LoginScreen({
                   firstName,
                   lastName,
                   email,
+                  correoVerificadoDelProveedor: true,
                   requiereInvitacion: false,
                 })}
             >
@@ -2174,11 +2214,6 @@ export function LoginScreen({
                 {faltanDatosParaGoogle && (
                   <p className="note note-orange note-datos-google" role="status">
                     {t('Escribe tu nombre y apellido aquí arriba para continuar con Google.')}
-                  </p>
-                )}
-                {faltaCorreoParaAltaSocial && (
-                  <p className="note note-orange note-correo-social" role="status">
-                    {t('Escribe tu correo aquí arriba para continuar con Google.')}
                   </p>
                 )}
                 {googleEligible && !capturaGoogle && ranuraGoogle}

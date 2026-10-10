@@ -25,6 +25,7 @@ import {
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { esInvitacionNoAceptada } from '../api/invitacionNoAceptada';
 import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import { mesaClosureView, mesaPaymentOutcome } from '../api/paymentStatus';
@@ -421,6 +422,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * cada toque con un «intenta de nuevo» que no es cierto.
    */
   const [soltarNoDisponible, setSoltarNoDisponible] = useState(false);
+  // D268 · S-05 · el dueño dijo que la invitación a esta mesa sigue pendiente.
+  const [invitacionPendiente, setInvitacionPendiente] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const cerrandoRef = useRef(false);
   const [cerrarRetirado, setCerrarRetirado] = useState(false);
@@ -1022,7 +1025,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         : t('No había nada para soltar.'));
     } catch (err) {
       const { code: ec, status, extra } = extractApiError(err);
-      if (status === 404 && typeof extra.item_id !== 'string') {
+      if (esInvitacionNoAceptada(err)) {
+        setInvitacionPendiente(true);
+      } else if (status === 404 && typeof extra.item_id !== 'string') {
         setSoltarNoDisponible(true);
         toast(t('Soltar todavía no está disponible.'));
       } else {
@@ -1139,7 +1144,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
-        if (ec === 'fraction_not_available') {
+        if (esInvitacionNoAceptada(err)) {
+          setInvitacionPendiente(true);
+        } else if (ec === 'fraction_not_available') {
           const rem = typeof extra.remaining_bps === 'number' ? extra.remaining_bps : 0;
           toast(rem > 0 ? t('De ese plato queda solo {0}', bpsLabel(rem)) : t('Ese plato ya está completo'));
           const itemId = typeof extra.item_id === 'string' ? extra.item_id : null;
@@ -1253,6 +1260,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           }
           if (!reconciled) {
             const failure = extractApiError(err);
+            if (esInvitacionNoAceptada(err)) {
+              setInvitacionPendiente(true);
+              return;
+            }
             if (failure.status === 404) setInformativeState('unsupported');
             // v2.124.0: los dos rechazos por N del dueño se dicen con su copy
             // (la misma que consumo), nunca como un fallo genérico de red.
@@ -2053,6 +2064,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       } else if (ec === 'no_slots_available') {
         setError(t('Ya no quedan partes por pagar en esta mesa.'));
         reload();
+      } else if (esInvitacionNoAceptada(err)) {
+        // D268 · S-05 · el 403 no cobró nada: primero se acepta la invitación.
+        setError(t('Primero acepta la invitación a esta mesa.'));
+        setInvitacionPendiente(true);
       } else if (definitivo) {
         // 4xx sin código propio: el backend dijo que NO y ya liberó lo tomado.
         // La clave se rotó arriba, así que reintentar arranca de cero.
@@ -3017,6 +3032,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onSetDenominator={setDenominator}
       onGoToPay={goToPay}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
+      invitacionPendiente={invitacionPendiente}
+      onVerAvisos={() => navigate('avisos')}
       pagosCortados={CORTE.pagosCortados}
       // El corte DECLARADO por el dueño: sólo con el riel autoritativo. Ver el
       // porqué en la prop de `MesaDetailView`.

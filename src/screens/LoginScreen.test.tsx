@@ -40,6 +40,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
       firstName: 'Mati',
       lastName: 'Verón',
       email: '',
+      correoVerificadoDelProveedor: false,
       requiereInvitacion: false,
     };
     expect(socialActionEligible({ ...base, mode: 'login' })).toBe(true);
@@ -76,12 +77,14 @@ describe('LoginScreen · gates sociales owner-first', () => {
   });
 
   /**
-   * D-R16 · sin invitación, el email que la persona escribe es la ÚNICA fuente
-   * del email de la cuenta (`request_notes.email` del contrato). Por eso con
-   * autoridad pública el botón de Google no puede habilitarse sin él, y con
-   * invitación sí: ahí el email lo pone la invitación.
+   * D-R16 · sin invitación y con un proveedor que no lo verifica (Facebook), el
+   * email que la persona escribe es la ÚNICA fuente del email de la cuenta: con
+   * autoridad pública el botón no puede habilitarse sin él, y con invitación sí.
+   *
+   * 🔴 D268 · S-01 · con Google, no: el dueño 2.178.0 usa el correo VERIFICADO de
+   * Google e ignora el del cuerpo. El alta con Google no pide ningún correo.
    */
-  it('con alta pública el email es obligatorio para el alta social; con invitación no', () => {
+  it('con alta pública el email es obligatorio para el alta social sin correo verificado; con Google o con invitación, no', () => {
     const base = {
       mode: 'register',
       providerActionEnabled: true,
@@ -92,12 +95,15 @@ describe('LoginScreen · gates sociales owner-first', () => {
     } as const;
     const publica = { tipo: 'publica' } as const;
     const invitacion = { tipo: 'invitacion', token: 'inv-aaa' } as const;
+    const sinVerificar = { correoVerificadoDelProveedor: false } as const;
 
-    expect(socialActionEligible({ ...base, autoridad: publica, email: 'mati@payme.mx' })).toBe(true);
-    expect(socialActionEligible({ ...base, autoridad: publica, email: '   ' })).toBe(false);
-    expect(socialActionEligible({ ...base, autoridad: publica, email: '' })).toBe(false);
+    expect(socialActionEligible({ ...base, ...sinVerificar, autoridad: publica, email: 'mati@payme.mx' })).toBe(true);
+    expect(socialActionEligible({ ...base, ...sinVerificar, autoridad: publica, email: '   ' })).toBe(false);
+    expect(socialActionEligible({ ...base, ...sinVerificar, autoridad: publica, email: '' })).toBe(false);
     // Con invitación el email no se exige: lo aporta la autoridad del dueño.
-    expect(socialActionEligible({ ...base, autoridad: invitacion, email: '' })).toBe(true);
+    expect(socialActionEligible({ ...base, ...sinVerificar, autoridad: invitacion, email: '' })).toBe(true);
+    // D268 · S-01 · con Google, el correo es el verificado: sin escribir ninguno.
+    expect(socialActionEligible({ ...base, correoVerificadoDelProveedor: true, autoridad: publica, email: '' })).toBe(true);
   });
 
   /**
@@ -116,6 +122,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
       firstName: 'Mati',
       lastName: 'Verón',
       email: 'mati@payme.mx',
+      correoVerificadoDelProveedor: false,
       requiereInvitacion: true,
     } as const;
     expect(socialActionEligible({ ...base, autoridad: { tipo: 'publica' } })).toBe(false);
@@ -303,5 +310,26 @@ describe('LoginScreen · rediseño del 2026-09-17', () => {
     expect(source).toContain("t('Términos de Uso')");
     expect(source).toContain("paquete.status === 'ready'");
     expect(source).toContain("status: extractApiError(err).status === 404 ? 'unavailable' : 'error'");
+  });
+});
+
+describe('🔴 D268 · S-01 · el alta con Google no escribe el correo a mano', () => {
+  const fuente = readFileSync(new URL('./LoginScreen.tsx', import.meta.url), 'utf8');
+
+  it('ningún envío a /google/register lleva `email`: el dueño usa el verificado de Google', () => {
+    const envios = [...fuente.matchAll(/await googleRegister\(\{([\s\S]*?)\}\);/g)].map((m) => m[1]!);
+    expect(envios).toHaveLength(2);
+    // Se mira el código, no los comentarios: el que explica por qué no va, nombra `email`.
+    for (const cuerpo of envios) expect(cuerpo.replace(/\/\/[^\n]*/g, '')).not.toMatch(/\bemail\b/);
+  });
+
+  it('en el paso de Google no hay campo de correo', () => {
+    const campo = fuente.indexOf('type="email"');
+    const guarda = fuente.lastIndexOf('{!pasoGoogle && (', campo);
+    expect(campo).toBeGreaterThan(-1);
+    expect(guarda).toBeGreaterThan(-1);
+    // Entre la guarda y el campo no hay otro bloque que lo vuelva a abrir.
+    expect(fuente.slice(guarda, campo)).not.toMatch(/\)\}\s*\{/);
+    expect(fuente).not.toContain('Escribe tu correo aquí arriba para continuar con Google.');
   });
 });

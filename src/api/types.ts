@@ -258,6 +258,8 @@ export interface AppConfig {
     google_redirect_signup?: unknown;
     /** AF-VINCULAR-GOOGLE · App Backend v2.141.0 · `{ supported, enabled }`, igual que la fase 1. */
     google_redirect_link?: unknown;
+    /** D268 · S-02 · App Backend v2.178.0 · `{ supported: true }`: el canje del redirect atado al navegador. */
+    google_redirect_binding?: unknown;
     /** AF-USUARIO-ARROBA · v2.137.0 · el @usuario; se decodifica en `username.ts`. */
     username?: unknown;
     /**

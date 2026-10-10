@@ -27,9 +27,12 @@ import type {
 import { volverAlIngreso } from '../router';
 import {
   canjearVueltaGoogleRedirectUnaVez,
+  descartarVueltaGoogleRedirect,
   olvidarVueltaGoogleRedirect,
   vueltaGoogleRedirectSnapshot,
 } from '../api/googleRedirect';
+import { olvidarCodigoAlta, vueltaAltaSnapshot } from '../api/googleAltaRedirect';
+import { borrarInicioGoogle, tomarInicioGoogle, type InicioGoogle } from '../api/googleRedirectInicio';
 import { extractApiError } from '../api/errors';
 import { useInicioTrasIngreso } from './useInicioTrasIngreso';
 
@@ -53,6 +56,26 @@ export type VueltaGoogle =
   | { readonly fase: 'idle' }
   | { readonly fase: 'processing' }
   | { readonly fase: 'error'; readonly motivo: MotivoVueltaGoogle };
+
+/**
+ * D268 · S-02 · con la sesión abierta, una vuelta de Google NO se canjea sola:
+ * un link con `#google_redirect=<código>` o `#google_signup=<código>` cambiaba
+ * de cuenta. Se descarta antes del primer cuadro —el código sale de la memoria
+ * sin llegar a ninguna request— junto con lo que el inicio dejó guardado.
+ * Devuelve la sesión con la que arranca el provider.
+ */
+function sesionInicialSinVueltaAjena(): StoredSession | null {
+  const sesion = api.restoreSession();
+  if (sesion && vueltaGoogleRedirectSnapshot().estado === 'codigo') {
+    descartarVueltaGoogleRedirect();
+    borrarInicioGoogle('entrar');
+  }
+  if (sesion && vueltaAltaSnapshot().estado === 'codigo') {
+    olvidarCodigoAlta();
+    borrarInicioGoogle('crear');
+  }
+  return sesion;
+}
 
 function vueltaGoogleInicial(): VueltaGoogle {
   const v = vueltaGoogleRedirectSnapshot();
@@ -112,7 +135,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<StoredSession | null>(() => api.restoreSession());
+  const [session, setSession] = useState<StoredSession | null>(sesionInicialSinVueltaAjena);
   const [facebookCallbackPhase, setFacebookCallbackPhase] = useState<FacebookCallbackPhase>(
     initialFacebookCallbackPhase,
   );
@@ -127,10 +150,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Inicio (AF-INICIO-TRAS-INGRESO) siguen su curso de siempre.
    */
   const [vueltaGoogle, setVueltaGoogle] = useState<VueltaGoogle>(vueltaGoogleInicial);
+  // El registro de inicio se TOMA una sola vez: `StrictMode` corre el efecto dos
+  // veces y la segunda no lo encontraría (lo borró la primera).
+  const inicioDeLaVuelta = useRef<InicioGoogle | null | undefined>(undefined);
   useEffect(() => {
     if (vueltaGoogleRedirectSnapshot().estado !== 'codigo') return;
     let vivo = true;
-    canjearVueltaGoogleRedirectUnaVez((codigo) => api.googleRedirectRedeem(codigo))
+    // D268 · S-02 · se canjea SÓLO si este navegador empezó ese ingreso: con su
+    // verifier (`entrar:<challenge>`) o, si el dueño no publica el binding, con
+    // el registro «sin binding». Sin registro, el código no se empezó acá.
+    if (inicioDeLaVuelta.current === undefined) inicioDeLaVuelta.current = tomarInicioGoogle('entrar');
+    const inicio = inicioDeLaVuelta.current;
+    if (!inicio) {
+      descartarVueltaGoogleRedirect();
+      setVueltaGoogle({ fase: 'error', motivo: 'codigo_invalido' });
+      return;
+    }
+    canjearVueltaGoogleRedirectUnaVez((codigo) => api.googleRedirectRedeem(codigo, inicio.binding ? inicio.verifier : undefined))
       .then(() => {
         olvidarVueltaGoogleRedirect();
         setSession(loadSession());

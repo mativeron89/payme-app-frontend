@@ -476,6 +476,60 @@ export function googleRedirectMock(): boolean {
   return leerSeam(CLAVE_GOOGLE_REDIRECT) === 'true';
 }
 
+/**
+ * D268 · S-02 · seam de `features.google_redirect_binding` (App Backend 2.178.0,
+ * servido): se publica por defecto, como el dueño; con `'apagado'`, no (un
+ * dueño anterior). El canje se ata al challenge del `state` (`entrar:`/`crear:`).
+ */
+export const CLAVE_GOOGLE_BINDING_MOCK = 'payme.app.mock.google_redirect_binding.v1';
+
+export function googleBindingMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_BINDING_MOCK) !== 'apagado';
+}
+
+/**
+ * D268 · S-05 · costura: el código de una mesa a la que ESTE usuario entra sólo
+ * con la invitación pendiente. Como el dueño 2.178.0 (`requireMesaParticipant`,
+ * `contract/mesa-acceso-v1.json#/invitacion_pendiente`): ve la mesa, pero tomar,
+ * soltar, guardar la selección o pagar responde `403 invitation_not_accepted`,
+ * antes de mirar el pedido.
+ */
+export const CLAVE_INVITACION_PENDIENTE_MOCK = 'payme.app.mock.invitacion_pendiente.v1';
+
+function invitacionPendienteMock(code: string): boolean {
+  const valor = leerSeam(CLAVE_INVITACION_PENDIENTE_MOCK);
+  return valor !== null && valor.toUpperCase() === code.toUpperCase();
+}
+
+const CHALLENGE_MOCK = '[A-Za-z0-9_-]{43}';
+const VERIFIER_MOCK = /^[A-Za-z0-9_-]{43,128}$/;
+
+/** El challenge del `state` (`entrar:` o `crear:`), o `null`: el código queda suelto. */
+function challengeDelEstado(state: string | undefined, prefijo: 'entrar' | 'crear'): string | null {
+  const m = typeof state === 'string' ? new RegExp(`^${prefijo}:(${CHALLENGE_MOCK})$`).exec(state) : null;
+  return m ? m[1]! : null;
+}
+
+/** base64url, sin relleno, de SHA-256(verifier), como `services/googleRedirect.js`. */
+async function challengeMock(verifier: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  let binario = '';
+  for (const b of digest) binario += String.fromCharCode(b);
+  return btoa(binario).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * D268 · ¿el canje encuentra este código? Con verifier, sólo los atados a su
+ * challenge; sin él, sólo los sueltos. Un verifier que no es texto o pasa de 256
+ * ⇒ 400; con mala forma ⇒ el 401 opaco.
+ */
+async function canjeAtado(ligado: string | null | undefined, verifier: unknown): Promise<boolean> {
+  if (verifier === undefined) return !ligado;
+  if (typeof verifier !== 'string' || verifier.length > 256) throw new MockApiError(400, 'validation_error');
+  if (!VERIFIER_MOCK.test(verifier)) return false;
+  return !!ligado && ligado === await challengeMock(verifier);
+}
+
 /** AF-GOOGLE-ALTA-REDIRECT · seam de `features.google_redirect_signup`: sólo con el `'true'` exacto. */
 export const CLAVE_GOOGLE_ALTA_REDIRECT = 'payme.app.mock.google_redirect_signup.v1';
 
@@ -520,7 +574,12 @@ function arrobaEnListaMock(payme: string | null): { username: string | null } | 
 const CLAVE_CODIGOS_GOOGLE_REDIRECT = 'payme.app.mock.google_redirect_codes.v1';
 const TTL_CODIGO_GOOGLE_REDIRECT_MS = 60_000;
 
-interface CodigoGoogleRedirectMock { readonly expira: number; readonly consumido: boolean }
+interface CodigoGoogleRedirectMock {
+  readonly expira: number;
+  readonly consumido: boolean;
+  /** D268 · el challenge al que quedó atado (`entrar:<challenge>`), o `null`: suelto. */
+  readonly ligado?: string | null;
+}
 
 function leerCodigosGoogleRedirect(): Record<string, CodigoGoogleRedirectMock> {
   try {
@@ -540,7 +599,7 @@ function guardarCodigosGoogleRedirect(codigos: Record<string, CodigoGoogleRedire
  * consume el `id_token` como `google/login` y devuelve el FRAGMENTO del 303
  * (`services/googleRedirect.js`): el código, o el error opaco sin vínculo.
  */
-export async function mockGoogleRedirectLoginUri(idToken: string): Promise<string> {
+export async function mockGoogleRedirectLoginUri(idToken: string, state?: string): Promise<string> {
   await waitSocialLatency();
   if (!validSocialCredential(idToken) || mockGoogleCredencialesConsumidas.has(idToken)
       || googleSinCuentaMock()) {
@@ -551,7 +610,11 @@ export async function mockGoogleRedirectLoginUri(idToken: string): Promise<strin
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const codigo = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const codigos = leerCodigosGoogleRedirect();
-  codigos[await sha256Hex(codigo)] = { expira: Date.now() + TTL_CODIGO_GOOGLE_REDIRECT_MS, consumido: false };
+  codigos[await sha256Hex(codigo)] = {
+    expira: Date.now() + TTL_CODIGO_GOOGLE_REDIRECT_MS,
+    consumido: false,
+    ligado: challengeDelEstado(state, 'entrar'),
+  };
   guardarCodigosGoogleRedirect(codigos);
   return `google_redirect=${codigo}`;
 }
@@ -561,7 +624,7 @@ export async function mockGoogleRedirectLoginUri(idToken: string): Promise<strin
  * `google/login`. Reusado, vencido o inexistente ⇒ `401 social_auth_failed`;
  * capability apagada ⇒ `404`.
  */
-export async function mockGoogleRedirectRedeem(code: string): Promise<StoredSession> {
+export async function mockGoogleRedirectRedeem(code: string, verifier?: string): Promise<StoredSession> {
   if (typeof code !== 'string') throw new MockApiError(400, 'validation_error');
   const origin = loadSession();
   await waitSocialLatency();
@@ -570,7 +633,7 @@ export async function mockGoogleRedirectRedeem(code: string): Promise<StoredSess
   const codigos = leerCodigosGoogleRedirect();
   const clave = await sha256Hex(code);
   const fila = codigos[clave];
-  if (!fila || fila.consumido || fila.expira <= Date.now()) {
+  if (!fila || fila.consumido || fila.expira <= Date.now() || !(await canjeAtado(fila.ligado, verifier))) {
     throw new MockApiError(401, 'social_auth_failed');
   }
   codigos[clave] = { ...fila, consumido: true };
@@ -593,7 +656,13 @@ export const CLAVE_ALTAS_PENDIENTES_MOCK = 'payme.app.mock.google_signup_pending
 const TTL_ALTA_PENDIENTE_MS = 10 * 60_000;
 const TOPE_INTENTOS_ALTA = 5;
 
-interface AltaPendienteMock { readonly expira: number; intentos: number; readonly sinNombre: boolean }
+interface AltaPendienteMock {
+  readonly expira: number;
+  intentos: number;
+  readonly sinNombre: boolean;
+  /** D268 · el challenge al que quedó atado (`crear:<challenge>`), o `null`: suelto (`alta:<id>`). */
+  readonly ligado?: string | null;
+}
 
 function leerAltasPendientes(): Record<string, AltaPendienteMock> {
   try {
@@ -613,7 +682,7 @@ function guardarAltasPendientes(altas: Record<string, AltaPendienteMock>): void 
  * dueño verifica y guarda la identidad hasta 10 min, SIN crear nada ni mirar si
  * existe una cuenta, y devuelve el mismo fragmento para todos.
  */
-export async function mockGoogleRedirectSignupLoginUri(idToken: string): Promise<string> {
+export async function mockGoogleRedirectSignupLoginUri(idToken: string, state?: string): Promise<string> {
   await waitSocialLatency();
   if (!validSocialCredential(idToken) || mockGoogleCredencialesConsumidas.has(idToken)) {
     mockGoogleCredencialesConsumidas.add(idToken);
@@ -627,13 +696,14 @@ export async function mockGoogleRedirectSignupLoginUri(idToken: string): Promise
     expira: Date.now() + TTL_ALTA_PENDIENTE_MS,
     intentos: 0,
     sinNombre: googleSinNombreMock(),
+    ligado: challengeDelEstado(state, 'crear'),
   };
   guardarAltasPendientes(altas);
   return `google_signup=${codigo}`;
 }
 
 // v2.173.0 · D252 · `referral_code` opcional (el link de invitación).
-const CLAVES_CANJE_ALTA = new Set(['code', 'accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name', 'referral_code']);
+const CLAVES_CANJE_ALTA = new Set(['code', 'verifier', 'accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name', 'referral_code']);
 
 /**
  * `POST /api/auth/google/redirect/signup` · la lógica de `continue` sin el
@@ -653,6 +723,8 @@ export async function mockGoogleRedirectSignup(data: GoogleRedirectSignupRequest
   const altas = leerAltasPendientes();
   const clave = await sha256Hex(data.code);
   const fila = altas[clave];
+  // D268 · con el verifier equivocado, o sin él para un código atado, el dueño no encuentra la fila: 401 y nada se crea.
+  if (fila && !(await canjeAtado(fila.ligado, data.verifier))) throw new MockApiError(401, 'social_auth_failed');
   if (!fila || fila.expira <= Date.now() || fila.intentos >= TOPE_INTENTOS_ALTA) {
     delete altas[clave];
     guardarAltasPendientes(altas);
@@ -875,6 +947,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       google_redirect_signup: { supported: true, enabled: googleRedirectMock() && googleAltaRedirectMock() },
       // AF-VINCULAR-GOOGLE · v2.141.0 · vincular en la misma pestaña (seam `…google_redirect_link.v1`).
       google_redirect_link: { supported: true, enabled: googleRedirectMock() && googleLinkRedirectMock() },
+      // D268 · S-02 · v2.178.0 · bloque hermano, una clave (seam `…google_redirect_binding.v1` en `'apagado'`: ausente).
+      ...(googleBindingMock() ? { google_redirect_binding: { supported: true } } : {}),
       // AF-USUARIO-ARROBA · forma exacta del dueño v2.137.0: el bloque se sirve
       // siempre, y `enabled` es `true` sólo con el seam en `'true'` exacto.
       username: { supported: true, enabled: usernameMock() },
@@ -1210,7 +1284,8 @@ export async function mockGoogleLogin(idToken: string): Promise<StoredSession> {
 export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<StoredSession> {
   // C2b · el DTO social del dueño es strict POR MODO: `email` sólo se acepta
   // con el alta abierta, y con el alta cerrada lo rechaza con `validation_error`.
-  // El mock reproduce esa distinción porque es la única del alta que existe.
+  // D268 · S-01 · y con el alta abierta se ACEPTA y se IGNORA: la cuenta toma el
+  // correo verificado de Google (el del mock es fijo).
   const traeToken = data.invitation_token !== undefined;
   const tokenSocialValido = typeof data.invitation_token === 'string'
     && data.invitation_token.length >= 20 && data.invitation_token.length <= 200;
@@ -1219,7 +1294,6 @@ export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<S
   }
   if (!validSocialCredential(data.id_token)
       || (traeToken ? !tokenSocialValido : !altaPublicaMock())
-      || (!traeToken && (typeof data.email !== 'string' || !data.email.includes('@')))
       || !data.first_name.trim() || data.first_name.length > 100
       || !data.last_name.trim() || data.last_name.length > 100) {
     throw new MockApiError(403, 'registration_not_available');
@@ -2401,6 +2475,7 @@ export async function mockReplaceInformativeSelection(
   code: string,
   req: ReplaceInformativeSelectionRequest,
 ): Promise<InformativeSelectionResponse> {
+  if (invitacionPendienteMock(code)) return fail(403, 'invitation_not_accepted');
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   settleIfExpired(mesa);
@@ -3239,6 +3314,7 @@ export async function mockLockItems(
   requests: LockFractionRequest[],
   identity: MockIdentity,
 ): Promise<LockItemsResponse> {
+  if (invitacionPendienteMock(code)) return fail(403, 'invitation_not_accepted');
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_active');
@@ -3349,6 +3425,7 @@ export async function mockReleaseItems(
     try { return localStorage.getItem('payme.app.mock.soltar.v1') === 'antiguo'; } catch { return false; }
   })();
   if (antiguo) return fail(404, 'not_found');
+  if (invitacionPendienteMock(code)) return fail(403, 'invitation_not_accepted');
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   const ids = [...itemIds];
@@ -3801,6 +3878,7 @@ export async function mockPayMesa(
   req: PayMesaRequest,
   identity: MockIdentity,
 ): Promise<PayMesaResponse> {
+  if (invitacionPendienteMock(code)) return fail(403, 'invitation_not_accepted');
   if (!validIdempotencyKey(req.idempotency_key) ||
       (req.tip_cents !== undefined && !validNonNegativeCents(req.tip_cents)) ||
       (req.tip_bps !== undefined && (!Number.isSafeInteger(req.tip_bps) || req.tip_bps < 0 || req.tip_bps > 10_000)) ||

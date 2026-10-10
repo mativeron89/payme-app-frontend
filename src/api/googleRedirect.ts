@@ -116,6 +116,16 @@ export function canjearVueltaGoogleRedirectUnaVez(
   return canjeEnVuelo;
 }
 
+/**
+ * D268 · S-02 · la vuelta NO se canjea (la sesión está abierta, o este
+ * navegador no empezó ese ingreso): el código se suelta de la memoria sin
+ * llegar a ninguna request.
+ */
+export function descartarVueltaGoogleRedirect(): void {
+  codigoPrivado = null;
+  snapshot = { estado: 'ausente' };
+}
+
 /** La pantalla ya mostró el resultado: la vuelta deja de pesar. */
 export function olvidarVueltaGoogleRedirect(): void {
   snapshot = { estado: 'ausente' };
@@ -139,7 +149,7 @@ export function navegarComoEl303(fragmento: string): void {
   window.location.reload();
 }
 
-/** Riel mock: el POST de Google al `login_uri` (el mock del dueño) y el 303. */
-export async function simularIdaYVueltaMock(credencial: string): Promise<void> {
-  navegarComoEl303(await mockGoogleRedirectLoginUri(credencial));
+/** Riel mock: el POST de Google al `login_uri` (el mock del dueño), con el `state` del botón, y el 303. */
+export async function simularIdaYVueltaMock(credencial: string, state?: string): Promise<void> {
+  navegarComoEl303(await mockGoogleRedirectLoginUri(credencial, state));
 }

@@ -11,6 +11,77 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.238.0 — Seguridad D268: el espejo sólo con el contrato, Google atado a la pestaña que lo empezó, el alta con Google sin correo a mano y la invitación pendiente en la mesa (2026-10-10)
+
+Orden AF-SEGURIDAD-D268-20261010 (9c0dc3af…), con App Backend 2.178.0 (inventario en 6424b1a, contenido de
+1664dd8). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **S-03 · el espejo público lleva sólo el contrato** (commit propio, sin reescribir la historia):
+  - `contract-mirror/` copia sólo `contract/*.json`: 13 archivos. Salen 125 (el código del servidor y los
+    documentos del dueño);
+  - el inventario del dueño se adopta sin editar: 138 entradas, y lo que no se copia queda por hash;
+  - `verificar-mirror.mjs` declara la regla `SE_COPIA`:
+    - `--integridad` (CI) exige lo copiado con su hash, que lo demás no esté (aunque sea idéntico al del dueño)
+      y que los hechos del dueño sean de archivos del inventario con su sha;
+    - `--paridad` (local) sigue verificando las 138 entradas contra el dueño;
+  - **los hechos del dueño** (`scripts/hechos-del-dueno.json`, 43 hechos de 14 fuentes):
+    - son entradas y salidas de vectores sintéticos, con el origen y el sha256 del archivo fuente;
+    - no llevan código, secretos ni datos reales;
+    - los genera `scripts/generar-hechos-del-dueno.mjs` sólo en local, con el repo del dueño: nunca corre en el
+      CI;
+    - las 11 pruebas que leían o ejecutaban el código del servidor comparan contra ellos;
+    - las dos de la identidad del pago se conservan.
+- **S-02 · la vuelta de Google por redirect se canjea sólo si esta pestaña empezó ese ingreso**
+  (`features.google_redirect_binding`, claves exactas `{ supported: true }`):
+  - **al dibujar el botón** («Entrar» o «Crea tu cuenta»):
+    - se fabrica un par PKCE: el verifier son 32 bytes en base64url, y el challenge es base64url(SHA-256), con
+      `crypto.subtle`;
+    - a Google viaja `entrar:<challenge>` o `crear:<challenge>`;
+    - el verifier queda en `sessionStorage` (`googleRedirectInicio.ts`). Nunca se guarda el código, y no se
+      loguea nada;
+    - sin `sessionStorage`, el botón no se degrada a un código suelto;
+  - **al volver** se canjea `{ code, verifier }`:
+    - sin el registro de inicio, el código no se canjea: «No pudimos entrar con Google…» o, en el alta, «No
+      pudimos completar el ingreso. Prueba de nuevo.»;
+    - con la sesión abierta, la vuelta se descarta antes del primer cuadro, y la sesión no cambia;
+  - **sin la capacidad** (dueño anterior): «Entrar» sin state y el alta con `alta:<id>`, como antes. Igual se
+    canjea sólo con el registro «sin binding» de esta pestaña;
+  - la guarda «ningún storage» de `googleRedirect.ts` no cambia: el código sigue sin tocar storage. El verifier
+    vive en el módulo nuevo, con su propia guarda (sólo `sessionStorage`, nunca el código, sin logs);
+  - el mock ata el código al challenge, como el dueño, con una costura para apagar la capacidad.
+- **S-01 · el alta con Google ya no pide ni manda el correo:** el dueño usa el correo verificado de Google.
+  - En el paso de Google sale el campo de correo y su aviso.
+  - `/google/register` va sin `email`.
+  - El mock acepta el correo y lo ignora.
+- **S-05 · la invitación a la mesa sigue pendiente** (`403 invitation_not_accepted` en tomar, soltar, guardar la
+  selección y pagar):
+  - la mesa dice «Primero acepta la invitación a esta mesa.», con «Ver avisos», que lleva a Avisos;
+  - en el pago se dice además el mismo texto, y el intento se cierra porque no se cobró nada;
+  - el mock suma una costura para ese 403;
+  - **corrección a la premisa de la orden:** crear invitaciones no está entre las rutas guardadas (el contrato
+    `mesa-acceso-v1.json` nombra las cuatro de arriba).
+- **Pruebas:**
+  - **rojo en la base:**
+    - S-03 en `7a9eace`: 13 unitarias, y el archivo de los hechos no carga;
+    - S-02, S-01 y S-05 en `72b9851`: 9 unitarias, dos archivos nuevos que no cargan y 24 e2e;
+  - **mutantes: mueren los 29**, cada uno por la prueba que lo vigila (21 unitarios y 8 en el navegador). Entre
+    ellos:
+    - copiar lo que no es `contract/*.json`;
+    - dejar el código del servidor en el espejo;
+    - no exigir los hechos;
+    - el challenge con relleno;
+    - el verifier sin guardar;
+    - una clave de más en el registro;
+    - el decodificador laxo;
+    - canjear sin registro o sin verifier;
+    - no descartar con la sesión abierta, que en el navegador cambia la sesión a la cuenta de Google;
+    - el alta sin verifier;
+    - el correo de vuelta;
+    - el 403 sin su status;
+    - el aviso sin `role="alert"`;
+  - e2e a 375 con capturas;
+  - el e2e completo local, sin cambios en el CI.
+
 ## 0.237.1 — El viaje abierto en Inicio, con su balance; la pestaña Viajes con «Crear viaje» y «Cerrados» (D265, D266, D267) (2026-10-10)
 
 Orden AF-VIAJE-EN-INICIO-Y-PESTANA-VIAJES-20261010 (12201970…), con las adendas D265, D266 y D267 (b9859fe0…). Lo

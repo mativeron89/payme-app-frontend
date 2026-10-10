@@ -166,10 +166,10 @@ test.describe('AF-GOOGLE-ALTA-REDIRECT · encendido: «Crea tu cuenta» en la mi
     await registrarUrls(page);
     await irACreaTuCuenta(page, 'redirect');
 
-    // El botón de alta: redirect, el MISMO login_uri y state `alta:<id>`.
+    // El botón de alta: redirect, el MISMO login_uri y (D268) state `crear:<challenge>`.
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
     await expect(google(page)).toHaveAttribute('data-login-uri', LOGIN_URI);
-    await expect(google(page)).toHaveAttribute('data-state', /^alta:[0-9a-f-]{36}$/);
+    await expect(google(page)).toHaveAttribute('data-state', /^crear:[A-Za-z0-9_-]{43}$/);
 
     // Nada avanza sin las casillas, y sin ellas no hay contexto guardado.
     expect(await page.evaluate((k) => sessionStorage.getItem(k), CONTEXTO)).toBeNull();
@@ -372,10 +372,10 @@ test('como está servido hoy (@ encendido): 201 → «Elige tu @usuario» → ad
   await codigoEnNingunLado(page);
 });
 
-test('«Entrar» (fase 1) sin cambios: su botón no lleva el state de alta', async ({ page }) => {
+test('«Entrar» (fase 1): su botón no lleva el state de alta, sino `entrar:<challenge>` (D268)', async ({ page }) => {
   await preparar(page, { redirect: true, altaRedirect: true });
   await page.goto('/');
   await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
-  await expect(google(page)).not.toHaveAttribute('data-state', /.*/);
+  await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
 });

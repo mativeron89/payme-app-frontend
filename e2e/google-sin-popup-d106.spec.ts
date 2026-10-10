@@ -52,7 +52,9 @@ async function preparar(page: Page, s: Seams = {}): Promise<void> {
   await page.addInitScript((clave: string) => {
     const anotar = (boton: HTMLElement) => {
       const lista = JSON.parse(sessionStorage.getItem(clave) ?? '[]') as string[];
-      lista.push(boton.dataset.uxMode === 'redirect' ? `redirect ${boton.dataset.state ?? '-'}` : 'popup');
+      // D268 · el challenge del state atado es aleatorio: se anota su forma.
+      const estado = (boton.dataset.state ?? '-').replace(/^(entrar|crear):[A-Za-z0-9_-]{43}$/, '$1:<challenge>');
+      lista.push(boton.dataset.uxMode === 'redirect' ? `redirect ${estado}` : 'popup');
       sessionStorage.setItem(clave, JSON.stringify(lista));
     };
     new MutationObserver((cambios) => {
@@ -113,7 +115,8 @@ const registrarme = (page: Page) => page.getByRole('button', { name: 'Registrarm
 async function esAltaEnRedirect(page: Page): Promise<void> {
   await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
   await expect(google(page)).toHaveAttribute('data-login-uri', LOGIN_URI);
-  await expect(google(page)).toHaveAttribute('data-state', /^alta:[0-9a-f-]{36}$/);
+  // D268 · S-02 · con el binding del dueño (servido), `crear:<challenge>`.
+  await expect(google(page)).toHaveAttribute('data-state', /^crear:[A-Za-z0-9_-]{43}$/);
 }
 
 /** Salir y volver a la pestaña, como al pasar a otra app del teléfono y regresar. */
@@ -128,13 +131,13 @@ async function salirYVolver(page: Page): Promise<void> {
 }
 
 test.describe('AF-ALTA-POPUP-D106 · el censo de caminos con Google, con todo encendido', () => {
-  test('«Log in»: el botón va en la misma pestaña y sin state de alta', async ({ page }) => {
+  test('«Log in»: el botón va en la misma pestaña, con `entrar:<challenge>` (D268) y no el de alta', async ({ page }) => {
     await preparar(page);
     await page.goto('/');
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
     await expect(google(page)).toHaveAttribute('data-login-uri', LOGIN_URI);
-    await expect(google(page)).not.toHaveAttribute('data-state', /.*/);
-    expect(new Set(await nuncaPopup(page))).toEqual(new Set(['redirect -']));
+    await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
+    expect(new Set(await nuncaPopup(page))).toEqual(new Set(['redirect entrar:<challenge>']));
   });
 
   test('«Crea tu cuenta», con el aviso lento: sin botón mientras carga, después el alta en redirect', async ({ page }) => {
@@ -145,7 +148,7 @@ test.describe('AF-ALTA-POPUP-D106 · el censo de caminos con Google, con todo en
     await esAltaEnRedirect(page);
     await capturar(page, 'd106-01-crea-tu-cuenta');
     const lista = await nuncaPopup(page, 2);
-    expect(lista.at(-1)).toMatch(/^redirect alta:/);
+    expect(lista.at(-1)).toBe('redirect crear:<challenge>');
   });
 
   test('alta por link de invitación: el alta en redirect lleva la invitación', async ({ page }) => {
@@ -168,8 +171,8 @@ test.describe('AF-ALTA-POPUP-D106 · el censo de caminos con Google, con todo en
     await esAltaEnRedirect(page);
     // Dos documentos: el del ingreso y el de la vuelta con el error.
     const lista = await nuncaPopup(page, 2);
-    expect(lista[0]).toBe('redirect -');
-    expect(lista.at(-1)).toMatch(/^redirect alta:/);
+    expect(lista[0]).toBe('redirect entrar:<challenge>');
+    expect(lista.at(-1)).toBe('redirect crear:<challenge>');
   });
 
   test('aviso con una versión que «continuar» no acepta: sin Google en el alta, con el alta por correo', async ({ page }) => {
@@ -190,7 +193,7 @@ test.describe('AF-ALTA-POPUP-D106 · el censo de caminos con Google, con todo en
     await expect(paso(page)).toHaveCount(0);
     await expect(google(page)).toHaveCount(0);
     await capturar(page, 'd106-02-version-no-aceptada');
-    expect(new Set(await nuncaPopup(page))).toEqual(new Set(['redirect -']));
+    expect(new Set(await nuncaPopup(page))).toEqual(new Set(['redirect entrar:<challenge>']));
   });
 
   test('alta sólo por invitación (sin un toque): sin Google en el alta, con el alta por correo', async ({ page }) => {
@@ -229,8 +232,8 @@ test.describe('AF-ALTA-POPUP-D106 · la capability se vuelve a leer', () => {
     await creaTuCuenta(page).click();
     await esAltaEnRedirect(page);
     const lista = await nuncaPopup(page, 2);
-    expect(lista[0]).toBe('redirect -');
-    expect(lista.at(-1)).toMatch(/^redirect alta:/);
+    expect(lista[0]).toBe('redirect entrar:<challenge>');
+    expect(lista.at(-1)).toBe('redirect crear:<challenge>');
   });
 
   test('pantalla abierta, el dueño la enciende, la persona vuelve a la pestaña: el botón pasa a redirect', async ({ page }) => {

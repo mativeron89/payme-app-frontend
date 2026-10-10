@@ -246,6 +246,6 @@ export function codigoSigueVivo(status: number | null, code: string): boolean {
  * Riel mock: lo que en real hacen Google (el POST al `login_uri` con el `state`
  * de alta) y el dueño (el 303 a `/#google_signup=…`).
  */
-export async function simularIdaYVueltaAltaMock(credencial: string): Promise<void> {
-  navegarComoEl303(await mockGoogleRedirectSignupLoginUri(credencial));
+export async function simularIdaYVueltaAltaMock(credencial: string, state?: string): Promise<void> {
+  navegarComoEl303(await mockGoogleRedirectSignupLoginUri(credencial, state));
 }

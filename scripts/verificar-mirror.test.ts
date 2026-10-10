@@ -48,6 +48,8 @@ const CONTRATO: Record<string, string> = {
   'contract/b-v1.json': '{"b":2}\n',
   'routes/auth.js': 'module.exports = "auth";\n',
   'services/settlement.js': 'module.exports = "settlement";\n',
+  // D268 · bajo `contract/` pero no `.json`: tampoco se copia.
+  'contract/generar-vectores.js': 'module.exports = "generador";\n',
 };
 /** El inventario RENOMBRA: el mapeo lo declara el dueño, no una convención. */
 const DESTINO: Record<string, string> = {
@@ -55,6 +57,7 @@ const DESTINO: Record<string, string> = {
   'contract/b-v1.json': 'contract/b-v1.json',
   'routes/auth.js': 'routes/auth.js',
   'services/settlement.js': 'docs/settlement.js.ref',
+  'contract/generar-vectores.js': 'contract/generar-vectores.js',
 };
 /** D268 · se copia sólo `contract/*.json`; el código del servidor queda por hash. */
 const SE_COPIA = ['contract/a-v1.json', 'contract/b-v1.json'];
@@ -150,6 +153,10 @@ describe('integridad local · el espejo contra el inventario del dueño', () => 
     expect(correr('--integridad')).toBe(1);
     rmSync(join(espejo, 'routes/auth.js'));
     escribir(espejo, 'docs/settlement.js.ref', CONTRATO['services/settlement.js']!);
+    expect(correr('--integridad')).toBe(1);
+    rmSync(join(espejo, 'docs/settlement.js.ref'));
+    // Bajo `contract/`, pero no es `.json`: tampoco.
+    escribir(espejo, 'contract/generar-vectores.js', CONTRATO['contract/generar-vectores.js']!);
     expect(correr('--integridad')).toBe(1);
   });
 

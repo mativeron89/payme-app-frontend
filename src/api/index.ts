@@ -336,7 +336,8 @@ export interface Api {
    * vuelve «Entrar» con Google en la misma pestaña. Misma respuesta que
    * `google/login`, y la sesión se guarda igual.
    */
-  googleRedirectRedeem(code: string): Promise<StoredSession>;
+  /** D268 · S-02 · con el `verifier` del par si el ingreso empezó con `entrar:<challenge>`. */
+  googleRedirectRedeem(code: string, verifier?: string): Promise<StoredSession>;
   googleRegister(data: GoogleRegisterRequest): Promise<StoredSession>;
   /**
    * AF-17 · v2.92.0 · «Continuar con Google» entra o crea la cuenta en un toque.
@@ -735,7 +736,8 @@ const realApi: Api = {
   // D252 · `referral_code` (el link de invitación) va en las cuatro altas, sólo con la capacidad.
   register: (data) => httpRegister(conReferido(data)),
   googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
-  googleRedirectRedeem: (code) => httpSocialSession('/auth/google/redirect/redeem', { code }),
+  googleRedirectRedeem: (code, verifier) =>
+    httpSocialSession('/auth/google/redirect/redeem', verifier === undefined ? { code } : { code, verifier }),
   googleRegister: (data) => httpSocialSession('/auth/google/register', conReferido(data)),
   googleContinue: (data) => httpGoogleContinue('/auth/google/continue', conReferido(data)),
   googleRedirectSignup: (data) => httpGoogleContinue('/auth/google/redirect/signup', conReferido(data)),
@@ -1431,7 +1433,7 @@ const mockApi: Api = {
   login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password)),
   register: (data) => runWithSessionStateLock(() => mock.mockRegister(conReferido(data))),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
-  googleRedirectRedeem: (code) => mock.mockGoogleRedirectRedeem(code),
+  googleRedirectRedeem: (code, verifier) => mock.mockGoogleRedirectRedeem(code, verifier),
   googleRegister: (data) => mock.mockGoogleRegister(conReferido(data)),
   googleContinue: (data) => mock.mockGoogleContinue(conReferido(data)),
   googleRedirectSignup: (data) => mock.mockGoogleRedirectSignup(conReferido(data)),
