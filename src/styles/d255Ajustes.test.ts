@@ -47,9 +47,18 @@ describe('🔴 D255 · los ajustes de CSS', () => {
   });
 
   it('3 · Balance: con «Volver» y pestañas, la banda crece y la primera fila no se achica', () => {
-    expect(efectivo(regla(GLOBAL, '.hdr-tabbed.hdr-con-volver'), 'height')).toBe('calc(214px + env(safe-area-inset-top))');
+    // D261 · 214 → 197: las pestañas suben 17 px (franja de 25 a 8) y la tarjeta sube con ellas.
+    expect(efectivo(regla(GLOBAL, '.hdr-tabbed.hdr-con-volver'), 'height')).toBe('calc(197px + env(safe-area-inset-top))');
     expect(efectivo(regla(GLOBAL, '.hdr-tabbed.hdr-con-volver > .hdr-row:first-child'), 'min-height')).toBe('var(--tap-min)');
     expect(efectivo(regla(GLOBAL, '.btabs.btabs-2'), 'grid-template-columns')).toBe('repeat(2, minmax(0, 1fr))');
+  });
+
+  it('🔴 D261 · D262 · bajo «Volver», las pestañas a 8 px de la fila y en negrita; las de Inicio, como siempre', () => {
+    expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btabs'), 'top')).toBe('0');
+    expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btabs'), 'margin-top')).toBe('var(--sp-2)');
+    expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btab'), 'font-weight')).toBe('700');
+    expect(efectivo(regla(GLOBAL, '.btabs'), 'top')).toBe('15px');
+    expect(efectivo(regla(GLOBAL, '.btab'), 'font-weight')).toBe('500');
   });
 
   it('🔴 5 · en TODA pantalla con pestañas en la cabecera, el scroll no rebota (no pantalla por pantalla)', () => {

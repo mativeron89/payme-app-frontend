@@ -13,7 +13,6 @@ import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
 import { circuloDelViaje } from './circuloDelViaje';
-import { metaDelTicket } from './viajeView';
 import { iconoTipoLugar, nombreDelLugar, nombreDeMiembro, parametroDeTicket } from './viajesView';
 import './viajes.css';
 import './viaje.css';
@@ -25,8 +24,8 @@ import './viaje.css';
  * como Cuenta · Estadísticas · Viajes en Inicio, y su contenido en la tarjeta
  * blanca montada debajo:
  * - **Consumos** (primero): los tickets y gastos del viaje, el más nuevo arriba,
- *   con lugar o descripción, fecha, quién pagó y el total. Al tocarlo abre el
- *   ticket como antes. Nunca qué eligió cada uno.
+ *   con lugar o descripción y el total. D262 · sin la fecha ni quién pagó: eso se
+ *   ve al entrar. Al tocarlo abre el ticket como antes. Nunca qué eligió cada uno.
  * - **Miembros** (segundo): cada miembro, con su foto si la tiene, y lo que
  *   pagó (Mati: «Lo que pagó»): `pagado_cents` del dueño. La app no lo calcula.
  * El total de cada consumo y lo que pagó cada uno llegan con `viaje_version=2`
@@ -164,7 +163,7 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
   onAbrirTicket: (ticketId: string) => void;
   deslizar?: DeslizarConsumo;
 }) {
-  const { t, idioma } = useIdioma();
+  const { t } = useIdioma();
   if (v.tickets.length === 0) return <p className="vjb-vacio">{t('Todavía no hay consumos.')}</p>;
   return (
     <ul className="vjb-consumos">
@@ -177,7 +176,6 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
               </span>
               <span className="vjb-consumo-main">
                 <span className="vjb-consumo-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
-                <span className="vjb-consumo-meta">{metaDelTicket(tk, v.miembros, t, idioma)}</span>
                 {tk.falta_que_elija > 0 && (
                   <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
                 )}

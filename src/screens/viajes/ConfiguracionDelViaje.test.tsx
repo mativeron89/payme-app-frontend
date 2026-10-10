@@ -49,12 +49,22 @@ describe('🔴 D255-8 · Configuración del viaje', () => {
     expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Configuración<\/h1><\/div>/);
   });
 
-  it('«Agregar miembros» con el buscador del alta; sin buscar, la ayuda y los invitados que faltan aceptar', () => {
+  it('«Agregar miembros» con el buscador del alta; sin buscar, los invitados que faltan aceptar', () => {
     const leido = texto(render());
     expect(leido).toContain('Agregar miembros');
     expect(render()).toContain('placeholder="Busca en Amigos o escribe @usuario"');
-    expect(leido).toContain('Les llega una invitación. Entran al viaje cuando la aceptan.');
     expect(leido).toContain('Invitados LP Leo Paz Falta que acepte');
+  });
+
+  it('🔴 D259 · sin «Les llega una invitación…» ni el título «El viaje»; las tres filas, sin título', () => {
+    const html = render();
+    const leido = texto(html);
+    expect(leido).not.toContain('Les llega una invitación');
+    expect(html).not.toMatch(/>El viaje</);
+    expect(html).not.toContain('aria-labelledby="vjcfg-viaje"');
+    // Sin ningún título: la tarjeta empieza con las tres filas.
+    expect(html).toMatch(/<section class="vj-card vjcfg-viaje"><ul class="vjcfg-filas">/);
+    expect(leido).toMatch(/Nombre y fechas.*Color.*Foto/);
   });
 
   it('buscando: «Agregar» para los que se pueden sumar; quien ya está, en «Ya están en el viaje» sin botón', () => {
@@ -80,9 +90,9 @@ describe('🔴 D255-8 · Configuración del viaje', () => {
     expect(html).toContain('vjc-agregar" disabled=""');
   });
 
-  it('🔴 D255 · «El viaje»: nombre y fechas, color y foto, cada uno abre su editor (cerrados al entrar)', () => {
+  it('🔴 D255 · nombre y fechas, color y foto: cada uno abre su editor (cerrados al entrar)', () => {
     const html = render();
-    expect(texto(html)).toContain('El viaje Nombre y fechas Cancún 2026 · 5–11 oct Color Sin color Foto C');
+    expect(texto(html)).toContain('Nombre y fechas Cancún 2026 · 5–11 oct Color Sin color Foto C');
     expect(html.match(/<button type="button" class="vjcfg-fila" aria-expanded="false">/g)).toHaveLength(3);
     expect(html).not.toContain('disabled=""><span class="vjcfg-fila-rotulo">');
     expect(html).not.toContain('vjcfg-editor');
@@ -178,7 +188,7 @@ describe('D255 · lo que se manda al editar el nombre y las fechas', () => {
   });
 });
 
-describe('D255 · el cableado de «El viaje»', () => {
+describe('D255 · el cableado de nombre y fechas, color y foto', () => {
   const config = readFileSync(new URL('./ConfiguracionDelViaje.tsx', import.meta.url), 'utf8');
 
   it('editar va por `PATCH` y actualiza el viaje; el color, apenas se elige', () => {

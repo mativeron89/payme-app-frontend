@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.236.2 — Configuración y Balance del viaje: menos textos, menos franja, pestañas en negrita (D259, D261, D262) (2026-10-10)
+
+Orden AF-CONFIGURACION-SIN-TEXTOS-20261010 (a7075561…). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **D259 · Configuración del viaje.** Mati: «quitar "les llega una invitscion…" y "el viaje"».
+  - Sale la ayuda «Les llega una invitación. Entran al viaje cuando la aceptan.» de debajo del buscador.
+  - Sale el título «El viaje», con su `aria-labelledby` y su EN. Nombre y fechas, Color y Foto quedan en su tarjeta,
+    sin título.
+  - **Censo:** la misma ayuda está también en **Crear viaje**. No se tocó: el pedido es sólo de Configuración, y su EN
+    queda.
+- **D261 · Balance: la franja entre «Volver» y las pestañas, de 25 a 8 px.**
+  - La producía `.btabs` (10 de margen + 15 de `top`).
+  - Bajo «Volver», las pestañas suben 17 px y la banda (`.hdr-con-volver`) baja de 214 a 197, para que la tarjeta siga
+    pegada a la pestaña.
+  - **Censo:** Balance es la única pantalla con pestañas bajo «Volver». Inicio y Amigos no cambian.
+- **D262 · Balance.**
+  - «Consumos» y «Miembros» van en negrita, elegida o no, sólo en esa cabecera.
+  - En Consumos, cada fila queda con el ícono, el nombre del lugar o del gasto y el total. Se mantienen el aviso «Falta
+    que elija», que no es fecha ni quién pagó, y deslizar para eliminar.
+  - La fecha y «Pagó…» / «Pagaste tú» siguen al entrar al ítem.
+  - `metaDelTicket` y `quienPagoElTicket` quedaron sin uso y salieron. Las pruebas de la fecha pasaron a
+    `fechaDelTicket`, que sigue en uso.
+- **Pruebas:**
+  - rojo en la base `a391b61`: 4 unitarias y 4 e2e;
+  - mutantes 7/7. Uno sobrevivía, otro título en la tarjeta de Configuración; ahora se afirma que la tarjeta no tiene
+    ningún encabezado.
+  - Capturas a 375, antes y después.
+
 ## 0.236.1 — El pie de acción de Viajes, en el flujo: el scroll de la app de inicio (D256, segundo caso) (2026-10-10)
 
 Orden AF-SCROLL-APP-DE-INICIO-20261010 (91246f8c…). Mati, en la app de inicio de iOS, en «Carga manual» de un viaje

@@ -5,7 +5,7 @@ import { formatMXN } from '../../utils/format';
 import {
   avisosDeCierre,
   estadoDeTransferencia,
-  metaDelTicket,
+  fechaDelTicket,
   partirPlantilla,
   progresoDePagos,
   textoNoPuedeSalir,
@@ -77,21 +77,17 @@ describe('partirPlantilla · negritas sin perder la traducción', () => {
   });
 });
 
-describe('1g · la fila del ticket', () => {
-  it('«8 oct · Pagó Luis Pérez» y «6 oct · Pagaste tú»', () => {
+describe('la fecha de un ticket', () => {
+  // D262 · la fila de Consumos ya no muestra fecha ni quién pagó (se sacó `metaDelTicket`); la fecha sigue en uso.
+  it('la fecha impresa, «8 oct» u «Oct 8»', () => {
     const v = viaje();
-    expect(metaDelTicket(v.tickets[0]!, MIEMBROS, es, 'es')).toBe('8 oct · Pagó Luis Pérez');
-    expect(metaDelTicket(v.tickets[1]!, MIEMBROS, es, 'es')).toBe('6 oct · Pagaste tú');
-    expect(metaDelTicket(v.tickets[0]!, MIEMBROS, en, 'en')).toBe('Oct 8 · Paid by Luis Pérez');
+    expect(fechaDelTicket(v.tickets[0]!, 'es')).toBe('8 oct');
+    expect(fechaDelTicket(v.tickets[0]!, 'en')).toBe('Oct 8');
   });
 
-  it('sin fecha impresa usa el día en que se cargó; sin quien pagó, «Cuenta eliminada»', () => {
-    const sinFecha = ticket({ fecha_ticket: null, cargado_en: '2026-10-07T18:00:00.000Z' });
-    expect(metaDelTicket(sinFecha, MIEMBROS, es, 'es')).toBe('7 oct · Pagó Luis Pérez');
-    const sinPagador = ticket({ pagado_por: 'm-salio' });
-    expect(metaDelTicket(sinPagador, MIEMBROS, es, 'es')).toBe('8 oct · Pagó Cuenta eliminada');
-    const nada = ticket({ fecha_ticket: null, cargado_en: null });
-    expect(metaDelTicket(nada, MIEMBROS, es, 'es')).toBe('Pagó Luis Pérez');
+  it('sin fecha impresa, el día en que se cargó; sin ninguna, nada', () => {
+    expect(fechaDelTicket(ticket({ fecha_ticket: null, cargado_en: '2026-10-07T18:00:00.000Z' }), 'es')).toBe('7 oct');
+    expect(fechaDelTicket(ticket({ fecha_ticket: null, cargado_en: null }), 'es')).toBeNull();
   });
 });
 

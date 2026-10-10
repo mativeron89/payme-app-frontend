@@ -93,7 +93,6 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Le mandamos la invitación a {0}.': 'We sent {0} an invitation.',
   'Invitados': 'Invited',
   'Falta que acepte': "Hasn't accepted yet",
-  'El viaje': 'The trip',
   'Nombre y fechas': 'Name and dates',
   'Color': 'Color',
   'Foto': 'Photo',

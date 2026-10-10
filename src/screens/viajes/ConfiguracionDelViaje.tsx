@@ -214,11 +214,8 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
           <h2 className="vjc-etiqueta" id="vjcfg-agregar">{t('Agregar miembros')}</h2>
           <CampoDeBusqueda texto={p.texto} onTexto={p.onTexto} />
           {p.lleno && <p className="vjc-nota">{t('Un viaje admite hasta 20 personas.')}</p>}
-          {p.busqueda ? (
-            <ResultadosDeBusqueda b={p.busqueda} lleno={p.lleno} ocupado={p.ocupado} onAgregar={p.onAgregar} />
-          ) : (
-            <p className="vjc-ayuda">{t('Les llega una invitación. Entran al viaje cuando la aceptan.')}</p>
-          )}
+          {/* D259 · Mati: sin la ayuda «Les llega una invitación…» (sigue en Crear viaje). */}
+          {p.busqueda && <ResultadosDeBusqueda b={p.busqueda} lleno={p.lleno} ocupado={p.ocupado} onAgregar={p.onAgregar} />}
           {!p.busqueda && p.invitados.length > 0 && (
             <>
               <h3 className="vj-seccion">{t('Invitados')}</h3>
@@ -233,8 +230,8 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
           )}
         </section>
 
-        <section className="vj-card vjcfg-viaje" aria-labelledby="vjcfg-viaje">
-          <h2 className="vjc-etiqueta" id="vjcfg-viaje">{t('El viaje')}</h2>
+        {/* D259 · Mati: sin el título «El viaje»; las tres filas, en su tarjeta. */}
+        <section className="vj-card vjcfg-viaje">
           <ul className="vjcfg-filas">
             <li>
               <FilaDeEditor

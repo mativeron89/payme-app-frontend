@@ -78,17 +78,6 @@ export function fechaDelTicket(
   return fechaCortaViaje(ticket.fecha_ticket ?? ticket.cargado_en?.slice(0, 10) ?? null, idioma);
 }
 
-/** «Pagaste tú» o «Pagó Luis Pérez» (sin el miembro: «Pagó Cuenta eliminada»). */
-export function quienPagoElTicket(ticket: TicketEnViaje, miembros: readonly MiembroViaje[], t: T): string {
-  if (ticket.pagaste_tu) return t('Pagaste tú');
-  return t('Pagó {0}', nombreCompletoDeId(miembros, ticket.pagado_por, t));
-}
-
-/** «8 oct · Pagó Luis Pérez». */
-export function metaDelTicket(ticket: TicketEnViaje, miembros: readonly MiembroViaje[], t: T, idioma: Idioma): string {
-  return [fechaDelTicket(ticket, idioma), quienPagoElTicket(ticket, miembros, t)].filter(Boolean).join(' · ');
-}
-
 // ─── 1q · por qué no puedo salir ──────────────────────────────────────────
 
 export type MotivoSalida = 'selection' | 'paid_ticket' | 'present_in_equal_split';

@@ -349,16 +349,18 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
     expect(fuente).toMatch(/<AppHeaderBack\s+userName=\{[^}]+\}\s+onBack=\{[^}]+\}\s+tabs=\{<PestanasDeBalance opcion=\{opcion\} onOpcion=\{setOpcion\} \/>\}/);
   });
 
-  it('🔴 Consumos: los tickets del dueño, el más nuevo arriba, con lugar, fecha y quién pagó; nunca qué eligió nadie', () => {
+  it('🔴 Consumos: los tickets del dueño, el más nuevo arriba, con el lugar y el total; nunca qué eligió nadie', () => {
     const leido = texto(balance(listo(viaje())));
     // Respuesta A: el total de cada uno (`monto_cents`), no lo que me toca.
-    expect(leido).toContain('Mariscos El Faro 8 oct · Pagó Luis Pérez Falta que elija 1 $1,590');
-    expect(leido).toContain('Café Caribe 7 oct · Pagó Diego Torres $380');
-    expect(leido).toContain('Bar 6 oct · Pagaste tú $960');
+    // D262 · sólo el ítem: sin la fecha ni quién pagó (eso se ve al entrar).
+    expect(leido).toContain('Mariscos El Faro Falta que elija 1 $1,590');
+    expect(leido).toContain('Café Caribe $380');
+    expect(leido).toContain('Bar $960');
+    expect(leido).not.toMatch(/\d+ oct|Pagó|Pagaste tú/);
     expect(leido).not.toContain('$530');
     expect(leido).not.toContain('$240');
     expect(leido.indexOf('Mariscos')).toBeLessThan(leido.indexOf('Café Caribe'));
-    expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar 6 oct'));
+    expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar $960'));
     // Sin el «Debe / Le deben» de cada uno ni el aviso de «sin repartir» (respuesta C).
     expect(leido).not.toMatch(/Le deben|Debe \$|sin repartir/);
   });

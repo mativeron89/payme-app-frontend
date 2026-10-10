@@ -3677,7 +3677,19 @@ html.app-de-inicio-ios .app {
    recupera: logo y «Volver» quedan donde están en la pantalla del viaje (sin
    salto al entrar) y las pestañas, pegadas a la tarjeta como en Inicio. */
 .hdr-tabbed.hdr-con-volver {
-  height: calc(214px + env(safe-area-inset-top));
+  height: calc(197px + env(safe-area-inset-top));
+}
+/* D261 · Mati: «Que no haya tanto espacio entre el volver y las burbujas». La
+   franja salía de `.btabs` (10 de margen + 15 de `top`): 25 px de banda vacía.
+   Bajo «Volver» queda en 8, y la banda baja 17 (214 → 197) para que la tarjeta
+   siga pegada a la pestaña. Las de Inicio no cambian.
+   D262 · Mati: los títulos de las pestañas, en negrita (la elegida también). */
+.hdr-con-volver .btabs {
+  top: 0;
+  margin-top: var(--sp-2);
+}
+.hdr-con-volver .btab {
+  font-weight: 700;
 }
 .hdr-tabbed.hdr-con-volver > .hdr-row:first-child {
   height: auto;
