@@ -24,6 +24,10 @@ por el pie «Listo», y no desplazaba. Lo visible se cierra con la prueba de Mat
   - el contenedor que desplaza terminaba en 852: el final del contenido quedaba detrás del pie y, si el contenido
     entraba en esos 852, no había nada que desplazar.
   - Explica también el primer caso de D256 (un ticket ya cargado, «No se movía nada»).
+  - **El panel de diagnóstico de Mati** desde Carga manual (0.236.0) lo confirmó: `.app` 852 y
+    `documentElement.clientHeight` 793 (el bloque inicial, donde se ancla lo fijo: 59 pt). En «al abrir», el `.scroll`
+    tenía `clientHeight` = `scrollHeight` = 598: el contenido entraba y no había nada que desplazar. No había `inert`,
+    hojas abiertas ni `touch-action`.
 - **El arreglo, un solo patrón:** el pie va en el flujo de `.screen`, debajo del `.scroll`, y termina donde termina
   `.app`, como la barra. Ya no lo cubre ningún aire de compensación: se retiran los `padding-bottom` de 112, 168 y
   176 px.
@@ -32,12 +36,15 @@ por el pie «Listo», y no desplazaba. Lo visible se cierra con la prueba de Mat
   - en Mesas, las pantallas usan `.action-bar` en el flujo y la barra `absolute`: no son de la clase;
   - `.fab` y `.cta-float` no se usan; el toast y el aviso de deshacer flotan, pero no son pies de acción.
 - **La guarda** (`e2e/pie-app-de-inicio.spec.ts`):
-  - **el modelo:** un `transform` en `#root`, de alto `100lvh − 58px`, hace de viewport corto para lo `fixed`.
-    No es el iPhone, y los 58 están medidos sólo en el de Mati.
-  - **los casos:** las cuatro pantallas en 375 × 667, 390 × 844 y 430 × 932, con 21 miembros y un ticket largo;
-  - **mide:** el pie termina con `.app`, el último elemento queda entero arriba del pie y recibe el toque;
+  - **el modelo:** un `transform` en `#root`, de alto `100lvh − desfase`, hace de viewport corto para lo `fixed`.
+    No es el iPhone. El desfase se prueba con los dos medidos en el de Mati, 58 y 59.
+  - **los casos:** las cuatro pantallas en 375 × 667, 390 × 844 y 430 × 932, con 21 miembros y un ticket largo; y el
+    caso del panel (393 × 852, insets 59/34, 1 miembro), que en la base da el mismo 598 = 598 del panel;
+  - **mide:** el pie termina con `.app`; el último elemento queda entero arriba del pie y recibe el toque; y lo largo
+    desborda el contenedor (`scrollHeight > clientHeight`);
   - **el control:** sin desfase.
-  - En la base `e84a764`: 12 rojos de 16, y los 4 controles verdes, en Chromium y en WebKit local.
+  - En la base `e84a764`: 25 rojos de 29, con los 4 controles verdes. En WebKit local, 12 de 16 con la primera
+    versión de la guarda.
   - Mutantes 3/3: volver a `fixed`, `absolute` encima del contenido y el pie montado sobre el final.
 - `vjt-pie-alto` sale de la pantalla del ticket: sólo existía para el aire.
 

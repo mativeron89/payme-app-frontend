@@ -12,9 +12,13 @@ import { sacarFoto } from './_camara';
  * viewport corto, 58 pt más arriba. El contenedor que desplaza termina en 852, así que el final del contenido quedaba
  * detrás del pie, y, si el contenido entraba en esos 852, no había nada que desplazar.
  *
- * Acá se modela ese estado: un `transform` en `#root`, de alto `100lvh − 58px`, es el bloque contenedor de lo
- * `position: fixed` (como el viewport corto), y `.app` sigue midiendo `100lvh`. Es un modelo, no el iPhone: el desfase
- * de 58 es el medido en el de Mati; en los otros tamaños no está medido. Con desfase 0, el control.
+ * El panel de diagnóstico de Mati desde esta pantalla (0.236.0) lo confirmó: `.app` 852, `documentElement.clientHeight`
+ * (el bloque contenedor inicial, donde se ancla lo fijo) 793, y el `.scroll` con `clientHeight` = `scrollHeight` = 598:
+ * el contenido entraba, no había nada que desplazar, y lo último quedaba detrás del pie.
+ *
+ * Acá se modela ese estado: un `transform` en `#root`, de alto `100lvh − desfase`, es el bloque contenedor de lo
+ * `position: fixed` (como el viewport corto), y `.app` sigue midiendo `100lvh`. Es un modelo, no el iPhone. El desfase
+ * no se fija en un número: se prueba con los dos medidos (58 en la captura 11, 59 en el panel). Con 0, el control.
  *
  * En cada pantalla con pie de acción, al final del desplazamiento:
  * - el pie termina donde termina `.app`;
@@ -24,8 +28,8 @@ import { sacarFoto } from './_camara';
 
 const CANCUN = 'd1000000-0000-4000-8000-000000000001';
 const MARISCOS = 'd2000000-0000-4000-8000-000000000105';
-/** Medido en el iPhone de Mati: `100lvh` 852 contra `innerHeight` 794. */
-const DESFASE_MEDIDO = 58;
+/** Medidos en el iPhone de Mati: 852 contra 794 (captura 11, E179b) y 852 contra 793 (el panel, D256). */
+const DESFASES_MEDIDOS = [58, 59] as const;
 const TAMANOS = [
   { width: 375, height: 667 },
   { width: 390, height: 844 },
@@ -55,17 +59,25 @@ async function ir(page: Page, ruta: string): Promise<void> {
   }, ruta);
 }
 
-/** Cancún con 21 miembros y «Mariscos El Faro» con 20 renglones de más. El mock lee su estado al cargar: se recarga. */
-async function sembrar(page: Page): Promise<void> {
+/**
+ * Cancún con 21 miembros y «Mariscos El Faro» con 20 renglones de más; con `soloYo`, Cancún sólo conmigo (los demás
+ * salieron), el caso corto del panel. El mock lee su estado al cargar: se recarga.
+ */
+async function sembrar(page: Page, { soloYo = false }: { soloYo?: boolean } = {}): Promise<void> {
   await ir(page, `/viaje/${CANCUN}`);
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
-  const ok = await page.evaluate(({ viajeId, ticketId }) => {
+  const ok = await page.evaluate(({ viajeId, ticketId, soloYo: corto }) => {
     const k = 'payme.app.mock.viajes.estado.v1';
     const e = JSON.parse(localStorage.getItem(k) ?? 'null') as
       { viajes: Array<{ id: string; miembros: Array<Record<string, unknown>>; tickets: Array<{ id: string; items: Array<Record<string, unknown>> }> }> } | null;
     const v = e?.viajes.find((x) => x.id === viajeId);
     const t = v?.tickets.find((x) => x.id === ticketId);
     if (!e || !v || !t) return false;
+    if (corto) {
+      for (const m of v.miembros.filter((x) => x.estado === 'activo').slice(1)) m.estado = 'salio';
+      localStorage.setItem(k, JSON.stringify(e));
+      return true;
+    }
     for (let i = 0; i < 17; i++) {
       const n = String(i).padStart(12, '0');
       v.miembros.push({ id: `d4ffffff-0000-4000-8000-${n}`, user_id: `c9ffffff-0000-4000-8000-${n}`, estado: 'activo',
@@ -77,13 +89,15 @@ async function sembrar(page: Page): Promise<void> {
     }
     localStorage.setItem(k, JSON.stringify(e));
     return true;
-  }, { viajeId: CANCUN, ticketId: MARISCOS });
+  }, { viajeId: CANCUN, ticketId: MARISCOS, soloYo });
   expect(ok).toBe(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
 }
 
 interface Medida {
+  scrollHeight: number;
+  clientHeight: number;
   pieBottom: number;
   appBottom: number;
   ultimoBottom: number;
@@ -106,6 +120,8 @@ async function alFinal(page: Page): Promise<Medida> {
     const app = document.querySelector('.app')!.getBoundingClientRect();
     const enElCentro = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return {
+      scrollHeight: s.scrollHeight,
+      clientHeight: s.clientHeight,
       pieBottom: pie.bottom,
       appBottom: app.bottom,
       ultimoBottom: r.bottom,
@@ -122,9 +138,10 @@ function seAlcanza(m: Medida): void {
   expect(m.tocable, `«${m.nombre}» no recibe el toque`).toBe(true);
 }
 
-const PANTALLAS: Array<{ nombre: string; abrir: (page: Page) => Promise<void> }> = [
+const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => Promise<void> }> = [
   {
     nombre: 'Carga manual con 21 miembros',
+    largo: true,
     abrir: async (page) => {
       await ir(page, `/viaje/${CANCUN}`);
       await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
@@ -133,6 +150,7 @@ const PANTALLAS: Array<{ nombre: string; abrir: (page: Page) => Promise<void> }>
   },
   {
     nombre: 'un ticket largo ya cargado («Te toca / Listo»)',
+    largo: true,
     abrir: async (page) => {
       await ir(page, `/viaje-balance/${CANCUN}`);
       await page.locator('.vjb-consumo').filter({ hasText: 'Mariscos El Faro' }).click();
@@ -141,6 +159,7 @@ const PANTALLAS: Array<{ nombre: string; abrir: (page: Page) => Promise<void> }>
   },
   {
     nombre: 'Ticket nuevo, en partes iguales entre 21',
+    largo: true,
     abrir: async (page) => {
       await ir(page, `/viaje/${CANCUN}`);
       await page.getByRole('button', { name: 'Escanear ticket para Cancún 2026', exact: true }).click();
@@ -152,6 +171,7 @@ const PANTALLAS: Array<{ nombre: string; abrir: (page: Page) => Promise<void> }>
   },
   {
     nombre: 'Crear viaje',
+    largo: false,
     abrir: async (page) => {
       await ir(page, '/viaje-nuevo');
       await expect(page.getByRole('button', { name: 'Crear viaje', exact: true })).toBeVisible();
@@ -159,19 +179,50 @@ const PANTALLAS: Array<{ nombre: string; abrir: (page: Page) => Promise<void> }>
   },
 ];
 
-for (const tamano of TAMANOS) {
-  test.describe(`🔴 D256 · pie de acción en la app de inicio, a ${tamano.width} × ${tamano.height}, con el desfase medido`, () => {
-    test.use({ viewport: tamano });
-    for (const p of PANTALLAS) {
-      test(`${p.nombre}: el último elemento se alcanza arriba del pie y se toca`, async ({ page }) => {
-        await comoAppDeInicio(page, DESFASE_MEDIDO);
-        await sembrar(page);
-        await p.abrir(page);
-        seAlcanza(await alFinal(page));
-      });
-    }
-  });
+/** Lo largo tiene que desbordar el contenedor: si no, no hay nada que desplazar. */
+function desborda(m: Medida, largo: boolean): void {
+  if (largo) expect(m.scrollHeight, 'el contenido no desborda: no hay nada que desplazar').toBeGreaterThan(m.clientHeight);
 }
+
+for (const desfase of DESFASES_MEDIDOS) {
+  for (const tamano of TAMANOS) {
+    test.describe(`🔴 D256 · pie de acción en la app de inicio, a ${tamano.width} × ${tamano.height}, con desfase ${desfase}`, () => {
+      test.use({ viewport: tamano });
+      for (const p of PANTALLAS) {
+        test(`${p.nombre}: el último elemento se alcanza arriba del pie y se toca`, async ({ page }) => {
+          await comoAppDeInicio(page, desfase);
+          await sembrar(page);
+          await p.abrir(page);
+          const m = await alFinal(page);
+          seAlcanza(m);
+          desborda(m, p.largo);
+        });
+      }
+    });
+  }
+}
+
+/**
+ * El caso del panel de Mati, en su iPhone (393 × 852, insets 59/34, desfase 59): en la base el `.scroll` mide 598 de
+ * alto (como en el panel) y, con un solo miembro, el contenido entra (`scrollHeight` = `clientHeight` = 598): no hay
+ * scroll y el miembro queda detrás del pie. Los insets se emulan con CDP: sólo Chromium.
+ */
+test.describe('🔴 D256 · el caso del panel de Mati: Carga manual, 393 × 852, insets 59/34, desfase 59', () => {
+  test.use({ viewport: { width: 393, height: 852 } });
+  test('el contenido que «entra» igual se alcanza: el miembro no queda detrás del pie', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'los insets se emulan con CDP');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    });
+    await comoAppDeInicio(page, 59);
+    await sembrar(page, { soloYo: true });
+    await ir(page, `/viaje/${CANCUN}`);
+    await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+    await expect(page.getByRole('checkbox')).toHaveCount(1);
+    seAlcanza(await alFinal(page));
+  });
+});
 
 test.describe('control · sin desfase (Safari, o la app de inicio ya acomodada), a 390 × 844', () => {
   test.use({ viewport: { width: 390, height: 844 } });
