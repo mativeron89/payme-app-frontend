@@ -17,9 +17,10 @@ Orden AF-CACHE-Y-AJUSTES-1010-20261010 (e761c8ed…). Fuentes:
 - T-01 de la auditoría Codex total (98ac9cf8…);
 - decisión 255 de Mati (bc86b278…), los ajustes que pidió al probar 0.233.0 en su iPhone.
 
-Plan aprobado (d6c649a5…, OK 01:16:34Z) con las respuestas A–D y un ajuste: Configuración con un solo título. Dos
-tramos en un solo PR: el 1 con el contrato servido hoy, el 2 con App Backend D255. Lo visible se cierra con la prueba
-de Mati en el iPhone (D63).
+Plan aprobado (d6c649a5…, OK 01:16:34Z) con las respuestas A–D y un ajuste: Configuración con un solo título.
+Cambio de plan de las 01:36:09Z: este PR sale SOLO con el tramo 1, para que T-01 (privacidad ALTA) no espere. El
+tramo 2 (quién pagó, color, foto, nombre y fechas) va en una orden aparte, con App Backend 2.174.0 servido. Lo
+visible se cierra con la prueba de Mati en el iPhone (D63).
 
 **Tramo 1**
 
@@ -61,7 +62,7 @@ de Mati en el iPhone (D63).
     `invitarAlViaje` (real y mock).
   - Cada «Agregar» invita en el acto («Le mandamos la invitación a …»).
   - Quien ya está en el viaje, por su @, va en «Ya están en el viaje», sin botón; debajo, «Invitados».
-  - El lugar de nombre, fechas, color y foto queda armado y apagado hasta el tramo 2.
+  - El lugar de nombre, fechas, color y foto queda armado y apagado: se conecta en la orden del tramo 2.
 
 ## 0.233.0 — Amigos: el link de invitación (D252) (2026-10-09)
 
