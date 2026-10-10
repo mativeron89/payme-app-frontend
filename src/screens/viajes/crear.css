@@ -2,11 +2,6 @@
    (tarjeta, rótulo de sección, avatar, pie fijo) vive en `viajes.css`. Sólo
    tokens: nada de colores sueltos. */
 
-/* El pie lleva el error encima del botón: un poco más de aire que el común. */
-.vjc.vj-con-pie .vj-scroll {
-  padding-bottom: 168px;
-}
-
 /* El rótulo de cada tarjeta («Nombre del viaje», «Fechas», «Miembros»). */
 .vjc-etiqueta {
   display: block;

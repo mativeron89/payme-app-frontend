@@ -43,7 +43,7 @@ function arbol() {
   const html = el('html', 'app-de-inicio-ios', null, { overflowY: 'hidden' });
   const body = el('body', '', html);
   const app = el('div', 'app', body, { overflowY: 'hidden' });
-  const screen = el('div', 'screen vj-con-pie vjt-pie-alto', app);
+  const screen = el('div', 'screen vj-con-pie', app);
   const scroll = el('div', 'scroll vj-scroll', screen, { overflowY: 'auto' }, { clientHeight: 451, scrollHeight: 1879, scrollTop: 0 });
   const fila = el('button', 'qc-circulo', scroll, {}, { textContent: 'Tacos al pastor' });
   return { html, body, app, screen, scroll, fila };

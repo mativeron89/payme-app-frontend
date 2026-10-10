@@ -11,6 +11,36 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.236.1 — El pie de acción de Viajes, en el flujo: el scroll de la app de inicio (D256, segundo caso) (2026-10-10)
+
+Orden AF-SCROLL-APP-DE-INICIO-20261010 (91246f8c…). Mati, en la app de inicio de iOS, en «Carga manual» de un viaje
+(0.236.0): «En ésta foto tampoco me deja schrollear hacia abajo». Se veían el primer miembro entero y el segundo cortado
+por el pie «Listo», y no desplazaba. Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **El mecanismo**, con los números medidos en el iPhone de Mati (captura 11, E179b):
+  - WebKit arranca la app de inicio con el viewport de layout corto (`innerHeight` 794) mientras `100lvh` ya mide 852;
+  - `.app` mide `100lvh`, y la barra de abajo, `absolute` dentro de `.app`, termina en 852;
+  - el pie de acción de Viajes (`.vj-pie`) era `position: fixed` y se anclaba al viewport corto, 58 pt más arriba;
+  - el contenedor que desplaza terminaba en 852: el final del contenido quedaba detrás del pie y, si el contenido
+    entraba en esos 852, no había nada que desplazar.
+  - Explica también el primer caso de D256 (un ticket ya cargado, «No se movía nada»).
+- **El arreglo, un solo patrón:** el pie va en el flujo de `.screen`, debajo del `.scroll`, y termina donde termina
+  `.app`, como la barra. Ya no lo cubre ningún aire de compensación: se retiran los `padding-bottom` de 112, 168 y
+  176 px.
+- **La clase, censada:**
+  - las cuatro pantallas con `.vj-pie`: Carga manual, Ticket nuevo, el ticket ya cargado y Crear viaje;
+  - en Mesas, las pantallas usan `.action-bar` en el flujo y la barra `absolute`: no son de la clase;
+  - `.fab` y `.cta-float` no se usan; el toast y el aviso de deshacer flotan, pero no son pies de acción.
+- **La guarda** (`e2e/pie-app-de-inicio.spec.ts`):
+  - **el modelo:** un `transform` en `#root`, de alto `100lvh − 58px`, hace de viewport corto para lo `fixed`.
+    No es el iPhone, y los 58 están medidos sólo en el de Mati.
+  - **los casos:** las cuatro pantallas en 375 × 667, 390 × 844 y 430 × 932, con 21 miembros y un ticket largo;
+  - **mide:** el pie termina con `.app`, el último elemento queda entero arriba del pie y recibe el toque;
+  - **el control:** sin desfase.
+  - En la base `e84a764`: 12 rojos de 16, y los 4 controles verdes, en Chromium y en WebKit local.
+  - Mutantes 3/3: volver a `fixed`, `absolute` encima del contenido y el pie montado sobre el final.
+- `vjt-pie-alto` sale de la pantalla del ticket: sólo existía para el aire.
+
 ## 0.236.0 — Viajes: deslizar para eliminar un ticket o un gasto, y el scroll de D256 (2026-10-10)
 
 Orden AF-VIAJES-ELIMINAR-TICKET-20261010 (22187cb9…). Fuente: D256 (a76c9d5f…), con el pedido literal de Mati y dos

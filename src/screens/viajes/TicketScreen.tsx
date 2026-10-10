@@ -170,7 +170,7 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
   const conPie = ticket !== null && ticket.forma === 'consumo' && ticket.puedo_elegir;
 
   return (
-    <div className={conPie ? 'screen vj-con-pie vjt-pie-alto' : 'screen has-appbar'}>
+    <div className={conPie ? 'screen vj-con-pie' : 'screen has-appbar'}>
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
       {ticket && viaje ? (
         <TicketVista

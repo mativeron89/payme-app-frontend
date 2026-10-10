@@ -86,13 +86,17 @@
   line-height: 1.45;
 }
 
-/* El botón de la acción principal, al pie y fijo (1d, 1h, 1i): sin la barra de cinco. */
+/* El botón de la acción principal, al pie (1d, 1h, 1i): sin la barra de cinco.
+   D256 · EN EL FLUJO de `.screen`, debajo del `.scroll`, no `position: fixed`. En la app de inicio de iOS, WebKit
+   arranca con el viewport de layout corto (794 en el iPhone de Mati) mientras `.app` mide `100lvh` (852): lo fijo se
+   anclaba 58 pt más arriba que el final de `.app`, tapaba el final del contenido y, si el contenido entraba en el
+   contenedor, no había nada que desplazar («no me deja schrollear hacia abajo»). En el flujo, el pie y el contenedor
+   terminan juntos en `.app`, como la barra de abajo, y el pie nunca tapa nada: sin aire de compensación.
+   Lo vigila `e2e/pie-app-de-inicio.spec.ts`. */
 .vj-pie {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
+  /* `relative` y `z-index`: la sombra de arriba se pinta sobre el final de la lista. */
+  position: relative;
+  z-index: 1;
   padding: var(--sp-3) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
   background: var(--surface);
   border-radius: 24px 24px 0 0;
@@ -100,10 +104,6 @@
 }
 .vj-pie .btn {
   width: 100%;
-}
-/* Aire para que el pie fijo no tape la última fila. */
-.vj-con-pie .vj-scroll {
-  padding-bottom: 112px;
 }
 
 /* Texto sólo para el lector de pantalla (D245-3: el color del monto nunca va solo). */

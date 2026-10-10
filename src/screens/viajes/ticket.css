@@ -372,11 +372,6 @@
   color: var(--text);
 }
 
-/* El pie de 1i mide más que el de un solo botón. */
-.vj-con-pie.vjt-pie-alto .vj-scroll {
-  padding-bottom: 176px;
-}
-
 .vjt-centrado {
   margin: 0 auto;
 }
