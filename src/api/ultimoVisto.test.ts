@@ -16,18 +16,18 @@ function conDueno(inicial: string | null) {
 
 describe('D237 · lo último visto, en memoria y por cuenta', () => {
   it('sin nada guardado no hay nada', () => {
-    const { cache, guardarYa, sinLeerYa } = conDueno('A');
+    const { cache } = conDueno('A');
     expect(cache.leer('inicio.mesasAbiertas')).toBeUndefined();
   });
 
   it('lo guardado con una cuenta se lee con esa cuenta', () => {
-    const { cache, guardarYa, sinLeerYa } = conDueno('A');
+    const { cache, guardarYa } = conDueno('A');
     guardarYa('mesas.historial', [{ id: 1 }]);
     expect(cache.leer('mesas.historial')).toEqual([{ id: 1 }]);
   });
 
   it('🔴 si lo nuevo es IGUAL, devuelve el MISMO objeto de antes (React no vuelve a dibujar)', () => {
-    const { cache, guardarYa, sinLeerYa } = conDueno('A');
+    const { cache, guardarYa } = conDueno('A');
     const primero = guardarYa('amigos.amigos', [{ id: 'x', nombre: 'Ana' }]);
     const igual = guardarYa('amigos.amigos', [{ id: 'x', nombre: 'Ana' }]);
     expect(igual).toBe(primero);
@@ -75,7 +75,7 @@ describe('D237 · lo último visto, en memoria y por cuenta', () => {
   });
 
   it('olvidar borra sólo lo pedido; las listas de mesas y de amigos', () => {
-    const { cache, guardarYa, sinLeerYa } = conDueno('A');
+    const { cache, guardarYa } = conDueno('A');
     for (const clave of [...CLAVES_DE_MESAS, ...CLAVES_DE_AMIGOS, 'sinLeer'] as const) guardarYa(clave, 1);
     cache.olvidar(...CLAVES_DE_MESAS);
     for (const clave of CLAVES_DE_MESAS) expect(cache.leer(clave)).toBeUndefined();
