@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "edee7f8812448b2814304f5635c6ca2f1d4ec658",
+  "commit": "54dc31a6b352681f1313ab6b877af4472d493590",
   "total": 138,
   "archivos": [
     {
@@ -79,8 +79,8 @@
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "444b0fea2492df4e19c4b08c115a26e4b31db860dce06b4cb20487c20e361a6d",
-      "bytes": 31938
+      "sha256": "c8404d49f5181ee344afc8d37ebf78d9a652443c418749dd40bd38ef7cabdf82",
+      "bytes": 34499
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -463,8 +463,8 @@
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "e753869699f6021a1b4482fb610fdece9d3afd041d276427c181327a7fadb5f3",
-      "bytes": 17695
+      "sha256": "0b6171d0b388f45b9882c7b310c6897afcca708f9da8c00d2571fad3761f4591",
+      "bytes": 18237
     },
     {
       "origen": "routes/joinRequests.js",
@@ -547,8 +547,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "57ac7a9d5800450d8e105cddcdb9bd93e8b370f3d6df20d4557c9b0062293a44",
-      "bytes": 10089
+      "sha256": "7a1addb268bb870bd6401cf610f07e960580202851d2abe7cc19faffdbb3294d",
+      "bytes": 10515
     },
     {
       "origen": "routes/webhooks.js",
@@ -685,8 +685,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "99ba32404d4bd66e9d5445d9214c7d2d0dfad6009991cb87f34463472ee46c27",
-      "bytes": 12919
+      "sha256": "d9a4a25728765012e8ecab590b4b3c300e5d2be5ab609fc7d117e2734464f85e",
+      "bytes": 13102
     },
     {
       "origen": "services/ocrRail.js",
@@ -787,8 +787,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "2c347859e87f5013ac26b1b9da3884a264bc1debdff2b50372a93577c5b0d57d",
-      "bytes": 92086
+      "sha256": "0798c6e8c22f8c55e4bb3dce98df08c638f7c1b3bd93044a4f660e70ff814f0a",
+      "bytes": 96431
     },
     {
       "origen": "services/viajesCalculo.js",

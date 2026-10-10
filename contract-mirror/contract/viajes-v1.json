@@ -21,7 +21,7 @@
     "mock": "En modo de ejemplo no hay RFC ni folio: no hay huella ni fecha."
   },
   "duplicado": {
-    "regla": "Quien carga primero un ticket es quien lo pagó. Un segundo escaneo del mismo ticket no lo duplica: devuelve el ya cargado, con quién y cuándo.",
+    "regla": "Quien carga primero un ticket es quien lo pagó. Un segundo escaneo del mismo ticket no lo duplica: devuelve el ya cargado, con quién y cuándo. Si el ticket se elimina (D256), la huella y el recibo quedan libres y un nuevo escaneo entra como nuevo.",
     "senales": [
       "El mismo recibo del OCR carga un solo ticket, en cualquier viaje. Siempre vale.",
       "La huella (HMAC-SHA256 con una llave derivada por HKDF de la que el servicio ya tiene, etiqueta `payme/viajes/huella/v1`): con folio, RFC + folio + total + fecha (si está); sin folio, RFC + fecha y hora completas + total + renglones (precio y cantidad).",
@@ -52,6 +52,14 @@
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
   "negociaciones": {
+    "viaje_version_4": {
+      "since": "2.175.0",
+      "decision": "256 (eliminar un ticket o un gasto del viaje)",
+      "parametro": "viaje_version=4",
+      "regla": "La cadena exacta, en las mismas rutas que la 3 y en DELETE /api/viajes/:id/tickets/:tid. Es la 3 más lo de abajo, sólo en los tickets del detalle; en GET /api/viajes la 4 sale como la 3. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte.",
+      "ticket_suma": ["puede_eliminar"],
+      "puede_eliminar": "Si quien mira puede eliminar ese ticket: el viaje está abierto y es quien lo cargó o quien lo pagó (D256). Es a quien se le muestra «Eliminar»."
+    },
     "viaje_version_3": {
       "since": "2.174.0",
       "decision": "255 (configuración del viaje: color y foto)",
@@ -324,6 +332,18 @@
         "422": { "error": "viaje_ticket_persona_unknown", "claves": ["error", "miembro_id"] }
       }
     },
+    "DELETE /api/viajes/:id/tickets/:tid": {
+      "since": "2.175.0 (D256)",
+      "regla": "Elimina un ticket escaneado o un gasto a mano. Pueden quien lo cargó y quien pagó (D256: «Quien lo cargó o quien pagó»), con el viaje abierto, bajo el lock del viaje. Se elimina aunque otros hayan elegido (D256: «Se elimina igual y se avisa a todos»): sus renglones, presentes y elecciones se borran y la cuenta se recalcula. La huella y el recibo quedan libres: un nuevo escaneo del mismo ticket entra como nuevo. Aviso `viaje_ticket_removed` a los demás miembros activos.",
+      "orden": "No miembro activo → 404 viaje_not_found (n325); el ticket no es del viaje o ya se eliminó → 404 viaje_ticket_not_found; el viaje no está abierto → 409 viaje_not_open; no es quien lo cargó ni quien pagó → 403 viaje_ticket_delete_forbidden.",
+      "limite_conocido": "Sin lápida (sin migración): un reintento tardío del POST original (tickets o gastos) con la misma idempotency_key, después de eliminarlo, lo vuelve a cargar.",
+      "respuestas": {
+        "200": { "claves": ["contract", "viaje"], "nota": "`viaje` con la versión negociada y la cuenta recalculada" },
+        "403": { "errores": ["viaje_ticket_delete_forbidden", "user_suspended"] },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_not_found": "no existe o no sos miembro activo (n325)" },
+        "409": { "errores": ["viaje_not_open"], "claves": ["error", "estado"] }
+      }
+    },
     "GET /api/viajes/:id/cierre": {
       "respuestas": {
         "200": {
@@ -373,6 +393,7 @@
       "viaje_invitation_received": "«{Nombre} te invitó al viaje {viaje}.»",
       "viaje_invitation_rejected": "«{Nombre} rechazó tu invitación al viaje {viaje}.»",
       "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.»",
+      "viaje_ticket_removed": "v2.175.0 (D256): «{Nombre} eliminó un ticket de {viaje}: {lugar}.» o «{Nombre} eliminó un gasto de {viaje}: {descripción}.» A los demás miembros activos, sin montos; el lugar es el que ya ven en la lista. payload: viaje_id.",
       "viaje_closed": "«Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»",
       "viaje_transfer_marked": "«{Nombre} marcó que te pagó {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
       "viaje_transfer_not_received": "«{Nombre} dice que no le llegó tu pago de {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
@@ -380,7 +401,7 @@
     }
   },
   "residual": [
-    "Sin borrar ni editar un ticket ya cargado, ni cambiar su forma: va al Roadmap.",
+    "Sin editar un ticket ya cargado ni cambiar su forma: va al Roadmap. Eliminarlo sí se puede (D256).",
     "El reparto de descuentos, cargos por servicio e IVA aparte va al Roadmap (V3).",
     "Sin foto de los miembros: no hay regla para mostrarla a quien no es amigo.",
     "Un recibo usado para abrir una mesa también puede cargar un ticket de viaje, y al revés: los usos únicos son independientes.",

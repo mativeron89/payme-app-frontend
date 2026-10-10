@@ -111,12 +111,18 @@ router.get('/:id/inviter-avatar', async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// v2.174.1 · C-02 de la auditoría Codex completa (n333, D237): a quien no es ni el invitado ni quien invitó, aceptar o
+// cancelar le responde lo mismo que un id que no existe, antes de decir si está vencida, aceptada o cancelada. Los 403
+// quedan sólo para las dos personas de la invitación, que ya saben que existe.
+const INVITACION_NO_ENCONTRADA = Object.freeze({ httpStatus: 404, error: 'invitation_not_found' });
+const esParte = (inv, userId) => inv.invited_user_id === userId || inv.inviter_user_id === userId;
+
 // ─── POST /:id/accept ─────────────────────────────────────
 router.post('/:id/accept', validateParams(uuidIdParam), async (req, res, next) => {
   try {
     const outcome = await pool.tx(async (client) => {
       const current = await invitationAuthority.lockCanonical(client, req.params.id);
-      if (!current) return { httpStatus: 404, error: 'invitation_not_found' };
+      if (!current || !esParte(current, req.user.id)) return INVITACION_NO_ENCONTRADA;
       if (current.invited_user_id !== req.user.id) {
         return { httpStatus: 403, error: 'not_for_you' };
       }
@@ -234,7 +240,7 @@ router.post('/:id/cancel', validateParams(uuidIdParam), async (req, res, next) =
   try {
     const outcome = await pool.tx(async (client) => {
       const current = await invitationAuthority.lockCanonical(client, req.params.id);
-      if (!current) return { httpStatus: 404, error: 'invitation_not_found' };
+      if (!current || !esParte(current, req.user.id)) return INVITACION_NO_ENCONTRADA;
       if (current.inviter_user_id !== req.user.id) {
         return { httpStatus: 403, error: 'only_inviter_can_cancel' };
       }

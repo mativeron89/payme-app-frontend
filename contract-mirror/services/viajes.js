@@ -21,7 +21,9 @@
  *   · Un viaje que no existe, o del que no sos miembro activo (invitado, rechazado, saliste o ajeno), contesta el
  *     MISMO 404, byte por byte (n325). Una invitación pendiente se ve por GET /api/viajes/invitaciones.
  *   · Los miembros ven de los demás: nombre y @usuario (sin foto: no hay regla para quien no es amigo), quién pagó
- *     cada ticket, quién ya eligió y el balance de cada uno. NUNCA qué eligió otro, ni el RFC ni el folio.
+ *     cada ticket, quién ya eligió y el balance de cada uno. Al elegir, se ve qué parte de cada renglón ya está tomada,
+ *     sin nombre (D247: los que comparten se conocen; por eso se puede deducir lo que tomó otro). Nunca el RFC ni el
+ *     folio.
  *     Declarado: el balance de quien elige cambia exactamente en su monto, así que la API no expone la selección
  *     ajena, pero el monto se infiere.
  *   · Esperando pagos: todos ven todas las transferencias (de, a, monto, estado).
@@ -75,6 +77,13 @@
  *     (`profileIdentity.fotoVisibleN164`: no eliminada, con foto, identidad de perfil encendida y mayor de edad
  *     conocida; un menor va sin foto), sólo a un miembro activo y de un miembro activo. Riesgo anotado por D245 bajo
  *     D243: el Aviso 3.0.0 cubre la foto sólo para amigos.
+ *
+ * ─── v2.175.0 · eliminar un ticket o un gasto (D256) ───────────────────────────────────────────────────────────────
+ *   · `DELETE /:id/tickets/:tid`: quien lo cargó o quien pagó, con el viaje abierto y bajo su lock. Se elimina aunque
+ *     otros hayan elegido; las FK en cascada borran renglones, presentes y elecciones, y la cuenta se recalcula al
+ *     leer. La huella y el recibo quedan libres (un nuevo escaneo entra como nuevo). Aviso `viaje_ticket_removed`
+ *     a los demás miembros activos, sin montos.
+ *   · `viaje_version=4`: `puede_eliminar` por ticket en el detalle. La 3, la 2 y sin versión no cambian.
  *
  * Cada función devuelve `{ status, body }`; la ruta sólo lo escribe. Los registros llevan ids y códigos cerrados.
  */
@@ -265,7 +274,7 @@ const cuerpoPresentes = z.object({
     .refine((xs) => new Set(xs).size === xs.length, 'miembro repetido'),
 }).strict();
 // v2.174.0 · D255: la lista acepta `viaje_version` (sólo la cadena exacta '3' negocia; un valor repetido llega como lista
-// y da 400, como cualquier otra clave inválida).
+// y da 400, como cualquier otra clave inválida). v2.175.0 · D256: '4' también, y en la lista es la 3.
 const consultaLista = z.object({
   estado: z.enum(['abiertos', 'cerrados']).default('abiertos'),
   viaje_version: z.string().optional(),
@@ -422,6 +431,10 @@ function vistaTicketEnLista(t, d, b, yo, idPublico, version = 1) {
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
     // v2.172.0 · D245, desde `viaje_version=2`: «Consumos» muestra el total y si se cargó a mano.
     ...(version >= 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
+    // v2.175.0 · D256, desde `viaje_version=4`: a quién se le muestra «Eliminar» (quien cargó o quien pagó, abierto).
+    ...(version >= 4 && {
+      puede_eliminar: d.viaje.estado === 'abierto' && (t.pagado_por === yo || cargadoPor(t) === yo),
+    }),
   };
 }
 
@@ -699,7 +712,8 @@ async function listar(userId, query) {
   const abiertos = []; const cerrados = [];
   for (const { id } of rows) {
     const d = await cargar(pool, id);
-    const item = vistaEnLista(d, userId, v.data.viaje_version === '3' ? 3 : 1);
+    // v2.175.0 · D256: la 4 sólo cambia los tickets del detalle; en la lista es la 3.
+    const item = vistaEnLista(d, userId, ['3', '4'].includes(v.data.viaje_version) ? 3 : 1);
     (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
   }
   cerrados.sort((a, b) => (b.fecha_desde || b.terminado_en || '').localeCompare(a.fecha_desde || a.terminado_en || ''));
@@ -1058,7 +1072,8 @@ async function verTicket(userId, viajeId, ticketId) {
 async function ticketBloqueado(client, viajeId, ticketId) {
   if (!esUuid(ticketId)) return null;
   const { rows: [t] } = await client.query(
-    `SELECT id, forma, pagado_por, cargado_por FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`, [ticketId, viajeId]);
+    `SELECT id, forma, pagado_por, cargado_por, lugar, recibo_jti FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`,
+    [ticketId, viajeId]);
   return t || null;
 }
 
@@ -1144,6 +1159,47 @@ async function marcarPresentes(userId, viajeId, ticketId, body) {
   if (r.status !== 200) return r;
   const { d, t } = await ticketDe(userId, viajeId, ticketId);
   return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId) });
+}
+
+/**
+ * DELETE /api/viajes/:id/tickets/:tid — v2.175.0 · D256: eliminar un ticket escaneado o un gasto a mano.
+ *   · Pueden quien lo cargó y quien pagó (Mati: «Quien lo cargó o quien pagó»); otro miembro, 403; quien no es
+ *     miembro, el 404 de n325.
+ *   · Sólo con el viaje abierto y bajo su lock: «cerrar», «elegir» y otro «eliminar» se ordenan con éste.
+ *   · Se elimina aunque otros hayan elegido («Se elimina igual y se avisa a todos»). Renglones, presentes y elecciones
+ *     caen por las FK en cascada, y la cuenta se recalcula al leer.
+ *   · La huella y el `recibo_jti` quedan libres: un nuevo escaneo del mismo ticket entra como nuevo. Sin migración no
+ *     hay lápida: un reintento tardío del POST original, con la misma `idempotency_key`, lo vuelve a cargar (límite
+ *     conocido, en el contrato).
+ *   · El aviso va a los demás miembros activos: quién eliminó y el lugar (lo que ya ven en la lista), sin montos.
+ */
+async function eliminarTicket(userId, viajeId, ticketId, { version = 1 } = {}) {
+  const r = await enViaje(viajeId, userId, async (client, viaje) => {
+    const t = await ticketBloqueado(client, viajeId, ticketId);
+    if (!t) return respuesta(404, { error: 'viaje_ticket_not_found' });
+    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    if (t.pagado_por !== userId && cargadoPor(t) !== userId) return respuesta(403, { error: 'viaje_ticket_delete_forbidden' });
+    const { rows: miembros } = await client.query(
+      `SELECT m.user_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
+        WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
+    const cuentas = await bloquearCuentas(client, [userId, ...miembros.map((m) => m.user_id)]);
+    if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
+    const { rows: [quien] } = await client.query(
+      `SELECT u.first_name, u.last_name, u.status AS user_status, v.nombre
+         FROM users u, viajes v WHERE u.id=$1 AND v.id=$2`, [userId, viajeId]);
+    await client.query(`DELETE FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`, [t.id, viajeId]);
+    const que = esManual(t) ? 'un gasto' : 'un ticket';
+    const donde = t.lugar ? `: ${t.lugar}` : '';
+    for (const m of miembros) {
+      if (m.user_id === userId) continue;
+      await avisar(client, { userId: m.user_id, type: 'viaje_ticket_removed', porPersona: userId, viajeId,
+        body: `${nombreDe(quien)} eliminó ${que} de ${quien.nombre}${donde}.`, payload: { viaje_id: viajeId } });
+    }
+    return { eliminado: true, origen: esManual(t) ? 'manual' : 'escaneo' };
+  });
+  if (!r.eliminado) return r;
+  logger.audit('viaje_ticket_deleted', { viaje_id: viajeId, ticket_id: ticketId, origen: r.origen });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, viajeId), userId, version) });
 }
 
 // ─── El gasto a mano (D244) y la foto de un miembro (D245) ─────────────────────────────────────────────────────
@@ -1533,7 +1589,7 @@ module.exports = {
   ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA, COLORES, SIN_FOTO_VIAJE,
   habilitado, forzarParaTests, capacidad, huellaDelTicket, huellaDeLectura, NO_ENCONTRADO,
   listar, invitaciones, crear, detalle, invitar, aceptar, rechazar, salir,
-  revisarTicket, cargarTicket, verTicket, elegir, marcarPresentes, cargarGasto, avatarDeMiembro,
+  revisarTicket, cargarTicket, verTicket, elegir, marcarPresentes, eliminarTicket, cargarGasto, avatarDeMiembro,
   vistaPreviaCierre, cerrar, marcarTransferencia, resumen,
   actualizar, puedoEditarFoto, guardarFoto, quitarFoto, fotoDelViaje,
 };

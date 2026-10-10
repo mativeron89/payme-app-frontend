@@ -48,6 +48,8 @@ const TYPES = {
   viaje_invitation_received: { title: 'Te invitaron a un viaje' },
   viaje_invitation_rejected: { title: 'Rechazaron tu invitación' },
   viaje_ticket_added: { title: 'Ticket nuevo en tu viaje' },
+  // v2.175.0 · D256: quien cargó o pagó un ticket lo eliminó. Sólo en la app, como los demás de Viajes.
+  viaje_ticket_removed: { title: 'Se eliminó un ticket de tu viaje' },
   viaje_closed: { title: 'Se cerró un viaje' },
   viaje_transfer_marked: { title: 'Te marcaron un pago' },
   viaje_transfer_not_received: { title: 'Un pago no llegó' },

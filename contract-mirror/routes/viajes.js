@@ -22,6 +22,8 @@
  *   PATCH /api/viajes/:id                                         → v2.174.0 · D255: nombre, fechas y color
  *   PUT | DELETE | GET /api/viajes/:id/foto                       → v2.174.0 · D255: la foto del viaje (sólo miembros)
  *   `viaje_version=3` (también en la lista)                       → v2.174.0 · D255: color y has_photo
+ *   DELETE /api/viajes/:id/tickets/:tid                           → v2.175.0 · D256: eliminar un ticket o un gasto
+ *   `viaje_version=4`                                             → v2.175.0 · D256: puede_eliminar por ticket
  *
  * 🔴 Con `features.viajes.enabled` en false (V1: hasta que Mati apruebe el Aviso), el router no existe: cualquier
  * pedido sigue al 404 de siempre de la app, también sin sesión. La lógica y las respuestas están en
@@ -100,9 +102,12 @@ function unaFoto(req, res, next) {
 }
 
 const escribir = (res, { status, body }) => res.status(status).json(body);
-// v2.172.0 · D245: `viaje_version=2`; v2.174.0 · D255: `viaje_version=3`. La cadena exacta (un valor repetido llega
-// como lista y no negocia).
-const version = (req) => ({ version: req.query.viaje_version === '3' ? 3 : req.query.viaje_version === '2' ? 2 : 1 });
+// v2.172.0 · D245: `viaje_version=2`; v2.174.0 · D255: `viaje_version=3`; v2.175.0 · D256: `viaje_version=4`. La cadena
+// exacta (un valor repetido llega como lista y no negocia).
+const version = (req) => {
+  const v = req.query.viaje_version;
+  return { version: v === '4' ? 4 : v === '3' ? 3 : v === '2' ? 2 : 1 };
+};
 const ruta = (fn) => async (req, res, next) => {
   try {
     escribir(res, await fn(req));
@@ -174,6 +179,8 @@ router.put('/:id/tickets/:tid/seleccion',
   ruta((req) => viajes.elegir(req.user.id, req.params.id, req.params.tid, req.body)));
 router.put('/:id/tickets/:tid/presentes',
   ruta((req) => viajes.marcarPresentes(req.user.id, req.params.id, req.params.tid, req.body)));
+router.delete('/:id/tickets/:tid',
+  ruta((req) => viajes.eliminarTicket(req.user.id, req.params.id, req.params.tid, version(req))));
 router.get('/:id/cierre', ruta((req) => viajes.vistaPreviaCierre(req.user.id, req.params.id)));
 router.post('/:id/cerrar', ruta((req) => viajes.cerrar(req.user.id, req.params.id, version(req))));
 router.post('/:id/transferencias/:trid/:accion(pague|deshacer|recibi|no-llego)',

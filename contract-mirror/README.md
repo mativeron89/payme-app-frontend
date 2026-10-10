@@ -6,6 +6,26 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes: eliminar un ticket o un gasto · App Backend v2.175.0 · 2026-10-10
+
+Orden `AF-VIAJES-ELIMINAR-TICKET-20261010` (D256). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`54dc31a6b352681f1313ab6b877af4472d493590`** (v2.175.0, commit A: la lectura de tickets Soft
+  Restaurant y eliminar un ticket del viaje).
+- Inventario: el del owner en **`d920b1328a9f2c8233804f6b5eb0ea37188f9ab9`** (v2.175.0, commit B, el servido según la
+  fila del lease; `contract/mirror-inventory.json`, sha256 `6bc675b7f9b1ab839bdea414306e31e7dfe51b429bc08e7674b4faad7be9c212`), adoptado con `--adoptar-inventario` sin editarlo.
+  Declara `54dc31a`.
+- **138 archivos espejados**, los mismos que antes.
+  - Cambian cinco:
+    - `contract/viajes-v1.json` (sha256 `c8404d49f5181ee344afc8d37ebf78d9a652443c418749dd40bd38ef7cabdf82`: `viaje_version=4` con `puede_eliminar`,
+      `DELETE /api/viajes/:id/tickets/:tid` y el aviso `viaje_ticket_removed`);
+    - `routes/viajes.js`, `services/viajes.js` y `services/notifications.js`;
+    - `routes/invitations.js`: v2.174.1, C-02. Aceptar y cancelar responden a un tercero el 404 `invitation_not_found`
+      que antes era 403. Este front no distingue esos 403 por código.
+  - Copiados con `git show 54dc31a:<origen>`, verificando el sha256 de cada uno contra el inventario.
+- `--paridad`: espejo = inventario = fuente en `54dc31a`, 138/138.
+
 ### Viajes: quién pagó y configuración del viaje · App Backend v2.174.0 · 2026-10-10
 
 Orden `AF-VIAJES-QUIEN-PAGO-Y-CONFIGURACION-20261010` (D255 tramo 2). Scope del lease con `contract-mirror/**` y
