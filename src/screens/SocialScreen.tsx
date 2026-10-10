@@ -135,17 +135,20 @@ export function SocialScreen() {
     if (!session || !isCurrentSession(session)) return;
     const expected = session;
     const epoch = requestsEpoch.current.next();
+    // T-01 · la cuenta del caché se toma AL PEDIR.
+    const turno = ultimoVisto.turno();
     void Promise.all([api.getIncomingFriendRequests(), api.getOutgoingFriendRequests()])
       .then(([entrantes, salientes]) => {
         if (!requestsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
         // Se guardan las FILAS de vista, no los DTO: la saliente ya viene sin la
         // identidad del destinatario, y así queda también en memoria.
-        const guardadas = ultimoVisto.guardar<SolicitudesGuardadas>('amigos.solicitudes', {
+        const g = ultimoVisto.guardar<SolicitudesGuardadas>(turno, 'amigos.solicitudes', {
           incoming: entrantes.requests.map(incomingRowView),
           outgoing: salientes.requests.map(outgoingRowView),
         });
-        setIncoming(guardadas.incoming);
-        setOutgoing(guardadas.outgoing);
+        if (!g) return;
+        setIncoming(g.valor.incoming);
+        setOutgoing(g.valor.outgoing);
         // D230 · la burbuja de «Amigos» sigue a esta misma carga: al entrar, al
         // volver y después de aceptar o rechazar.
         publicarSolicitudesPendientes(expected, entrantes.requests.length);
@@ -162,13 +165,16 @@ export function SocialScreen() {
     setFriendsRevision((value) => value + 1);
     const expected = session;
     const epoch = friendsEpoch.current.next();
+    const turno = ultimoVisto.turno();
     api.getFriends()
       .then((r) => {
         if (!friendsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
         podarFotosDeAmigos(expected, r.friends);
-        setFriends(ultimoVisto.guardar('amigos.amigos', r.friends));
+        const g = ultimoVisto.guardar(turno, 'amigos.amigos', r.friends);
+        if (g) setFriends(g.valor);
       })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         ultimoVisto.olvidar('amigos.amigos');
         if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends([]);
       });
@@ -178,13 +184,16 @@ export function SocialScreen() {
     if (!session || !isCurrentSession(session)) return;
     const expected = session;
     const epoch = groupsEpoch.current.next();
+    const turno = ultimoVisto.turno();
     api.getGroups()
       .then((r) => {
         if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) {
-          setGroups(ultimoVisto.guardar('amigos.grupos', r.groups));
+          const g = ultimoVisto.guardar(turno, 'amigos.grupos', r.groups);
+          if (g) setGroups(g.valor);
         }
       })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         ultimoVisto.olvidar('amigos.grupos');
         if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setGroups([]);
       });

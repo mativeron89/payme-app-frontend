@@ -205,10 +205,16 @@ export function HomeScreen() {
     // D237 · con lo último visto en pantalla se pide por detrás, sin volver a
     // la carga; «Reintentar» sí empieza de cero.
     if (desdeCero) setOpenMesas(null);
+    // T-01 · la cuenta se toma AL PEDIR: una respuesta tardía de otra cuenta ni se guarda ni se muestra.
+    const turno = ultimoVisto.turno();
     return api
       .getOpenMesas()
-      .then((r) => setOpenMesas(ultimoVisto.guardar('inicio.mesasAbiertas', r)))
+      .then((r) => {
+        const g = ultimoVisto.guardar(turno, 'inicio.mesasAbiertas', r);
+        if (g) setOpenMesas(g.valor);
+      })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         // Lo guardado ya no se puede confirmar: no se lo muestra como cierto.
         ultimoVisto.olvidar('inicio.mesasAbiertas');
         setOpenMesas(null);

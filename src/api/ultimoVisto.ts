@@ -22,7 +22,19 @@ import { loadSession, subscribeSession } from './storage';
  *   `ultimoVisto.test.ts` lista los únicos archivos que lo leen.
  * - **Siempre se vuelve a pedir.** Esto decide qué se ve en el primer cuadro,
  *   nunca reemplaza el pedido.
+ * - 🔴 **T-01 (auditoría Codex total, ALTA): la cuenta se toma AL PEDIR.** Antes
+ *   `guardar` tomaba la cuenta vigente cuando llegaba la respuesta: una tardía
+ *   de la cuenta A se guardaba bajo la B. Ahora quien pide saca un `turno()`
+ *   (la cuenta y la generación de ese momento) y `guardar(turno, …)` descarta
+ *   la respuesta si cualquiera de las dos cambió: no se guarda ni se muestra
+ *   (devuelve `null`). La generación sube con cada `vaciar`.
  */
+
+/** T-01 · quién pidió: la cuenta y la generación del caché en el momento de pedir. */
+export interface TurnoDeUltimoVisto {
+  readonly dueno: string | null;
+  readonly generacion: number;
+}
 
 export type ClaveUltimoVisto =
   | 'inicio.mesasAbiertas'
@@ -59,6 +71,8 @@ function duenoVigente(): string | null {
 
 export class UltimoVisto {
   private dueno: string | null = null;
+  /** T-01 · sube con cada `vaciar`: lo pedido antes ya no se guarda. */
+  private generacion = 0;
   private readonly entradas = new Map<ClaveUltimoVisto, Entrada>();
 
   constructor(private readonly vigente: () => string | null = duenoVigente) {}
@@ -68,51 +82,84 @@ export class UltimoVisto {
     const ahora = this.vigente();
     if (ahora === null || ahora !== this.dueno) {
       // Otra cuenta, o ninguna: lo guardado no es de quien mira.
-      if (this.dueno !== null) this.vaciar();
+      if (this.dueno !== null) this.soltar();
       return undefined;
     }
     return this.entradas.get(clave)?.valor as T | undefined;
   }
 
+  /** T-01 · se saca ANTES de pedir: la cuenta y la generación de este momento. */
+  turno(): TurnoDeUltimoVisto {
+    return { dueno: this.vigente(), generacion: this.generacion };
+  }
+
   /**
-   * Guarda lo que llegó para la cuenta de ahora y devuelve lo que hay que
-   * mostrar: si es IGUAL a lo guardado, devuelve el MISMO objeto de antes, así
-   * React no vuelve a dibujar nada. Sin sesión no guarda.
+   * ¿Lo pedido con este turno sigue siendo de la cuenta de ahora, y nada se
+   * vació desde entonces? Quien llama lo usa también en el error: un fallo
+   * tardío de otra cuenta no borra ni muestra nada.
    */
-  guardar<T>(clave: ClaveUltimoVisto, valor: T): T {
-    const ahora = this.vigente();
-    if (ahora === null) return valor;
-    if (ahora !== this.dueno) {
-      this.vaciar();
-      this.dueno = ahora;
+  esDeAhora(turno: TurnoDeUltimoVisto): boolean {
+    return this.sigue(turno);
+  }
+
+  private sigue(turno: TurnoDeUltimoVisto): boolean {
+    return turno.dueno !== null && turno.dueno === this.vigente() && turno.generacion === this.generacion;
+  }
+
+  /**
+   * Guarda lo que llegó y devuelve lo que hay que mostrar: si es IGUAL a lo
+   * guardado, el MISMO objeto de antes, así React no vuelve a dibujar nada.
+   *
+   * 🔴 T-01 · `null` si ya no es de quien lo pidió (otra cuenta, sin sesión o
+   * un `vaciar` en el medio): no se guarda y el que llama NO lo muestra.
+   */
+  guardar<T>(turno: TurnoDeUltimoVisto, clave: ClaveUltimoVisto, valor: T): { readonly valor: T } | null {
+    if (!this.sigue(turno)) return null;
+    if (turno.dueno !== this.dueno) {
+      // La primera vez con esta cuenta (o la sesión cambió sin aviso): lo de otra no queda.
+      if (this.dueno !== null) this.soltar();
+      this.dueno = turno.dueno;
     }
     let json: string;
     try {
       json = JSON.stringify(valor);
     } catch {
-      return valor;
+      return { valor };
     }
     const antes = this.entradas.get(clave);
-    if (antes && antes.json === json) return antes.valor as T;
+    if (antes && antes.json === json) return { valor: antes.valor as T };
     this.entradas.set(clave, { valor, json });
-    return valor;
+    return { valor };
   }
 
   /**
    * D237 · llegó el sin leer: si SUBIÓ respecto de lo guardado, puede haber
    * llegado un aviso de una mesa (te aceptaron, te invitaron, se cerró) y lo de
-   * las mesas se borra. Devuelve lo que hay que mostrar.
+   * las mesas se borra. Devuelve lo que hay que mostrar, o `null` (T-01).
    */
-  registrarSinLeer(ahora: number): number {
+  registrarSinLeer(turno: TurnoDeUltimoVisto, ahora: number): { readonly valor: number } | null {
+    if (!this.sigue(turno)) return null;
     if (subioSinLeer(this.leer<number>('sinLeer'), ahora)) this.olvidar(...CLAVES_DE_MESAS);
-    return this.guardar('sinLeer', ahora);
+    return this.guardar(turno, 'sinLeer', ahora);
   }
 
   olvidar(...claves: readonly ClaveUltimoVisto[]): void {
     for (const clave of claves) this.entradas.delete(clave);
   }
 
+  /** Todo afuera, y lo pedido hasta ahora ya no se guarda (T-01). */
   vaciar(): void {
+    this.soltar();
+    this.generacion += 1;
+  }
+
+  /**
+   * Suelta lo de una cuenta que ya no es la de ahora, SIN subir la generación:
+   * lo que la cuenta de ahora ya pidió es suyo y tiene que poder llegar (si no,
+   * su pantalla se quedaría esperando). Lo de la otra cuenta lo frena el dueño
+   * del turno.
+   */
+  private soltar(): void {
     this.entradas.clear();
     this.dueno = null;
   }

@@ -12,11 +12,14 @@ export function useSinLeer(): number {
   const [sinLeer, setSinLeer] = useState(() => ultimoVisto.leer<number>('sinLeer') ?? 0);
   useEffect(() => {
     let vivo = true;
+    // T-01 · la cuenta se toma al pedir: una respuesta de otra no se guarda ni se muestra.
+    const turno = ultimoVisto.turno();
     api
       .getUnreadCount()
       .then((r) => {
         if (!vivo) return;
-        setSinLeer(ultimoVisto.registrarSinLeer(r.unread_count));
+        const g = ultimoVisto.registrarSinLeer(turno, r.unread_count);
+        if (g) setSinLeer(g.valor);
       })
       .catch(() => undefined);
     return () => {

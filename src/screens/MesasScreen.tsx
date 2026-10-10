@@ -140,17 +140,21 @@ export function MesasScreen() {
     // D237 · con lo último visto en pantalla se pide por detrás; «Reintentar»
     // empieza de cero.
     if (desdeCero) setMisMesas(null);
+    // T-01 · la cuenta se toma AL PEDIR.
+    const turno = ultimoVisto.turno();
     api.getMyMesas({ detail: 'items' })
       .then((r) => {
         // Sólo la primera página: «Ver más mesas» no se guarda.
-        const pagina = ultimoVisto.guardar<PrimeraPaginaDeTusMesas>('mesas.tusMesas', {
+        const g = ultimoVisto.guardar<PrimeraPaginaDeTusMesas>(turno, 'mesas.tusMesas', {
           mesas: [...r.mesas],
           nextCursor: r.nextCursor,
         });
-        setMisMesas(pagina.mesas);
-        setCursorMesas(pagina.nextCursor);
+        if (!g) return;
+        setMisMesas(g.valor.mesas);
+        setCursorMesas(g.valor.nextCursor);
       })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         ultimoVisto.olvidar('mesas.tusMesas');
         setMisMesas(null);
         setFalloMesas(true);
@@ -199,11 +203,17 @@ export function MesasScreen() {
   const cargarHistorial = useCallback((desdeCero: boolean) => {
     setFallo(false);
     if (desdeCero) setPagos(null);
+    // T-01 · la cuenta se toma AL PEDIR.
+    const turno = ultimoVisto.turno();
     traerHistorialCompleto((limit, offset) =>
       api.getHistory({ limit, offset }).then((r) => r.history),
     )
-      .then((h) => setPagos(ultimoVisto.guardar('mesas.historial', h)))
+      .then((h) => {
+        const g = ultimoVisto.guardar(turno, 'mesas.historial', h);
+        if (g) setPagos(g.valor);
+      })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         // O está todo o es el error (ver arriba): lo guardado tampoco se muestra.
         ultimoVisto.olvidar('mesas.historial');
         setPagos(null);

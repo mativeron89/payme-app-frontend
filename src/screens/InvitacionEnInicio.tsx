@@ -188,16 +188,21 @@ export function InvitacionEnInicio() {
     () => ultimoVisto.leer<InvitacionMostrable[]>('inicio.invitaciones') ?? [],
   );
   const cargar = useCallback(() => {
+    // T-01 · la cuenta se toma AL PEDIR.
+    const turno = ultimoVisto.turno();
     api
       .getPendingInvitations()
       .then((r) => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         const mostrables = invitacionesMostrables(r.invitations);
         // E174-3B · la misma poda que en Avisos.
         const actual = loadSession();
         if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
-        setLista(ultimoVisto.guardar('inicio.invitaciones', mostrables));
+        const g = ultimoVisto.guardar(turno, 'inicio.invitaciones', mostrables);
+        if (g) setLista(g.valor);
       })
       .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
         // Sin poder confirmarla, no se sigue mostrando la guardada.
         ultimoVisto.olvidar('inicio.invitaciones');
         setLista([]);
