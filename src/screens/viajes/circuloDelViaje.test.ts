@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { saveSession } from '../../api/storage';
 import { traducir } from '../../i18n/idioma';
 import { circuloDelViaje, nombreDeViajeRecordado, recordarNombreDeViaje } from './circuloDelViaje';
 
@@ -29,11 +30,22 @@ describe('D250 · el círculo de la cámara dentro de un viaje', () => {
 });
 
 describe('D250 · el nombre del viaje para el título del escaneo', () => {
-  it('se recuerda por id y sólo para ese id', () => {
+  it('se recuerda por id y sólo para ese id (con una sesión: C-07)', () => {
+    const valores = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => valores.get(k) ?? null,
+      setItem: (k: string, v: string) => { valores.set(k, v); },
+      removeItem: (k: string) => { valores.delete(k); },
+    });
+    saveSession({
+      access_token: 'a', refresh_token: 'r', family_id: 'fam-d250', principal_id: 'user-d250',
+      user: { id: 'user-d250', payme_id: 'payme_mx_d250', email: 'd250@example.com', first_name: 'X', last_name: 'Y' },
+    });
     expect(nombreDeViajeRecordado('otro')).toBeNull();
     recordarNombreDeViaje(VIAJE.id, VIAJE.nombre);
     expect(nombreDeViajeRecordado(VIAJE.id)).toBe('Cancún 2026');
     expect(nombreDeViajeRecordado('otro')).toBeNull();
     expect(nombreDeViajeRecordado(null)).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

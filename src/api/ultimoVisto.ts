@@ -74,6 +74,8 @@ export class UltimoVisto {
   /** T-01 · sube con cada `vaciar`: lo pedido antes ya no se guarda. */
   private generacion = 0;
   private readonly entradas = new Map<ClaveUltimoVisto, Entrada>();
+  /** C-07 · las memorias por cuenta (`MemoriaDeCuenta`) se borran con cada `vaciar`. */
+  private readonly alVaciar = new Set<() => void>();
 
   constructor(private readonly vigente: () => string | null = duenoVigente) {}
 
@@ -151,6 +153,13 @@ export class UltimoVisto {
   vaciar(): void {
     this.soltar();
     this.generacion += 1;
+    for (const oyente of [...this.alVaciar]) oyente();
+  }
+
+  /** C-07 · avisa cada `vaciar` (cambio de cuenta o de sesión). */
+  alVaciarse(oyente: () => void): () => void {
+    this.alVaciar.add(oyente);
+    return () => this.alVaciar.delete(oyente);
   }
 
   /**
@@ -164,10 +173,20 @@ export class UltimoVisto {
     this.dueno = null;
   }
 
-  /** Se engancha a la sesión: si cambia el dueño (o no hay), se vacía todo. */
+  /**
+   * Se engancha a la sesión: si cambia el dueño (o no hay), se vacía todo.
+   * C-07 · también con la caché vacía: cada cambio de dueño (cerrar sesión,
+   * entrar, otra cuenta) sube la generación, así ningún turno anterior vale y
+   * las memorias por cuenta se borran. Un refresco de tokens no cambia el dueño.
+   */
   vigilarSesion(suscribir: (oyente: () => void) => () => void): () => void {
+    let visto = this.vigente();
     return suscribir(() => {
-      if (this.dueno !== null && this.vigente() !== this.dueno) this.vaciar();
+      const ahora = this.vigente();
+      if (ahora !== visto || (this.dueno !== null && ahora !== this.dueno)) {
+        visto = ahora;
+        this.vaciar();
+      }
     });
   }
 

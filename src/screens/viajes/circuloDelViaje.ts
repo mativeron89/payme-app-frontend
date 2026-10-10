@@ -1,3 +1,4 @@
+import { MemoriaDeCuenta } from '../../api/memoriaDeCuenta';
 import type { EstadoViaje } from '../../api/viajes';
 import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import type { AppBottomBarProps } from '../../components/AppBottomBar';
@@ -38,13 +39,16 @@ export function circuloDelViaje(
  * D250 · el título del escaneo de un viaje, «Ticket para {viaje}», sin esperar
  * la red: el nombre que mostró la pantalla del viaje queda recordado por id.
  * Después de una recarga no hay nada recordado y el escaneo lo pide.
+ * C-07 · es de la cuenta que lo vio (`MemoriaDeCuenta`): con otra cuenta, o
+ * después de cerrar sesión, no hay nada recordado y el escaneo lo pide.
  */
-let recordado: { readonly id: string; readonly nombre: string } | null = null;
+const recordado = new MemoriaDeCuenta<{ readonly id: string; readonly nombre: string }>();
 
 export function recordarNombreDeViaje(id: string, nombre: string): void {
-  recordado = { id, nombre };
+  recordado.guardar({ id, nombre });
 }
 
 export function nombreDeViajeRecordado(id: string | null): string | null {
-  return id !== null && recordado?.id === id ? recordado.nombre : null;
+  const r = recordado.leer();
+  return id !== null && r?.id === id ? r.nombre : null;
 }
