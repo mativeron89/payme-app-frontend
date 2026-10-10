@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "54dc31a6b352681f1313ab6b877af4472d493590",
+  "commit": "9d3f4588d2a42c2bde8f60b838c7f4d1b654cd1d",
   "total": 138,
   "archivos": [
     {
@@ -79,8 +79,8 @@
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "c8404d49f5181ee344afc8d37ebf78d9a652443c418749dd40bd38ef7cabdf82",
-      "bytes": 34499
+      "sha256": "1ec8a670b15a3c000e5093fc95f4e6cc609b69f8dbbd20fb924657b0a957a220",
+      "bytes": 40884
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -421,8 +421,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "a92ed4c82f5c49d3b10b9ce7af3be9de566fe1b566d676fb2b9093fbf8755a83",
-      "bytes": 56940
+      "sha256": "68d72fb494c43dc238c59a797e1a194bd2549c86acbb4f3f39083ec91dc30191",
+      "bytes": 64065
     },
     {
       "origen": "routes/auth.js",
@@ -547,8 +547,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "7a1addb268bb870bd6401cf610f07e960580202851d2abe7cc19faffdbb3294d",
-      "bytes": 10515
+      "sha256": "c7260ac03be7bcd50727be378c8b632ba8c4890ca559523040cbf3787dce216d",
+      "bytes": 10755
     },
     {
       "origen": "routes/webhooks.js",
@@ -787,14 +787,14 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "0798c6e8c22f8c55e4bb3dce98df08c638f7c1b3bd93044a4f660e70ff814f0a",
-      "bytes": 96431
+      "sha256": "1a28c9d1c64f3c3c45285a3f65ac44afb4bc8c908e26c5f6ea748b5fa7037703",
+      "bytes": 107055
     },
     {
       "origen": "services/viajesCalculo.js",
       "destino": "services/viajesCalculo.js",
-      "sha256": "c693e279fddff67fc825c576bd5f41ddaf0e32d66adc1a9ac3810d234360de1c",
-      "bytes": 10442
+      "sha256": "d59ce73cece904d4b2dac5dff236b1be4ecab402d03ef3a76bfb18de61c463a7",
+      "bytes": 12699
     },
     {
       "origen": "services/walletRail.js",

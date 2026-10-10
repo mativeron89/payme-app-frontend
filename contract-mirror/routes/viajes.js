@@ -24,6 +24,7 @@
  *   `viaje_version=3` (también en la lista)                       → v2.174.0 · D255: color y has_photo
  *   DELETE /api/viajes/:id/tickets/:tid                           → v2.175.0 · D256: eliminar un ticket o un gasto
  *   `viaje_version=4`                                             → v2.175.0 · D256: puede_eliminar por ticket
+ *   `viaje_version=5` (también en el detalle de un ticket)        → v2.177.0 · D263: los pagadores con su monto
  *
  * 🔴 Con `features.viajes.enabled` en false (V1: hasta que Mati apruebe el Aviso), el router no existe: cualquier
  * pedido sigue al 404 de siempre de la app, también sin sesión. La lógica y las respuestas están en
@@ -102,11 +103,11 @@ function unaFoto(req, res, next) {
 }
 
 const escribir = (res, { status, body }) => res.status(status).json(body);
-// v2.172.0 · D245: `viaje_version=2`; v2.174.0 · D255: `viaje_version=3`; v2.175.0 · D256: `viaje_version=4`. La cadena
-// exacta (un valor repetido llega como lista y no negocia).
+// v2.172.0 · D245: `viaje_version=2`; v2.174.0 · D255: `viaje_version=3`; v2.175.0 · D256: `viaje_version=4`;
+// v2.177.0 · D263: `viaje_version=5`. La cadena exacta (un valor repetido llega como lista y no negocia).
 const version = (req) => {
   const v = req.query.viaje_version;
-  return { version: v === '4' ? 4 : v === '3' ? 3 : v === '2' ? 2 : 1 };
+  return { version: v === '5' ? 5 : v === '4' ? 4 : v === '3' ? 3 : v === '2' ? 2 : 1 };
 };
 const ruta = (fn) => async (req, res, next) => {
   try {
@@ -160,9 +161,9 @@ router.post('/:id/aceptar', ruta((req) => viajes.aceptar(req.user.id, req.params
 router.post('/:id/rechazar', ruta((req) => viajes.rechazar(req.user.id, req.params.id)));
 router.post('/:id/salir', ruta((req) => viajes.salir(req.user.id, req.params.id)));
 router.post('/:id/tickets/check', ruta((req) => viajes.revisarTicket(req.user.id, req.params.id, req.body)));
-router.post('/:id/tickets', ruta((req) => viajes.cargarTicket(req.user.id, req.params.id, req.body)));
+router.post('/:id/tickets', ruta((req) => viajes.cargarTicket(req.user.id, req.params.id, req.body, version(req))));
 // v2.172.0 · D244: el gasto a mano (descripción, monto y entre quiénes se reparte).
-router.post('/:id/gastos', ruta((req) => viajes.cargarGasto(req.user.id, req.params.id, req.body)));
+router.post('/:id/gastos', ruta((req) => viajes.cargarGasto(req.user.id, req.params.id, req.body, version(req))));
 // v2.172.0 · D245: la foto de un miembro, con la regla n164. Sin URL pública; `private, no-store`.
 router.get('/:id/miembros/:mid/avatar', async (req, res, next) => {
   try {
@@ -174,11 +175,11 @@ router.get('/:id/miembros/:mid/avatar', async (req, res, next) => {
     return res.end(r.avatar.bytes);
   } catch (err) { return next(err); }
 });
-router.get('/:id/tickets/:tid', ruta((req) => viajes.verTicket(req.user.id, req.params.id, req.params.tid)));
+router.get('/:id/tickets/:tid', ruta((req) => viajes.verTicket(req.user.id, req.params.id, req.params.tid, version(req))));
 router.put('/:id/tickets/:tid/seleccion',
-  ruta((req) => viajes.elegir(req.user.id, req.params.id, req.params.tid, req.body)));
+  ruta((req) => viajes.elegir(req.user.id, req.params.id, req.params.tid, req.body, version(req))));
 router.put('/:id/tickets/:tid/presentes',
-  ruta((req) => viajes.marcarPresentes(req.user.id, req.params.id, req.params.tid, req.body)));
+  ruta((req) => viajes.marcarPresentes(req.user.id, req.params.id, req.params.tid, req.body, version(req))));
 router.delete('/:id/tickets/:tid',
   ruta((req) => viajes.eliminarTicket(req.user.id, req.params.id, req.params.tid, version(req))));
 router.get('/:id/cierre', ruta((req) => viajes.vistaPreviaCierre(req.user.id, req.params.id)));

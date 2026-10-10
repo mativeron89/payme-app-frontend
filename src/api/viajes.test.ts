@@ -228,7 +228,7 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
     const ruta = CONTRATO.rutas['POST /api/viajes/:id/gastos'] as unknown as {
       request: Record<string, string>; respuestas: Record<string, Record<string, unknown>>;
     };
-    expect(Object.keys(ruta.request).sort()).toEqual(['descripcion', 'idempotency_key', 'monto_cents', 'pagado_por', 'presentes']);
+    expect(Object.keys(ruta.request).sort()).toEqual(['descripcion', 'idempotency_key', 'monto_cents', 'pagado_por', 'pagadores', 'presentes']);
     expect(ruta.respuestas['201']!.claves).toEqual(['contract', 'ticket', 'ya_cargado']);
     expect(decodeGastoCargado({ contract: CONTRATO.id, ticket, ya_cargado: null })).toMatchObject({ id: 't', monto_cents: 90000 });
   });

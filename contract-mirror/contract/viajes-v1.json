@@ -21,7 +21,7 @@
     "mock": "En modo de ejemplo no hay RFC ni folio: no hay huella ni fecha."
   },
   "duplicado": {
-    "regla": "Quien carga primero un ticket es quien lo pagó. Un segundo escaneo del mismo ticket no lo duplica: devuelve el ya cargado, con quién y cuándo. Si el ticket se elimina (D256), la huella y el recibo quedan libres y un nuevo escaneo entra como nuevo.",
+    "regla": "Quien carga un ticket elige quién lo pagó (D255: un miembro activo; si no elige, quien carga). Un segundo escaneo del mismo ticket no lo duplica: devuelve el ya cargado, con quién lo cargó y cuándo. Si el ticket se elimina (D256), la huella y el recibo quedan libres y un nuevo escaneo entra como nuevo.",
     "senales": [
       "El mismo recibo del OCR carga un solo ticket, en cualquier viaje. Siempre vale.",
       "La huella (HMAC-SHA256 con una llave derivada por HKDF de la que el servicio ya tiene, etiqueta `payme/viajes/huella/v1`): con folio, RFC + folio + total + fecha (si está); sin folio, RFC + fecha y hora completas + total + renglones (precio y cantidad).",
@@ -40,7 +40,8 @@
   "balance": {
     "regla": "pagó − consumió, por miembro. La suma de todos los balances es siempre 0.",
     "en_vivo": "Lo que nadie eligió todavía no es de nadie: a quien pagó sólo se le acredita lo asignado, y `sin_repartir` dice cuánto falta y quién falta elegir.",
-    "al_cerrar": "Lo no elegido de cada ticket va en partes iguales a quienes no eligieron en ese ticket (D242-4); si todos eligieron, a todos los del ticket (V4). Una cuenta dada de baja no recibe mientras quede alguien vivo. El cierre queda congelado."
+    "al_cerrar": "Lo no elegido de cada ticket va en partes iguales a quienes no eligieron en ese ticket (D242-4); si todos eligieron, a todos los del ticket (V4). Una cuenta dada de baja no recibe mientras quede alguien vivo. El cierre queda congelado.",
+    "varios_pagadores": "v2.177.0 · D263: con varios pagadores, cada uno acredita lo que pagó. En vivo, con algo sin repartir, lo acreditado (total − sin repartir) se reparte en proporción a lo que pagó cada uno, en centavos enteros (el piso de cada parte y el resto, de a un centavo, a los primeros), así la suma sigue en 0. «Pagar el total» con varios: cada uno consumió lo que pagó."
   },
   "transferencias": {
     "algoritmo": "El mínimo número de transferencias: n − (máximo número de grupos de suma 0 en que se pueden partir los n balances distintos de 0). Exacto, por programación dinámica sobre subconjuntos (n ≤ 20). Dentro de cada grupo, el mayor deudor le paga al mayor acreedor lo que alcance, hasta saldarlo.",
@@ -52,13 +53,23 @@
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
   "negociaciones": {
+    "viaje_version_5": {
+      "since": "2.177.0",
+      "decision": "263 (varias personas en «¿Quién pagó?»), plan OK del Bibliotecario 2026-10-10T16:25:32Z",
+      "parametro": "viaje_version=5",
+      "regla": "La cadena exacta, en las mismas rutas que la 4 y, además, en el detalle de un ticket: GET /api/viajes/:id/tickets/:tid y el `ticket` de las respuestas de POST /:id/tickets, POST /:id/gastos, PUT /:id/tickets/:tid/seleccion y PUT /:id/tickets/:tid/presentes. Es la 4 más lo de abajo; en GET /api/viajes la 5 sale como la 3. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte.",
+      "ticket_suma": ["pagadores"],
+      "detalle_de_ticket_suma": ["pagadores"],
+      "pagadores": "[{miembro_id, monto_cents}] en el orden en que se cargaron: quiénes pagaron y cuánto cada uno. Con un solo pagador, uno con el total.",
+      "pagado_por": "En todas las versiones, con varios pagadores, `pagado_por` es el primero de la lista. `pagaste_tu` es true para cualquiera de los que pagaron, y `pagado_cents` (v2) suma lo que pagó cada uno."
+    },
     "viaje_version_4": {
       "since": "2.175.0",
       "decision": "256 (eliminar un ticket o un gasto del viaje)",
       "parametro": "viaje_version=4",
       "regla": "La cadena exacta, en las mismas rutas que la 3 y en DELETE /api/viajes/:id/tickets/:tid. Es la 3 más lo de abajo, sólo en los tickets del detalle; en GET /api/viajes la 4 sale como la 3. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte.",
       "ticket_suma": ["puede_eliminar"],
-      "puede_eliminar": "Si quien mira puede eliminar ese ticket: el viaje está abierto y es quien lo cargó o quien lo pagó (D256). Es a quien se le muestra «Eliminar»."
+      "puede_eliminar": "Si quien mira puede eliminar ese ticket: el viaje está abierto y es quien lo cargó o quien lo pagó (D256; desde D263, cualquiera de los que pagaron). Es a quien se le muestra «Eliminar»."
     },
     "viaje_version_3": {
       "since": "2.174.0",
@@ -215,7 +226,8 @@
         "fecha_ticket": "YYYY-MM-DD | null, opcional (la de `ticket_datetime`)",
         "hora_ticket": "HH:MM | null, opcional; requiere fecha_ticket",
         "items": "1..100 de {name 1..200, price_cents ≥ 0 (unitario), quantity 1..32767}",
-        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos."
+        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos.",
+        "pagadores": "v2.177.0 · D263, opcional, en lugar de pagado_por (los dos juntos: 400): 1..20 de {miembro_id, monto_cents?}, sin repetir, todos con monto o ninguno (si no, 400). Cada uno, un miembro activo con la cuenta viva y activa (si no, 422 viaje_ticket_payer_unknown con su miembro_id). Sin montos: partes iguales del total, el centavo de más a los primeros en el orden pedido. Con montos: enteros 1..100000000 que suman exactamente el total. Cada pagador paga al menos un centavo; si no suman o a alguno le tocaría 0, 422 viaje_ticket_payers_total_mismatch {error, monto_cents (el total)}. Con uno solo, es lo mismo que pagado_por. Entra al hash del pedido sólo si vino. A cada pagador que no sea quien carga le llega un aviso propio, sin montos."
       },
       "respuestas": {
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null },
@@ -224,9 +236,10 @@
         "404": { "cuerpo": { "error": "viaje_not_found" } },
         "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_ticket_receipt_used", "viaje_tickets_limit", "viaje_total_limit"],
           "viaje_total_limit": ["error", "limit"] },
-        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown"],
+        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch"],
           "viaje_ticket_amount_invalid": "también un ticket de más de $1,000,000 (limites.monto_ticket_cents, v2.173.2)",
-          "viaje_ticket_payer_unknown": ["error", "miembro_id"] }
+          "viaje_ticket_payer_unknown": ["error", "miembro_id"],
+          "viaje_ticket_payers_total_mismatch": ["error", "monto_cents"] }
       }
     },
     "POST /api/viajes/:id/gastos": {
@@ -235,7 +248,8 @@
         "monto_cents": "entero 1..100000000",
         "presentes": "1..20 ids de miembro activo, sin repetir; quien carga puede no estar",
         "idempotency_key": "string 8..100",
-        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos."
+        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos.",
+        "pagadores": "v2.177.0 · D263, opcional, en lugar de pagado_por (los dos juntos: 400): 1..20 de {miembro_id, monto_cents?}, sin repetir, todos con monto o ninguno (si no, 400). Cada uno, un miembro activo con la cuenta viva y activa (si no, 422 viaje_ticket_payer_unknown con su miembro_id). Sin montos: partes iguales del total, el centavo de más a los primeros en el orden pedido. Con montos: enteros 1..100000000 que suman exactamente el total. Cada pagador paga al menos un centavo; si no suman o a alguno le tocaría 0, 422 viaje_ticket_payers_total_mismatch {error, monto_cents (el total)}. Con uno solo, es lo mismo que pagado_por. Entra al hash del pedido sólo si vino. A cada pagador que no sea quien carga le llega un aviso propio, sin montos."
       },
       "respuestas": {
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null, "ticket": "la forma de GET /:id/tickets/:tid" },
@@ -244,7 +258,8 @@
         "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
         "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_tickets_limit", "viaje_total_limit"],
           "viaje_total_limit": ["error", "limit"] },
-        "422": { "errores": ["viaje_ticket_persona_unknown", "viaje_ticket_payer_unknown"], "claves": ["error", "miembro_id"] }
+        "422": { "errores": ["viaje_ticket_persona_unknown", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch"], "claves": ["error", "miembro_id"],
+          "viaje_ticket_payers_total_mismatch": ["error", "monto_cents"] }
       }
     },
     "PATCH /api/viajes/:id": {
@@ -325,6 +340,7 @@
     },
     "PUT /api/viajes/:id/tickets/:tid/presentes": {
       "request": { "presentes": "1..20 ids de miembro del ticket, sin repetir; los demás quedan sin marcar" },
+      "regla": "Quien pagó o quien cargó (D255-6). Desde v2.177.0 (D263, extensión declarada en el plan) cualquiera de los que pagaron; si no, 409 viaje_ticket_not_yours.",
       "respuestas": {
         "200": { "claves": ["contract", "ticket"] },
         "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"] },
@@ -334,7 +350,7 @@
     },
     "DELETE /api/viajes/:id/tickets/:tid": {
       "since": "2.175.0 (D256)",
-      "regla": "Elimina un ticket escaneado o un gasto a mano. Pueden quien lo cargó y quien pagó (D256: «Quien lo cargó o quien pagó»), con el viaje abierto, bajo el lock del viaje. Se elimina aunque otros hayan elegido (D256: «Se elimina igual y se avisa a todos»): sus renglones, presentes y elecciones se borran y la cuenta se recalcula. La huella y el recibo quedan libres: un nuevo escaneo del mismo ticket entra como nuevo. Aviso `viaje_ticket_removed` a los demás miembros activos.",
+      "regla": "Elimina un ticket escaneado o un gasto a mano. Pueden quien lo cargó y quien pagó (D256: «Quien lo cargó o quien pagó»; desde D263, cualquiera de los que pagaron), con el viaje abierto, bajo el lock del viaje. Se elimina aunque otros hayan elegido (D256: «Se elimina igual y se avisa a todos»): sus renglones, presentes y elecciones se borran y la cuenta se recalcula. La huella y el recibo quedan libres: un nuevo escaneo del mismo ticket entra como nuevo. Aviso `viaje_ticket_removed` a los demás miembros activos.",
       "orden": "No miembro activo → 404 viaje_not_found (n325); el ticket no es del viaje o ya se eliminó → 404 viaje_ticket_not_found; el viaje no está abierto → 409 viaje_not_open; no es quien lo cargó ni quien pagó → 403 viaje_ticket_delete_forbidden.",
       "limite_conocido": "Sin lápida (sin migración): un reintento tardío del POST original (tickets o gastos) con la misma idempotency_key, después de eliminarlo, lo vuelve a cargar.",
       "respuestas": {
@@ -392,13 +408,26 @@
     "tipos": {
       "viaje_invitation_received": "«{Nombre} te invitó al viaje {viaje}.»",
       "viaje_invitation_rejected": "«{Nombre} rechazó tu invitación al viaje {viaje}.»",
-      "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.»",
+      "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.» v2.177.0 · D263: con varios pagadores, a cada uno que no sea quien carga, sin montos: «{Nombre} cargó un ticket en {viaje}: {lugar} y te puso entre quienes pagaron.…» o «{Nombre} cargó un gasto en {viaje} y te puso entre quienes pagaron: {descripción}.»; con uno, «… como quien pagó». «Te toca» va a los elegidos que no cargan ni pagan.",
       "viaje_ticket_removed": "v2.175.0 (D256): «{Nombre} eliminó un ticket de {viaje}: {lugar}.» o «{Nombre} eliminó un gasto de {viaje}: {descripción}.» A los demás miembros activos, sin montos; el lugar es el que ya ven en la lista. payload: viaje_id.",
       "viaje_closed": "«Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»",
       "viaje_transfer_marked": "«{Nombre} marcó que te pagó {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
       "viaje_transfer_not_received": "«{Nombre} dice que no le llegó tu pago de {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
       "viaje_finished": "«{viaje} quedó cerrado. Todos pagaron y ya está en Cerrados.»"
     }
+  },
+  "estadisticas": {
+    "since": "2.176.0",
+    "decision": "260 (los tickets de los viajes suman a las estadísticas), plan OK del Bibliotecario 2026-10-10T15:54:55Z",
+    "rutas": "GET /api/account/stats (consumption_month), /stats/restaurants, /stats/dishes, /stats/dayparts, /stats/ingredients y /stats/evolution, sólo en la base `consumption` (con el dinero encendido la base es lo pagado con PayMe, y un ticket de viaje no se paga por PayMe).",
+    "que_cuenta": "Lo que consumiste vos de cada ticket escaneado, con el mismo balance del viaje: con el viaje abierto, lo elegido (más tu parte de «en partes iguales» o de «pagar el total»); cerrado, lo que quedó guardado al cerrar, con lo no elegido que te tocó. Lo no elegido va al monto de la visita y no a los platos. Se calcula al leer: cambiar lo elegido o eliminar el ticket cambia la estadística.",
+    "platos": "«Por lo que pidió cada uno»: tu parte de cada renglón. «Pagar el total»: todos los renglones, para quien pagó. «En partes iguales»: sin platos, como una mesa «igual».",
+    "que_no_cuenta": "Los gastos a mano; los tickets de súper y de otro (D260 «sólo restaurantes», en la interpretación del Bibliotecario: cuentan restaurante, bar y café); un ticket en el que no consumiste nada; nunca lo de otro miembro.",
+    "instante": "La fecha y hora impresas del ticket, en hora de México; si falta alguna, cuando se cargó. Decide el período y el momento del día.",
+    "restaurante": "Un viaje no guarda el RFC: el ticket va con el restaurante de una mesa de la misma respuesta cuyo nombre mostrado coincide (sin acentos, mayúsculas ni espacios de más), si es uno solo. Si no, en su propio grupo: id `viaje:` más el sha256 corto del nombre, categoría `cafe` para un café u `other`; sin lugar, id `viaje-ticket:<id del ticket>` y «Restaurante sin identificar». Nunca el RFC ni el folio.",
+    "recibo_en_mesa_y_viaje": "Cuenta una sola vez: si el mismo recibo abrió una mesa que cuenta para vos, gana la mesa; si no, cuenta el ticket del viaje.",
+    "visita": "`code` = el id del ticket (nunca es un código de mesa); `division_mode` consumo o igual; `created_at` = el instante. Con `stats_version=2` (cadena exacta, sólo en /stats/restaurants) cada visita suma `viaje_id` (null en una mesa); sin el parámetro, la forma de siempre.",
+    "topes": "El tope del mes y el del rango cuentan también los tickets de viaje, incluido el conteo previo."
   },
   "residual": [
     "Sin editar un ticket ya cargado ni cambiar su forma: va al Roadmap. Eliminarlo sí se puede (D256).",

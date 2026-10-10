@@ -21,6 +21,13 @@
  * ─── El balance (`balanceDelViaje`) ─────────────────────────────────────────────────────────────────────────────
  *   pagó − consumió, por miembro. Invariante: la suma da 0, o lanza `viaje_balance_no_cuadra` (falla cerrado).
  *
+ * ─── v2.177.0 · varios pagadores (D263) ────────────────────────────────────────────────────────────────────────
+ *   `t.pagadores` = [{ user_id, monto_cents }], lo que pagó cada uno; sin la lista, `pagado_por` pagó el monto entero
+ *   (`pagadoresDe`). Las filas tienen que sumar el monto o lanza `viaje_ticket_pagadores_no_cuadran`.
+ *     · Lo pagado: con todo repartido, cada uno lo suyo. En vivo, con algo sin repartir, lo acreditado (monto − sin
+ *       repartir) se reparte en proporción a lo que pagó cada uno (`repartirProporcional`), así la suma sigue en 0.
+ *     · «Pagar el total» con varios: cada uno consumió lo que pagó (nadie le debe a nadie por ese ticket).
+ *
  * ─── Las transferencias mínimas (`transferenciasMinimas`) ───────────────────────────────────────────────────────
  *   El mínimo número de transferencias para saldar n balances distintos de 0 es n − (el máximo número de grupos
  *   en que se pueden partir con suma 0): cada grupo de k se salda con k − 1 y no con menos. Se calcula EXACTO con
@@ -45,6 +52,30 @@ function error(code) {
 
 const sumar = (m, k, v) => { if (v) m.set(k, (m.get(k) || 0) + v); };
 
+/** D263 · los pagadores de un ticket con lo que pagó cada uno. Sin la lista, quien pagó pagó todo. */
+function pagadoresDe(t) {
+  const lista = Array.isArray(t.pagadores) && t.pagadores.length
+    ? t.pagadores : [{ user_id: t.pagado_por, monto_cents: t.monto_cents }];
+  if (lista.reduce((s, p) => s + p.monto_cents, 0) !== t.monto_cents) throw error('viaje_ticket_pagadores_no_cuadran');
+  return lista;
+}
+
+/**
+ * D263 · `total` en proporción a `pesos` (enteros > 0), en centavos enteros: a cada uno el piso de su parte y lo que
+ * sobra, de a un centavo, a los primeros. El producto puede pasar de 2^53 (dos montos de un millón de pesos), así que se
+ * calcula con BigInt.
+ */
+function repartirProporcional(total, pesos) {
+  const suma = BigInt(pesos.reduce((s, p) => s + p, 0));
+  const partes = pesos.map((p) => Number((BigInt(total) * BigInt(p)) / suma));
+  let resto = total - partes.reduce((s, x) => s + x, 0);
+  for (let i = 0; resto > 0; i = (i + 1) % partes.length) {
+    partes[i] += 1;
+    resto -= 1;
+  }
+  return partes;
+}
+
 /**
  * @param {{forma:'consumo'|'iguales'|'total', pagado_por:string, monto_cents:number,
  *   items:Array<{id:string, line_cents:number}>,
@@ -58,7 +89,8 @@ function consumoDelTicket(t, { cierre = false } = {}) {
   const asignado = new Map();
   if (!Number.isSafeInteger(t.monto_cents) || t.monto_cents <= 0) throw error('viaje_ticket_monto_invalido');
   if (t.forma === 'total') {
-    sumar(consumo, t.pagado_por, t.monto_cents);
+    // D263: con varios pagadores, cada uno consumió lo que pagó.
+    for (const p of pagadoresDe(t)) sumar(consumo, p.user_id, p.monto_cents);
     return { consumo, asignado, sinRepartir: 0, faltan: [] };
   }
   if (t.forma === 'iguales') {
@@ -116,10 +148,15 @@ function balanceDelViaje(miembros, tickets, { cierre = false } = {}) {
     const r = consumoDelTicket(t, { cierre });
     porTicket.set(t.id, r);
     gasto += t.monto_cents;
-    // A quien pagó se le acredita lo asignado: en vivo, lo no elegido no es de nadie.
+    // A quien pagó se le acredita lo asignado: en vivo, lo no elegido no es de nadie. D263: con varios, en proporción a
+    // lo que pagó cada uno.
     const acreditado = t.monto_cents - r.sinRepartir;
-    sumar(pagado, t.pagado_por, acreditado);
-    balance.set(t.pagado_por, (balance.get(t.pagado_por) || 0) + acreditado);
+    const pagadores = pagadoresDe(t);
+    const partes = repartirProporcional(acreditado, pagadores.map((p) => p.monto_cents));
+    pagadores.forEach((p, i) => {
+      sumar(pagado, p.user_id, partes[i]);
+      balance.set(p.user_id, (balance.get(p.user_id) || 0) + partes[i]);
+    });
     for (const [u, c] of r.consumo) {
       sumar(consumido, u, c);
       balance.set(u, (balance.get(u) || 0) - c);
@@ -189,4 +226,6 @@ function transferenciasMinimas(balances) {
   return salida;
 }
 
-module.exports = { MAX_MIEMBROS, consumoDelTicket, balanceDelViaje, totalesSeguros, transferenciasMinimas };
+module.exports = {
+  MAX_MIEMBROS, consumoDelTicket, balanceDelViaje, totalesSeguros, transferenciasMinimas, pagadoresDe, repartirProporcional,
+};

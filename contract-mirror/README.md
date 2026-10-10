@@ -6,6 +6,25 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes: varios pagadores y estadísticas · App Backend v2.177.0 (y v2.176.0) · 2026-10-10
+
+Orden `AF-VIAJES-VARIOS-PAGARON-Y-ESTADISTICAS-20261010` (D263, D260, D264). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`9d3f4588d2a42c2bde8f60b838c7f4d1b654cd1d`** (v2.177.0, commit A: «¿Quién pagó?» con varias
+  personas). Incluye v2.176.0 (`c18f05f`: los tickets de los viajes suman a las estadísticas).
+- Inventario: el del owner en **`6d2494d7755090eed3e0f7cee6cb5be5e400d579`** (v2.177.0, commit B, el servido según la
+  fila del lease; `contract/mirror-inventory.json`, sha256 `1640f339106c66ec06e7ac5d2b0411061aa5ba0003d30a657356629c055cab30`), adoptado con `--adoptar-inventario` sin editarlo.
+  Declara `9d3f458`.
+- **138 archivos espejados**, los mismos que antes.
+  - Cambian cinco:
+    - `contract/viajes-v1.json` (sha256 `1ec8a670b15a3c000e5093fc95f4e6cc609b69f8dbbd20fb924657b0a957a220`): `pagadores`, el 422 `viaje_ticket_payers_total_mismatch`,
+      `viaje_version=5` (también en el detalle de un ticket) y la sección `estadisticas` con `stats_version=2`;
+    - `routes/account.js`: los tickets de los viajes en las estadísticas, y `visits[].viaje_id` con `stats_version=2`;
+    - `routes/viajes.js`, `services/viajes.js` y `services/viajesCalculo.js`.
+  - Copiados con `git show 9d3f458:<origen>`, verificando el sha256 de cada uno contra el inventario.
+- `--paridad`: espejo = inventario = fuente en `9d3f458`, 138/138.
+
 ### Viajes: eliminar un ticket o un gasto · App Backend v2.175.0 · 2026-10-10
 
 Orden `AF-VIAJES-ELIMINAR-TICKET-20261010` (D256). Scope del lease con `contract-mirror/**` y

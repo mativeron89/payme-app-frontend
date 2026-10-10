@@ -85,6 +85,18 @@
  *     a los demás miembros activos, sin montos.
  *   · `viaje_version=4`: `puede_eliminar` por ticket en el detalle. La 3, la 2 y sin versión no cambian.
  *
+ * ─── v2.177.0 · «¿Quién pagó?» con varias personas (D263) ─────────────────────────────────────────────────────────
+ *   · `pagadores: [{ miembro_id, monto_cents? }]` en lugar de `pagado_por`: partes iguales (el centavo de más a los
+ *     primeros) o montos que suman el total. Con uno, el ticket se guarda como siempre; con varios, una fila por cada uno
+ *     en `viaje_ticket_pagadores` y `pagado_por` = el primero. `calc.pagadoresDe` es la única lectura.
+ *   · El balance, «pagar el total», `pagaste_tu`, `pagado_cents`, el resumen, salir, eliminar y presentes miran a todos los
+ *     pagadores. `miembrosVisibles` y el tope de miembros no cambian: los pagadores son siempre parte de la foto.
+ *   · `viaje_version=5`: `pagadores` por ticket, en la lista y en el detalle del ticket.
+ *
+ * ─── v2.176.0 · los tickets de los viajes en las estadísticas (D260) ───────────────────────────────────────────────
+ *   · `visitasParaEstadisticas`: lo que consumió cada uno de cada ticket escaneado, con este mismo `balance`. Los
+ *     candidatos, el instante y el restaurante los resuelve routes/account.js. Cuentan restaurante, bar y café.
+ *
  * Cada función devuelve `{ status, body }`; la ruta sólo lo escribe. Los registros llevan ids y códigos cerrados.
  */
 'use strict';
@@ -133,6 +145,11 @@ const COLORES = Object.freeze({
 });
 /** D255-6: quien cargó un ticket. Las filas que la instancia vieja insertó durante el deploy no lo tienen: era quien pagó. */
 const cargadoPor = (t) => t.cargado_por || t.pagado_por;
+/** D263: si `userId` pagó el ticket. Con varios, `pagado_por` es el primero y las filas los traen a todos. */
+const esPagador = (t, userId) => t.pagado_por === userId || (t.pagadores || []).some((p) => p.user_id === userId);
+/** D263 · `viaje_version=5`: los pagadores de un ticket con lo que pagó cada uno, por su id de miembro. */
+const pagadoresPublicos = (t, idPublico) => calc.pagadoresDe(t)
+  .map((p) => ({ miembro_id: idPublico.get(p.user_id) ?? null, monto_cents: p.monto_cents }));
 const ETIQUETA_HUELLA = 'payme/viajes/huella/v1';
 const RFC_GENERICOS = new Set(['XAXX010101000', 'XEXX010101000']);
 
@@ -236,6 +253,19 @@ const cuerpoCrear = z.object({
   { message: 'fecha_desde <= fecha_hasta', path: ['fecha_hasta'] });
 const cuerpoInvitar = z.object({ miembros: z.array(miembro).min(1).max(MAX_MIEMBROS - 1) }).strict();
 const cuerpoRecibo = z.object({ ocr_receipt: z.string().min(1).max(16384) }).strict();
+/**
+ * v2.177.0 · D263 · varios pagadores: una lista de miembros, todos con monto o ninguno («Partes iguales, y se puede
+ * ajustar»). Sin repetir, de 1 a 20. No se manda junto a `pagado_por`, que sigue sirviendo para uno solo.
+ */
+const pagadoresPedidos = z.array(z.object({
+  miembro_id: uuid,
+  monto_cents: z.number().int().min(1).max(MAX_GASTO_CENTS).optional(),
+}).strict()).min(1).max(MAX_MIEMBROS)
+  .refine((xs) => new Set(xs.map((x) => x.miembro_id)).size === xs.length, 'pagador repetido')
+  .refine((xs) => xs.every((x) => x.monto_cents === undefined) || xs.every((x) => x.monto_cents !== undefined),
+    'todos con monto o ninguno');
+const unSoloPagador = [(b) => !(b.pagado_por !== undefined && b.pagadores !== undefined),
+  { message: 'pagado_por o pagadores, no los dos', path: ['pagadores'] }];
 const cuerpoTicket = z.object({
   ocr_receipt: z.string().min(1).max(16384),
   idempotency_key: idempotencyKey,
@@ -251,7 +281,10 @@ const cuerpoTicket = z.object({
   }).strict()).min(1).max(100),
   // v2.174.0 · D255-6: quién pagó, un id de miembro. Sin él, quien carga.
   pagado_por: uuid.optional(),
-}).strict().refine((b) => !b.hora_ticket || b.fecha_ticket, { message: 'hora_ticket requiere fecha_ticket', path: ['hora_ticket'] });
+  // v2.177.0 · D263: o varios.
+  pagadores: pagadoresPedidos.optional(),
+}).strict().refine((b) => !b.hora_ticket || b.fecha_ticket, { message: 'hora_ticket requiere fecha_ticket', path: ['hora_ticket'] })
+  .refine(...unSoloPagador);
 const cuerpoSeleccion = z.object({
   items: z.array(z.object({
     item_id: uuid,
@@ -268,7 +301,9 @@ const cuerpoGasto = z.object({
   idempotency_key: idempotencyKey,
   // v2.174.0 · D255-6: quién pagó, un id de miembro. Sin él, quien carga.
   pagado_por: uuid.optional(),
-}).strict();
+  // v2.177.0 · D263: o varios.
+  pagadores: pagadoresPedidos.optional(),
+}).strict().refine(...unSoloPagador);
 const cuerpoPresentes = z.object({
   presentes: z.array(uuid).min(1).max(MAX_MIEMBROS)
     .refine((xs) => new Set(xs).size === xs.length, 'miembro repetido'),
@@ -328,7 +363,7 @@ async function cargar(db, viajeId) {
   const { rows: tickets } = await db.query(
     `SELECT * FROM viaje_tickets WHERE viaje_id=$1 ORDER BY created_at, id`, [viajeId]);
   const ids = tickets.map((t) => t.id);
-  const [{ rows: items }, { rows: personas }, { rows: selecciones }, { rows: transferencias }] = await Promise.all([
+  const [{ rows: items }, { rows: personas }, { rows: selecciones }, { rows: transferencias }, { rows: pagadores }] = await Promise.all([
     db.query(`SELECT * FROM viaje_ticket_items WHERE ticket_id = ANY($1::uuid[]) ORDER BY ticket_id, orden`, [ids]),
     db.query(`SELECT p.*, u.status AS user_status FROM viaje_ticket_personas p JOIN users u ON u.id = p.user_id
                WHERE p.ticket_id = ANY($1::uuid[]) ORDER BY p.ticket_id, p.orden`, [ids]),
@@ -338,6 +373,9 @@ async function cargar(db, viajeId) {
     db.query(`SELECT t.*, ud.status AS de_status, ua.status AS a_status
                 FROM viaje_transferencias t JOIN users ud ON ud.id = t.de_user JOIN users ua ON ua.id = t.a_user
                WHERE t.viaje_id=$1 ORDER BY t.orden`, [viajeId]),
+    // v2.177.0 · D263: los pagadores de los tickets con dos o más (los de uno no tienen filas).
+    db.query(`SELECT ticket_id, user_id, monto_cents FROM viaje_ticket_pagadores
+               WHERE ticket_id = ANY($1::uuid[]) ORDER BY ticket_id, orden`, [ids]),
   ]);
   for (const t of tickets) {
     t.monto_cents = Number(t.monto_cents);
@@ -347,6 +385,8 @@ async function cargar(db, viajeId) {
       consumo_final_cents: p.consumo_final_cents === null ? null : Number(p.consumo_final_cents),
       asignado_cierre_cents: p.asignado_cierre_cents === null ? null : Number(p.asignado_cierre_cents) }));
     t.selecciones = selecciones.filter((s) => s.ticket_id === t.id);
+    t.pagadores = pagadores.filter((p) => p.ticket_id === t.id)
+      .map((p) => ({ user_id: p.user_id, monto_cents: Number(p.monto_cents) }));
   }
   for (const tr of transferencias) {
     tr.monto_cents = Number(tr.monto_cents);
@@ -366,7 +406,7 @@ function estadoEfectivo(d) {
 /** La entrada del cálculo puro. */
 function paraCalculo(t) {
   return {
-    id: t.id, forma: t.forma, pagado_por: t.pagado_por, monto_cents: t.monto_cents,
+    id: t.id, forma: t.forma, pagado_por: t.pagado_por, monto_cents: t.monto_cents, pagadores: t.pagadores,
     items: t.items.map((i) => ({ id: i.id, line_cents: i.line_cents })),
     personas: t.personas.map((p) => ({ user_id: p.user_id, presente: p.presente, listo: !!p.listo_en, vivo: vivo(p) })),
     selecciones: t.selecciones.map((s) => ({ item_id: s.item_id, user_id: s.user_id, fraction_bps: s.fraction_bps })),
@@ -389,8 +429,11 @@ function balance(d, { cierre = false } = {}) {
   const sumar = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
   for (const t of d.tickets) {
     gasto += t.monto_cents;
-    sumar(pagado, t.pagado_por, t.monto_cents);
-    sumar(bal, t.pagado_por, t.monto_cents);
+    // D263: cerrado, cada pagador lo que pagó.
+    for (const p of calc.pagadoresDe(t)) {
+      sumar(pagado, p.user_id, p.monto_cents);
+      sumar(bal, p.user_id, p.monto_cents);
+    }
     const consumo = new Map(); const asignado = new Map();
     for (const p of t.personas) {
       consumo.set(p.user_id, p.consumo_final_cents);
@@ -425,7 +468,7 @@ function vistaTicketEnLista(t, d, b, yo, idPublico, version = 1) {
   return {
     id: t.id, lugar: t.lugar, tipo_lugar: t.tipo_lugar, fecha_ticket: fechaDe(t.fecha_ticket),
     hora_ticket: horaDe(t.hora_ticket), cargado_en: ts(t.created_at), forma: t.forma,
-    pagado_por: idPublico.get(t.pagado_por) ?? null, pagaste_tu: t.pagado_por === yo,
+    pagado_por: idPublico.get(t.pagado_por) ?? null, pagaste_tu: esPagador(t, yo),
     te_toca_cents: r.consumo.get(yo) || 0,
     falta_que_elija: b.congelado ? 0 : r.faltan.length,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
@@ -433,8 +476,11 @@ function vistaTicketEnLista(t, d, b, yo, idPublico, version = 1) {
     ...(version >= 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
     // v2.175.0 · D256, desde `viaje_version=4`: a quién se le muestra «Eliminar» (quien cargó o quien pagó, abierto).
     ...(version >= 4 && {
-      puede_eliminar: d.viaje.estado === 'abierto' && (t.pagado_por === yo || cargadoPor(t) === yo),
+      // D263: quien cargó o cualquiera de los que pagaron.
+      puede_eliminar: d.viaje.estado === 'abierto' && (esPagador(t, yo) || cargadoPor(t) === yo),
     }),
+    // v2.177.0 · D263, desde `viaje_version=5`: quiénes pagaron y cuánto cada uno.
+    ...(version >= 5 && { pagadores: pagadoresPublicos(t, idPublico) }),
   };
 }
 
@@ -473,7 +519,8 @@ function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
   }
   const tickets = d.tickets.map((t) => vistaTicketEnLista(t, d, b, yo, idPublico, version)).reverse();
   // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que pagó (D255-6: puede no ser quien cargó).
-  const pagadoDe = (u) => d.tickets.filter((t) => t.pagado_por === u).reduce((s, t) => s + t.monto_cents, 0);
+  // D263: con varios pagadores, lo que pagó cada uno.
+  const pagadoDe = (u) => d.tickets.reduce((s, t) => s + (calc.pagadoresDe(t).find((p) => p.user_id === u)?.monto_cents || 0), 0);
   const sinRepartir = b.congelado ? [] : d.tickets.filter((t) => b.porTicket.get(t.id).sinRepartir > 0).map((t) => ({
     ticket_id: t.id, lugar: t.lugar, fecha_ticket: fechaDe(t.fecha_ticket),
     monto_cents: b.porTicket.get(t.id).sinRepartir,
@@ -530,7 +577,7 @@ async function vistaDelViaje(d, yo, version = 1) {
  * El detalle de un ticket que ve un miembro activo. Al elegir, se ve qué parte de cada renglón ya está tomada, sin
  * nombre (D247: los que comparten se conocen; por eso se puede deducir lo que tomó otro).
  */
-function vistaTicket(t, d, yo) {
+function vistaTicket(t, d, yo, version = 1) {
   const b = balance(d);
   const r = b.porTicket.get(t.id);
   const idPublico = new Map(d.miembros.map((m) => [m.user_id, m.id]));
@@ -540,7 +587,7 @@ function vistaTicket(t, d, yo) {
   return {
     id: t.id, lugar: t.lugar, tipo_lugar: t.tipo_lugar, fecha_ticket: fechaDe(t.fecha_ticket),
     hora_ticket: horaDe(t.hora_ticket), cargado_en: ts(t.created_at), forma: t.forma, monto_cents: t.monto_cents,
-    pagado_por: idPublico.get(t.pagado_por) ?? null, pagaste_tu: t.pagado_por === yo,
+    pagado_por: idPublico.get(t.pagado_por) ?? null, pagaste_tu: esPagador(t, yo),
     items: t.items.map((i) => ({
       id: i.id, name: i.nombre, price_cents: i.price_cents, quantity: i.quantity, line_cents: i.line_cents,
       remaining_bps: restanteDe(acumulado.get(i.id)?.bps || 0),
@@ -551,8 +598,10 @@ function vistaTicket(t, d, yo) {
     te_toca_cents: r.consumo.get(yo) || 0,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
     puedo_elegir: abierto && t.forma === 'consumo' && soyPersona,
-    // D255-6: quien pagó o quien cargó.
-    puedo_marcar_presentes: abierto && t.forma === 'iguales' && (t.pagado_por === yo || cargadoPor(t) === yo),
+    // D255-6: quien pagó o quien cargó (D263: cualquiera de los que pagaron).
+    puedo_marcar_presentes: abierto && t.forma === 'iguales' && (esPagador(t, yo) || cargadoPor(t) === yo),
+    // v2.177.0 · D263, desde `viaje_version=5`: quiénes pagaron y cuánto cada uno.
+    ...(version >= 5 && { pagadores: pagadoresPublicos(t, idPublico) }),
   };
 }
 
@@ -713,7 +762,7 @@ async function listar(userId, query) {
   for (const { id } of rows) {
     const d = await cargar(pool, id);
     // v2.175.0 · D256: la 4 sólo cambia los tickets del detalle; en la lista es la 3.
-    const item = vistaEnLista(d, userId, ['3', '4'].includes(v.data.viaje_version) ? 3 : 1);
+    const item = vistaEnLista(d, userId, ['3', '4', '5'].includes(v.data.viaje_version) ? 3 : 1);
     (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
   }
   cerrados.sort((a, b) => (b.fecha_desde || b.terminado_en || '').localeCompare(a.fecha_desde || a.terminado_en || ''));
@@ -885,7 +934,9 @@ async function salir(userId, viajeId) {
       `SELECT
          EXISTS (SELECT 1 FROM viaje_selecciones s JOIN viaje_ticket_items i ON i.id = s.item_id
                    JOIN viaje_tickets t ON t.id = i.ticket_id WHERE t.viaje_id=$1 AND s.user_id=$2) AS eligio,
-         EXISTS (SELECT 1 FROM viaje_tickets t WHERE t.viaje_id=$1 AND t.pagado_por=$2) AS pago,
+         (EXISTS (SELECT 1 FROM viaje_tickets t WHERE t.viaje_id=$1 AND t.pagado_por=$2)
+          OR EXISTS (SELECT 1 FROM viaje_ticket_pagadores pg JOIN viaje_tickets t ON t.id = pg.ticket_id
+                      WHERE t.viaje_id=$1 AND pg.user_id=$2)) AS pago,
          EXISTS (SELECT 1 FROM viaje_ticket_personas p JOIN viaje_tickets t ON t.id = p.ticket_id
                   WHERE t.viaje_id=$1 AND p.user_id=$2 AND t.forma='iguales' AND p.presente) AS presente`,
       [viajeId, userId]);
@@ -954,6 +1005,41 @@ function pagadorDe(pagadoPor, miembros, cuentas, userId) {
 }
 
 /**
+ * v2.177.0 · D263 · los pagadores del pedido, `[{ user_id, monto_cents }]` en el orden pedido, o `{ error }`.
+ *   · Sin `pagadores`: el de siempre (`pagado_por`, o quien carga), con el monto entero.
+ *   · Cada uno, un miembro activo con la cuenta viva y activa (el 422 `viaje_ticket_payer_unknown` de D255-6).
+ *   · Sin montos: `splitEqual` del total, el centavo de más a los primeros. Con montos: tienen que sumar el total.
+ *     Cada pagador paga al menos un centavo; si no se puede (o no suman), 422 `viaje_ticket_payers_total_mismatch`.
+ */
+function pagadoresDelPedido(b, monto, miembros, cuentas, userId) {
+  if (b.pagadores === undefined) {
+    const p = pagadorDe(b.pagado_por, miembros, cuentas, userId);
+    return p.error ? p : { lista: [{ user_id: p.id, monto_cents: monto }] };
+  }
+  const lista = [];
+  for (const x of b.pagadores) {
+    const p = pagadorDe(x.miembro_id, miembros, cuentas, userId);
+    if (p.error) return p;
+    lista.push({ user_id: p.id, monto_cents: x.monto_cents });
+  }
+  if (lista[0].monto_cents === undefined) splitEqual(monto, lista.length).forEach((c, i) => { lista[i].monto_cents = c; });
+  if (lista.some((p) => p.monto_cents < 1) || lista.reduce((s, p) => s + p.monto_cents, 0) !== monto) {
+    return { error: respuesta(422, { error: 'viaje_ticket_payers_total_mismatch', monto_cents: monto }) };
+  }
+  return { lista };
+}
+
+/** D263: con dos o más pagadores, una fila por cada uno (con uno, el ticket se guarda como siempre). */
+async function guardarPagadores(client, ticketId, lista) {
+  if (lista.length < 2) return;
+  for (const [orden, p] of lista.entries()) {
+    await client.query(
+      `INSERT INTO viaje_ticket_pagadores (ticket_id, user_id, orden, monto_cents) VALUES ($1, $2, $3, $4)`,
+      [ticketId, p.user_id, orden, p.monto_cents]);
+  }
+}
+
+/**
  * D255-6 · la idempotencia es por quien carga (UNIQUE `(viaje_id, cargado_por, idempotency_key)`). El UNIQUE viejo
  * `(viaje_id, pagado_por, idempotency_key)` se conserva (OK del plan): sólo salta si otra persona repite la misma clave
  * al azar con el mismo pagador. Se mira antes de insertar, bajo el lock del viaje, para contestar 409 y no un 500.
@@ -965,7 +1051,7 @@ async function claveDelPagadorUsada(client, viajeId, pagadorId, clave) {
 }
 
 /** POST /api/viajes/:id/tickets — quien carga elige quién pagó (D255-6); sin elegir, quien carga (regla 3). */
-async function cargarTicket(userId, viajeId, body) {
+async function cargarTicket(userId, viajeId, body, { version = 1 } = {}) {
   const v = validar(cuerpoTicket, body);
   if (!v.ok) return v.res;
   const b = v.data;
@@ -975,7 +1061,9 @@ async function cargarTicket(userId, viajeId, body) {
   // `pagado_por` entra al hash sólo si vino: un reintento de un pedido anterior a D255 conserva su hash.
   const pedido = hashDe({ forma: b.forma, tipo_lugar: b.tipo_lugar, lugar: b.lugar ?? null,
     fecha_ticket: b.fecha_ticket ?? null, hora_ticket: b.hora_ticket ?? null, items: b.items, recibo: b.ocr_receipt,
-    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }) });
+    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }),
+    // v2.177.0 · D263: los pagadores, sólo si vinieron (un pedido anterior conserva su hash).
+    ...(b.pagadores !== undefined && { pagadores: b.pagadores }) });
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
     const { rows: [previo] } = await client.query(
       `SELECT id, pedido_hash FROM viaje_tickets
@@ -1007,8 +1095,10 @@ async function cargarTicket(userId, viajeId, body) {
         WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
     const cuentas = await bloquearCuentas(client, miembros.map((m) => m.user_id));
     if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
-    const pagador = pagadorDe(b.pagado_por, miembros, cuentas, userId);
-    if (pagador.error) return pagador.error;
+    // D263: uno o varios pagadores; `pagado_por` guarda el primero.
+    const pagos = pagadoresDelPedido(b, monto, miembros, cuentas, userId);
+    if (pagos.error) return pagos.error;
+    const pagador = { id: pagos.lista[0].user_id };
     if (await claveDelPagadorUsada(client, viajeId, pagador.id, b.idempotency_key)) return conflicto('idempotency_key_conflict');
     const { rows: [t] } = await client.query(
       `INSERT INTO viaje_tickets (viaje_id, pagado_por, cargado_por, forma, tipo_lugar, lugar, fecha_ticket, hora_ticket,
@@ -1016,6 +1106,7 @@ async function cargarTicket(userId, viajeId, body) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
       [viajeId, pagador.id, userId, b.forma, b.tipo_lugar, b.lugar ?? null, b.fecha_ticket ?? null, b.hora_ticket ?? null,
         monto, recibo.huella ?? null, recibo.id, b.idempotency_key, pedido]);
+    await guardarPagadores(client, t.id, pagos.lista);
     for (const [k, i] of b.items.entries()) {
       await client.query(
         `INSERT INTO viaje_ticket_items (ticket_id, orden, nombre, price_cents, quantity) VALUES ($1, $2, $3, $4, $5)`,
@@ -1031,11 +1122,14 @@ async function cargarTicket(userId, viajeId, body) {
     const donde = b.lugar ? `: ${b.lugar}` : '';
     const accion = b.forma === 'consumo' ? ' Elige lo que consumiste.'
       : b.forma === 'iguales' ? ' Se divide en partes iguales.' : ' Lo paga todo.';
+    // D263: a cada uno de los que pagaron, su propio aviso (sin montos).
+    const pagan = new Set(pagos.lista.map((p) => p.user_id));
+    const comoPagador = pagos.lista.length > 1 ? 'entre quienes pagaron' : 'como quien pagó';
     for (const m of miembros) {
       if (m.user_id === userId) continue;
       // D255-6: a quien quedó como quien pagó, su propio aviso (sin montos).
-      const body = m.user_id === pagador.id
-        ? `${nombreDe(quien)} cargó un ticket en ${quien.nombre}${donde} y te puso como quien pagó.${accion}`
+      const body = pagan.has(m.user_id)
+        ? `${nombreDe(quien)} cargó un ticket en ${quien.nombre}${donde} y te puso ${comoPagador}.${accion}`
         : `${nombreDe(quien)} cargó un ticket nuevo en ${quien.nombre}${donde}.${accion}`;
       await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId, body,
         payload: { viaje_id: viajeId, ticket_id: t.id } });
@@ -1047,7 +1141,7 @@ async function cargarTicket(userId, viajeId, body) {
   const t = d.tickets.find((x) => x.id === r.ticketId);
   logger.audit('viaje_ticket', { viaje_id: viajeId, ticket_id: r.ticketId, resultado: r.duplicado ? 'duplicado'
     : r.status === 201 ? 'cargado' : 'reintento' });
-  return respuesta(r.status, { contract: CONTRATO, ticket: vistaTicket(t, d, userId),
+  return respuesta(r.status, { contract: CONTRATO, ticket: vistaTicket(t, d, userId, version),
     ya_cargado: r.duplicado ? yaCargado(r.duplicado, d) : null });
 }
 
@@ -1060,25 +1154,28 @@ async function ticketDe(userId, viajeId, ticketId) {
   return { d, t };
 }
 
-/** GET /api/viajes/:id/tickets/:tid */
-async function verTicket(userId, viajeId, ticketId) {
+/** GET /api/viajes/:id/tickets/:tid — v2.177.0 · D263: con `viaje_version=5`, los pagadores. */
+async function verTicket(userId, viajeId, ticketId, { version = 1 } = {}) {
   const { res, d, t } = await ticketDe(userId, viajeId, ticketId);
   if (res) return res;
   if (estadoEfectivo(d) === 'cerrado') return conflicto('viaje_closed');
-  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId) });
+  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId, version) });
 }
 
-/** Bajo el lock del viaje: el ticket, sus personas y sus renglones. */
+/** Bajo el lock del viaje: el ticket, sus personas y sus renglones. v2.177.0 · D263: con sus pagadores. */
 async function ticketBloqueado(client, viajeId, ticketId) {
   if (!esUuid(ticketId)) return null;
   const { rows: [t] } = await client.query(
     `SELECT id, forma, pagado_por, cargado_por, lugar, recibo_jti FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`,
     [ticketId, viajeId]);
-  return t || null;
+  if (!t) return null;
+  const { rows: pagadores } = await client.query(
+    `SELECT user_id FROM viaje_ticket_pagadores WHERE ticket_id=$1 ORDER BY orden`, [t.id]);
+  return { ...t, pagadores };
 }
 
 /** PUT /api/viajes/:id/tickets/:tid/seleccion — lo que consumí, con porciones como en la mesa. */
-async function elegir(userId, viajeId, ticketId, body) {
+async function elegir(userId, viajeId, ticketId, body, { version = 1 } = {}) {
   const v = validar(cuerpoSeleccion, body);
   if (!v.ok) return v.res;
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
@@ -1130,11 +1227,11 @@ async function elegir(userId, viajeId, ticketId, body) {
   });
   if (r.status !== 200) return r;
   const { d, t } = await ticketDe(userId, viajeId, ticketId);
-  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId) });
+  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId, version) });
 }
 
 /** PUT /api/viajes/:id/tickets/:tid/presentes — D242-6: quien pagó destilda a quien no estuvo. */
-async function marcarPresentes(userId, viajeId, ticketId, body) {
+async function marcarPresentes(userId, viajeId, ticketId, body, { version = 1 } = {}) {
   const v = validar(cuerpoPresentes, body);
   if (!v.ok) return v.res;
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
@@ -1142,8 +1239,8 @@ async function marcarPresentes(userId, viajeId, ticketId, body) {
     if (!t) return respuesta(404, { error: 'viaje_ticket_not_found' });
     if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
     if (t.forma !== 'iguales') return conflicto('viaje_ticket_not_equal_split', { forma: t.forma });
-    // D255-6: quien pagó o quien cargó.
-    if (t.pagado_por !== userId && cargadoPor(t) !== userId) return conflicto('viaje_ticket_not_yours');
+    // D255-6: quien pagó o quien cargó (D263: cualquiera de los que pagaron).
+    if (!esPagador(t, userId) && cargadoPor(t) !== userId) return conflicto('viaje_ticket_not_yours');
     const { rows: personas } = await client.query(
       `SELECT p.user_id, m.id AS miembro_id FROM viaje_ticket_personas p
          JOIN viaje_miembros m ON m.viaje_id=$2 AND m.user_id = p.user_id
@@ -1158,7 +1255,7 @@ async function marcarPresentes(userId, viajeId, ticketId, body) {
   });
   if (r.status !== 200) return r;
   const { d, t } = await ticketDe(userId, viajeId, ticketId);
-  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId) });
+  return respuesta(200, { contract: CONTRATO, ticket: vistaTicket(t, d, userId, version) });
 }
 
 /**
@@ -1178,7 +1275,8 @@ async function eliminarTicket(userId, viajeId, ticketId, { version = 1 } = {}) {
     const t = await ticketBloqueado(client, viajeId, ticketId);
     if (!t) return respuesta(404, { error: 'viaje_ticket_not_found' });
     if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
-    if (t.pagado_por !== userId && cargadoPor(t) !== userId) return respuesta(403, { error: 'viaje_ticket_delete_forbidden' });
+    // D263: quien cargó o cualquiera de los que pagaron.
+    if (!esPagador(t, userId) && cargadoPor(t) !== userId) return respuesta(403, { error: 'viaje_ticket_delete_forbidden' });
     const { rows: miembros } = await client.query(
       `SELECT m.user_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
         WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
@@ -1209,13 +1307,15 @@ async function eliminarTicket(userId, viajeId, ticketId, { version = 1 } = {}) {
  * personas elegidas (los presentes), con el residuo a las primeras en el orden de los miembros. Se guarda como un
  * ticket «En partes iguales» de tipo «Otro»: ver el encabezado.
  */
-async function cargarGasto(userId, viajeId, body) {
+async function cargarGasto(userId, viajeId, body, { version = 1 } = {}) {
   const v = validar(cuerpoGasto, body);
   if (!v.ok) return v.res;
   const b = v.data;
   if (!esUuid(viajeId)) return noEncontrado();
   const pedido = hashDe({ gasto: true, descripcion: b.descripcion, monto_cents: b.monto_cents, presentes: b.presentes,
-    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }) });
+    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }),
+    // v2.177.0 · D263: los pagadores, sólo si vinieron.
+    ...(b.pagadores !== undefined && { pagadores: b.pagadores }) });
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
     const { rows: [previo] } = await client.query(
       `SELECT id, pedido_hash FROM viaje_tickets
@@ -1237,8 +1337,10 @@ async function cargarGasto(userId, viajeId, body) {
     const elegidos = new Set(b.presentes.map((id) => porMiembro.get(id)));
     const cuentas = await bloquearCuentas(client, miembros.map((m) => m.user_id));
     if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
-    const pagador = pagadorDe(b.pagado_por, miembros, cuentas, userId);
-    if (pagador.error) return pagador.error;
+    // D263: uno o varios pagadores; `pagado_por` guarda el primero.
+    const pagos = pagadoresDelPedido(b, b.monto_cents, miembros, cuentas, userId);
+    if (pagos.error) return pagos.error;
+    const pagador = { id: pagos.lista[0].user_id };
     if (await claveDelPagadorUsada(client, viajeId, pagador.id, b.idempotency_key)) return conflicto('idempotency_key_conflict');
     // Un id propio que nunca es el de un recibo: `~` no es base64url (ver el encabezado).
     const idPropio = `${PREFIJO_GASTO_MANUAL}${randomBytes(15).toString('base64url')}`;
@@ -1247,6 +1349,7 @@ async function cargarGasto(userId, viajeId, body) {
                                   idempotency_key, pedido_hash)
        VALUES ($1, $2, $3, 'iguales', 'otro', $4, $5, $6, $7, $8) RETURNING id`,
       [viajeId, pagador.id, userId, b.descripcion, b.monto_cents, idPropio, b.idempotency_key, pedido]);
+    await guardarPagadores(client, t.id, pagos.lista);
     await client.query(
       `INSERT INTO viaje_ticket_items (ticket_id, orden, nombre, price_cents, quantity) VALUES ($1, 0, $2, $3, 1)`,
       [t.id, b.descripcion, b.monto_cents]);
@@ -1260,16 +1363,20 @@ async function cargarGasto(userId, viajeId, body) {
          FROM users u, viajes v WHERE u.id=$1 AND v.id=$2`, [userId, viajeId]);
     const presentes = miembros.filter((m) => elegidos.has(m.user_id));
     const partes = splitEqual(b.monto_cents, presentes.length);
+    const pagan = new Set(pagos.lista.map((p) => p.user_id));
     for (const [k, m] of presentes.entries()) {
-      if (m.user_id === userId || m.user_id === pagador.id) continue;
+      if (m.user_id === userId || pagan.has(m.user_id)) continue;
       await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
         body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre}: ${b.descripcion}. Te toca ${montoEnTexto(partes[k])}.`,
         payload: { viaje_id: viajeId, ticket_id: t.id } });
     }
-    // D255-6: a quien quedó como quien pagó, su propio aviso (sin montos), esté o no entre las elegidas.
-    if (pagador.id !== userId) {
-      await avisar(client, { userId: pagador.id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
-        body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre} y te puso como quien pagó: ${b.descripcion}.`,
+    // D255-6: a quien quedó como quien pagó, su propio aviso (sin montos), esté o no entre las elegidas. D263: a cada uno
+    // de los que pagaron.
+    const comoPagador = pagos.lista.length > 1 ? 'entre quienes pagaron' : 'como quien pagó';
+    for (const p of pagos.lista) {
+      if (p.user_id === userId) continue;
+      await avisar(client, { userId: p.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
+        body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre} y te puso ${comoPagador}: ${b.descripcion}.`,
         payload: { viaje_id: viajeId, ticket_id: t.id } });
     }
     return { ticketId: t.id, status: 201 };
@@ -1278,7 +1385,7 @@ async function cargarGasto(userId, viajeId, body) {
   const d = await cargar(pool, viajeId);
   const t = d.tickets.find((x) => x.id === r.ticketId);
   logger.audit('viaje_gasto', { viaje_id: viajeId, ticket_id: r.ticketId, resultado: r.status === 201 ? 'cargado' : 'reintento' });
-  return respuesta(r.status, { contract: CONTRATO, ticket: vistaTicket(t, d, userId), ya_cargado: null });
+  return respuesta(r.status, { contract: CONTRATO, ticket: vistaTicket(t, d, userId, version), ya_cargado: null });
 }
 
 // D245: toda negativa de la foto contesta lo mismo (viaje que no existe, no sos miembro, miembro ajeno o que no está
@@ -1558,7 +1665,7 @@ async function resumen(userId, viajeId) {
   const lugares = [];
   for (const t of d.tickets) {
     const mio = b.porTicket.get(t.id).consumo.get(userId) || 0;
-    const pague = t.pagado_por === userId;
+    const pague = esPagador(t, userId);
     if (!mio && !pague) continue;
     porTipo.set(t.tipo_lugar, porTipo.get(t.tipo_lugar) + mio);
     const { mio: platos } = mioPorPlato(t, userId);
@@ -1584,8 +1691,65 @@ async function resumen(userId, viajeId) {
   } });
 }
 
+// ─── v2.176.0 · las estadísticas de cada uno (D260) ────────────────────────────────────────────────────────────────
+
+/**
+ * D260 «sólo restaurantes», en la interpretación del Bibliotecario (OK del plan 2026-10-10T15:54:55Z): cuentan
+ * restaurante, bar y café; súper y otro no. Los gastos a mano (tipo «otro» y `m~`) tampoco.
+ */
+const TIPOS_EN_ESTADISTICAS = Object.freeze(['restaurante', 'bar', 'cafe']);
+/** El `division_mode` de una visita: «pagar el total» lleva todos los platos de quien pagó, como un consumo. */
+const MODO_DE_VISITA = Object.freeze({ consumo: 'consumo', iguales: 'igual', total: 'consumo' });
+
+/**
+ * Los platos propios de un ticket para las estadísticas: tu parte de cada renglón. «En partes iguales» sale sin platos
+ * porque nadie elige en él (`elegir` lo rechaza con 409): es como una mesa «igual».
+ */
+function platosPropios(t, userId) {
+  if (t.forma === 'total') {
+    // D263: con varios pagadores, «pagar el total» se repartió entre ellos: sin platos, como una mesa «igual».
+    return t.pagado_por === userId && calc.pagadoresDe(t).length === 1
+      ? t.items.map((i) => ({ name: i.nombre, fraction_bps: 10000, amount_cents: i.line_cents })) : [];
+  }
+  const { mio } = mioPorPlato(t, userId);
+  return t.items.filter((i) => (mio.get(i.id)?.bps || 0) > 0)
+    .map((i) => ({ name: i.nombre, fraction_bps: mio.get(i.id).bps, amount_cents: mio.get(i.id).monto }));
+}
+
+/**
+ * D260 · lo que consumiste vos de cada ticket candidato (`[{ id, viaje_id, instante }]`, los elige routes/account.js),
+ * con el mismo `balance` del viaje:
+ *   · abierto, lo elegido (más tu parte de «en partes iguales» o de «pagar el total»);
+ *   · cerrado, lo que quedó guardado al cerrar, con lo no elegido que te tocó.
+ * Lo no elegido va al monto de la visita y no a los platos, porque no es un plato que elegiste. Un ticket en el que no
+ * consumiste nada no es una visita. Sólo lo tuyo: nunca lo de otro miembro.
+ */
+async function visitasParaEstadisticas(userId, candidatos) {
+  const porViaje = new Map();
+  for (const c of candidatos) {
+    if (!porViaje.has(c.viaje_id)) porViaje.set(c.viaje_id, []);
+    porViaje.get(c.viaje_id).push(c);
+  }
+  const visitas = [];
+  for (const [viajeId, cs] of porViaje) {
+    const d = await cargar(pool, viajeId);
+    if (!d) continue;
+    const b = balance(d);
+    for (const c of cs) {
+      const t = d.tickets.find((x) => x.id === c.id);
+      const monto = t ? b.porTicket.get(t.id).consumo.get(userId) || 0 : 0;
+      if (monto <= 0) continue;
+      visitas.push({ ticket_id: t.id, viaje_id: viajeId, instante: c.instante, lugar: t.lugar, tipo_lugar: t.tipo_lugar,
+        division_mode: t.forma === 'total' && calc.pagadoresDe(t).length > 1 ? 'igual' : MODO_DE_VISITA[t.forma],
+        amount_cents: monto, items: platosPropios(t, userId) });
+    }
+  }
+  return visitas;
+}
+
 module.exports = {
   CONTRATO, MAX_MIEMBROS, MAX_TICKETS, MAX_GASTO_CENTS, MAX_TOTAL_CENTS, PREFIJO_GASTO_MANUAL, FORMAS, TIPOS_LUGAR, ESTADOS,
+  TIPOS_EN_ESTADISTICAS, visitasParaEstadisticas,
   ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA, COLORES, SIN_FOTO_VIAJE,
   habilitado, forzarParaTests, capacidad, huellaDelTicket, huellaDeLectura, NO_ENCONTRADO,
   listar, invitaciones, crear, detalle, invitar, aceptar, rechazar, salir,

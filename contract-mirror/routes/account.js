@@ -35,6 +35,9 @@ const { dineroHabilitado } = require('../services/moneyRail');
 
 const informativeSelections = require('../services/informativeSelections');
 const { displayRestaurantName } = require('../services/mesaPresentation');
+// v2.176.0 · D260: los tickets escaneados de los viajes suman a la base consumo (se llama por el módulo: los tests lo espían).
+const viajes = require('../services/viajes');
+const { createHash } = require('node:crypto');
 const router = express.Router();
 router.use('/informative-history', (req, res, next) => {
   res.setHeader('Cache-Control', 'private, no-store'); res.vary('Authorization'); next();
@@ -686,7 +689,12 @@ function seleccionPropiaSql(rango) {
   // v2.169.0 · D238: una mesa borrada de la app deja de contar (M y MH). Este es el único punto de la base
   // consumo: la carga y el tope previo salen del mismo conjunto.
   return `${filtroDeRango('m.created_at', rango)}
-        AND ${ocultamientos.mesaVisibleSql('m.id', '$1')}
+        AND ${mesaCuentaParaMiSql()}`;
+}
+// La mesa `m` cuenta para el usuario $1, sin mirar el rango. v2.176.0 · D260: también decide si un ticket de viaje con
+// el mismo recibo ya está contado por su mesa.
+function mesaCuentaParaMiSql() {
+  return `${ocultamientos.mesaVisibleSql('m.id', '$1')}
         AND (
               EXISTS (
                 SELECT 1 FROM mesa_item_claims c
@@ -709,6 +717,87 @@ function seleccionPropiaSql(rango) {
                   AND EXISTS (SELECT 1 FROM restaurants r
                                WHERE r.id = m.restaurant_id AND ${ACCESO_INFORMATIVO}))
             )`;
+}
+
+/**
+ * v2.176.0 · D260 · los tickets escaneados de un viaje que pueden sumar al usuario $1 en el rango (plan OK del
+ * Bibliotecario 2026-10-10T15:54:55Z). Arranca por `viaje_ticket_personas (user_id)`. Entra un ticket si:
+ *   · estás en él y sos miembro activo del viaje;
+ *   · no es un gasto a mano y es de un restaurante, bar o café (D260 «sólo restaurantes»);
+ *   · su instante (abajo) cae en el rango;
+ *   · consumiste algo: cerrado, lo que quedó guardado; abierto, «pagar el total» si pagaste (D263: o estás entre los que
+ *     pagaron), «en partes iguales» si estuviste, «por lo que pidió cada uno» si elegiste;
+ *   · no lo cuenta ya una mesa: si el mismo recibo abrió una mesa que cuenta para vos, gana la mesa. El recibo es de
+ *     quien escaneó, así que esa mesa la abrió quien cargó el ticket.
+ * Las candidatas nunca son menos que las visitas: sirven para el tope previo.
+ */
+// El instante de un ticket de viaje: la fecha y hora impresas, en hora de México; si falta alguna, cuando se cargó.
+const INSTANTE_DEL_TICKET = `COALESCE((vt.fecha_ticket + vt.hora_ticket) AT TIME ZONE 'America/Mexico_City', vt.created_at)`;
+const TIPOS_DE_VIAJE_EN_ESTADISTICAS = viajes.TIPOS_EN_ESTADISTICAS.map((t) => `'${t}'`).join(', ');
+const MANUAL = viajes.PREFIJO_GASTO_MANUAL;
+function ticketsDeViajeSql(rango) {
+  return `FROM viaje_ticket_personas vp
+      JOIN viaje_tickets vt ON vt.id = vp.ticket_id
+      JOIN viajes vj ON vj.id = vt.viaje_id
+      JOIN viaje_miembros vm ON vm.viaje_id = vt.viaje_id AND vm.user_id = vp.user_id AND vm.estado = 'activo'
+     WHERE vp.user_id = $1
+       AND left(vt.recibo_jti, ${MANUAL.length}) <> '${MANUAL}'
+       AND vt.tipo_lugar IN (${TIPOS_DE_VIAJE_EN_ESTADISTICAS})
+       AND ${filtroDeRango(INSTANTE_DEL_TICKET, rango)}
+       AND CASE WHEN vj.estado <> 'abierto' THEN COALESCE(vp.consumo_final_cents, 0) > 0
+                -- v2.177.0 · D263: con varios pagadores, cada uno consumió lo que pagó.
+                WHEN vt.forma = 'total' THEN (vt.pagado_por = $1
+                  OR EXISTS (SELECT 1 FROM viaje_ticket_pagadores vpg WHERE vpg.ticket_id = vt.id AND vpg.user_id = $1))
+                WHEN vt.forma = 'iguales' THEN vp.presente
+                ELSE EXISTS (SELECT 1 FROM viaje_selecciones vs JOIN viaje_ticket_items vi ON vi.id = vs.item_id
+                              WHERE vi.ticket_id = vt.id AND vs.user_id = $1 AND vs.fraction_bps > 0) END
+       AND NOT EXISTS (
+             SELECT 1 FROM mesas m
+              WHERE m.opener_user_id = COALESCE(vt.cargado_por, vt.pagado_por)
+                AND m.metadata->'origin_receipt'->>'status' = 'accepted'
+                AND m.metadata->'origin_receipt'->>'id' = vt.recibo_jti
+                AND ${mesaCuentaParaMiSql()})`;
+}
+
+/** Las visitas de viaje del rango, con lo consumido por el usuario (services/viajes.js, el mismo cálculo del viaje). */
+async function visitasDeViajes(userId, rango) {
+  const { rows } = await pool.query(
+    `SELECT vt.id, vt.viaje_id, ${INSTANTE_DEL_TICKET} AS instante ${ticketsDeViajeSql(rango)}`, [userId]);
+  return rows.length ? viajes.visitasParaEstadisticas(userId, rows) : [];
+}
+
+/** Sin acentos, en minúsculas y con los espacios colapsados: para reconocer el mismo comercio por su nombre. */
+const nombreComparable = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/\s+/g, ' ').trim();
+
+/**
+ * v2.176.0 · D260 · el restaurante de cada visita de viaje. Un viaje no guarda el RFC, así que la única señal es el
+ * nombre: el ticket va con el restaurante de una mesa de la MISMA respuesta cuyo nombre mostrado coincide (sin
+ * acentos, mayúsculas ni espacios de más), si es uno solo. Si no hay ninguno, o hay varios con ese nombre, va en su
+ * propio grupo: `viaje:` más el sha256 corto del nombre (estable entre períodos y sin el nombre en claro) y la
+ * categoría `cafe` para un café u `other`. Sin lugar: `viaje-ticket:<id>`, «Restaurante sin identificar».
+ */
+function conRestaurante(deViajes, deMesas) {
+  const porNombre = new Map();
+  for (const m of deMesas) {
+    if (m.amount_cents <= 0) continue;
+    const clave = nombreComparable(nombreDelRestaurante(m));
+    if (!porNombre.has(clave)) porNombre.set(clave, new Map());
+    porNombre.get(clave).set(m.restaurant_id, m);
+  }
+  return deViajes.map((v) => {
+    const clave = nombreComparable(v.lugar);
+    const mismos = clave ? porNombre.get(clave) : null;
+    const mesa = mismos?.size === 1 ? [...mismos.values()][0] : null;
+    const restaurante = mesa
+      ? { restaurant_id: mesa.restaurant_id, restaurant_name: mesa.restaurant_name, category: mesa.category,
+        nombre_restaurant_status: mesa.nombre_restaurant_status, nombre_restaurant_label: mesa.nombre_restaurant_label }
+      : { restaurant_id: clave ? `viaje:${createHash('sha256').update(clave).digest('hex').slice(0, 16)}` : `viaje-ticket:${v.ticket_id}`,
+        restaurant_name: v.lugar || 'Restaurante sin identificar', category: v.tipo_lugar === 'cafe' ? 'cafe' : 'other',
+        nombre_restaurant_status: null, nombre_restaurant_label: null };
+    return { id: v.ticket_id, code: v.ticket_id, division_mode: v.division_mode, created_at: v.instante,
+      amount_cents: v.amount_cents, items: v.items, viaje_id: v.viaje_id, ...restaurante };
+  });
 }
 
 async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
@@ -737,7 +826,9 @@ async function excedeTopeAntes(userId, rango, maximo) {
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
           AND ${ocultamientos.pagoEnEstadisticasSql('pa', '$1')}
           AND ${filtroDeRango('pa.created_at', rango)}`
-    : `SELECT COUNT(*)::int AS n FROM mesas m WHERE ${seleccionPropiaSql(rango)}`,
+    // v2.176.0 · D260: en la base consumo, también los tickets de viaje candidatos.
+    : `SELECT ((SELECT COUNT(*) FROM mesas m WHERE ${seleccionPropiaSql(rango)})
+              + (SELECT COUNT(*) ${ticketsDeViajeSql(rango)}))::int AS n`,
   [userId]);
   return r.n > maximo;
 }
@@ -745,11 +836,14 @@ async function excedeTopeAntes(userId, rango, maximo) {
 async function consumoDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
   const mesas = await mesasDelMesConSeleccion(userId, rango);
   const mios = await consumoPropio.porMesa(userId, mesas, pool, { informativas: true });
+  const deMesas = mesas.map((m) => ({ ...m, amount_cents: mios.get(m.id)?.amount_cents || 0 }));
+  // v2.176.0 · D260: con los tickets de viaje, cada uno en la categoría de su restaurante.
+  const todas = [...deMesas, ...conRestaurante(await visitasDeViajes(userId, rango), deMesas)];
   const porCategoria = new Map();
   let total = 0;
   let visitas = 0;
-  for (const m of mesas) {
-    const monto = mios.get(m.id)?.amount_cents || 0;
+  for (const m of todas) {
+    const monto = m.amount_cents;
     if (monto <= 0) continue;
     total += monto;
     visitas += 1;
@@ -799,7 +893,11 @@ function fijarMaxVisitasParaTests(n) {
   return () => { maxVisitasDelMes = previo; };
 }
 
-function armarRestaurantes(basis, visitas) {
+/**
+ * v2.176.0 · D260 · `conViaje` (con `stats_version=2`, decisión A del plan): cada visita lleva `viaje_id`, el viaje del
+ * ticket o null en una mesa, para que App Frontend abra el ticket del viaje. Sin él, la forma de siempre.
+ */
+function armarRestaurantes(basis, visitas, { conViaje = false } = {}) {
   const porResto = new Map();
   let total = 0;
   for (const v of visitas) {
@@ -826,6 +924,7 @@ function armarRestaurantes(basis, visitas) {
       division_mode: v.division_mode,
       amount_cents: v.amount_cents,
       items: v.items,
+      ...(conViaje && { viaje_id: v.viaje_id ?? null }),
     });
     porResto.set(v.restaurant_id, r);
   }
@@ -838,17 +937,22 @@ function armarRestaurantes(basis, visitas) {
   return { basis, total_cents: total, restaurants };
 }
 
-async function restaurantesDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
+async function restaurantesDesdeSelecciones(userId, rango = RANGO_DEL_MES, opciones = {}) {
   const mesas = await mesasDelMesConSeleccion(userId, rango);
   const mios = await consumoPropio.porMesa(userId, mesas, pool, { detalle: true, informativas: true });
-  return armarRestaurantes('consumption', mesas.map((m) => ({
+  const deMesas = mesas.map((m) => ({
     ...m,
     amount_cents: mios.get(m.id)?.amount_cents || 0,
     items: mios.get(m.id)?.items || [],
-  })));
+  }));
+  // v2.176.0 · D260: con los tickets de viaje.
+  return armarRestaurantes('consumption',
+    [...deMesas, ...conRestaurante(await visitasDeViajes(userId, rango), deMesas)], opciones);
 }
 
-async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
+// v2.176.0 · D260 (decisión C del plan): con el dinero encendido la base es lo pagado con PayMe, y un ticket de viaje no
+// se paga por PayMe: no suma acá.
+async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES, opciones = {}) {
   const { rows: mesas } = await pool.query(
     `SELECT m.id, m.code, m.division_mode, m.created_at,
             r.id AS restaurant_id, r.name AS restaurant_name, r.category,
@@ -893,7 +997,7 @@ async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
   }
   return armarRestaurantes('payments', mesas.map((m) => ({
     ...m, amount_cents: Number(m.amount), items: itemsPorMesa.get(m.id) || [],
-  })));
+  })), opciones);
 }
 
 router.get('/stats/restaurants', validateQuery(statsPeriodQuery), async (req, res, next) => {
@@ -903,9 +1007,11 @@ router.get('/stats/restaurants', validateQuery(statsPeriodQuery), async (req, re
       return res.status(413).json({ error: 'stats_month_too_large' });
     }
     const period = await periodoPublicado(periodo, rango);
+    // v2.176.0 · D260: `stats_version=2`, la cadena exacta (un valor repetido llega como lista y no negocia).
+    const opciones = { conViaje: req.query.stats_version === '2' };
     const cuerpo = dineroHabilitado()
-      ? await restaurantesDesdePagos(req.user.id, rango)
-      : await restaurantesDesdeSelecciones(req.user.id, rango);
+      ? await restaurantesDesdePagos(req.user.id, rango, opciones)
+      : await restaurantesDesdeSelecciones(req.user.id, rango, opciones);
     const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
     if (visitas > maxVisitasDelMes) {
       return res.status(413).json({ error: 'stats_month_too_large' });
