@@ -171,6 +171,8 @@ async function createOrReplay({
     );
     const mesa = mesaRows[0];
     if (!mesa) throw codedError('mesa_not_found', 404);
+    // v2.173.2 · T-02: la ruta pasa antes por requireMesaParticipant, así que este 403 sólo lo recibe quien participa
+    // sin ser titular (o quien perdió el acceso entre la puerta y este lock): no dice qué códigos existen.
     if (mesa.opener_user_id !== inviter.id) throw codedError('only_opener_can_invite', 403);
 
     await client.query(

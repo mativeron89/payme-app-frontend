@@ -94,7 +94,7 @@ function avisoVisibleSql(n) {
 /**
  * La mesa por código, sólo si la persona tiene HUELLA en ella: quien la ve en alguna superficie propia. Es la
  * unión de titular, participante activo, claim propio (cualquier estado), casillero propio, selección
- * informativa propia y pago propio. No se reusa `requireMesaParticipantSinRevelar`: deja afuera a quien eligió
+ * informativa propia y pago propio. No se reusa `requireMesaParticipant`: deja afuera a quien eligió
  * con una invitación que después venció, que ve la mesa en `/mine` pero recibiría 404. Cualquier otro caso —
  * el código no existe o no hay huella— vuelve `null` y la ruta responde el 404 de n325, byte por byte.
  */

@@ -52,6 +52,16 @@
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
   "negociaciones": {
+    "viaje_version_3": {
+      "since": "2.174.0",
+      "decision": "255 (configuración del viaje: color y foto)",
+      "parametro": "viaje_version=3",
+      "regla": "La cadena exacta, en las mismas rutas que la 2 (GET /api/viajes/:id, POST /api/viajes, POST /:id/miembros, POST /:id/aceptar, POST /:id/cerrar), en PATCH /api/viajes/:id y en GET /api/viajes. Es la 2 más lo de abajo. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte; en la lista, un valor repetido es 400 validation_error.",
+      "detalle_suma": ["color", "has_photo"],
+      "lista_suma": ["color", "has_photo"],
+      "color": "Una clave de `colores`, o null (el color de la app).",
+      "has_photo": "Si el viaje tiene foto. La foto sale por GET /api/viajes/:id/foto."
+    },
     "viaje_version_2": {
       "since": "2.172.0",
       "decision": "245 (la pantalla del viaje y la de Balance)",
@@ -60,7 +70,7 @@
       "miembro": ["id", "first_name", "last_name", "username", "eliminada", "es_yo", "balance_cents", "falta_elegir", "has_avatar", "pagado_cents"],
       "ticket": ["id", "lugar", "tipo_lugar", "fecha_ticket", "hora_ticket", "cargado_en", "forma", "pagado_por", "pagaste_tu", "te_toca_cents", "falta_que_elija", "sin_repartir_cents", "monto_cents", "origen"],
       "has_avatar": "La regla n164 de las personas de una mesa: la cuenta no está eliminada, tiene foto, la identidad de perfil está encendida y es mayor de edad conocida. Un menor va sin foto. La foto sale por GET /api/viajes/:id/miembros/:mid/avatar.",
-      "pagado_cents": "Lo que pagó de su bolsillo: la suma de los tickets y gastos a mano que cargó (D245, «Lo que pagó»). En un viaje cerrado, null para los demás, como el balance.",
+      "pagado_cents": "Lo que pagó de su bolsillo: la suma de los tickets y gastos a mano que pagó (D245, «Lo que pagó»; desde D255-6 puede no ser quien los cargó). En un viaje cerrado, null para los demás, como el balance.",
       "origen": "escaneo | manual. «Consumos» es la lista `tickets`, el más nuevo arriba; nunca la selección de nadie."
     }
   },
@@ -72,24 +82,29 @@
     "origen": "Sin migración: el ticket guarda un id propio `m~` + 20 caracteres al azar donde un ticket escaneado guarda el id de su recibo. Nunca coincide con un recibo (un recibo es base64url de 22 caracteres y `~` no es base64url) y no lo trata como recibo ninguna lectura. El origen manual sale de ese prefijo; la API nunca publica ese id.",
     "monto_maximo_cents": 100000000,
     "duplicados": "La regla anti-duplicado del escaneo no aplica; la idempotencia es por `idempotency_key`.",
-    "en_tickets": "En `tickets[]` de GET /api/viajes/:id llega como cualquier ticket: `lugar` = la descripción, `tipo_lugar` = «otro», `forma` = «iguales», `fecha_ticket` y `hora_ticket` en null (la fecha es `cargado_en`), `pagado_por` = quien lo cargó. Con `viaje_version=2` suma `monto_cents` (el total) y `origen` = «manual». Sin el parámetro, sus claves son las de siempre.",
-    "abre_como_ticket": "Sí: GET /api/viajes/:id/tickets/:tid lo abre como un ticket «En partes iguales», con un renglón (la descripción y el monto), `personas` con `presente` en las elegidas, `monto_cents`, `te_toca_cents`, `puedo_elegir` = false y `puedo_marcar_presentes` = true sólo para quien lo cargó (PUT /:id/tickets/:tid/presentes cambia entre quiénes se reparte). La respuesta de POST /:id/gastos es esa misma forma."
+    "en_tickets": "En `tickets[]` de GET /api/viajes/:id llega como cualquier ticket: `lugar` = la descripción, `tipo_lugar` = «otro», `forma` = «iguales», `fecha_ticket` y `hora_ticket` en null (la fecha es `cargado_en`), `pagado_por` = quien lo pagó (quien lo cargó, salvo que eligiera a otro: D255-6). Con `viaje_version=2` suma `monto_cents` (el total) y `origen` = «manual». Sin el parámetro, sus claves son las de siempre.",
+    "abre_como_ticket": "Sí: GET /api/viajes/:id/tickets/:tid lo abre como un ticket «En partes iguales», con un renglón (la descripción y el monto), `personas` con `presente` en las elegidas, `monto_cents`, `te_toca_cents`, `puedo_elegir` = false y `puedo_marcar_presentes` = true sólo para quien lo pagó o lo cargó (D255-6; PUT /:id/tickets/:tid/presentes cambia entre quiénes se reparte). La respuesta de POST /:id/gastos es esa misma forma."
   },
   "estados_del_viaje": ["abierto", "esperando_pagos", "cerrado"],
   "tipos_de_lugar": ["restaurante", "bar", "cafe", "super", "otro"],
   "formas": ["consumo", "iguales", "total"],
-  "limites": { "miembros": 20, "tickets": 200, "renglones": 100, "lista": 100 },
+  "limites": { "miembros": 20, "tickets": 200, "renglones": 100, "lista": 100, "monto_ticket_cents": 100000000, "total_viaje_cents": 20000000000,
+    "miembros_cuentan": "v2.173.2 (T-04): al invitar, el tope de 20 cuenta a los activos e invitados con cuenta viva y a todo el que tiene historia en el viaje (pagó un ticket o está en la foto de alguno), aunque haya salido o dado de baja su cuenta: así el cierre nunca ve más de 20 saldos.",
+    "montos": "v2.173.2 (T-03): un ticket escaneado o un gasto a mano, hasta $1,000,000; el total del viaje, hasta 200 de esos. Los totales (gasto del grupo, pagado y consumido) son enteros seguros." },
   "privacidad": {
     "miembros_ven": "De los demás: nombre y @usuario (sin foto), quién pagó cada ticket, quién ya eligió y el balance de cada uno. Esperando pagos: todas las transferencias.",
-    "nunca": "Qué eligió otro, ni el RFC ni el folio del ticket.",
+    "nunca": "El RFC ni el folio del ticket.",
+    "ya_tomado": "Al elegir, se ve qué parte de cada renglón ya está tomada, sin nombre (D247: los que comparten se conocen). Por eso se puede deducir lo que tomó otro.",
     "cerrado": "Cada uno ve sólo lo suyo (D240-17): `balance_cents` de los demás en null, sólo las transferencias propias y `GET /:id/resumen`.",
     "declarado": "El balance de quien elige cambia exactamente en su monto: la API no expone la selección ajena, pero el monto se infiere.",
     "cuenta_eliminada": "Queda como miembro con `eliminada: true`, nombre «Cuenta eliminada» y sin @."
   },
   "persona": { "claves": ["first_name", "last_name", "username", "eliminada"], "username": "null sin @, con la función de @ apagada o con la cuenta eliminada" },
+  "colores": { "azul": "#1D4ED8", "verde": "#15803D", "violeta": "#6D28D9", "rojo": "#B91C1C", "naranja": "#C2410C", "turquesa": "#0F766E" },
+  "colores_nota": "v2.174.0 · D255: la paleta fija del color del viaje. Todos con contraste ≥ 4.5:1 contra texto blanco. Se guarda la clave; el front pinta con el hex.",
   "rutas": {
     "GET /api/viajes": {
-      "query": { "estado": "abiertos (por defecto) | cerrados" },
+      "query": { "estado": "abiertos (por defecto) | cerrados", "viaje_version": "opcional; sólo '3' negocia (v2.174.0)" },
       "respuestas": {
         "200": {
           "claves": ["contract", "viajes", "counts"],
@@ -184,22 +199,26 @@
     },
     "POST /api/viajes/:id/tickets": {
       "request": {
-        "ocr_receipt": "obligatorio: el recibo del escaneo (quien escanea es quien pagó)",
+        "ocr_receipt": "obligatorio: el recibo del escaneo, de quien carga (D255-6: quien pagó puede ser otro, ver pagado_por)",
         "idempotency_key": "string 8..100",
         "forma": "consumo | iguales | total",
         "tipo_lugar": "restaurante | bar | cafe | super | otro (V6: lo elige quien carga)",
         "lugar": "string 1..120 | null, opcional (el nombre del comercio; nunca el RFC)",
         "fecha_ticket": "YYYY-MM-DD | null, opcional (la de `ticket_datetime`)",
         "hora_ticket": "HH:MM | null, opcional; requiere fecha_ticket",
-        "items": "1..100 de {name 1..200, price_cents ≥ 0 (unitario), quantity 1..32767}"
+        "items": "1..100 de {name 1..200, price_cents ≥ 0 (unitario), quantity 1..32767}",
+        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos."
       },
       "respuestas": {
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null },
         "200": { "claves": ["contract", "ticket", "ya_cargado"], "cuando": "el reintento del mismo pedido (ya_cargado null), o un ticket que ya estaba en el viaje: `ticket` es el ya cargado y `ya_cargado` = {por, first_name, last_name, username, eliminada, en}" },
         "400": { "error": "validation_error" },
         "404": { "cuerpo": { "error": "viaje_not_found" } },
-        "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_ticket_receipt_used", "viaje_tickets_limit"] },
-        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid"] }
+        "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_ticket_receipt_used", "viaje_tickets_limit", "viaje_total_limit"],
+          "viaje_total_limit": ["error", "limit"] },
+        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown"],
+          "viaje_ticket_amount_invalid": "también un ticket de más de $1,000,000 (limites.monto_ticket_cents, v2.173.2)",
+          "viaje_ticket_payer_unknown": ["error", "miembro_id"] }
       }
     },
     "POST /api/viajes/:id/gastos": {
@@ -207,15 +226,64 @@
         "descripcion": "string 1..120",
         "monto_cents": "entero 1..100000000",
         "presentes": "1..20 ids de miembro activo, sin repetir; quien carga puede no estar",
-        "idempotency_key": "string 8..100"
+        "idempotency_key": "string 8..100",
+        "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos."
       },
       "respuestas": {
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null, "ticket": "la forma de GET /:id/tickets/:tid" },
         "200": { "cuando": "el reintento del mismo pedido" },
         "400": { "error": "validation_error" },
         "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
-        "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_tickets_limit"] },
-        "422": { "error": "viaje_ticket_persona_unknown", "claves": ["error", "miembro_id"] }
+        "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_tickets_limit", "viaje_total_limit"],
+          "viaje_total_limit": ["error", "limit"] },
+        "422": { "errores": ["viaje_ticket_persona_unknown", "viaje_ticket_payer_unknown"], "claves": ["error", "miembro_id"] }
+      }
+    },
+    "PATCH /api/viajes/:id": {
+      "since": "2.174.0 (D255)",
+      "request": {
+        "nombre": "string 1..80, opcional",
+        "fecha_desde": "YYYY-MM-DD | null, opcional",
+        "fecha_hasta": "YYYY-MM-DD | null, opcional; contra la fecha_desde nueva o la guardada, fecha_desde <= fecha_hasta",
+        "color": "una clave de `colores` | null, opcional"
+      },
+      "regla": "Cualquier miembro activo, con el viaje abierto (D255: «Cualquier miembro»). Al menos un campo; null borra una fecha o el color. Sin aviso a los demás.",
+      "respuestas": {
+        "200": { "claves": ["contract", "viaje"], "nota": "`viaje` con la versión negociada" },
+        "400": { "error": "validation_error" },
+        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
+        "409": { "error": "viaje_not_open", "claves": ["error", "estado"] }
+      }
+    },
+    "PUT /api/viajes/:id/foto": {
+      "since": "2.174.0 (D255)",
+      "request": "multipart/form-data con un solo archivo en el campo `foto`: jpeg, png o webp, hasta 5 MiB. Se re-codifica a JPEG de hasta 512 px por lado y 256 KiB, sin metadatos (lo mismo que la foto de perfil).",
+      "regla": "Cualquier miembro activo, con el viaje abierto. Gana la última escritura (sin If-Match). Hasta 10 por cada 10 minutos por cuenta. No se guarda quién la subió.",
+      "respuestas": {
+        "201": { "claves": ["foto"], "foto": ["revision", "width", "height", "updated_at"], "cuando": "no había foto" },
+        "200": { "claves": ["foto"], "cuando": "reemplazó la que había" },
+        "400": { "errores": ["avatar_file_required", "avatar_multipart_invalid"] },
+        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
+        "409": { "error": "viaje_not_open", "claves": ["error", "estado"] },
+        "413": { "error": "avatar_input_too_large" },
+        "415": { "errores": ["avatar_media_type_unsupported", "avatar_magic_bytes_invalid", "avatar_media_type_mismatch", "avatar_animation_unsupported"] },
+        "422": { "nota": "una imagen que no se puede leer, demasiados píxeles o que no entra en 256 KiB (los códigos avatar_* de la foto de perfil)" },
+        "429": { "errores": ["viaje_photo_rate_limited", "avatar_processing_busy"] }
+      }
+    },
+    "DELETE /api/viajes/:id/foto": {
+      "since": "2.174.0 (D255)",
+      "respuestas": {
+        "204": { "cuando": "la quitó, o no había" },
+        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
+        "409": { "error": "viaje_not_open", "claves": ["error", "estado"] }
+      }
+    },
+    "GET /api/viajes/:id/foto": {
+      "since": "2.174.0 (D255)",
+      "respuestas": {
+        "200": { "cuerpo": "los bytes de la foto (image/jpeg)", "cabeceras": { "Cache-Control": "private, no-store" } },
+        "404": { "cuerpo": { "error": "viaje_photo_not_found" }, "cuando": "toda negativa, igual byte por byte y sin ETag: id inválido, el viaje no existe, no sos miembro activo, sin foto. Sólo los miembros activos la ven, en cualquier estado del viaje." }
       }
     },
     "GET /api/viajes/:id/miembros/:mid/avatar": {
@@ -231,7 +299,7 @@
           "ticket": ["id", "lugar", "tipo_lugar", "fecha_ticket", "hora_ticket", "cargado_en", "forma", "monto_cents", "pagado_por", "pagaste_tu", "items", "personas", "te_toca_cents", "sin_repartir_cents", "puedo_elegir", "puedo_marcar_presentes"],
           "item": ["id", "name", "price_cents", "quantity", "line_cents", "remaining_bps", "my_bps", "my_amount_cents"],
           "persona": ["miembro_id", "ya_eligio", "presente"],
-          "nota": "`remaining_bps` es un agregado por plato; nunca qué eligió otro (diseño 1i)."
+          "nota": "`remaining_bps` es un agregado por plato, sin nombre: se ve qué parte de cada renglón ya está tomada (D247)."
         },
         "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"] },
         "409": { "error": "viaje_closed", "cuando": "cerrado: lo propio está en GET /:id/resumen" }

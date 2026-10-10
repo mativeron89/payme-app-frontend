@@ -6,6 +6,31 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+### Viajes: quién pagó y configuración del viaje · App Backend v2.174.0 · 2026-10-10
+
+Orden `AF-VIAJES-QUIEN-PAGO-Y-CONFIGURACION-20261010` (D255 tramo 2). Scope del lease con `contract-mirror/**` y
+`scripts/mirror-inventory.json`.
+
+- Contenido: owner **`edee7f8812448b2814304f5635c6ca2f1d4ec658`** (v2.174.0, commit A: quién pagó, y nombre,
+  fechas, color y foto del viaje).
+- Inventario: el del owner en **`310b6dea549a038226f377354cc21fc64f9a4bd2`** (v2.174.0, commit C, el de la orden;
+  `contract/mirror-inventory.json`, sha256 `68322ef17405fd8e1a2426a0a30dca32ba9267d88fe5b1f7da38e9ba16f87ebc`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `edee7f8`.
+- **138 archivos espejados** (antes 136).
+  - Entran dos: `contract/mesa-acceso-v1.json` (sha256
+    `281c2b39600942f42b7058c17150a0d585824763e5166e28f807dbeff5514693`) y
+    `db/migrate_viajes_configuracion_v2.174.0.sql`.
+  - Cambian nueve: `contract/viajes-v1.json` (sha256
+    `444b0fea2492df4e19c4b08c115a26e4b31db860dce06b4cb20487c20e361a6d`: `viaje_version=3`, `pagado_por`,
+    `PATCH /api/viajes/:id`, la foto y la paleta), `contract/mesa-join-requests-v1.json`, `middleware/auth.js`,
+    `routes/mesas.js`, `routes/viajes.js`, `services/invitationAuthority.js`, `services/ocultamientos.js`,
+    `services/viajes.js` y `services/viajesCalculo.js`.
+  - Copiados con `git show edee7f8:<origen>`.
+- `--paridad`: espejo = inventario = fuente en `edee7f8`, 138/138.
+- `main` del owner ya está en v2.174.1 (`8d8b64e`, otra orden). De lo espejado cambia `services/viajes.js` (sólo un
+  comentario) y `routes/invitations.js` (aceptar y cancelar responden 404 a un tercero). Nada de lo que este front
+  decodifica: el espejo se queda en la v2.174.0 de la orden.
+
 ### Amigos: el link de invitación · App Backend v2.173.0 · 2026-10-09
 
 Orden `AF-LINK-DE-INVITACION-20261009` (D252), Adenda 1 (`6bb16b02…`). Scope del lease con `contract-mirror/**` y

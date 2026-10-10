@@ -60,7 +60,7 @@
     }
   },
   "titular": {
-    "acceso": "Sólo el titular (mesas.opener_user_id). Otro participante: 403 not_mesa_organizer. Quien no participa: 403 not_a_mesa_participant; mesa inexistente: 404 mesa_not_found (residual conocido, igual que /api/mesas/:code/participants).",
+    "acceso": "Sólo el titular (mesas.opener_user_id). Otro participante: 403 not_mesa_organizer. Quien no participa: el mismo 404 mesa_not_found que una mesa inexistente (v2.173.1 · n333, contract/mesa-acceso-v1.json).",
     "listar": {
       "endpoint": "GET /api/mesas/:code/join-requests",
       "respuesta_200": {

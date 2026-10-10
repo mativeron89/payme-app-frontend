@@ -80,7 +80,7 @@
  */
 'use strict';
 
-const { createHash, createHmac, hkdfSync, randomBytes } = require('node:crypto');
+const { createHash, createHmac, hkdfSync, randomBytes, randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const pool = require('../db/pool');
 const notifs = require('./notifications');
@@ -107,12 +107,23 @@ const MAX_TICKETS = 200;
 const MAX_LISTA = 100;
 // v2.172.0 · D244: el tope de un gasto a mano (un millón de pesos) y el prefijo de su id propio en `recibo_jti`.
 const MAX_GASTO_CENTS = 100_000_000;
+// v2.173.2 · T-03 de la auditoría Codex total: el mismo tope vale para un ticket escaneado, y el total del viaje tiene
+// el suyo, que es el máximo alcanzable con los dos topes (200 tickets de $1,000,000): un entero seguro con margen.
+// Se comprueba bajo el lock del viaje, antes de guardar; sólo lo alcanzan datos anteriores a 2.173.2.
+const MAX_TOTAL_CENTS = MAX_TICKETS * MAX_GASTO_CENTS;
 const PREFIJO_GASTO_MANUAL = 'm~';
 const esManual = (t) => typeof t.recibo_jti === 'string' && t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL);
 const FORMAS = Object.freeze(['consumo', 'iguales', 'total']);
 const TIPOS_LUGAR = Object.freeze(['restaurante', 'bar', 'cafe', 'super', 'otro']);
 const ESTADOS = Object.freeze(['abierto', 'esperando_pagos', 'cerrado']);
 const ESTADOS_TRANSFERENCIA = Object.freeze(['pendiente', 'marcada', 'pagada', 'anulada_por_baja']);
+// v2.174.0 · D255: la paleta del color del viaje. Claves fijas (la base las guarda con un CHECK) y su hex, todos con
+// contraste ≥ 4.5:1 contra texto blanco. El front pinta con el hex; sin color, el de la app.
+const COLORES = Object.freeze({
+  azul: '#1D4ED8', verde: '#15803D', violeta: '#6D28D9', rojo: '#B91C1C', naranja: '#C2410C', turquesa: '#0F766E',
+});
+/** D255-6: quien cargó un ticket. Las filas que la instancia vieja insertó durante el deploy no lo tienen: era quien pagó. */
+const cargadoPor = (t) => t.cargado_por || t.pagado_por;
 const ETIQUETA_HUELLA = 'payme/viajes/huella/v1';
 const RFC_GENERICOS = new Set(['XAXX010101000', 'XEXX010101000']);
 
@@ -139,6 +150,17 @@ const respuesta = (status, body) => ({ status, body });
 const NO_ENCONTRADO = Object.freeze({ error: 'viaje_not_found' });
 const noEncontrado = () => respuesta(404, NO_ENCONTRADO);
 const conflicto = (error, extra = {}) => respuesta(409, { error, ...extra });
+
+/**
+ * v2.173.2 · T-03: ¿el total del viaje más este monto se pasa del tope? Se suma en la base (numeric), no en JS, para
+ * que un dato viejo enorme no pierda precisión antes de compararlo. Con la fila del viaje ya bloqueada.
+ */
+async function totalExcedido(client, viajeId, monto) {
+  const { rows: [r] } = await client.query(
+    `SELECT COALESCE(SUM(monto_cents), 0) + $2::bigint > $3::bigint AS excede FROM viaje_tickets WHERE viaje_id=$1`,
+    [viajeId, monto, MAX_TOTAL_CENTS]);
+  return r.excede === true;
+}
 
 // ─── La huella del ticket (V2) ─────────────────────────────────────────────────────────────────────────────────
 
@@ -218,6 +240,8 @@ const cuerpoTicket = z.object({
     price_cents: z.number().int().safe().min(0),
     quantity: z.number().int().min(1).max(32767),
   }).strict()).min(1).max(100),
+  // v2.174.0 · D255-6: quién pagó, un id de miembro. Sin él, quien carga.
+  pagado_por: uuid.optional(),
 }).strict().refine((b) => !b.hora_ticket || b.fecha_ticket, { message: 'hora_ticket requiere fecha_ticket', path: ['hora_ticket'] });
 const cuerpoSeleccion = z.object({
   items: z.array(z.object({
@@ -233,12 +257,26 @@ const cuerpoGasto = z.object({
   presentes: z.array(uuid).min(1).max(MAX_MIEMBROS)
     .refine((xs) => new Set(xs).size === xs.length, 'miembro repetido'),
   idempotency_key: idempotencyKey,
+  // v2.174.0 · D255-6: quién pagó, un id de miembro. Sin él, quien carga.
+  pagado_por: uuid.optional(),
 }).strict();
 const cuerpoPresentes = z.object({
   presentes: z.array(uuid).min(1).max(MAX_MIEMBROS)
     .refine((xs) => new Set(xs).size === xs.length, 'miembro repetido'),
 }).strict();
-const consultaLista = z.object({ estado: z.enum(['abiertos', 'cerrados']).default('abiertos') }).strict();
+// v2.174.0 · D255: la lista acepta `viaje_version` (sólo la cadena exacta '3' negocia; un valor repetido llega como lista
+// y da 400, como cualquier otra clave inválida).
+const consultaLista = z.object({
+  estado: z.enum(['abiertos', 'cerrados']).default('abiertos'),
+  viaje_version: z.string().optional(),
+}).strict();
+// v2.174.0 · D255: la configuración del viaje. Al menos un campo; null borra una fecha o el color.
+const cuerpoEditar = z.object({
+  nombre: texto(80).optional(),
+  fecha_desde: fecha.nullable().optional(),
+  fecha_hasta: fecha.nullable().optional(),
+  color: z.enum(Object.keys(COLORES)).nullable().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, 'nada para cambiar');
 
 function validar(schema, valor) {
   const r = schema.safeParse(valor ?? {});
@@ -269,7 +307,9 @@ const recortar = (s, n) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
 
 /** Todo lo de un viaje, con el `db` dado (pool o el cliente de la transacción). */
 async function cargar(db, viajeId) {
-  const { rows: [viaje] } = await db.query(`SELECT * FROM viajes WHERE id=$1`, [viajeId]);
+  const { rows: [viaje] } = await db.query(
+    `SELECT v.*, EXISTS (SELECT 1 FROM viaje_fotos f WHERE f.viaje_id = v.id) AS tiene_foto FROM viajes v WHERE v.id=$1`,
+    [viajeId]);
   if (!viaje) return null;
   const { rows: miembros } = await db.query(
     `SELECT m.id, m.user_id, m.estado, m.invitado_por, m.invitado_en, m.created_at,
@@ -352,6 +392,8 @@ function balance(d, { cierre = false } = {}) {
     porTicket.set(t.id, { consumo, asignado, sinRepartir: 0, faltan: [] });
   }
   if ([...bal.values()].reduce((s, x) => s + x, 0) !== 0) throw new Error('viaje_balance_no_cuadra');
+  // v2.173.2 · T-03: los totales, no sólo el balance neto, tienen que ser enteros seguros.
+  if (!calc.totalesSeguros(gasto, pagado, consumido)) throw new Error('viaje_totales_invalidos');
   return { balance: bal, pagado, consumido, gasto, porTicket, congelado: true };
 }
 
@@ -378,8 +420,8 @@ function vistaTicketEnLista(t, d, b, yo, idPublico, version = 1) {
     te_toca_cents: r.consumo.get(yo) || 0,
     falta_que_elija: b.congelado ? 0 : r.faltan.length,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
-    // v2.172.0 · D245, sólo con `viaje_version=2`: «Consumos» muestra el total y si se cargó a mano.
-    ...(version === 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
+    // v2.172.0 · D245, desde `viaje_version=2`: «Consumos» muestra el total y si se cargó a mano.
+    ...(version >= 2 && { monto_cents: t.monto_cents, origen: esManual(t) ? 'manual' : 'escaneo' }),
   };
 }
 
@@ -417,7 +459,7 @@ function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
     for (const r of b.porTicket.values()) for (const u of r.faltan) faltaElegir.set(u, (faltaElegir.get(u) || 0) + 1);
   }
   const tickets = d.tickets.map((t) => vistaTicketEnLista(t, d, b, yo, idPublico, version)).reverse();
-  // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
+  // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que pagó (D255-6: puede no ser quien cargó).
   const pagadoDe = (u) => d.tickets.filter((t) => t.pagado_por === u).reduce((s, t) => s + t.monto_cents, 0);
   const sinRepartir = b.congelado ? [] : d.tickets.filter((t) => b.porTicket.get(t.id).sinRepartir > 0).map((t) => ({
     ticket_id: t.id, lugar: t.lugar, fecha_ticket: fechaDe(t.fecha_ticket),
@@ -435,7 +477,7 @@ function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
       id: m.id, ...persona(m), es_yo: m.user_id === yo,
       balance_cents: cerrado && m.user_id !== yo ? null : b.balance.get(m.user_id) || 0,
       falta_elegir: faltaElegir.get(m.user_id) || 0,
-      ...(version === 2 && {
+      ...(version >= 2 && {
         has_avatar: fotos?.get(m.user_id) === true,
         // Cerrado (D240-17): de los demás, nada, como el balance.
         pagado_cents: cerrado && m.user_id !== yo ? null : pagadoDe(m.user_id),
@@ -446,6 +488,8 @@ function vistaViaje(d, yo, { version = 1, fotos = null } = {}) {
     gasto_del_grupo_cents: b.gasto,
     tickets, sin_repartir: sinRepartir,
     transferencias, transferencias_pendientes: pendientes(d).length,
+    // v2.174.0 · D255, desde `viaje_version=3`: el color de la paleta (o null) y si el viaje tiene foto.
+    ...(version >= 3 && { color: d.viaje.color ?? null, has_photo: d.viaje.tiene_foto === true }),
   };
 }
 
@@ -463,13 +507,16 @@ async function fotosDeMiembros(db, d) {
   return fotos;
 }
 
-/** El detalle con la versión negociada: la 2 suma la foto y lo que pagó cada uno (D245). */
+/** El detalle con la versión negociada: la 2 suma la foto y lo que pagó cada uno (D245); la 3, color y foto (D255). */
 async function vistaDelViaje(d, yo, version = 1) {
-  if (version !== 2) return vistaViaje(d, yo);
+  if (version < 2) return vistaViaje(d, yo);
   return vistaViaje(d, yo, { version, fotos: await fotosDeMiembros(pool, d) });
 }
 
-/** El detalle de un ticket que ve un miembro activo. Nunca qué eligió otro. */
+/**
+ * El detalle de un ticket que ve un miembro activo. Al elegir, se ve qué parte de cada renglón ya está tomada, sin
+ * nombre (D247: los que comparten se conocen; por eso se puede deducir lo que tomó otro).
+ */
 function vistaTicket(t, d, yo) {
   const b = balance(d);
   const r = b.porTicket.get(t.id);
@@ -491,11 +538,12 @@ function vistaTicket(t, d, yo) {
     te_toca_cents: r.consumo.get(yo) || 0,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
     puedo_elegir: abierto && t.forma === 'consumo' && soyPersona,
-    puedo_marcar_presentes: abierto && t.forma === 'iguales' && t.pagado_por === yo,
+    // D255-6: quien pagó o quien cargó.
+    puedo_marcar_presentes: abierto && t.forma === 'iguales' && (t.pagado_por === yo || cargadoPor(t) === yo),
   };
 }
 
-function vistaEnLista(d, yo) {
+function vistaEnLista(d, yo, version = 1) {
   const estado = estadoEfectivo(d);
   const b = balance(d);
   return {
@@ -506,6 +554,8 @@ function vistaEnLista(d, yo) {
     transferencias_pendientes: estado === 'esperando_pagos' ? pendientes(d).length : null,
     consumiste_cents: estado === 'cerrado' ? b.consumido.get(yo) || 0 : null,
     terminado_en: ts(d.viaje.terminado_en),
+    // v2.174.0 · D255, con `viaje_version=3`: la tarjeta de Abiertos y Cerrados lleva el color y la foto.
+    ...(version >= 3 && { color: d.viaje.color ?? null, has_photo: d.viaje.tiene_foto === true }),
   };
 }
 
@@ -596,8 +646,22 @@ async function invitarEn(client, viajeId, yo, ids, nombreViaje) {
       WHERE m.viaje_id=$1`, [viajeId]);
   const porId = new Map(actuales.map((m) => [m.user_id, m]));
   const nuevos = ids.filter((id) => !['activo', 'invitado'].includes(porId.get(id)?.estado));
-  const ocupados = actuales.filter((m) => ['activo', 'invitado'].includes(m.estado) && m.status !== 'deleted').length;
-  if (ocupados + nuevos.length > MAX_MIEMBROS) return { error: conflicto('viaje_members_limit', { limit: MAX_MIEMBROS }) };
+  // v2.173.2 · T-04 de la auditoría Codex total: el tope cuenta a todos los que pueden tener saldo al cerrar, no sólo a
+  // los activos e invitados vivos. También a quien tiene historia en el viaje (pagó un ticket o está en la foto de
+  // alguno), aunque haya salido o dado de baja su cuenta: su saldo sigue entrando al cierre. Es conservador a propósito
+  // (la foto incluye a quien no consumió, porque al cerrar lo no elegido puede caerle, D242-4). Así el cierre nunca ve
+  // más de MAX_MIEMBROS saldos y las transferencias mínimas siempre se pueden calcular.
+  const { rows: historia } = await client.query(
+    `SELECT pagado_por AS user_id FROM viaje_tickets WHERE viaje_id=$1
+     UNION
+     SELECT p.user_id FROM viaje_ticket_personas p JOIN viaje_tickets t ON t.id = p.ticket_id WHERE t.viaje_id=$1`,
+    [viajeId]);
+  const cuentan = new Set([
+    ...actuales.filter((m) => ['activo', 'invitado'].includes(m.estado) && m.status !== 'deleted').map((m) => m.user_id),
+    ...historia.map((h) => h.user_id),
+    ...nuevos,
+  ]);
+  if (cuentan.size > MAX_MIEMBROS) return { error: conflicto('viaje_members_limit', { limit: MAX_MIEMBROS }) };
   const cuentas = await bloquearCuentas(client, [yo, ...nuevos]);
   if (nuevos.some((id) => cuentas.get(id) !== 'active')) {
     return { error: MIEMBRO_NO_ENCONTRADO({ user_id: null }) };
@@ -635,7 +699,7 @@ async function listar(userId, query) {
   const abiertos = []; const cerrados = [];
   for (const { id } of rows) {
     const d = await cargar(pool, id);
-    const item = vistaEnLista(d, userId);
+    const item = vistaEnLista(d, userId, v.data.viaje_version === '3' ? 3 : 1);
     (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
   }
   cerrados.sort((a, b) => (b.fecha_desde || b.terminado_en || '').localeCompare(a.fecha_desde || a.terminado_en || ''));
@@ -831,18 +895,19 @@ const RECIBO_INVALIDO = (reason) => respuesta(422, { error: 'viaje_ticket_receip
 /** El ticket ya cargado en este viaje por ese recibo o esa huella, o la marca de que el recibo es de otro viaje. */
 async function buscarDuplicado(db, viajeId, recibo) {
   const { rows: [porRecibo] } = await db.query(
-    `SELECT id, viaje_id, pagado_por, created_at FROM viaje_tickets WHERE recibo_jti=$1`, [recibo.id]);
+    `SELECT id, viaje_id, pagado_por, cargado_por, created_at FROM viaje_tickets WHERE recibo_jti=$1`, [recibo.id]);
   if (porRecibo && porRecibo.viaje_id !== viajeId) return { otroViaje: true };
   if (porRecibo) return { ticket: porRecibo };
   if (!recibo.huella) return {};
   const { rows: [porHuella] } = await db.query(
-    `SELECT id, viaje_id, pagado_por, created_at FROM viaje_tickets WHERE viaje_id=$1 AND huella=$2`,
+    `SELECT id, viaje_id, pagado_por, cargado_por, created_at FROM viaje_tickets WHERE viaje_id=$1 AND huella=$2`,
     [viajeId, recibo.huella]);
   return porHuella ? { ticket: porHuella } : {};
 }
 
+/** Quien cargó un ticket que ya estaba (D255-6: quien cargó, que puede no ser quien pagó). */
 function yaCargado(t, d) {
-  const m = d.miembros.find((x) => x.user_id === t.pagado_por);
+  const m = d.miembros.find((x) => x.user_id === cargadoPor(t));
   return { por: m?.id ?? null, ...(m ? persona(m) : {}), en: ts(t.created_at) };
 }
 
@@ -861,7 +926,31 @@ async function revisarTicket(userId, viajeId, body) {
     duplicado: dup.ticket ? { ticket_id: dup.ticket.id, ...yaCargado(dup.ticket, d) } : null });
 }
 
-/** POST /api/viajes/:id/tickets — quien carga es quien pagó (regla 3). */
+/**
+ * D255-6: quién pagó. Sin `pagado_por`, quien carga; con él, un miembro activo del viaje con la cuenta viva y activa
+ * (`miembros` ya excluye las dadas de baja; `cuentas` es el estado de cada cuenta, bloqueado).
+ */
+function pagadorDe(pagadoPor, miembros, cuentas, userId) {
+  if (pagadoPor === undefined) return { id: userId };
+  const m = miembros.find((x) => x.miembro_id === pagadoPor);
+  if (!m || cuentas.get(m.user_id) !== 'active') {
+    return { error: respuesta(422, { error: 'viaje_ticket_payer_unknown', miembro_id: pagadoPor }) };
+  }
+  return { id: m.user_id };
+}
+
+/**
+ * D255-6 · la idempotencia es por quien carga (UNIQUE `(viaje_id, cargado_por, idempotency_key)`). El UNIQUE viejo
+ * `(viaje_id, pagado_por, idempotency_key)` se conserva (OK del plan): sólo salta si otra persona repite la misma clave
+ * al azar con el mismo pagador. Se mira antes de insertar, bajo el lock del viaje, para contestar 409 y no un 500.
+ */
+async function claveDelPagadorUsada(client, viajeId, pagadorId, clave) {
+  const { rowCount } = await client.query(
+    `SELECT 1 FROM viaje_tickets WHERE viaje_id=$1 AND pagado_por=$2 AND idempotency_key=$3`, [viajeId, pagadorId, clave]);
+  return rowCount > 0;
+}
+
+/** POST /api/viajes/:id/tickets — quien carga elige quién pagó (D255-6); sin elegir, quien carga (regla 3). */
 async function cargarTicket(userId, viajeId, body) {
   const v = validar(cuerpoTicket, body);
   if (!v.ok) return v.res;
@@ -869,11 +958,14 @@ async function cargarTicket(userId, viajeId, body) {
   if (!esUuid(viajeId)) return noEncontrado();
   // El recibo se verifica antes de la transacción (es puro); su uso único, adentro.
   const recibo = origenItems.verificarRecibo(b.ocr_receipt, { userId });
+  // `pagado_por` entra al hash sólo si vino: un reintento de un pedido anterior a D255 conserva su hash.
   const pedido = hashDe({ forma: b.forma, tipo_lugar: b.tipo_lugar, lugar: b.lugar ?? null,
-    fecha_ticket: b.fecha_ticket ?? null, hora_ticket: b.hora_ticket ?? null, items: b.items, recibo: b.ocr_receipt });
+    fecha_ticket: b.fecha_ticket ?? null, hora_ticket: b.hora_ticket ?? null, items: b.items, recibo: b.ocr_receipt,
+    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }) });
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
     const { rows: [previo] } = await client.query(
-      `SELECT id, pedido_hash FROM viaje_tickets WHERE viaje_id=$1 AND pagado_por=$2 AND idempotency_key=$3`,
+      `SELECT id, pedido_hash FROM viaje_tickets
+        WHERE viaje_id=$1 AND COALESCE(cargado_por, pagado_por)=$2 AND idempotency_key=$3`,
       [viajeId, userId, b.idempotency_key]);
     if (previo) {
       return previo.pedido_hash === pedido ? { ticketId: previo.id, status: 200 } : conflicto('idempotency_key_conflict');
@@ -886,20 +978,30 @@ async function cargarTicket(userId, viajeId, body) {
     if (dup.ticket) return { ticketId: dup.ticket.id, status: 200, duplicado: dup.ticket };
     const { rows: [{ n }] } = await client.query(`SELECT COUNT(*)::int AS n FROM viaje_tickets WHERE viaje_id=$1`, [viajeId]);
     if (n >= MAX_TICKETS) return conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
+    // v2.173.2 · T-03: un ticket escaneado tiene el tope del gasto a mano. Cada precio se acota antes de multiplicar,
+    // así ningún renglón puede pasarse del entero seguro (100 renglones × 32767 × $1,000,000 < 2^53).
+    const montoInvalido = respuesta(422, { error: 'viaje_ticket_amount_invalid' });
     let monto = 0;
-    for (const i of b.items) monto += lineTotalCents(i.price_cents, i.quantity);
-    if (!Number.isSafeInteger(monto) || monto <= 0) return respuesta(422, { error: 'viaje_ticket_amount_invalid' });
+    for (const i of b.items) {
+      if (i.price_cents > MAX_GASTO_CENTS) return montoInvalido;
+      monto += lineTotalCents(i.price_cents, i.quantity);
+    }
+    if (!Number.isSafeInteger(monto) || monto <= 0 || monto > MAX_GASTO_CENTS) return montoInvalido;
+    if (await totalExcedido(client, viajeId, monto)) return conflicto('viaje_total_limit', { limit: MAX_TOTAL_CENTS });
     const { rows: miembros } = await client.query(
-      `SELECT m.user_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
+      `SELECT m.user_id, m.id AS miembro_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
         WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
     const cuentas = await bloquearCuentas(client, miembros.map((m) => m.user_id));
     if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
+    const pagador = pagadorDe(b.pagado_por, miembros, cuentas, userId);
+    if (pagador.error) return pagador.error;
+    if (await claveDelPagadorUsada(client, viajeId, pagador.id, b.idempotency_key)) return conflicto('idempotency_key_conflict');
     const { rows: [t] } = await client.query(
-      `INSERT INTO viaje_tickets (viaje_id, pagado_por, forma, tipo_lugar, lugar, fecha_ticket, hora_ticket, monto_cents,
-                                  huella, recibo_jti, idempotency_key, pedido_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-      [viajeId, userId, b.forma, b.tipo_lugar, b.lugar ?? null, b.fecha_ticket ?? null, b.hora_ticket ?? null, monto,
-        recibo.huella ?? null, recibo.id, b.idempotency_key, pedido]);
+      `INSERT INTO viaje_tickets (viaje_id, pagado_por, cargado_por, forma, tipo_lugar, lugar, fecha_ticket, hora_ticket,
+                                  monto_cents, huella, recibo_jti, idempotency_key, pedido_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [viajeId, pagador.id, userId, b.forma, b.tipo_lugar, b.lugar ?? null, b.fecha_ticket ?? null, b.hora_ticket ?? null,
+        monto, recibo.huella ?? null, recibo.id, b.idempotency_key, pedido]);
     for (const [k, i] of b.items.entries()) {
       await client.query(
         `INSERT INTO viaje_ticket_items (ticket_id, orden, nombre, price_cents, quantity) VALUES ($1, $2, $3, $4, $5)`,
@@ -917,8 +1019,11 @@ async function cargarTicket(userId, viajeId, body) {
       : b.forma === 'iguales' ? ' Se divide en partes iguales.' : ' Lo paga todo.';
     for (const m of miembros) {
       if (m.user_id === userId) continue;
-      await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
-        body: `${nombreDe(quien)} cargó un ticket nuevo en ${quien.nombre}${donde}.${accion}`,
+      // D255-6: a quien quedó como quien pagó, su propio aviso (sin montos).
+      const body = m.user_id === pagador.id
+        ? `${nombreDe(quien)} cargó un ticket en ${quien.nombre}${donde} y te puso como quien pagó.${accion}`
+        : `${nombreDe(quien)} cargó un ticket nuevo en ${quien.nombre}${donde}.${accion}`;
+      await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId, body,
         payload: { viaje_id: viajeId, ticket_id: t.id } });
     }
     return { ticketId: t.id, status: 201 };
@@ -953,7 +1058,7 @@ async function verTicket(userId, viajeId, ticketId) {
 async function ticketBloqueado(client, viajeId, ticketId) {
   if (!esUuid(ticketId)) return null;
   const { rows: [t] } = await client.query(
-    `SELECT id, forma, pagado_por FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`, [ticketId, viajeId]);
+    `SELECT id, forma, pagado_por, cargado_por FROM viaje_tickets WHERE id=$1 AND viaje_id=$2`, [ticketId, viajeId]);
   return t || null;
 }
 
@@ -1022,7 +1127,8 @@ async function marcarPresentes(userId, viajeId, ticketId, body) {
     if (!t) return respuesta(404, { error: 'viaje_ticket_not_found' });
     if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
     if (t.forma !== 'iguales') return conflicto('viaje_ticket_not_equal_split', { forma: t.forma });
-    if (t.pagado_por !== userId) return conflicto('viaje_ticket_not_yours');
+    // D255-6: quien pagó o quien cargó.
+    if (t.pagado_por !== userId && cargadoPor(t) !== userId) return conflicto('viaje_ticket_not_yours');
     const { rows: personas } = await client.query(
       `SELECT p.user_id, m.id AS miembro_id FROM viaje_ticket_personas p
          JOIN viaje_miembros m ON m.viaje_id=$2 AND m.user_id = p.user_id
@@ -1052,10 +1158,12 @@ async function cargarGasto(userId, viajeId, body) {
   if (!v.ok) return v.res;
   const b = v.data;
   if (!esUuid(viajeId)) return noEncontrado();
-  const pedido = hashDe({ gasto: true, descripcion: b.descripcion, monto_cents: b.monto_cents, presentes: b.presentes });
+  const pedido = hashDe({ gasto: true, descripcion: b.descripcion, monto_cents: b.monto_cents, presentes: b.presentes,
+    ...(b.pagado_por !== undefined && { pagado_por: b.pagado_por }) });
   const r = await enViaje(viajeId, userId, async (client, viaje) => {
     const { rows: [previo] } = await client.query(
-      `SELECT id, pedido_hash FROM viaje_tickets WHERE viaje_id=$1 AND pagado_por=$2 AND idempotency_key=$3`,
+      `SELECT id, pedido_hash FROM viaje_tickets
+        WHERE viaje_id=$1 AND COALESCE(cargado_por, pagado_por)=$2 AND idempotency_key=$3`,
       [viajeId, userId, b.idempotency_key]);
     if (previo) {
       return previo.pedido_hash === pedido ? { ticketId: previo.id, status: 200 } : conflicto('idempotency_key_conflict');
@@ -1063,6 +1171,7 @@ async function cargarGasto(userId, viajeId, body) {
     if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
     const { rows: [{ n }] } = await client.query(`SELECT COUNT(*)::int AS n FROM viaje_tickets WHERE viaje_id=$1`, [viajeId]);
     if (n >= MAX_TICKETS) return conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
+    if (await totalExcedido(client, viajeId, b.monto_cents)) return conflicto('viaje_total_limit', { limit: MAX_TOTAL_CENTS });
     const { rows: miembros } = await client.query(
       `SELECT m.user_id, m.id AS miembro_id FROM viaje_miembros m JOIN users u ON u.id = m.user_id
         WHERE m.viaje_id=$1 AND m.estado='activo' AND u.status <> 'deleted' ORDER BY m.created_at, m.user_id`, [viajeId]);
@@ -1072,13 +1181,16 @@ async function cargarGasto(userId, viajeId, body) {
     const elegidos = new Set(b.presentes.map((id) => porMiembro.get(id)));
     const cuentas = await bloquearCuentas(client, miembros.map((m) => m.user_id));
     if (cuentas.get(userId) !== 'active') return respuesta(403, { error: 'user_suspended' });
+    const pagador = pagadorDe(b.pagado_por, miembros, cuentas, userId);
+    if (pagador.error) return pagador.error;
+    if (await claveDelPagadorUsada(client, viajeId, pagador.id, b.idempotency_key)) return conflicto('idempotency_key_conflict');
     // Un id propio que nunca es el de un recibo: `~` no es base64url (ver el encabezado).
     const idPropio = `${PREFIJO_GASTO_MANUAL}${randomBytes(15).toString('base64url')}`;
     const { rows: [t] } = await client.query(
-      `INSERT INTO viaje_tickets (viaje_id, pagado_por, forma, tipo_lugar, lugar, monto_cents, recibo_jti,
+      `INSERT INTO viaje_tickets (viaje_id, pagado_por, cargado_por, forma, tipo_lugar, lugar, monto_cents, recibo_jti,
                                   idempotency_key, pedido_hash)
-       VALUES ($1, $2, 'iguales', 'otro', $3, $4, $5, $6, $7) RETURNING id`,
-      [viajeId, userId, b.descripcion, b.monto_cents, idPropio, b.idempotency_key, pedido]);
+       VALUES ($1, $2, $3, 'iguales', 'otro', $4, $5, $6, $7, $8) RETURNING id`,
+      [viajeId, pagador.id, userId, b.descripcion, b.monto_cents, idPropio, b.idempotency_key, pedido]);
     await client.query(
       `INSERT INTO viaje_ticket_items (ticket_id, orden, nombre, price_cents, quantity) VALUES ($1, 0, $2, $3, 1)`,
       [t.id, b.descripcion, b.monto_cents]);
@@ -1086,16 +1198,22 @@ async function cargarGasto(userId, viajeId, body) {
       await client.query(`INSERT INTO viaje_ticket_personas (ticket_id, user_id, orden, presente) VALUES ($1, $2, $3, $4)`,
         [t.id, m.user_id, k, elegidos.has(m.user_id)]);
     }
-    // El aviso, sólo a las elegidas menos quien carga, con su parte (el mismo reparto que el cálculo).
+    // El aviso, sólo a las elegidas menos quien carga y quien pagó, con su parte (el mismo reparto que el cálculo).
     const { rows: [quien] } = await client.query(
       `SELECT u.first_name, u.last_name, u.status AS user_status, v.nombre
          FROM users u, viajes v WHERE u.id=$1 AND v.id=$2`, [userId, viajeId]);
     const presentes = miembros.filter((m) => elegidos.has(m.user_id));
     const partes = splitEqual(b.monto_cents, presentes.length);
     for (const [k, m] of presentes.entries()) {
-      if (m.user_id === userId) continue;
+      if (m.user_id === userId || m.user_id === pagador.id) continue;
       await avisar(client, { userId: m.user_id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
         body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre}: ${b.descripcion}. Te toca ${montoEnTexto(partes[k])}.`,
+        payload: { viaje_id: viajeId, ticket_id: t.id } });
+    }
+    // D255-6: a quien quedó como quien pagó, su propio aviso (sin montos), esté o no entre las elegidas.
+    if (pagador.id !== userId) {
+      await avisar(client, { userId: pagador.id, type: 'viaje_ticket_added', porPersona: userId, viajeId,
+        body: `${nombreDe(quien)} cargó un gasto en ${quien.nombre} y te puso como quien pagó: ${b.descripcion}.`,
         payload: { viaje_id: viajeId, ticket_id: t.id } });
     }
     return { ticketId: t.id, status: 201 };
@@ -1127,6 +1245,95 @@ async function avatarDeMiembro(viewerId, viajeId, miembroId) {
   }
   const avatar = await profileIdentity.obtenerAvatar(f.user_id);
   return avatar ? { avatar } : no;
+}
+
+// ─── La configuración del viaje (D255): nombre, fechas, color y foto ────────────────────────────────────────────
+
+/** PATCH /api/viajes/:id — cualquier miembro activo, con el viaje abierto, edita nombre, fechas y color. */
+async function actualizar(userId, viajeId, body, { version = 1 } = {}) {
+  const v = validar(cuerpoEditar, body);
+  if (!v.ok) return v.res;
+  const b = v.data;
+  const r = await enViaje(viajeId, userId, async (client, viaje) => {
+    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    // Las fechas nuevas contra las guardadas, en la base (sin pasar DATE por la zona del proceso).
+    const { rows: [f] } = await client.query(
+      `SELECT (d IS NULL OR h IS NULL OR d <= h) AS ok FROM (
+         SELECT CASE WHEN $2 THEN $3::date ELSE fecha_desde END AS d,
+                CASE WHEN $4 THEN $5::date ELSE fecha_hasta END AS h
+           FROM viajes WHERE id=$1) x`,
+      [viajeId, b.fecha_desde !== undefined, b.fecha_desde ?? null, b.fecha_hasta !== undefined, b.fecha_hasta ?? null]);
+    if (!f.ok) {
+      return respuesta(400, { error: 'validation_error', issues: [{ path: 'fecha_hasta', message: 'fecha_desde <= fecha_hasta' }] });
+    }
+    // Las columnas salen de las claves del esquema estricto: nombre, fecha_desde, fecha_hasta y color.
+    const campos = Object.keys(b);
+    await client.query(`UPDATE viajes SET ${campos.map((c, i) => `${c}=$${i + 2}`).join(', ')} WHERE id=$1`,
+      [viajeId, ...campos.map((c) => b[c] ?? null)]);
+    return respuesta(200, null);
+  });
+  if (r.status !== 200) return r;
+  logger.audit('viaje_editado', { viaje_id: viajeId, campos: Object.keys(b) });
+  return respuesta(200, { contract: CONTRATO, viaje: await vistaDelViaje(await cargar(pool, viajeId), userId, version) });
+}
+
+// La foto del viaje: toda negativa al servirla contesta lo mismo (id inválido, el viaje no existe, no sos miembro
+// activo, sin foto). Sólo los miembros activos la ven, en cualquier estado del viaje.
+const SIN_FOTO_VIAJE = Object.freeze({ error: 'viaje_photo_not_found' });
+
+/** Antes de procesar la imagen: ¿quien pide puede cambiar la foto? null si sí; si no, el 404 de n325 o el 409. */
+async function puedoEditarFoto(userId, viajeId) {
+  if (!esUuid(viajeId)) return noEncontrado();
+  const { rows: [r] } = await pool.query(
+    `SELECT v.estado FROM viajes v JOIN viaje_miembros m ON m.viaje_id = v.id AND m.user_id = $2 AND m.estado = 'activo'
+      WHERE v.id=$1`, [viajeId, userId]);
+  if (!r) return noEncontrado();
+  if (r.estado !== 'abierto') return conflicto('viaje_not_open', { estado: r.estado });
+  return null;
+}
+
+/**
+ * PUT /api/viajes/:id/foto — la imagen ya procesada por `profileIdentity.procesarAvatar` (los mismos límites que la
+ * foto de perfil). Gana la última escritura: varios miembros editan y la foto es del viaje, no de una persona.
+ */
+async function guardarFoto(userId, viajeId, image) {
+  const r = await enViaje(viajeId, userId, async (client, viaje) => {
+    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    const { rows: [f] } = await client.query(
+      `INSERT INTO viaje_fotos (viaje_id, revision, mime_type, width, height, byte_size, image_bytes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (viaje_id) DO UPDATE SET revision = EXCLUDED.revision, mime_type = EXCLUDED.mime_type,
+         width = EXCLUDED.width, height = EXCLUDED.height, byte_size = EXCLUDED.byte_size,
+         image_bytes = EXCLUDED.image_bytes, updated_at = NOW()
+       RETURNING revision, width, height, updated_at, (xmax = 0) AS creada`,
+      [viajeId, randomUUID(), image.mimeType, image.width, image.height, image.bytes.length, image.bytes]);
+    return respuesta(f.creada ? 201 : 200, {
+      foto: { revision: f.revision, width: f.width, height: f.height, updated_at: ts(f.updated_at) } });
+  });
+  if (r.status === 200 || r.status === 201) logger.audit('viaje_foto', { viaje_id: viajeId, accion: 'subida' });
+  return r;
+}
+
+/** DELETE /api/viajes/:id/foto — 204, haya o no foto. */
+async function quitarFoto(userId, viajeId) {
+  const r = await enViaje(viajeId, userId, async (client, viaje) => {
+    if (viaje.estado !== 'abierto') return conflicto('viaje_not_open', { estado: viaje.estado });
+    await client.query(`DELETE FROM viaje_fotos WHERE viaje_id=$1`, [viajeId]);
+    return respuesta(204, null);
+  });
+  if (r.status === 204) logger.audit('viaje_foto', { viaje_id: viajeId, accion: 'quitada' });
+  return r;
+}
+
+/** GET /api/viajes/:id/foto — `{ foto: { mimeType, bytes } }` o `{ res }` con el 404 uniforme. */
+async function fotoDelViaje(userId, viajeId) {
+  const no = { res: respuesta(404, SIN_FOTO_VIAJE) };
+  if (!esUuid(viajeId)) return no;
+  const { rows: [f] } = await pool.query(
+    `SELECT f.mime_type, f.image_bytes FROM viaje_fotos f
+       JOIN viaje_miembros m ON m.viaje_id = f.viaje_id AND m.user_id = $2 AND m.estado = 'activo'
+      WHERE f.viaje_id = $1`, [viajeId, userId]);
+  return f ? { foto: { mimeType: f.mime_type, bytes: f.image_bytes } } : no;
 }
 
 // ─── Cierre y transferencias ───────────────────────────────────────────────────────────────────────────────────
@@ -1322,10 +1529,11 @@ async function resumen(userId, viajeId) {
 }
 
 module.exports = {
-  CONTRATO, MAX_MIEMBROS, MAX_TICKETS, MAX_GASTO_CENTS, PREFIJO_GASTO_MANUAL, FORMAS, TIPOS_LUGAR, ESTADOS,
-  ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA,
+  CONTRATO, MAX_MIEMBROS, MAX_TICKETS, MAX_GASTO_CENTS, MAX_TOTAL_CENTS, PREFIJO_GASTO_MANUAL, FORMAS, TIPOS_LUGAR, ESTADOS,
+  ESTADOS_TRANSFERENCIA, ETIQUETA_HUELLA, COLORES, SIN_FOTO_VIAJE,
   habilitado, forzarParaTests, capacidad, huellaDelTicket, huellaDeLectura, NO_ENCONTRADO,
   listar, invitaciones, crear, detalle, invitar, aceptar, rechazar, salir,
   revisarTicket, cargarTicket, verTicket, elegir, marcarPresentes, cargarGasto, avatarDeMiembro,
   vistaPreviaCierre, cerrar, marcarTransferencia, resumen,
+  actualizar, puedoEditarFoto, guardarFoto, quitarFoto, fotoDelViaje,
 };

@@ -101,6 +101,11 @@ function consumoDelTicket(t, { cierre = false } = {}) {
  * @param {Array} tickets ver `consumoDelTicket`
  * @returns {{balance:Map, pagado:Map, consumido:Map, gasto:number, porTicket:Map}}
  */
+/** v2.173.2 · T-03: el gasto del grupo y lo pagado y consumido por cada uno, todos enteros seguros. */
+function totalesSeguros(gasto, pagado, consumido) {
+  return Number.isSafeInteger(gasto) && [...pagado.values(), ...consumido.values()].every(Number.isSafeInteger);
+}
+
 function balanceDelViaje(miembros, tickets, { cierre = false } = {}) {
   const balance = new Map(miembros.map((m) => [m, 0]));
   const pagado = new Map();
@@ -122,6 +127,9 @@ function balanceDelViaje(miembros, tickets, { cierre = false } = {}) {
   }
   const suma = [...balance.values()].reduce((x, c) => x + c, 0);
   if (suma !== 0 || ![...balance.values()].every(Number.isSafeInteger)) throw error('viaje_balance_no_cuadra');
+  // v2.173.2 · T-03 de la auditoría Codex total: dos importes enormes pueden cancelarse en el balance y dejar el gasto y
+  // lo pagado fuera del entero seguro. Se valida cada total, no sólo el neto.
+  if (!totalesSeguros(gasto, pagado, consumido)) throw error('viaje_totales_invalidos');
   return { balance, pagado, consumido, gasto, porTicket };
 }
 
@@ -181,4 +189,4 @@ function transferenciasMinimas(balances) {
   return salida;
 }
 
-module.exports = { MAX_MIEMBROS, consumoDelTicket, balanceDelViaje, transferenciasMinimas };
+module.exports = { MAX_MIEMBROS, consumoDelTicket, balanceDelViaje, totalesSeguros, transferenciasMinimas };

@@ -218,16 +218,15 @@ async function guestOrAuth(req, res, next) {
  * v2.5.1 P1 #8: para guests, valida por token_hash primero (nuevos links)
  *               con fallback a token crudo (legacy).
  *
- * v2.168.1 · n325 (D237): `ajenoComoInexistente` le responde a quien no participa lo mismo que a un código que no
- * existe (404 `mesa_not_found`, byte por byte), para no decir qué códigos existen. Quién entra no cambia: es la
- * misma consulta, sólo cambia la respuesta del rechazo. La usa `GET /api/mesas/:code` (`requireMesaParticipantSinRevelar`);
- * las otras rutas de `requireMesaParticipant` conservan su 403 (residual declarado de n325).
+ * v2.168.1 · n325 (D237): a quien no participa, lo mismo que a un código que no existe (404 `mesa_not_found`, byte
+ * por byte), para no decir qué códigos existen. Empezó en `GET /api/mesas/:code`.
+ * v2.173.1 · n333: la misma respuesta en TODAS las rutas que pasan por acá (camino B del plan OK, sin negociar: una
+ * negociación no cierra el oráculo, porque quien adivina códigos no la manda). Quién entra no cambia: es la misma
+ * consulta; sólo cambia la respuesta del rechazo. Contrato: contract/mesa-acceso-v1.json.
  */
 const MESA_NO_ENCONTRADA = Object.freeze({ error: 'mesa_not_found' });
-async function verificarParticipante(req, res, next, { ajenoComoInexistente = false } = {}) {
-  const noParticipa = () => (ajenoComoInexistente
-    ? res.status(404).json(MESA_NO_ENCONTRADA)
-    : res.status(403).json({ error: 'not_a_mesa_participant' }));
+async function verificarParticipante(req, res, next) {
+  const noParticipa = () => res.status(404).json(MESA_NO_ENCONTRADA);
   try {
     const code = req.params.code;
     const { rows: mRows } = await pool.query(
@@ -355,14 +354,11 @@ async function verificarParticipante(req, res, next, { ajenoComoInexistente = fa
 }
 // De tres argumentos: Express trata una función de cuatro como manejador de errores.
 const requireMesaParticipant = (req, res, next) => verificarParticipante(req, res, next);
-const requireMesaParticipantSinRevelar = (req, res, next) =>
-  verificarParticipante(req, res, next, { ajenoComoInexistente: true });
 
 module.exports = {
   requireAuth,
   guestOrAuth,
   requireMesaParticipant,
-  requireMesaParticipantSinRevelar,
   verifyJwt,
   // Compartido con /auth/logout: aceptar una forma legacy en el middleware
   // pero no poder revocarla dejaría una sesión activa tras un logout exitoso.

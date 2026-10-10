@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "payme.app.mesa_acceso/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de la respuesta a quien no participa de una mesa, v2.173.1. n325 (D237: «Respuestas iguales en mesas») lo hizo en GET /api/mesas/:code; n333 lo extiende a las otras rutas de la misma puerta (plan OK del Bibliotecario, camino B, 2026-10-09T22:07:46Z).",
+    "Sin negociación: una negociación no cierra el oráculo, porque quien adivina códigos no la manda.",
+    "El front decide por status, nunca por el código del error."
+  ],
+  "puerta": "middleware/auth.js · requireMesaParticipant (una sola puerta; quién entra no cambia)",
+  "quien_entra": "El titular, un participante activo o un invitado in-app con la invitación pendiente y vigente.",
+  "quien_no_participa": { "status": 404, "cuerpo": { "error": "mesa_not_found" } },
+  "igual_que": "Un código que no existe: el mismo status, el mismo cuerpo byte por byte y las mismas cabeceras (salvo date, ratelimit-* y x-correlation-id, que cambian en cada pedido). Vale también para una mesa cerrada, una invitación cancelada o una vencida.",
+  "rutas": {
+    "GET /api/mesas/:code": { "desde": "v2.168.1 (n325)" },
+    "GET /api/mesas/:code/informative-selection": { "desde": "v2.173.1 (n333)" },
+    "PUT /api/mesas/:code/informative-selection": { "desde": "v2.173.1 (n333)" },
+    "GET /api/mesas/:code/participants": { "desde": "v2.173.1 (n333)" },
+    "GET /api/mesas/:code/join-requests": { "desde": "v2.173.1 (n333)" },
+    "POST /api/mesas/:code/join-requests/:id/:decision": { "desde": "v2.173.1 (n333)", "decision": ["accept", "reject"] },
+    "POST /api/mesas/:code/items/lock": { "desde": "v2.173.1 (n333)" },
+    "POST /api/mesas/:code/items/release": { "desde": "v2.173.1 (n333)" },
+    "POST /api/mesas/:code/close": { "desde": "v2.173.1 (n333)" },
+    "POST /api/mesas/:code/pay": { "desde": "v2.173.1 (n333)" },
+    "POST /api/mesas/:code/invitations": { "desde": "v2.173.2 (T-02 de la auditoría Codex total)" }
+  },
+  "no_cambia": {
+    "sin_sesion": "401, antes de mirar la mesa.",
+    "cuenta_suspendida": "403 {\"error\":\"user_suspended\"}, antes de mirar la mesa.",
+    "no_titular": "403 {\"error\":\"not_mesa_organizer\"} a quien SÍ participa sin ser titular, en participants, join-requests (listar, accept, reject) y close; en invitations, 403 {\"error\":\"only_opener_can_invite\"}. No revela nada: esa persona ya ve la mesa.",
+    "mesa_privada": "Las dos de informative-selection pasan antes por la visibilidad de los restaurantes privados, que ya respondía este mismo 404."
+  },
+  "antes": "Hasta v2.173.0, las diez rutas de n333 (accept y reject cuentan aparte) respondían 403 {\"error\":\"not_a_mesa_participant\"} a quien no participaba y 404 {\"error\":\"mesa_not_found\"} a un código inexistente.",
+  "app_frontend": "0.232.0 no lee el código del error de estas rutas: decide por status, y quien no participa no llega a esas pantallas (el detalle ya le daba 404). Sólo cambia algo en un caso borde (perder el acceso con la pantalla abierta): al guardar la selección o al soltar un consumo, el 404 dice «todavía no está disponible» en lugar del error genérico, y el siguiente reload muestra «No encontramos esta mesa»."
+}

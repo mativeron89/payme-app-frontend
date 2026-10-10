@@ -25,7 +25,7 @@ const {
   // Sin `guestOrAuth`: tras el cierre del pago sin cuenta ninguna ruta de la
   // app acepta invitados. El middleware sigue existiendo y exportado, pero ya
   // no tiene un solo call site — se deja en pie porque sacarlo es otro cambio.
-  requireAuth, requireMesaParticipant, requireMesaParticipantSinRevelar,
+  requireAuth, requireMesaParticipant,
 } = require('../middleware/auth');
 const schemas = require('../schemas');
 const mesaPresentation = require('../services/mesaPresentation');
@@ -1415,8 +1415,9 @@ router.delete('/:code/hidden', requireAuth, async (req, res, next) => {
 });
 
 // v2.168.1 · n325 (D237): a quien no participa, la misma respuesta que a un código que no existe (404
-// `mesa_not_found`), para no decir qué códigos existen. Quién entra no cambia.
-router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipantSinRevelar, async (req, res, next) => {
+// `mesa_not_found`), para no decir qué códigos existen. Quién entra no cambia. Desde v2.173.1 (n333) es la
+// respuesta de `requireMesaParticipant` en todas sus rutas (contract/mesa-acceso-v1.json).
+router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant, async (req, res, next) => {
   try {
     const mesa = req.mesa;
     // `req.mesa` no trae `guarantee_mode` y su middleware está fuera del
@@ -1649,8 +1650,8 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
 // titular: GET /:code/join-requests (las pendientes vigentes) y
 // POST /:code/join-requests/:id/accept|reject. Sólo el titular
 // (`mesas.opener_user_id`); otro participante recibe el mismo 403 que en
-// /:code/participants. El 404/403 de una mesa ajena es el residual conocido de
-// requireMesaParticipant (queda en el Roadmap). La lógica, en
+// /:code/participants. A quien no participa, el mismo 404 `mesa_not_found` que a
+// un código que no existe (v2.173.1 · n333). La lógica, en
 // services/joinRequests.js.
 // ═══════════════════════════════════════════════════════════
 function soloTitular(req, res, next) {
@@ -1701,7 +1702,7 @@ async function fotoVisibleAlOrganizador(fila) {
 // 🔴 No oracular: «la mesa no existe», «no la organizás», «ese participante no
 // es de esta mesa o se fue», «sin foto», «menor o sin fecha» y «cuenta
 // eliminada» responden EXACTAMENTE el mismo 404. Por eso no usa
-// requireMesaParticipant (que distingue 404 de 403).
+// requireMesaParticipant: su rechazo es `mesa_not_found` y acá todo es un solo 404.
 // ═══════════════════════════════════════════════════════════
 router.get('/:code/participants/:participant_id/avatar', requireAuth,
   validateParams(schemas.mesaParticipantAvatarParams), async (req, res, next) => {
@@ -3241,8 +3242,10 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
 
 // ═══════════════════════════════════════════════════════════
 // POST /:code/invitations  (autoridad canónica + journal idempotente)
+// v2.173.2 · T-02 de la auditoría Codex total: la misma puerta que n333 antes de todo. A quien no participa, el 404
+// `mesa_not_found` de un código inexistente; `only_opener_can_invite` queda para quien participa sin ser titular.
 // ═══════════════════════════════════════════════════════════
-router.post('/:code/invitations', requireAuth, validateBody(schemas.createInvitation),
+router.post('/:code/invitations', requireAuth, requireMesaParticipant, validateBody(schemas.createInvitation),
   async (req, res, next) => {
   try {
     const {
