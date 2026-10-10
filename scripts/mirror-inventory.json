@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "9d3f4588d2a42c2bde8f60b838c7f4d1b654cd1d",
+  "commit": "1664dd844d8fe3fa1d88d5f287379833a8365351",
   "total": 138,
   "archivos": [
     {
@@ -25,8 +25,8 @@
     {
       "origen": "contract/mesa-acceso-v1.json",
       "destino": "contract/mesa-acceso-v1.json",
-      "sha256": "281c2b39600942f42b7058c17150a0d585824763e5166e28f807dbeff5514693",
-      "bytes": 3237
+      "sha256": "25c72808298d96cdf7babee711a8bdce1d0045d4f59b9236fe3f7cec4d966753",
+      "bytes": 4437
     },
     {
       "origen": "contract/mesa-join-requests-v1.json",
@@ -73,14 +73,14 @@
     {
       "origen": "contract/social-auth-v1.json",
       "destino": "contract/social-auth-v1.json",
-      "sha256": "87c6d4f41e06c239ed46491b605100305d024dbf80325f3aec5255fbcd03710e",
-      "bytes": 30974
+      "sha256": "f1b6e8d3a2b42a96be3cecd3e6cd4312076dc80ef9618d029c1aeab8b8ac6fa4",
+      "bytes": 34465
     },
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "1ec8a670b15a3c000e5093fc95f4e6cc609b69f8dbbd20fb924657b0a957a220",
-      "bytes": 40884
+      "sha256": "fbffa77553c7a185b02725a71135794cad7abc66160d13b49917772bf100c609",
+      "bytes": 41169
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -415,8 +415,8 @@
     {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "99d19278cd23a41cc17460a049dbfaa7b3998397b873ad333c17cc8f919027d9",
-      "bytes": 14500
+      "sha256": "043d3fb5bbb1ae997eaae5c85919c633a2f4ddf2adc3a0ff149d544e7a667ac6",
+      "bytes": 15723
     },
     {
       "origen": "routes/account.js",
@@ -433,8 +433,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "1afcbc5cb2b854c475fb5df56b4eb9e0bb3841aa62b0607982798d5655c0cd1f",
-      "bytes": 12735
+      "sha256": "81b8012c9ceb2cbc2b74ee029d5885d12f4e5f8929ad758818f552644e3c5698",
+      "bytes": 13142
     },
     {
       "origen": "routes/connect.js",
@@ -475,8 +475,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "7a86215764852bc1ca4fefa5816dbec2639f6ff8e88f7fdf12ae31218bed6d18",
-      "bytes": 202462
+      "sha256": "cef19694f628e25cb6ff571501a1a8e3e6747020af99967c65e1a8f41dabc9be",
+      "bytes": 202597
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -511,8 +511,8 @@
     {
       "origen": "routes/social-auth.js",
       "destino": "routes/social-auth.js",
-      "sha256": "d5fa36904ce62dfcbcb323b8ebd0bc637bc38ab360f4cc8f706be11576620fd7",
-      "bytes": 21054
+      "sha256": "a94173c7a25faaf720db848d5d1b52c889c052781752b876ca15e217f5b899f3",
+      "bytes": 21680
     },
     {
       "origen": "routes/spei-funding.js",
@@ -523,14 +523,14 @@
     {
       "origen": "routes/staff.js",
       "destino": "routes/staff.js",
-      "sha256": "01c6168bf82e0fae07e3191bd635c2e640d1fd7bbad76c9c4e6220e94f0d38f7",
-      "bytes": 7149
+      "sha256": "cf0448a4bee7fc5ed9c1f07535a39d018f29b49d16b86f640e92e26054bec7a8",
+      "bytes": 8180
     },
     {
       "origen": "routes/stp-webhook.js",
       "destino": "routes/stp-webhook.js",
-      "sha256": "d35e7b2071cb849e79ae58dedc20a62bdd49c5c79274db3c5c69065667fc7648",
-      "bytes": 4164
+      "sha256": "6325a145ba2d4fc3fe20bd7f2136a66f1bafba3c3b5a40d508a4a1243bccf8c2",
+      "bytes": 4813
     },
     {
       "origen": "routes/topup.js",
@@ -559,14 +559,14 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "a56e007a4bc5cbfdc5087bc5ab0fc04ceee1ef3c9e2619be9228ce8a72cf700d",
-      "bytes": 32841
+      "sha256": "ac496434b9418649e5397a3c263daab9c197c2f498d90c3b3aa50a293197be05",
+      "bytes": 33139
     },
     {
       "origen": "services/authRecovery.js",
       "destino": "services/authRecovery.js",
-      "sha256": "38bf6424d8b4fbe0bb81c1ec9682bd5d5dee1dbbb4131b09feae1959da3b4a7a",
-      "bytes": 9038
+      "sha256": "94454dbcb8b52c00a200fc9c21fed6f3ee2370cbe306ebfc274f7320553aea53",
+      "bytes": 10710
     },
     {
       "origen": "services/authRecoveryDelivery.js",
@@ -601,8 +601,8 @@
     {
       "origen": "services/externalIdentities.js",
       "destino": "services/externalIdentities.js",
-      "sha256": "469175f3dcf329ac115b2673daa062201c93c45dc8c8db1ba9bf645c3fd5497e",
-      "bytes": 36528
+      "sha256": "2507dc218464a675c0e941a80c7e544bdf2b7d03b46f95e5e7442757249d9a84",
+      "bytes": 37113
     },
     {
       "origen": "services/facebookDataRights.js",
@@ -775,8 +775,8 @@
     {
       "origen": "services/staffCatalog.js",
       "destino": "services/staffCatalog.js",
-      "sha256": "93122723e8a165866b920d1626eced8e1406418f7861815db45d887db0284f30",
-      "bytes": 3885
+      "sha256": "13e32b4b2dc59b857ed085bc5c24a9da8462a634a7628d72c58ad640296d0ef6",
+      "bytes": 5588
     },
     {
       "origen": "services/topupProcessor.js",
@@ -787,8 +787,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "1a28c9d1c64f3c3c45285a3f65ac44afb4bc8c908e26c5f6ea748b5fa7037703",
-      "bytes": 107055
+      "sha256": "56d4d5eb609f016fb2e73501480ff3a4d631624a1543d7815641423d78c6f78b",
+      "bytes": 107472
     },
     {
       "origen": "services/viajesCalculo.js",

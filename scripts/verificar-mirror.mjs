@@ -28,10 +28,27 @@
  *    que no es un desvío se termina ignorando"*. Que el HEAD avance no es un
  *    desvío; que cambie lo espejado, sí.
  *
+ * 5. **D268 · S-03 · el repo es público: el espejo copia SÓLO el contrato.** Se
+ *    copia lo que es `contract/*.json` (la regla `SE_COPIA`, declarada: lo bueno
+ *    se nombra, lo demás no entra). El código del servidor (`db/`, `routes/`,
+ *    `services/`, `middleware/`, `utils/`, `schemas/`) y los documentos del
+ *    dueño ya no se copian: siguen en el inventario, byte a byte el del dueño,
+ *    y sus sha256 son la paridad (`--paridad` los compara contra la fuente,
+ *    copiados o no). En el espejo, cualquiera de ellos es un desvío.
+ * 6. **D268 · los hechos del dueño** (`scripts/hechos-del-dueno.json`). Lo que
+ *    las pruebas del front leían del código del servidor, ahora como salidas
+ *    de vectores sintéticos, generadas SÓLO EN LOCAL con el repo del dueño
+ *    (`scripts/generar-hechos-del-dueno.mjs`, nunca en el CI). Cada fuente
+ *    lleva el sha256 del archivo del dueño del que salió: `--integridad` exige
+ *    que sea el del inventario, así que si el dueño cambia ese archivo, el CI
+ *    queda rojo hasta regenerarlos.
+ *
  * ## Los modos
  *
  *   --integridad   (sin fuente) El espejo es fiel al INVENTARIO: cada `destino`
- *                  existe con su sha256, no hay intrusos, y el total coincide.
+ *                  que se copia existe con su sha256, lo que no se copia NO
+ *                  está, no hay intrusos, el total coincide, y los hechos del
+ *                  dueño son de los mismos archivos que el inventario.
  *                  Es lo único verificable en CI, donde no está el repo hermano.
  *                  🔴 NO es paridad y no se llama paridad: no acredita que el
  *                  inventario describa al backend, sólo que el espejo describe
@@ -58,6 +75,7 @@ import { fileURLToPath } from 'node:url';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ESPEJO = resolve(AQUI, '..', 'contract-mirror');
 const INVENTARIO = join(AQUI, 'mirror-inventory.json');
+const HECHOS = join(AQUI, 'hechos-del-dueno.json');
 /** Relativa al workspace, no absoluta a una máquina. Overridable para tests. */
 const FUENTE = process.env.PAYME_APP_BACKEND_DIR
   ? resolve(process.env.PAYME_APP_BACKEND_DIR)
@@ -65,6 +83,13 @@ const FUENTE = process.env.PAYME_APP_BACKEND_DIR
 
 /** El README es PROCEDENCIA, no contrato: se documenta a mano y no se inventaría. */
 const FUERA_DEL_INVENTARIO = new Set(['README.md']);
+
+/**
+ * D268 · S-03 · lo ÚNICO que se copia: los JSON de `contract/`. Todo lo demás
+ * del inventario (el código del servidor y los documentos) queda sólo como
+ * hash. Se declara lo que entra; lo que no matchea, no entra.
+ */
+const SE_COPIA = (destino) => /^contract\/[^/]+\.json$/.test(destino);
 
 const EXIT_OK = 0;
 const EXIT_DESVIO = 1;
@@ -124,11 +149,13 @@ function poblacionDelEspejo(dir = ESPEJO, base = ESPEJO) {
  * falta y lo que sobra— con comparación de path EXACTA (`Set`), nunca por
  * prefijo ni subcadena.
  */
-function verificarIntegridad(inv) {
+function verificarIntegridad(inv, { conHechos = true } = {}) {
   const problemas = [];
-  const declarados = new Set(inv.archivos.map((a) => a.destino));
+  const copiados = new Set(inv.archivos.filter((a) => SE_COPIA(a.destino)).map((a) => a.destino));
+  const soloHash = new Set(inv.archivos.filter((a) => !SE_COPIA(a.destino)).map((a) => a.destino));
 
   for (const a of inv.archivos) {
+    if (!SE_COPIA(a.destino)) continue;
     const abs = join(ESPEJO, a.destino);
     if (!existsSync(abs)) {
       problemas.push(`FALTA EN EL ESPEJO: ${a.destino}`);
@@ -138,7 +165,40 @@ function verificarIntegridad(inv) {
     if (real !== a.sha256) problemas.push(`CONTENIDO DISTINTO DEL INVENTARIO: ${a.destino}`);
   }
   for (const rel of poblacionDelEspejo()) {
-    if (!declarados.has(rel)) problemas.push(`INTRUSO (no está en el inventario del dueño): ${rel}`);
+    if (soloHash.has(rel)) problemas.push(`NO SE COPIA (D268: el espejo público lleva sólo contract/*.json): ${rel}`);
+    else if (!copiados.has(rel)) problemas.push(`INTRUSO (no está en el inventario del dueño): ${rel}`);
+  }
+  if (conHechos) problemas.push(...verificarHechos(inv));
+  return problemas;
+}
+
+/**
+ * D268 · los hechos del dueño son de los MISMOS archivos que el inventario:
+ * cada fuente, con el sha256 que el inventario declara para ese `origen`, y
+ * cada hecho, de una fuente declarada. Un archivo del dueño que cambió deja
+ * los hechos viejos: se regeneran en local (`generar-hechos-del-dueno.mjs`).
+ */
+function verificarHechos(inv) {
+  if (!existsSync(HECHOS)) return [`SIN HECHOS DEL DUEÑO: no existe ${relative(resolve(AQUI, '..'), HECHOS)}`];
+  let h;
+  try {
+    h = JSON.parse(readFileSync(HECHOS, 'utf8'));
+  } catch (e) {
+    return [`HECHOS ILEGIBLES: ${e.message}`];
+  }
+  const forma = h && h.version === 1 && typeof h.commit === 'string' && h.fuentes && typeof h.fuentes === 'object'
+    && !Array.isArray(h.fuentes) && h.hechos && typeof h.hechos === 'object' && !Array.isArray(h.hechos);
+  if (!forma) return ['HECHOS MAL FORMADOS: se esperaba { version: 1, commit, fuentes: { origen: sha256 }, hechos: { clave: { origen, valor } } }'];
+  const problemas = [];
+  if (h.commit !== inv.commit) problemas.push(`HECHOS DE OTRO COMMIT: ${h.commit.slice(0, 7)} y el inventario es de ${inv.commit.slice(0, 7)}`);
+  const porOrigen = new Map(inv.archivos.map((a) => [a.origen, a.sha256]));
+  for (const [origen, sha] of Object.entries(h.fuentes)) {
+    if (!porOrigen.has(origen)) problemas.push(`HECHO DE UN ARCHIVO FUERA DEL INVENTARIO: ${origen}`);
+    else if (porOrigen.get(origen) !== sha) problemas.push(`HECHOS VENCIDOS (el dueño cambió ${origen}): regenerarlos en local con el dueño`);
+  }
+  for (const [clave, hecho] of Object.entries(h.hechos)) {
+    if (!hecho || typeof hecho.origen !== 'string' || !('valor' in hecho)) problemas.push(`HECHO MAL FORMADO: ${clave}`);
+    else if (!(hecho.origen in h.fuentes)) problemas.push(`HECHO SIN FUENTE DECLARADA: ${clave} (${hecho.origen})`);
   }
   return problemas;
 }
@@ -216,13 +276,14 @@ if (modo === '--adoptar-inventario') {
   // Se verifica ANTES de escribir: el reemplazado bendecía el espejo tal como
   // estuviera, y así una omisión coordinada quedaba verde para siempre.
   const candidato = leerInventario(origen);
-  const problemas = [...verificarIntegridad(candidato), ...verificarParidad(candidato)];
+  // Los hechos se regeneran DESPUÉS, desde el inventario adoptado: acá no se miran.
+  const problemas = [...verificarIntegridad(candidato, { conHechos: false }), ...verificarParidad(candidato)];
   if (problemas.length > 0) {
     for (const p of problemas) console.error(p);
     morir(EXIT_DESVIO, '── NO SE ADOPTA: el inventario candidato no verifica contra el espejo y la fuente.');
   }
   writeFileSync(INVENTARIO, readFileSync(origen));
-  console.log(`── inventario adoptado y verificado: ${candidato.total} archivos · commit ${candidato.commit.slice(0, 7)}`);
+  console.log(`── inventario adoptado y verificado: ${candidato.total} archivos · commit ${candidato.commit.slice(0, 7)}. Ahora, en local: node scripts/generar-hechos-del-dueno.mjs`);
   process.exit(EXIT_OK);
 }
 
@@ -234,7 +295,8 @@ if (modo === '--integridad') {
     for (const p of problemas) console.error(p);
     morir(EXIT_DESVIO, '── INTEGRIDAD LOCAL ROTA');
   }
-  console.log(`── integridad local del espejo OK: ${inv.total} archivos fieles al inventario del dueño (commit ${inv.commit.slice(0, 7)}). NO es paridad: la fuente no se consultó.`);
+  const copiados = inv.archivos.filter((a) => SE_COPIA(a.destino)).length;
+  console.log(`── integridad local del espejo OK: ${copiados} copiados (contract/*.json) y ${inv.total - copiados} sólo por hash, fieles al inventario del dueño (commit ${inv.commit.slice(0, 7)}); hechos del dueño al día. NO es paridad: la fuente no se consultó.`);
   process.exit(EXIT_OK);
 }
 

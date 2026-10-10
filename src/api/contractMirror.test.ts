@@ -39,7 +39,11 @@ const inventarioRaw = import.meta.glob('/scripts/mirror-inventory.json', {
 interface MirrorInventory {
   commit: string;
   total: number;
+  archivos: Array<{ origen: string; destino: string }>;
 }
+
+/** D268 · S-03 · lo que el espejo público copia: los JSON de `contract/`. El resto del inventario, sólo por hash. */
+const SE_COPIA = (destino: string) => /^contract\/[^/]+\.json$/.test(destino);
 
 function inventario(): MirrorInventory {
   const raw = inventarioRaw['/scripts/mirror-inventory.json'];
@@ -54,17 +58,26 @@ const espejados = Object.keys(espejo).filter((r) => r !== PROCEDENCIA).sort();
 
 describe('inventario del contract-mirror', () => {
   it('el glob encuentra el espejo (si no, todo lo de abajo pasa en vacío)', () => {
-    expect(Object.keys(espejo).length).toBeGreaterThan(50);
+    expect(espejados.length).toBeGreaterThan(10);
     expect(Object.keys(espejo)).toContain(PROCEDENCIA);
   });
 
   /**
-   * ⭐ El archivo que se caía del barrido. Se nombra explícitamente para que, si
-   * alguien vuelve a escribir una exclusión sin anclar, este test lo diga con
-   * nombre y apellido en vez de con un número que nadie va a recalcular.
+   * 🔴 D268 · S-03 · el repo es público: en el espejo está EXACTAMENTE lo que el
+   * inventario del dueño declara como contrato (`contract/*.json`), ni un
+   * archivo del servidor. Se compara contra el inventario, no contra una lista
+   * a mano: si el dueño agrega un contrato, falta acá; si alguien vuelve a
+   * copiar código, sobra.
    */
-  it('legal/README.md está espejado y NO se excluye por llamarse README', () => {
-    expect(espejados).toContain('/contract-mirror/legal/README.md');
+  it('🔴 D268 · el espejo es exactamente el contrato del inventario: sin código del servidor ni documentos', () => {
+    const delInventario = inventario().archivos.filter((a) => SE_COPIA(a.destino)).map((a) => `/contract-mirror/${a.destino}`).sort();
+    expect(espejados).toEqual(delInventario);
+    for (const r of espejados) expect(r, r).toMatch(/^\/contract-mirror\/contract\/[^/]+\.json$/);
+    // Lo que se iba antes, nombrado: ni el código, ni `legal/README.md`, ni el settlement renombrado.
+    for (const fuera of ['/contract-mirror/routes/mesas.js', '/contract-mirror/middleware/auth.js',
+      '/contract-mirror/schemas/index.js', '/contract-mirror/legal/README.md', '/contract-mirror/docs/settlement.js.ref']) {
+      expect(Object.keys(espejo)).not.toContain(fuera);
+    }
   });
 
   it('la única exclusión es el README de procedencia de la raíz', () => {
@@ -83,7 +96,9 @@ describe('inventario del contract-mirror', () => {
     const m = /\*\*(\d+) archivos espejados\*\*/.exec(readme!);
     expect(m, 'el README debe declarar "**N archivos espejados**"').toBeTruthy();
     expect(Number(m![1])).toBe(espejados.length);
-    expect(inventario().total).toBe(espejados.length);
+    // D268 · el inventario es el del dueño (138); en el espejo, sólo lo que se copia.
+    expect(inventario().archivos.filter((a) => SE_COPIA(a.destino)).length).toBe(espejados.length);
+    expect(inventario().total).toBe(inventario().archivos.length);
   });
 
   it('la procedencia VIGENTE declara exactamente el commit del inventario', () => {

@@ -11,16 +11,15 @@ import {
 import { state } from './mock/store';
 import type { AppNotification } from './types';
 import { saveSession, type StoredSession } from './storage';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 /**
  * E174-2 / E174-3 · decisión 174 · contra el contrato del dueño v2.148.0
  * (`docs/CONTRATO_E173_E174_FOTOS_Y_NOTIFICACIONES.md` @ 91aacdd).
  */
 const API_SOURCE = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
-/** El código del dueño, espejado en 673156d (v2.148.0). */
-const OWNER_NOTIFICATIONS = readFileSync(new URL('../../contract-mirror/routes/notifications.js', import.meta.url), 'utf8');
-const OWNER_FRIENDS = readFileSync(new URL('../../contract-mirror/routes/friends.js', import.meta.url), 'utf8');
-const OWNER_INVITATIONS = readFileSync(new URL('../../contract-mirror/services/invitationAuthority.js', import.meta.url), 'utf8');
+/** D268 · lo que declara el código del dueño, como hechos generados en local (el espejo público ya no lo copia). */
+const consta = (clave: string) => hechoDelDueno<boolean>(clave);
 
 const original = state.notifications.map((n) => ({ ...n }));
 afterEach(() => {
@@ -68,11 +67,11 @@ describe('E174-2 · DELETE /notifications → { deleted_count }', () => {
   });
 
   it('🔴 el dueño tiene las dos rutas y las respuestas que la fachada espera', () => {
-    expect(OWNER_NOTIFICATIONS).toContain("router.delete('/', async");
-    expect(OWNER_NOTIFICATIONS).toContain('res.json({ deleted_count: count });');
-    expect(OWNER_NOTIFICATIONS).toContain("router.delete('/:id', async");
-    expect(OWNER_NOTIFICATIONS).toContain("res.json({ deleted: true });");
-    expect(OWNER_NOTIFICATIONS).toContain("res.status(404).json({ error: 'notification_not_found' })");
+    expect(consta('avisos.borrar_todos.ruta')).toBe(true);
+    expect(consta('avisos.borrar_todos.responde_deleted_count')).toBe(true);
+    expect(consta('avisos.borrar_uno.ruta')).toBe(true);
+    expect(consta('avisos.borrar_uno.responde_deleted_true')).toBe(true);
+    expect(consta('avisos.borrar_uno.404_notification_not_found')).toBe(true);
   });
 
   it('la fachada usa las dos rutas del dueño, y valida el `{ deleted: true }` del borrado por id', () => {
@@ -110,13 +109,13 @@ describe('E174-3 · la foto de quien invita', () => {
   });
 
   it('🔴 el dueño: la ruta de la foto, su 404 no oracular y la pista en el payload', () => {
-    expect(OWNER_NOTIFICATIONS).toContain("router.get('/:id/inviter-avatar', async");
-    expect(OWNER_NOTIFICATIONS).toContain("res.setHeader('Cache-Control', 'private, no-store');");
-    expect(OWNER_NOTIFICATIONS).toContain("res.vary('Authorization');");
-    expect(OWNER_NOTIFICATIONS).toContain("JSON.stringify({ error: 'avatar_not_found' })");
-    expect(OWNER_INVITATIONS).toContain('has_inviter_avatar: hasInviterAvatar,');
+    expect(consta('avisos.foto_del_invitador.ruta')).toBe(true);
+    expect(consta('avisos.foto_del_invitador.no_store')).toBe(true);
+    expect(consta('avisos.foto_del_invitador.vary_authorization')).toBe(true);
+    expect(consta('avisos.foto_del_invitador.404_avatar_not_found')).toBe(true);
+    expect(consta('invitaciones.aviso.has_inviter_avatar')).toBe(true);
     // `has_avatar` sólo en la lista de amigos, con el predicado de la ruta de la foto.
-    expect(OWNER_FRIENDS).toContain('has_avatar: conFoto.has(f.id),');
+    expect(consta('amigos.has_avatar_con_la_foto')).toBe(true);
   });
 
   it('la fachada pide la ruta del dueño con la misma política que la foto de un amigo', () => {

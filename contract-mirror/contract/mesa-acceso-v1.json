@@ -9,6 +9,21 @@
   "puerta": "middleware/auth.js · requireMesaParticipant (una sola puerta; quién entra no cambia)",
   "quien_entra": "El titular, un participante activo o un invitado in-app con la invitación pendiente y vigente.",
   "quien_no_participa": { "status": 404, "cuerpo": { "error": "mesa_not_found" } },
+  "invitacion_pendiente": {
+    "desde": "v2.178.0 (D268 · S-05 de la auditoría de seguridad del 2026-10-10)",
+    "regla": "Invitar no es aceptar. Quien entra SÓLO con una invitación in-app pendiente ve la mesa para decidir si acepta (GET /api/mesas/:code con my_role \"participant\", como siempre, y GET de su selección informativa), pero no opera sobre ella.",
+    "status": 403,
+    "cuerpo": { "error": "invitation_not_accepted" },
+    "rutas": [
+      "POST /api/mesas/:code/items/lock",
+      "POST /api/mesas/:code/items/release",
+      "POST /api/mesas/:code/pay",
+      "PUT /api/mesas/:code/informative-selection"
+    ],
+    "por_que_esas": "Son las que toman, sueltan o pagan consumos; con el dinero apagado, completar la selección (lock o informative-selection) también cierra la mesa. Invitar ya era sólo del titular (only_opener_can_invite) y cerrar, también (not_mesa_organizer): no cambian.",
+    "no_es_oraculo": "Sólo lo recibe el propio invitado, que ya ve la mesa.",
+    "despues_de_aceptar": "POST /api/invitations/:id/accept: opera como cualquier participante activo. Un participante activo que además tenga una invitación pendiente opera (gana lo aceptado)."
+  },
   "igual_que": "Un código que no existe: el mismo status, el mismo cuerpo byte por byte y las mismas cabeceras (salvo date, ratelimit-* y x-correlation-id, que cambian en cada pedido). Vale también para una mesa cerrada, una invitación cancelada o una vencida.",
   "rutas": {
     "GET /api/mesas/:code": { "desde": "v2.168.1 (n325)" },

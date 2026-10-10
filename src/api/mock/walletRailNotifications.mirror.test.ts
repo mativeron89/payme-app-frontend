@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WALLET_NOTIFICATION_TYPES } from './store';
+import { hechoDelDueno } from '../../../scripts/hechosDelDueno';
 
 /**
  * OLA 5C(d) · el emisor dejó de mandar los avisos del riel saldo (`5e210fd`), y
@@ -10,7 +11,7 @@ import { WALLET_NOTIFICATION_TYPES } from './store';
  * dejaría el hecho viajando por la red igual y, peor, daría verde a cualquier
  * medición hecha desde acá. Así que:
  *
- *  1. La lista del mock no es nuestra: se compara contra el ESPEJO del emisor.
+ *  1. La lista del mock no es nuestra: se compara contra la del emisor (D268: un hecho del dueño).
  *  2. Ningún archivo del camino de red filtra avisos por tipo. Si alguien lo
  *     agrega, un barrido estructural lo nombra.
  *
@@ -20,18 +21,11 @@ import { WALLET_NOTIFICATION_TYPES } from './store';
  * ya no existe. La distinción es la que separa `store.ts` de todo el resto.
  */
 
-const ESPEJO = import.meta.glob('/contract-mirror/services/notifications.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
+/** D268 · `WALLET_RAIL_TYPES` de `services/notifications.js` del dueño, como hecho generado en local. */
 function tiposDelEmisor(): string[] {
-  const texto = Object.values(ESPEJO)[0];
-  expect(texto, 'no se encontró contract-mirror/services/notifications.js').toBeTruthy();
-  const bloque = /const WALLET_RAIL_TYPES = new Set\(\[([\s\S]*?)\]\)/.exec(texto!);
-  expect(bloque, 'no se encontró WALLET_RAIL_TYPES en el espejo').toBeTruthy();
-  return [...bloque![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+  const tipos = hechoDelDueno<string[] | null>('riel.tipos_de_avisos');
+  expect(tipos, 'no se encontró WALLET_RAIL_TYPES en el dueño').not.toBeNull();
+  return [...tipos!].sort();
 }
 
 describe('(d) · los avisos del riel saldo los apaga EL EMISOR', () => {

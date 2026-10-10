@@ -146,6 +146,7 @@
         "201": { "claves": ["contract", "viaje"], "viaje": "ver GET /api/viajes/:id" },
         "200": { "cuando": "la misma clave con el mismo pedido: el mismo viaje" },
         "400": { "error": "validation_error" },
+        "404": { "error": "viaje_not_found", "cuando": "v2.178.0 · D268 · S-04: la misma clave con el mismo pedido de quien ya no es miembro activo de ese viaje (salió): el mismo 404 que GET /api/viajes/:id (n325), sin el id. También si sale entre la creación y la respuesta." },
         "409": { "errores": ["idempotency_key_conflict", "viaje_members_limit"] },
         "422": { "error": "viaje_member_not_found", "claves": ["error", "member"], "cuando": "un @ inexistente o que la búsqueda no muestra, o un id que no es un amigo: la misma respuesta (D119)" },
         "429": { "error": "viajes_rate_limited", "cuando": "30 invitaciones por cuenta cada 10 minutos (crear y POST /:id/miembros)" }

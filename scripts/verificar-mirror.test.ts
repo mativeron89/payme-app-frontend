@@ -42,18 +42,22 @@ function correr(...args: string[]): number {
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
-/** Contenido de los archivos del contrato de mentira: origen → cuerpo. */
+/** Contenido de los archivos del dueño de mentira: origen → cuerpo. */
 const CONTRATO: Record<string, string> = {
+  'contract/a-v1.json': '{"a":1}\n',
+  'contract/b-v1.json': '{"b":2}\n',
   'routes/auth.js': 'module.exports = "auth";\n',
-  'routes/mesas.js': 'module.exports = "mesas";\n',
   'services/settlement.js': 'module.exports = "settlement";\n',
 };
-/** El espejo RENOMBRA: el mapeo lo declara el inventario, no una convención. */
+/** El inventario RENOMBRA: el mapeo lo declara el dueño, no una convención. */
 const DESTINO: Record<string, string> = {
+  'contract/a-v1.json': 'contract/a-v1.json',
+  'contract/b-v1.json': 'contract/b-v1.json',
   'routes/auth.js': 'routes/auth.js',
-  'routes/mesas.js': 'routes/mesas.js',
   'services/settlement.js': 'docs/settlement.js.ref',
 };
+/** D268 · se copia sólo `contract/*.json`; el código del servidor queda por hash. */
+const SE_COPIA = ['contract/a-v1.json', 'contract/b-v1.json'];
 
 function escribir(base: string, rel: string, cuerpo: string) {
   const abs = join(base, rel);
@@ -71,9 +75,24 @@ function inventario(commit: string) {
   return { version: 1, commit, total: archivos.length, archivos };
 }
 
+/** D268 · los hechos del dueño de mentira: uno, del archivo del servidor que ya no se copia. */
+function hechos(commit: string, extra: Record<string, unknown> = {}) {
+  return {
+    _comentario: 'de prueba',
+    version: 1,
+    commit,
+    fuentes: { 'routes/auth.js': sha(CONTRATO['routes/auth.js']!) },
+    hechos: { 'auth.ruta': { origen: 'routes/auth.js', valor: true } },
+    ...extra,
+  };
+}
+const escribirHechos = (h: unknown) => writeFileSync(join(scripts, 'hechos-del-dueno.json'), JSON.stringify(h, null, 2));
+
 function git(...args: string[]): string {
   return execFileSync('git', ['-C', fuente, ...args], { encoding: 'utf8' }).trim();
 }
+
+let commitInicial: string;
 
 beforeEach(() => {
   raiz = mkdtempSync(join(tmpdir(), 'mirror-gate-'));
@@ -85,20 +104,21 @@ beforeEach(() => {
   mkdirSync(fuente, { recursive: true });
   copyFileSync(SCRIPT_REAL, join(scripts, 'verificar-mirror.mjs'));
 
-  // La FUENTE es un repo git real con el contrato de mentira commiteado: el
+  // La FUENTE es un repo git real con el dueño de mentira commiteado: el
   // verificador lee con `git show <commit>:<origen>`, así que necesita uno.
   git('init', '-q');
   git('config', 'user.email', 'test@payme.invalid');
   git('config', 'user.name', 'test');
   for (const [rel, cuerpo] of Object.entries(CONTRATO)) escribir(fuente, rel, cuerpo);
   git('add', '-A');
-  git('commit', '-qm', 'contrato de mentira');
-  const commit = git('rev-parse', 'HEAD');
+  git('commit', '-qm', 'dueño de mentira');
+  commitInicial = git('rev-parse', 'HEAD');
 
-  // El espejo, con los RENOMBRES aplicados, y el inventario del "dueño".
-  for (const [origen, cuerpo] of Object.entries(CONTRATO)) escribir(espejo, DESTINO[origen]!, cuerpo);
+  // El espejo, SÓLO con el contrato, y el inventario y los hechos del "dueño".
+  for (const destino of SE_COPIA) escribir(espejo, destino, CONTRATO[destino]!);
   escribir(espejo, 'README.md', '# procedencia — no se inventaría\n');
-  writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inventario(commit), null, 2));
+  writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inventario(commitInicial), null, 2));
+  escribirHechos(hechos(commitInicial));
 });
 
 afterEach(() => {
@@ -106,22 +126,30 @@ afterEach(() => {
 });
 
 describe('integridad local · el espejo contra el inventario del dueño', () => {
-  it('espejo fiel → 0, incluidos los archivos RENOMBRADOS', () => {
+  it('espejo fiel → 0: el contrato copiado, y el código del servidor sólo por hash', () => {
     expect(correr('--integridad')).toBe(0);
   });
 
   it('un archivo CAMBIADO → 1 (el defecto original: esto devolvía 0)', () => {
-    escribir(espejo, 'routes/mesas.js', 'module.exports = "otra cosa";\n');
+    escribir(espejo, 'contract/b-v1.json', '{"b":3}\n');
     expect(correr('--integridad')).toBe(1);
   });
 
   it('un archivo BORRADO del espejo → 1', () => {
-    rmSync(join(espejo, 'routes/mesas.js'));
+    rmSync(join(espejo, 'contract/b-v1.json'));
     expect(correr('--integridad')).toBe(1);
   });
 
   it('un archivo DE MÁS (intruso) → 1 · la dirección que el verificador viejo callaba', () => {
-    escribir(espejo, 'routes/colado.js', 'no lo declaró el dueño\n');
+    escribir(espejo, 'contract/colado.json', '{}\n');
+    expect(correr('--integridad')).toBe(1);
+  });
+
+  it('🔴 D268 · el código del servidor EN el espejo → 1, aunque sea idéntico al del dueño (renombrado también)', () => {
+    escribir(espejo, 'routes/auth.js', CONTRATO['routes/auth.js']!);
+    expect(correr('--integridad')).toBe(1);
+    rmSync(join(espejo, 'routes/auth.js'));
+    escribir(espejo, 'docs/settlement.js.ref', CONTRATO['services/settlement.js']!);
     expect(correr('--integridad')).toBe(1);
   });
 
@@ -134,7 +162,7 @@ describe('integridad local · el espejo contra el inventario del dueño', () => 
    * verificador; R3-A lo autorizó y el marcador se retiró, como correspondía.)
    */
   it('🔴 un intruso que es PREFIJO de un archivo declarado → 1', () => {
-    escribir(espejo, 'routes/auth', 'intruso disfrazado de prefijo\n');
+    escribir(espejo, 'contract/a-v1', 'intruso disfrazado de prefijo\n');
     expect(correr('--integridad')).toBe(1);
   });
 
@@ -148,6 +176,32 @@ describe('integridad local · el espejo contra el inventario del dueño', () => 
   it('sin inventario → 2 · el que no puede verificar FALLA, no aprueba', () => {
     rmSync(join(scripts, 'mirror-inventory.json'));
     expect(correr('--integridad')).toBe(2);
+  });
+
+  it('🔴 D268 · sin hechos del dueño → 1', () => {
+    rmSync(join(scripts, 'hechos-del-dueno.json'));
+    expect(correr('--integridad')).toBe(1);
+  });
+
+  it('🔴 D268 · hechos VENCIDOS: la fuente no tiene el sha del inventario → 1', () => {
+    escribirHechos(hechos(commitInicial, { fuentes: { 'routes/auth.js': sha('otra versión') } }));
+    expect(correr('--integridad')).toBe(1);
+  });
+
+  it('🔴 D268 · hechos de otro commit, de un archivo fuera del inventario o sin fuente declarada → 1', () => {
+    escribirHechos(hechos('a'.repeat(40)));
+    expect(correr('--integridad')).toBe(1);
+    escribirHechos(hechos(commitInicial, { fuentes: { 'routes/auth.js': sha(CONTRATO['routes/auth.js']!), 'routes/x.js': sha('x') } }));
+    expect(correr('--integridad')).toBe(1);
+    escribirHechos(hechos(commitInicial, { hechos: { 'x.ruta': { origen: 'services/settlement.js', valor: true } } }));
+    expect(correr('--integridad')).toBe(1);
+    escribirHechos({ version: 1, commit: commitInicial, fuentes: [], hechos: {} });
+    expect(correr('--integridad')).toBe(1);
+  });
+
+  it('control · los hechos al día → 0 (lo de arriba no falla por otra causa)', () => {
+    escribirHechos(hechos(commitInicial));
+    expect(correr('--integridad')).toBe(0);
   });
 
   it('un inventario con total mentiroso → 1', () => {
@@ -182,16 +236,16 @@ describe('paridad · la fuente respalda al inventario', () => {
    * inventario del DUEÑO, el archivo que falta se ve contra la fuente.
    */
   it('🔴 quitar un archivo del espejo Y del inventario local → sigue rojo contra la fuente', () => {
-    rmSync(join(espejo, 'routes/mesas.js'));
+    rmSync(join(espejo, 'contract/b-v1.json'));
     const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
-    inv.archivos = inv.archivos.filter((a: { origen: string }) => a.origen !== 'routes/mesas.js');
+    inv.archivos = inv.archivos.filter((a: { origen: string }) => a.origen !== 'contract/b-v1.json');
     inv.total = inv.archivos.length;
     writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
     // La integridad local no puede verlo —el inventario adulterado es coherente
     // consigo mismo— y por eso la integridad NO se llama paridad…
     expect(correr('--integridad')).toBe(0);
     // …pero adoptar ese inventario contra la fuente REAL no pasa: el dueño
-    // declara 3 archivos y el candidato trae 2.
+    // declara 4 archivos y el candidato trae 3.
     const delDuenio = join(raiz, 'inv-del-dueno.json');
     writeFileSync(delDuenio, JSON.stringify(inventario(git('rev-parse', 'HEAD'))));
     expect(correr('--adoptar-inventario', delDuenio)).toBe(1);
@@ -200,13 +254,21 @@ describe('paridad · la fuente respalda al inventario', () => {
   it('🔴 un sha256 adulterado en el inventario → 1: el inventario es INFIEL a su commit', () => {
     // El caso "corromper y regenerar": el espejo y el inventario coinciden
     // entre sí, pero el commit declarado dice otra cosa.
-    const cuerpoFalso = 'module.exports = "adulterado";\n';
-    escribir(espejo, 'routes/mesas.js', cuerpoFalso);
+    const cuerpoFalso = '{"b":"adulterado"}\n';
+    escribir(espejo, 'contract/b-v1.json', cuerpoFalso);
     const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
-    for (const a of inv.archivos) if (a.origen === 'routes/mesas.js') a.sha256 = sha(cuerpoFalso);
+    for (const a of inv.archivos) if (a.origen === 'contract/b-v1.json') a.sha256 = sha(cuerpoFalso);
     writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
     expect(correr('--integridad')).toBe(0); // coherente consigo mismo…
     expect(correr('--paridad')).toBe(1); // …y desmentido por la fuente.
+  });
+
+  it('🔴 D268 · la paridad cubre también lo que NO se copia: un hash del servidor adulterado → 1', () => {
+    const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
+    for (const a of inv.archivos) if (a.origen === 'services/settlement.js') a.sha256 = sha('otro settlement');
+    writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
+    expect(correr('--integridad')).toBe(0); // en el espejo no está: la integridad no lo ve…
+    expect(correr('--paridad')).toBe(1); // …y la fuente lo desmiente.
   });
 });
 
@@ -222,7 +284,7 @@ describe('vigencia · pregunta SEPARADA de la paridad', () => {
   });
 
   it('la fuente CAMBIA un archivo espejado → desactualizado (1), sin ensuciar la paridad', () => {
-    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    escribir(fuente, 'routes/auth.js', 'module.exports = "v2";\n');
     git('add', '-A');
     git('commit', '-qm', 'el contrato se movió');
     expect(correr('--paridad')).toBe(0); // el espejo sigue fiel a SU commit…
@@ -237,8 +299,16 @@ describe('adoptar inventario · nunca bendice sin verificar', () => {
     expect(correr('--adoptar-inventario', delDuenio)).toBe(0);
   });
 
+  it('D268 · adoptar no mira los hechos: se regeneran DESPUÉS, desde el inventario adoptado', () => {
+    escribirHechos(hechos('b'.repeat(40)));
+    const delDuenio = join(raiz, 'inv.json');
+    writeFileSync(delDuenio, JSON.stringify(inventario(git('rev-parse', 'HEAD'))));
+    expect(correr('--adoptar-inventario', delDuenio)).toBe(0);
+    expect(correr('--integridad')).toBe(1);
+  });
+
   it('🔴 si el espejo no coincide, NO se adopta (el reemplazado bendecía cualquier cosa)', () => {
-    escribir(espejo, 'routes/mesas.js', 'desviado\n');
+    escribir(espejo, 'contract/b-v1.json', 'desviado\n');
     const delDuenio = join(raiz, 'inv.json');
     writeFileSync(delDuenio, JSON.stringify(inventario(git('rev-parse', 'HEAD'))));
     const antes = readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8');

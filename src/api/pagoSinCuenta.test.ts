@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { acceptInvitationLinkResponse } from './contractResponses';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · el test que ACREDITA el cierre del lado del
@@ -21,11 +22,8 @@ const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
   eager: true,
 }) as Record<string, string>;
 
-const espejo = import.meta.glob('/contract-mirror/services/invitationAuthority.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
+/** D268 · lo que declara `services/invitationAuthority.js` del dueño, como hechos generados en local. */
+const consta = (clave: string) => hechoDelDueno<boolean>(clave);
 
 describe('C1/C2/C3 · el front no opera la mesa como invitado', () => {
   it('el barrido ve el árbol (si no, todo lo de abajo pasa en vacío)', () => {
@@ -168,10 +166,8 @@ describe('ORDEN 3A · la semántica REAL de los alias legacy', () => {
    * fija lo único que puede fijar desde acá: que el espejo **dice** la
    * semántica real, para que nadie razone sobre un token leyendo un resumen.
    */
-  it('el espejo declara que resolveLinkToken NO es definición única', () => {
-    const svc = espejo['/contract-mirror/services/invitationAuthority.js'];
-    expect(svc, 'no se encontró invitationAuthority en el espejo').toBeTruthy();
-    expect(svc!).toContain('SEGUNDA COPIA');
+  it('el dueño declara que resolveLinkToken NO es definición única', () => {
+    expect(consta('invitaciones.resolveLinkToken.declara_segunda_copia')).toBe(true);
   });
 
   /**
@@ -181,10 +177,9 @@ describe('ORDEN 3A · la semántica REAL de los alias legacy', () => {
    * reviviría por haber sido supersedido por uno nuevo.
    */
   it('el alias legacy exige vigencia de la fila FUENTE y de la canónica', () => {
-    const svc = espejo['/contract-mirror/services/invitationAuthority.js']!;
-    expect(svc).toContain('COALESCE(source.superseded_by_id, source.id)');
-    expect(svc).toContain('source.expires_at > NOW()');
-    expect(svc).toContain('canonical.expires_at > NOW()');
+    expect(consta('invitaciones.alias_legacy.salta_a_la_canonica')).toBe(true);
+    expect(consta('invitaciones.alias_legacy.exige_fuente_vigente')).toBe(true);
+    expect(consta('invitaciones.alias_legacy.exige_canonica_vigente')).toBe(true);
   });
 });
 

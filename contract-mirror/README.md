@@ -1,12 +1,48 @@
 # contract-mirror — App Backend → App Frontend
 
 Espejo **de solo lectura** del contrato que el App Frontend consume. La fuente
-de verdad continúa siendo el código del App Backend; esta carpeta no se importa
-desde `src/` y nunca se corrige a mano.
+de verdad continúa siendo el App Backend; esta carpeta no se importa desde
+`src/` y nunca se corrige a mano.
+
+🔴 **D268 · S-03 (desde 0.238.0): este repo es público y el espejo lleva SÓLO el
+contrato, los JSON de `contract/`.** El código del servidor (`db/`, `routes/`,
+`services/`, `middleware/`, `utils/`, `schemas/`) y los documentos del dueño ya no
+se copian. Siguen en el inventario del dueño (`scripts/mirror-inventory.json`,
+byte a byte el suyo) y se verifican por su sha256:
+
+- `node scripts/verificar-mirror.mjs --integridad` (en el CI): lo copiado, con su
+  hash; nada más en el espejo; y los hechos del dueño, de los mismos archivos que
+  el inventario.
+- `node scripts/verificar-mirror.mjs --paridad` (local, con el repo del dueño): los
+  138, copiados o no, contra la fuente.
+- Lo que las pruebas del front leían del código del servidor está en
+  `scripts/hechos-del-dueno.json`: salidas de vectores sintéticos que genera SÓLO
+  EN LOCAL `scripts/generar-hechos-del-dueno.mjs` (nunca en el CI).
+
+Lo que se publicó antes de 0.238.0 sigue en la historia de git: D268 lo declara
+y no se reescribe.
 
 ## Procedencia congelada
 
-### Viajes: varios pagadores y estadísticas · App Backend v2.177.0 (y v2.176.0) · 2026-10-10
+### D268 · el espejo sólo con el contrato · App Backend v2.178.0 · 2026-10-10
+
+Orden `AF-SEGURIDAD-D268-20261010` (S-03, y el contrato de S-01, S-02 y S-05). Scope del lease con
+`contract-mirror/**` y `scripts/**` (el espejo y su verificación).
+
+- Contenido: owner **`1664dd844d8fe3fa1d88d5f287379833a8365351`** (v2.178.0, commit A: AB-SEGURIDAD-D268).
+- Inventario: el del owner en **`6424b1a64ea415c44948df2c69c873942b9de185`** (v2.178.0, commit B, el servido según la
+  orden; `contract/mirror-inventory.json`), adoptado con `--adoptar-inventario` sin editarlo. Declara `1664dd8`,
+  138 entradas.
+- **13 archivos espejados**: los `contract/*.json` del inventario, copiados con `git show 1664dd8:<origen>` y verificando
+  el sha256 de cada uno. Cambian tres respecto de `9d3f458`: `contract/social-auth-v1.json` (S-01 y S-02:
+  `google_redirect_binding`, `verifier`, `entrar:` y `crear:`), `contract/mesa-acceso-v1.json` (S-05:
+  `invitation_not_accepted`) y `contract/viajes-v1.json`.
+- Salieron del espejo 125: el código del servidor y los documentos del dueño, que quedan sólo por hash.
+- `--integridad`: 13 copiados y 125 sólo por hash, con los hechos al día. `--paridad`: espejo = inventario = fuente en
+  `1664dd8`, 138/138.
+- Hechos del dueño: 43, de 14 archivos, generados en local sobre `1664dd8`.
+
+### Refresh anterior · Viajes: varios pagadores y estadísticas · App Backend v2.177.0 (y v2.176.0) · 2026-10-10
 
 Orden `AF-VIAJES-VARIOS-PAGARON-Y-ESTADISTICAS-20261010` (D263, D260, D264). Scope del lease con `contract-mirror/**` y
 `scripts/mirror-inventory.json`.

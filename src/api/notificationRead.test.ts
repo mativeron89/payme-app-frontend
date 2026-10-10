@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mockMarkNotificationRead } from './mock/mockApi';
 import { state } from './mock/store';
 import type { AppNotification } from './types';
 
 const API_SOURCE = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
-const OWNER_ROUTE = readFileSync(new URL('../../contract-mirror/routes/notifications.js', import.meta.url), 'utf8');
+/** D268 · lo que declara el código del dueño, como hechos generados en local (el espejo público ya no lo copia). */
+const consta = (clave: string) => hechoDelDueno<boolean>(clave);
 
 const original = state.notifications.map((notification) => ({ ...notification }));
 
@@ -27,8 +29,8 @@ const notification = (id: string): AppNotification => ({
 
 describe('M04 · lectura individual de notificaciones', () => {
   it('la fachada usa el PATCH individual existente y conserva read-all separado', () => {
-    expect(OWNER_ROUTE).toMatch(/router\.patch\('\/:id\/read'/);
-    expect(OWNER_ROUTE).toContain('notification_not_found_or_already_read');
+    expect(consta('avisos.leido.ruta')).toBe(true);
+    expect(consta('avisos.leido.404_notification_not_found_or_already_read')).toBe(true);
     expect(API_SOURCE).toContain("httpRequest<unknown>('PATCH', `/notifications/${encodeURIComponent(id)}/read`)");
     expect(API_SOURCE).toContain("throw new Error('notification_read_response_malformed')");
     expect(API_SOURCE).toContain("httpRequest('PATCH', '/notifications/read-all')");

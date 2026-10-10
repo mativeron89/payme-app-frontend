@@ -50,8 +50,9 @@
       "request_notes": {
         "referral_code": "v2.173.0 · D252 · opcional: el código del link de invitación personal (contract/invitacion-personal-v1.json). Mandarlo sólo con features.invite_link.enabled (este cuerpo es estricto). Uno que no vale se ignora: la cuenta se crea igual, sin referido, y la respuesta no cambia.",
         "invitation_token": "Obligatorio con el alta cerrada (default). Con PUBLIC_SIGNUP_ENABLED=true es opcional: si llega se valida y consume; inválido = registration_not_available.",
-        "email": "Declarado por el usuario, NO verificado y NO autoridad: no enlaza, no fusiona ni recupera una cuenta existente, y un email ya registrado devuelve el mismo registration_not_available opaco. SÓLO se acepta con PUBLIC_SIGNUP_ENABLED=true (con el alta cerrada el DTO es strict y lo rechaza con validation_error). Sin invitación es la ÚNICA fuente del email de la cuenta, con el mismo parser que el alta directa; con invitación manda la invitación y un email distinto es registration_not_available. Nunca el email del proveedor: en esta versión lo escribe la persona, y prellenarlo desde la credencial del proveedor sería un cambio de contrato posterior."
+        "email": "v2.178.0 · D268 · S-01: se ACEPTA y se IGNORA. Sólo con PUBLIC_SIGNUP_ENABLED=true (con el alta cerrada el DTO es strict y lo rechaza con validation_error). No es autoridad de nada: no da el correo de la cuenta, no enlaza, no fusiona ni recupera. Hasta v2.177.0 era la fuente del correo sin invitación, y eso permitía crear con el propio Google una cuenta con el correo de otra persona. App Frontend puede dejar de mandarlo."
       },
+      "account_email": "v2.178.0 · D268 · S-01 (raíz v2.43, «copia una sola vez … correo verificado»): el correo VERIFICADO del ID token (email_verified === true, booleano), normalizado con el mismo parser que el alta directa. Sin correo verificado ⇒ registration_not_available 403. Con invitación, el correo de la invitación tiene que ser el verificado; si no, el mismo 403 y la invitación sigue sin usar. Un correo ya registrado ⇒ el mismo 403: nunca se enlaza ni se fusiona por correo.",
       "success_status": 201,
       "success_shape": "session_success_shape",
       "errors": {
@@ -85,7 +86,10 @@
       "caller": "Google (modo redirect de GIS), nunca el front por fetch",
       "gated_by": "features.google_redirect.enabled; apagado ⇒ 404",
       "request_content_type": "application/x-www-form-urlencoded",
-      "request": ["credential", "g_csrf_token", "select_by?"],
+      "request": ["credential", "g_csrf_token", "select_by?", "state?"],
+      "request_notes": {
+        "state": "v2.178.0 · D268 · S-02: entrar:<challenge> ata el código al navegador (ver google_redirect_binding_capability). Ausente u otro valor ⇒ código suelto, como hasta v2.177.0."
+      },
       "csrf": "doble envío de GIS: cookie g_csrf_token === campo g_csrf_token; falta o distinto ⇒ csrf_failed",
       "mounted_before_public_cors": true,
       "auth_limiter": false,
@@ -99,9 +103,10 @@
       "method": "POST",
       "path": "/api/auth/google/redirect/redeem",
       "gated_by": "features.google_redirect.enabled; apagado ⇒ 404",
-      "request": ["code"],
+      "request": ["code", "verifier?"],
       "request_notes": {
-        "code": "el valor del fragmento #google_redirect=. Un solo uso, vence a los 60 s; se guarda sólo su sha256 (google_redirect_codes)."
+        "code": "el valor del fragmento #google_redirect=. Un solo uso, vence a los 60 s; se guarda sólo su sha256 (google_redirect_codes).",
+        "verifier": "v2.178.0 · D268 · S-02: el verifier que guardó el navegador al iniciar con state entrar:<challenge>. Con verifier sólo se canjea un código atado a su challenge; sin él, sólo uno suelto. Sin coincidencia o mal formado ⇒ social_auth_failed 401 opaco. Otra clave, o un verifier que no es texto o pasa 256 caracteres ⇒ validation_error 400."
       },
       "success_status": 200,
       "success_shape": "session_success_shape",
@@ -120,7 +125,7 @@
       "gated_by": "features.google_redirect_signup.enabled; apagado ⇒ el state se ignora y rige google_redirect_login_uri byte a byte",
       "request": ["credential", "g_csrf_token", "select_by?", "state"],
       "request_notes": {
-        "state": "alta:<id> con id en [A-Za-z0-9_-]{1,100}. Cualquier otro valor o ausente ⇒ fase 1 («Entrar»)."
+        "state": "alta:<id> con id en [A-Za-z0-9_-]{1,100} (código suelto, como hasta v2.177.0) o, desde v2.178.0 (D268 · S-02), crear:<challenge> (código atado al navegador, ver google_redirect_binding_capability). Cualquier otro valor o ausente ⇒ fase 1 («Entrar»)."
       },
       "csrf": "el mismo doble envío que google_redirect_login_uri",
       "success_status": 303,
@@ -133,8 +138,9 @@
       "method": "POST",
       "path": "/api/auth/google/redirect/signup",
       "gated_by": "features.google_redirect_signup.enabled; apagado ⇒ el 404 not_found de siempre",
-      "request": ["code", "accepted_notice_version", "legal_acceptance?", "invitation_token?", "first_name?", "last_name?", "referral_code?"],
+      "request": ["code", "verifier?", "accepted_notice_version", "legal_acceptance?", "invitation_token?", "first_name?", "last_name?", "referral_code?"],
       "request_notes": {
+        "verifier": "v2.178.0 · D268 · S-02: igual que en google_redirect_redeem, para el código de un state crear:<challenge>. Sin coincidencia ⇒ social_auth_failed 401 y no se crea nada.",
         "referral_code": "v2.173.0 · D252 · opcional: el código del link de invitación personal (contract/invitacion-personal-v1.json). Mandarlo sólo con features.invite_link.enabled (este cuerpo es estricto). Uno que no vale se ignora: la cuenta se crea igual, sin referido, y la respuesta no cambia.",
         "code": "el valor del fragmento #google_signup=. Vive 10 min; se guarda sólo su sha256. Un desenlace terminal lo consume (borra la fila); 422 profile_required, 429 y 503 lo dejan vivo hasta 5 intentos.",
         "resto": "idéntico a google_continue sin id_token: la misma lógica y los mismos desenlaces, con la identidad y el perfil que verificó google_redirect_signup_start"
@@ -394,6 +400,7 @@
       "path": "/api/auth/recovery/complete",
       "request": ["token", "new_password"],
       "success": { "completed": true },
+      "efectos": "v2.178.0 · D268 · S-01: además de cambiar la contraseña, reactivar y revocar las sesiones, BORRA los vínculos con identidades externas de la cuenta (activos o revocados). Con UNIQUE (user_id, provider), marcarlos revoked impediría volver a vincular. La persona vuelve a vincular su propio Google por google_link o google_link_redirect (sesión + contraseña). Un logger.audit external_identity_removed_on_recovery {user_id, provider} por vínculo, sin correo ni subject. La respuesta no cambia.",
       "errors": {
         "validation_error": [400],
         "recovery_not_available": [403],
@@ -425,6 +432,23 @@
     "shape": { "supported": "boolean (true)", "enabled": "boolean" },
     "enabled_true_when": "GOOGLE_REDIRECT_SIGNUP_ENABLED=true y features.google_redirect.enabled true (v2.138.1 · decisión 103: sin atadura al Aviso)",
     "absent_means": "backend anterior a v2.138.0: «Crea tu cuenta» con Google en popup"
+  },
+  "google_redirect_binding_capability": {
+    "since": "v2.178.0",
+    "decision": "D268 · S-02 de la auditoría de seguridad del 2026-10-10 (login CSRF del redirect)",
+    "path": "features.google_redirect_binding",
+    "shape": { "supported": "boolean (true)" },
+    "why_top_level": "igual que google_redirect: ese bloque se decodifica con claves exactas en el front y una clave más lo pasaría al popup",
+    "absent_means": "backend anterior a v2.178.0: no mandar state entrar:/crear: ni verifier",
+    "flujo": [
+      "el front genera un verifier al azar (43 a 128 caracteres [A-Za-z0-9_-]; recomendado: 32 bytes en base64url) y lo guarda en sessionStorage hasta el canje",
+      "manda a Google el state entrar:<challenge> («Entrar») o crear:<challenge> («Crea tu cuenta»), con challenge = base64url sin relleno de SHA-256(verifier): 43 caracteres",
+      "el dueño guarda el código con hash sha256(<código>.<challenge>), sin columna nueva",
+      "en el canje (google_redirect_redeem o google_redirect_signup) el front presenta el verifier; sin coincidencia, social_auth_failed 401"
+    ],
+    "regla_del_front": "nunca canjear un código sin un verifier propio pendiente: así un #google_redirect= o #google_signup= ajeno no mete a nadie en la cuenta de otro",
+    "compatibilidad": "hasta que se retire en una orden posterior, los state de hoy (ninguno, otro valor o alta:<id>) siguen emitiendo códigos sueltos que se canjean sin verifier (App Frontend 0.237.x). Un canje con verifier nunca encuentra un código suelto.",
+    "no_cambia": "el código sigue sólo en el fragmento, un solo uso, 60 s («Entrar») o 10 min («Crea tu cuenta»); el verifier no viaja en la URL"
   },
   "google_redirect_link_capability": {
     "since": "v2.141.0",

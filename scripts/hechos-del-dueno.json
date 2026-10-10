@@ -1,0 +1,377 @@
+{
+  "_comentario": "GENERADO por scripts/generar-hechos-del-dueno.mjs, SÓLO EN LOCAL, con el repo del dueño en el commit del inventario. No se edita a mano. D268.",
+  "version": 1,
+  "commit": "1664dd844d8fe3fa1d88d5f287379833a8365351",
+  "fuentes": {
+    "routes/account.js": "68d72fb494c43dc238c59a797e1a194bd2549c86acbb4f3f39083ec91dc30191",
+    "routes/config.js": "81b8012c9ceb2cbc2b74ee029d5885d12f4e5f8929ad758818f552644e3c5698",
+    "routes/friends.js": "409962c6edc64f34846c7c17ec58d2569953ae60f11760f92efccb4f2678afe5",
+    "routes/invitations.js": "0b6171d0b388f45b9882c7b310c6897afcca708f9da8c00d2571fad3761f4591",
+    "routes/mesas.js": "cef19694f628e25cb6ff571501a1a8e3e6747020af99967c65e1a8f41dabc9be",
+    "routes/notifications.js": "cd069d53a137d091408a6beb018ed3f9e4c7e78bd2af733e13f8cd528097e607",
+    "routes/ocr.js": "fe550379c57c252298bb872bb8461e5b13eb37e20e418cd3e4deefb57c9b8877",
+    "schemas/index.js": "ac496434b9418649e5397a3c263daab9c197c2f498d90c3b3aa50a293197be05",
+    "services/invitationAuthority.js": "e5d5a7c22dc77a8c1562973aa40a0248a6eb34f044db721e10339313aa4dd0d3",
+    "services/notifications.js": "d9a4a25728765012e8ecab590b4b3c300e5d2be5ab609fc7d117e2734464f85e",
+    "services/ocrResponseContract.js": "3782bf8a0cf3187a6fc8f71d681a08602f67728b9a24b951e392370e9f7e3920",
+    "services/walletRail.js": "809b549c66b3391ab3d41089d3c8fa1ef1e95982aec5102e835e0da5c01a0646",
+    "utils/idempotency.js": "9485658088f36e7921b7cb3c5e18da9903ff652d1d95c051b4607fd9598d7bce",
+    "utils/stateMachine.js": "53c5e80c6a16334e2c5e29d40110cdb6b595a3b41ae5253b31eb46102bcb94ea"
+  },
+  "hechos": {
+    "amigos.has_avatar_con_la_foto": {
+      "origen": "routes/friends.js",
+      "valor": true
+    },
+    "avisos.borrar_todos.responde_deleted_count": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.borrar_todos.ruta": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.borrar_uno.404_notification_not_found": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.borrar_uno.responde_deleted_true": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.borrar_uno.ruta": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.foto_del_invitador.404_avatar_not_found": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.foto_del_invitador.no_store": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.foto_del_invitador.ruta": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.foto_del_invitador.vary_authorization": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.leido.404_notification_not_found_or_already_read": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "avisos.leido.ruta": {
+      "origen": "routes/notifications.js",
+      "valor": true
+    },
+    "estadisticas.ingredientes.salida": {
+      "origen": "routes/account.js",
+      "valor": {
+        "classifier_version": "1",
+        "estimated": true,
+        "groups": [
+          {
+            "key": "meat",
+            "times": 3,
+            "amount_cents": 92000,
+            "dish_count": 2
+          },
+          {
+            "key": "nuevo_grupo",
+            "times": 1,
+            "amount_cents": 15000,
+            "dish_count": 1
+          },
+          {
+            "key": "alcohol",
+            "times": 1,
+            "amount_cents": 9000,
+            "dish_count": 1
+          },
+          {
+            "key": "dessert",
+            "times": 1,
+            "amount_cents": 7000,
+            "dish_count": 1
+          },
+          {
+            "key": "other",
+            "times": 1,
+            "amount_cents": 2000,
+            "dish_count": 1
+          }
+        ],
+        "total_cents": 125000
+      }
+    },
+    "identidad.contrato": {
+      "origen": "utils/idempotency.js",
+      "valor": {
+        "mesa_pay": {
+          "selector_field": "payment_attempts.idempotency_hash_version",
+          "legacy_default_if_missing": 1,
+          "default_for_new": 2,
+          "keysets": {
+            "legacy_before_version": 2,
+            "legacy": "mesa_pay_legacy",
+            "current_from_version": 2,
+            "current": "mesa_pay"
+          }
+        }
+      }
+    },
+    "identidad.create_mesa.hash_por_caso": {
+      "origen": "utils/idempotency.js",
+      "valor": {
+        "request de apertura completo": "791373f8a0c5080cb76e50a453cc8bed9c5678b157555bc98f877579207cb93f",
+        "los mismos ítems al revés": "791373f8a0c5080cb76e50a453cc8bed9c5678b157555bc98f877579207cb93f",
+        "claves del objeto en otro orden": "791373f8a0c5080cb76e50a453cc8bed9c5678b157555bc98f877579207cb93f",
+        "sin ítems": "6e596cafe33f36e117dabe148cb2728d103988ddfa0615569bdc21acc9bcd31c",
+        "una clave del subset ausente": "6cc392f1c73a9b62d1e0d2d0a355a5b4fffc3aa101fc0125a0bdeb243459ad9d",
+        "una clave del subset en undefined": "6cc392f1c73a9b62d1e0d2d0a355a5b4fffc3aa101fc0125a0bdeb243459ad9d",
+        "una clave del subset en null": "f5f2948e3b1f91a9c3bf7341da383575cd518cf1e5013847a06ffc96cea9e5c3",
+        "ítems con claves opcionales distintas": "4a36ac2ab54090b193e962ea00723bd6ff1762427af424a995a32295f4360636",
+        "ítems anidados": "6c43526a69cd020ffba0ac250dd99fe7eb4b08133ac115903ae9805c9e316fed",
+        "ítems como primitivos (camino sin objetos)": "d725549a03630187e69fedd8cbc93f0a159ffd31939e17fed95a2365e8f682a8",
+        "ítems mezclando primitivos y objetos": "0de0111cf0b7c59afcaa14929294beb294525b65691f3f2fec67de632f25f3c0",
+        "ítems con null adentro": "ee7302f9afbbd8aa4bc9139a174b008e91d947c495c1ffdf7f211105d33be11d",
+        "unicode y comillas": "ab4afaeefdd17ac3a97d5b872925e2c42d0549b7d49cc6d46fcba92d6b308e3c",
+        "números en los bordes": "a38fd273f89a475dc3a6c8197b1db7c29707a94e0e175d83a26efd36c60f91a4",
+        "payload vacío": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "payload nulo": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "sólo claves ajenas al subset": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+      }
+    },
+    "identidad.fracciones_mitades.hash_de_items": {
+      "origen": "utils/idempotency.js",
+      "valor": "fbccec55ea5a1cc261dc922f789b0c566f8f153e2ff576750468265aaf3af4a1"
+    },
+    "identidad.mesa_pay.claves_por_version": {
+      "origen": "utils/idempotency.js",
+      "valor": {
+        "1": [
+          "payment_method_id",
+          "stripe_payment_method_id",
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ],
+        "2": [
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ],
+        "99": [
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ],
+        "ausente": [
+          "payment_method_id",
+          "stripe_payment_method_id",
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ]
+      }
+    },
+    "identidad.payload_keys": {
+      "origen": "utils/idempotency.js",
+      "valor": {
+        "mesa_pay": [
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ],
+        "mesa_pay_legacy": [
+          "payment_method_id",
+          "stripe_payment_method_id",
+          "payment_type",
+          "item_ids",
+          "items",
+          "tip_cents",
+          "tip_bps",
+          "tip_to_staff_id"
+        ],
+        "create_mesa": [
+          "restaurant_id",
+          "restaurant_label",
+          "total_cents",
+          "division_mode",
+          "expected_participants",
+          "guarantee_method",
+          "items"
+        ],
+        "topup_oxxo": [
+          "amount_cents"
+        ],
+        "topup_card": [
+          "amount_cents",
+          "payment_method_id"
+        ],
+        "transfer": [
+          "amount_cents",
+          "to_payme_id",
+          "to_email",
+          "to_user_id",
+          "concept"
+        ]
+      }
+    },
+    "invitaciones.alias_legacy.exige_canonica_vigente": {
+      "origen": "services/invitationAuthority.js",
+      "valor": true
+    },
+    "invitaciones.alias_legacy.exige_fuente_vigente": {
+      "origen": "services/invitationAuthority.js",
+      "valor": true
+    },
+    "invitaciones.alias_legacy.salta_a_la_canonica": {
+      "origen": "services/invitationAuthority.js",
+      "valor": true
+    },
+    "invitaciones.aviso.has_inviter_avatar": {
+      "origen": "services/invitationAuthority.js",
+      "valor": true
+    },
+    "invitaciones.foto_del_invitador.404_avatar_not_found": {
+      "origen": "routes/invitations.js",
+      "valor": true
+    },
+    "invitaciones.foto_del_invitador.no_store": {
+      "origen": "routes/invitations.js",
+      "valor": true
+    },
+    "invitaciones.foto_del_invitador.ruta": {
+      "origen": "routes/invitations.js",
+      "valor": true
+    },
+    "invitaciones.foto_del_invitador.vary_authorization": {
+      "origen": "routes/invitations.js",
+      "valor": true
+    },
+    "invitaciones.lista.has_inviter_avatar": {
+      "origen": "routes/invitations.js",
+      "valor": true
+    },
+    "invitaciones.resolveLinkToken.declara_segunda_copia": {
+      "origen": "services/invitationAuthority.js",
+      "valor": true
+    },
+    "mesa.clasificacion_de_la_creacion": {
+      "origen": "routes/mesas.js",
+      "valor": {
+        "pending_auth": "requires_action",
+        "open": "open",
+        "partially_paid": "partially_paid",
+        "auth_failed": "terminal",
+        "cancelled": "terminal",
+        "expired": "terminal",
+        "fully_paid": "replayable",
+        "settling": "replayable",
+        "settled": "replayable",
+        "dispersing": "replayable",
+        "completed": "replayable",
+        "dispersed": "replayable"
+      }
+    },
+    "mesa.division_mode": {
+      "origen": "schemas/index.js",
+      "valor": [
+        "consumo",
+        "igual"
+      ]
+    },
+    "mesa.estados_de_la_fsm": {
+      "origen": "utils/stateMachine.js",
+      "valor": [
+        "auth_failed",
+        "cancelled",
+        "completed",
+        "dispersed",
+        "dispersing",
+        "expired",
+        "fully_paid",
+        "open",
+        "partially_paid",
+        "pending_auth",
+        "settled",
+        "settling"
+      ]
+    },
+    "mesa.expected_participants_minimo_uno": {
+      "origen": "schemas/index.js",
+      "valor": true
+    },
+    "mesa.refine.encontrado": {
+      "origen": "schemas/index.js",
+      "valor": true
+    },
+    "mesa.refine.exige_expected_participants": {
+      "origen": "schemas/index.js",
+      "valor": true
+    },
+    "mesa.refine.sin_piso_de_dos": {
+      "origen": "schemas/index.js",
+      "valor": true
+    },
+    "ocr.image_too_large.status": {
+      "origen": "services/ocrResponseContract.js",
+      "valor": 413
+    },
+    "ocr.multipart_con_multer": {
+      "origen": "routes/ocr.js",
+      "valor": true
+    },
+    "ocr.rechaza_con_image_too_large": {
+      "origen": "routes/ocr.js",
+      "valor": true
+    },
+    "ocr.tope_de_imagen_bytes": {
+      "origen": "routes/ocr.js",
+      "valor": 8388608
+    },
+    "riel.config.enabled_por_la_capacidad": {
+      "origen": "routes/config.js",
+      "valor": true
+    },
+    "riel.config.literales": {
+      "origen": "routes/config.js",
+      "valor": {
+        "account_activity": true
+      }
+    },
+    "riel.habilitado": {
+      "origen": "services/walletRail.js",
+      "valor": false
+    },
+    "riel.tipos_de_avisos": {
+      "origen": "services/notifications.js",
+      "valor": [
+        "topup_failed",
+        "topup_pending",
+        "topup_succeeded",
+        "transfer_received",
+        "transfer_sent"
+      ]
+    }
+  }
+}

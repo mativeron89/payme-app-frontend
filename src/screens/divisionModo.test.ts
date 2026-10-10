@@ -7,30 +7,25 @@ import {
   reparteElTotal,
   tituloStepper,
 } from './divisionModo';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 const TODOS: ModoUI[] = ['consumo', 'igual', 'total'];
 
 /**
- * El espejo del contrato es la fuente: la guarda NO repite el enum a mano, lo
- * lee. Si el dueño agrega una tercera forma de verdad, este archivo se pone
- * rojo y alguien tiene que venir a mirarlo — que es exactamente lo que se
- * quiere que pase.
+ * El dueño es la fuente: la guarda NO repite el enum a mano, lo lee. Si el
+ * dueño agrega una tercera forma de verdad, este archivo se pone rojo y alguien
+ * tiene que venir a mirarlo — que es exactamente lo que se quiere que pase.
+ * D268 · de `schemas/index.js` del dueño, como hechos generados en local (el
+ * espejo público ya no lo copia).
  */
-const ESPEJO = import.meta.glob('/contract-mirror/schemas/index.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-const SCHEMAS = ESPEJO['/contract-mirror/schemas/index.js'];
 
 describe('las tres formas de dividir de §1.3-bis contra las dos del contrato', () => {
   it('🔴 el contrato sigue teniendo DOS modos, y son los que traducimos', () => {
-    const m = SCHEMAS.match(/division_mode:\s*z\.enum\(\[([^\]]*)\]\)/);
-    expect(m, 'el espejo perdió la declaración de division_mode').not.toBeNull();
-    const delContrato = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort();
+    const delContrato = hechoDelDueno<string[] | null>('mesa.division_mode');
+    expect(delContrato, 'el dueño perdió la declaración de division_mode').not.toBeNull();
     expect(delContrato).toEqual(['consumo', 'igual']);
     // Y todo lo que emitimos cae adentro de ese enum: sin valores inventados.
-    for (const modo of TODOS) expect(delContrato).toContain(modoContrato(modo));
+    for (const modo of TODOS) expect(delContrato!).toContain(modoContrato(modo));
   });
 
   it('🔴 «pagar el total» viaja como igual — es la MISMA operación del backend', () => {
@@ -47,11 +42,10 @@ describe('las tres formas de dividir de §1.3-bis contra las dos del contrato', 
     // ese piso hacía IMPOSIBLE…»), así que un barrido global matchea la
     // explicación y no la regla. Tercera vez esta semana: se veta lo que
     // EJECUTA, nunca lo que se cuenta.
-    const refine = SCHEMAS.match(/\}\)\.refine\(d => d\.division_mode[^\n]*/)?.[0] ?? '';
-    expect(refine, 'el espejo perdió el refine de division_mode').not.toBe('');
-    expect(refine).not.toMatch(/>=\s*2/);
-    expect(refine).toMatch(/expected_participants\s*!==\s*undefined/);
-    expect(SCHEMAS).toMatch(/expected_participants:\s*safeInt\.min\(1\)/);
+    expect(hechoDelDueno<boolean>('mesa.refine.encontrado'), 'el dueño perdió el refine de division_mode').toBe(true);
+    expect(hechoDelDueno<boolean>('mesa.refine.sin_piso_de_dos')).toBe(true);
+    expect(hechoDelDueno<boolean>('mesa.refine.exige_expected_participants')).toBe(true);
+    expect(hechoDelDueno<boolean>('mesa.expected_participants_minimo_uno')).toBe(true);
   });
 
   it('🔴 UNA persona puede «Pagar el total» — es lo que Mati ratificó', () => {

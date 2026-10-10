@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { idsConFotoDeInvitacion, invitacionesMostrables } from './invitacionAdmision';
 import { claveInvitador, claveInvitadorDeInvitacion, PREFIJO_INVITADOR } from '../api/fotosEnMemoria';
@@ -12,7 +13,8 @@ import { saveSession, type StoredSession } from '../api/storage';
  * espejado en `06fa648`).
  */
 const API_SOURCE = readFileSync(new URL('../api/index.ts', import.meta.url), 'utf8');
-const OWNER_INVITATIONS = readFileSync(new URL('../../contract-mirror/routes/invitations.js', import.meta.url), 'utf8');
+/** D268 · lo que declara el código del dueño, como hechos generados en local (el espejo público ya no lo copia). */
+const consta = (clave: string) => hechoDelDueno<boolean>(clave);
 
 const base = {
   id: 'inv-1', mesa_code: 'PA-1', restaurant_name: 'La Parolaccia',
@@ -56,11 +58,11 @@ describe('E174-3B · la pista en GET /invitations', () => {
 
 describe('E174-3B · contra el código del dueño', () => {
   it('🔴 el dueño publica la pista y la ruta de la foto, con su 404 no oracular', () => {
-    expect(OWNER_INVITATIONS).toContain('has_inviter_avatar: conFoto[i],');
-    expect(OWNER_INVITATIONS).toContain("router.get('/:id/inviter-avatar', async");
-    expect(OWNER_INVITATIONS).toContain("res.setHeader('Cache-Control', 'private, no-store');");
-    expect(OWNER_INVITATIONS).toContain("res.vary('Authorization');");
-    expect(OWNER_INVITATIONS).toContain("JSON.stringify({ error: 'avatar_not_found' })");
+    expect(consta('invitaciones.lista.has_inviter_avatar')).toBe(true);
+    expect(consta('invitaciones.foto_del_invitador.ruta')).toBe(true);
+    expect(consta('invitaciones.foto_del_invitador.no_store')).toBe(true);
+    expect(consta('invitaciones.foto_del_invitador.vary_authorization')).toBe(true);
+    expect(consta('invitaciones.foto_del_invitador.404_avatar_not_found')).toBe(true);
   });
 
   it('la fachada pide esa ruta con la misma política que la foto de un amigo', () => {

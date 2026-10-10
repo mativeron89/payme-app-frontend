@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_TICKET_IMAGE_BYTES } from './index';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 /**
  * §1.6 · el techo de la foto del ticket, atado al contrato y no a un número
@@ -24,45 +25,27 @@ import { MAX_TICKET_IMAGE_BYTES } from './index';
  *
  * ## Límite declarado
  *
- * Lee `contract-mirror/`, que es una copia — no el backend corriendo. Que el
- * espejo esté fresco lo acredita `scripts/verificar-mirror.mjs`, no este test.
+ * D268 · lee los hechos del dueño (`scripts/hechos-del-dueno.json`), generados
+ * en local desde su código: el espejo público ya no lo copia. Que sean de los
+ * archivos del inventario lo acredita `scripts/verificar-mirror.mjs`.
  */
 
-const espejo = import.meta.glob('/contract-mirror/routes/ocr.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-const ocr = espejo['/contract-mirror/routes/ocr.js'];
-
-const espejoRespuesta = import.meta.glob('/contract-mirror/services/ocrResponseContract.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-const contratoRespuesta = espejoRespuesta['/contract-mirror/services/ocrResponseContract.js'];
-
-/** `limits: { fileSize: 8 * 1024 * 1024 }` → 8388608. */
-const LIMITE = /limits:\s*\{\s*fileSize:\s*(\d+)\s*\*\s*(\d+)\s*\*\s*(\d+)\s*\}/;
+/** D268 · lo que declaran `routes/ocr.js` y `services/ocrResponseContract.js` del dueño, como hechos generados en local. */
+const consta = (clave: string) => hechoDelDueno<boolean>(clave);
 
 describe('el techo de la imagen del OCR sale del contrato', () => {
-  it('el espejo de routes/ocr.js está y se puede leer', () => {
-    // Sin esto, un glob que no matchea dejaría pasar todo lo de abajo en vacío.
-    expect(ocr, 'no se pudo leer contract-mirror/routes/ocr.js').toBeTypeOf('string');
-    expect(ocr).toContain('multer');
+  it('el dueño monta el multipart con multer', () => {
+    expect(consta('ocr.multipart_con_multer')).toBe(true);
   });
 
-  it('el multipart sigue declarando su límite con la forma que este test lee', () => {
+  it('el multipart sigue declarando su límite con la forma que el generador lee', () => {
     // Si el backend lo escribe de otra manera —un `require` de constante, otro
-    // orden—, esto se pone rojo en vez de comparar contra `null` y aprobar.
-    expect(LIMITE.test(ocr)).toBe(true);
+    // orden—, el hecho es `null` y esto se pone rojo en vez de aprobar.
+    expect(hechoDelDueno<number | null>('ocr.tope_de_imagen_bytes')).not.toBeNull();
   });
 
   it('MAX_TICKET_IMAGE_BYTES es exactamente el techo del contrato', () => {
-    const m = LIMITE.exec(ocr)!;
-    const delContrato = Number(m[1]) * Number(m[2]) * Number(m[3]);
+    const delContrato = hechoDelDueno<number>('ocr.tope_de_imagen_bytes');
     expect(delContrato).toBe(8 * 1024 * 1024);
     expect(MAX_TICKET_IMAGE_BYTES).toBe(delContrato);
   });
@@ -72,8 +55,7 @@ describe('el techo de la imagen del OCR sale del contrato', () => {
     // backend, no sólo con el chequeo local: si el código de error cambia, el
     // front cae al cartel genérico de "no pudimos leer el ticket", que es otra
     // cosa y manda a la persona a sacar la foto de nuevo por nada.
-    expect(contratoRespuesta, 'no se pudo leer el contrato de respuesta OCR').toBeTypeOf('string');
-    expect(contratoRespuesta).toMatch(/image_too_large:\s*413/);
-    expect(ocr).toContain("errorOcr('image_too_large')");
+    expect(hechoDelDueno<number>('ocr.image_too_large.status')).toBe(413);
+    expect(consta('ocr.rechaza_con_image_too_large')).toBe(true);
   });
 });

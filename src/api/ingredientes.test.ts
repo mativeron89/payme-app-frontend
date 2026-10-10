@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { agruparIngredientes, decodeIngredientes } from './ingredientes';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 const BUENO = {
   basis: 'consumption',
@@ -147,57 +147,31 @@ describe('n178 · dish_count por grupo', () => {
 
 /**
  * 🔴 n178 · incidente del 22/09: la FORMA SERVIDA por el dueño v2.125.0, generada
- * con el código del espejo (`contract-mirror/routes/account.js`, `bd1c976`), no
- * escrita a mano. Se extraen literalmente `normalizarPlato` y `armarIngredientes`
- * y se arma el cuerpo como la ruta (`{ basis, period, ...armarIngredientes(...) }`).
+ * con el código del dueño, no escrita a mano: `normalizarPlato` y
+ * `armarIngredientes` de `routes/account.js`, sobre las entradas sintéticas de
+ * `scripts/corpusDeHechos.ts`, y el cuerpo se arma como la ruta
+ * (`{ basis, period, ...armarIngredientes(...) }`).
  *
- * ⚠️ `services/clasificadorPlatos.js` no está en el inventario del espejo: el
- * clasificador es un doble fijo de este test. La FORMA (claves de cada grupo,
- * `dish_count` incluido) sale del código espejado, que es lo que rompió.
+ * D268 · el espejo público ya no copia `routes/account.js`. El generador local
+ * (`scripts/generar-hechos-del-dueno.mjs`) EJECUTA ese código con el repo del
+ * dueño y guarda la SALIDA; este test la decodifica. Si el dueño cambia el
+ * archivo, el CI queda rojo hasta regenerarla.
+ *
+ * ⚠️ `services/clasificadorPlatos.js` no está en el inventario: el clasificador
+ * es un doble fijo (`GRUPO_DE_PLATO`). La FORMA (claves de cada grupo,
+ * `dish_count` incluido) sale del código del dueño, que es lo que rompió.
  *
  * Con el decodificador de `4b367b8` (claves exactas sin `dish_count`) este test
  * da rojo: es el que faltaba.
  */
-describe('🔴 n178 · la forma servida por v2.125.0, desde el espejo', () => {
-  const fuente = readFileSync(new URL('../../contract-mirror/routes/account.js', import.meta.url), 'utf8');
-
-  /** El cuerpo completo de `function nombre(...) { ... }`, contando llaves. */
-  function extraer(nombre: string): string {
-    const inicio = fuente.indexOf(`function ${nombre}(`);
-    if (inicio < 0) throw new Error(`no está ${nombre} en el espejo`);
-    let i = fuente.indexOf('{', fuente.indexOf(')', inicio));
-    let nivel = 0;
-    for (; i < fuente.length; i += 1) {
-      if (fuente[i] === '{') nivel += 1;
-      if (fuente[i] === '}') { nivel -= 1; if (nivel === 0) return fuente.slice(inicio, i + 1); }
-    }
-    throw new Error(`${nombre} sin cerrar`);
-  }
-
-  // Como el real, el doble clasifica por el nombre normalizado.
-  const GRUPO: Record<string, string> = { arrachera: 'meat', flan: 'dessert', mezcal: 'alcohol', pozole: 'nuevo_grupo' };
-  const clasificadorPlatos = { VERSION: '1', clasificar: (n: string) => GRUPO[n.trim().toLowerCase()] ?? 'other' };
-  const armarIngredientes = new Function(
-    'clasificadorPlatos',
-    `${extraer('normalizarPlato')}\n${extraer('armarIngredientes')}\nreturn armarIngredientes;`,
-  )(clasificadorPlatos) as (restaurants: unknown[]) => Record<string, unknown>;
-
-  const restaurants = [
-    { id: 'r1', visits: [
-      { items: [{ name: 'Arrachera', amount_cents: 30000 }, { name: 'Mezcal', amount_cents: 9000 }] },
-      { items: [{ name: ' arrachera ', amount_cents: 30000 }, { name: 'Flan', amount_cents: 7000 }, { name: 'Pan', amount_cents: 2000 }] },
-    ] },
-    { id: 'r2', visits: [
-      { items: [{ name: 'Arrachera', amount_cents: 32000 }, { name: 'Pozole', amount_cents: 15000 }] },
-    ] },
-  ];
+describe('🔴 n178 · la forma servida por v2.125.0, desde el código del dueño', () => {
   const servido: Record<string, unknown> = {
     basis: 'consumption',
     period: { key: 'this_month', start: '2026-09-01T06:00:00.000Z', end: null },
-    ...armarIngredientes(restaurants),
+    ...hechoDelDueno<Record<string, unknown>>('estadisticas.ingredientes.salida'),
   };
 
-  it('el espejo publica `dish_count` en cada grupo (si no, este test no prueba nada)', () => {
+  it('el dueño publica `dish_count` en cada grupo (si no, este test no prueba nada)', () => {
     const grupos = servido.groups as Record<string, unknown>[];
     expect(grupos.length).toBeGreaterThan(0);
     for (const g of grupos) expect(Object.keys(g).sort()).toEqual(['amount_cents', 'dish_count', 'key', 'times']);

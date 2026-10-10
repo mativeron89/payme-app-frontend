@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MESA_CREATION_OUTCOME_BY_STATUS, MESA_STATUSES } from './types';
 import { mesaStatusLabel } from '../utils/labels';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 /**
  * ⭐ EL UNION DE ESTADOS DE MESA, CONTRA LA FSM DEL DUEÑO.
@@ -21,64 +22,31 @@ import { mesaStatusLabel } from '../utils/labels';
  * Ahora esto lo contradice, en las dos direcciones.
  */
 
-const ESPEJO = import.meta.glob(
-  ['/contract-mirror/utils/stateMachine.js', '/contract-mirror/routes/mesas.js'],
-  { query: '?raw', import: 'default', eager: true },
-) as Record<string, string>;
-
 /**
- * 🔴 LA CLASIFICACIÓN, LEÍDA DEL ESPEJO · corregido el 2026-08-16.
+ * 🔴 LA CLASIFICACIÓN, LEÍDA DEL DUEÑO · corregido el 2026-08-16.
  *
  * Acá abajo había una copia A MANO de `CREACION_OUTCOMES`, y su comentario
  * prometía: *«si el dueño reclasifica un estado, esto queda rojo»*. **Era
  * falso.** El test comparaba el union contra **otra constante de este mismo
- * repo**, sin abrir `routes/mesas.js` nunca. Si el dueño movía `settled` de
- * `replayable` a `terminal`, el espejo cambiaba y **esto seguía verde**: lo
- * único que lo ponía rojo era editar `types.ts`, o sea el lado equivocado.
+ * repo**, sin abrir `routes/mesas.js` nunca. Ahora los cinco grupos se leen del
+ * dueño. El fallback `unknown` no se lee: es lo que la función devuelve cuando
+ * ningún grupo matchea, y se afirma abajo como propiedad, no como lista.
  *
- * Es la clase que el Bibliotecario señaló como la más dura: **una afirmación de
- * fidelidad que ninguna guarda sostiene** — con el agravante de que acá el
- * comentario afirmaba la guarda que faltaba, así que quien lo leyera quedaba
- * tranquilo por escrito.
- *
- * Ahora los cinco grupos se leen del espejo. El fallback `unknown` no se lee:
- * es lo que la función devuelve cuando ningún grupo matchea, y se afirma abajo
- * como propiedad, no como lista.
+ * D268 · `routes/mesas.js` y `utils/stateMachine.js` ya no se copian al espejo
+ * público: llegan como hechos del dueño, generados en local desde su código y
+ * atados por sha al inventario.
  */
 function clasificacionDelEmisor(): Record<string, string> {
-  const fuente = ESPEJO['/contract-mirror/routes/mesas.js'];
-  expect(fuente, 'no se pudo leer routes/mesas.js del espejo').toBeTruthy();
-  const grupos: [string, string][] = [
-    ['CREACION_REQUIERE_ACCION', 'requires_action'],
-    ['CREACION_ABIERTA', 'open'],
-    ['CREACION_PARCIAL', 'partially_paid'],
-    ['CREACION_TERMINAL', 'terminal'],
-    ['CREACION_REPLAYABLE', 'replayable'],
-  ];
-  const fuera: Record<string, string> = {};
-  for (const [constante, outcome] of grupos) {
-    const bloque = new RegExp(`const ${constante}\\s*=\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)`).exec(fuente!);
-    expect(bloque, `no se encontró ${constante} en el espejo`).toBeTruthy();
-    const estados = [...bloque![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
-    expect(estados.length, `${constante} quedó vacío: el parseo mediría en vacío`).toBeGreaterThan(0);
-    for (const e of estados) fuera[e] = outcome;
-  }
-  return fuera;
+  const c = hechoDelDueno<Record<string, string> | null>('mesa.clasificacion_de_la_creacion');
+  expect(c, 'no están los cinco grupos CREACION_* en el dueño').not.toBeNull();
+  return c!;
 }
 
-/**
- * Se leen las claves del bloque `mesa: { … }` de `TRANSITIONS`. Es parsing de
- * texto, sí — el espejo no se ejecuta desde `src/` — y por eso el test empieza
- * afirmando que encontró algo: un regex que no matchea daría una lista vacía y
- * todo pasaría en verde sin haber comparado nada.
- */
+/** Las claves del bloque `mesa: { … }` de `TRANSITIONS`, del dueño. */
 function estadosDeLaFsm(): string[] {
-  const fuente = ESPEJO['/contract-mirror/utils/stateMachine.js'];
-  expect(fuente, 'no se pudo leer stateMachine.js del espejo').toBeTruthy();
-  const bloque = /\bmesa:\s*\{([\s\S]*?)\n\s{2}\}/.exec(fuente!);
-  expect(bloque, 'no se encontró el bloque TRANSITIONS.mesa').toBeTruthy();
-  const estados = [...bloque![1]!.matchAll(/^\s{4}([a-z_]+):\s*\[/gm)].map((m) => m[1]!);
-  return [...new Set(estados)].sort();
+  const e = hechoDelDueno<string[] | null>('mesa.estados_de_la_fsm');
+  expect(e, 'no se encontró el bloque TRANSITIONS.mesa').not.toBeNull();
+  return [...e!].sort();
 }
 
 describe('MesaStatus espeja la FSM del dueño', () => {
@@ -116,25 +84,25 @@ describe('MesaStatus espeja la FSM del dueño', () => {
     expect(Object.keys(MESA_CREATION_OUTCOME_BY_STATUS).sort()).toEqual(fsm);
   });
 
-  it('🔴 la clasificación se LEE del espejo · si el dueño reclasifica, esto queda rojo', () => {
+  it('🔴 la clasificación se LEE del dueño · si el dueño reclasifica, esto queda rojo', () => {
     // Ahora sí hace lo que su comentario prometía: la expectativa sale de
-    // `contract-mirror/routes/mesas.js`, no de una copia a mano de este repo.
+    // `routes/mesas.js` del dueño (D268: un hecho), no de una copia a mano de este repo.
     expect(MESA_CREATION_OUTCOME_BY_STATUS).toEqual(clasificacionDelEmisor());
   });
 
-  it('🔴 SONDA · el parseo del espejo encontró los cinco grupos de verdad', () => {
+  it('🔴 SONDA · el generador encontró los cinco grupos de verdad', () => {
     // Sin esto, un regex que dejara de matchear devolvería `{}` y el test de
     // arriba compararía contra vacío… y pasaría sólo si el union también
     // estuviera vacío. Se afirma la forma, no sólo que no explotó.
     const emisor = clasificacionDelEmisor();
-    expect(Object.keys(emisor).length, 'el espejo devolvió menos estados que la FSM').toBe(fsm.length);
+    expect(Object.keys(emisor).length, 'el dueño devolvió menos estados que la FSM').toBe(fsm.length);
     expect(new Set(Object.values(emisor))).toEqual(
       new Set(['requires_action', 'open', 'partially_paid', 'terminal', 'replayable']),
     );
   });
 
   it('🔴 `unknown` NO sale de una lista: es lo que el emisor devuelve por descarte', () => {
-    // El sexto outcome no está en ningún grupo del espejo a propósito — es el
+    // El sexto outcome no está en ningún grupo del dueño a propósito — es el
     // `return 'unknown'` final de `outcomeDeCreacion`. Se afirma como propiedad
     // para que nadie lo agregue a la tabla creyendo que faltaba.
     expect(Object.values(clasificacionDelEmisor())).not.toContain('unknown');

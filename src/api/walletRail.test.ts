@@ -8,6 +8,7 @@ import {
   subscribeWalletRail,
 } from './walletRail';
 import { allowsWalletRoute } from './releaseGates';
+import { hechoDelDueno } from '../../scripts/hechosDelDueno';
 
 /**
  * OLA 5D · el apagado del riel saldo deja de ser decisión de este repo.
@@ -233,45 +234,35 @@ describe('el MOCK respeta la capability, no la ignora', () => {
    * pasa a enseñar un comportamiento que ya no existe. Este test lee el ESPEJO
    * como texto y los compara.
    */
-  it('los valores del mock son los que declara el espejo del emisor', async () => {
-    const fuentes = import.meta.glob(
-      ['/contract-mirror/routes/config.js', '/contract-mirror/services/walletRail.js'],
-      { query: '?raw', import: 'default', eager: true },
-    ) as Record<string, string>;
-    const config = fuentes['/contract-mirror/routes/config.js'];
-    const servicio = fuentes['/contract-mirror/services/walletRail.js'];
-    // Si el espejo se mueve de lugar o se renombra, esto falla en vez de pasar
-    // en vacío — que es como muere una verificación estructural.
-    expect(config, 'no se encontró contract-mirror/routes/config.js').toBeTruthy();
-    expect(servicio, 'no se encontró contract-mirror/services/walletRail.js').toBeTruthy();
-
-    const bloque = /const WALLET_RAIL = Object\.freeze\(\{([\s\S]*?)\}\);/.exec(config!);
-    expect(bloque, 'no se encontró el bloque WALLET_RAIL en el espejo').toBeTruthy();
-
-    const declarado: Record<string, boolean> = {};
-    for (const m of bloque![1].matchAll(/(\w+):\s*(true|false)/g)) {
-      declarado[m[1]] = m[2] === 'true';
-    }
+  it('los valores del mock son los que declara el emisor', async () => {
+    /**
+     * D268 · el espejo público ya no copia `routes/config.js` ni
+     * `services/walletRail.js`: lo que declaran llega como hechos del dueño,
+     * generados en local desde su código y atados por sha al inventario.
+     */
+    const literales = hechoDelDueno<Record<string, boolean> | null>('riel.config.literales');
+    expect(literales, 'no se encontró el bloque WALLET_RAIL en el dueño').not.toBeNull();
+    const declarado: Record<string, boolean> = { ...literales! };
 
     /**
      * 🔴 **v2.42.0 movió la autoridad de `enabled`, y este test la sigue.**
      *
-     * Antes era un literal `false` acá adentro. Ahora `/api/config` publica
+     * Antes era un literal `false` en `config.js`. Ahora `/api/config` publica
      * `walletRailCapability()` y la única fuente es la constante del servicio:
      * el emisor tenía DOS declaraciones que podían describir estados opuestos
      * —la capability apagada mientras el runtime aceptaba operaciones wallet—,
-     * y eliminó una. Seguir raspando literales acá habría dejado este test
+     * y eliminó una. Seguir raspando literales habría dejado este test
      * comparando un solo campo y **pasando en vacío sobre el que importa**.
      */
     expect(Object.keys(declarado).sort()).toEqual(['account_activity']);
     expect(
-      /enabled:\s*walletRailCapability\(\)/.test(bloque![1]),
+      hechoDelDueno<boolean>('riel.config.enabled_por_la_capacidad'),
       '`enabled` volvió a ser un literal en config.js: la autoridad se movió y hay que revisar dónde',
     ).toBe(true);
 
-    const riel = /const RIEL_HABILITADO = (true|false);/.exec(servicio!);
-    expect(riel, 'no se encontró la constante autoritativa del riel').toBeTruthy();
-    declarado.enabled = riel![1] === 'true';
+    const riel = hechoDelDueno<boolean | null>('riel.habilitado');
+    expect(riel, 'no se encontró la constante autoritativa del riel').not.toBeNull();
+    declarado.enabled = riel!;
 
     expect(Object.keys(declarado).sort()).toEqual([...WALLET_RAIL_KEYS]);
 
