@@ -62,8 +62,9 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
     expect(await valor(page, 'navigator.standalone')).toBe('true');
     expect(await valor(page, '100vh · 100svh · 100dvh · 100lvh')).toBe('785 · 785 · 785 · 785');
     expect(await valor(page, '.app height (computed)')).toBe('785');
-    // La barra entera dentro de lo visible: arriba en 785 − 90, abajo en 785.
-    expect(await valor(page, '.appbar-block top · bottom · height')).toBe('695 · 785 · 90');
+    // La barra entera dentro de lo visible: arriba en 785 − 78, abajo en 785.
+    // D255-1 · con el inset de 34 la barra mide 56 + (34 − 12) = 78 (antes 90).
+    expect(await valor(page, '.appbar-block top · bottom · height')).toBe('707 · 785 · 78');
     expect(await valor(page, 'html style (JS fix)')).toBe('none');
     expect(await valor(page, 'display-mode')).toBe('browser');
     expect(await valor(page, 'version')).toMatch(/^\d+\.\d+\.\d+$/);
@@ -77,7 +78,7 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
     expect(await valor(page, 'innerWidth × innerHeight')).toBe('390 × 785');
     await page.setViewportSize({ width: 390, height: 844 });
     await expect.poll(() => valor(page, 'innerWidth × innerHeight')).toBe('390 × 844');
-    await expect.poll(() => valor(page, '.appbar-block top · bottom · height')).toBe('754 · 844 · 90');
+    await expect.poll(() => valor(page, '.appbar-block top · bottom · height')).toBe('766 · 844 · 78');
   });
 
   test('vuelve a medir cuando la página se mueve: 1 px abajo y de vuelta', async ({ page }) => {
@@ -90,17 +91,17 @@ test.describe('E173-2 · diagnóstico de pantalla (5 toques en el logo)', () => 
     await tocarLogo(page, 5);
     await expect(panel(page)).toBeVisible();
     const barra = () => valor(page, '.appbar-block top · bottom · height');
-    await expect.poll(barra).toBe('695 · 785 · 90');
+    await expect.poll(barra).toBe('707 · 785 · 78');
     await page.evaluate(() => {
       document.documentElement.style.minHeight = 'calc(100% + 1px)';
       window.scrollTo(0, 1);
     });
-    await expect.poll(barra).toBe('694 · 784 · 90');
+    await expect.poll(barra).toBe('706 · 784 · 78');
     await page.evaluate(() => {
       window.scrollTo(0, 0);
       document.documentElement.style.removeProperty('min-height');
     });
-    await expect.poll(barra).toBe('695 · 785 · 90');
+    await expect.poll(barra).toBe('707 · 785 · 78');
   });
 
   test('🔴 sólo lee: abrir, volver a medir, copiar y cerrar no hacen ningún pedido de red', async ({ page, context }) => {
