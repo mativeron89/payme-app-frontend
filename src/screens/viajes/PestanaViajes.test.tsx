@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ViajeEnLista } from '../../api/viajes';
-import { FilaCrearViaje, ListaDeInicio, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
+import { FilaCrearViaje, ListaDeInicioVista, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
 
 /** AF-VIAJES · D242 · la pestaña «Viajes» de Inicio (1a, 1b); D246 · la lista elegida debajo de «Crear viaje». */
 const nada = () => undefined;
@@ -10,7 +10,8 @@ const nada = () => undefined;
 function enLista(extra: Partial<ViajeEnLista>): ViajeEnLista {
   return {
     id: 'v-1', nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: '2026-10-11', estado: 'abierto', personas: 4,
-    mi_balance_cents: -54200, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null, ...extra,
+    mi_balance_cents: -54200, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
+    color: null, has_photo: false, ...extra,
   };
 }
 
@@ -44,7 +45,7 @@ describe('la pestaña Viajes', () => {
     expect(html).toContain('Todavía no tienes viajes');
     expect(html).toContain('PayMe va calculando quién le debe a quién.');
     expect(renderToStaticMarkup(<FilaCrearViaje conteo={listo(0, 0)} />)).toBe('');
-    expect(renderToStaticMarkup(<ListaDeInicio conteo={listo(0, 0)} elegida="abiertos" />)).toBe('');
+    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(0, 0)} elegida="abiertos" />)).toBe('');
   });
 
   it('1a · con viajes, la fila «Crear viaje» va debajo de la tarjeta', () => {
@@ -68,7 +69,7 @@ describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
     .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
 
   it('🔴 D255-6 · Abiertos: cada fila es sólo la inicial y el nombre, en orden', () => {
-    const html = renderToStaticMarkup(<ListaDeInicio conteo={listo(2, 0, [
+    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0, [
       enLista({}),
       enLista({ id: 'v-2', nombre: 'Monterrey', estado: 'esperando_pagos', mi_balance_cents: 105000, transferencias_pendientes: 2 }),
     ])} elegida="abiertos" />);
@@ -78,12 +79,25 @@ describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
   });
 
   it('🔴 D255-6 · Cerrados: también sólo la inicial y el nombre, sin «Gastaste»', () => {
-    const html = renderToStaticMarkup(<ListaDeInicio conteo={listo(1, 1, [
+    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(1, 1, [
       enLista({ id: 'v-3', nombre: 'oaxaca puente', estado: 'cerrado', mi_balance_cents: null, consumiste_cents: 223000, terminado_en: '2026-08-20T15:00:00.000Z' }),
     ])} elegida="cerrados" />);
     expect(filas(html)).toEqual(['O oaxaca puente']);
     expect(html).not.toContain('Gastaste');
     expect(html).not.toContain('$2,230');
+  });
+
+  it('🔴 D255 · la tarjeta con el color del viaje (texto blanco) y, si tiene, su foto en vez de la inicial', () => {
+    const html = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0, [
+      enLista({ color: 'violeta', has_photo: true }),
+      enLista({ id: 'v-2', nombre: 'Monterrey', color: 'verde' }),
+    ])} elegida="abiertos" fotoDe={(id) => (id === 'v-1' ? 'blob:foto-cancun' : null)} />);
+    expect(html).toContain('<span class="vj-insignia vj-insignia--color" style="background:#6D28D9" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-cancun" alt=""/></span>');
+    expect(html).toContain('<span class="vj-insignia vj-insignia--color" style="background:#15803D" aria-hidden="true">M</span>');
+    // Sin foto (`has_photo: false`) no se pide ni se muestra, aunque hubiera una guardada.
+    const sinFoto = renderToStaticMarkup(<ListaDeInicioVista conteo={listo(1, 0, [enLista({})])} elegida="abiertos" fotoDe={() => 'blob:vieja'} />);
+    expect(sinFoto).not.toContain('<img');
+    expect(sinFoto).toContain('<span class="vj-insignia" aria-hidden="true">C</span>');
   });
 
   it('la inicial: la primera letra en mayúscula, también con acento o emoji; sin nombre, un punto', () => {
@@ -93,8 +107,8 @@ describe('D246 · la lista elegida, debajo de «Crear viaje»', () => {
   });
 
   it('lista vacía: «No tienes viajes abiertos» o «No tienes viajes cerrados»', () => {
-    expect(renderToStaticMarkup(<ListaDeInicio conteo={listo(0, 2)} elegida="abiertos" />)).toContain('No tienes viajes abiertos');
-    expect(renderToStaticMarkup(<ListaDeInicio conteo={listo(2, 0)} elegida="cerrados" />)).toContain('No tienes viajes cerrados');
+    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(0, 2)} elegida="abiertos" />)).toContain('No tienes viajes abiertos');
+    expect(renderToStaticMarkup(<ListaDeInicioVista conteo={listo(2, 0)} elegida="cerrados" />)).toContain('No tienes viajes cerrados');
   });
 });
 

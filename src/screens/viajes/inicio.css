@@ -135,20 +135,7 @@
   text-align: left;
   color: var(--text);
 }
-/* D255-6 · la inicial en su círculo y el nombre; en el tramo 2, foto y color. */
-.vj-insignia {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-full);
-  background: var(--teal-l);
-  color: var(--teal-txt);
-  font-family: var(--font-display);
-  font-size: var(--fs-body);
-  font-weight: 800;
-}
+/* D255-6 · el nombre del viaje junto a su insignia (`.vj-insignia`, en viajes.css). */
 .vj-inicio-nombre {
   flex: 1;
   min-width: 0;

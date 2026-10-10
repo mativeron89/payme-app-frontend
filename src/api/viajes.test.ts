@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   aplicarConfigViajes,
   assertViajesHabilitado,
+  COLORES_VIAJE,
   decodeCapacidadViajes,
   decodeDetalleViaje,
+  decodeFotoDeViaje,
   decodeGastoCargado,
   decodeListaDeViajes,
   decodeMarcaDeTransferencia,
@@ -25,9 +27,15 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
   id: string;
   capacidad: { path: string; valor: Record<string, unknown> };
   rutas: Record<string, { respuestas: Record<string, Record<string, unknown>> }>;
-  negociaciones: { viaje_version_2: { parametro: string; miembro: string[]; ticket: string[] } };
+  negociaciones: {
+    viaje_version_2: { parametro: string; miembro: string[]; ticket: string[] };
+    viaje_version_3: { parametro: string; detalle_suma: string[]; lista_suma: string[] };
+  };
+  colores: Record<string, string>;
 };
 const V2 = CONTRATO.negociaciones.viaje_version_2;
+/** D255 · App Backend 2.174.0: la 2 más `color` y `has_photo`, en el detalle y en la lista. */
+const V3 = CONTRATO.negociaciones.viaje_version_3;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -81,14 +89,16 @@ const detalle = (cambios: Record<string, unknown> = {}) => ({
     cargado_en: '2026-10-02T00:00:00.000Z', forma: 'consumo', pagado_por: 'm2', pagaste_tu: false,
     te_toca_cents: 100, falta_que_elija: 1, sin_repartir_cents: 0, monto_cents: 200, origen: 'escaneo' }],
   sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
+  color: null, has_photo: false,
   ...cambios,
 });
 
 describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', () => {
-  it('el detalle de un viaje: las claves del contrato con `viaje_version=2`, ni una más', () => {
+  it('el detalle de un viaje: las claves del contrato con `viaje_version=3`, ni una más', () => {
     const claves = CONTRATO.rutas['GET /api/viajes/:id']!.respuestas['200']!.viaje as string[];
-    expect(Object.keys(detalle()).sort()).toEqual([...claves].sort());
+    expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma].sort());
     expect(V2.parametro).toBe('viaje_version=2');
+    expect(V3.parametro).toBe('viaje_version=3');
     expect(Object.keys(detalle().miembros[0]!).sort()).toEqual([...V2.miembro].sort());
     expect(Object.keys(detalle().tickets[0]!).sort()).toEqual([...V2.ticket].sort());
     const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle() });
@@ -131,7 +141,10 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
 
   it('la lista: Abiertos no trae cerrados y lo que no aplica llega en null', () => {
     const item = { id: 'v', nombre: 'A', fecha_desde: null, fecha_hasta: null, estado: 'abierto', personas: 2,
-      mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null };
+      mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
+      color: null, has_photo: false };
+    const claves = CONTRATO.rutas['GET /api/viajes']!.respuestas['200']!.viaje as string[];
+    expect(Object.keys(item).sort()).toEqual([...claves, ...V3.lista_suma].sort());
     const r = decodeListaDeViajes({ contract: CONTRATO.id, viajes: [item], counts: { abiertos: 1, cerrados: 0 } }, 'abiertos');
     expect(r.counts).toEqual({ abiertos: 1, cerrados: 0 });
     expect(() => decodeListaDeViajes({ contract: CONTRATO.id, viajes: [item], counts: { abiertos: 1, cerrados: 0 } }, 'cerrados')).toThrow();
@@ -210,9 +223,18 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
     const ruta = CONTRATO.rutas['POST /api/viajes/:id/gastos'] as unknown as {
       request: Record<string, string>; respuestas: Record<string, Record<string, unknown>>;
     };
-    expect(Object.keys(ruta.request).sort()).toEqual(['descripcion', 'idempotency_key', 'monto_cents', 'presentes']);
+    expect(Object.keys(ruta.request).sort()).toEqual(['descripcion', 'idempotency_key', 'monto_cents', 'pagado_por', 'presentes']);
     expect(ruta.respuestas['201']!.claves).toEqual(['contract', 'ticket', 'ya_cargado']);
     expect(decodeGastoCargado({ contract: CONTRATO.id, ticket, ya_cargado: null })).toMatchObject({ id: 't', monto_cents: 90000 });
+  });
+
+  it('🔴 D255-6 · con «pagó otro», el gasto vuelve con ese miembro y no conmigo; sin pedirlo, conmigo', () => {
+    const deLuis = { ...ticket, pagado_por: 'm2', pagaste_tu: false };
+    expect(decodeGastoCargado({ contract: CONTRATO.id, ticket: deLuis, ya_cargado: null }, 'm2')).toMatchObject({ pagado_por: 'm2' });
+    // Lo pedido manda: si vuelve otro pagador, o yo, no es lo que se pidió.
+    expect(() => decodeGastoCargado({ contract: CONTRATO.id, ticket: deLuis, ya_cargado: null }, 'm3')).toThrow();
+    expect(() => decodeGastoCargado({ contract: CONTRATO.id, ticket, ya_cargado: null }, 'm2')).toThrow();
+    expect(() => decodeGastoCargado({ contract: CONTRATO.id, ticket: deLuis, ya_cargado: null })).toThrow();
   });
 
   it('🔴 falla cerrado ante lo que un gasto a mano no es', () => {
@@ -290,5 +312,60 @@ describe('una cuenta sin apellido', () => {
     expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({
       miembros: [{ id: 'm1', ...persona('Mati', { last_name: 7 }), ...v2m(), es_yo: true, balance_cents: -100, falta_elegir: 0 }],
     }) })).toThrow();
+  });
+});
+
+describe('🔴 D255 · `viaje_version=3`: color y foto del viaje (App Backend 2.174.0)', () => {
+  const sinClave = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+  const item = (cambios: Record<string, unknown> = {}) => ({ id: 'v', nombre: 'A', fecha_desde: null, fecha_hasta: null,
+    estado: 'abierto', personas: 2, mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null,
+    terminado_en: null, color: null, has_photo: false, ...cambios });
+  const lista = (i: Record<string, unknown>) => ({ contract: CONTRATO.id, viajes: [i], counts: { abiertos: 1, cerrados: 0 } });
+
+  it('la paleta es la del contrato, con sus hex', () => {
+    expect(COLORES_VIAJE).toEqual(CONTRATO.colores);
+  });
+
+  it('sin `color` o sin `has_photo` (la forma de la 2) no se acepta: la app pide la 3 siempre', () => {
+    for (const k of V3.detalle_suma) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: sinClave(detalle(), k) }), k).toThrow();
+    }
+    for (const k of V3.lista_suma) {
+      expect(() => decodeListaDeViajes(lista(sinClave(item(), k)), 'abiertos'), k).toThrow();
+    }
+  });
+
+  it('el color es una clave de la paleta o null; la foto, un booleano', () => {
+    for (const c of Object.keys(CONTRATO.colores)) {
+      expect(decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({ color: c }) }).color).toBe(c);
+      expect(decodeListaDeViajes(lista(item({ color: c })), 'abiertos').viajes[0]!.color).toBe(c);
+    }
+    expect(decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({ has_photo: true }) }).has_photo).toBe(true);
+    for (const malo of [{ color: 'fucsia' }, { color: '#1D4ED8' }, { color: '' }, { has_photo: 'true' }, { has_photo: null }]) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle(malo) }), JSON.stringify(malo)).toThrow();
+      expect(() => decodeListaDeViajes(lista(item(malo)), 'abiertos'), JSON.stringify(malo)).toThrow();
+    }
+  });
+
+  it('la foto subida: `{ foto: { revision, width, height, updated_at } }`, claves exactas', () => {
+    const ruta = CONTRATO.rutas['PUT /api/viajes/:id/foto']!.respuestas['201']! as { foto: string[] };
+    const foto = { revision: 1, width: 512, height: 384, updated_at: '2026-10-10T03:00:00.000Z' };
+    expect(Object.keys(foto).sort()).toEqual([...ruta.foto].sort());
+    expect(decodeFotoDeViaje({ foto })).toEqual(foto);
+    for (const malo of [{}, { foto, contract: CONTRATO.id }, { foto: { ...foto, extra: 1 } }, { foto: { ...foto, revision: -1 } },
+      { foto: { ...foto, updated_at: 'ayer' } }]) {
+      expect(() => decodeFotoDeViaje(malo), JSON.stringify(malo)).toThrow();
+    }
+  });
+
+  it('los errores nuevos: quién pagó no vale, la foto ocupada o inválida', () => {
+    const err = (status: number, code: string, extra: Record<string, unknown> = {}) => new MockApiError(status, code, extra);
+    expect(errorDeViaje(err(422, 'viaje_ticket_payer_unknown', { miembro_id: 'm9' }))).toEqual({ tipo: 'pagador_desconocido' });
+    expect(errorDeViaje(err(429, 'viaje_photo_rate_limited'))).toEqual({ tipo: 'foto_ocupada' });
+    expect(errorDeViaje(err(429, 'avatar_processing_busy'))).toEqual({ tipo: 'foto_ocupada' });
+    for (const [s, c] of [[413, 'avatar_input_too_large'], [415, 'avatar_media_type_unsupported'], [400, 'avatar_file_required'],
+      [422, 'avatar_dimensions_exceeded']] as const) {
+      expect(errorDeViaje(err(s, c))).toEqual({ tipo: 'foto_invalida' });
+    }
   });
 });

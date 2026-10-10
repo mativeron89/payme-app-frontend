@@ -20,6 +20,7 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate, replaceRoute } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
+import { conQuienPago, pagadorVigente, SelectorDeQuienPago } from './QuienPago';
 import { olvidarTicketEscaneado, ticketEscaneadoDe } from './ticketEscaneado';
 import {
   alternarPresente,
@@ -70,6 +71,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
   const [tipo, setTipo] = useState<TipoLugar>('restaurante');
   const [forma, setForma] = useState<FormaTicket>('consumo');
   const [ausentes, setAusentes] = useState<Set<string>>(() => new Set());
+  /** D255-6 · `null` = lo pagué yo. */
+  const [pagador, setPagador] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const llave = useRef<{ json: string; key: string } | null>(null);
   const vivo = useRef(true);
@@ -125,7 +128,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
 
   async function compartir() {
     if (!ocr || enviando) return;
-    const pedido = pedidoDeCarga(ocr, forma, tipo);
+    // D255-6 · `pagado_por` sólo si pagó otro; entra en la llave (otro pagador es otro pedido).
+    const pedido = conQuienPago(pedidoDeCarga(ocr, forma, tipo), pagadorVigente(pagador, viaje?.miembros ?? []));
     llave.current = llaveParaPedido(llave.current, pedido, newIdempotencyKey);
     setEnviando(true);
     try {
@@ -159,7 +163,11 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
       else if (e.tipo === 'no_abierto') setFase({ tipo: 'aviso', aviso: 'cerrado' });
       else if (e.tipo === 'no_disponible') setFase({ tipo: 'no_disponible' });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
-      else toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
+      else if (e.tipo === 'pagador_desconocido') {
+        // Quien pagó salió del viaje: el viaje de nuevo, y el selector vuelve a «Lo pagaste tú».
+        toast(t('Quien pagó ya no está en el viaje. Elige de nuevo.'), { sobreLaBarra: true });
+        api.getViaje(viajeId).then((v) => { if (vivo.current) setViaje(v); }, () => undefined);
+      } else toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
     } finally {
       if (vivo.current) setEnviando(false);
     }
@@ -173,6 +181,9 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
       {fase.tipo === 'nuevo' && ocr && viaje ? (
         <TicketNuevoVista
           viajeNombre={viaje.nombre}
+          miembros={viaje.miembros}
+          pagador={pagador}
+          onPagador={setPagador}
           ocr={ocr}
           tipo={tipo}
           forma={forma}
@@ -393,9 +404,13 @@ export function ListaDePresentes({ candidatos, ausentes, onAlternar, deshabilita
 
 /** 1h · el ticket recién escaneado, cómo se divide y (en partes iguales) quiénes estuvieron. */
 export function TicketNuevoVista({
-  viajeNombre, ocr, tipo, forma, candidatos, ausentes, enviando, onTipo, onForma, onPresente, onCompartir,
+  viajeNombre, miembros, pagador, onPagador, ocr, tipo, forma, candidatos, ausentes, enviando, onTipo, onForma, onPresente, onCompartir,
 }: {
   viajeNombre: string;
+  /** D255-6 · para «¿Quién pagó?». */
+  miembros: readonly MiembroViaje[];
+  pagador: string | null;
+  onPagador: (pagador: string | null) => void;
   ocr: OcrResponse;
   tipo: TipoLugar;
   forma: FormaTicket;
@@ -423,8 +438,9 @@ export function TicketNuevoVista({
             <span className="vjt-monto vjt-monto--grande">{formatMXN(totalDelEscaneo(ocr.items))}</span>
           </div>
           <hr className="vjt-div" />
-          <span className="vjt-pagaste"><Icon name="check" size={14} />{t('Lo pagaste tú')}</span>
-          <p className="vjt-texto">{t('Como lo escaneaste primero, queda a tu nombre el pago completo.')}</p>
+          {/* D255-6 · reemplaza «quien escanea primero pagó» (D240-17): quien carga elige quién pagó. */}
+          <SelectorDeQuienPago miembros={miembros} valor={pagador} onCambio={onPagador} deshabilitado={enviando} />
+          <p className="vjt-texto">{t('El pago completo queda a nombre de quien pagó.')}</p>
           <h2 id="vjt-tipo-lugar" className="vjt-rotulo">{t('Tipo de lugar')}</h2>
           <div className="vjt-chips" role="radiogroup" aria-labelledby="vjt-tipo-lugar">
             {TIPOS_LUGAR.map((x) => (

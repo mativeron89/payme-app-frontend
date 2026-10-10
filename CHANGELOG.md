@@ -11,6 +11,52 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.235.0 — Viajes: quién pagó, nombre, fechas, color y foto (D255 tramo 2), C-06 y C-07 (2026-10-10)
+
+Orden AF-VIAJES-QUIEN-PAGO-Y-CONFIGURACION-20261010 (ba694666…). Fuentes:
+- D255 (bc86b278…), puntos 6, 7 y 9;
+- D256 (a76c9d5f…), el scroll;
+- C-06 y C-07 de la auditoría Codex completa (22f0e111…).
+
+Dueño: App Backend 2.174.0 (`310b6dea`). Plan en el ESTADO, sin cambio de navegación. Lo visible se cierra con la prueba
+de Mati en el iPhone (D63).
+
+- **D256 · el scroll al elegir ítems de un ticket del viaje: NO CERRADO.** A 375, con 27 renglones:
+  - en Chromium, con un arrastre táctil real, se desplaza;
+  - en el WebKit de Playwright, como Safari y como app de inicio, el layout es desplazable (contenido de 1879 en una
+    caja de 451).
+
+  No hay manejadores táctiles ni `touch-action` en Viajes, y no hay Simulador de iOS disponible. Se pidieron a Mati
+  tres datos (app de inicio o Safari, qué pantalla y cómo falla). No se cambió nada a ciegas.
+- **C-06 · el reintento de Abiertos ya no pisa Cerrados.** Cada pedido de la lista, también «Reintentar», saca su turno
+  (`ConsultaDeViajes`) y sólo el último publica. Cambiar de lista o desmontar invalida lo que esté en vuelo.
+- **C-07 · el nombre recordado del viaje y el ticket escaneado son de una cuenta.**
+  - `MemoriaDeCuenta`, con el `turno()` de T-01: con otra cuenta o después de cerrar sesión no se lee nada, se pide al
+    servidor y se borra.
+  - `vigilarSesion` sube la generación en cada cambio de dueño, también con lo último visto vacío.
+  - La clase, censada: ya tenían dueño las fotos, lo último visto, las solicitudes, el @ propio, el aviso de foto y la
+    idempotencia.
+- **D255-6 · «¿Quién pagó?»** en la carga manual y en el ticket escaneado:
+  - «Lo pagaste tú» por defecto, o uno de los demás miembros activos.
+  - `pagado_por` va sólo si es otro. Reemplaza «quien escanea primero pagó».
+  - Si quien pagó ya salió del viaje (422 `viaje_ticket_payer_unknown`), se avisa y el selector vuelve a «Lo pagaste
+    tú».
+- **D255-9 · Configuración:**
+  - nombre y fechas (`PATCH /api/viajes/:id`);
+  - el color, con las seis muestras de la paleta del dueño más «Sin color»;
+  - la foto: elegirla con la cámara o la galería, cambiarla o eliminarla (`PUT`/`DELETE /api/viajes/:id/foto`, JPG,
+    PNG o WEBP de hasta 5 MB).
+- **D255-7 · el color y la foto se ven:**
+  - en la burbuja del viaje: su color, con texto blanco, y la foto junto al nombre;
+  - en la tarjeta de Abiertos y Cerrados: la foto, o la inicial sobre el color.
+
+  La foto se pide con `GET /api/viajes/:id/foto` y vive sólo en memoria.
+- **`viaje_version=3`** en todas las rutas que devuelven `viaje` y en la lista. El decodificador usa claves exactas, con
+  `color` (una clave de la paleta o `null`) y `has_photo`.
+- **El espejo** a 2.174.0: el inventario de `310b6dea` declara `edee7f8`, con paridad 138/138.
+  - Entran `contract/mesa-acceso-v1.json` y la migración `db/migrate_viajes_configuracion_v2.174.0.sql`.
+  - Cambian nueve, entre ellos `contract/viajes-v1.json`.
+
 ## 0.234.0 — La caché por cuenta (T-01) y los ajustes del 10/10 (D255) (2026-10-10)
 
 Orden AF-CACHE-Y-AJUSTES-1010-20261010 (e761c8ed…). Fuentes:

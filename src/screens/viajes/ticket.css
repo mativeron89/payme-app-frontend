@@ -79,20 +79,6 @@
   border-top: 1px solid var(--border);
 }
 
-/* «Lo pagaste tú»: el tilde y la palabra, no sólo el verde. */
-.vjt-pagaste {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: var(--sp-1) 10px;
-  border-radius: var(--r-full);
-  background: var(--success-tint);
-  color: var(--success);
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .vjt-texto {
   margin: var(--sp-2) 0 0;
   font-family: var(--font-body);

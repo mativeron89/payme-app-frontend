@@ -3,8 +3,10 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   // Ticket nuevo (1h) y «¿Quiénes estuvieron?» (la pantalla nueva de presentes).
   'Ticket nuevo': 'New ticket',
   'Lo pagaste tú': 'You paid it',
-  'Como lo escaneaste primero, queda a tu nombre el pago completo.':
-    'Since you scanned it first, the full payment is under your name.',
+  // D255-6 · quien carga elige quién pagó (reemplaza «quien escanea primero pagó»).
+  '¿Quién pagó?': 'Who paid?',
+  'El pago completo queda a nombre de quien pagó.': 'The full payment goes under whoever paid.',
+  'Quien pagó ya no está en el viaje. Elige de nuevo.': "Whoever paid is no longer on the trip. Choose again.",
   'Tipo de lugar': 'Type of place',
   '¿Cómo lo dividen?': 'How do you split it?',
   'Cada uno elige lo suyo': 'Everyone picks their own',

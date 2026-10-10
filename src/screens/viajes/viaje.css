@@ -724,18 +724,10 @@
 }
 .vjm-input:focus { outline: none; border-color: var(--action-2); }
 .vjm-monto { font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
-.vjm-pago {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  align-self: flex-start;
-  margin: 0;
-  padding: var(--sp-1) var(--sp-3);
-  border-radius: var(--r-full);
-  background: var(--success-tint);
-  color: var(--success);
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
+/* D255-6 · «¿Quién pagó?»: el selector nativo del teléfono, con el aspecto de los campos. */
+.vjm-select {
+  appearance: auto;
+  font-family: var(--font-display);
   font-weight: 700;
 }
 .vjm-titulo { margin: 0 0 var(--sp-1); font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--text); }
@@ -802,7 +794,7 @@
   color: var(--text);
   cursor: pointer;
 }
-.vjcfg-fila:disabled { cursor: default; opacity: 0.55; }
+.vjcfg-fila:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .vjcfg-fila-rotulo {
   flex: 1;
   font-family: var(--font-display);
@@ -819,10 +811,65 @@
   color: var(--text-muted);
 }
 .vjcfg-muestra {
+  flex: none;
   width: 24px;
   height: 24px;
   border-radius: var(--r-full);
   background: var(--teal-l);
   box-shadow: inset 0 0 0 1px var(--border);
 }
-.vjcfg-chev { color: var(--text-muted); transform: rotate(-90deg); }
+/* «Sin color»: el de la app, con una raya para que no parezca un color más. */
+.vjcfg-muestra--sin {
+  background: linear-gradient(135deg, var(--teal-l) 45%, var(--border) 45%, var(--border) 55%, var(--teal-l) 55%);
+}
+.vjcfg-chev { flex: none; color: var(--text-muted); transition: transform 0.15s; }
+.vjcfg-chev.abierto { transform: rotate(180deg); }
+.vjcfg-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 0 0 var(--sp-3);
+}
+.vjcfg-botones {
+  display: flex;
+  gap: var(--sp-2);
+}
+.vjcfg-botones .btn { flex: 1; }
+/* D255 · la paleta: siete muestras de 44 px (el mínimo táctil), la elegida con tilde. */
+.vjcfg-paleta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.vjcfg-opcion-color {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: none;
+  cursor: pointer;
+}
+.vjcfg-opcion-color .vjcfg-muestra { width: 36px; height: 36px; }
+.vjcfg-opcion-color[aria-checked='true'] { border-color: var(--navy); }
+.vjcfg-opcion-color:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.vjcfg-tilde {
+  position: absolute;
+  color: #fff;
+  filter: drop-shadow(0 0 1px rgba(16, 30, 59, 0.8));
+}
+
+/* ══ D255 · la burbuja del viaje con su color y su foto ══ */
+.title-card.vj-titulo-color .title-card-title,
+.title-card.vj-titulo-color .title-card-sub {
+  color: #fff;
+}
+.vj-titulo-fila {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+}

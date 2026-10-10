@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import type { ListaDeViajes, ViajeEnLista } from '../../api/viajes';
 import { RequestEpoch } from '../../utils/requestEpoch';
+import { InsigniaDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import { Icon, type IconName } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { navigate } from '../../router';
@@ -185,20 +186,7 @@ export function FilaCrearViaje({ conteo }: { conteo: ConteoDeViajes }) {
   );
 }
 
-/**
- * D255-6 · la inicial del viaje, en su círculo. En el tramo 2 lleva la foto y
- * el color del viaje; sin foto, la inicial.
- */
-export function inicialDelViaje(nombre: string): string {
-  const primera = Array.from(nombre.trim())[0];
-  return primera ? primera.toLocaleUpperCase('es-MX') : '·';
-}
-
-export function InsigniaDelViaje({ nombre }: { nombre: string }) {
-  return (
-    <span className="vj-insignia" aria-hidden="true">{inicialDelViaje(nombre)}</span>
-  );
-}
+export { inicialDelViaje } from './InsigniaDelViaje';
 
 /**
  * D246 · la lista elegida, en una burbuja debajo de «Crear viaje» (antes
@@ -208,6 +196,16 @@ export function InsigniaDelViaje({ nombre }: { nombre: string }) {
  * pagos» ni «Gastaste». El detalle está adentro del viaje.
  */
 export function ListaDeInicio({ conteo, elegida }: { conteo: ConteoDeViajes; elegida: ListaElegida }) {
+  const { fotoDe } = useFotosDeViajes(conteo.estado === 'listo' ? conteo.viajes : null);
+  return <ListaDeInicioVista conteo={conteo} elegida={elegida} fotoDe={fotoDe} />;
+}
+
+/** La vista pura de la lista (D255: la foto, si hay, sobre el color del viaje). */
+export function ListaDeInicioVista({ conteo, elegida, fotoDe = () => null }: {
+  conteo: ConteoDeViajes;
+  elegida: ListaElegida;
+  fotoDe?: (viajeId: string) => string | null;
+}) {
   const { t } = useIdioma();
   if (conteo.estado !== 'listo' || conteo.counts.abiertos + conteo.counts.cerrados === 0) return null;
   if (conteo.viajes.length === 0) {
@@ -222,7 +220,7 @@ export function ListaDeInicio({ conteo, elegida }: { conteo: ConteoDeViajes; ele
       {conteo.viajes.map((v) => (
         <li key={v.id}>
           <button type="button" className="vj-inicio-fila" onClick={() => navigate(v.estado === 'cerrado' ? 'viaje-cerrado' : 'viaje', v.id)}>
-            <InsigniaDelViaje nombre={v.nombre} />
+            <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} />
             <span className="vj-inicio-nombre">{v.nombre}</span>
             <Icon name="chevron-down" size={18} className="vj-inicio-chev" />
           </button>

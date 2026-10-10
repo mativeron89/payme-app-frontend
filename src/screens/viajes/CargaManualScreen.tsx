@@ -3,13 +3,13 @@ import { api, newIdempotencyKey } from '../../api';
 import { errorDeViaje, MAX_DESCRIPCION_GASTO, MAX_GASTO_MANUAL_CENTS, type DetalleViaje, type GastoManualPedido } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppHeaderBack } from '../../components/AppHeader';
-import { Icon } from '../../components/Icon';
 import { useToast } from '../../components/ui';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { stringToCents } from '../../utils/money';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
+import { conQuienPago, pagadorVigente, SelectorDeQuienPago } from './QuienPago';
 import { ListaDePresentes } from './TicketNuevoScreen';
 import { alternarPresente, candidatosDelViaje, idsPresentes, llaveParaPedido } from './ticketView';
 import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
@@ -19,9 +19,9 @@ import './viaje.css';
 /**
  * D244 · D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`).
  * Mati: «muy sencillo: Descripción, monto, selección de personas a distribuir
- * y listo». Quien lo carga queda como quien pagó (la regla del escaneo); se
- * reparte en partes iguales entre los marcados, con todos marcados y se
- * desmarca a quien no va. Sin tipo de lugar, fecha ni renglones.
+ * y listo». Se reparte en partes iguales entre los marcados, con todos marcados
+ * y se desmarca a quien no va. Sin tipo de lugar, fecha ni renglones.
+ * D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto, o uno de los demás.
  *
  * «Listo» manda `POST /api/viajes/:id/gastos` (App Backend 2.172.0) con una
  * llave de idempotencia estable mientras el pedido no cambie (un reintento es
@@ -56,7 +56,11 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
       if (e.tipo === 'no_disponible') noDisponible();
       else if (e.tipo === 'no_abierto') toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
-      else if (e.tipo === 'persona_desconocida') {
+      else if (e.tipo === 'pagador_desconocido') {
+        // Quien pagó salió del viaje mientras tanto: se vuelve a pedir el viaje y el selector vuelve a «Lo pagaste tú».
+        toast(t('Quien pagó ya no está en el viaje. Elige de nuevo.'), { sobreLaBarra: true });
+        void refrescar();
+      } else if (e.tipo === 'persona_desconocida') {
         // Alguien de la lista salió del viaje mientras tanto: se vuelve a pedir el viaje sin borrar lo
         // escrito, y la lista queda con los que siguen.
         toast(t('Alguien ya no está en el viaje. Revisa entre quiénes.'), { sobreLaBarra: true });
@@ -107,6 +111,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('');
   const [ausentes, setAusentes] = useState<ReadonlySet<string>>(new Set());
+  const [pagador, setPagador] = useState<string | null>(null);
   const candidatos = useMemo(() => candidatosDelViaje(viaje.miembros, t), [viaje.miembros, t]);
   const cents = montoTipeado(monto);
   const listo = descripcion.trim().length > 0 && cents !== null;
@@ -138,10 +143,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
               onChange={(e) => setMonto(e.target.value.replace(/[^0-9.,$]/g, ''))}
             />
           </label>
-          <p className="vjm-pago">
-            <Icon name="check" size={16} />
-            {t('Lo pagaste tú')}
-          </p>
+          <SelectorDeQuienPago miembros={viaje.miembros} valor={pagador} onCambio={setPagador} deshabilitado={enviando} />
         </section>
         <section className="vj-card">
           <h2 className="vjm-titulo">{t('¿Entre quiénes?')}</h2>
@@ -161,7 +163,10 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
           disabled={!listo || enviando}
           onClick={() => {
             if (cents === null) return;
-            onListo?.({ descripcion: descripcion.trim(), monto_cents: cents, presentes: idsPresentes(candidatos, ausentes) });
+            onListo?.(conQuienPago(
+              { descripcion: descripcion.trim(), monto_cents: cents, presentes: idsPresentes(candidatos, ausentes) },
+              pagadorVigente(pagador, viaje.miembros),
+            ));
           }}
         >
           {t('Listo')}

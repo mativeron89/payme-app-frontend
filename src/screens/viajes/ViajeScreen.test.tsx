@@ -52,7 +52,7 @@ function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
     creado_en: '2026-10-01T15:00:00.000Z', mi_miembro_id: IDS.yo, miembros: MIEMBROS, invitados: [],
     mi_balance_cents: -54200, gasto_del_grupo_cents: 666000, tickets: TICKETS,
     sin_repartir: [{ ticket_id: 'tk-1', lugar: 'Mariscos El Faro', fecha_ticket: '2026-10-08', monto_cents: 56500, faltan: [IDS.diego] }],
-    transferencias: [], transferencias_pendientes: 0, ...extra,
+    transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, ...extra,
   };
 }
 
@@ -91,6 +91,20 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Cancún 2026<\/h1><\/div>/);
     expect(leido).not.toContain('5–11 oct');
     expect(leido).not.toContain('Tú, Luis');
+  });
+
+  it('🔴 D255 · con color, la burbuja va en ese color (texto blanco); con foto, la foto junto al nombre', () => {
+    const conColor = renderToStaticMarkup(<ViajeVista carga={listo(viaje({ color: 'rojo' }))} marcando={null} {...ACCIONES} />);
+    expect(conColor).toMatch(/<div class="title-card vj-titulo-color" style="background:#B91C1C"><h1 class="title-card-title">Cancún 2026<\/h1><\/div>/);
+    const conFoto = renderToStaticMarkup(
+      <ViajeVista carga={listo(viaje({ color: 'azul', has_photo: true }))} marcando={null} {...ACCIONES} fotoDelViaje="blob:foto-viaje" />,
+    );
+    expect(conFoto).toContain('<div class="vj-titulo-fila"><span class="vj-insignia vj-insignia--grande vj-insignia--color" style="background:#1D4ED8" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-viaje" alt=""/></span><h1 class="title-card-title">Cancún 2026</h1></div>');
+    // Esperando pagos, también.
+    const esperando = renderToStaticMarkup(
+      <ViajeVista carga={listo(viaje({ color: 'naranja', estado: 'esperando_pagos', transferencias_pendientes: 1 }))} marcando={null} {...ACCIONES} />,
+    );
+    expect(esperando).toContain('<div class="title-card vj-titulo-color" style="background:#C2410C">');
   });
 
   it('🔴 enseguida el balance como monto: la deuda en rojo con «−», sin «Debes» a la vista', () => {

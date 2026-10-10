@@ -18,7 +18,7 @@ function viaje(extra: Partial<ViajeEnLista> = {}): ViajeEnLista {
   return {
     id: 'v1', nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: '2026-10-11', estado: 'abierto',
     personas: 4, mi_balance_cents: -54200, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
-    ...extra,
+    color: null, has_photo: false, ...extra,
   };
 }
 

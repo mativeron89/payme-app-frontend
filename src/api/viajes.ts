@@ -44,6 +44,22 @@ export const MAX_RENGLONES_TICKET = 100;
 export const MAX_GASTO_MANUAL_CENTS = 100_000_000;
 export const MAX_DESCRIPCION_GASTO = 120;
 
+/**
+ * D255 · App Backend 2.174.0 · la paleta fija del color del viaje (`colores`
+ * del contrato): todos con contraste ≥ 4.5:1 contra texto blanco. Se guarda la
+ * clave; la app pinta con el hex. `null` es el color de la app.
+ */
+export const COLORES_VIAJE = {
+  azul: '#1D4ED8',
+  verde: '#15803D',
+  violeta: '#6D28D9',
+  rojo: '#B91C1C',
+  naranja: '#C2410C',
+  turquesa: '#0F766E',
+} as const;
+export type ColorViaje = keyof typeof COLORES_VIAJE;
+export const CLAVES_COLOR_VIAJE = Object.keys(COLORES_VIAJE) as ColorViaje[];
+
 // ─── La capacidad ─────────────────────────────────────────────────────────
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -143,6 +159,10 @@ export interface ViajeEnLista {
   /** Sólo cerrado. */
   readonly consumiste_cents: number | null;
   readonly terminado_en: string | null;
+  /** D255 · `viaje_version=3`: una clave de la paleta, o `null` (el color de la app). */
+  readonly color: ColorViaje | null;
+  /** D255 · `viaje_version=3`: la foto sale por `GET /api/viajes/:id/foto`. */
+  readonly has_photo: boolean;
 }
 
 export interface ListaDeViajes {
@@ -231,6 +251,9 @@ export interface DetalleViaje {
   readonly sin_repartir: readonly SinRepartir[];
   readonly transferencias: readonly TransferenciaViaje[];
   readonly transferencias_pendientes: number;
+  /** D255 · `viaje_version=3`. */
+  readonly color: ColorViaje | null;
+  readonly has_photo: boolean;
 }
 
 export interface ItemDelTicket {
@@ -359,6 +382,8 @@ export interface CargarTicketPedido {
   readonly fecha_ticket: string | null;
   readonly hora_ticket: string | null;
   readonly items: readonly ItemPedido[];
+  /** D255-6 · un id de miembro activo, sólo si pagó OTRO; sin él, quien carga. */
+  readonly pagado_por?: string;
 }
 
 /** D244 · `POST /api/viajes/:id/gastos`: quien lo carga pagó; se reparte en partes iguales entre `presentes`. */
@@ -368,6 +393,24 @@ export interface GastoManualPedido {
   /** Ids de miembro (1..20, sin repetir). */
   readonly presentes: readonly string[];
   readonly idempotency_key: string;
+  /** D255-6 · un id de miembro activo, sólo si pagó OTRO; sin él, quien carga. */
+  readonly pagado_por?: string;
+}
+
+/** D255 · `PATCH /api/viajes/:id`: al menos uno; `null` borra una fecha o el color. */
+export interface EditarViajePedido {
+  readonly nombre?: string;
+  readonly fecha_desde?: string | null;
+  readonly fecha_hasta?: string | null;
+  readonly color?: ColorViaje | null;
+}
+
+/** D255 · `PUT /api/viajes/:id/foto` → `{ foto }`. */
+export interface FotoDeViaje {
+  readonly revision: number;
+  readonly width: number;
+  readonly height: number;
+  readonly updated_at: string;
 }
 
 export interface SeleccionPedido {
@@ -401,6 +444,8 @@ const esEstado = de(ESTADOS_VIAJE);
 const esForma = de(FORMAS_TICKET);
 const esTipo = de(TIPOS_LUGAR);
 const esEstadoTr = de(ESTADOS_TRANSFERENCIA);
+const esColor = de(CLAVES_COLOR_VIAJE);
+const colorONull = (v: unknown): v is ColorViaje | null => v === null || esColor(v);
 
 /** El cuerpo de una respuesta: objeto con `contract` exacto y las claves dadas. */
 function cuerpo(raw: unknown, claves: readonly string[], endpoint: string): Record<string, unknown> {
@@ -449,11 +494,11 @@ function persona(o: Record<string, unknown>, endpoint: string): PersonaViaje {
 function viajeEnLista(raw: unknown): ViajeEnLista {
   const e = 'viajes.lista';
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'personas', 'mi_balance_cents',
-    'transferencias_pendientes', 'consumiste_cents', 'terminado_en'], e);
+    'transferencias_pendientes', 'consumiste_cents', 'terminado_en', 'color', 'has_photo'], e);
   exigir(texto(o.id) && texto(o.nombre) && fechaONull(o.fecha_desde) && fechaONull(o.fecha_hasta)
     && esEstado(o.estado) && noNegativo(o.personas) && enteroONull(o.mi_balance_cents)
     && noNegativoONull(o.transferencias_pendientes) && noNegativoONull(o.consumiste_cents)
-    && instanteONull(o.terminado_en), e);
+    && instanteONull(o.terminado_en) && colorONull(o.color) && typeof o.has_photo === 'boolean', e);
   // Lo que no aplica a su estado llega en null (nota del contrato).
   const cerrado = o.estado === 'cerrado';
   exigir(cerrado === (o.mi_balance_cents === null) && cerrado === (o.consumiste_cents !== null)
@@ -461,7 +506,7 @@ function viajeEnLista(raw: unknown): ViajeEnLista {
   return o as unknown as ViajeEnLista;
 }
 
-/** `GET /api/viajes?estado=…` → `{ contract, viajes, counts }`. */
+/** `GET /api/viajes?estado=…&viaje_version=3` → `{ contract, viajes, counts }`; cada viaje con `color` y `has_photo` (D255). */
 export function decodeListaDeViajes(raw: unknown, estado: 'abiertos' | 'cerrados'): ListaDeViajes {
   const e = 'viajes.lista';
   const b = cuerpo(raw, ['viajes', 'counts'], e);
@@ -503,10 +548,11 @@ function transferencia(raw: unknown, e: string): TransferenciaViaje {
 function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'creado_en', 'mi_miembro_id',
     'miembros', 'invitados', 'mi_balance_cents', 'gasto_del_grupo_cents', 'tickets', 'sin_repartir',
-    'transferencias', 'transferencias_pendientes'], e);
+    'transferencias', 'transferencias_pendientes', 'color', 'has_photo'], e);
   exigir(texto(o.id) && texto(o.nombre) && fechaONull(o.fecha_desde) && fechaONull(o.fecha_hasta)
     && esEstado(o.estado) && instanteONull(o.creado_en) && texto(o.mi_miembro_id) && entero(o.mi_balance_cents)
-    && noNegativo(o.gasto_del_grupo_cents) && noNegativo(o.transferencias_pendientes), e);
+    && noNegativo(o.gasto_del_grupo_cents) && noNegativo(o.transferencias_pendientes)
+    && colorONull(o.color) && typeof o.has_photo === 'boolean', e);
   const cerrado = o.estado === 'cerrado';
   const miembros = lista(o.miembros, e, (x): MiembroViaje => {
     const m = objeto(x, ['id', ...CLAVES_PERSONA, 'es_yo', 'balance_cents', 'falta_elegir', 'has_avatar', 'pagado_cents'], e);
@@ -560,13 +606,15 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
     sin_repartir: sinRepartir,
     transferencias,
     transferencias_pendientes: o.transferencias_pendientes as number,
+    color: o.color as ColorViaje | null,
+    has_photo: o.has_photo as boolean,
   };
 }
 
 /**
- * `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` → `{ contract, viaje }`.
- * Sólo la forma de `viaje_version=2` (D245, App Backend 2.172.0): la fachada la
- * pide SIEMPRE en esas rutas, así las claves nuevas nunca llegan sin pedirlas.
+ * `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` y `PATCH /api/viajes/:id`
+ * → `{ contract, viaje }`. Sólo la forma de `viaje_version=3` (D255, App Backend 2.174.0: la 2 más `color` y
+ * `has_photo`): la fachada la pide SIEMPRE en esas rutas, así las claves nuevas nunca llegan sin pedirlas.
  */
 export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle'): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);
@@ -648,12 +696,18 @@ export function decodeTicketCargado(raw: unknown): TicketCargado {
  * mano nunca es un duplicado; se guarda «En partes iguales», de tipo «Otro», y
  * lo pagó quien lo cargó (`gasto_manual.como_se_guarda` del contrato).
  */
-export function decodeGastoCargado(raw: unknown): TicketDelViaje {
+/**
+ * `POST …/gastos` → el gasto como ticket. D255-6 · `pagadoPor` es lo que se
+ * pidió: sin él, lo pagó quien carga (`pagaste_tu`); con el id de otro, ese
+ * miembro y no yo.
+ */
+export function decodeGastoCargado(raw: unknown, pagadoPor?: string): TicketDelViaje {
   const e = 'viajes.gasto';
   const b = cuerpo(raw, ['ticket', 'ya_cargado'], e);
   exigir(b.ya_cargado === null, e);
   const t = ticketDetalle(b.ticket, e);
-  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro' && t.pagaste_tu, e);
+  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro'
+    && (pagadoPor === undefined ? t.pagaste_tu : !t.pagaste_tu && t.pagado_por === pagadoPor), e);
   return t;
 }
 
@@ -744,9 +798,25 @@ export type ErrorDeViaje =
   | { readonly tipo: 'limite_tickets' }
   /** D244 · alguien de los elegidos ya no está en el viaje. */
   | { readonly tipo: 'persona_desconocida' }
+  /** D255-6 · quien pagó ya no es un miembro activo con cuenta. */
+  | { readonly tipo: 'pagador_desconocido' }
+  /** D255 · la foto: muchas seguidas, o el dueño la está procesando. */
+  | { readonly tipo: 'foto_ocupada' }
+  /** D255 · la foto: el tipo, el tamaño o la imagen no sirven (los `avatar_*` de la foto de perfil). */
+  | { readonly tipo: 'foto_invalida' }
   | { readonly tipo: 'reintentar' };
 
 const MOTIVOS_SALIDA = ['selection', 'paid_ticket', 'present_in_equal_split'] as const;
+
+/** `PUT /api/viajes/:id/foto` → `{ foto: { revision, width, height, updated_at } }` (sin `contract`). */
+export function decodeFotoDeViaje(raw: unknown): FotoDeViaje {
+  const e = 'viajes.foto';
+  if (!plainObject(raw) || !clavesExactas(raw, ['foto'])) throw new ViajesResponseError(e);
+  const f = objeto(raw.foto, ['revision', 'width', 'height', 'updated_at'], e);
+  exigir(noNegativo(f.revision) && noNegativo(f.width) && noNegativo(f.height)
+    && typeof f.updated_at === 'string' && !Number.isNaN(Date.parse(f.updated_at)), e);
+  return f as unknown as FotoDeViaje;
+}
 
 export function errorDeViaje(err: unknown): ErrorDeViaje {
   const { code, extra, status } = extractApiError(err);
@@ -763,6 +833,9 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
   if (status === 409 && code === 'viaje_members_limit') return { tipo: 'limite_miembros' };
   if (status === 409 && code === 'viaje_tickets_limit') return { tipo: 'limite_tickets' };
   if (status === 422 && code === 'viaje_ticket_persona_unknown') return { tipo: 'persona_desconocida' };
+  if (status === 422 && code === 'viaje_ticket_payer_unknown') return { tipo: 'pagador_desconocido' };
+  if (status === 429 && (code === 'viaje_photo_rate_limited' || code === 'avatar_processing_busy')) return { tipo: 'foto_ocupada' };
+  if ((status === 400 || status === 413 || status === 415 || status === 422) && code.startsWith('avatar_')) return { tipo: 'foto_invalida' };
   if (status === 429 && code === 'viajes_rate_limited') return { tipo: 'demasiadas_invitaciones' };
   if (status === 409 && code === 'viaje_member_cannot_leave'
       && (MOTIVOS_SALIDA as readonly unknown[]).includes(extra.reason)) {

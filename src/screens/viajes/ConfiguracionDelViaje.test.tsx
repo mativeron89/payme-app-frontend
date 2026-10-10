@@ -3,15 +3,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CONTRATO_VIAJES, decodeDetalleViaje } from '../../api/viajes';
 import { partirPorViaje } from './BuscadorDeMiembros';
-import { ConfiguracionVista } from './ConfiguracionDelViaje';
+import { traducir } from '../../i18n/idioma';
+import { cambiosDeNombreYFechas, ConfiguracionVista, nombreDelColor } from './ConfiguracionDelViaje';
 import { sinResultados, type Candidato, type VistaDeBusqueda } from './crearViajeView';
 
 /**
  * D255-8 · «Configuración» del viaje. Mati: «abajo de "Ver balance del viaje"
  * coloca un botón de configuración. En ese botón tiene que estar la opción de
  * agregar nuevos miembros, de ajustar el color de la burbuja del encabezado (y
- * cómo se ve luego en viajes abiertos), foto, fecha». Tramo 1: agregar miembros;
- * el resto, armado y apagado hasta el dueño (tramo 2).
+ * cómo se ve luego en viajes abiertos), foto, fecha». Agregar miembros (tramo
+ * 1) y nombre, fechas, color y foto (tramo 2, App Backend 2.174.0).
  */
 const nada = () => undefined;
 const persona = { first_name: 'Ana', last_name: 'López', username: 'ana.lopez', eliminada: false };
@@ -23,6 +24,7 @@ const VIAJE = decodeDetalleViaje({
     miembros: [{ id: 'm1', ...persona, es_yo: true, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0 }],
     invitados: [{ id: 'm2', first_name: 'Leo', last_name: 'Paz', username: null, eliminada: false }],
     mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
+    color: null, has_photo: false,
   },
 });
 const LEO = { clave: 'm2', nombre: 'Leo Paz', iniciales: 'LP', arroba: null };
@@ -34,8 +36,10 @@ const busqueda = (extra: Partial<VistaDeBusqueda> = {}): VistaDeBusqueda =>
   ({ texto: 'j', amigos: [], otros: [], yaAgregados: [], fase: 'quieta', arrobaCorta: false, ...extra });
 const render = (extra: Partial<Parameters<typeof ConfiguracionVista>[0]> = {}) => renderToStaticMarkup(
   <ConfiguracionVista
-    viaje={VIAJE} texto="" busqueda={null} invitados={[LEO]} lleno={false} ocupado={null}
-    onVolver={nada} onTexto={nada} onAgregar={nada} {...extra}
+    viaje={VIAJE} foto={null} texto="" busqueda={null} invitados={[LEO]} lleno={false} ocupado={null}
+    editor={null} guardando={false}
+    onVolver={nada} onTexto={nada} onAgregar={nada} onEditor={nada} onGuardarNombre={nada} onColor={nada} onFoto={nada}
+    {...extra}
   />,
 );
 
@@ -76,10 +80,41 @@ describe('🔴 D255-8 · Configuración del viaje', () => {
     expect(html).toContain('vjc-agregar" disabled=""');
   });
 
-  it('tramo 2 · «El viaje»: nombre y fechas, color y foto, armados y apagados', () => {
+  it('🔴 D255 · «El viaje»: nombre y fechas, color y foto, cada uno abre su editor (cerrados al entrar)', () => {
     const html = render();
-    expect(texto(html)).toContain('El viaje Nombre y fechas Cancún 2026 · 5–11 oct Color Foto C');
-    expect(html.match(/<button type="button" class="vjcfg-fila" disabled="">/g)).toHaveLength(3);
+    expect(texto(html)).toContain('El viaje Nombre y fechas Cancún 2026 · 5–11 oct Color Sin color Foto C');
+    expect(html.match(/<button type="button" class="vjcfg-fila" aria-expanded="false">/g)).toHaveLength(3);
+    expect(html).not.toContain('disabled=""><span class="vjcfg-fila-rotulo">');
+    expect(html).not.toContain('vjcfg-editor');
+  });
+
+  it('nombre y fechas: lo guardado en los campos; «Guardar» apagado mientras no cambie nada', () => {
+    const html = render({ editor: 'nombre' });
+    expect(html).toContain('<button type="button" class="vjcfg-fila" aria-expanded="true"><span class="vjcfg-fila-rotulo">Nombre y fechas</span>');
+    expect(html).toContain('value="Cancún 2026"');
+    expect(html).toContain('value="2026-10-05"');
+    expect(html).toContain('value="2026-10-11"');
+    expect(html).toMatch(/<button type="button" class="btn btn-navy" disabled="">Guardar<\/button>/);
+    expect(render({ editor: 'nombre', guardando: true })).toContain('Guardando…');
+  });
+
+  it('🔴 el color: siete muestras con nombre (sin color y la paleta), la actual marcada', () => {
+    const html = render({ editor: 'color', viaje: { ...VIAJE, color: 'verde' } });
+    const radios = [...html.matchAll(/role="radio" aria-checked="(true|false)" aria-label="([^"]+)"/g)].map((m) => [m[2], m[1]]);
+    expect(radios).toEqual([['Sin color', 'false'], ['Azul', 'false'], ['Verde', 'true'], ['Violeta', 'false'],
+      ['Rojo', 'false'], ['Naranja', 'false'], ['Turquesa', 'false']]);
+    expect(html).toContain('style="background:#15803D"');
+    expect(html).toContain('role="radiogroup" aria-label="Color"');
+  });
+
+  it('🔴 la foto: el archivo de imagen del teléfono (cámara o galería), JPG, PNG o WEBP; quitar sólo si hay', () => {
+    const sinFoto = render({ editor: 'foto' });
+    expect(sinFoto).toContain('type="file" accept="image/jpeg,image/png,image/webp"');
+    expect(texto(sinFoto)).toContain('La ven sólo los miembros del viaje. Elegir foto');
+    expect(sinFoto).not.toContain('Eliminar foto');
+    const conFoto = render({ editor: 'foto', viaje: { ...VIAJE, has_photo: true }, foto: 'blob:foto' });
+    expect(texto(conFoto)).toContain('Cambiar la foto Eliminar foto');
+    expect(conFoto).toContain('<img class="vj-insignia-foto" src="blob:foto" alt=""/>');
   });
 
   it('«Ya están en el viaje» cuenta como resultado: no dice «No encontramos»', () => {
@@ -122,5 +157,36 @@ describe('D255-8 · el cableado', () => {
     expect(viaje).toMatch(/if \(configuracion && viaje\?\.estado === 'abierto'\) \{/);
     expect(viaje).toMatch(/onConfiguracion=\{\(\) => setConfiguracion\(true\)\}/);
     expect(viaje).toMatch(/onVolver=\{\(\) => setConfiguracion\(false\)\}/);
+  });
+});
+
+describe('D255 · lo que se manda al editar el nombre y las fechas', () => {
+  const V = { nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: null };
+
+  it('sólo lo que cambió; vacío es borrar la fecha; sin cambios, nada', () => {
+    expect(cambiosDeNombreYFechas(V, 'Cancún 2026', '2026-10-05', '')).toBeNull();
+    expect(cambiosDeNombreYFechas(V, '  Cancún 2027 ', '2026-10-05', '')).toEqual({ nombre: 'Cancún 2027' });
+    expect(cambiosDeNombreYFechas(V, 'Cancún 2026', '', '2026-10-11')).toEqual({ fecha_desde: null, fecha_hasta: '2026-10-11' });
+  });
+
+  it('el nombre de cada color, en los dos idiomas', () => {
+    const es = (s: string, ...a: unknown[]) => traducir(s, 'es', ...a);
+    const en = (s: string, ...a: unknown[]) => traducir(s, 'en', ...a);
+    expect(nombreDelColor('turquesa', es)).toBe('Turquesa');
+    expect(nombreDelColor('turquesa', en)).toBe('Teal');
+    expect(nombreDelColor(null, en)).toBe('No color');
+  });
+});
+
+describe('D255 · el cableado de «El viaje»', () => {
+  const config = readFileSync(new URL('./ConfiguracionDelViaje.tsx', import.meta.url), 'utf8');
+
+  it('editar va por `PATCH` y actualiza el viaje; el color, apenas se elige', () => {
+    expect(config).toMatch(/onActualizado\(await api\.editarViaje\(viaje\.id, cambios\)\);/);
+    expect(config).toMatch(/onColor=\{\(color\) => void editar\(\{ color \}\)\}/);
+  });
+
+  it('subir o quitar la foto: después se vuelve a pedir la foto y el viaje (`has_photo`)', () => {
+    expect(config).toMatch(/if \(archivo\) await api\.subirFotoDeViaje\(viaje\.id, archivo\);\s*else await api\.quitarFotoDeViaje\(viaje\.id, session\);\s*onFotoCambiada\(\);\s*onActualizado\(await api\.getViaje\(viaje\.id\)\);/);
   });
 });

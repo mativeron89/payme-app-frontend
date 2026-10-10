@@ -50,7 +50,7 @@ function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
     creado_en: '2026-10-01T15:00:00.000Z', mi_miembro_id: IDS.yo, miembros: MIEMBROS, invitados: [],
     mi_balance_cents: -54200, gasto_del_grupo_cents: 666000,
     tickets: [ticket({}), ticket({ id: 'tk-2', lugar: null, tipo_lugar: 'bar', pagado_por: IDS.yo, pagaste_tu: true, fecha_ticket: '2026-10-06', forma: 'iguales', falta_que_elija: 0 })],
-    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, ...extra,
+    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, ...extra,
   };
 }
 

@@ -148,7 +148,8 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
   await sacarFoto(page);
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket-nuevo/${CANCUN}$`));
   await expect(page.getByRole('heading', { name: 'Ticket nuevo' })).toBeVisible();
-  await expect(page.getByText('Lo pagaste tú', { exact: true })).toBeVisible();
+  // D255-6 · «¿Quién pagó?», con «Lo pagaste tú» por defecto.
+  await expect(page.getByLabel('¿Quién pagó?', { exact: true })).toHaveValue('');
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await expect(page.getByText('Se divide entre los marcados. Desmarca a quien no estuvo.')).toBeVisible();
   await page.getByRole('checkbox', { name: /Diego Torres/ }).click();

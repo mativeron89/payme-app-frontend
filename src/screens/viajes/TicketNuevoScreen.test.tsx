@@ -30,10 +30,13 @@ const OCR: OcrResponse = {
   ticket_datetime: { date: '2026-10-09', time: '14:20' },
 };
 
-function nuevo(forma: FormaTicket = 'consumo', opciones: { tipo?: TipoLugar; ocr?: OcrResponse; ausentes?: Set<string> } = {}) {
+function nuevo(forma: FormaTicket = 'consumo', opciones: { tipo?: TipoLugar; ocr?: OcrResponse; ausentes?: Set<string>; pagador?: string | null } = {}) {
   return renderToStaticMarkup(
     <TicketNuevoVista
       viajeNombre="Cancún 2026"
+      miembros={MIEMBROS}
+      pagador={opciones.pagador ?? null}
+      onPagador={nada}
       ocr={opciones.ocr ?? OCR}
       tipo={opciones.tipo ?? 'restaurante'}
       forma={forma}
@@ -61,9 +64,19 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     expect(html).toContain('9 oct · 14:20');
     expect(html).toContain('$1,020');
     expect(html).not.toContain('$1,020.00');
-    expect(html).toContain('Lo pagaste tú');
-    expect(html).toContain('Como lo escaneaste primero, queda a tu nombre el pago completo.');
     expect(html).toContain('Compartir con el viaje');
+  });
+
+  it('🔴 D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto y los demás miembros; ya no «quien escanea primero»', () => {
+    const html = nuevo();
+    expect(html).toContain('¿Quién pagó?');
+    const opciones = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]);
+    expect(opciones).toEqual([['', 'Lo pagaste tú'], ['m-luis', 'Luis Perez'], ['m-sofia', 'Sofia Ramirez'], ['m-diego', 'Diego Torres']]);
+    expect(html).toMatch(/<option value="" selected="">Lo pagaste tú<\/option>/);
+    expect(html).toContain('El pago completo queda a nombre de quien pagó.');
+    expect(html).not.toContain('Como lo escaneaste primero');
+    // Elegido Luis, el selector lo muestra.
+    expect(nuevo('consumo', { pagador: 'm-luis' })).toMatch(/<option value="m-luis" selected="">Luis Perez<\/option>/);
   });
 
   it('con el comercio leído, su nombre; sin fecha leída, ninguna fecha', () => {
@@ -97,7 +110,9 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     expect(html).toContain('¿Quiénes estuvieron?');
     expect(html).toContain('Se divide entre los marcados. Desmarca a quien no estuvo.');
     expect(marcas(html, 'checkbox')).toEqual([true, true, true, true]);
-    expect(html.indexOf('>Tú<')).toBeLessThan(html.indexOf('Luis Perez'));
+    // En la lista de presentes (el selector de quién pagó, arriba, también nombra a Luis).
+    const lista = html.slice(html.indexOf('¿Quiénes estuvieron?'));
+    expect(lista.indexOf('>Tú<')).toBeLessThan(lista.indexOf('Luis Perez'));
     expect(html).toContain('@ana.lopez');
     expect(html).toContain('@diego.torres');
   });

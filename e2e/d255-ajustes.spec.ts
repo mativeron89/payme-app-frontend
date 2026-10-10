@@ -162,9 +162,9 @@ test.describe('D255 · tramo 1', () => {
     await page.getByLabel('Busca en Amigos o escribe @usuario', { exact: true }).fill('sofi');
     await expect(page.getByText('Ya están en el viaje', { exact: true })).toBeVisible();
     await expect(page.locator('.vjc-fila').filter({ hasText: 'Sofía Fernández' }).getByRole('button')).toHaveCount(0);
-    // Tramo 2: armado y apagado.
+    // Tramo 2: nombre y fechas, color y foto, cada uno con su editor.
     await expect(page.locator('button.vjcfg-fila')).toHaveCount(3);
-    for (const b of await page.locator('button.vjcfg-fila').all()) await expect(b).toBeDisabled();
+    for (const b of await page.locator('button.vjcfg-fila').all()) await expect(b).toHaveAttribute('aria-expanded', 'false');
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page.getByText('Ver balance del viaje', { exact: true })).toBeVisible();
     expect(page.url()).toMatch(new RegExp(`/viaje/${CANCUN}$`));

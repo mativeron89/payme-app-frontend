@@ -16,7 +16,7 @@ const MIEMBROS = [
 const VIAJE = {
   id: 'v-1', nombre: 'Cancún 2026', fecha_desde: null, fecha_hasta: null, estado: 'abierto', creado_en: null,
   mi_miembro_id: 'm-yo', miembros: MIEMBROS, invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0,
-  tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
+  tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false,
 } as const satisfies DetalleViaje;
 
 const texto = (html: string) => html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -47,17 +47,24 @@ describe('D244 · la pantalla de la carga manual', () => {
     expect(leido).not.toContain('Cancún 2026');
   });
 
-  it('tres datos: descripción, monto y entre quiénes; quien carga pagó', () => {
+  it('descripción, monto, quién pagó y entre quiénes', () => {
     expect(leido).toContain('Descripción');
     expect(html).toContain('placeholder="Por ejemplo: gasolina"');
     expect(leido).toContain('Monto');
-    expect(leido).toContain('Lo pagaste tú');
     expect(leido).toContain('¿Entre quiénes? Se divide entre los marcados. Desmarca a quien no va.');
+  });
+
+  it('🔴 D255-6 · «¿Quién pagó?»: «Lo pagaste tú» por defecto y los demás miembros, sin mí', () => {
+    expect(leido).toContain('¿Quién pagó?');
+    const opciones = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]);
+    expect(opciones).toEqual([['', 'Lo pagaste tú'], ['m-luis', 'Luis Pérez'], ['m-sofia', 'Sofía Ramírez']]);
+    expect(html).toMatch(/<option value="" selected="">Lo pagaste tú<\/option>/);
   });
 
   it('todos marcados al empezar, «Tú» primero', () => {
     expect(html.match(/aria-checked="true"/g)).toHaveLength(3);
-    expect(leido.indexOf('Tú')).toBeLessThan(leido.indexOf('Luis Pérez'));
+    const lista = leido.slice(leido.indexOf('¿Entre quiénes?'));
+    expect(lista.indexOf('Tú')).toBeLessThan(lista.indexOf('Luis Pérez'));
   });
 
   it('«Listo» apagado hasta tener descripción y monto', () => {

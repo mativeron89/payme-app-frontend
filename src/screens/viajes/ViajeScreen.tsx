@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api';
 import {
+  COLORES_VIAJE,
   errorDeViaje,
   type AccionTransferencia,
   type DetalleViaje,
@@ -44,6 +45,7 @@ import {
 import { pedirInicioEnViajes } from './inicioEnViajes';
 import { circuloDelViaje, recordarNombreDeViaje } from './circuloDelViaje';
 import { ConfiguracionDelViaje } from './ConfiguracionDelViaje';
+import { InsigniaDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import './viajes.css';
 import './viaje.css';
 
@@ -176,6 +178,9 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 
   const viaje = carga.tipo === 'listo' ? carga.viaje : null;
   const fotoDe = useFotosDeMiembros(viajeId, viaje?.miembros ?? null);
+  // D255 · la foto del viaje, para su burbuja y Configuración.
+  const conFoto = useMemo(() => (viaje ? [viaje] : null), [viaje]);
+  const fotoDelViaje = useFotosDeViajes(conFoto);
   const nombre = viaje?.nombre ?? '';
 
   /** Otro miembro lo cerró mientras mirabas: se avisa y se vuelve a pedir. */
@@ -277,6 +282,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         <ConfiguracionDelViaje
           viaje={viaje}
           userName={fullName(session) ?? undefined}
+          foto={viaje.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
+          onFotoCambiada={() => fotoDelViaje.recargar(viaje.id)}
           onVolver={() => setConfiguracion(false)}
           onActualizado={mostrar}
           onYaSeCerro={() => {
@@ -302,6 +309,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onCargaManual={() => navigate('viaje-gasto', viajeId)}
         onConfiguracion={() => setConfiguracion(true)}
         fotoDe={fotoDe}
+        fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
         onCerrar={pedirCierre}
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
@@ -472,6 +480,8 @@ export interface ViajeVistaProps {
   readonly onConfiguracion: () => void;
   /** D245 · la foto de un miembro, si la hay (si no, iniciales). */
   readonly fotoDe?: (miembroId: string) => string | null;
+  /** D255 · la foto del viaje, si la hay, para su burbuja. */
+  readonly fotoDelViaje?: string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onCerrar: () => void;
   readonly onSalir: () => void;
@@ -496,7 +506,7 @@ export function ViajeVista(props: ViajeVistaProps) {
   const v = carga.viaje;
   return (
     <>
-      <TarjetaDeTitulo viaje={v} />
+      <TarjetaDeTitulo viaje={v} foto={props.fotoDelViaje ?? null} />
       {/* La clave por estado: al cerrarse el viaje la pantalla es otra y
           arranca arriba, no donde estaba el botón «Cerrar viaje». */}
       <div key={v.estado} className={`scroll vj-scroll ${v.estado === 'abierto' ? 'vjv-scroll-abierto' : ''}`}>
@@ -506,13 +516,34 @@ export function ViajeVista(props: ViajeVistaProps) {
   );
 }
 
-function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
+/**
+ * D255 tramo 2 · la burbuja del viaje lleva su color (la paleta del dueño, con
+ * texto blanco) y, si tiene, su foto junto al nombre. Sin color, la de siempre.
+ */
+function estiloDeBurbuja(v: DetalleViaje): { readonly className: string; readonly style?: { background: string } } {
+  return v.color
+    ? { className: 'title-card vj-titulo-color', style: { background: COLORES_VIAJE[v.color] } }
+    : { className: 'title-card' };
+}
+
+function NombreDelViaje({ viaje: v, foto }: { viaje: DetalleViaje; foto: string | null }) {
+  if (!foto) return <h1 className="title-card-title">{v.nombre}</h1>;
+  return (
+    <div className="vj-titulo-fila">
+      <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={foto} grande />
+      <h1 className="title-card-title">{v.nombre}</h1>
+    </div>
+  );
+}
+
+function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string | null }) {
   const { t } = useIdioma();
+  const burbuja = estiloDeBurbuja(v);
   if (v.estado !== 'abierto') {
     const conChip = vistaDePagos(v.transferencias) !== 'resto';
     return (
-      <div className="title-card">
-        <h1 className="title-card-title">{v.nombre}</h1>
+      <div {...burbuja}>
+        <NombreDelViaje viaje={v} foto={foto} />
         <div className="title-card-sub">{t('Gasto del grupo {0}', formatMXN(v.gasto_del_grupo_cents))}</div>
         {conChip && (
           <span className="vjv-chip vjv-chip-info vjv-titulo-chip">{t('Esperando pagos · faltan {0}', v.transferencias_pendientes)}</span>
@@ -522,8 +553,8 @@ function TarjetaDeTitulo({ viaje: v }: { viaje: DetalleViaje }) {
   }
   // D245-2 · la burbuja dice sólo el nombre del viaje: sin fechas ni avatares.
   return (
-    <div className="title-card">
-      <h1 className="title-card-title">{v.nombre}</h1>
+    <div {...burbuja}>
+      <NombreDelViaje viaje={v} foto={foto} />
     </div>
   );
 }
