@@ -19,8 +19,6 @@ export const EN_VIAJES_COMUN: Record<string, string> = {
   // Inicio · la pestaña Viajes (1a, 1b).
   'Viajes': 'Trips',
   'Cerrados': 'Closed',
-  '{0} viaje': '{0} trip',
-  '{0} viajes': '{0} trips',
   'Crear viaje': 'Create trip',
   'Todavía no tienes viajes': "You don't have any trips yet",
   'No pudimos cargar tus viajes': "We couldn't load your trips",

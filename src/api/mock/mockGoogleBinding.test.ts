@@ -22,6 +22,21 @@ function storage(extra: Record<string, string> = {}) {
   };
   vi.stubGlobal('localStorage', almacen);
   vi.stubGlobal('sessionStorage', almacen);
+  // La sesión social del canje se persiste bajo el Web Lock de sesión, y sin él
+  // falla cerrada (`session_lock_unavailable`). El Node del CI (20) no trae
+  // `navigator`: el lock se instala acá, en serie, como en `mockGoogleSinCuenta`.
+  let cola = Promise.resolve();
+  vi.stubGlobal('navigator', {
+    locks: {
+      async request<T>(_nombre: string, _opciones: unknown, accion: () => Promise<T> | T): Promise<T> {
+        const anterior = cola;
+        let soltar: (() => void) | undefined;
+        cola = new Promise<void>((resolve) => { soltar = resolve; });
+        await anterior;
+        try { return await accion(); } finally { soltar?.(); }
+      },
+    },
+  });
   return values;
 }
 

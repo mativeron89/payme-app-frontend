@@ -17,7 +17,9 @@ import './inicio.css';
  * D266 · Mati: «en vez de Abiertos y Cerrados dejas Cerrados pero cambias el de
  * Abiertos por Crear Viaje ya que ahora el viaje abierto va a estar
  * constantemente en display». Las dos burbujas son «Crear viaje» (el alta) y
- * «Cerrados», con cuántos hay, que muestra u oculta la lista de cerrados debajo.
+ * «Cerrados», que muestra u oculta la lista de cerrados debajo. D274 · Mati:
+ * «Quitar la cantidad de viajes cerrados, dejar únicamente Cerrados»: cada
+ * burbuja lleva sólo su ícono y su palabra.
  * Los abiertos están en la pantalla principal (D265): la pestaña ya no los pide.
  * «Crear viaje» es uno solo: salieron la fila aparte y el vacío con su botón.
  */
@@ -90,8 +92,8 @@ export function useCerradosDeViajes(activa: boolean): {
   return { conteo, abierta, alternar, reintentar };
 }
 
-function Lanzador({ icon, label, sub, onClick, elegido }: {
-  icon: IconName; label: string; sub?: string; onClick: () => void;
+function Lanzador({ icon, label, onClick, elegido }: {
+  icon: IconName; label: string; onClick: () => void;
   /** D246 · lo elegido se marca con borde 2px teal y `aria-pressed`, no sólo con color. Sin él, un botón común. */
   elegido?: boolean;
 }) {
@@ -106,7 +108,6 @@ function Lanzador({ icon, label, sub, onClick, elegido }: {
         <Icon name={icon} size={22} />
       </span>
       <span className="launch-label">{label}</span>
-      {sub && <span className="launch-sub">{sub}</span>}
     </button>
   );
 }
@@ -119,7 +120,6 @@ export function PanelViajes({ conteo, cerradosAbierta, onCerrados, onReintentar 
   onReintentar: () => void;
 }) {
   const { t } = useIdioma();
-  const cuantos = (n: number) => (n === 1 ? t('{0} viaje', n) : t('{0} viajes', n));
   if (conteo.estado === 'cargando') {
     return (
       <div className="launch-pair home-tab-panel" aria-busy="true" aria-label={t('Cargando…')}>
@@ -149,7 +149,7 @@ export function PanelViajes({ conteo, cerradosAbierta, onCerrados, onReintentar 
   return (
     <div className="launch-pair home-tab-panel vj-lanzadores">
       <Lanzador icon="plus" label={t('Crear viaje')} onClick={() => navigate('viaje-nuevo')} />
-      <Lanzador icon="archive" label={t('Cerrados')} sub={cuantos(conteo.counts.cerrados)} elegido={cerradosAbierta} onClick={onCerrados} />
+      <Lanzador icon="archive" label={t('Cerrados')} elegido={cerradosAbierta} onClick={onCerrados} />
     </div>
   );
 }

@@ -1,13 +1,5 @@
 /* AF-VIAJES · D242 · la pestaña «Viajes» de Inicio (1a, 1b). */
 
-/* Cuántos hay, debajo del rótulo del acceso («2 viajes»). */
-.launch-sub {
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: 1.2;
-  color: var(--text-muted);
-}
-
 /* D246 · D266 · «Cerrados» se elige: lo elegido con borde 2px teal (no sólo color).
    D255-2 · en negrita, y el recuadro de lo elegido es la MITAD de la tarjeta:
    sin borde propio ni radio menor, sigue las esquinas de la tarjeta (con la

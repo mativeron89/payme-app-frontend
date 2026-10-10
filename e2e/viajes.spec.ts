@@ -50,9 +50,10 @@ test('1a · D266 · Inicio: «Viajes» reemplaza a «Asociadas»; «Crear viaje�
   await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
   const inicio = page.url();
-  const cerrados = page.getByRole('button', { name: /Cerrados\s*2 viajes/ });
+  // D274 · «Cerrados», sin la cantidad.
+  const cerrados = page.getByRole('button', { name: 'Cerrados', exact: true });
   // Sin «Abiertos» ni un segundo «Crear viaje»: los abiertos están en la pantalla principal (D265).
-  await expect(page.locator('button.vj-lanzador')).toHaveText(['Crear viaje', 'Cerrados2 viajes']);
+  await expect(page.locator('button.vj-lanzador')).toHaveText(['Crear viaje', 'Cerrados']);
   await expect(page.getByRole('button', { name: /Abiertos/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Crear viaje/ })).toHaveCount(1);
   // Al entrar, la lista de cerrados oculta; «Cerrados» la muestra.
@@ -493,4 +494,23 @@ test('🔴 el 404 de un viaje ajeno o inexistente es uno solo (n325)', async ({ 
   await conViajes(page);
   await ir(page, '/viaje/d1000000-0000-4000-8000-000000000099');
   await expect(page.getByText('Este viaje ya no está disponible.')).toBeVisible();
+});
+
+test.describe('🔴 D274 · a 375: «Cerrados» sin la cantidad', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('la burbuja dice sólo «Cerrados»; tocarla sigue abriendo la lista', async ({ page }) => {
+    // Mati, mirando Inicio › Viajes: «Quitar la cantidad de viajes cerrados, dejar únicamente Cerrados».
+    await conViajes(page);
+    await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
+    const lanzadores = page.locator('button.vj-lanzador');
+    await expect(lanzadores).toHaveText(['Crear viaje', 'Cerrados']);
+    await expect(lanzadores.nth(1).locator('.launch-sub')).toHaveCount(0);
+    await expect(page.locator('.vj-lanzadores')).not.toContainText(/\d+ viajes?/);
+    const cerrados = page.getByRole('button', { name: 'Cerrados', exact: true });
+    await cerrados.click();
+    await expect(page.locator('.vj-inicio-fila')).toHaveText(['OOaxaca puente', 'VValle de Bravo']);
+    const dir = process.env.PAYME_E2E_CAPTURAS;
+    if (dir) await page.screenshot({ path: `${dir}/d274-cerrados-sin-cantidad.png`, fullPage: true });
+  });
 });

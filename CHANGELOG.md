@@ -11,10 +11,10 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.238.0 — Seguridad D268: el espejo sólo con el contrato, Google atado a la pestaña que lo empezó, el alta con Google sin correo a mano y la invitación pendiente en la mesa (2026-10-10)
+## 0.238.0 — Seguridad D268: el espejo sólo con el contrato, Google atado a la pestaña que lo empezó, el alta con Google sin correo a mano y la invitación pendiente en la mesa; «Cerrados» sin la cantidad (D274) (2026-10-10)
 
 Orden AF-SEGURIDAD-D268-20261010 (9c0dc3af…), con App Backend 2.178.0 (inventario en 6424b1a, contenido de
-1664dd8). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+1664dd8), y la adenda D274 (35fa1f1f…). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
 
 - **S-03 · el espejo público lleva sólo el contrato** (commit propio, sin reescribir la historia):
   - `contract-mirror/` copia sólo `contract/*.json`: 13 archivos. Salen 125 (el código del servidor y los
@@ -60,10 +60,24 @@ Orden AF-SEGURIDAD-D268-20261010 (9c0dc3af…), con App Backend 2.178.0 (inventa
   - el mock suma una costura para ese 403;
   - **corrección a la premisa de la orden:** crear invitaciones no está entre las rutas guardadas (el contrato
     `mesa-acceso-v1.json` nombra las cuatro de arriba).
+- **D274 · Inicio › Viajes: «Cerrados» sin la cantidad.** Mati: «Quitar la cantidad de viajes cerrados, dejar
+  únicamente Cerrados».
+  - La burbuja lleva sólo el ícono y la palabra; tocarla sigue abriendo la lista.
+  - «Crear viaje» no cambia.
+  - Salen la línea «N viajes», su CSS (`.launch-sub`) y los textos «{0} viaje» y «{0} viajes», que quedaron sin
+    uso.
+- **La CI del PR dio rojo sobre `decfab5`** (3 de 4356, `session_lock_unavailable`, en
+  `mockGoogleBinding.test.ts`):
+  - **la causa, medida:** el CI corre Node 20, que no trae `navigator` ni `navigator.locks`, y la Mac corre Node
+    24, que sí. El canje persiste la sesión social bajo el Web Lock y, sin él, falla cerrado;
+  - **reproducida** quitando `navigator` en una copia de la prueba: las mismas 3, con el mismo error;
+  - **el arreglo:** la prueba instala el lock en serie, como `mockGoogleSinCuenta.test.ts`. Pasa con `navigator`
+    y sin él. No cambian el Node del workflow (D273) ni la regla de producto.
 - **Pruebas:**
   - **rojo en la base:**
     - S-03 en `7a9eace`: 13 unitarias, y el archivo de los hechos no carga;
     - S-02, S-01 y S-05 en `72b9851`: 9 unitarias, dos archivos nuevos que no cargan y 24 e2e;
+    - D274 en `decfab5`: 3 unitarias y 2 e2e;
   - **mutantes: mueren los 29**, cada uno por la prueba que lo vigila (21 unitarios y 8 en el navegador). Entre
     ellos:
     - copiar lo que no es `contract/*.json`;

@@ -26,11 +26,20 @@ const lanzadores = (html: string) => [...html.matchAll(/<button type="button" cl
   .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
 
 describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () => {
-  it('las dos burbujas, lado a lado: «Crear viaje» sin conteo y «Cerrados» con cuántos hay (el conteo del dueño)', () => {
+  it('las dos burbujas, lado a lado: «Crear viaje» y «Cerrados», cada una con su ícono y su palabra', () => {
     const html = panel(listo(2, 1));
-    expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados 1 viaje']);
-    expect(lanzadores(panel(listo(1, 3)))).toEqual(['Crear viaje', 'Cerrados 3 viajes']);
+    expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados']);
     expect(html).toContain('launch-pair');
+  });
+
+  it('🔴 D274 · «Cerrados» sin la cantidad: ni «N viajes» ni la línea de abajo, haya los que haya', () => {
+    // Mati: «Quitar la cantidad de viajes cerrados, dejar únicamente Cerrados».
+    for (const conteo of [listo(0, 0), listo(2, 1), listo(1, 3)]) {
+      const html = panel(conteo);
+      expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados']);
+      expect(html).not.toMatch(/\d+ viajes?\b/);
+      expect(html).not.toContain('launch-sub');
+    }
   });
 
   it('🔴 sin «Abiertos», ni un segundo «Crear viaje», ni el vacío con su botón; aunque no haya ningún viaje', () => {
@@ -41,7 +50,7 @@ describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () =
       expect(html).not.toContain('Todavía no tienes viajes');
       expect(html).not.toContain('btn btn-navy');
     }
-    expect(lanzadores(panel(listo(0, 0)))).toEqual(['Crear viaje', 'Cerrados 0 viajes']);
+    expect(lanzadores(panel(listo(0, 0)))).toEqual(['Crear viaje', 'Cerrados']);
   });
 
   it('🔴 «Crear viaje» es un botón común; «Cerrados» se elige con `aria-pressed` y el borde (no sólo color)', () => {
