@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import type { ListaDeViajes, ViajeEnLista } from '../../api/viajes';
+import { RequestEpoch } from '../../utils/requestEpoch';
 import { Icon, type IconName } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { navigate } from '../../router';
@@ -31,6 +32,35 @@ export type ConteoDeViajes =
   };
 
 /**
+ * C-06 (auditoría Codex completa) · cada pedido de la lista, también el de
+ * «Reintentar», saca su turno; sólo el ÚLTIMO publica. Cambiar de Abiertos a
+ * Cerrados, salir de la pestaña o desmontar invalida lo que esté en vuelo. Antes
+ * el reintento perdía su limpieza y un Abiertos tardío pisaba la lista de
+ * Cerrados.
+ */
+export class ConsultaDeViajes {
+  private readonly epoca = new RequestEpoch();
+
+  constructor(
+    private readonly traer: (lista: ListaElegida) => Promise<ListaDeViajes>,
+    private readonly publicar: (conteo: ConteoDeViajes) => void,
+  ) {}
+
+  pedir(lista: ListaElegida): void {
+    const mia = this.epoca.next();
+    this.traer(lista).then(
+      (r) => { if (this.epoca.isCurrent(mia)) this.publicar({ estado: 'listo', counts: r.counts, viajes: r.viajes }); },
+      () => { if (this.epoca.isCurrent(mia)) this.publicar({ estado: 'error' }); },
+    );
+  }
+
+  /** Nada de lo que esté en vuelo publica. */
+  invalidar(): void {
+    this.epoca.next();
+  }
+}
+
+/**
  * Los conteos y la lista elegida: se piden la primera vez que la pestaña se
  * abre, cada vez que se vuelve a abrir y al cambiar de Abiertos a Cerrados
  * (D246). Al entrar, Abiertos.
@@ -43,19 +73,19 @@ export function useConteoDeViajes(activa: boolean): {
 } {
   const [conteo, setConteo] = useState<ConteoDeViajes>({ estado: 'cargando' });
   const [elegida, setElegida] = useState<ListaElegida>('abiertos');
-  const pedir = useCallback((lista: ListaElegida) => {
-    let vivo = true;
-    api.getViajes(lista)
-      .then((r) => { if (vivo) setConteo({ estado: 'listo', counts: r.counts, viajes: r.viajes }); })
-      .catch(() => { if (vivo) setConteo({ estado: 'error' }); });
-    return () => { vivo = false; };
-  }, []);
-  useEffect(() => (activa ? pedir(elegida) : undefined), [activa, elegida, pedir]);
+  const consulta = useRef<ConsultaDeViajes | null>(null);
+  if (consulta.current === null) consulta.current = new ConsultaDeViajes((lista) => api.getViajes(lista), setConteo);
+  useEffect(() => {
+    if (!activa) return undefined;
+    const c = consulta.current!;
+    c.pedir(elegida);
+    return () => c.invalidar();
+  }, [activa, elegida]);
   useEffect(() => { if (!activa) setElegida('abiertos'); }, [activa]);
   const reintentar = useCallback(() => {
     setConteo({ estado: 'cargando' });
-    pedir(elegida);
-  }, [elegida, pedir]);
+    consulta.current!.pedir(elegida);
+  }, [elegida]);
   return { conteo, elegida, elegir: setElegida, reintentar };
 }
 
