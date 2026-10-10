@@ -28,6 +28,18 @@ de Mati en el iPhone (D63).
 
   No hay manejadores táctiles ni `touch-action` en Viajes, y no hay Simulador de iOS disponible. Se pidieron a Mati
   tres datos (app de inicio o Safari, qué pantalla y cómo falla). No se cambió nada a ciegas.
+
+  Mati contestó, por el Bibliotecario: app de inicio, al entrar a un ticket ya cargado, y «No se movía nada». El
+  Bibliotecario lo pasó a la entrega 0.236.0, con dos cosas: un panel de diagnóstico para medirlo en el iPhone y una
+  guarda e2e en WebKit como app de inicio. Esta versión no lo toca.
+- **El testigo de `cartel-version-nueva` estaba saturado.** «Una respuesta vieja que llega tarde no esconde el cartel»
+  cuenta las entradas de Resource Timing de `/version.json`. El búfer guarda 250, y en `vite dev` cada módulo es una
+  entrada: con los módulos nuevos de esta versión, al ingresar ya eran 250 justas (medido), y la respuesta retenida no
+  se anotaba al llegar.
+  - El síntoma: falló 3 de 3 en `707075b` sin ningún cambio en el cartel. En `a0adf72` había pasado.
+  - El arreglo: la prueba agranda el búfer antes de ingresar; no se toca código de la app. Pasa 27/27 en tres
+    corridas.
+  - El mutante: sacar el chequeo de turno de `versionPublicada.ts` vuelve a dar rojo en la aserción del cartel.
 - **C-06 · el reintento de Abiertos ya no pisa Cerrados.** Cada pedido de la lista, también «Reintentar», saca su turno
   (`ConsultaDeViajes`) y sólo el último publica. Cambiar de lista o desmontar invalida lo que esté en vuelo.
 - **C-07 · el nombre recordado del viaje y el ticket escaneado son de una cuenta.**

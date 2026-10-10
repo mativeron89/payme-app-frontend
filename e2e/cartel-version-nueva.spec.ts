@@ -197,6 +197,12 @@ test('🔴 una respuesta vieja que llega tarde no esconde el cartel', async ({ p
       body: JSON.stringify({ version }),
     });
   });
+  // 0.235.0 · el testigo cuenta entradas de Resource Timing, y el búfer guarda
+  // 250 por defecto. En `vite dev` cada módulo es una entrada: al ingresar ya
+  // eran 250 justas (medido), y las respuestas que llegan después NO se anotan.
+  // El conteo quedaba quieto y el control positivo fallaba sin que el cartel
+  // tuviera nada. Con el búfer agrandado, el testigo vuelve a ver lo que llega.
+  await page.addInitScript(() => { performance.setResourceTimingBufferSize(100_000); });
   await ingresar(page);
   const respuestas = () => page.evaluate(() => performance.getEntriesByType('resource')
     .filter((e) => e.name.endsWith('/version.json')).length);
