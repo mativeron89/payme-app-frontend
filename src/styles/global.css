@@ -95,7 +95,7 @@
      12 px y siguen arriba del indicador. Sin inset (Safari, computadora) no
      cambia: 8. Una sola variable: la barra y las pantallas que la miden. */
   --appbar-pie: max(8px, calc(env(safe-area-inset-bottom) - 12px));
-  /* D275 · el alto de la barra, en UN lugar: lo usan la barra y el aviso que flota sobre ella. */
+  /* D275 · el alto de la barra, en UN lugar: lo usan la barra y el aviso de Inicio (D277). */
   --appbar-alto: calc(56px + var(--appbar-pie));
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -3055,27 +3055,20 @@ html.app-de-inicio-ios .app {
   z-index: 19;
 }
 
-/* D275 · lo que flota sobre la barra («No tienes mesas abiertas»): el texto 40 px
-   sobre su borde de arriba, centrado, con 16 px a los costados.
-   Va en una franja del color de la página que baja hasta la barra y queda DEBAJO
-   de ella (z-index 18 contra 19, como hermana y no como hija): así el contenido
-   que se desplaza no pasa por debajo del texto (el prototipo no lo muestra porque
-   su contenido nunca llega ahí) y la sombra de la barra se sigue viendo. Arriba,
-   20 px de fundido. Anclada a `.screen`, como la barra; nunca `fixed` (D256). */
-.appbar-aviso {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px; /* mismo ancho que .app y la barra */
-  z-index: 18;
-  padding: 20px var(--sp-4) calc(var(--appbar-alto) + 40px);
-  background: linear-gradient(to bottom, transparent, var(--gray-l) 20px);
+/* D277 · «No tienes mesas abiertas», en el medio del espacio vacío (Mati: «No esta
+   centrado el mensaje»). Va al final del contenido de Inicio, en el flujo (nunca
+   `fixed`, D256), y toma el resto del alto: el texto queda centrado entre lo último
+   de arriba y el círculo de Nueva. Con mucho contenido no hay resto: va debajo, con
+   24 px de aire arriba y abajo, y se desplaza con todo lo demás. Supersede la franja
+   de D275, 40 px sobre la barra. */
+.aviso-sin-mesas {
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  padding: var(--sp-6) var(--sp-4);
   text-align: center;
 }
 .aviso-sin-mesas-titulo {
@@ -3098,11 +3091,24 @@ html.app-de-inicio-ios .app {
   display: inline-flex;
   color: var(--text-muted);
 }
-/* D275 · con el aviso al pie, el final del contenido queda encima de su franja:
-   la barra, los 40 px, el texto (~51) y el fundido (20), con margen. Lo mide
-   e2e/d275-burbuja-del-viaje.spec.ts, con y sin el inset de abajo. */
+/* D277 · con el aviso, el contenido de Inicio es una columna para que el aviso tome
+   el resto del alto (como el pie del viaje abierto, `.vjv-scroll-abierto`). Abajo,
+   la barra y lo que sobresale el círculo de Nueva (`.appbar-fab`, 26 px): el resto
+   termina en el borde de arriba del círculo. Lo mide
+   e2e/d277-aviso-centrado.spec.ts, a 375 y 390, con y sin viajes. */
 .has-appbar .scroll.con-aviso-sin-mesas {
-  padding-bottom: calc(var(--appbar-alto) + 128px);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--appbar-alto) + 26px);
+}
+/* En columna, cada uno conserva su alto (con mucho contenido, el scroll crece). */
+.has-appbar .scroll.con-aviso-sin-mesas > * {
+  flex-shrink: 0;
+}
+/* En una columna flex los márgenes no colapsan: la sección de la mesa, vacía, sumaría
+   sus 24 px a los 28 de los viajes. Sin mesas no ocupa lugar. */
+.has-appbar .scroll.con-aviso-sin-mesas > .home-mesa:empty {
+  display: none;
 }
 
 /* Fila propia arriba de la barra: acá vive lo dinámico (el importe), para que

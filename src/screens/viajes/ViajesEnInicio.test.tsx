@@ -300,50 +300,54 @@ describe('🔴 D265 · D271 · el cableado en Inicio', () => {
   });
 });
 
-describe('🔴 D275 · «No tienes mesas abiertas», al pie y con la cámara', () => {
+describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en el medio del espacio libre', () => {
   const home = readFileSync(new URL('../HomeScreen.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
+  const de = (selector: string) => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
 
-  it('el texto, con el ícono de la cámara de Nueva en lugar del «+»', () => {
+  it('el texto, con el ícono de la cámara de Nueva en lugar del «+», en su caja', () => {
     const html = renderToStaticMarkup(<AvisoSinMesas />);
     expect(texto(html)).toBe('No tienes mesas abiertas Toca el para abrir una');
+    expect(html).toMatch(/^<div class="aviso-sin-mesas"><div class="aviso-sin-mesas-titulo">/);
     expect(html).toContain('<span class="aviso-sin-mesas-camara" role="img" aria-label="ícono de cámara"><svg');
     expect(html).not.toContain('+');
   });
 
   it('🔴 sólo con la lista de mesas leída y vacía (ni cargando ni con error), y no en la pestaña Viajes (D246)', () => {
     expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';");
-    expect(home).toContain('<AppBottomBar active="home" aviso={avisoSinMesas ? <AvisoSinMesas /> : undefined} />');
+    expect(home).toContain('{avisoSinMesas && <AvisoSinMesas />}');
     // Ya no vive en la sección de la mesa.
     expect(home).not.toContain('mesa-empty');
     expect(home).not.toContain("t('Toca el + para abrir una')");
   });
 
-  it('🔴 la barra lo pone 40 px sobre su borde, en una franja que queda DEBAJO de ella; sin aviso, la barra es la de siempre', () => {
-    const con = renderToStaticMarkup(<AppBottomBar active="home" aviso={<AvisoSinMesas />} />);
-    const sin = renderToStaticMarkup(<AppBottomBar active="home" />);
-    // Hermana de la barra, antes de ella: no hija (taparía su sombra).
-    expect(con).toMatch(/^<div class="appbar-aviso"><div class="aviso-sin-mesas-titulo">/);
-    expect(sin).not.toContain('appbar-aviso');
-    expect(con.replace(/^<div class="appbar-aviso">[\s\S]*?<\/div><\/div><div class="appbar-block">/, '<div class="appbar-block">')).toBe(sin);
-    const css = readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
-    const de = (selector: string) => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
-    const aviso = de('.appbar-aviso');
-    for (const m of ['position: absolute;', 'bottom: 0;', 'z-index: 18;', 'padding: 20px var(--sp-4) calc(var(--appbar-alto) + 40px);', 'background: linear-gradient(to bottom, transparent, var(--gray-l) 20px);']) {
-      expect(aviso, m).toContain(m);
-    }
-    expect(aviso).not.toContain('fixed');
-    // Debajo de la barra, y el alto de la barra en un solo lugar.
-    expect(de('.appbar-block')).toContain('z-index: 19;');
-    expect(de('.appbar')).toContain('height: var(--appbar-alto);');
-    expect(css).toContain('--appbar-alto: calc(56px + var(--appbar-pie));');
-    // Lo de abajo de la página es del color de `.app`: la franja no se nota sin contenido debajo.
-    expect(de('.app')).toContain('background: var(--gray-l);');
+  it('🔴 D277 · va al final del contenido de Inicio (en el flujo), y la barra ya no lo cuelga', () => {
+    // Lo último del `.scroll`, después de todo lo demás.
+    const scroll = home.slice(home.indexOf("<div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>"));
+    const cierre = scroll.indexOf('<AppBottomBar');
+    expect(scroll.slice(0, cierre)).toMatch(/\{avisoSinMesas && <AvisoSinMesas \/>\}\s*<\/div>\s*$/);
+    expect(home).toContain('<AppBottomBar active="home" />');
+    // La barra es la de siempre: sin la franja de D275.
+    expect(renderToStaticMarkup(<AppBottomBar active="home" />)).toMatch(/^<div class="appbar-block">/);
+    expect(css).not.toContain('.appbar-aviso');
   });
 
-  it('🔴 con el aviso, el contenido deja lugar abajo para que nada quede tapado', () => {
+  it('🔴 D277 · la columna: el aviso toma el resto del alto y centra el texto; abajo, la barra y el círculo de Nueva', () => {
+    const columna = de('.has-appbar .scroll.con-aviso-sin-mesas');
+    for (const m of ['display: flex;', 'flex-direction: column;', 'padding-bottom: calc(var(--appbar-alto) + 26px);']) {
+      expect(columna, m).toContain(m);
+    }
+    // Lo que sobresale el círculo es lo mismo que suma la columna.
+    expect(de('.appbar-fab')).toContain('top: -26px;');
+    const aviso = de('.aviso-sin-mesas');
+    for (const m of ['flex: 1 0 auto;', 'justify-content: center;', 'padding: var(--sp-6) var(--sp-4);']) {
+      expect(aviso, m).toContain(m);
+    }
+    expect(aviso).not.toMatch(/position:\s*(fixed|absolute)/);
+    // En columna cada uno conserva su alto, y la sección de la mesa vacía no suma margen (no colapsa).
+    expect(de('.has-appbar .scroll.con-aviso-sin-mesas > *')).toContain('flex-shrink: 0;');
+    expect(de('.has-appbar .scroll.con-aviso-sin-mesas > .home-mesa:empty')).toContain('display: none;');
     expect(home).toContain("<div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>");
-    const css = readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
-    expect(css).toMatch(/\.has-appbar \.scroll\.con-aviso-sin-mesas \{\s*padding-bottom: calc\(var\(--appbar-alto\) \+ 128px\);\s*\}/);
   });
 });
 

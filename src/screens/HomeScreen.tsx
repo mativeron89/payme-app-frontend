@@ -310,8 +310,8 @@ export function HomeScreen() {
   const porUrgencia = openMesas ? ordenarPorUrgencia(openMesas.mesas) : [];
   const masked = '$ ••••';
   /**
-   * D275 · «No tienes mesas abiertas» va al pie, sobre la barra, y sólo con la lista de mesas ya leída y vacía: ni
-   * cargando ni con error. D246 · en la pestaña Viajes no se muestra.
+   * D275 · «No tienes mesas abiertas», sólo con la lista de mesas ya leída y vacía: ni cargando ni con error. D246 · en
+   * la pestaña Viajes no se muestra. D277 · va al final del contenido, centrado en el espacio libre.
    */
   const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';
 
@@ -334,7 +334,7 @@ export function HomeScreen() {
         />}
       />
 
-      {/* D275 · con el aviso al pie, el final del contenido queda encima de él y de la barra. */}
+      {/* D277 · con el aviso, el contenido es una columna y el aviso, al final, toma el resto del alto. */}
       <div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>
         {aperturaPendiente && (
           <button type="button" className="note note-orange aviso-retome" onClick={() => navigate('scan')}>
@@ -506,8 +506,8 @@ export function HomeScreen() {
               })}
             </div>
           ) : null
-          /* Vacío REAL: la sección queda vacía (sin alto, su margen colapsa con los 28 px de los viajes) y el aviso
-             «No tienes mesas abiertas» va al pie, sobre la barra (D275, `avisoSinMesas`). */}
+          /* Vacío REAL: la sección queda vacía (con el aviso no ocupa lugar: `.con-aviso-sin-mesas`) y el aviso
+             «No tienes mesas abiertas» va al final del contenido (D277, `avisoSinMesas`). */}
         </section>
 
         {/* D265 · D275 · cada viaje abierto: foto o inicial, nombre y monto; debajo, sus restaurantes pendientes (D271). */}
@@ -612,9 +612,12 @@ export function HomeScreen() {
             </div>
           </>
         )}
+
+        {/* D277 · lo último del contenido: centrado en el espacio libre entre lo de arriba y el círculo de Nueva. */}
+        {avisoSinMesas && <AvisoSinMesas />}
       </div>
 
-      <AppBottomBar active="home" aviso={avisoSinMesas ? <AvisoSinMesas /> : undefined} />
+      <AppBottomBar active="home" />
 
     </div>
   );

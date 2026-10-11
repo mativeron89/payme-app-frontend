@@ -106,16 +106,9 @@ export interface AppBottomBarProps {
    * texto según el estado, que sería un nav item inestable (SPEC_APP.md §1.5).
    */
   above?: React.ReactNode;
-  /**
-   * D275 · un aviso 40 px SOBRE la barra («No tienes mesas abiertas» de Inicio), en una franja del color de la página
-   * que queda debajo de la barra. Lo pone la barra porque es ella la que sabe su alto (`--appbar-alto`) y está anclada a
-   * `.app`: lo `position: fixed` se anclaría al viewport corto de la app de inicio de iOS (D256). Sin él, la barra se ve
-   * igual que siempre.
-   */
-  aviso?: React.ReactNode;
 }
 
-export function AppBottomBar({ active = null, center, above, aviso }: AppBottomBarProps) {
+export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
   const { t } = useIdioma();
   /**
    * D276-1 · Mati: «siempre que estes dentro de las fechas del viaje y seleccionas la cámara para escanear ticket, por
@@ -171,30 +164,27 @@ export function AppBottomBar({ active = null, center, above, aviso }: AppBottomB
   };
 
   return (
-    <>
-      {aviso && <div className="appbar-aviso">{aviso}</div>}
-      <div className="appbar-block">
-        {above && <div className="appbar-above">{above}</div>}
-        <nav className="appbar" aria-label={t('Navegación principal')}>
-          {LEFT.map(item)}
-          <button
-            type="button"
-            className="appbar-center"
-            onClick={centro.onClick}
-            disabled={centro.disabled}
-            aria-busy={centro.busy || undefined}
-            // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.
-            aria-label={t(('ariaLabel' in centro && centro.ariaLabel) || centro.label)}
-          >
-            <span className="appbar-fab" aria-hidden="true">
-              {/* 22px dentro del círculo de 56px medido por Diseño. */}
-              <Icon name={centro.icon} size={22} />
-            </span>
-            <span className="appbar-label">{t(centro.label)}</span>
-          </button>
-          {RIGHT.map(item)}
-        </nav>
-      </div>
-    </>
+    <div className="appbar-block">
+      {above && <div className="appbar-above">{above}</div>}
+      <nav className="appbar" aria-label={t('Navegación principal')}>
+        {LEFT.map(item)}
+        <button
+          type="button"
+          className="appbar-center"
+          onClick={centro.onClick}
+          disabled={centro.disabled}
+          aria-busy={centro.busy || undefined}
+          // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.
+          aria-label={t(('ariaLabel' in centro && centro.ariaLabel) || centro.label)}
+        >
+          <span className="appbar-fab" aria-hidden="true">
+            {/* 22px dentro del círculo de 56px medido por Diseño. */}
+            <Icon name={centro.icon} size={22} />
+          </span>
+          <span className="appbar-label">{t(centro.label)}</span>
+        </button>
+        {RIGHT.map(item)}
+      </nav>
+    </div>
   );
 }

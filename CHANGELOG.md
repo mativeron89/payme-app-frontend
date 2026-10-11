@@ -11,10 +11,11 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.239.0 — La cámara de Nueva va al viaje en sus fechas, «¿Quiénes estuvieron?» en las tres formas, el gasto personal y el que no estuvo (D276) (2026-10-10)
+## 0.239.0 — La cámara de Nueva va al viaje en sus fechas, «¿Quiénes estuvieron?» en las tres formas, el gasto personal y el que no estuvo (D276); «No tienes mesas abiertas» en el medio del espacio vacío (D277) (2026-10-10)
 
-Orden AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010 (0072cfb9…), con D276 (2849a1a1…) y App Backend 2.179.0 (inventario en
-b038fed, contenido de 66eafab). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+Orden AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010 (0072cfb9…), con D276 (2849a1a1…), App Backend 2.179.0 (inventario en
+b038fed, contenido de 66eafab) y la adenda D277 (f71ff12c…), que va como commit sucesor. Lo visible se cierra con la
+prueba de Mati en el iPhone (D63).
 
 - **D276-1 · la cámara de Nueva, por las fechas del viaje.** Mati: «siempre que estes dentro de las fechas del viaje y
   seleccionas la cámara para escanear ticket, por default se tiene que ir a los gastos del viaje».
@@ -56,6 +57,19 @@ b038fed, contenido de 66eafab). Lo visible se cierra con la prueba de Mati en el
   con «No estuviste en este ticket: no eliges nada.».
   - Si al tocar «Listo» llega el 409 `viaje_ticket_not_present` (me desmarcaron mientras elegía), la misma línea en un
     aviso y el ticket de nuevo, sin pantalla de error. `viaje_ticket_personal`, igual.
+- **D277 · «No tienes mesas abiertas», en el medio del espacio vacío.** Mati: «No esta centrado el mensaje de “no tienes
+  mesas..”», y eligió «En el medio del espacio vacío». Supersede sólo la posición de D275 (40 px sobre la barra).
+  - **Dónde:** centrado de arriba a abajo en el espacio libre entre lo último de arriba (la última burbuja de viaje o de
+    restaurante pendiente; sin viajes, la tarjeta Ver pagos / Ver perfil) y el borde de arriba del círculo de Nueva, que
+    sobresale 26 px de la barra.
+  - **Sin espacio** (muchos viajes, o la invitación y el aviso de la foto a la vista): va debajo del contenido, con 24 px
+    de aire arriba y abajo hasta el círculo, y nada queda tapado.
+  - **Cómo:** va al final del contenido de Inicio, en el flujo (nunca `fixed`, D256). Con el aviso, el contenido es una
+    columna y el aviso toma el resto del alto, como el pie del viaje abierto. La barra ya no lo cuelga: sale la franja
+    de D275.
+    - En una columna los márgenes no colapsan: la sección de la mesa, vacía, no ocupa lugar (si no, sumaba 24 px a los
+      28 de los viajes).
+  - Sigue apareciendo sólo sin mesas abiertas, y no en la pestaña Viajes.
 - **`viaje_version=6`** en todas las rutas de Viajes, con claves exactas: cada ticket suma `presentes` (ids de miembro,
   sin repetir) y `personal`, y el detalle suma `personal` (un personal nunca se elige). Los errores nuevos:
   `viaje_ticket_persona_ya_eligio` (con su `miembro_id`), `viaje_ticket_not_present` y `viaje_ticket_personal`.
@@ -85,6 +99,9 @@ b038fed, contenido de 66eafab). Lo visible se cierra con la prueba de Mati en el
       la precarga de la sesión, salvo que esa falle.
   - **e2e a 375,** con la hora de México y el reloj fijo: los bordes se prueban de noche, donde la fecha local y la UTC
     no coinciden.
+  - **D277, rojo en `95af189`:** 5 unitarias y 16 e2e (los 12 de D277 y los 4 de D275 que ahora buscan el aviso en el
+    contenido). Mueren sus 12 mutantes (5 unitarios y 7 en el navegador).
+  - **D277, e2e a 375 y 390,** con y sin viajes, y sin espacio con y sin el inset del iPhone, con capturas.
 
 ## 0.238.1 — La burbuja del viaje con el diseño de Claude Design, el restaurante pendiente y «No tienes mesas abiertas» al pie (D275, D271) (2026-10-10)
 

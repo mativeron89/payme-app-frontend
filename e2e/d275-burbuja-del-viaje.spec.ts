@@ -3,7 +3,8 @@ import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 
 /**
  * D275 · la burbuja del viaje en Inicio con el diseño de Claude Design (`PANTALLA-burbuja-del-viaje.md`), D271 · el
- * restaurante con gente por elegir debajo de su viaje, y el aviso «No tienes mesas abiertas» al pie, sobre la barra.
+ * restaurante con gente por elegir debajo de su viaje, y cuándo se ve el aviso «No tienes mesas abiertas» (su lugar,
+ * centrado en el espacio libre, es de D277: `d277-aviso-centrado.spec.ts`).
  * A 375 y a 390: el paquete mezcla los dos anchos y D275 pide que funcione en ambos.
  *
  * La semilla del mock: «Cancún 2026» abierto (debes $542) con «Mariscos El Faro», donde Diego no eligió (yo sí);
@@ -62,7 +63,7 @@ async function editarViajes(page: Page, cambio: string): Promise<void> {
 
 const burbuja = (page: Page, nombre: string) => page.locator('button.viaje-burbuja').filter({ hasText: nombre });
 const pendientes = (page: Page) => page.locator('button.viaje-pendiente');
-const aviso = (page: Page) => page.locator('.appbar-aviso');
+const aviso = (page: Page) => page.locator('.aviso-sin-mesas');
 
 async function capturar(page: Page, nombre: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
@@ -98,7 +99,7 @@ for (const ancho of [375, 390]) {
       await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
     });
 
-    test('las medidas: 28 debajo de la tarjeta, 20 entre viajes, el pendiente 8 abajo y 24 adentro; el aviso 40 sobre la barra', async ({ page }) => {
+    test('las medidas: 28 debajo de la tarjeta, 20 entre viajes, el pendiente 8 abajo y 24 adentro (también con el aviso)', async ({ page }) => {
       await conViajes(page);
       await sinMesas(page);
       // Lo de arriba que la semilla trae y el prototipo no (la invitación y el aviso de la foto) se oculta, para medir
@@ -131,25 +132,8 @@ for (const ancho of [375, 390]) {
       expect(Math.round(ancho - b0.right)).toBe(16);
       expect(b0.height).toBeGreaterThanOrEqual(96);
       expect(p0.height).toBeGreaterThanOrEqual(60);
-      // El texto del aviso, 40 px sobre el borde de arriba de la barra, centrado.
-      const barra = await caja(page, '.appbar-block');
-      const a = await caja(page, '.aviso-sin-mesas-cuerpo');
-      expect(Math.round(barra.top - a.bottom)).toBe(40);
-      expect(Math.abs(Math.round(a.left + a.width / 2 - ancho / 2))).toBeLessThanOrEqual(1);
-      // La franja del aviso queda debajo de la barra, y es del color de la página.
-      const capas = await page.evaluate(() => ({
-        franja: Number(getComputedStyle(document.querySelector('.appbar-aviso')!).zIndex),
-        barra: Number(getComputedStyle(document.querySelector('.appbar-block')!).zIndex),
-        app: getComputedStyle(document.querySelector('.app')!).backgroundColor,
-        franjaFondo: getComputedStyle(document.querySelector('.appbar-aviso')!).backgroundImage,
-      }));
-      expect(capas.franja).toBeLessThan(capas.barra);
-      expect(capas.franjaFondo).toContain(capas.app);
-      // El círculo de Nueva sobresale de la barra: cuánto queda entre él y el aviso (lo pidió el Bibliotecario).
-      const fab = await caja(page, '.appbar-fab');
-      const libre = Math.round(fab.top - a.bottom);
-      test.info().annotations.push({ type: 'círculo de Nueva', description: `sobresale ${Math.round(barra.top - fab.top)} px de la barra; quedan ${libre} px hasta el aviso` });
-      expect(libre).toBeGreaterThan(0);
+      // Sin mesas, con el aviso: la columna de D277 no cambia ninguna de estas medidas (sus márgenes no colapsan).
+      await expect(aviso(page)).toBeVisible();
       await capturar(page, 'medidas');
     });
 
@@ -166,51 +150,10 @@ for (const ancho of [375, 390]) {
       await expect(aviso(page)).toHaveCount(0);
       await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
       await expect(aviso(page)).toBeVisible();
-      // La franja tapa lo que pasa por debajo: también toma sus toques, así nadie toca algo que no ve.
-      const enLaFranja = await aviso(page).evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        return el.contains(document.elementFromPoint(r.left + 8, r.top + r.height / 3));
-      });
-      expect(enLaFranja).toBe(true);
+      // D277 · va en el contenido, no colgado de la barra.
+      await expect(page.locator('.scroll .aviso-sin-mesas')).toHaveCount(1);
+      await expect(page.locator('.appbar-block .aviso-sin-mesas')).toHaveCount(0);
       await capturar(page, 'aviso');
-    });
-
-    for (const inset of [0, 34]) test(`🔴 nada queda tapado (inset de abajo ${inset}): al final del scroll, lo último queda encima del aviso, y el aviso encima de la barra`, async ({ page, browserName }) => {
-      // El iPhone con indicador de inicio: la barra crece (`--appbar-pie`) y el aviso sube con ella. El inset se emula
-      // por CDP, que es de Chromium (la suite corre en Chromium); sin `test.skip`, que `corteGuard` no permite.
-      if (inset > 0 && browserName === 'chromium') {
-        const cdp = await page.context().newCDPSession(page);
-        await cdp.send('Emulation.setSafeAreaInsetsOverride', {
-          insets: { top: 59, topMax: 59, bottom: inset, bottomMax: inset, left: 0, leftMax: 0, right: 0, rightMax: 0 },
-        });
-      }
-      await conViajes(page);
-      await sinMesas(page);
-      await editarViajes(page, 'dos-pendientes');
-      // Con la página llena: la invitación y el aviso de la foto de la semilla se quedan, así hay que desplazar.
-      // Se espera a que estén (llegan después) y a los dos pendientes, ANTES de ir al final.
-      await expect(page.locator('section[aria-label="Te invitaron"]')).toBeVisible();
-      await expect(page.locator('.friend-avatar-notice')).toBeVisible();
-      await expect(pendientes(page)).toHaveCount(2);
-      const desplazado = await page.locator('.scroll').first().evaluate(async (el) => {
-        el.scrollTo(0, el.scrollHeight);
-        await new Promise((r) => setTimeout(r, 200));
-        return el.scrollTop;
-      });
-      // Control: si no hubiera nada que desplazar, esta prueba no probaría nada.
-      expect(desplazado).toBeGreaterThan(0);
-      const ultimo = await page.evaluate(() => {
-        const s = document.querySelector('.scroll')!;
-        const hijos = [...s.querySelectorAll('button, .state-error, .note')].filter((e) => (e as HTMLElement).getBoundingClientRect().height > 0);
-        return Math.max(...hijos.map((e) => e.getBoundingClientRect().bottom));
-      });
-      // La franja del aviso empieza en su fundido: lo último del contenido termina antes.
-      const franja = await caja(page, '.appbar-aviso');
-      const a = await caja(page, '.aviso-sin-mesas-cuerpo');
-      const barra = await caja(page, '.appbar-block');
-      expect(ultimo, 'lo último del contenido, por encima de la franja del aviso').toBeLessThanOrEqual(franja.top);
-      expect(Math.round(barra.top - a.bottom)).toBe(40);
-      await capturar(page, `al-final-inset-${inset}`);
     });
 
     test('🔴 el restaurante pendiente: lo ve quien ya eligió, abre ESE ticket, varios del más reciente al más viejo, y se va', async ({ page }) => {
