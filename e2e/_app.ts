@@ -59,6 +59,18 @@ export async function ingresar(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
+/**
+ * D276-1 · con Viajes encendido, la cámara de «Nueva» va al viaje abierto cuyas fechas cubren HOY, y su nombre
+ * accesible pasa a «Escanear ticket para {viaje}». «Cancún 2026», el viaje abierto del mock, va del 5 al 11 de
+ * octubre de 2026. Sin un reloj fijo, una spec de Viajes depende del día de la corrida, y además corre una carrera:
+ * «Nueva» se ve hasta que llega la lista de viajes. Las que no prueban eso fijan el reloj FUERA de esas fechas.
+ */
+export const FUERA_DE_LAS_FECHAS_DE_LOS_VIAJES = new Date('2026-10-13T18:00:00Z');
+
+export async function relojFueraDeLasFechasDeLosViajes(page: Page): Promise<void> {
+  await page.clock.setFixedTime(FUERA_DE_LAS_FECHAS_DE_LOS_VIAJES);
+}
+
 export interface MesaAbierta {
   /** `PA-####`. Distinto en cada corrida: el mock lo genera. */
   readonly code: string;

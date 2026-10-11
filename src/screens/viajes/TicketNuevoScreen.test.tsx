@@ -146,13 +146,23 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     expect(marcas(html, 'radio').slice(5)).toEqual([false, false, true]);
   });
 
-  it('🔴 «¿Quiénes estuvieron?» sólo con «En partes iguales»: todos marcados, «Tú» primero con su @', () => {
-    expect(nuevo('consumo')).not.toContain('¿Quiénes estuvieron?');
-    expect(nuevo('total')).not.toContain('¿Quiénes estuvieron?');
+  it('🔴 D276-2 · «¿Quiénes estuvieron?» en las TRES formas, todos marcados al arrancar; la ayuda según la forma', () => {
+    const ayuda = {
+      consumo: 'Sólo eligen los que estuvieron. Desmarca a quien no estuvo.',
+      iguales: 'Se divide entre los marcados. Desmarca a quien no estuvo.',
+    } as const;
+    for (const forma of ['consumo', 'iguales', 'total'] as const) {
+      const h = nuevo(forma);
+      expect(h, forma).toContain('¿Quiénes estuvieron?');
+      expect(marcas(presentes(h), 'checkbox'), forma).toEqual([true, true, true, true]);
+      // Cada forma dice SU ayuda y no la de otra; «Pagar el total», ninguna (el plan: sin texto extra).
+      for (const [f, texto] of Object.entries(ayuda)) {
+        if (f === forma) expect(h, forma).toContain(texto);
+        else expect(h, forma).not.toContain(texto);
+      }
+      if (forma === 'total') expect(h).not.toContain('vjt-texto--ayuda');
+    }
     const html = nuevo('iguales');
-    expect(html).toContain('¿Quiénes estuvieron?');
-    expect(html).toContain('Se divide entre los marcados. Desmarca a quien no estuvo.');
-    expect(marcas(presentes(html), 'checkbox')).toEqual([true, true, true, true]);
     // En la lista de presentes (el selector de quién pagó, arriba, también nombra a Luis).
     const lista = presentes(html);
     expect(lista.indexOf('>Tú<')).toBeLessThan(lista.indexOf('Luis Perez'));
@@ -160,10 +170,35 @@ describe('AF-VIAJES · 1h · Ticket nuevo', () => {
     expect(html).toContain('@diego.torres');
   });
 
-  it('desmarcado Diego: su casilla dice «no»', () => {
-    const html = nuevo('iguales', { ausentes: new Set(['m-diego']) });
-    expect(marcas(presentes(html), 'checkbox')).toEqual([true, true, true, false]);
+  it('desmarcado Diego: su casilla dice «no», en las tres formas', () => {
+    for (const forma of ['consumo', 'iguales', 'total'] as const) {
+      const html = nuevo(forma, { ausentes: new Set(['m-diego']) });
+      expect(marcas(presentes(html), 'checkbox'), forma).toEqual([true, true, true, false]);
+    }
   });
+
+  const PERSONAL = 'Es un gasto personal: sólo lo ves tú y no suma al total del viaje.';
+  const SOLO_YO = new Set(['m-luis', 'm-sofia', 'm-diego']);
+
+  it('🔴 D276-3 · sólo yo marcado y pagué yo: la línea del gasto personal, arriba del botón, en las tres formas', () => {
+    for (const forma of ['consumo', 'iguales', 'total'] as const) {
+      const html = nuevo(forma, { ausentes: SOLO_YO });
+      expect(html, forma).toContain(PERSONAL);
+      // En el pie, antes del botón: es lo último que se lee antes de compartir.
+      const pie = html.slice(html.indexOf('vj-pie'));
+      expect(pie.indexOf(PERSONAL), forma).toBeGreaterThan(-1);
+      expect(pie.indexOf(PERSONAL), forma).toBeLessThan(pie.indexOf('Compartir con el viaje'));
+    }
+  });
+
+  it('🔴 D276-3 · sin la línea: con alguien más marcado, o sólo yo pero pagó otro (es una deuda), o pagamos dos', () => {
+    expect(nuevo('consumo')).not.toContain(PERSONAL);
+    expect(nuevo('consumo', { ausentes: new Set(['m-diego']) })).not.toContain(PERSONAL);
+    expect(nuevo('consumo', { ausentes: SOLO_YO, quienPago: { marcados: new Set(['m-luis']), montos: null } })).not.toContain(PERSONAL);
+    expect(nuevo('consumo', { ausentes: SOLO_YO, quienPago: { marcados: new Set(['m-ana', 'm-luis']), montos: null } }))
+      .not.toContain(PERSONAL);
+  });
+
 });
 
 describe('AF-VIAJES · «¿Quiénes estuvieron?» · el último no se desmarca', () => {
@@ -182,7 +217,7 @@ describe('AF-VIAJES · 1k · el ticket ya estaba en el viaje', () => {
   const tk = {
     id: 'tk', lugar: null, tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40', cargado_en: instante,
     forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false, items: [], personas: [],
-    te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false,
+    te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
     pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
   } satisfies TicketDelViaje;
 

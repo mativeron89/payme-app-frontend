@@ -36,6 +36,8 @@ import {
   candidatosDelViaje,
   fechaDelEscaneo,
   fechaYHoraLocal,
+  ayudaDePresentes,
+  esGastoPersonal,
   idsPresentes,
   llaveParaPedido,
   pedidoDeCarga,
@@ -142,7 +144,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
     // pagadores son otro pedido).
     const reparto = repartoDeQuienPago(quienPago, opciones, totalDelEscaneo(ocr.items));
     if (!reparto.valido) return;
-    const pedido = conQuienPago(pedidoDeCarga(ocr, forma, tipo), reparto);
+    // D276-2 · quiénes estuvieron, SIEMPRE: va lo que se ve (plan OK del Bibliotecario). Entran en la llave.
+    const pedido = { ...conQuienPago(pedidoDeCarga(ocr, forma, tipo), reparto), presentes: idsPresentes(candidatos, ausentes) };
     llave.current = llaveParaPedido(llave.current, pedido, newIdempotencyKey);
     setEnviando(true);
     try {
@@ -151,18 +154,12 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
         if (vivo.current) mostrarDuplicado(r.ya_cargado, r.ticket.id, r.ticket);
         return;
       }
-      if (forma === 'iguales') {
-        // Las personas del ticket son las del viaje al cargarlo; se marcan las
-        // que quedaron marcadas acá. Sin nadie desmarcado, no hay nada que mandar.
-        const marcados = new Set(idsPresentes(candidatos, ausentes));
-        const delTicket = r.ticket.personas.flatMap((p) => (p.miembro_id ? [p.miembro_id] : []));
-        const presentes = delTicket.filter((id) => marcados.has(id));
-        if (presentes.length > 0 && presentes.length < delTicket.length) {
-          await api.marcarPresentesEnTicket(viajeId, r.ticket.id, presentes);
-        }
-      }
       olvidarTicketEscaneado();
-      if (forma === 'consumo') {
+      if (r.ticket.personal) {
+        // D276-3 · es todo mío: no hay nada que elegir.
+        replaceRoute('viaje', viajeId);
+        toast(t('Guardaste el gasto personal.'), { sobreLaBarra: true });
+      } else if (forma === 'consumo') {
         replaceRoute('viaje-ticket', parametroDeTicket(viajeId, r.ticket.id));
       } else {
         replaceRoute('viaje', viajeId);
@@ -177,6 +174,11 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
       else if (e.tipo === 'no_disponible') setFase({ tipo: 'no_disponible' });
       else if (e.tipo === 'limite_tickets') toast(t('Este viaje ya tiene el máximo de tickets.'), { sobreLaBarra: true });
       else if (e.tipo === 'pagadores_no_suman') toast(t('Los montos no suman el total. Revísalos.'), { sobreLaBarra: true });
+      else if (e.tipo === 'persona_desconocida') {
+        // D276-2 · alguien de los marcados salió del viaje mientras tanto: el viaje de nuevo, y la lista con los que siguen.
+        toast(t('Alguien ya no está en el viaje. Revisa quiénes estuvieron.'), { sobreLaBarra: true });
+        api.getViaje(viajeId).then((v) => { if (vivo.current) setViaje(v); }, () => undefined);
+      }
       else if (e.tipo === 'pagador_desconocido') {
         // Alguien que pagó salió del viaje: el viaje de nuevo, y el selector queda con los que siguen (sin ninguno, tú).
         toast(t('Quien pagó ya no está en el viaje. Elige de nuevo.'), { sobreLaBarra: true });
@@ -416,7 +418,7 @@ export function ListaDePresentes({ candidatos, ausentes, onAlternar, deshabilita
   );
 }
 
-/** 1h · el ticket recién escaneado, cómo se divide y (en partes iguales) quiénes estuvieron. */
+/** 1h · el ticket recién escaneado, cómo se divide y quiénes estuvieron (D276: en las tres formas). */
 export function TicketNuevoVista({
   viajeNombre, opciones, quienPago, onQuienPago, ocr, tipo, forma, candidatos, ausentes, enviando, onTipo, onForma, onPresente, onCompartir,
 }: {
@@ -441,6 +443,7 @@ export function TicketNuevoVista({
   const total = totalDelEscaneo(ocr.items);
   const reparto = repartoDeQuienPago(quienPago, opciones, total);
   const aviso = avisoDeQuienPago(reparto, total, t);
+  const personal = esGastoPersonal(candidatos, ausentes, reparto.pagadores);
   return (
     <>
       <TituloTicketNuevo escanear={false} viajeNombre={viajeNombre} />
@@ -512,16 +515,18 @@ export function TicketNuevoVista({
           </div>
         </section>
 
-        {forma === 'iguales' && candidatos.length > 0 && (
+        {/* D276-2 · en las tres formas, todos marcados al arrancar: se destilda a quien no estuvo. */}
+        {candidatos.length > 0 && (
           <section className="vj-card" aria-labelledby="vjt-quienes">
             <h2 id="vjt-quienes" className="vjt-card-titulo">{t('¿Quiénes estuvieron?')}</h2>
-            <p className="vjt-texto vjt-texto--ayuda">{t('Se divide entre los marcados. Desmarca a quien no estuvo.')}</p>
+            {ayudaDePresentes(forma, t) && <p className="vjt-texto vjt-texto--ayuda">{ayudaDePresentes(forma, t)}</p>}
             <ListaDePresentes candidatos={candidatos} ausentes={ausentes} onAlternar={onPresente} deshabilitada={enviando} />
           </section>
         )}
       </div>
       <div className="vj-pie">
         {aviso && <p className="vjq-aviso vjq-aviso--pie" role="status">{aviso}</p>}
+        {!aviso && personal && <p className="vjq-aviso vjq-aviso--pie vjt-personal" role="status">{t('Es un gasto personal: sólo lo ves tú y no suma al total del viaje.')}</p>}
         <button
           type="button"
           className="btn btn-navy"

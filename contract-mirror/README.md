@@ -24,7 +24,24 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D268 · el espejo sólo con el contrato · App Backend v2.178.0 · 2026-10-10
+### D276 · quiénes estuvieron y el gasto personal · App Backend v2.179.0 · 2026-10-10
+
+Orden `AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010` (D276). Scope del lease con `contract-mirror/**` y `scripts/**` (el espejo,
+su verificación y los hechos del dueño).
+
+- Contenido: owner **`66eafab42eef59a85e49c33706124d06fe38140d`** (v2.179.0, commit A: quiénes estuvieron en cada ticket y el gasto personal).
+- Inventario: el del owner en **`b038fed85c07fa62856b26728c641b54301ccd5d`** (v2.179.0, commit B, el servido; `contract/mirror-inventory.json`, sha256
+  `737596d935963a7a94fe1ddbf0faf635718d11174586e988cff36c89200fc3d3`), adoptado con `--adoptar-inventario` sin editarlo. Declara `66eafab`, 138 entradas.
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `4137c4e94386f27ad7f40b5b6d94921bcbb462460d127c236b086aab7a114ac9`): `presentes` al cargar, el gasto personal,
+  `viaje_version=6` y los 409 `viaje_ticket_persona_ya_eligio`, `viaje_ticket_not_present` y `viaje_ticket_personal`.
+- Sólo por hash cambian, desde `1664dd8`: `routes/account.js`, `routes/groups.js` (los dos de v2.178.1),
+  `routes/viajes.js`, `services/viajes.js` y `services/viajesCalculo.js`.
+- `--integridad`: 13 copiados y 125 sólo por hash. `--paridad`: espejo = inventario = fuente en `66eafab`, 138/138.
+- Hechos del dueño: regenerados en local sobre `66eafab` porque cambió una fuente (`routes/account.js`). Los 43 hechos
+  dan los mismos valores; cambian sólo el commit y el sha de esa fuente.
+
+### Refresh anterior · D268 · el espejo sólo con el contrato · App Backend v2.178.0 · 2026-10-10
 
 Orden `AF-SEGURIDAD-D268-20261010` (S-03, y el contrato de S-01, S-02 y S-05). Scope del lease con
 `contract-mirror/**` y `scripts/**` (el espejo y su verificación).

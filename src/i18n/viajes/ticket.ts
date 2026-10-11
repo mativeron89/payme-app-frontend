@@ -61,4 +61,19 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   'Pagaste el total de este ticket. Nadie te debe nada.': "You paid the whole ticket. Nobody owes you anything.",
   'Se divide entre los que estuvieron': "It's split among those who were there",
   'Guardamos quiénes estuvieron.': 'We saved who was there.',
+  // D276 · quiénes estuvieron en las tres formas, el gasto personal y el no presente.
+  'Sólo eligen los que estuvieron. Desmarca a quien no estuvo.':
+    'Only those who were there choose. Uncheck anyone who wasn\'t.',
+  'Es un gasto personal: sólo lo ves tú y no suma al total del viaje.':
+    "It's a personal expense: only you see it, and it doesn't count toward the trip total.",
+  'Es tu gasto personal: sólo lo ves tú y no suma al total del viaje.':
+    "It's your personal expense: only you see it, and it doesn't count toward the trip total.",
+  'Guardaste el gasto personal.': 'You saved the personal expense.',
+  'Alguien ya no está en el viaje. Revisa quiénes estuvieron.':
+    "Someone is no longer on the trip. Check who was there.",
+  'No estuviste en este ticket: no eliges nada.': "You weren't there for this ticket: you don't choose anything.",
+  'Es tu gasto personal: no hay nada que elegir.': "It's your personal expense: there's nothing to choose.",
+  '{0} ya eligió: no se puede desmarcar.': '{0} already chose: they can\'t be unchecked.',
+  'Alguien ya eligió: no se puede desmarcar.': "Someone already chose: they can't be unchecked.",
+  'Ya elegiste: no te puedes desmarcar.': "You already chose: you can't be unchecked.",
 };

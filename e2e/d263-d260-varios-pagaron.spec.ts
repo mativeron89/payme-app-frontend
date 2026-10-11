@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 
 /**
@@ -15,6 +15,8 @@ const MARISCOS = 'd2000000-0000-4000-8000-000000000105';
 async function conViajes(page: Page): Promise<void> {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.viajes.v1', 'encendido'));
+  // D276-1 · el día de la corrida no decide a dónde va «Nueva» (`_app.ts`).
+  await relojFueraDeLasFechasDeLosViajes(page);
   await ingresar(page);
 }
 

@@ -85,6 +85,11 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Total {0}': 'Total {0}',
   'Cargaste el gasto.': 'You added the expense.',
   'Escanear ticket para {0}': 'Scan a ticket for {0}',
+  // D276-1 · dos viajes cubren hoy: la cámara de Nueva pregunta a cuál.
+  '¿Para qué viaje?': 'Which trip is it for?',
+  'Escanear ticket para un viaje': 'Scan a ticket for a trip',
+  // D276-3 · el chip del gasto personal en mi lista del viaje.
+  'Personal': 'Personal',
   'Ticket para {0}': 'Ticket for {0}',
   'Alguien ya no está en el viaje. Revisa entre quiénes.': 'Someone is no longer on the trip. Check who it is split among.',
   // D255-8 · Configuración del viaje.

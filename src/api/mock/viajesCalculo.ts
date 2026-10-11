@@ -33,6 +33,8 @@ export interface TicketParaCalculo {
   readonly id: string;
   readonly forma: 'consumo' | 'iguales' | 'total';
   readonly pagado_por: string;
+  /** D276 · quien lo cargó, si no es quien lo pagó (como `cargado_por` del dueño). */
+  readonly cargado_por?: string;
   readonly monto_cents: number;
   /** D263 · lo que pagó cada uno, en el orden en que se cargaron. Sin la lista, `pagado_por` pagó todo. */
   readonly pagadores?: ReadonlyArray<{ readonly user_id: string; readonly monto_cents: number }>;
@@ -71,6 +73,20 @@ export interface ConsumoDelTicket {
   readonly asignado: Map<string, number>;
   readonly sinRepartir: number;
   readonly faltan: string[];
+  /** D276 · un gasto personal: todo de su dueño, fuera del balance del viaje. */
+  readonly personal?: true;
+}
+
+/**
+ * v2.179.0 · D276 · `esPersonal` del dueño: el único presente es quien lo cargó (sin `cargado_por`, quien lo pagó) y lo
+ * pagó él solo. Si lo pagó otro, no es personal: es una deuda. Es la ÚNICA definición.
+ */
+export function esPersonal(t: Pick<TicketParaCalculo, 'pagado_por' | 'cargado_por' | 'pagadores' | 'personas'>): boolean {
+  const duenio = t.cargado_por ?? t.pagado_por;
+  const presentes = t.personas.filter((p) => p.presente);
+  const pagadores = t.pagadores && t.pagadores.length ? t.pagadores : [{ user_id: t.pagado_por }];
+  return presentes.length === 1 && presentes[0]!.user_id === duenio
+    && pagadores.length === 1 && pagadores[0]!.user_id === duenio;
 }
 
 const sumar = (m: Map<string, number>, k: string, v: number) => { if (v) m.set(k, (m.get(k) ?? 0) + v); };
@@ -79,6 +95,11 @@ export function consumoDelTicket(t: TicketParaCalculo, { cierre = false } = {}):
   const consumo = new Map<string, number>();
   const asignado = new Map<string, number>();
   if (!Number.isSafeInteger(t.monto_cents) || t.monto_cents <= 0) throw new Error('viaje_ticket_monto_invalido');
+  // D276: el personal es todo de su dueño, en cualquier forma y sin elegir.
+  if (esPersonal(t)) {
+    sumar(consumo, t.cargado_por ?? t.pagado_por, t.monto_cents);
+    return { consumo, asignado, sinRepartir: 0, faltan: [], personal: true };
+  }
   if (t.forma === 'total') {
     // D263: con varios pagadores, cada uno consumió lo que pagó.
     for (const p of pagadoresDe(t)) sumar(consumo, p.user_id, p.monto_cents);
@@ -103,11 +124,13 @@ export function consumoDelTicket(t: TicketParaCalculo, { cierre = false } = {}):
   const elegido = [...consumo.values()].reduce((x, c) => x + c, 0);
   let sinRepartir = t.monto_cents - elegido;
   if (sinRepartir < 0) throw new Error('viaje_ticket_no_cuadra');
-  const faltan = t.personas.filter((p) => !p.listo).map((p) => p.user_id);
+  // D276: sólo los presentes faltan y reciben lo no elegido al cerrar.
+  const presentes = t.personas.filter((p) => p.presente);
+  const faltan = presentes.filter((p) => !p.listo).map((p) => p.user_id);
   if (cierre && sinRepartir > 0) {
-    const vivos = t.personas.filter((p) => p.vivo);
+    const vivos = presentes.filter((p) => p.vivo);
     const sinElegir = vivos.filter((p) => !p.listo);
-    const receptores = sinElegir.length ? sinElegir : vivos.length ? vivos : t.personas;
+    const receptores = sinElegir.length ? sinElegir : vivos.length ? vivos : presentes;
     if (!receptores.length) throw new Error('viaje_ticket_sin_personas');
     splitEqual(sinRepartir, receptores.length).forEach((c, i) => {
       sumar(consumo, receptores[i]!.user_id, c);
@@ -135,6 +158,8 @@ export function balanceDelViaje(miembros: readonly string[], tickets: readonly T
   for (const t of tickets) {
     const r = consumoDelTicket(t, { cierre });
     porTicket.set(t.id, r);
+    // D276: el personal no suma al gasto del grupo ni mueve balances.
+    if (r.personal) continue;
     gasto += t.monto_cents;
     // A quien pagó se le acredita lo asignado: en vivo, lo no elegido no es de nadie.
     const acreditado = t.monto_cents - r.sinRepartir;

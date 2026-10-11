@@ -28,19 +28,35 @@
       "Sin RFC (o con el genérico XAXX010101000 / XEXX010101000), o sin folio ni fecha y hora: no hay huella y sólo vale el recibo. Así, dos pedidos iguales en el mismo café en días distintos no se bloquean."
     ],
     "total": "El TOTAL impreso o, si no se leyó, la suma de los renglones.",
-    "privacidad": "Nunca se guarda ni se publica el RFC ni el folio: sólo la huella."
+    "privacidad": "Nunca se guarda ni se publica el RFC ni el folio: sólo la huella.",
+    "personal_de_otro": "v2.179.0 · D276: el duplicado (POST /:id/tickets/check y el del POST /:id/tickets) sólo mira tickets que quien escanea puede ver. El gasto personal de otro miembro, para él, no existe: el chequeo da `duplicado: null` y la carga entra como un ticket nuevo, sin decir nada del personal. Como la huella es única por viaje, al personal se le libera la huella (queda sin huella) y el nuevo se queda con ella; el personal no cambia de monto ni de balance. Declarado: ese ticket puede quedar contado dos veces (el personal, que no suma al viaje, y el nuevo; y si su dueño después lo comparte, los dos en el viaje: se borra uno). Sin su huella, el personal pierde la defensa por huella frente a un segundo escaneo de su dueño."
   },
   "dividir": {
-    "consumo": "«Por lo que pidió cada uno»: cada miembro del ticket elige sus renglones con las porciones de la mesa (1/k para k=1..20, más 2/3 y 3/4). Quien completa un plato paga lo que queda (tolerancia de 100 bps). «Listo» marca que ya eligió.",
+    "consumo": "«Por lo que pidió cada uno»: cada presente del ticket (v2.179.0 · D276: sólo los que estuvieron) elige sus renglones con las porciones de la mesa (1/k para k=1..20, más 2/3 y 3/4). Quien completa un plato paga lo que queda (tolerancia de 100 bps). «Listo» marca que ya eligió.",
     "iguales": "«En partes iguales»: entre los presentes, todos marcados al cargar (D242-6); quien pagó destilda a quien no estuvo. El centavo de más va a los primeros, en el orden de los miembros.",
     "total": "«Pagar el total»: todo a quien pagó; a los demás no les toca nada.",
     "monto_del_ticket": "La suma de los renglones (V3). Descuentos, cargos por servicio e IVA aparte no se reparten en esta versión.",
-    "personas_del_ticket": "La foto de los miembros activos al cargarlo: un miembro nuevo no hereda tickets viejos."
+    "personas_del_ticket": "La foto de los miembros activos al cargarlo: un miembro nuevo no hereda tickets viejos.",
+    "presentes": "v2.179.0 · D276: en las tres formas, quiénes estuvieron (`presentes` al cargar; sin el campo, todos, como hoy). Sólo los presentes participan: eligen en «consumo», reparten en «iguales», faltan y reciben avisos. Un gasto entre algunos mueve sólo los balances de esos y se netea en el balance final y en las transferencias (pagó − consumió, como siempre)."
+  },
+  "personal": {
+    "since": "2.179.0",
+    "decision": "276 (Mati: «si pones solo vos … es un gasto personal y … NO tiene que restarse del total del viaje»), plan OK del Bibliotecario 2026-10-11T01:31:00Z, con las decisiones A, B y C",
+    "regla": "Un ticket escaneado o un gasto a mano es personal si su único presente es quien lo cargó y lo pagó él solo (sin `pagado_por`, o con `pagado_por` = él, y sin otros pagadores). Si lo pagó otro, no es personal: es una deuda. Se deriva al leer, sin marca guardada: un ticket ya cargado que cumple la regla es personal (decisión A); su balance no cambia (ya era «pagó él, consumió él»).",
+    "lo_ve": "Sólo su dueño. Para los demás no existe: no está en su lista; GET /:id/tickets/:tid, PUT /seleccion, PUT /presentes y DELETE responden el mismo 404 viaje_ticket_not_found que un ticket que no está, byte por byte; no está en `sin_repartir`, ni en la hoja de cierre (tampoco en su conteo de `tickets`), ni en los avisos.",
+    "no_suma": "No suma a `gasto_del_grupo_cents`, ni a `pagado_cents`, ni a los balances, ni a las transferencias, ni al resumen de Cerrados (decisión B: ni a sus totales ni a `lugares`).",
+    "es_todo_suyo": "En cualquier forma, el monto entero es de su dueño (`te_toca_cents` = el monto), sin elegir: `puedo_elegir` false y PUT /seleccion responde 409 viaje_ticket_personal. Al cerrar queda congelado así.",
+    "estadisticas": "Suma a las Estadísticas de su dueño si es un escaneo de restaurante, bar o café: el monto entero, todos sus platos enteros, `division_mode` consumo.",
+    "avisos": "Ni al cargarlo ni al borrarlo.",
+    "borrar": "Lo borra su dueño (DELETE), sin avisos.",
+    "transiciones": "Por PUT /:id/tickets/:tid/presentes. De personal a compartido (suma presentes): se ve, suma y avisa a los nuevos presentes (menos quien lo cargó): «{Nombre} compartió un ticket en {viaje}: {lugar}.…». De compartido a personal (queda sólo su dueño, que lo pagó): desaparece para los demás, sin aviso. En «consumo» no se puede desmarcar a quien ya eligió algo (409 viaje_ticket_persona_ya_eligio), así que nunca se borran elecciones ajenas.",
+    "cliente_viejo": "Decisión C: con viaje_version ≤ 5 (o sin ella), el dueño ve su personal como un ticket común suyo (`te_toca_cents` = el monto, `pagaste_tu` true, `puedo_elegir` false), fuera del total. Las claves no cambian.",
+    "sin_cambio": "Los topes de 200 tickets y del total por viaje cuentan todos los tickets (son de recursos). `salir` sigue frenando a quien pagó un ticket, también uno personal (lo puede borrar antes)."
   },
   "balance": {
     "regla": "pagó − consumió, por miembro. La suma de todos los balances es siempre 0.",
     "en_vivo": "Lo que nadie eligió todavía no es de nadie: a quien pagó sólo se le acredita lo asignado, y `sin_repartir` dice cuánto falta y quién falta elegir.",
-    "al_cerrar": "Lo no elegido de cada ticket va en partes iguales a quienes no eligieron en ese ticket (D242-4); si todos eligieron, a todos los del ticket (V4). Una cuenta dada de baja no recibe mientras quede alguien vivo. El cierre queda congelado.",
+    "al_cerrar": "Lo no elegido de cada ticket va en partes iguales a quienes no eligieron en ese ticket (D242-4); si todos eligieron, a todos los del ticket (V4). v2.179.0 · D276: sólo entre los presentes de ese ticket (los que no eligieron; si eligieron todos, todos los presentes). Una cuenta dada de baja no recibe mientras quede alguien vivo. El cierre queda congelado.",
     "varios_pagadores": "v2.177.0 · D263: con varios pagadores, cada uno acredita lo que pagó. En vivo, con algo sin repartir, lo acreditado (total − sin repartir) se reparte en proporción a lo que pagó cada uno, en centavos enteros (el piso de cada parte y el resto, de a un centavo, a los primeros), así la suma sigue en 0. «Pagar el total» con varios: cada uno consumió lo que pagó."
   },
   "transferencias": {
@@ -53,6 +69,17 @@
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
   "negociaciones": {
+    "viaje_version_6": {
+      "since": "2.179.0",
+      "decision": "276 (quiénes estuvieron y el gasto personal), plan OK del Bibliotecario 2026-10-11T01:31:00Z",
+      "parametro": "viaje_version=6",
+      "regla": "La cadena exacta, en las mismas rutas que la 5 (también el detalle de un ticket). Es la 5 más lo de abajo; en GET /api/viajes la 6 sale como la 3. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte; la 5 y anteriores no cambian de forma.",
+      "ticket_suma": ["presentes", "personal"],
+      "detalle_de_ticket_suma": ["personal"],
+      "presentes": "[miembro_id] de los que estuvieron, en el orden de los miembros. En el detalle de un ticket ya estaban en `personas[].presente`.",
+      "personal": "boolean: si es un gasto personal. Sólo puede ser true en un ticket propio, porque el personal de otro no aparece.",
+      "puedo_marcar_presentes": "Desde la 6, en las tres formas (quien cargó o quien pagó, con el viaje abierto). Con ≤ 5, sólo en «iguales», como siempre."
+    },
     "viaje_version_5": {
       "since": "2.177.0",
       "decision": "263 (varias personas en «¿Quién pagó?»), plan OK del Bibliotecario 2026-10-10T16:25:32Z",
@@ -228,7 +255,8 @@
         "hora_ticket": "HH:MM | null, opcional; requiere fecha_ticket",
         "items": "1..100 de {name 1..200, price_cents ≥ 0 (unitario), quantity 1..32767}",
         "pagado_por": "v2.174.0 · D255-6, opcional: un id de miembro activo con la cuenta viva y activa. Sin él, quien carga. Entra al hash del pedido; la idempotencia es por quien carga. Si no vale, 422 viaje_ticket_payer_unknown {error, miembro_id}. A quien pagó (si no es quien carga) le llega un aviso propio, sin montos.",
-        "pagadores": "v2.177.0 · D263, opcional, en lugar de pagado_por (los dos juntos: 400): 1..20 de {miembro_id, monto_cents?}, sin repetir, todos con monto o ninguno (si no, 400). Cada uno, un miembro activo con la cuenta viva y activa (si no, 422 viaje_ticket_payer_unknown con su miembro_id). Sin montos: partes iguales del total, el centavo de más a los primeros en el orden pedido. Con montos: enteros 1..100000000 que suman exactamente el total. Cada pagador paga al menos un centavo; si no suman o a alguno le tocaría 0, 422 viaje_ticket_payers_total_mismatch {error, monto_cents (el total)}. Con uno solo, es lo mismo que pagado_por. Entra al hash del pedido sólo si vino. A cada pagador que no sea quien carga le llega un aviso propio, sin montos."
+        "pagadores": "v2.177.0 · D263, opcional, en lugar de pagado_por (los dos juntos: 400): 1..20 de {miembro_id, monto_cents?}, sin repetir, todos con monto o ninguno (si no, 400). Cada uno, un miembro activo con la cuenta viva y activa (si no, 422 viaje_ticket_payer_unknown con su miembro_id). Sin montos: partes iguales del total, el centavo de más a los primeros en el orden pedido. Con montos: enteros 1..100000000 que suman exactamente el total. Cada pagador paga al menos un centavo; si no suman o a alguno le tocaría 0, 422 viaje_ticket_payers_total_mismatch {error, monto_cents (el total)}. Con uno solo, es lo mismo que pagado_por. Entra al hash del pedido sólo si vino. A cada pagador que no sea quien carga le llega un aviso propio, sin montos.",
+        "presentes": "v2.179.0 · D276, opcional: 1..20 ids de miembro activo, sin repetir; quien carga puede no estar. Sin el campo, todos los miembros activos (como antes). Un id que no es miembro activo: 422 viaje_ticket_persona_unknown {error, miembro_id}. Entra al hash del pedido sólo si vino. Si queda sólo quien carga y lo pagó él solo, es un gasto personal (ver `personal`)."
       },
       "respuestas": {
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null },
@@ -237,10 +265,11 @@
         "404": { "cuerpo": { "error": "viaje_not_found" } },
         "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_ticket_receipt_used", "viaje_tickets_limit", "viaje_total_limit"],
           "viaje_total_limit": ["error", "limit"] },
-        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch"],
+        "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch", "viaje_ticket_persona_unknown"],
           "viaje_ticket_amount_invalid": "también un ticket de más de $1,000,000 (limites.monto_ticket_cents, v2.173.2)",
           "viaje_ticket_payer_unknown": ["error", "miembro_id"],
-          "viaje_ticket_payers_total_mismatch": ["error", "monto_cents"] }
+          "viaje_ticket_payers_total_mismatch": ["error", "monto_cents"],
+          "viaje_ticket_persona_unknown": ["error", "miembro_id"] }
       }
     },
     "POST /api/viajes/:id/gastos": {
@@ -334,18 +363,20 @@
       "respuestas": {
         "200": { "claves": ["contract", "ticket"] },
         "400": { "error": "validation_error" },
-        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"] },
-        "409": { "errores": ["viaje_not_open", "viaje_ticket_not_selectable", "viaje_ticket_not_in_snapshot", "viaje_fraction_exceeds_item"], "viaje_fraction_exceeds_item": ["error", "item_id", "remaining_bps"] },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)" },
+        "409": { "errores": ["viaje_not_open", "viaje_ticket_not_selectable", "viaje_ticket_personal", "viaje_ticket_not_in_snapshot", "viaje_ticket_not_present", "viaje_fraction_exceeds_item"], "viaje_fraction_exceeds_item": ["error", "item_id", "remaining_bps"],
+          "viaje_ticket_personal": "v2.179.0 · D276: el gasto personal propio es todo de su dueño, sin elegir",
+          "viaje_ticket_not_present": "v2.179.0 · D276: no estuviste en ese ticket; sólo eligen los presentes" },
         "422": { "error": "viaje_ticket_item_unknown", "claves": ["error", "item_id"] }
       }
     },
     "PUT /api/viajes/:id/tickets/:tid/presentes": {
       "request": { "presentes": "1..20 ids de miembro del ticket, sin repetir; los demás quedan sin marcar" },
-      "regla": "Quien pagó o quien cargó (D255-6). Desde v2.177.0 (D263, extensión declarada en el plan) cualquiera de los que pagaron; si no, 409 viaje_ticket_not_yours.",
+      "regla": "Quien pagó o quien cargó (D255-6). Desde v2.177.0 (D263, extensión declarada en el plan) cualquiera de los que pagaron; si no, 409 viaje_ticket_not_yours. v2.179.0 · D276: en las tres formas (antes, sólo «iguales» con 409 viaje_ticket_not_equal_split, que ya no sale). En «consumo» no se puede desmarcar a quien ya eligió algo: 409 viaje_ticket_persona_ya_eligio {error, miembro_id}. Las transiciones entre personal y compartido están en `personal`.",
       "respuestas": {
         "200": { "claves": ["contract", "ticket"] },
-        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"] },
-        "409": { "errores": ["viaje_not_open", "viaje_ticket_not_equal_split", "viaje_ticket_not_yours"] },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)" },
+        "409": { "errores": ["viaje_not_open", "viaje_ticket_not_yours", "viaje_ticket_persona_ya_eligio"], "viaje_ticket_persona_ya_eligio": ["error", "miembro_id"] },
         "422": { "error": "viaje_ticket_persona_unknown", "claves": ["error", "miembro_id"] }
       }
     },
@@ -409,8 +440,8 @@
     "tipos": {
       "viaje_invitation_received": "«{Nombre} te invitó al viaje {viaje}.»",
       "viaje_invitation_rejected": "«{Nombre} rechazó tu invitación al viaje {viaje}.»",
-      "viaje_ticket_added": "«{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.» v2.177.0 · D263: con varios pagadores, a cada uno que no sea quien carga, sin montos: «{Nombre} cargó un ticket en {viaje}: {lugar} y te puso entre quienes pagaron.…» o «{Nombre} cargó un gasto en {viaje} y te puso entre quienes pagaron: {descripción}.»; con uno, «… como quien pagó». «Te toca» va a los elegidos que no cargan ni pagan.",
-      "viaje_ticket_removed": "v2.175.0 (D256): «{Nombre} eliminó un ticket de {viaje}: {lugar}.» o «{Nombre} eliminó un gasto de {viaje}: {descripción}.» A los demás miembros activos, sin montos; el lugar es el que ya ven en la lista. payload: viaje_id.",
+      "viaje_ticket_added": "v2.179.0 · D276: sólo a los presentes y a los que pagaron (menos quien carga); un gasto personal no avisa; un personal que pasa a compartido avisa a los nuevos presentes: «{Nombre} compartió un ticket en {viaje}: {lugar}.…». «{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.» v2.177.0 · D263: con varios pagadores, a cada uno que no sea quien carga, sin montos: «{Nombre} cargó un ticket en {viaje}: {lugar} y te puso entre quienes pagaron.…» o «{Nombre} cargó un gasto en {viaje} y te puso entre quienes pagaron: {descripción}.»; con uno, «… como quien pagó». «Te toca» va a los elegidos que no cargan ni pagan.",
+      "viaje_ticket_removed": "v2.175.0 (D256): «{Nombre} eliminó un ticket de {viaje}: {lugar}.» o «{Nombre} eliminó un gasto de {viaje}: {descripción}.» A los demás miembros activos, sin montos; el lugar es el que ya ven en la lista. payload: viaje_id. v2.179.0 · D276: un gasto personal no avisa.",
       "viaje_closed": "«Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»",
       "viaje_transfer_marked": "«{Nombre} marcó que te pagó {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
       "viaje_transfer_not_received": "«{Nombre} dice que no le llegó tu pago de {monto} en {viaje}.» payload: viaje_id, transferencia_id.",
@@ -422,7 +453,7 @@
     "decision": "260 (los tickets de los viajes suman a las estadísticas), plan OK del Bibliotecario 2026-10-10T15:54:55Z",
     "rutas": "GET /api/account/stats (consumption_month), /stats/restaurants, /stats/dishes, /stats/dayparts, /stats/ingredients y /stats/evolution, sólo en la base `consumption` (con el dinero encendido la base es lo pagado con PayMe, y un ticket de viaje no se paga por PayMe).",
     "que_cuenta": "Lo que consumiste vos de cada ticket escaneado, con el mismo balance del viaje: con el viaje abierto, lo elegido (más tu parte de «en partes iguales» o de «pagar el total»); cerrado, lo que quedó guardado al cerrar, con lo no elegido que te tocó. Lo no elegido va al monto de la visita y no a los platos. Se calcula al leer: cambiar lo elegido o eliminar el ticket cambia la estadística.",
-    "platos": "«Por lo que pidió cada uno»: tu parte de cada renglón. «Pagar el total»: todos los renglones, para quien pagó. «En partes iguales»: sin platos, como una mesa «igual».",
+    "platos": "«Por lo que pidió cada uno»: tu parte de cada renglón. «Pagar el total»: todos los renglones, para quien pagó. «En partes iguales»: sin platos, como una mesa «igual». v2.179.0 · D276: un gasto personal propio, todos los renglones enteros, con el monto entero y `division_mode` consumo.",
     "que_no_cuenta": "Los gastos a mano; los tickets de súper y de otro (D260 «sólo restaurantes», en la interpretación del Bibliotecario: cuentan restaurante, bar y café); un ticket en el que no consumiste nada; nunca lo de otro miembro.",
     "instante": "La fecha y hora impresas del ticket, en hora de México; si falta alguna, cuando se cargó. Decide el período y el momento del día.",
     "restaurante": "Un viaje no guarda el RFC: el ticket va con el restaurante de una mesa de la misma respuesta cuyo nombre mostrado coincide (sin acentos, mayúsculas ni espacios de más), si es uno solo. Si no, en su propio grupo: id `viaje:` más el sha256 corto del nombre, categoría `cafe` para un café u `other`; sin lugar, id `viaje-ticket:<id del ticket>` y «Restaurante sin identificar». Nunca el RFC ni el folio.",

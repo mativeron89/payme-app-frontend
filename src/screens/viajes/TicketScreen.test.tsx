@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ItemDelTicket, MiembroViaje, PersonaDelTicket, TicketDelViaje } from '../../api/viajes';
-import { TicketEstadoVista, TicketVista, type TicketVistaProps } from './TicketScreen';
+import { traducir } from '../../i18n/idioma';
+import { avisoDelTicket, textoYaEligio, TicketEstadoVista, TicketVista, type TicketVistaProps } from './TicketScreen';
 import { ausentesDelTicket, seleccionGuardada } from './ticketView';
 
 const nada = () => undefined;
@@ -33,7 +34,7 @@ const MARISCOS: TicketDelViaje = {
     item('i6', 'Margarita', 56000, { price_cents: 14000, quantity: 4, remaining_bps: 5000, my_bps: 2500, my_amount_cents: 14000 }),
   ],
   personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', false)],
-  te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false,
+  te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
   pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
 };
 
@@ -223,5 +224,102 @@ describe('AF-VIAJES · el ticket · cargando, 404 y red', () => {
     expect(no).toContain('Este viaje ya no está disponible.');
     expect(no).toContain('Ver tus viajes');
     expect(renderToStaticMarkup(<TicketEstadoVista estado="error" onReintentar={nada} />)).toContain('Reintentar');
+  });
+});
+
+describe('🔴 D276 · el detalle de un ticket: quiénes estuvieron en las tres formas, el personal y el no presente', () => {
+  const es = (x: string, ...a: unknown[]) => traducir(x, 'es', ...a);
+  const PERSONAL = 'Es tu gasto personal: sólo lo ves tú y no suma al total del viaje.';
+  const NO_ESTUVE = 'No estuviste en este ticket: no eliges nada.';
+  const casillas = (html: string) => [...html.slice(html.indexOf('¿Quiénes estuvieron?')).matchAll(/role="checkbox" aria-checked="(true|false)"/g)]
+    .map((m) => m[1] === 'true');
+
+  it('🔴 D276-2 · con `puedo_marcar_presentes`, la lista editable y «Guardar» también en «consumo», con su ayuda', () => {
+    const html = render({ ...MARISCOS, puedo_marcar_presentes: true });
+    expect(html).toContain('¿Quiénes estuvieron?');
+    expect(html).toContain('Sólo eligen los que estuvieron. Desmarca a quien no estuvo.');
+    expect(casillas(html)).toEqual([true, true, true, true]);
+    expect(html).toMatch(/<button type="button" class="btn btn-navy vjt-guardar" disabled="">Guardar<\/button>/);
+    // Y elegir sigue ahí: estuve y puedo elegir.
+    expect(html).toContain('¿Qué consumiste?');
+  });
+
+  it('🔴 D276-2 · y en «Pagar el total», sin texto de ayuda (el plan)', () => {
+    const TOTAL: TicketDelViaje = { ...MARISCOS, forma: 'total', items: [], puedo_elegir: false, puedo_marcar_presentes: true,
+      pagado_por: 'm-ana', pagaste_tu: true, pagadores: [{ miembro_id: 'm-ana', monto_cents: 220000 }] };
+    const html = render(TOTAL);
+    expect(html).toContain('¿Quiénes estuvieron?');
+    expect(html).toContain('vjt-guardar');
+    expect(html).not.toContain('vjt-texto--ayuda');
+  });
+
+  it('control · sin `puedo_marcar_presentes`, en «consumo» no hay lista para editar', () => {
+    expect(render(MARISCOS)).not.toContain('¿Quiénes estuvieron?');
+  });
+
+  it('🔴 D276-4 · en «consumo», si no estuve: la línea y la lista se ve sin poder elegir', () => {
+    const NO: TicketDelViaje = { ...MARISCOS, puedo_elegir: false,
+      personas: [persona('m-ana', false, false), persona('m-luis'), persona('m-sofia'), persona('m-diego', false)] };
+    const html = render(NO);
+    expect(html).toContain(NO_ESTUVE);
+    expect(html).toMatch(/<section class="vj-card vjt-aviso-ticket" role="note"><p class="vjt-texto">No estuviste/);
+    expect(avisoDelTicket(NO, MIEMBROS, es)).toBe(NO_ESTUVE);
+    // Estuve: no hay línea.
+    expect(render(MARISCOS)).not.toContain(NO_ESTUVE);
+    expect(avisoDelTicket(MARISCOS, MIEMBROS, es)).toBeNull();
+  });
+
+  it('🔴 D276-4 · «Quién ya eligió» lista sólo a los que estuvieron: quien no estuvo no «falta elegir»', () => {
+    const SIN_DIEGO: TicketDelViaje = { ...MARISCOS,
+      personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', false, false)] };
+    const html = render(SIN_DIEGO);
+    expect(html).toContain('Quién ya eligió');
+    expect(html).not.toContain('Diego');
+    // Control: presente y sin elegir, sí.
+    expect(render(MARISCOS)).toContain('Diego · falta elegir');
+  });
+
+  it('🔴 D276-3 · en un gasto personal en «consumo», no hay «Quién ya eligió», lista para elegir ni «Listo»', () => {
+    const P: TicketDelViaje = { ...MARISCOS, personal: true, puedo_elegir: false, pagado_por: 'm-ana', pagaste_tu: true,
+      pagadores: [{ miembro_id: 'm-ana', monto_cents: 220000 }],
+      personas: [persona('m-ana', false), persona('m-luis', false, false), persona('m-sofia', false, false), persona('m-diego', false, false)] };
+    const html = render(P);
+    expect(html).not.toContain('Quién ya eligió');
+    expect(html).not.toContain('falta elegir');
+    expect(html).not.toContain('>Listo<');
+    expect(html).not.toContain('¿Qué consumiste?');
+    expect(html).not.toContain('qc-lista');
+    // Quedan el total y lo que me toca (todo).
+    expect(html).toContain('Total del ticket');
+    expect(html).toContain('Te toca');
+  });
+
+  it('D276-4 · la línea del no presente es sólo de «consumo» (en iguales o total no hay nada que elegir)', () => {
+    const fuera = [persona('m-ana', false, false), persona('m-luis')];
+    expect(avisoDelTicket({ ...MARISCOS, forma: 'iguales', personas: fuera }, MIEMBROS, es)).toBeNull();
+    expect(avisoDelTicket({ ...MARISCOS, forma: 'total', personas: fuera }, MIEMBROS, es)).toBeNull();
+  });
+
+  it('🔴 D276-3 · un gasto personal: «Es tu gasto personal…», arriba y en su color, en las tres formas', () => {
+    for (const forma of ['consumo', 'iguales', 'total'] as const) {
+      const P: TicketDelViaje = { ...MARISCOS, forma, personal: true, puedo_elegir: false, puedo_marcar_presentes: true,
+        pagado_por: 'm-ana', pagaste_tu: true, te_toca_cents: 220000, pagadores: [{ miembro_id: 'm-ana', monto_cents: 220000 }],
+        personas: [persona('m-ana'), persona('m-luis', false, false), persona('m-sofia', false, false), persona('m-diego', false, false)] };
+      const html = render(P);
+      expect(html, forma).toContain(PERSONAL);
+      expect(html, forma).toContain('vjt-aviso-ticket vjt-personal');
+      // Manda el personal: nunca dice además que no estuve.
+      expect(html, forma).not.toContain(NO_ESTUVE);
+      // Lo cargué yo: puedo cambiar quiénes estuvieron y compartirlo.
+      expect(html, forma).toContain('¿Quiénes estuvieron?');
+      expect(avisoDelTicket(P, MIEMBROS, es), forma).toBe(PERSONAL);
+    }
+  });
+
+  it('D276-2 · el 409 de quien ya eligió, dicho con su nombre; si soy yo, en segunda persona; sin nombre, «Alguien»', () => {
+    expect(textoYaEligio('m-luis', MIEMBROS, es)).toBe('Luis Perez ya eligió: no se puede desmarcar.');
+    expect(textoYaEligio('m-ana', MIEMBROS, es)).toBe('Ya elegiste: no te puedes desmarcar.');
+    expect(textoYaEligio(null, MIEMBROS, es)).toBe('Alguien ya eligió: no se puede desmarcar.');
+    expect(textoYaEligio('m-otro', MIEMBROS, es)).toBe('Alguien ya eligió: no se puede desmarcar.');
   });
 });

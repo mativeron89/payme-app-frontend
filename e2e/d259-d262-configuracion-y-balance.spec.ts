@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 
 /**
  * D259 · Mati, en Configuración del viaje: «quitar "les llega una invitscion…" y "el viaje"».
@@ -14,6 +14,8 @@ test.use({ viewport: { width: 375, height: 812 } });
 
 async function conViajes(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.viajes.v1', 'encendido'));
+  // D276-1 · el día de la corrida no decide a dónde va «Nueva» (`_app.ts`).
+  await relojFueraDeLasFechasDeLosViajes(page);
   await ingresar(page);
 }
 

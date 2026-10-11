@@ -37,7 +37,7 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
-    puede_eliminar: false, ...extra,
+    puede_eliminar: false, presentes: [], personal: false, ...extra,
   } as const;
   // D263 · con un solo pagador, uno con el total.
   return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
@@ -365,6 +365,15 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
     expect(leido.indexOf('Café Caribe')).toBeLessThan(leido.indexOf('Bar $960'));
     // Sin el «Debe / Le deben» de cada uno ni el aviso de «sin repartir» (respuesta C).
     expect(leido).not.toMatch(/Le deben|Debe \$|sin repartir/);
+  });
+
+  it('🔴 D276-3 · en Consumos, mi gasto personal lleva el chip «Personal»; los demás, no', () => {
+    const v = viaje({ tickets: TICKETS.map((tk) => (tk.id === 'tk-3' ? { ...tk, personal: true } : tk)) });
+    const html = balance(listo(v));
+    expect(html.match(/vjv-chip vjv-chip-personal/g)).toHaveLength(1);
+    const filas = html.split('<li>').slice(1);
+    expect(filas.map((f) => f.includes('>Personal<'))).toEqual([false, false, true]);
+    expect(balance(listo(viaje()))).not.toContain('vjv-chip-personal');
   });
 
   it('🔴 D256 · deslizar para eliminar sólo donde el dueño dice `puede_eliminar`; las demás filas no se deslizan', () => {

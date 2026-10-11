@@ -220,6 +220,10 @@ export interface TicketEnViaje {
   readonly puede_eliminar: boolean;
   /** D263 · `viaje_version=5` (App Backend 2.177.0): quiénes pagaron y cuánto. Con uno solo, uno con el total. */
   readonly pagadores: readonly PagadorDelTicket[];
+  /** D276 · `viaje_version=6` (App Backend 2.179.0): quiénes estuvieron (ids de miembro, en el orden de los miembros). */
+  readonly presentes: readonly string[];
+  /** D276 · un gasto personal: sólo yo estuve y lo pagué yo. Sólo puede ser mío (el de otro no aparece). */
+  readonly personal: boolean;
 }
 
 /**
@@ -309,6 +313,8 @@ export interface TicketDelViaje {
   readonly puedo_marcar_presentes: boolean;
   /** D263 · `viaje_version=5`: también en el detalle de un ticket. */
   readonly pagadores: readonly PagadorDelTicket[];
+  /** D276 · `viaje_version=6`: un gasto personal (todo de su dueño, sin elegir). Los presentes están en `personas`. */
+  readonly personal: boolean;
 }
 
 /** Quién cargó (y pagó) un ticket que ya estaba en el viaje (diseño 1k). */
@@ -404,6 +410,11 @@ export interface CargarTicketPedido {
   readonly pagado_por?: string;
   /** D263 · o varios (nunca junto a `pagado_por`). */
   readonly pagadores?: readonly PagadorPedido[];
+  /**
+   * D276 · quiénes estuvieron (1..20 ids de miembro activo, sin repetir; quien carga puede no estar). La fachada lo
+   * manda SIEMPRE: va lo que se ve en la pantalla (plan OK del Bibliotecario, 2026-10-11).
+   */
+  readonly presentes?: readonly string[];
 }
 
 /**
@@ -606,14 +617,15 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
       'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
-      'puede_eliminar', 'pagadores'], e);
+      'puede_eliminar', 'pagadores', 'presentes', 'personal'], e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
       && noNegativo(t.sin_repartir_cents) && noNegativo(t.monto_cents)
-      && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen) && typeof t.puede_eliminar === 'boolean', e);
+      && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen) && typeof t.puede_eliminar === 'boolean'
+      && typeof t.personal === 'boolean', e);
     const pagadores = pagadoresDe(t.pagadores, t.monto_cents as number, t.pagado_por, e);
-    return { ...(t as unknown as TicketEnViaje), pagadores };
+    return { ...(t as unknown as TicketEnViaje), pagadores, presentes: presentesDe(t.presentes, e) };
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
     const s = objeto(x, ['ticket_id', 'lugar', 'fecha_ticket', 'monto_cents', 'faltan'], e);
@@ -693,15 +705,28 @@ function pagadoresDe(raw: unknown, montoCents: number, pagadoPor: unknown, e: st
   return xs;
 }
 
+/**
+ * D276 · `presentes` de la 6: ids de miembro (sin repetir, hasta 20). Uno en `null` es una cuenta que ya no está: no se
+ * muestra, como en `faltan`.
+ */
+function presentesDe(raw: unknown, e: string): readonly string[] {
+  exigir(Array.isArray(raw) && raw.length <= 40 && raw.every((x) => x === null || texto(x)), e);
+  const ids = (raw as Array<string | null>).filter((x): x is string => x !== null);
+  exigir(new Set(ids).size === ids.length, e);
+  return ids;
+}
+
 function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
   const t = objeto(raw, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
     'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
-    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores'], e);
+    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal'], e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
     && textoONull(t.pagado_por) && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents)
     && noNegativo(t.sin_repartir_cents) && typeof t.puedo_elegir === 'boolean'
-    && typeof t.puedo_marcar_presentes === 'boolean', e);
+    && typeof t.puedo_marcar_presentes === 'boolean' && typeof t.personal === 'boolean'
+    // Un personal es todo de su dueño: nunca se elige en él.
+    && !(t.personal === true && t.puedo_elegir === true), e);
   const items = lista(t.items, e, (x): ItemDelTicket => {
     const i = objeto(x, ['id', 'name', 'price_cents', 'quantity', 'line_cents', 'remaining_bps', 'my_bps', 'my_amount_cents'], e);
     exigir(texto(i.id) && texto(i.name) && noNegativo(i.price_cents) && noNegativo(i.quantity) && i.quantity >= 1
@@ -858,6 +883,12 @@ export type ErrorDeViaje =
   | { readonly tipo: 'pagador_desconocido' }
   /** D263 · 422 `viaje_ticket_payers_total_mismatch`: los montos no suman el total (`monto_cents`). */
   | { readonly tipo: 'pagadores_no_suman'; readonly totalCents: number | null }
+  /** D276 · 409 `viaje_ticket_persona_ya_eligio`: no se desmarca a quien ya eligió (`miembro_id`). */
+  | { readonly tipo: 'persona_ya_eligio'; readonly miembroId: string | null }
+  /** D276 · 409 `viaje_ticket_not_present`: no estuve en ese ticket; sólo eligen los presentes. */
+  | { readonly tipo: 'no_presente' }
+  /** D276 · 409 `viaje_ticket_personal`: un gasto personal es todo de su dueño, sin elegir. */
+  | { readonly tipo: 'personal' }
   /** D255 · la foto: muchas seguidas, o el dueño la está procesando. */
   | { readonly tipo: 'foto_ocupada' }
   /** D255 · la foto: el tipo, el tamaño o la imagen no sirven (los `avatar_*` de la foto de perfil). */
@@ -926,6 +957,11 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
       && typeof extra.pendientes === 'number' && Number.isSafeInteger(extra.pendientes) && extra.pendientes > 0) {
     return { tipo: 'transferencias_pendientes', pendientes: extra.pendientes };
   }
+  if (status === 409 && code === 'viaje_ticket_persona_ya_eligio') {
+    return { tipo: 'persona_ya_eligio', miembroId: typeof extra.miembro_id === 'string' ? extra.miembro_id : null };
+  }
+  if (status === 409 && code === 'viaje_ticket_not_present') return { tipo: 'no_presente' };
+  if (status === 409 && code === 'viaje_ticket_personal') return { tipo: 'personal' };
   if (status === 409 && code === 'viaje_fraction_exceeds_item') {
     return { tipo: 'fraccion_excede', itemId: typeof extra.item_id === 'string' ? extra.item_id : null };
   }

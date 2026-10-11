@@ -49,3 +49,70 @@ describe('D250 · el nombre del viaje para el título del escaneo', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFechas`)', () => {
+  const desde = '2026-10-05';
+  const hasta = '2026-10-11';
+  const CANCUN = { ...VIAJE, estado: 'abierto' as const, fecha_desde: desde, fecha_hasta: hasta };
+  const OAXACA = { id: 'd1000000-0000-4000-8000-000000000002', nombre: 'Oaxaca', estado: 'abierto' as const, fecha_desde: desde, fecha_hasta: hasta };
+
+  it('🔴 un viaje que cubre hoy: el círculo de ESE viaje (D250), con su nombre para el lector de pantalla', async () => {
+    const { centroPorFechas } = await import('./circuloDelViaje');
+    expect(centroPorFechas([CANCUN], undefined, es))
+      .toMatchObject({ label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
+  });
+
+  it('🔴 un viaje: el toque abre la cámara EN EL MISMO gesto y el escaneo de ese viaje', async () => {
+    vi.resetModules();
+    const camara = vi.fn();
+    const ir = vi.fn();
+    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara }));
+    vi.doMock('../../router', async (orig) => ({ ...(await orig<typeof import('../../router')>()), navigate: ir }));
+    try {
+      const { centroPorFechas } = await import('./circuloDelViaje');
+      centroPorFechas([CANCUN], undefined, es)!.onClick();
+      expect(camara).toHaveBeenCalledTimes(1);
+      expect(ir).toHaveBeenCalledWith('scan', VIAJE.id);
+      expect(camara.mock.invocationCallOrder[0]).toBeLessThan(ir.mock.invocationCallOrder[0]!);
+    } finally {
+      vi.doUnmock('../../camara/camaraNativa');
+      vi.doUnmock('../../router');
+      vi.resetModules();
+    }
+  });
+
+  it('🔴 dos viajes: «Nueva» abre la hoja «¿Para qué viaje?» y NO la cámara (se abre en el toque que elige)', async () => {
+    vi.resetModules();
+    const camara = vi.fn();
+    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara }));
+    try {
+      const { centroPorFechas } = await import('./circuloDelViaje');
+      const { abrirHojaParaQueViaje, hojaParaQueViajeAbierta, cerrarHojaParaQueViaje } = await import('./hojaParaQueViajeEstado');
+      const c = centroPorFechas([CANCUN, OAXACA], undefined, es)!;
+      expect(c).toMatchObject({ label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para un viaje' });
+      expect(c.onClick).toBe(abrirHojaParaQueViaje);
+      expect(hojaParaQueViajeAbierta()).toBe(false);
+      c.onClick();
+      expect(hojaParaQueViajeAbierta()).toBe(true);
+      expect(camara).not.toHaveBeenCalled();
+      cerrarHojaParaQueViaje();
+    } finally {
+      vi.doUnmock('../../camara/camaraNativa');
+      vi.resetModules();
+    }
+  });
+
+  it('🔴 sin viajes que cubran hoy, o con un centro propio de la pantalla (el de un viaje, el del pago): `undefined`', async () => {
+    const { centroPorFechas } = await import('./circuloDelViaje');
+    expect(centroPorFechas([], undefined, es)).toBeUndefined();
+    const propio = { label: 'Pagar', icon: 'card' as const, onClick: () => undefined };
+    expect(centroPorFechas([CANCUN], propio, es)).toBeUndefined();
+    expect(centroPorFechas([CANCUN, OAXACA], propio, es)).toBeUndefined();
+  });
+
+  it('con el idioma en «en»', async () => {
+    const { centroPorFechas } = await import('./circuloDelViaje');
+    const en = (s: string, ...a: unknown[]) => traducir(s, 'en', ...a);
+    expect(centroPorFechas([CANCUN, OAXACA], undefined, en)).toMatchObject({ label: 'New', ariaLabel: 'Scan a ticket for a trip' });
+  });
+});

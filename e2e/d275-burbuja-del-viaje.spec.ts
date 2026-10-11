@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 
 /**
  * D275 · la burbuja del viaje en Inicio con el diseño de Claude Design (`PANTALLA-burbuja-del-viaje.md`), D271 · el
@@ -20,6 +20,8 @@ async function conViajes(page: Page): Promise<void> {
     localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
     localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
   });
+  // D276-1 · el día de la corrida no decide a dónde va «Nueva» (`_app.ts`).
+  await relojFueraDeLasFechasDeLosViajes(page);
   await ingresar(page);
 }
 

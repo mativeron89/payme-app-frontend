@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 
 /**
@@ -32,6 +32,8 @@ async function comoAppDeInicio(page: Page): Promise<void> {
     localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
     Object.defineProperty(Navigator.prototype, 'standalone', { configurable: true, get: () => true });
   });
+  // D276-1 · el día de la corrida no decide a dónde va «Nueva» (`_app.ts`).
+  await relojFueraDeLasFechasDeLosViajes(page);
   await ingresar(page);
   await expect(page.locator('html')).toHaveClass(/\bapp-de-inicio-ios\b/);
 }

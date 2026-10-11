@@ -144,6 +144,30 @@ export function idsPresentes(candidatos: readonly { readonly id: string }[], aus
   return candidatos.filter((c) => !ausentes.has(c.id)).map((c) => c.id);
 }
 
+/**
+ * D276-2 · la ayuda de «¿Quiénes estuvieron?», según cómo se divide (al cargar y en el detalle). En «Pagar el total»,
+ * sin texto extra (el plan): `null`.
+ */
+export function ayudaDePresentes(forma: FormaTicket, t: T): string | null {
+  if (forma === 'consumo') return t('Sólo eligen los que estuvieron. Desmarca a quien no estuvo.');
+  if (forma === 'iguales') return t('Se divide entre los marcados. Desmarca a quien no estuvo.');
+  return null;
+}
+
+/**
+ * D276-3 · Mati: «si pones solo vos y no seleccionas a nadie más quiere decir que es un gasto personal». Visto desde
+ * quien carga: quedo sólo yo marcado y pagué yo solo (la definición del dueño, `esPersonal`). Si quedo sólo yo pero
+ * pagó otro, no es personal: es una deuda.
+ */
+export function esGastoPersonal(
+  candidatos: readonly { readonly id: string; readonly es_yo: boolean }[],
+  ausentes: ReadonlySet<string>,
+  pagadores: readonly { readonly es_yo: boolean }[],
+): boolean {
+  const marcados = candidatos.filter((c) => !ausentes.has(c.id));
+  return marcados.length === 1 && marcados[0]!.es_yo && pagadores.length === 1 && pagadores[0]!.es_yo;
+}
+
 /** Los desmarcados de un ticket ya cargado (para editar quiénes estuvieron). */
 export function ausentesDelTicket(personas: readonly PersonaDelTicket[]): Set<string> {
   return new Set(personas.filter((p) => !p.presente && p.miembro_id).map((p) => p.miembro_id as string));
@@ -239,7 +263,8 @@ export function chipsDeEleccion(
   t: T,
 ): ChipDeEleccion[] {
   const porId = new Map(miembros.map((m) => [m.id, m]));
-  const chips = personas.map((p, i) => {
+  // D276-4 · sólo eligen los que estuvieron: quien no estuvo no «falta elegir» (el dueño lo saca de `faltan`).
+  const chips = personas.flatMap((p, i) => (p.presente ? [{ p, i }] : [])).map(({ p, i }) => {
     const m = p.miembro_id ? porId.get(p.miembro_id) : undefined;
     return {
       clave: p.miembro_id ?? `sin-${i}`,

@@ -216,8 +216,15 @@ export function olvidarLoDeMesas(): void {
  * D265 · borra los viajes abiertos de Inicio después de crear, aceptar, salir o cerrar un viaje: son las acciones que
  * agregan, sacan o cambian de estado una burbuja.
  */
+/** D276 · lo de Viajes que vive fuera de este caché (los viajes de hoy de la cámara) se registra acá. */
+const alOlvidarViajes = new Set<() => void>();
+export function alOlvidarLoDeViajes(fn: () => void): void {
+  alOlvidarViajes.add(fn);
+}
+
 export function olvidarLoDeViajes(): void {
   ultimoVisto.olvidar('inicio.viajesAbiertos', 'inicio.pendientesDeViajes');
+  for (const fn of [...alOlvidarViajes]) fn();
 }
 
 /** Borra todo lo de Amigos (después de responder, bloquear o tocar grupos). */

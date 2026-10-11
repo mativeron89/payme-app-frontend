@@ -19,7 +19,7 @@ import {
   type QuienPagoElegido,
 } from './QuienPago';
 import { ListaDePresentes } from './TicketNuevoScreen';
-import { alternarPresente, candidatosDelViaje, idsPresentes, llaveParaPedido } from './ticketView';
+import { alternarPresente, candidatosDelViaje, esGastoPersonal, idsPresentes, llaveParaPedido } from './ticketView';
 import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
 import './viajes.css';
 import './viaje.css';
@@ -55,9 +55,10 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
     llave.current = llaveParaPedido(llave.current, pedido, newIdempotencyKey);
     setEnviando(true);
     try {
-      await api.cargarGastoDeViaje(viajeId, { ...pedido, idempotency_key: llave.current.key });
+      const ticket = await api.cargarGastoDeViaje(viajeId, { ...pedido, idempotency_key: llave.current.key });
       goBack('viaje', viajeId);
-      toast(t('Cargaste el gasto.'), { sobreLaBarra: true });
+      // D276-3 · si quedé sólo yo y pagué yo, es un gasto personal.
+      toast(ticket.personal ? t('Guardaste el gasto personal.') : t('Cargaste el gasto.'), { sobreLaBarra: true });
     } catch (err) {
       if (!vivo.current) return;
       const e = errorDeViaje(err);
@@ -172,6 +173,9 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
       <div className="vj-pie">
         {cents !== null && <p className="vjm-resumen">{t('Total {0}', formatMXN(cents))}</p>}
         {aviso && <p className="vjq-aviso vjq-aviso--pie" role="status">{aviso}</p>}
+        {!aviso && esGastoPersonal(candidatos, ausentes, reparto.pagadores) && (
+          <p className="vjq-aviso vjq-aviso--pie vjt-personal" role="status">{t('Es un gasto personal: sólo lo ves tú y no suma al total del viaje.')}</p>
+        )}
         <button
           type="button"
           className="btn btn-navy"

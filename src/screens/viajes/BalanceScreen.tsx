@@ -179,6 +179,8 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
                 {tk.falta_que_elija > 0 && (
                   <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
                 )}
+                {/* D276-3 · un gasto personal: sólo lo veo yo y no suma al viaje. */}
+                {tk.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
               </span>
               {/* Respuesta A del plan: el total del ticket o del gasto (`monto_cents`). */}
               <span className="vjb-consumo-monto">{formatMXN(tk.monto_cents)}</span>

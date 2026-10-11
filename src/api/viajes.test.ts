@@ -33,6 +33,7 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
     viaje_version_3: { parametro: string; detalle_suma: string[]; lista_suma: string[] };
     viaje_version_4: { parametro: string; ticket_suma: string[] };
     viaje_version_5: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
+    viaje_version_6: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
   };
   colores: Record<string, string>;
 };
@@ -43,6 +44,8 @@ const V3 = CONTRATO.negociaciones.viaje_version_3;
 const V4 = CONTRATO.negociaciones.viaje_version_4;
 /** D263 · App Backend 2.177.0: la 4 más `pagadores`, en los tickets del detalle y en el detalle de un ticket. */
 const V5 = CONTRATO.negociaciones.viaje_version_5;
+/** D276 · App Backend 2.179.0: la 5 más `presentes` y `personal` en cada ticket, y `personal` en el detalle de un ticket. */
+const V6 = CONTRATO.negociaciones.viaje_version_6;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -95,14 +98,14 @@ const detalle = (cambios: Record<string, unknown> = {}) => ({
   tickets: [{ id: 't1', lugar: null, tipo_lugar: 'bar', fecha_ticket: null, hora_ticket: null,
     cargado_en: '2026-10-02T00:00:00.000Z', forma: 'consumo', pagado_por: 'm2', pagaste_tu: false,
     te_toca_cents: 100, falta_que_elija: 1, sin_repartir_cents: 0, monto_cents: 200, origen: 'escaneo', puede_eliminar: false,
-    pagadores: [{ miembro_id: 'm2', monto_cents: 200 }] }],
+    pagadores: [{ miembro_id: 'm2', monto_cents: 200 }], presentes: ['m1', 'm2'], personal: false }],
   sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
   color: null, has_photo: false,
   ...cambios,
 });
 
 describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', () => {
-  it('el detalle de un viaje: las claves del contrato con `viaje_version=5`, ni una más', () => {
+  it('el detalle de un viaje: las claves del contrato con `viaje_version=6`, ni una más', () => {
     const claves = CONTRATO.rutas['GET /api/viajes/:id']!.respuestas['200']!.viaje as string[];
     expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma].sort());
     expect(V2.parametro).toBe('viaje_version=2');
@@ -110,7 +113,9 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
     expect(V4.parametro).toBe('viaje_version=4');
     expect(Object.keys(detalle().miembros[0]!).sort()).toEqual([...V2.miembro].sort());
     expect(V5.parametro).toBe('viaje_version=5');
-    expect(Object.keys(detalle().tickets[0]!).sort()).toEqual([...V2.ticket, ...V4.ticket_suma, ...V5.ticket_suma].sort());
+    expect(V6.parametro).toBe('viaje_version=6');
+    expect(Object.keys(detalle().tickets[0]!).sort())
+      .toEqual([...V2.ticket, ...V4.ticket_suma, ...V5.ticket_suma, ...V6.ticket_suma].sort());
     const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle() });
     expect(v.miembros.map((m) => m.first_name)).toEqual(['Yo', 'Luis']);
     expect(() => decodeDetalleViaje({ contract: 'otro/v1', viaje: detalle() })).toThrow();
@@ -167,9 +172,9 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
       items: [{ id: 'i', name: 'Taco', price_cents: 500, quantity: 2, line_cents: 1000, remaining_bps: 5000, my_bps: 5000, my_amount_cents: 500 }],
       personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
       te_toca_cents: 500, sin_repartir_cents: 500, puedo_elegir: true, puedo_marcar_presentes: false,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }] };
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false };
     const claves = CONTRATO.rutas['GET /api/viajes/:id/tickets/:tid']!.respuestas['200']!.ticket as string[];
-    expect(Object.keys(ticket).sort()).toEqual([...claves, ...V5.detalle_de_ticket_suma].sort());
+    expect(Object.keys(ticket).sort()).toEqual([...claves, ...V5.detalle_de_ticket_suma, ...V6.detalle_de_ticket_suma].sort());
     expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket }).items[0]!.my_amount_cents).toBe(500);
     const malo = { ...ticket, items: [{ ...ticket.items[0]!, remaining_bps: 10001 }] };
     expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: malo })).toThrow();
@@ -229,7 +234,7 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
     items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
     personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }, { miembro_id: 'm2', ya_eligio: true, presente: true }],
     te_toca_cents: 45000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
-    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }],
+    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }], personal: false,
   };
 
   it('responde como un ticket, con `ya_cargado` nulo: el pedido y la respuesta del contrato', () => {
@@ -472,7 +477,7 @@ describe('🔴 D263 · `viaje_version=5`: varios pagadores (App Backend 2.177.0)
         forma: 'iguales', monto_cents: 90000, pagado_por: 'm1', pagaste_tu,
         items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
         personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }], te_toca_cents: 0, sin_repartir_cents: 0,
-        puedo_elegir: false, puedo_marcar_presentes: true, pagadores,
+        puedo_elegir: false, puedo_marcar_presentes: true, pagadores, personal: false,
       },
     });
     const dos = [{ miembro_id: 'm1', monto_cents: 45000 }, { miembro_id: 'm2', monto_cents: 45000 }];
@@ -492,5 +497,63 @@ describe('🔴 D263 · `viaje_version=5`: varios pagadores (App Backend 2.177.0)
       .toEqual({ tipo: 'pagadores_no_suman', totalCents: 90000 });
     expect(errorDeViaje(new HttpError(422, { error: 'viaje_ticket_payers_total_mismatch' })))
       .toEqual({ tipo: 'pagadores_no_suman', totalCents: null });
+  });
+});
+
+describe('🔴 D276 · `viaje_version=6`: quiénes estuvieron y el gasto personal (App Backend 2.179.0)', () => {
+  const decode = (viaje: unknown) => decodeDetalleViaje({ contract: CONTRATO.id, viaje });
+  const conTicket = (extra: Record<string, unknown>) => {
+    const v = detalle();
+    return { ...v, tickets: [{ ...v.tickets[0], ...extra }] };
+  };
+  const ticket = (extra: Record<string, unknown> = {}) => ({
+    id: 't', lugar: 'X', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
+    cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 1000, pagado_por: 'm1', pagaste_tu: true,
+    items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 10000, my_bps: 0, my_amount_cents: 0 }],
+    personas: [{ miembro_id: 'm1', ya_eligio: false, presente: true }],
+    te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
+    pagadores: [{ miembro_id: 'm1', monto_cents: 1000 }], personal: true, ...extra,
+  });
+
+  it('lo que suma la 6: `presentes` y `personal` en cada ticket del detalle, `personal` en el de un ticket', () => {
+    expect(V6.ticket_suma).toEqual(['presentes', 'personal']);
+    expect(V6.detalle_de_ticket_suma).toEqual(['personal']);
+  });
+
+  it('`presentes`: ids de miembro en orden, y una cuenta que ya no está (`null`) no se cuenta', () => {
+    expect(decode(conTicket({ presentes: ['m2', null, 'm1'] })).tickets[0]!.presentes).toEqual(['m2', 'm1']);
+    expect(decode(conTicket({ presentes: [] })).tickets[0]!.presentes).toEqual([]);
+  });
+
+  it('🔴 lo que no es del dueño no entra: un id repetido, de más de 40, no texto, o `personal` que no es booleano', () => {
+    for (const malo of [
+      { presentes: ['m1', 'm1'] },
+      { presentes: Array.from({ length: 41 }, (_, i) => `m${i}`) },
+      { presentes: [1] },
+      { presentes: 'm1' },
+      { personal: 'no' },
+      { personal: null },
+    ]) expect(() => decode(conTicket(malo)), JSON.stringify(malo)).toThrow();
+  });
+
+  it('🔴 el detalle de un personal nunca se elige: `personal` con `puedo_elegir` es otra semántica', () => {
+    expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket() }).personal).toBe(true);
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_elegir: true }) })).toThrow();
+    // Compartido y elegible, como siempre.
+    expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ personal: false, puedo_elegir: true }) }).puedo_elegir)
+      .toBe(true);
+  });
+
+  it('🔴 errorDeViaje · los 409 nuevos: quién ya eligió (con su `miembro_id`), el no presente y el personal', () => {
+    expect(errorDeViaje(new HttpError(409, { error: 'viaje_ticket_persona_ya_eligio', miembro_id: 'm2' })))
+      .toEqual({ tipo: 'persona_ya_eligio', miembroId: 'm2' });
+    expect(errorDeViaje(new MockApiError(409, 'viaje_ticket_persona_ya_eligio', { miembro_id: 'm2' })))
+      .toEqual({ tipo: 'persona_ya_eligio', miembroId: 'm2' });
+    expect(errorDeViaje(new HttpError(409, { error: 'viaje_ticket_persona_ya_eligio', miembro_id: null })))
+      .toEqual({ tipo: 'persona_ya_eligio', miembroId: null });
+    expect(errorDeViaje(new HttpError(409, { error: 'viaje_ticket_not_present' }))).toEqual({ tipo: 'no_presente' });
+    expect(errorDeViaje(new MockApiError(409, 'viaje_ticket_personal'))).toEqual({ tipo: 'personal' });
+    // Con otro status, no es lo mismo.
+    expect(errorDeViaje(new HttpError(422, { error: 'viaje_ticket_not_present' }))).toEqual({ tipo: 'reintentar' });
   });
 });

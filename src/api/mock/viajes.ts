@@ -13,10 +13,12 @@ import {
 } from './mockApi';
 import { persist as persistirStore, state as store } from './store';
 import {
-  avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeEliminarMock, seamDeGastoMock, viajesMockEncendido,
+  avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeEliminarMock, seamDeGastoMock, seamDeSeleccionMock,
+  viajesMockEncendido,
 } from './viajesSeam';
 import {
   balanceDelViaje,
+  esPersonal,
   pagadoresDe,
   precioInformativo,
   restanteDe,
@@ -50,8 +52,9 @@ const esManual = (t: TicketMock) => t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL
 /** D245 · `viaje_version=2`: sólo con la negociación el detalle suma foto, lo que pagó y el total de cada ticket. */
 interface OpcionesDeVersion {
   /** 2: D245 (2.172.0); 3: la 2 más `color` y `has_photo` (D255, 2.174.0); 4: la 3 más `puede_eliminar` (D256, 2.175.0);
-   *  5: la 4 más `pagadores`, también en el detalle de un ticket (D263, 2.177.0). */
-  readonly version?: 1 | 2 | 3 | 4 | 5;
+   *  5: la 4 más `pagadores`, también en el detalle de un ticket (D263, 2.177.0);
+   *  6: la 5 más `presentes` y `personal` (D276, 2.179.0). */
+  readonly version?: 1 | 2 | 3 | 4 | 5 | 6;
 }
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
@@ -284,6 +287,7 @@ function paraCalculo(v: ViajeMock, t: TicketMock): TicketParaCalculo {
     id: t.id,
     forma: t.forma,
     pagado_por: t.pagado_por,
+    ...(t.cargado_por && { cargado_por: t.cargado_por }),
     monto_cents: t.monto_cents,
     ...(t.pagadores && { pagadores: t.pagadores }),
     items: t.items.map((i) => ({ id: i.id, line_cents: lineaDe(i) })),
@@ -293,6 +297,10 @@ function paraCalculo(v: ViajeMock, t: TicketMock): TicketParaCalculo {
 }
 
 const ticketsEnOrden = (v: ViajeMock) => porOrden(v.tickets, (t) => t.id);
+/** D276 · el gasto personal, con la ÚNICA definición del dueño (`esPersonal` del cálculo). */
+const esPersonalMock = (v: ViajeMock, t: TicketMock) => esPersonal(paraCalculo(v, t));
+/** D276 · el personal de otro, para `u`, no existe (`loVe` del dueño). */
+const loVe = (v: ViajeMock, t: TicketMock, u: string) => !esPersonalMock(v, t) || cargadoPor(t) === u;
 
 type Balance = BalanceDelViaje & { congelado: boolean };
 
@@ -309,6 +317,12 @@ function balance(v: ViajeMock, { cierre = false } = {}): Balance {
   let gasto = 0;
   const sumar = (m: Map<string, number>, k: string, x: number) => m.set(k, (m.get(k) ?? 0) + x);
   for (const t of ticketsEnOrden(v)) {
+    // D276: el personal quedó congelado entero a su dueño y no suma al grupo.
+    if (esPersonalMock(v, t)) {
+      porTicket.set(t.id, { consumo: new Map(t.personas.map((p) => [p.user_id, p.consumo_final_cents ?? 0])),
+        asignado: new Map(), sinRepartir: 0, faltan: [], personal: true });
+      continue;
+    }
     gasto += t.monto_cents;
     for (const p of pagadoresDe(t)) {
       sumar(pagado, p.user_id, p.monto_cents);
@@ -355,7 +369,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 = 1) {
+function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -364,7 +378,8 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 = 1) {
   if (!b.congelado) {
     for (const r of b.porTicket.values()) for (const x of r.faltan) faltaElegir.set(x, (faltaElegir.get(x) ?? 0) + 1);
   }
-  const tickets = ticketsEnOrden(v).map((t) => {
+  // D276: el personal de otro no existe para `u`; el propio sí se ve (y no suma).
+  const tickets = ticketsEnOrden(v).filter((t) => loVe(v, t, u)).map((t) => {
     const r = b.porTicket.get(t.id)!;
     return {
       id: t.id, lugar: t.lugar, tipo_lugar: t.tipo_lugar, fecha_ticket: t.fecha_ticket, hora_ticket: t.hora_ticket,
@@ -377,11 +392,17 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 = 1) {
       ...(version >= 4 && { puede_eliminar: v.estado === 'abierto' && (esPagador(t, u) || cargadoPor(t) === u) }),
       // D263 · con la 5: quiénes pagaron y cuánto.
       ...(version >= 5 && { pagadores: pagadoresPublicos(t, ids) }),
+      // D276 · con la 6: quiénes estuvieron y si es un gasto personal.
+      ...(version >= 6 && {
+        presentes: t.personas.filter((p) => p.presente).map((p) => ids.get(p.user_id) ?? null),
+        personal: esPersonalMock(v, t),
+      }),
     };
   }).reverse();
   // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
-  const pagadoDe = (x: string) => v.tickets.flatMap((t) => pagadoresDe(t)).filter((p) => p.user_id === x)
-    .reduce((s, p) => s + p.monto_cents, 0);
+  // D276: sin los personales, que no son del viaje.
+  const pagadoDe = (x: string) => v.tickets.filter((t) => !esPersonalMock(v, t)).flatMap((t) => pagadoresDe(t))
+    .filter((p) => p.user_id === x).reduce((s, p) => s + p.monto_cents, 0);
   const sinRepartir = b.congelado ? [] : ticketsEnOrden(v).filter((t) => b.porTicket.get(t.id)!.sinRepartir > 0).map((t) => ({
     ticket_id: t.id, lugar: t.lugar, fecha_ticket: t.fecha_ticket,
     monto_cents: b.porTicket.get(t.id)!.sinRepartir,
@@ -413,13 +434,15 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 = 1) {
   };
 }
 
-function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 = 1) {
+function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 = 1) {
   const b = balance(v);
   const r = b.porTicket.get(t.id)!;
   const ids = idPublico(v);
   const { mio, acumulado } = mioPorPlato(t, u);
   const abierto = v.estado === 'abierto';
-  const soyPersona = t.personas.some((p) => p.user_id === u);
+  // D276: elige quien estuvo, y nunca en un personal (es todo de su dueño).
+  const estuve = t.personas.some((p) => p.user_id === u && p.presente);
+  const personal = esPersonalMock(v, t);
   return {
     id: t.id, lugar: t.lugar, tipo_lugar: t.tipo_lugar, fecha_ticket: t.fecha_ticket, hora_ticket: t.hora_ticket,
     cargado_en: t.created_at, forma: t.forma, monto_cents: t.monto_cents,
@@ -435,10 +458,13 @@ function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 
     })),
     te_toca_cents: r.consumo.get(u) ?? 0,
     sin_repartir_cents: b.congelado ? 0 : r.sinRepartir,
-    puedo_elegir: abierto && t.forma === 'consumo' && soyPersona,
-    puedo_marcar_presentes: abierto && t.forma === 'iguales' && (esPagador(t, u) || cargadoPor(t) === u),
+    puedo_elegir: abierto && t.forma === 'consumo' && estuve && !personal,
+    // D276 · desde la 6, en las tres formas.
+    puedo_marcar_presentes: abierto && (version >= 6 || t.forma === 'iguales') && (esPagador(t, u) || cargadoPor(t) === u),
     // D263 · con la 5, también en el detalle de un ticket.
     ...(version >= 5 && { pagadores: pagadoresPublicos(t, ids) }),
+    // D276 · con la 6, si es un gasto personal.
+    ...(version >= 6 && { personal }),
   };
 }
 
@@ -540,7 +566,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -822,14 +848,20 @@ function verificarRecibo(raw: unknown): { id: string; huella: string | null } {
   return { id: payload.jti, huella: typeof payload.h === 'string' ? payload.h : null };
 }
 
-function buscarDuplicado(v: ViajeMock, recibo: { id: string; huella: string | null }): { otroViaje?: true; ticket?: TicketMock } {
+/**
+ * D276 · sólo lo que quien escanea puede ver: si la huella es la del personal de otro, para él no existe y se devuelve
+ * `personalAjeno`, para que la carga le libere la huella (como el dueño).
+ */
+function buscarDuplicado(v: ViajeMock, recibo: { id: string; huella: string | null }):
+  { otroViaje?: true; ticket?: TicketMock; personalAjeno?: TicketMock } {
   for (const w of cargar().viajes) {
     const t = w.tickets.find((x) => x.recibo_jti === recibo.id);
     if (t) return w.id === v.id ? { ticket: t } : { otroViaje: true };
   }
   if (!recibo.huella) return {};
   const t = v.tickets.find((x) => x.huella === recibo.huella);
-  return t ? { ticket: t } : {};
+  if (!t) return {};
+  return loVe(v, t, yo()) ? { ticket: t } : { personalAjeno: t };
 }
 
 function yaCargado(v: ViajeMock, t: TicketMock) {
@@ -850,7 +882,11 @@ export function mockRevisarTicket(id: string, body: unknown) {
 }
 
 function cuerpoTicket(body: unknown) {
-  if (!objeto(body) || !soloClaves(body, ['ocr_receipt', 'idempotency_key', 'forma', 'tipo_lugar', 'lugar', 'fecha_ticket', 'hora_ticket', 'items', 'pagado_por', 'pagadores'])) throw invalido();
+  if (!objeto(body) || !soloClaves(body, ['ocr_receipt', 'idempotency_key', 'forma', 'tipo_lugar', 'lugar', 'fecha_ticket', 'hora_ticket', 'items', 'pagado_por', 'pagadores', 'presentes'])) throw invalido();
+  // D276 · quiénes estuvieron: 1..20 ids de miembro, sin repetir. Sin el campo, todos.
+  const presentes = body.presentes;
+  if (presentes !== undefined && (!Array.isArray(presentes) || presentes.length < 1 || presentes.length > MAX_MIEMBROS
+      || !presentes.every(esUuid) || new Set(presentes).size !== presentes.length)) throw invalido();
   if (body.pagado_por !== undefined && !esUuid(body.pagado_por)) throw invalido();
   const pagadores = pagadoresPedidos(body);
   const lugar = body.lugar === undefined || body.lugar === null ? null : textoNormal(body.lugar, 120);
@@ -875,6 +911,7 @@ function cuerpoTicket(body: unknown) {
     tipo_lugar: body.tipo_lugar as TipoLugar, lugar, fecha_ticket: fecha as string | null, hora_ticket: hora as string | null, items,
     pagado_por: body.pagado_por as string | undefined,
     pagadores,
+    presentes: presentes as string[] | undefined,
   };
 }
 
@@ -931,7 +968,9 @@ export function mockCargarTicket(id: string, body: unknown, { version = 1 }: Opc
     const pedido = hashDe({ forma: b.forma, tipo_lugar: b.tipo_lugar, lugar: b.lugar, fecha_ticket: b.fecha_ticket,
       hora_ticket: b.hora_ticket, items: b.items, recibo: b.ocr_receipt, pagado_por: b.pagado_por ?? null,
       // D263 · entra al hash sólo si vino.
-      ...(b.pagadores !== undefined && { pagadores: b.pagadores }) });
+      ...(b.pagadores !== undefined && { pagadores: b.pagadores }),
+      // D276 · los presentes, sólo si vinieron.
+      ...(b.presentes !== undefined && { presentes: b.presentes }) });
     // D255-6 · la idempotencia es de quien carga.
     const previo = v.tickets.find((t) => cargadoPor(t) === u && t.idempotency_key === b.idempotency_key);
     if (previo) {
@@ -943,17 +982,25 @@ export function mockCargarTicket(id: string, body: unknown, { version = 1 }: Opc
     const dup = buscarDuplicado(v, recibo.ok);
     if (dup.otroViaje) throw conflicto('viaje_ticket_receipt_used');
     if (dup.ticket) return { contract: CONTRATO, ticket: vistaTicket(v, dup.ticket, u, version), ya_cargado: yaCargado(v, dup.ticket) };
+    // D276 · la huella es del personal de otro: se le libera y este entra como nuevo.
+    if (dup.personalAjeno) dup.personalAjeno.huella = null;
     if (v.tickets.length >= MAX_TICKETS) throw conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
     const monto = b.items.reduce((s, i) => s + lineaDe(i), 0);
     if (!Number.isSafeInteger(monto) || monto <= 0) throw new Respuesta(422, 'viaje_ticket_amount_invalid');
     const quien = pagadoresResueltos(v, b.pagado_por, b.pagadores, u, monto);
+    // D276 · quiénes estuvieron, ids de miembros activos (el 422 de siempre si no); sin el campo, todos.
+    const activos = miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada);
+    const porMiembro = new Map(activos.map((m) => [m.id, m.user_id]));
+    const desconocido = (b.presentes ?? []).find((x) => !porMiembro.has(x));
+    if (desconocido) throw new Respuesta(422, 'viaje_ticket_persona_unknown', { miembro_id: desconocido });
+    const estuvieron = new Set(b.presentes ? b.presentes.map((x) => porMiembro.get(x)) : activos.map((m) => m.user_id));
     const t: TicketMock = {
       id: nuevoId(), ...quien, ...(quien.pagado_por !== u && { cargado_por: u }), forma: b.forma, tipo_lugar: b.tipo_lugar, lugar: b.lugar,
       fecha_ticket: b.fecha_ticket, hora_ticket: b.hora_ticket, monto_cents: monto, created_at: ahora(),
       huella: recibo.ok.huella, recibo_jti: recibo.ok.id, idempotency_key: b.idempotency_key, pedido_hash: pedido,
       items: b.items.map((i) => ({ id: nuevoId(), nombre: i.name, price_cents: i.price_cents, quantity: i.quantity })),
-      personas: miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada).map((m) => ({
-        user_id: m.user_id, presente: true, listo_en: null, consumo_final_cents: null, asignado_cierre_cents: null,
+      personas: activos.map((m) => ({
+        user_id: m.user_id, presente: estuvieron.has(m.user_id), listo_en: null, consumo_final_cents: null, asignado_cierre_cents: null,
       })),
       selecciones: [],
     };
@@ -1070,7 +1117,8 @@ function costuraDeFotos(): string | null {
 
 function ticketDe(v: ViajeMock, tid: unknown): TicketMock {
   const t = esUuid(tid) ? v.tickets.find((x) => x.id === tid) : undefined;
-  if (!t) throw new Respuesta(404, 'viaje_ticket_not_found');
+  // D276: el personal de otro es el mismo 404 de un ticket que no está.
+  if (!t || !loVe(v, t, yo())) throw new Respuesta(404, 'viaje_ticket_not_found');
   return t;
 }
 
@@ -1098,8 +1146,17 @@ export function mockElegirEnTicket(id: string, tid: string, body: unknown, { ver
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     if (t.forma !== 'consumo') throw conflicto('viaje_ticket_not_selectable', { forma: t.forma });
     const u = yo();
+    // D276 · un personal es todo de su dueño, sin elegir (el de otro ya fue el 404 de `ticketDe`).
+    if (esPersonalMock(v, t)) throw conflicto('viaje_ticket_personal');
     const p = t.personas.find((x) => x.user_id === u);
     if (!p) throw conflicto('viaje_ticket_not_in_snapshot');
+    // D276-4 · el seam: me desmarcaron justo antes (sin elecciones mías, como exige el dueño).
+    if (seamDeSeleccionMock('me_desmarcaron')) {
+      p.presente = false;
+      t.selecciones = t.selecciones.filter((x) => x.user_id !== u);
+    }
+    // D276 · sólo eligen los que estuvieron.
+    if (!p.presente) throw conflicto('viaje_ticket_not_present');
     const desconocido = items.find((i) => !t.items.some((x) => x.id === i.item_id));
     if (desconocido) throw new Respuesta(422, 'viaje_ticket_item_unknown', { item_id: desconocido.item_id });
     const previa = new Map(t.selecciones.filter((s) => s.user_id === u).map((s) => [s.item_id, s.fraction_bps]));
@@ -1130,12 +1187,20 @@ export function mockMarcarPresentes(id: string, tid: string, body: unknown, { ve
     const v = miViaje(id);
     const t = ticketDe(v, tid);
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
-    if (t.forma !== 'iguales') throw conflicto('viaje_ticket_not_equal_split', { forma: t.forma });
+    // D276 · en las tres formas (ya no sale `viaje_ticket_not_equal_split`).
     if (!esPagador(t, yo()) && cargadoPor(t) !== yo()) throw conflicto('viaje_ticket_not_yours');
     const porMiembro = new Map(t.personas.map((p) => [v.miembros.find((m) => m.user_id === p.user_id)?.id, p.user_id]));
     const desconocido = presentes.find((x) => !porMiembro.has(x));
     if (desconocido) throw new Respuesta(422, 'viaje_ticket_persona_unknown', { miembro_id: desconocido });
     const marcados = new Set(presentes.map((x) => porMiembro.get(x)));
+    if (t.forma === 'consumo') {
+      // D276 · no se desmarca a quien ya eligió algo: nunca se borran elecciones ajenas.
+      const conEleccion = new Set(t.selecciones.map((x) => x.user_id));
+      const quitado = t.personas.find((p) => conEleccion.has(p.user_id) && !marcados.has(p.user_id));
+      if (quitado) {
+        throw conflicto('viaje_ticket_persona_ya_eligio', { miembro_id: v.miembros.find((m) => m.user_id === quitado.user_id)?.id ?? null });
+      }
+    }
     for (const p of t.personas) p.presente = marcados.has(p.user_id);
     return { contract: CONTRATO, ticket: vistaTicket(v, t, yo(), version) };
   });
@@ -1165,7 +1230,8 @@ export function mockVistaPreviaCierre(id: string) {
     return {
       contract: CONTRATO,
       todos_eligieron: asignaciones.length === 0,
-      tickets: v.tickets.length,
+      // D276 · sin los personales, que no son del viaje.
+      tickets: v.tickets.filter((t) => !esPersonalMock(v, t)).length,
       asignaciones,
       balances: miembrosEnOrden(v).filter((m) => m.estado === 'activo').map((m) => ({ miembro_id: m.id, balance_cents: b.balance.get(m.user_id) ?? 0 })),
       transferencias: transferencias.map((x) => ({ de: ids.get(x.de) ?? null, a: ids.get(x.a) ?? null, monto_cents: x.monto_cents })),
@@ -1210,7 +1276,8 @@ export function mockEliminarTicket(id: string, ticketId: string, { version = 1 }
     const v = miViaje(id);
     if (seamDeEliminarMock('sin_viaje')) throw noEncontrado();
     const u = yo();
-    const i = v.tickets.findIndex((t) => t.id === ticketId);
+    // D276 · el personal de otro, para mí, no existe: el mismo 404.
+    const i = v.tickets.findIndex((t) => t.id === ticketId && loVe(v, t, u));
     if (i >= 0 && seamDeEliminarMock('ya_no_estaba')) {
       // El seam: otro lo eliminó justo antes.
       v.tickets.splice(i, 1);
@@ -1278,7 +1345,8 @@ export function mockResumenDeViaje(id: string) {
     const b = balance(v);
     const porTipo = new Map<string, number>(TIPOS_LUGAR.map((t) => [t, 0]));
     const lugares = [];
-    for (const t of ticketsEnOrden(v)) {
+    // D276 · decisión B: el personal no entra al resumen (ni a sus totales ni a `lugares`).
+    for (const t of ticketsEnOrden(v).filter((x) => !esPersonalMock(v, x))) {
       const mio = b.porTicket.get(t.id)!.consumo.get(u) ?? 0;
       const pague = esPagador(t, u);
       if (!mio && !pague) continue;

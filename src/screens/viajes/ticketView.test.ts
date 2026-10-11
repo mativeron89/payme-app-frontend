@@ -5,9 +5,11 @@ import { traducir } from '../../i18n/idioma';
 import {
   alternarPresente,
   ausentesDelTicket,
+  ayudaDePresentes,
   candidatosDelTicket,
   candidatosDelViaje,
   chipsDeEleccion,
+  esGastoPersonal,
   fechaDelEscaneo,
   fechaYHoraLocal,
   idsPresentes,
@@ -50,7 +52,7 @@ function ticket(extra: Partial<TicketDelViaje> = {}): TicketDelViaje {
     id: 'tk', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false,
     items: [], personas: [persona('m-luis'), persona('m-ana'), persona('m-sofia'), persona('m-diego', false)],
-    te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, ...extra,
+    te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false, ...extra,
   } as const;
   // D263 · con un solo pagador, uno con el total.
   return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
@@ -226,5 +228,41 @@ describe('AF-VIAJES · 1k · la hora del teléfono', () => {
     expect(fechaYHoraLocal(d.toISOString(), 'en')).toEqual({ fecha: 'Oct 8', hora: '21:40' });
     expect(fechaYHoraLocal(null, 'es')).toBeNull();
     expect(fechaYHoraLocal('no', 'es')).toBeNull();
+  });
+});
+
+describe('🔴 D276-3 · ¿es un gasto personal? (visto desde quien carga)', () => {
+  const C = [{ id: 'yo', es_yo: true }, { id: 'luis', es_yo: false }, { id: 'sofia', es_yo: false }];
+  const YO = { es_yo: true };
+  const LUIS = { es_yo: false };
+  const soloYo = new Set(['luis', 'sofia']);
+
+  it('sólo yo marcado y pagué yo solo: sí', () => {
+    expect(esGastoPersonal(C, soloYo, [YO])).toBe(true);
+  });
+
+  it('sólo yo marcado, pero pagó otro: no (es una deuda)', () => {
+    expect(esGastoPersonal(C, soloYo, [LUIS])).toBe(false);
+  });
+
+  it('sólo yo marcado, pero pagamos dos: no', () => {
+    expect(esGastoPersonal(C, soloYo, [YO, LUIS])).toBe(false);
+  });
+
+  it('con alguien más marcado: no', () => {
+    expect(esGastoPersonal(C, new Set(['sofia']), [YO])).toBe(false);
+    expect(esGastoPersonal(C, new Set(), [YO])).toBe(false);
+  });
+
+  it('sólo otro marcado (no yo) y pagué yo: no', () => {
+    expect(esGastoPersonal(C, new Set(['yo', 'sofia']), [YO])).toBe(false);
+  });
+});
+
+describe('D276-2 · la ayuda de «¿Quiénes estuvieron?»', () => {
+  it('cada forma la suya; «Pagar el total», ninguna', () => {
+    expect(ayudaDePresentes('consumo', t)).toBe('Sólo eligen los que estuvieron. Desmarca a quien no estuvo.');
+    expect(ayudaDePresentes('iguales', t)).toBe('Se divide entre los marcados. Desmarca a quien no estuvo.');
+    expect(ayudaDePresentes('total', t)).toBeNull();
   });
 });

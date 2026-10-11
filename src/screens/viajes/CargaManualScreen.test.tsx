@@ -96,3 +96,19 @@ describe('D245-4 · el desplegable «Miembros»', () => {
     expect(texto(html)).toBe('Miembros 3 AL Tú @ana.lopez Luis Pérez @luis.perez SR Sofía Ramírez');
   });
 });
+
+describe('🔴 D276-3 · el gasto a mano personal', () => {
+  const PERSONAL = 'Es un gasto personal: sólo lo ves tú y no suma al total del viaje.';
+
+  it('sólo yo en el viaje (todo marcado = sólo yo) y pagué yo: la línea, arriba del botón', () => {
+    const html = renderToStaticMarkup(<CargaManualVista viaje={{ ...VIAJE, miembros: [MIEMBROS[0]!] }} />);
+    expect(html).toContain(PERSONAL);
+    const pie = html.slice(html.indexOf('vj-pie'));
+    expect(pie.indexOf(PERSONAL)).toBeGreaterThan(-1);
+    expect(pie.indexOf(PERSONAL)).toBeLessThan(pie.indexOf('class="btn btn-navy"'));
+  });
+
+  it('control · con todos marcados (más de uno), sin la línea', () => {
+    expect(renderToStaticMarkup(<CargaManualVista viaje={VIAJE} />)).not.toContain(PERSONAL);
+  });
+});

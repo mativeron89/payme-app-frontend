@@ -1,8 +1,10 @@
 import { MemoriaDeCuenta } from '../../api/memoriaDeCuenta';
 import type { EstadoViaje } from '../../api/viajes';
+import type { ViajeConFechas } from '../../api/viajesDeHoy';
 import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import type { AppBottomBarProps } from '../../components/AppBottomBar';
 import { navigate } from '../../router';
+import { abrirHojaParaQueViaje } from './hojaParaQueViajeEstado';
 import type { T } from './viajesView';
 
 /**
@@ -32,6 +34,26 @@ export function circuloDelViaje(
       abrirCamaraNativa();
       navigate('scan', id);
     },
+  };
+}
+
+/**
+ * D276-1 · el círculo de la barra según las fechas: sin un centro propio de la pantalla (el de adentro de un viaje,
+ * D250, o el CTA del pago), con UN viaje abierto que cubre hoy, el de ese viaje; con dos o más, «Nueva» abre la hoja
+ * «¿Para qué viaje?» (la cámara se abre después, en el toque que elige). Si no, `undefined`: el de siempre.
+ */
+export function centroPorFechas(
+  deHoy: readonly ViajeConFechas[],
+  center: AppBottomBarProps['center'],
+  t: T,
+): AppBottomBarProps['center'] {
+  if (center || deHoy.length === 0) return undefined;
+  if (deHoy.length === 1) return circuloDelViaje(deHoy[0]!, t);
+  return {
+    label: t('Nueva'),
+    icon: 'camera',
+    ariaLabel: t('Escanear ticket para un viaje'),
+    onClick: abrirHojaParaQueViaje,
   };
 }
 

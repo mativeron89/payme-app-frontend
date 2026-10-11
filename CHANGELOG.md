@@ -11,6 +11,81 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.239.0 — La cámara de Nueva va al viaje en sus fechas, «¿Quiénes estuvieron?» en las tres formas, el gasto personal y el que no estuvo (D276) (2026-10-10)
+
+Orden AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010 (0072cfb9…), con D276 (2849a1a1…) y App Backend 2.179.0 (inventario en
+b038fed, contenido de 66eafab). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+- **D276-1 · la cámara de Nueva, por las fechas del viaje.** Mati: «siempre que estes dentro de las fechas del viaje y
+  seleccionas la cámara para escanear ticket, por default se tiene que ir a los gastos del viaje».
+  - **Cuándo:** soy miembro de un viaje `abierto` y la fecha LOCAL de hoy (la del teléfono) está entre `fecha_desde` y
+    `fecha_hasta`, los dos días incluidos. Entonces el círculo es el del viaje (el de D250): se ve «Nueva», la cámara se
+    abre en el mismo toque y el escaneo es el de ese viaje. El lector de pantalla oye «Escanear ticket para {viaje}».
+    - Un viaje sin las dos fechas no cuenta, y esperando pagos o cerrado, tampoco.
+    - Adentro de un viaje abierto sigue mandando el círculo de ESE viaje (D250).
+    - No hay «Es otra mesa»: el gasto que no es del viaje es el personal (D276-3).
+  - **Dos viajes que cubren hoy:** «Nueva» abre una hoja, «¿Para qué viaje?», con sus nombres; la cámara se abre en el
+    toque que elige. Mati no lo decidió (es un caso raro): queda declarado.
+    - La hoja vive una vez en `App` y la barra sólo la abre. Por eso no entra en el árbol de la pantalla de pago (ahí la
+      barra trae su propio botón y la hoja no se puede abrir), y el censo P36 no cambia.
+    - Escape o ✕ la cierran y el foco vuelve al círculo; cambiar de pantalla también la cierra.
+  - **De dónde sale el dato:** de la lista de viajes abiertos (`GET /api/viajes?estado=abiertos`, que trae las fechas),
+    en una memoria de la cuenta (C-07) con el turno de T-01 sacado al pedir. Sólo guarda id, nombre, estado y fechas;
+    nunca montos. `olvidarLoDeViajes()` la vacía.
+    - **Se precarga apenas hay sesión,** no sólo al abrir Inicio (condición del OK del Bibliotecario).
+    - 🔴 **Residual declarado:** la cámara decide ANTES del toque (iOS la abre sólo dentro del gesto). Si en la primera
+      carga la lista todavía no llegó, va la mesa de siempre. Dura lo que tarda esa lista.
+- **D276-2 · «¿Quiénes estuvieron?», en las tres formas, con todos marcados al arrancar.**
+  - **Al cargar un ticket escaneado:** también en «Por lo que pidió cada uno» («Sólo eligen los que estuvieron. Desmarca
+    a quien no estuvo.») y en «Pagar el total» (sin texto extra). Hay que dejar al menos uno.
+  - **`presentes` va SIEMPRE** en el pedido, con exactamente lo que se ve. Sale el `PUT /presentes` de después que
+    hacía «En partes iguales»: es una sola llamada.
+  - **En el detalle de un ticket,** con `puedo_marcar_presentes` (desde la 6, en las tres formas), la lista se edita y
+    se guarda.
+    - En «por lo que pidió cada uno» no se desmarca a quien ya eligió: «{Nombre} ya eligió: no se puede desmarcar.»
+      (si soy yo, «Ya elegiste: no te puedes desmarcar.»), y la lista vuelve a lo guardado.
+  - **«Quién ya eligió»** lista sólo a los que estuvieron: quien no estuvo no «falta elegir» (como `faltan` del dueño).
+- **D276-3 · el gasto personal:** quedo sólo yo marcado y pagué yo solo.
+  - Al cargarlo, una línea justo arriba del botón: «Es un gasto personal: sólo lo ves tú y no suma al total del
+    viaje.» Igual en el gasto a mano.
+  - Al guardarlo no se elige nada: vuelve al viaje con «Guardaste el gasto personal.».
+  - Si quedo sólo yo pero pagó otro, no es personal (es una deuda) y no hay línea.
+  - En Balance › Consumos, el chip «Personal». En su detalle, «Es tu gasto personal: sólo lo ves tú y no suma al total
+    del viaje.», sin «Quién ya eligió» ni «Listo».
+- **D276-4 · el que no estuvo:** en un ticket «por lo que pidió cada uno» en el que no estuve, se ve sin poder elegir,
+  con «No estuviste en este ticket: no eliges nada.».
+  - Si al tocar «Listo» llega el 409 `viaje_ticket_not_present` (me desmarcaron mientras elegía), la misma línea en un
+    aviso y el ticket de nuevo, sin pantalla de error. `viaje_ticket_personal`, igual.
+- **`viaje_version=6`** en todas las rutas de Viajes, con claves exactas: cada ticket suma `presentes` (ids de miembro,
+  sin repetir) y `personal`, y el detalle suma `personal` (un personal nunca se elige). Los errores nuevos:
+  `viaje_ticket_persona_ya_eligio` (con su `miembro_id`), `viaje_ticket_not_present` y `viaje_ticket_personal`.
+- **El espejo y los hechos:** `contract/viajes-v1.json` de 2.179.0 y el inventario del dueño adoptado tal cual (138
+  entradas; 13 archivos espejados). Los hechos del dueño se regeneraron en local porque cambió `routes/account.js`:
+  cambian sólo el commit y el sha de esa fuente, ningún hecho.
+- **El mock, como el dueño 2.179.0:** `presentes` al cargar, el personal (que para los demás no existe y no suma),
+  `PUT /presentes` en las tres formas con el 409 de quien ya eligió, y el 409 del no presente. Suma el seam
+  `payme.app.mock.viajes.seleccion.v1` = `me_desmarcaron`, de un solo uso.
+- **Las specs de Viajes fijan el reloj.** No sólo la de D250 que toca Nueva desde Inicio: con el reloj real, toda spec
+  con Viajes encendido dependía del día de la corrida («Cancún 2026» del mock va del 5 al 11 de octubre), y además
+  corría una carrera, porque «Nueva» se ve hasta que llega la lista. Las diez fijan el reloj FUERA de esas fechas
+  (`relojFueraDeLasFechasDeLosViajes`, en `e2e/_app.ts`).
+- **Pruebas:**
+  - **rojo en la base `716561b`:**
+    - 57 unitarias en 11 archivos (dos de ellos no cargan, porque importan lo nuevo);
+    - 13 e2e de 17. Los 4 que pasan son los controles (el día antes, el día después, sin fechas, un solo viaje
+      esperando pagos), que afirman que ahí no cambia nada;
+  - **mutantes: mueren los 62,** cada uno por la prueba que lo vigila (42 unitarios y 20 en el navegador).
+    - En la primera vuelta sobrevivían siete. Cinco eran huecos de las pruebas unitarias: la lista de cerrados no se
+      decodificaba (y por eso nunca llegaba a recordarse), faltaban los presentes repetidos, el personal elegible y el
+      `miembro_id` del 409 en el decodificador, y el personal en un viaje ya cerrado.
+    - Los otros dos, en el navegador: un solo viaje esperando pagos ya iba a la cámara de siempre por `circuloDelViaje`
+      (el filtro importa con dos, y ahora se prueba con dos); y la hoja de `App`, siempre montada, también pedía la
+      lista y tapaba a la precarga de la sesión: ahora sólo lee.
+    - **Declarado sin discriminar:** el respaldo de la barra (pide la lista si al montarse no hay dato) lo tapa siempre
+      la precarga de la sesión, salvo que esa falle.
+  - **e2e a 375,** con la hora de México y el reloj fijo: los bordes se prueban de noche, donde la fecha local y la UTC
+    no coinciden.
+
 ## 0.238.1 — La burbuja del viaje con el diseño de Claude Design, el restaurante pendiente y «No tienes mesas abiertas» al pie (D275, D271) (2026-10-10)
 
 Orden AF-BURBUJA-DISENO-Y-RESTAURANTE-PENDIENTE-20261010 (4644c9f1…), con D275 (2d476407…), D271 (b21def53…) y la

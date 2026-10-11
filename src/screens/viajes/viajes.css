@@ -151,3 +151,50 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* ─── D276 · el gasto personal y «¿Para qué viaje?» ─── */
+
+/* «Personal» en mi lista del viaje: no es un aviso, es un dato del ticket. */
+.vjv-chip-personal {
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+/* La línea del gasto personal (al cargar, arriba del botón; en su detalle, arriba de todo):
+   no es un aviso, así que no va en el color de aviso. Dos clases, para ganarle a `.vjq-aviso`. */
+.vjq-aviso.vjt-personal {
+  color: var(--teal-txt);
+}
+.vjt-aviso-ticket .vjt-texto {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.vjt-aviso-ticket.vjt-personal {
+  background: var(--teal-l);
+}
+.vjt-aviso-ticket.vjt-personal .vjt-texto {
+  color: var(--teal-txt);
+}
+
+/* La hoja de dos viajes que cubren hoy: un botón por viaje, a todo el ancho, con el mínimo táctil. */
+.vj-hoja-viajes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.vj-hoja-viaje {
+  min-height: 48px;
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}

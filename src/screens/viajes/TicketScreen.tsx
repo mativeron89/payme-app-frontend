@@ -17,6 +17,7 @@ import { ListaDePresentes } from './TicketNuevoScreen';
 import {
   alternarPresente,
   ausentesDelTicket,
+  ayudaDePresentes,
   candidatosDelTicket,
   chipsDeEleccion,
   idsPresentes,
@@ -32,7 +33,7 @@ import {
   teTocaConSeleccion,
   topeDelPlato,
 } from './ticketView';
-import { iconoTipoLugar, nombreCompleto, nombreDePila, nombreDelLugar } from './viajesView';
+import { iconoTipoLugar, nombreCompleto, nombreDePila, nombreDelLugar, type T } from './viajesView';
 import { circuloDelViaje } from './circuloDelViaje';
 import './viajes.css';
 import './ticket.css';
@@ -131,6 +132,13 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
       if (e.tipo === 'fraccion_excede') {
         toast(t('Alguien ya eligió parte de ese plato. Revisa lo que queda.'), { sobreLaBarra: true });
         cargar(true);
+      } else if (e.tipo === 'no_presente') {
+        // D276-4 · me desmarcaron mientras elegía: se dice, sin pantalla de error, y el ticket de nuevo.
+        toast(t('No estuviste en este ticket: no eliges nada.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'personal') {
+        toast(t('Es tu gasto personal: no hay nada que elegir.'), { sobreLaBarra: true });
+        cargar(true);
       } else if (e.tipo === 'no_abierto') {
         toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
         cargar(true);
@@ -155,7 +163,15 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
     } catch (err) {
       if (!vivo.current) return;
       const e = errorDeViaje(err);
-      if (e.tipo === 'no_abierto') {
+      if (e.tipo === 'persona_ya_eligio') {
+        // D276-2 · en «por lo que pidió cada uno» no se desmarca a quien ya eligió: se dice quién, y la lista vuelve a
+        // lo guardado.
+        toast(textoYaEligio(e.miembroId, viaje.miembros, t), { sobreLaBarra: true });
+        setAusentes(ausentesDelTicket(ticket.personas));
+      } else if (e.tipo === 'persona_desconocida') {
+        toast(t('Alguien ya no está en el viaje. Revisa quiénes estuvieron.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'no_abierto') {
         toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
         cargar(true);
       } else if (e.tipo === 'no_disponible') {
@@ -278,11 +294,72 @@ export function TicketVista(props: TicketVistaProps) {
       {ticket.forma === 'consumo' ? (
         <ConsumoVista {...props} />
       ) : ticket.forma === 'total' ? (
-        <TotalVista ticket={ticket} miembros={miembros} />
+        <TotalVista {...props} />
       ) : (
         <IgualesVista {...props} />
       )}
     </>
+  );
+}
+
+/**
+ * D276-2 · «{Nombre} ya eligió: no se puede desmarcar.» Si soy yo, «Ya elegiste: no te puedes desmarcar.»; sin el
+ * nombre (una cuenta que ya no está, o no vino), «Alguien».
+ */
+export function textoYaEligio(miembroId: string | null, miembros: readonly MiembroViaje[], t: T): string {
+  const m = miembroId ? miembros.find((x) => x.id === miembroId) : undefined;
+  if (!m) return t('Alguien ya eligió: no se puede desmarcar.');
+  return m.es_yo ? t('Ya elegiste: no te puedes desmarcar.') : t('{0} ya eligió: no se puede desmarcar.', nombreCompleto(m, t));
+}
+
+/**
+ * D276-3 · D276-4 · lo que se dice arriba del ticket: un gasto personal (todo mío, no suma al viaje) o, en «por lo que
+ * pidió cada uno», que no estuve y no elijo. `null` si no hay nada que decir.
+ */
+export function avisoDelTicket(ticket: TicketDelViaje, miembros: readonly MiembroViaje[], t: T): string | null {
+  if (ticket.personal) return t('Es tu gasto personal: sólo lo ves tú y no suma al total del viaje.');
+  if (ticket.forma !== 'consumo') return null;
+  const yo = miembros.find((m) => m.es_yo)?.id;
+  const estuve = ticket.personas.some((p) => p.presente && p.miembro_id === yo);
+  return estuve ? null : t('No estuviste en este ticket: no eliges nada.');
+}
+
+function AvisoDelTicket({ ticket, miembros }: { ticket: TicketDelViaje; miembros: readonly MiembroViaje[] }) {
+  const { t } = useIdioma();
+  const aviso = avisoDelTicket(ticket, miembros, t);
+  if (!aviso) return null;
+  return (
+    <section className={`vj-card vjt-aviso-ticket${ticket.personal ? ' vjt-personal' : ''}`} role="note">
+      <p className="vjt-texto">{aviso}</p>
+    </section>
+  );
+}
+
+/**
+ * «¿Quiénes estuvieron?» para editar: con `puedo_marcar_presentes` (desde la 6, en las tres formas, D276), quien cargó
+ * o quien pagó cambia quiénes estuvieron y guarda.
+ */
+function EditarPresentes({ ticket, miembros, ausentes, guardando, onPresente, onGuardarPresentes }: TicketVistaProps) {
+  const { t } = useIdioma();
+  if (!ticket.puedo_marcar_presentes) return null;
+  const candidatos = candidatosDelTicket(ticket.personas, miembros, t);
+  const guardados = ausentesDelTicket(ticket.personas);
+  const cambio = ausentes.size !== guardados.size || [...ausentes].some((id) => !guardados.has(id));
+  return (
+    <section className="vj-card" aria-labelledby="vjt-quienes">
+      <h2 id="vjt-quienes" className="vjt-card-titulo">{t('¿Quiénes estuvieron?')}</h2>
+      {ayudaDePresentes(ticket.forma, t) && <p className="vjt-texto vjt-texto--ayuda">{ayudaDePresentes(ticket.forma, t)}</p>}
+      <ListaDePresentes candidatos={candidatos} ausentes={ausentes} onAlternar={onPresente} deshabilitada={guardando} />
+      <button
+        type="button"
+        className="btn btn-navy vjt-guardar"
+        disabled={!cambio || guardando}
+        aria-busy={guardando || undefined}
+        onClick={onGuardarPresentes}
+      >
+        {t('Guardar')}
+      </button>
+    </section>
   );
 }
 
@@ -324,7 +401,8 @@ function QuienesPagaron({ ticket, miembros }: { ticket: TicketDelViaje; miembros
 }
 
 /** 1j · «Pagar el total»: invita quien lo pagó; con varios (D263), cada uno pone lo que pagó. */
-function TotalVista({ ticket, miembros }: { ticket: TicketDelViaje; miembros: readonly MiembroViaje[] }) {
+function TotalVista(props: TicketVistaProps) {
+  const { ticket, miembros } = props;
   const { t } = useIdioma();
   const pago = quienPago(ticket, miembros);
   const completo = pago ? nombreCompleto(pago, t) : t('Cuenta eliminada');
@@ -332,6 +410,7 @@ function TotalVista({ ticket, miembros }: { ticket: TicketDelViaje; miembros: re
   const varios = ticket.pagadores.length > 1;
   return (
     <div className="scroll vj-scroll">
+      <AvisoDelTicket ticket={ticket} miembros={miembros} />
       <section className="vj-card vjt-aviso">
         <span className="vjt-icono vjt-icono--centro" aria-hidden="true"><Icon name={iconoTipoLugar(ticket.tipo_lugar)} size={20} /></span>
         <h2 className="vjt-aviso-titulo">
@@ -349,40 +428,25 @@ function TotalVista({ ticket, miembros }: { ticket: TicketDelViaje; miembros: re
       </section>
       <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
+      <EditarPresentes {...props} />
     </div>
   );
 }
 
-/** «En partes iguales»: entre quiénes, y (si lo pagué y el viaje sigue abierto) quiénes estuvieron. */
-function IgualesVista({ ticket, miembros, ausentes, guardando, onPresente, onGuardarPresentes }: TicketVistaProps) {
+/** «En partes iguales»: entre quiénes, y (si lo cargué o pagué, con el viaje abierto) quiénes estuvieron. */
+function IgualesVista(props: TicketVistaProps) {
+  const { ticket, miembros } = props;
   const { t } = useIdioma();
-  const candidatos = candidatosDelTicket(ticket.personas, miembros, t);
-  const guardados = ausentesDelTicket(ticket.personas);
-  const cambio = ausentes.size !== guardados.size || [...ausentes].some((id) => !guardados.has(id));
   return (
     <div className="scroll vj-scroll">
+      <AvisoDelTicket ticket={ticket} miembros={miembros} />
       <section className="vj-card">
         <h2 className="vjt-card-titulo">{t('Se divide entre los que estuvieron')}</h2>
         <p className="vjt-texto">{nombresPresentes(ticket.personas, miembros, t)}</p>
       </section>
       <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
-      {ticket.puedo_marcar_presentes && (
-        <section className="vj-card" aria-labelledby="vjt-quienes">
-          <h2 id="vjt-quienes" className="vjt-card-titulo">{t('¿Quiénes estuvieron?')}</h2>
-          <p className="vjt-texto vjt-texto--ayuda">{t('Se divide entre los marcados. Desmarca a quien no estuvo.')}</p>
-          <ListaDePresentes candidatos={candidatos} ausentes={ausentes} onAlternar={onPresente} deshabilitada={guardando} />
-          <button
-            type="button"
-            className="btn btn-navy vjt-guardar"
-            disabled={!cambio || guardando}
-            aria-busy={guardando || undefined}
-            onClick={onGuardarPresentes}
-          >
-            {t('Guardar')}
-          </button>
-        </section>
-      )}
+      <EditarPresentes {...props} />
     </div>
   );
 }
@@ -395,23 +459,31 @@ function ConsumoVista(props: TicketVistaProps) {
   return (
     <>
       <div className="scroll vj-scroll">
-        <section className="vj-card" aria-labelledby="vjt-quien-eligio">
-          <h2 id="vjt-quien-eligio" className="vjt-rotulo vjt-rotulo--arriba">{t('Quién ya eligió')}</h2>
-          <ul className="vjt-chips vjt-chips--eleccion">
-            {chips.map((c) => (
-              <li key={c.clave} className={c.ya_eligio ? 'vjt-eligio' : 'vjt-eligio vjt-eligio--falta'}>
-                <Icon name={c.ya_eligio ? 'check' : 'clock'} size={13} />
-                {c.ya_eligio ? c.nombre : t('{0} · falta elegir', c.nombre)}
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
-          <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
-          <ListaParaElegir {...props} />
-        </section>
+        <AvisoDelTicket ticket={ticket} miembros={miembros} />
+        {/* D276-3 · en un gasto personal nadie elige: no hay «Quién ya eligió». */}
+        {!ticket.personal && (
+          <section className="vj-card" aria-labelledby="vjt-quien-eligio">
+            <h2 id="vjt-quien-eligio" className="vjt-rotulo vjt-rotulo--arriba">{t('Quién ya eligió')}</h2>
+            <ul className="vjt-chips vjt-chips--eleccion">
+              {chips.map((c) => (
+                <li key={c.clave} className={c.ya_eligio ? 'vjt-eligio' : 'vjt-eligio vjt-eligio--falta'}>
+                  <Icon name={c.ya_eligio ? 'check' : 'clock'} size={13} />
+                  {c.ya_eligio ? c.nombre : t('{0} · falta elegir', c.nombre)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {/* D276-3 · un gasto personal es todo mío: sin lista para elegir (quedan el total y quiénes estuvieron). */}
+        {!ticket.personal && (
+          <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
+            <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
+            <ListaParaElegir {...props} />
+          </section>
+        )}
         <QuienesPagaron ticket={ticket} miembros={miembros} />
         {!ticket.puedo_elegir && <Totales ticket={ticket} />}
+        <EditarPresentes {...props} />
       </div>
       {ticket.puedo_elegir && (
         <div className="vj-pie">

@@ -78,6 +78,20 @@ export function seamDeEliminarMock(valor: 'ya_no_estaba' | 'cerrado' | 'prohibid
   return true;
 }
 
+/**
+ * D276-4 · elegir en un ticket, una sola vez (el seam se consume): `me_desmarcaron` — quien cargó me desmarcó de
+ * «¿Quiénes estuvieron?» justo antes (todavía no había elegido nada: a quien eligió no se lo desmarca), y el dueño
+ * contesta 409 `viaje_ticket_not_present`.
+ */
+export const CLAVE_SELECCION_MOCK = 'payme.app.mock.viajes.seleccion.v1';
+
+/** Lee y consume el seam de elegir: `true` una sola vez si vale `valor`. */
+export function seamDeSeleccionMock(valor: 'me_desmarcaron'): boolean {
+  if (leer(CLAVE_SELECCION_MOCK) !== valor) return false;
+  try { localStorage.removeItem(CLAVE_SELECCION_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
+  return true;
+}
+
 export function avisoEliminadoMock(): boolean {
   return leer(CLAVE_AVISO_ELIMINADO_MOCK) === 'encendido';
 }

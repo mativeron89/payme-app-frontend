@@ -36,6 +36,8 @@ import { CartelVersionNueva } from './components/CartelVersionNueva';
 import { RegionProvider } from './preferences/RegionProvider';
 import { useCapacidadViajes } from './api/viajes';
 import { enforceViajesRouteGuard, esPaginaDeViajes } from './screens/viajes/viajesRouteGuard';
+import { precargarViajesAbiertos } from './screens/viajes/useViajesDeHoy';
+import { HojaParaQueViajeEnLaApp } from './screens/viajes/HojaParaQueViaje';
 import { ViajesScreen } from './screens/viajes/ViajesScreen';
 import { CrearViajeScreen } from './screens/viajes/CrearViajeScreen';
 import { ViajeScreen } from './screens/viajes/ViajeScreen';
@@ -152,6 +154,11 @@ function Shell() {
    */
   const capacidadViajes = useCapacidadViajes();
   const rutaDeViajes = esPaginaDeViajes(route.page) && capacidadViajes !== 'encendida';
+  // D276-1 · la cámara de Nueva decide por las fechas del viaje ANTES del toque: los abiertos se precargan apenas hay
+  // sesión y Viajes, no sólo al abrir Inicio (condición del OK del Bibliotecario).
+  useEffect(() => {
+    if (session && capacidadViajes === 'encendida') precargarViajesAbiertos();
+  }, [session, capacidadViajes]);
   useEffect(() => {
     enforceViajesRouteGuard(capacidadViajes, route.page);
   }, [capacidadViajes, route.page]);
@@ -437,6 +444,8 @@ export default function App() {
                 flujo: empuja la pantalla, no la tapa. */}
             <CartelVersionNueva />
             <Shell />
+            {/* D276-1 · «¿Para qué viaje?»: la abre la cámara de Nueva con dos viajes que cubren hoy. */}
+            <HojaParaQueViajeEnLaApp />
           </div>
         </ToastProvider>
       </AuthProvider>

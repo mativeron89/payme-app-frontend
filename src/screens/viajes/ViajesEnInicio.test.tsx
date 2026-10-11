@@ -158,7 +158,7 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
     id: 'tk-1', lugar: 'La Parolaccia', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: 'm-luis', pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 2, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
-    puede_eliminar: false, pagadores: [{ miembro_id: 'm-luis', monto_cents: 159000 }], ...extra,
+    puede_eliminar: false, pagadores: [{ miembro_id: 'm-luis', monto_cents: 159000 }], presentes: [], personal: false, ...extra,
   };
 }
 
