@@ -24,7 +24,28 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D279 y D278-2 · el cierre por el creador, la hora de cierre y el total impreso · App Backend v2.181.0 · 2026-10-11
+### D278-3 y D282-2 · corregir un ticket ya cargado · App Backend v2.182.0 · 2026-10-11
+
+Orden `AF-VIAJES-CORREGIR-TICKET-20261011` (D278-3 y D282-2, n349). Según la orden, el dueño 2.182.0 está servido
+(/ready 75/75).
+
+- Contenido: owner **`bd65b582bdd63f5894260017debfe1998a08944f`** (v2.182.0: corregir un ticket o un gasto ya cargado,
+  `PATCH /api/viajes/:id/tickets/:tid`).
+- Inventario: el del owner en **`f00928028aa80658c05c4ba62c0aa14a04a6ab02`** (v2.182.0, commit B;
+  `contract/mirror-inventory.json`, sha256 `6b8b0faef555ce7c6d5cf1bf954a97319a47a419615e1e1ac817daed133aa377`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `bd65b58`, 138 entradas.
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `da86f0931612b126c3aabf7895496bbf233cdd5dffaa8429bdfcf1357b4ef6b0`):
+  - `viaje_version=10`: la 9 más `puedo_corregir` en el detalle de un ticket (fuera de él responde como la 9; en la
+    lista de viajes, como la 8);
+  - la ruta `PATCH /api/viajes/:id/tickets/:tid`: el pedido de un escaneado y el de un gasto a mano, los topes, los
+    pagadores con el total nuevo, las elecciones que se borran, la idempotencia por contenido y el orden de errores;
+  - el aviso `viaje_ticket_corregido`.
+- Sólo por hash cambian, desde `b3699c9`: `routes/viajes.js`, `services/notifications.js` y `services/viajes.js`. Los
+  hechos del dueño se regeneraron: cambian sólo el commit y el sha de `services/notifications.js`, ningún hecho.
+- `--integridad`: 13 copiados y 125 sólo por hash. `--paridad`: espejo = inventario = fuente en `bd65b58`, 138/138.
+
+### Refresh anterior · D279 y D278-2 · el cierre por el creador, la hora de cierre y el total impreso · App Backend v2.181.0 · 2026-10-11
 
 Orden `AF-VIAJES-CIERRE-CONSUMOS-Y-NEGRITA-20261011` (D279, D281, D282-3 y D283) y su adenda, punto 7 (D278-2 y D284).
 Según el Bibliotecario, el dueño 2.181.0 está servido (/ready 75/75). Reemplaza al espejo de 2.180.0 de esta misma

@@ -342,6 +342,11 @@ export interface TicketDelViaje {
   readonly total_cents: number;
   /** D278-2 · `viaje_version=9`: lo tuyo de los renglones, sin tu parte del ajuste. `te_toca_cents` es tu parte del total. */
   readonly te_toca_platos_cents: number;
+  /**
+   * D278-3 · `viaje_version=10`: lo cargaste o lo pagaste, y el viaje está abierto (un personal, sólo su dueño lo ve).
+   * Es la misma condición que `puedo_marcar_presentes` desde la 6.
+   */
+  readonly puedo_corregir: boolean;
 }
 
 /** Quién cargó (y pagó) un ticket que ya estaba en el viaje (diseño 1k). */
@@ -467,6 +472,41 @@ export interface GastoManualPedido {
   /** D263 · o varios (nunca junto a `pagado_por`). */
   readonly pagadores?: readonly PagadorPedido[];
 }
+
+/**
+ * D278-3 · D282-2 · `PATCH /api/viajes/:id/tickets/:tid` (App Backend 2.182.0): corregir un ticket ya cargado. Todo
+ * opcional, al menos un campo, y sólo los de su tipo: una clave del otro da 400. `pagadores`, con las reglas de la carga
+ * y sobre el total nuevo: obligatorio si cambia el total y hay dos o más pagadores.
+ */
+export interface RenglonCorregido {
+  /** Uno que existe; sin id, uno nuevo. Uno que existe y no viene, se saca. */
+  readonly id?: string;
+  readonly name: string;
+  readonly price_cents: number;
+  readonly quantity: number;
+}
+
+export interface CorreccionDeEscaneado {
+  readonly lugar?: string | null;
+  readonly tipo_lugar?: TipoLugar;
+  readonly fecha_ticket?: string | null;
+  /** Requiere una fecha: la nueva o la guardada. */
+  readonly hora_ticket?: string | null;
+  /** La lista COMPLETA de 1 a 100 renglones. */
+  readonly items?: readonly RenglonCorregido[];
+  readonly servicio_cents?: number;
+  readonly descuentos_cents?: number;
+  readonly iva_aparte_cents?: number;
+  readonly pagadores?: readonly PagadorPedido[];
+}
+
+export interface CorreccionDeGasto {
+  readonly descripcion?: string;
+  readonly monto_cents?: number;
+  readonly pagadores?: readonly PagadorPedido[];
+}
+
+export type CorreccionDeTicket = CorreccionDeEscaneado | CorreccionDeGasto;
 
 /** D255 · `PATCH /api/viajes/:id`: al menos uno; `null` borra una fecha o el color. */
 export interface EditarViajePedido {
@@ -777,7 +817,7 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
   const t = objeto(raw, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
     'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
     'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal', 'servicio_cents', 'descuentos_cents',
-    'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents'], e);
+    'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents', 'puedo_corregir'], e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
     && textoONull(t.pagado_por) && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents)
@@ -785,7 +825,9 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
     && typeof t.puedo_marcar_presentes === 'boolean' && typeof t.personal === 'boolean'
     // Un personal es todo de su dueño: nunca se elige en él.
     && !(t.personal === true && t.puedo_elegir === true)
-    && ajustesValidos(t) && noNegativo(t.te_toca_platos_cents), e);
+    && ajustesValidos(t) && noNegativo(t.te_toca_platos_cents)
+    // D278-3 · el dueño los calcula igual desde la 6: abierto y (lo cargó o lo pagó).
+    && typeof t.puedo_corregir === 'boolean' && t.puedo_corregir === t.puedo_marcar_presentes, e);
   const items = lista(t.items, e, (x): ItemDelTicket => {
     const i = objeto(x, ['id', 'name', 'price_cents', 'quantity', 'line_cents', 'remaining_bps', 'my_bps', 'my_amount_cents'], e);
     exigir(texto(i.id) && texto(i.name) && noNegativo(i.price_cents) && noNegativo(i.quantity) && i.quantity >= 1
@@ -807,6 +849,11 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
 export function decodeTicketDelViaje(raw: unknown, endpoint = 'viajes.ticket'): TicketDelViaje {
   const b = cuerpo(raw, ['ticket'], endpoint);
   return ticketDetalle(b.ticket, endpoint);
+}
+
+/** D278-3 · `PATCH …/tickets/:tid` → `{ contract, ticket }`, con la forma de `GET …/tickets/:tid`. */
+export function decodeTicketCorregido(raw: unknown): TicketDelViaje {
+  return decodeTicketDelViaje(raw, 'viajes.corregir');
 }
 
 /** `POST …/tickets` → `{ contract, ticket, ya_cargado }`. */
@@ -987,6 +1034,33 @@ export function errorAlEliminar(err: unknown): ErrorAlEliminar {
   const { status, code } = extractApiError(err);
   if (status === 403 && code === 'viaje_ticket_delete_forbidden') return { tipo: 'eliminar_prohibido' };
   if (status === 404 && code === 'viaje_ticket_not_found') return { tipo: 'ticket_no_encontrado' };
+  return errorDeViaje(err);
+}
+
+/**
+ * D278-3 · lo que dice la pantalla al corregir un ticket o un gasto (`PATCH /api/viajes/:id/tickets/:tid`). Los propios:
+ * - 403 `viaje_ticket_edit_forbidden`: no lo cargó ni lo pagó (la pantalla quedó vieja);
+ * - 404 `viaje_ticket_not_found`: ya no está (otro lo eliminó), o la corrección lo dejó como el personal de otro;
+ * - 422 `viaje_ticket_amount_invalid`: el total fuera de los topes;
+ * - 409 `viaje_total_limit`: el viaje pasaría su tope;
+ * - 422 `viaje_ticket_item_unknown`: un renglón que ya no está.
+ * El 404 del viaje, el 409 `viaje_not_open`, los pagadores y lo demás siguen a `errorDeViaje`.
+ */
+export type ErrorAlCorregir =
+  | { readonly tipo: 'corregir_prohibido' }
+  | { readonly tipo: 'ticket_no_encontrado' }
+  | { readonly tipo: 'monto_invalido' }
+  | { readonly tipo: 'tope_del_viaje' }
+  | { readonly tipo: 'renglon_desconocido' }
+  | ErrorDeViaje;
+
+export function errorAlCorregir(err: unknown): ErrorAlCorregir {
+  const { status, code } = extractApiError(err);
+  if (status === 403 && code === 'viaje_ticket_edit_forbidden') return { tipo: 'corregir_prohibido' };
+  if (status === 404 && code === 'viaje_ticket_not_found') return { tipo: 'ticket_no_encontrado' };
+  if (status === 422 && code === 'viaje_ticket_amount_invalid') return { tipo: 'monto_invalido' };
+  if (status === 409 && code === 'viaje_total_limit') return { tipo: 'tope_del_viaje' };
+  if (status === 422 && code === 'viaje_ticket_item_unknown') return { tipo: 'renglon_desconocido' };
   return errorDeViaje(err);
 }
 

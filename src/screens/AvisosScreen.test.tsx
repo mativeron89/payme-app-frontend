@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { reconciledReadDestination } from './AvisosScreen';
+import { TIPOS_AVISO_VIAJE } from './viajes/avisosDeViaje';
 import type { AppNotification } from '../api/types';
 
 const SOURCE = readFileSync(new URL('./AvisosScreen.tsx', import.meta.url), 'utf8');
@@ -22,6 +23,12 @@ describe('M04 · Avisos', () => {
     expect(handler).toContain('const refreshed = await api.getNotifications()');
     expect(handler).toContain('reconciledReadDestination(');
     expect(handler).toContain("toast(t('No se pudo marcar como leído'))");
+  });
+
+  it('🔴 D278-3 · cada tipo de aviso de un viaje tiene su ícono (sin él, cae en la campana genérica)', () => {
+    const bloque = SOURCE.match(/const NOTIF_ICON[\s\S]*?\n};/)?.[0] ?? '';
+    expect(bloque).not.toBe('');
+    for (const type of TIPOS_AVISO_VIAJE) expect(bloque, type).toMatch(new RegExp(`\\n  ${type}: '[a-z-]+',`));
   });
 
   it('una carrera 404 sólo continúa si el GET confirma misma fila leída y mismo destino', () => {

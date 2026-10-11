@@ -38,6 +38,7 @@ const MARISCOS: TicketDelViaje = {
   te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
   pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
   servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 220000, te_toca_platos_cents: 53000,
+  puedo_corregir: false,
 };
 
 function render(ticket: TicketDelViaje, extra: Partial<TicketVistaProps> = {}) {

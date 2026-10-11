@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-hechos-del-dueno.mjs, SÓLO EN LOCAL, con el repo del dueño en el commit del inventario. No se edita a mano. D268.",
   "version": 1,
-  "commit": "b3699c95fe1118582712930d3da92943669b9782",
+  "commit": "bd65b582bdd63f5894260017debfe1998a08944f",
   "fuentes": {
     "routes/account.js": "e70c4817aa7e9506e33d587c2c534004c4133f3be3d2a48544e1a6e97403206b",
     "routes/config.js": "81b8012c9ceb2cbc2b74ee029d5885d12f4e5f8929ad758818f552644e3c5698",
@@ -12,7 +12,7 @@
     "routes/ocr.js": "fe550379c57c252298bb872bb8461e5b13eb37e20e418cd3e4deefb57c9b8877",
     "schemas/index.js": "ac496434b9418649e5397a3c263daab9c197c2f498d90c3b3aa50a293197be05",
     "services/invitationAuthority.js": "e5d5a7c22dc77a8c1562973aa40a0248a6eb34f044db721e10339313aa4dd0d3",
-    "services/notifications.js": "d9a4a25728765012e8ecab590b4b3c300e5d2be5ab609fc7d117e2734464f85e",
+    "services/notifications.js": "195aef6bb8915c2d17b3cd3291e453a4ac695b57d48593b29c1c94f1e7d563e0",
     "services/ocrResponseContract.js": "3782bf8a0cf3187a6fc8f71d681a08602f67728b9a24b951e392370e9f7e3920",
     "services/walletRail.js": "809b549c66b3391ab3d41089d3c8fa1ef1e95982aec5102e835e0da5c01a0646",
     "utils/idempotency.js": "9485658088f36e7921b7cb3c5e18da9903ff652d1d95c051b4607fd9598d7bce",

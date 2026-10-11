@@ -13,8 +13,8 @@ import {
 } from './mockApi';
 import { persist as persistirStore, state as store } from './store';
 import {
-  avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeEliminarMock, seamDeGastoMock, seamDeSeleccionMock,
-  viajesMockEncendido,
+  avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeCorregirMock, seamDeEliminarMock, seamDeGastoMock,
+  seamDeSeleccionMock, viajesMockEncendido,
 } from './viajesSeam';
 import {
   ajustesDeRecibo,
@@ -48,6 +48,8 @@ const MAX_TICKETS = 200;
 const MAX_LISTA = 100;
 /** D244 · App Backend 2.172.0: el tope de un gasto a mano. */
 const MAX_GASTO_CENTS = 100_000_000;
+/** v2.173.2 · T-03 · el tope del total de un viaje (`MAX_TOTAL_CENTS` del dueño). */
+const MAX_TOTAL_CENTS = MAX_TICKETS * MAX_GASTO_CENTS;
 /** D244 · el id propio de un gasto a mano, donde uno escaneado guarda el de su recibo (`~` no es base64url). */
 const PREFIJO_GASTO_MANUAL = 'm~';
 const esManual = (t: TicketMock) => t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL);
@@ -61,9 +63,11 @@ interface OpcionesDeVersion {
    *  8: la 7 más `hora_cierre`, `puedo_cerrar` y `se_cierra_en` en el viaje, y `hora_cierre` en la lista (D279, 2.180.0);
    *  9: la 8 más el servicio, los descuentos, el IVA aparte y el total impreso en cada ticket, y `te_toca_platos_cents`
    *     en el detalle de un ticket; la lista, como la 8. Sólo un POST de ticket con la 9 guarda los ajustes (D278-2, D284,
-   *     2.181.0). */
-  readonly version?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+   *     2.181.0);
+   *  10: la 9 más `puedo_corregir` en el detalle de un ticket; fuera de él, como la 9 (D278-3, 2.182.0). */
+  readonly version?: Version;
 }
+type Version = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
 const COLORES = ['azul', 'verde', 'violeta', 'rojo', 'naranja', 'turquesa'] as const;
@@ -453,7 +457,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 1) {
+function vistaViaje(v: ViajeMock, u: string, version: Version = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -526,7 +530,7 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 
   };
 }
 
-function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 1) {
+function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: Version = 1) {
   const b = balance(v);
   const r = b.porTicket.get(t.id)!;
   const ids = idPublico(v);
@@ -559,6 +563,8 @@ function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 
     ...(version >= 6 && { personal }),
     // D278-2 · D284 · con la 9: los ajustes, el total impreso y lo tuyo de los renglones (`te_toca_cents` es tu parte del total).
     ...(version >= 9 && { ...ajustesPublicos(t), te_toca_platos_cents: r.platos.get(u) ?? 0 }),
+    // D278-3 · con la 10: lo cargué o lo pagué, y el viaje está abierto (la misma condición que marcar presentes).
+    ...(version >= 10 && { puedo_corregir: abierto && (esPagador(t, u) || cargadoPor(t) === u) }),
   };
 }
 
@@ -661,7 +667,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -669,7 +675,7 @@ export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { versio
     const abiertos: Array<ReturnType<typeof vistaEnLista>> = [];
     const cerrados: Array<ReturnType<typeof vistaEnLista>> = [];
     for (const v of mios) {
-      // D256 · en la lista la 4 sale como la 3 (como el dueño); D279 · la 8 suma `hora_cierre`; la 9 sale como la 8.
+      // D256 · en la lista la 4 sale como la 3 (como el dueño); D279 · la 8 suma `hora_cierre`; la 9 y la 10 salen como la 8.
       const item = vistaEnLista(v, u, version >= 8 ? 8 : version >= 3 ? 3 : 1);
       (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
     }
@@ -1429,6 +1435,202 @@ export function mockEliminarTicket(id: string, ticketId: string, { version = 1 }
     v.tickets.splice(i, 1);
     guardar();
     return { contract: CONTRATO, viaje: vistaViaje(v, u, version) };
+  });
+}
+
+/**
+ * D278-3 · D282-2 · el pedido de `PATCH …/tickets/:tid` (`cuerpoCorregirTicket` / `cuerpoCorregirGasto` del dueño): todo
+ * opcional, al menos un campo, y sólo los de su tipo de ticket (una clave del otro da 400). Los renglones, la lista
+ * completa de 1 a 100, sin repetir id.
+ */
+type RenglonPedidoMock = { id?: string; name: string; price_cents: number; quantity: number };
+function cuerpoCorregir(body: unknown, manual: boolean) {
+  const claves = manual
+    ? ['descripcion', 'monto_cents', 'pagadores']
+    : ['lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'items', 'servicio_cents', 'descuentos_cents', 'iva_aparte_cents', 'pagadores'];
+  if (!objeto(body) || !soloClaves(body, claves) || Object.keys(body).length === 0) throw invalido();
+  const pagadores = pagadoresPedidos(body);
+  const importe = (x: unknown, min: number) => x === undefined
+    || (typeof x === 'number' && Number.isSafeInteger(x) && x >= min && x <= MAX_GASTO_CENTS);
+  const lugar = body.lugar === undefined || body.lugar === null ? body.lugar : textoNormal(body.lugar, 120);
+  const descripcion = body.descripcion === undefined ? undefined : textoNormal(body.descripcion, 120);
+  if (lugar === null && body.lugar !== null) throw invalido();
+  if (descripcion === null) throw invalido();
+  if (body.tipo_lugar !== undefined && !(TIPOS_LUGAR as readonly unknown[]).includes(body.tipo_lugar)) throw invalido();
+  if (body.fecha_ticket !== undefined && body.fecha_ticket !== null && !esFecha(body.fecha_ticket)) throw invalido();
+  if (body.hora_ticket !== undefined && body.hora_ticket !== null
+      && !(typeof body.hora_ticket === 'string' && HORA.test(body.hora_ticket))) throw invalido();
+  if (!importe(body.monto_cents, 1) || !importe(body.servicio_cents, 0) || !importe(body.descuentos_cents, 0)
+      || !importe(body.iva_aparte_cents, 0)) throw invalido();
+  let items: RenglonPedidoMock[] | undefined;
+  if (body.items !== undefined) {
+    if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) throw invalido();
+    items = body.items.map((i): RenglonPedidoMock => {
+      if (!objeto(i) || !soloClaves(i, ['id', 'name', 'price_cents', 'quantity'])) throw invalido();
+      const name = textoNormal(i.name, 200);
+      if ((i.id !== undefined && !esUuid(i.id)) || !name || typeof i.price_cents !== 'number' || !Number.isSafeInteger(i.price_cents)
+          || i.price_cents < 0 || typeof i.quantity !== 'number' || !Number.isInteger(i.quantity) || i.quantity < 1
+          || i.quantity > 32767) throw invalido();
+      return { ...(i.id !== undefined && { id: i.id as string }), name, price_cents: i.price_cents, quantity: i.quantity };
+    });
+    const ids = items.filter((i) => i.id).map((i) => i.id);
+    if (new Set(ids).size !== ids.length) throw invalido();
+  }
+  return {
+    lugar: lugar as string | null | undefined, descripcion, items, pagadores,
+    tipo_lugar: body.tipo_lugar as TipoLugar | undefined,
+    fecha_ticket: body.fecha_ticket as string | null | undefined, hora_ticket: body.hora_ticket as string | null | undefined,
+    monto_cents: body.monto_cents as number | undefined, servicio_cents: body.servicio_cents as number | undefined,
+    descuentos_cents: body.descuentos_cents as number | undefined, iva_aparte_cents: body.iva_aparte_cents as number | undefined,
+  };
+}
+
+/**
+ * D278-3 · D282-2 · `PATCH /api/viajes/:id/tickets/:tid` (App Backend 2.182.0, `corregirTicket`): corrige un ticket ya
+ * cargado. Lo corrigen quien lo cargó o cualquiera de los que pagaron; un personal, su dueño; con el viaje abierto.
+ *
+ * - El orden de errores: 404 del viaje (n325) → 404 del ticket → 409 `viaje_not_open` → 403
+ *   `viaje_ticket_edit_forbidden` → la validación (400/422). El mock no tiene cuentas suspendidas.
+ * - Los topes de la carga: cada precio y la suma de los renglones hasta $1,000,000 y mayor que 0; el total impreso,
+ *   mayor que 0 y hasta $1,000,000 (422 `viaje_ticket_amount_invalid`); y el viaje no pasa su tope, contando sólo lo que
+ *   el ticket suma de más (409 `viaje_total_limit`).
+ * - Con dos o más pagadores y otro total, `pagadores` es obligatorio y suma el total nuevo (422
+ *   `viaje_ticket_payers_total_mismatch` con el total nuevo).
+ * - Un renglón con otro precio o cantidad, o sacado, borra sus elecciones y quien las perdió pierde su «Listo». El nombre
+ *   o el orden solos no borran nada.
+ * - Idempotente por contenido: un renglón nuevo igual a uno existente que el pedido no nombra es ese mismo; sin cambios,
+ *   el ticket como estaba.
+ * - Si la corrección lo deja como el personal de otro (quien pagó lo deja sólo de quien lo cargó), se guarda y, como deja
+ *   de verlo, el 404.
+ * El aviso `viaje_ticket_corregido` va a los demás, que en el mock no tienen bandeja.
+ */
+export function mockCorregirTicket(id: string, tid: string, body: unknown, { version = 1 }: OpcionesDeVersion = {}) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    const i = v.tickets.findIndex((t) => t.id === tid && loVe(v, t, u));
+    if (i >= 0 && seamDeCorregirMock('ya_no_estaba')) {
+      // El seam: otro lo eliminó justo antes.
+      v.tickets.splice(i, 1);
+      throw new Respuesta(404, 'viaje_ticket_not_found');
+    }
+    const t = ticketDe(v, tid);
+    if (v.estado !== 'abierto' || seamDeCorregirMock('cerrado')) {
+      throw conflicto('viaje_not_open', { estado: v.estado === 'abierto' ? 'esperando_pagos' : v.estado });
+    }
+    if ((!esPagador(t, u) && cargadoPor(t) !== u) || seamDeCorregirMock('prohibido')) {
+      throw new Respuesta(403, 'viaje_ticket_edit_forbidden');
+    }
+    const manual = esManual(t);
+    const b = cuerpoCorregir(body, manual);
+    const ajusteViejo = { servicio_cents: t.servicio_cents ?? 0, descuentos_cents: t.descuentos_cents ?? 0, iva_aparte_cents: t.iva_aparte_cents ?? 0 };
+    const nuevo = {
+      lugar: manual ? (b.descripcion ?? t.lugar) : (b.lugar !== undefined ? b.lugar : t.lugar),
+      tipo: b.tipo_lugar ?? t.tipo_lugar,
+      fecha: b.fecha_ticket !== undefined ? b.fecha_ticket : t.fecha_ticket,
+      hora: b.hora_ticket !== undefined ? b.hora_ticket : t.hora_ticket,
+      servicio_cents: b.servicio_cents ?? ajusteViejo.servicio_cents,
+      descuentos_cents: b.descuentos_cents ?? ajusteViejo.descuentos_cents,
+      iva_aparte_cents: b.iva_aparte_cents ?? ajusteViejo.iva_aparte_cents,
+    };
+    if (nuevo.hora && !nuevo.fecha) throw invalido();
+    // Los renglones: lo pedido contra lo que hay.
+    const viejos = t.items;
+    const porId = new Map(viejos.map((x) => [x.id, x]));
+    const pedidos: RenglonPedidoMock[] | null = manual
+      ? (b.descripcion !== undefined || b.monto_cents !== undefined
+        ? [{ id: viejos[0]!.id, name: b.descripcion ?? viejos[0]!.nombre, price_cents: b.monto_cents ?? viejos[0]!.price_cents, quantity: 1 }]
+        : null)
+      : b.items ?? null;
+    let plan: { final: Array<Omit<RenglonPedidoMock, 'id'> & { id: string | null }>; sacados: string[]; cambiados: string[] } | null = null;
+    if (pedidos) {
+      const desconocido = pedidos.find((p) => p.id && !porId.has(p.id));
+      if (desconocido) throw new Respuesta(422, 'viaje_ticket_item_unknown', { item_id: desconocido.id });
+      const nombrados = new Set(pedidos.filter((p) => p.id).map((p) => p.id));
+      const libres = viejos.filter((x) => !nombrados.has(x.id));
+      // Idempotencia por contenido: un renglón nuevo igual a uno existente que el pedido no nombra es ese mismo (en orden).
+      const final = pedidos.map((p) => {
+        if (p.id) return { ...p, id: p.id };
+        const k = libres.findIndex((x) => x.nombre === p.name && x.price_cents === p.price_cents && x.quantity === p.quantity);
+        return { ...p, id: k >= 0 ? libres.splice(k, 1)[0]!.id : null };
+      });
+      const quedan = new Set(final.filter((p) => p.id).map((p) => p.id));
+      plan = {
+        final,
+        sacados: viejos.filter((x) => !quedan.has(x.id)).map((x) => x.id),
+        // «Cambió»: el mismo renglón con otro precio o cantidad. El nombre solo, no.
+        cambiados: final.filter((p) => p.id && (porId.get(p.id)!.price_cents !== p.price_cents || porId.get(p.id)!.quantity !== p.quantity))
+          .map((p) => p.id!),
+      };
+    }
+    const final = plan ? plan.final : viejos.map((x) => ({ id: x.id, name: x.nombre, price_cents: x.price_cents, quantity: x.quantity }));
+    // Los topes de la carga.
+    const montoInvalido = () => new Respuesta(422, 'viaje_ticket_amount_invalid');
+    let monto = 0;
+    for (const x of final) {
+      if (x.price_cents > MAX_GASTO_CENTS) throw montoInvalido();
+      monto += lineaDe(x);
+    }
+    if (!Number.isSafeInteger(monto) || monto <= 0 || monto > MAX_GASTO_CENTS) throw montoInvalido();
+    const totalViejo = totalDelTicket(t);
+    const total = monto + nuevo.servicio_cents + nuevo.iva_aparte_cents - nuevo.descuentos_cents;
+    if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_GASTO_CENTS) throw montoInvalido();
+    const delViaje = v.tickets.reduce((s, x) => s + totalDelTicket(x), 0);
+    if ((total > totalViejo && delViaje + (total - totalViejo) > MAX_TOTAL_CENTS) || seamDeCorregirMock('tope_del_viaje')) {
+      throw conflicto('viaje_total_limit', { limit: MAX_TOTAL_CENTS });
+    }
+    // Los pagadores: con dos o más y otro total, hay que mandarlos (no se reparte por inferencia lo que dijo cada uno).
+    let pagos: Array<{ user_id: string; monto_cents: number }> | null = null;
+    if (b.pagadores !== undefined) {
+      const r = pagadoresResueltos(v, undefined, b.pagadores, u, total);
+      pagos = r.pagadores ?? [{ user_id: r.pagado_por, monto_cents: total }];
+    } else if ((total !== totalViejo && (t.pagadores?.length ?? 0) >= 2) || seamDeCorregirMock('cambio_el_total')) {
+      throw new Respuesta(422, 'viaje_ticket_payers_total_mismatch', { monto_cents: total });
+    }
+    const listaVieja = t.pagadores && t.pagadores.length >= 2 ? t.pagadores : [{ user_id: t.pagado_por, monto_cents: totalViejo }];
+    const cambianPagadores = !!pagos && (pagos.length !== listaVieja.length
+      || pagos.some((p, k) => p.user_id !== listaVieja[k]!.user_id || p.monto_cents !== listaVieja[k]!.monto_cents));
+    if (cambianPagadores && pagos![0]!.user_id !== t.pagado_por
+        && v.tickets.some((x) => x.id !== t.id && x.pagado_por === pagos![0]!.user_id && x.idempotency_key === t.idempotency_key)) {
+      throw conflicto('idempotency_key_conflict');
+    }
+    // ¿Cambia algo? Si no, el ticket como estaba, sin tocar nada.
+    const cambiaElTicket = nuevo.lugar !== t.lugar || nuevo.tipo !== t.tipo_lugar || nuevo.fecha !== t.fecha_ticket
+      || nuevo.hora !== t.hora_ticket || monto !== t.monto_cents
+      || (['servicio_cents', 'descuentos_cents', 'iva_aparte_cents'] as const).some((k) => nuevo[k] !== ajusteViejo[k]);
+    const cambianRenglones = !!plan && (plan.sacados.length > 0 || plan.final.some((p, k) => {
+      const v0 = p.id ? porId.get(p.id) : undefined;
+      return !v0 || v0.nombre !== p.name || v0.price_cents !== p.price_cents || v0.quantity !== p.quantity || viejos.indexOf(v0) !== k;
+    }));
+    if (!cambiaElTicket && !cambianRenglones && !cambianPagadores) return { contract: CONTRATO, ticket: vistaTicket(v, t, u, version) };
+    // Las elecciones de lo que cambió o se sacó se borran; quien las perdió vuelve a «falta elegir».
+    if (plan) {
+      const tocados = new Set([...plan.sacados, ...plan.cambiados]);
+      const perdieron = new Set(t.selecciones.filter((x) => tocados.has(x.item_id)).map((x) => x.user_id));
+      t.selecciones = t.selecciones.filter((x) => !tocados.has(x.item_id));
+      t.items = plan.final.map((p) => (p.id
+        ? { ...porId.get(p.id)!, nombre: p.name, price_cents: p.price_cents, quantity: p.quantity }
+        : { id: nuevoId(), nombre: p.name, price_cents: p.price_cents, quantity: p.quantity }));
+      for (const p of t.personas) if (perdieron.has(p.user_id)) p.listo_en = null;
+    }
+    t.lugar = nuevo.lugar;
+    t.tipo_lugar = nuevo.tipo;
+    t.fecha_ticket = nuevo.fecha;
+    t.hora_ticket = nuevo.hora;
+    t.monto_cents = monto;
+    t.servicio_cents = nuevo.servicio_cents;
+    t.descuentos_cents = nuevo.descuentos_cents;
+    t.iva_aparte_cents = nuevo.iva_aparte_cents;
+    if (cambianPagadores) {
+      // Quien lo cargó no cambia: sin `cargado_por`, era quien pagaba hasta ahora.
+      if (!t.cargado_por) t.cargado_por = t.pagado_por;
+      t.pagado_por = pagos![0]!.user_id;
+      if (pagos!.length >= 2) t.pagadores = pagos!;
+      else delete t.pagadores;
+    }
+    // Quedó como el personal de otro: se guardó, y quien corrige deja de verlo.
+    if (!loVe(v, t, u)) throw new Respuesta(404, 'viaje_ticket_not_found');
+    return { contract: CONTRATO, ticket: vistaTicket(v, t, u, version) };
   });
 }
 

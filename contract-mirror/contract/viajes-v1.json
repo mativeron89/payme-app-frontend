@@ -79,6 +79,14 @@
     "fechas": "D-2: las fechas siguen siendo de cualquier miembro (D255), salvo un PATCH que dejaría el viaje vencido ya, que es cerrarlo: sólo el creador (403 viaje_not_creator); si lo hace el creador, el viaje se cierra en ese mismo pedido."
   },
   "negociaciones": {
+    "viaje_version_10": {
+      "since": "2.182.0",
+      "decision": "278-3 (corregir un ticket); plan OK del Bibliotecario 2026-10-11T17:00:24Z",
+      "parametro": "viaje_version=10",
+      "regla": "La cadena exacta, en las mismas rutas que la 9 y en PATCH /:id/tickets/:tid. Es la 9 más `puedo_corregir` en el detalle de un ticket; fuera de ese detalle, la 10 responde como la 9 (en la lista de viajes, como la 8). Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte.",
+      "detalle_de_ticket_suma": ["puedo_corregir"],
+      "puedo_corregir": "boolean: sos quien lo cargó o uno de los que pagaron, y el viaje está abierto (un personal, sólo su dueño lo ve)."
+    },
     "viaje_version_9": {
       "since": "2.181.0",
       "decision": "278-2 y 284 (el servicio, los descuentos y el IVA aparte, según lo consumido; migración aditiva aprobada por Mati); plan OK del Bibliotecario 2026-10-11T16:14:42Z",
@@ -404,6 +412,38 @@
         "409": { "error": "viaje_closed", "cuando": "cerrado: lo propio está en GET /:id/resumen. v2.179.2 · V-02: con viaje_version=7, 200 en sólo lectura (negociaciones.viaje_version_7)" }
       }
     },
+    "PATCH /api/viajes/:id/tickets/:tid": {
+      "since": "2.182.0 (D278-3, D282-2; plan OK del Bibliotecario 2026-10-11T17:00:24Z)",
+      "regla": "Corregir un ticket ya cargado, bajo el lock del viaje. Lo corrigen quien lo cargó o cualquiera de los que pagaron (D263); un gasto personal, su dueño. Con el viaje abierto. Responde el detalle del ticket con la versión negociada; la ruta es nueva, así que se puede usar sin viaje_version.",
+      "request_escaneado": {
+        "lugar": "string 1..120 | null, opcional (D282-2: el nombre del lugar, por ejemplo «NATAMBRE» → «Matambre»)",
+        "tipo_lugar": "restaurante | bar | cafe | super | otro, opcional",
+        "fecha_ticket": "YYYY-MM-DD | null, opcional",
+        "hora_ticket": "HH:MM | null, opcional; requiere una fecha (la nueva o la guardada)",
+        "items": "opcional: la lista COMPLETA de 1..100 renglones {id?, name 1..200, price_cents ≥ 0, quantity 1..32767}, sin repetir id. Con id, un renglón que existe (un id ajeno: 422 viaje_ticket_item_unknown {error, item_id}); sin id, uno nuevo; uno que existe y no viene, se saca.",
+        "servicio_cents": "entero ≥ 0, opcional",
+        "descuentos_cents": "entero ≥ 0, opcional",
+        "iva_aparte_cents": "entero ≥ 0, opcional",
+        "pagadores": "opcional, con las reglas de POST /:id/tickets, sobre el total nuevo"
+      },
+      "request_gasto_a_mano": { "descripcion": "string 1..120, opcional", "monto_cents": "entero 1..100000000, opcional", "pagadores": "opcional, como arriba" },
+      "pedido": "Estricto: al menos un campo; una clave que no es de su tipo de ticket (por ejemplo `lugar` en un gasto a mano) da 400.",
+      "ajustes": "El servicio, los descuentos y el IVA aparte se corrigen en cualquier ticket escaneado (OK del Bibliotecario): uno sin ajustes guarda 0 y no se distingue de uno al que el OCR no le leyó el servicio, y corregir es agregar lo que faltó.",
+      "topes": "Como al cargar: cada precio y la suma de los renglones son ≤ $1,000,000 y los renglones suman > 0; el total del ticket (renglones + servicio + IVA aparte − descuentos) es > 0 y ≤ $1,000,000 (si no, 422 viaje_ticket_amount_invalid); y el total del viaje no pasa su tope, contando sólo lo que el ticket suma de más (409 viaje_total_limit). Si el total cambia y el ticket tiene dos o más pagadores, `pagadores` es obligatorio y suma el total nuevo (si no, 422 viaje_ticket_payers_total_mismatch {error, monto_cents: el total nuevo}).",
+      "elecciones": "Sólo en «por lo que pidió cada uno». Un renglón CAMBIÓ si tiene otro precio o cantidad, o se sacó: sus elecciones se borran y quien las perdió vuelve a «falta elegir» (sin «Listo»). Un cambio de nombre o de orden no borra nada. Las demás elecciones se conservan. El balance se calcula al leer, con el reparto del total impreso (D278-2/D284); la suma sigue en 0.",
+      "idempotencia": "Por contenido, sin clave: aplicar la misma corrección dos veces es un solo efecto. Un renglón nuevo (sin id) igual a uno existente que el pedido no nombra (mismo nombre, precio y cantidad, en orden) es ese mismo; un pedido que no cambia nada responde 200 sin tocar nada ni avisar.",
+      "huella": "Se conserva la del escaneo: no se puede recalcular (el RFC y el folio no se guardan) e identifica el papel escaneado; un reescaneo del mismo ticket sigue siendo duplicado.",
+      "personal": "Un gasto personal (D276) lo corrige su dueño, sin avisos. Si su dueño le suma otro pagador, deja de ser personal: lo ven todos y quien pagó recibe el aviso de corrección. Si uno de los que pagaron lo deja como el personal de quien lo cargó (sólo estuvo él y ahora lo pagó él solo), se guarda y, como deja de verlo, responde el 404 viaje_ticket_not_found (el de V-03), sin avisos.",
+      "respuestas": {
+        "200": { "claves": ["contract", "ticket"], "ticket": "la forma de GET /:id/tickets/:tid con la versión negociada" },
+        "400": { "error": "validation_error" },
+        "403": { "errores": ["viaje_ticket_edit_forbidden", "user_suspended"], "viaje_ticket_edit_forbidden": "no lo cargaste ni lo pagaste" },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276), byte por byte; y después de guardar, si la corrección lo dejó como el personal de otro (ver `personal`)" },
+        "409": { "errores": ["viaje_not_open", "viaje_total_limit", "idempotency_key_conflict"], "idempotency_key_conflict": "el pagador nuevo ya cargó otro ticket con la misma clave de carga" },
+        "422": { "errores": ["viaje_ticket_amount_invalid", "viaje_ticket_item_unknown", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch"] }
+      },
+      "orden_de_errores": "404 viaje_not_found (n325) → 404 viaje_ticket_not_found → 409 viaje_not_open → 403 viaje_ticket_edit_forbidden → 403 user_suspended → la validación (400/422)."
+    },
     "PUT /api/viajes/:id/tickets/:tid/seleccion": {
       "request": { "items": "0..100 de {item_id, fraction_bps de la mesa}, sin repetir; reemplaza lo propio", "listo": "boolean, obligatorio" },
       "respuestas": {
@@ -490,6 +530,7 @@
       "viaje_invitation_received": "«{Nombre} te invitó al viaje {viaje}.»",
       "viaje_invitation_rejected": "«{Nombre} rechazó tu invitación al viaje {viaje}.»",
       "viaje_ticket_added": "v2.179.0 · D276: sólo a los presentes y a los que pagaron (menos quien carga); un gasto personal no avisa; un personal que pasa a compartido avisa a los nuevos presentes: «{Nombre} compartió un ticket en {viaje}: {lugar}.…». «{Nombre} cargó un ticket nuevo en {viaje}: {lugar}. Elige lo que consumiste.» (en partes iguales: «Se divide en partes iguales.»; pagar el total: «Lo paga todo.»). payload: viaje_id, ticket_id. Un gasto a mano (D244) usa el mismo tipo, sólo a las personas elegidas menos quien carga: «{Nombre} cargó un gasto en {viaje}: {descripción}. Te toca {monto}.» v2.177.0 · D263: con varios pagadores, a cada uno que no sea quien carga, sin montos: «{Nombre} cargó un ticket en {viaje}: {lugar} y te puso entre quienes pagaron.…» o «{Nombre} cargó un gasto en {viaje} y te puso entre quienes pagaron: {descripción}.»; con uno, «… como quien pagó». «Te toca» va a los elegidos que no cargan ni pagan.",
+      "viaje_ticket_corregido": "v2.182.0 (D278-3): a los presentes del ticket y a los que pagaron, menos quien corrige, sin montos. «{Nombre} corrigió un ticket en {viaje}: {lugar}.» (sin lugar, «{Nombre} corrigió un ticket en {viaje}.»; un gasto a mano: «… corrigió un gasto en {viaje}: {descripción}.»); a quien perdió elecciones se le suma «Cambiaron renglones que habías elegido: vuelve a elegir.» Un gasto personal no avisa, y una corrección que no cambió nada tampoco. payload: viaje_id, ticket_id.",
       "viaje_ticket_removed": "v2.175.0 (D256): «{Nombre} eliminó un ticket de {viaje}: {lugar}.» o «{Nombre} eliminó un gasto de {viaje}: {descripción}.» A los demás miembros activos, sin montos; el lugar es el que ya ven en la lista. payload: viaje_id. v2.179.0 · D276: un gasto personal no avisa.",
       "viaje_closed": "«Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»",
       "viaje_transfer_marked": "«{Nombre} marcó que te pagó {monto} en {viaje}.» payload: viaje_id, transferencia_id.",

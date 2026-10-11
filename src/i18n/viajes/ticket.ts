@@ -80,4 +80,53 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   'Ya elegiste: no te puedes desmarcar.': "You already chose: you can't be unchecked.",
   // D278-2 · D284 · el total impreso del ticket del viaje.
   'Tus platos {0} · Tu parte del resto {1}': 'Your dishes {0} · Your share of the rest {1}',
+  // D278-3 · D282-2 · corregir un ticket o un gasto ya cargado.
+  'Corregir ticket': 'Correct ticket',
+  'Corregir gasto': 'Correct expense',
+  'Corregiste el ticket.': 'You corrected the ticket.',
+  'Corregiste el gasto.': 'You corrected the expense.',
+  'Nombre del lugar': 'Name of the place',
+  'Fecha': 'Date',
+  'Hora': 'Time',
+  'Renglones': 'Lines',
+  'Agregar renglón': 'Add line',
+  'Nombre de {0}': 'Name of {0}',
+  'Nombre del renglón nuevo': 'Name of the new line',
+  'Precio de {0}': 'Price of {0}',
+  'Precio del renglón nuevo': 'Price of the new line',
+  'Uno menos de {0}': 'One less {0}',
+  'Uno menos del renglón nuevo': 'One less of the new line',
+  'Uno más de {0}': 'One more {0}',
+  'Uno más del renglón nuevo': 'One more of the new line',
+  'Sacar {0}': 'Remove {0}',
+  'Sacar el renglón nuevo': 'Remove the new line',
+  'Servicio, descuentos e IVA': 'Service, discounts and VAT',
+  'Lo que el ticket suma o resta aparte de los platos.': 'What the ticket adds or takes off besides the dishes.',
+  'Servicio': 'Service',
+  'IVA aparte': 'VAT on top',
+  'Antes {0}': 'Before {0}',
+  '¿Cuánto pagó cada uno?': 'How much did each one pay?',
+  'Cambió el total: escribe lo que pagó cada uno. Tienen que sumar {0}.':
+    'The total changed: enter what each one paid. They have to add up to {0}.',
+  'Cada renglón necesita un nombre.': 'Every line needs a name.',
+  'Revisa los montos: escribe sólo números, como 120 o 120.50.': 'Check the amounts: enter numbers only, like 120 or 120.50.',
+  'El total tiene que ser mayor que $0 y de hasta $1,000,000.': 'The total has to be more than $0 and up to $1,000,000.',
+  'Escribe una descripción.': 'Enter a description.',
+  'Cambiaste el precio de {0}: quienes lo eligieron van a tener que volver a elegir.':
+    'You changed the price of {0}: whoever chose it will have to choose again.',
+  'Cambiaste la cantidad de {0}: quienes lo eligieron van a tener que volver a elegir.':
+    'You changed the quantity of {0}: whoever chose it will have to choose again.',
+  'Sacaste {0}: quienes lo eligieron van a tener que volver a elegir.': 'You removed {0}: whoever chose it will have to choose again.',
+  'Cambiaste {0} renglones que ya se eligieron ({1}): quienes los eligieron van a tener que volver a elegir.':
+    'You changed {0} lines that were already chosen ({1}): whoever chose them will have to choose again.',
+  'Tú también.': 'You too.',
+  'Vas a tener que volver a elegir {0}.': 'You will have to choose {0} again.',
+  'Alguien que pagó ya no está en el viaje: el total no se puede cambiar.':
+    "Someone who paid is no longer on the trip: the total can't be changed.",
+  'Este ticket ya no está en el viaje.': 'This ticket is no longer on the trip.',
+  'Sólo quien cargó o pagó este ticket puede corregirlo.': 'Only whoever added or paid this ticket can correct it.',
+  'El ticket cambió mientras lo corregías. Revísalo de nuevo.': 'The ticket changed while you were correcting it. Check it again.',
+  'El total cambió: escribe cuánto pagó cada uno.': 'The total changed: enter how much each one paid.',
+  'Con este cambio el viaje pasaría su tope de gastos. Revisa los montos.':
+    'With this change the trip would go over its spending limit. Check the amounts.',
 };

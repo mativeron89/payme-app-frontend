@@ -95,3 +95,20 @@ export function seamDeSeleccionMock(valor: 'me_desmarcaron'): boolean {
 export function avisoEliminadoMock(): boolean {
   return leer(CLAVE_AVISO_ELIMINADO_MOCK) === 'encendido';
 }
+
+/**
+ * D278-3 · corregir un ticket o un gasto, una sola vez (el seam se consume):
+ * - `ya_no_estaba`: otro lo eliminó justo antes; se elimina y el dueño contesta 404 `viaje_ticket_not_found`;
+ * - `cerrado`: el viaje ya no está abierto; 409 `viaje_not_open`;
+ * - `prohibido`: el dueño contesta 403 `viaje_ticket_edit_forbidden`;
+ * - `tope_del_viaje`: el viaje pasaría su tope; 409 `viaje_total_limit`;
+ * - `cambio_el_total`: el total del dueño no es el de la pantalla; 422 `viaje_ticket_payers_total_mismatch`.
+ */
+export const CLAVE_CORREGIR_MOCK = 'payme.app.mock.viajes.corregir.v1';
+
+/** Lee y consume el seam de corregir: `true` una sola vez si vale `valor`. */
+export function seamDeCorregirMock(valor: 'ya_no_estaba' | 'cerrado' | 'prohibido' | 'tope_del_viaje' | 'cambio_el_total'): boolean {
+  if (leer(CLAVE_CORREGIR_MOCK) !== valor) return false;
+  try { localStorage.removeItem(CLAVE_CORREGIR_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
+  return true;
+}

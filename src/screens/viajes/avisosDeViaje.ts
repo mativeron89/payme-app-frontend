@@ -12,8 +12,8 @@ import { nombreCompleto, parametroDeTicket, rangoDeFechas, type T } from './viaj
  * los de las mesas. Lo que se decide acá es adónde lleva cada uno y qué línea
  * va debajo del texto.
  *
- * El viaje siempre viene en `payload.viaje_id`; `viaje_ticket_added` trae además
- * `ticket_id`. Abrir la pantalla del viaje la vuelve a pedir: el acceso lo
+ * El viaje siempre viene en `payload.viaje_id`; `viaje_ticket_added` y
+ * `viaje_ticket_corregido` traen además `ticket_id`. Abrir la pantalla del viaje la vuelve a pedir: el acceso lo
  * decide el dueño en ese momento, no el aviso (igual que `mesaDelAviso`).
  */
 
@@ -23,6 +23,8 @@ export const TIPOS_AVISO_VIAJE = [
   'viaje_ticket_added',
   // D256 · App Backend 2.175.0: alguien eliminó un ticket o un gasto. Lleva al viaje.
   'viaje_ticket_removed',
+  // D278-3 · App Backend 2.182.0: alguien corrigió un ticket o un gasto. Lleva al ticket.
+  'viaje_ticket_corregido',
   'viaje_closed',
   'viaje_transfer_marked',
   'viaje_transfer_not_received',
@@ -109,7 +111,8 @@ export function destinoDeAvisoDeViaje(
     case 'viaje_invitation_received':
       if (invitacion.tipo === 'respondida') return invitacion.respuesta === 'aceptada' ? { page: 'viaje', param: viaje } : null;
       return invitacion.tipo === 'no_pendiente' ? { page: 'viaje', param: viaje } : null;
-    case 'viaje_ticket_added': {
+    case 'viaje_ticket_added':
+    case 'viaje_ticket_corregido': {
       const ticket = idValido(n.payload?.ticket_id);
       // Sin `ticket_id` (no debería pasar: el contrato lo trae) el viaje sigue sirviendo.
       return ticket === null ? { page: 'viaje', param: viaje } : { page: 'viaje-ticket', param: parametroDeTicket(viaje, ticket) };

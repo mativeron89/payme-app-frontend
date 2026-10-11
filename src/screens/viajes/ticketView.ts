@@ -29,7 +29,7 @@ import { fechaCortaViaje, listaDeNombres, nombreCompleto, nombreDePila, type T }
 
 // ─── D278-2 · D284 · el total impreso: servicio, descuentos e IVA aparte ───────
 
-type ConAjustes = Pick<TicketEnViaje, 'monto_cents' | 'servicio_cents' | 'descuentos_cents' | 'iva_aparte_cents'>;
+export type ConAjustes = Pick<TicketEnViaje, 'monto_cents' | 'servicio_cents' | 'descuentos_cents' | 'iva_aparte_cents'>;
 
 /** El ticket trae algo aparte de los renglones (servicio, descuentos o IVA aparte). Uno viejo, nunca. */
 export function conAjustes(t: ConAjustes): boolean {

@@ -11,6 +11,95 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.241.0 — Corregir un ticket o un gasto ya cargado, con el nombre del lugar (D278-3 y D282-2) (2026-10-11)
+
+Orden AF-VIAJES-CORREGIR-TICKET-20261011 (c1d8cf26…), n349. Autoridad: D278 punto 3 (d9a554e3…) y D282 punto 2
+(1248c054…). Plan con maqueta a 375 aprobado por el Bibliotecario a las 19:12:02Z (ESTADO e9feb057…), con P1 a P4. Dueño:
+App Backend 2.182.0 (inventario en f009280, contenido de bd65b58); según la orden, servido. Lo visible se cierra con la
+prueba de Mati en el iPhone (D63).
+
+1. **La entrada (hecho).** Al final del detalle de un ticket, con `puedo_corregir`, un botón «Corregir ticket», o
+   «Corregir gasto» en un gasto a mano. Si es un gasto a mano lo dice `origen` en el ticket del viaje: el detalle no lo
+   trae. Va en el scroll y no en el pie, porque en «por lo que pidió cada uno» el pie es de «Listo». No aparece sin
+   `puedo_corregir` ni con el viaje cerrado.
+2. **La pantalla (hecho).** Es un modo de la pantalla del ticket y no una ruta (P4): «Volver» la cierra sin guardar.
+   - **Escaneado:** el nombre del lugar (vacío es `null`), el tipo en chips, la fecha y la hora nativas (sin fecha, la
+     hora se apaga y se va con ella). Cada renglón: nombre, − cantidad + y precio unitario, con «Sacar»; «Agregar
+     renglón». El servicio, el descuento y el IVA aparte (vacío es $0).
+   - **Gasto a mano:** la descripción y el monto.
+   - **Los montos:** con `leerMonto` (F-03) y su aviso para «1.250». Un renglón y los ajustes aceptan $0, como el dueño (un
+     plato de cortesía); el gasto no.
+   - **El total**, recalculado a la vista con cómo se llega a él y «Antes $X» si cambió.
+   - **Los topes del dueño, antes de mandar:** cada precio y la suma de los renglones hasta $1,000,000 y mayor que 0, y
+     el total entre $0 y $1,000,000. Si no se cumplen, «Guardar» se apaga y el aviso dice por qué.
+   - **Qué se manda:** sólo lo que cambió. Los renglones, la lista completa con su id, si cambió cualquiera, el orden, o
+     se agregó o sacó alguno. Sin cambios, «Guardar» está apagado.
+   - **Declarado:** «Sacar» va junto al nombre del renglón y no en la fila del precio, como en la maqueta: así, a 375, lo
+     del renglón entra hasta $1,000,000; si aun así no entra, baja a su propia línea.
+3. **El aviso previo (hecho, P1).** Si la corrección borra elecciones (un renglón con otro precio o cantidad, o sacado,
+   que alguien ya eligió), se dice antes de guardar, junto al botón: «Cambiaste el precio de Pescado a la talla: quienes
+   lo eligieron van a tener que volver a elegir.», con «Tú también.» si también era mío, y «Vas a tener que volver a
+   elegir…» si sólo era mío. **Sin nombres:** el contrato no dice quién eligió qué renglón (sólo cuánto queda y lo mío),
+   y nombrar a «los que ya eligieron» sería falso o revelaría qué eligió cada uno. El ejemplo con nombres de la orden
+   quedó reemplazado en el OK del plan.
+4. **Los pagadores (hecho, P2 y P3).** Con dos o más pagadores y otro total, «¿Cuánto pagó cada uno?» con lo que cada uno
+   tenía antes, «Suman $X de $Y» y «Partes iguales»; «Guardar» espera a que sumen el total nuevo. Con un pagador, o con
+   el mismo total, no aparece: el dueño se lo asigna. Corregir no cambia QUIÉN pagó. Si alguien que pagó ya no está en
+   el viaje, el total no se puede cambiar y se dice.
+5. **Después de guardar (hecho).** El ticket corregido (la respuesta del dueño), el viaje pedido de nuevo (los balances
+   y quién falta elegir) y el toast «Corregiste el ticket.» / «Corregiste el gasto.». Se olvidan los viajes de Inicio.
+   Balance se pide al abrirlo y lo muestra (e2e).
+   - **Estadísticas:** el dueño la calcula al leer, con el nombre del ticket (`estadisticas.que_cuenta` y `.restaurante`
+     del contrato), y sus cuatro pantallas la piden al abrirse, sin caché: lo prueba un censo que sale del código.
+   - **Declarado:** en el mock, «Tus restaurantes» es un modelo fijo (`VISITA_DE_VIAJE_MOCK`, D260) que no sigue al
+     estado de los viajes. El e2e no puede mostrar ahí el nombre corregido.
+6. **Los errores (hecho), `errorAlCorregir`:**
+   - 404 del ticket: «Este ticket ya no está en el viaje.» y vuelve al viaje, sin pantalla de error. Corregir no cambia
+     quién pagó, así que desde esta pantalla no se llega al caso declarado; un 404 es que otro lo eliminó (P3).
+   - 409 viaje cerrado: «Este viaje ya se cerró.» y vuelve al detalle.
+   - 403: «Sólo quien cargó o pagó este ticket puede corregirlo.» y se recarga (el botón se va).
+   - 422 de pagadores: «El total cambió: escribe cuánto pagó cada uno.», y se recarga el ticket.
+   - 422 de montos: «El total tiene que ser mayor que $0 y de hasta $1,000,000.»
+   - 409 tope del viaje: «Con este cambio el viaje pasaría su tope de gastos. Revisa los montos.»
+   - 422 de un renglón que ya no está: «El ticket cambió mientras lo corregías. Revísalo de nuevo.»
+   - 422 de un pagador que ya no está: el aviso de arriba.
+   - Lo demás (red, 5xx, 403 `user_suspended`): «No pudimos guardarlo. Prueba de nuevo.»
+7. **`viaje_version=10` (hecho).** Las 13 rutas reales y las 13 del mock que pedían la 9 piden la 10, más el PATCH nuevo
+   en las dos. El detalle de un ticket suma `puedo_corregir` con claves exactas y el invariante
+   `puedo_corregir === puedo_marcar_presentes` (el dueño los calcula igual desde la 6). La lista y el detalle del viaje
+   quedan como estaban.
+   - El aviso `viaje_ticket_corregido` lleva al ticket (`payload.ticket_id`), con el ícono de recibo.
+   - El espejo de 2.182.0: el contrato, el inventario de f009280 adoptado sin editar, y los hechos del dueño (cambian sólo
+     el commit y el sha de `services/notifications.js`).
+   - El mock porta `corregirTicket` del dueño, con seams de una vez para los errores del e2e.
+8. **Las pruebas (hecho).**
+   - **Rojo primero, sobre `7f90561`:** 30 unitarias y 2 archivos que no cargan (los módulos nuevos), y los 11 e2e del
+     spec nuevo, todos por la falta de «Corregir».
+   - **Nuevas:**
+     - `mockViajesCorregir.test.ts` (17): cada regla de `corregirTicket` portada al mock;
+     - `corregirTicketView.test.ts` (35): cada campo, el pedido, los topes, el aviso previo y los pagadores;
+     - `CorregirTicket.test.tsx` (16): quién ve «Corregir», la pantalla, y el censo de Estadísticas sin caché;
+     - la 10 en `viajes.test.ts` (5) y en `viajesNegociacion.test.ts` (2, más las rutas que pasan a pedir la 10);
+     - el destino del aviso (1) y su ícono (1).
+   - **E2E a 375, `viajes-corregir-ticket.spec.ts` (12):**
+     - quién ve «Corregir»;
+     - «NATAMBRE» → «Matambre» sin borrar elecciones, también en Balance;
+     - «Volver» sin guardar;
+     - un precio que sí borra: el aviso previo, el total, Luis en «falta elegir» y el pescado libre;
+     - cantidad, agregar y sacar, con doble toque;
+     - los botones de 44 × 44 y $1,000,000 sin desbordar;
+     - un gasto con dos pagadores;
+     - los cinco errores.
+   - **Agregadas después del rojo:**
+     - por el análisis de mutantes: el 409 antes que el 403, quién cargó al cambiar el pagador, el reorden de renglones
+       iguales, la hora sin fecha, y 44 × 44 y $1,000,000 a 375;
+     - porque un mutante sobrevivía: `puedo_corregir` con el viaje no abierto (U12), el tope propio de los renglones
+       (U34), el camino feliz que olvida lo de Inicio (U60) y el pescado libre en el e2e (E14).
+   - **Mutantes:** 62 unitarios, mueren todos; 15 e2e, mueren 14. E15 (sin la guarda del doble toque) es equivalente:
+     React apaga «Guardar» antes del segundo toque y el dueño es idempotente por contenido.
+   - **Un defecto que encontró el e2e a 375:** un renglón de $1,000,000 desbordaba la fila en 28 px. Ahora lo del renglón
+     baja a su propia línea.
+
 ## 0.240.0 — Cerrar sólo quien creó el viaje y la hora de cierre (D279), los consumos del viaje por lugar (D281), las pestañas del encabezado en negrita (D283) y el total impreso del ticket (D278-2 y D284) (2026-10-11)
 
 Orden AF-VIAJES-CIERRE-CONSUMOS-Y-NEGRITA-20261011 (60825999…), con la adenda del punto 7 (D278-2 d9a554e3…, D284

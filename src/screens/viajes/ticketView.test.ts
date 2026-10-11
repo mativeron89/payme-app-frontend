@@ -56,7 +56,7 @@ function ticket(extra: Partial<TicketDelViaje> = {}): TicketDelViaje {
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false,
     items: [], personas: [persona('m-luis'), persona('m-ana'), persona('m-sofia'), persona('m-diego', false)],
     te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
-    servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, te_toca_platos_cents: 53000, ...extra,
+    servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, te_toca_platos_cents: 53000, puedo_corregir: false, ...extra,
   } as const;
   // D278-2 · el total impreso, con la identidad del contrato.
   const total = extra.total_cents ?? t.monto_cents + t.servicio_cents + t.iva_aparte_cents - t.descuentos_cents;

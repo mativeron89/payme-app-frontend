@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import { denominatorBps } from '../../api/mesaPresentation';
-import { errorDeViaje, type DetalleViaje, type ItemDelTicket, type MiembroViaje, type TicketDelViaje } from '../../api/viajes';
+import {
+  errorAlCorregir,
+  errorDeViaje,
+  type CorreccionDeTicket,
+  type DetalleViaje,
+  type ItemDelTicket,
+  type MiembroViaje,
+  type OrigenTicket,
+  type TicketDelViaje,
+} from '../../api/viajes';
+import { olvidarLoDeViajes } from '../../api/ultimoVisto';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
@@ -14,6 +24,7 @@ import { fullName } from '../../utils/identity';
 import { bpsLabel } from '../mesaItemsView';
 import { montoDeDescuento } from '../desgloseDelTicket';
 import { etiquetaPorcion } from '../queConsumisteView';
+import { CorregirTicketVista } from './CorregirTicket';
 import { FilasDelTotal } from './FilasDelTotal';
 import { ListaDePresentes } from './TicketNuevoScreen';
 import {
@@ -66,6 +77,9 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
   const [abierto, setAbierto] = useState<string | null>(null);
   const [ausentes, setAusentes] = useState<Set<string>>(() => new Set());
   const [guardando, setGuardando] = useState(false);
+  // D278-3 · la corrección es un modo de esta pantalla (P4 del plan): «Volver» la cierra sin guardar.
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const corrigiendoEnCurso = useRef(false);
   const vivo = useRef(true);
 
   useEffect(() => {
@@ -187,12 +201,84 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
     }
   }
 
-  const conPie = ticket !== null && ticket.forma === 'consumo' && ticket.puedo_elegir;
+  // D278-3 · si es un escaneado o un gasto a mano lo dice el ticket del viaje (el detalle no trae `origen`).
+  const origen: OrigenTicket | null = (ticket && viaje?.tickets.find((x) => x.id === ticket.id)?.origen) ?? null;
+
+  async function guardarCorreccion(pedido: CorreccionDeTicket) {
+    if (!ticket || !viaje || corrigiendoEnCurso.current) return;
+    corrigiendoEnCurso.current = true;
+    setGuardando(true);
+    try {
+      const nuevo = await api.corregirTicketDeViaje(viajeId, ticketId, pedido);
+      if (!vivo.current) return;
+      // Inicio vuelve a pedir los viajes abiertos y lo que falta elegir; Balance y Estadísticas se piden al abrirlos.
+      olvidarLoDeViajes();
+      setCorrigiendo(false);
+      mostrar(nuevo, viaje);
+      toast(origen === 'manual' ? t('Corregiste el gasto.') : t('Corregiste el ticket.'), { sobreLaBarra: true });
+      // El viaje también cambió (los balances, quién falta elegir).
+      cargar(true);
+    } catch (err) {
+      if (!vivo.current) return;
+      const e = errorAlCorregir(err);
+      if (e.tipo === 'ticket_no_encontrado') {
+        // Otro lo eliminó mientras tanto (o la corrección lo dejó como el personal de otro): se dice y se vuelve al viaje,
+        // sin pantalla de error.
+        olvidarLoDeViajes();
+        goBack('viaje', viajeId);
+        toast(t('Este ticket ya no está en el viaje.'), { sobreLaBarra: true });
+      } else if (e.tipo === 'no_disponible') {
+        setEstado({ fase: 'no_disponible' });
+      } else if (e.tipo === 'no_abierto') {
+        setCorrigiendo(false);
+        toast(t('Este viaje ya se cerró.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'corregir_prohibido') {
+        setCorrigiendo(false);
+        toast(t('Sólo quien cargó o pagó este ticket puede corregirlo.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'renglon_desconocido') {
+        setCorrigiendo(false);
+        toast(t('El ticket cambió mientras lo corregías. Revísalo de nuevo.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'pagador_desconocido') {
+        toast(t('Alguien que pagó ya no está en el viaje: el total no se puede cambiar.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'pagadores_no_suman') {
+        toast(t('El total cambió: escribe cuánto pagó cada uno.'), { sobreLaBarra: true });
+        cargar(true);
+      } else if (e.tipo === 'monto_invalido') {
+        toast(t('El total tiene que ser mayor que $0 y de hasta $1,000,000.'), { sobreLaBarra: true });
+      } else if (e.tipo === 'tope_del_viaje') {
+        toast(t('Con este cambio el viaje pasaría su tope de gastos. Revisa los montos.'), { sobreLaBarra: true });
+      } else {
+        toast(t('No pudimos guardarlo. Prueba de nuevo.'), { sobreLaBarra: true });
+      }
+    } finally {
+      corrigiendoEnCurso.current = false;
+      if (vivo.current) setGuardando(false);
+    }
+  }
+
+  const enCorreccion = corrigiendo && ticket !== null && viaje !== null && origen !== null;
+  const conPie = enCorreccion || (ticket !== null && ticket.forma === 'consumo' && ticket.puedo_elegir);
 
   return (
     <div className={conPie ? 'screen vj-con-pie' : 'screen has-appbar'}>
-      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viaje', viajeId)} />
-      {ticket && viaje ? (
+      <AppHeaderBack
+        userName={fullName(session) ?? undefined}
+        onBack={() => (enCorreccion ? setCorrigiendo(false) : goBack('viaje', viajeId))}
+      />
+      {enCorreccion ? (
+        <CorregirTicketVista
+          key={ticket.id}
+          ticket={ticket}
+          origen={origen}
+          miembros={viaje.miembros}
+          enviando={guardando}
+          onGuardar={(pedido) => void guardarCorreccion(pedido)}
+        />
+      ) : ticket && viaje ? (
         <TicketVista
           ticket={ticket}
           miembros={viaje.miembros}
@@ -208,6 +294,8 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
           onListo={() => void listo()}
           onPresente={(id) => setAusentes((a) => alternarPresente(a, id, candidatos))}
           onGuardarPresentes={() => void guardarPresentes()}
+          origen={origen}
+          onCorregir={() => setCorrigiendo(true)}
         />
       ) : (
         <TicketEstadoVista
@@ -289,6 +377,9 @@ export interface TicketVistaProps {
    * `viaje_version=7`): el ticket es sólo para ver, y se dice arriba.
    */
   cerrado?: boolean;
+  /** D278-3 · escaneado o gasto a mano (del ticket del viaje); sin saberlo, no se ofrece corregir. */
+  origen?: OrigenTicket | null;
+  onCorregir?: () => void;
 }
 
 export function TicketVista(props: TicketVistaProps) {
@@ -379,6 +470,20 @@ function EditarPresentes({ ticket, miembros, ausentes, guardando, onPresente, on
 }
 
 /**
+ * D278-3 · D282-2 · «Corregir ticket» (o «Corregir gasto»), al final del detalle: sólo con `puedo_corregir` (lo cargué o
+ * lo pagué, con el viaje abierto). En el scroll y no en el pie: en «por lo que pidió cada uno» el pie es de «Listo».
+ */
+function BotonCorregir({ ticket, cerrado = false, origen = null, onCorregir }: TicketVistaProps) {
+  const { t } = useIdioma();
+  if (!ticket.puedo_corregir || cerrado || origen === null || !onCorregir) return null;
+  return (
+    <button type="button" className="btn btn-ghost vjt-corregir" onClick={onCorregir}>
+      {origen === 'manual' ? t('Corregir gasto') : t('Corregir ticket')}
+    </button>
+  );
+}
+
+/**
  * «Total del ticket» y «Te toca», como en 1j. D278-2 · D284 · el total es el impreso; con servicio, descuentos o IVA
  * aparte, primero cómo se llega a él, y debajo de «Te toca» lo de tus platos y tu parte del resto.
  */
@@ -457,6 +562,7 @@ function TotalVista(props: TicketVistaProps) {
       <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
       <EditarPresentes {...props} />
+      <BotonCorregir {...props} />
     </div>
   );
 }
@@ -475,6 +581,7 @@ function IgualesVista(props: TicketVistaProps) {
       <QuienesPagaron ticket={ticket} miembros={miembros} />
       <Totales ticket={ticket} />
       <EditarPresentes {...props} />
+      <BotonCorregir {...props} />
     </div>
   );
 }
@@ -513,6 +620,7 @@ function ConsumoVista(props: TicketVistaProps) {
         <QuienesPagaron ticket={ticket} miembros={miembros} />
         {!ticket.puedo_elegir && <Totales ticket={ticket} />}
         <EditarPresentes {...props} />
+        <BotonCorregir {...props} />
       </div>
       {ticket.puedo_elegir && (
         <div className="vj-pie">

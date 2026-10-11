@@ -11,7 +11,9 @@ import {
   decodeListaDeViajes,
   decodeMarcaDeTransferencia,
   decodeRevisionDeTicket,
+  decodeTicketCorregido,
   decodeTicketDelViaje,
+  errorAlCorregir,
   errorAlEliminar,
   errorDeViaje,
   reiniciarViajesParaTests,
@@ -37,6 +39,7 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
     viaje_version_7: { since: string; parametro: string; regla: string; cerrado: string; uso: string };
     viaje_version_8: { since: string; parametro: string; regla: string; detalle_suma: string[]; lista_suma: string[] };
     viaje_version_9: { since: string; parametro: string; regla: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
+    viaje_version_10: { since: string; parametro: string; regla: string; detalle_de_ticket_suma: string[]; puedo_corregir: string };
   };
   colores: Record<string, string>;
 };
@@ -53,6 +56,8 @@ const V6 = CONTRATO.negociaciones.viaje_version_6;
 const V8 = CONTRATO.negociaciones.viaje_version_8;
 /** D278-2 · D284 · App Backend 2.181.0: la 8 más los ajustes y el total impreso en cada ticket, y `te_toca_platos_cents`. */
 const V9 = CONTRATO.negociaciones.viaje_version_9;
+/** D278-3 · App Backend 2.182.0: la 9 más `puedo_corregir` en el detalle de un ticket. */
+const V10 = CONTRATO.negociaciones.viaje_version_10;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -183,10 +188,11 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
       items: [{ id: 'i', name: 'Taco', price_cents: 500, quantity: 2, line_cents: 1000, remaining_bps: 5000, my_bps: 5000, my_amount_cents: 500 }],
       personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
       te_toca_cents: 500, sin_repartir_cents: 500, puedo_elegir: true, puedo_marcar_presentes: false,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 500 };
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 500, puedo_corregir: false };
     const claves = CONTRATO.rutas['GET /api/viajes/:id/tickets/:tid']!.respuestas['200']!.ticket as string[];
     expect(Object.keys(ticket).sort())
-      .toEqual([...claves, ...V5.detalle_de_ticket_suma, ...V6.detalle_de_ticket_suma, ...V9.detalle_de_ticket_suma].sort());
+      .toEqual([...claves, ...V5.detalle_de_ticket_suma, ...V6.detalle_de_ticket_suma, ...V9.detalle_de_ticket_suma,
+        ...V10.detalle_de_ticket_suma].sort());
     expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket }).items[0]!.my_amount_cents).toBe(500);
     const malo = { ...ticket, items: [{ ...ticket.items[0]!, remaining_bps: 10001 }] };
     expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: malo })).toThrow();
@@ -249,7 +255,7 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
     items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
     personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }, { miembro_id: 'm2', ya_eligio: true, presente: true }],
     te_toca_cents: 45000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
-    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 45000,
+    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 45000, puedo_corregir: true,
   };
 
   it('responde como un ticket, con `ya_cargado` nulo: el pedido y la respuesta del contrato', () => {
@@ -492,7 +498,7 @@ describe('🔴 D263 · `viaje_version=5`: varios pagadores (App Backend 2.177.0)
         forma: 'iguales', monto_cents: 90000, pagado_por: 'm1', pagaste_tu,
         items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
         personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }], te_toca_cents: 0, sin_repartir_cents: 0,
-        puedo_elegir: false, puedo_marcar_presentes: true, pagadores, personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 0,
+        puedo_elegir: false, puedo_marcar_presentes: true, pagadores, personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 0, puedo_corregir: true,
       },
     });
     const dos = [{ miembro_id: 'm1', monto_cents: 45000 }, { miembro_id: 'm2', monto_cents: 45000 }];
@@ -527,7 +533,7 @@ describe('🔴 D276 · `viaje_version=6`: quiénes estuvieron y el gasto persona
     items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 10000, my_bps: 0, my_amount_cents: 0 }],
     personas: [{ miembro_id: 'm1', ya_eligio: false, presente: true }],
     te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
-    pagadores: [{ miembro_id: 'm1', monto_cents: 1000 }], personal: true, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000, ...extra,
+    pagadores: [{ miembro_id: 'm1', monto_cents: 1000 }], personal: true, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000, puedo_corregir: true, ...extra,
   });
 
   it('lo que suma la 6: `presentes` y `personal` en cada ticket del detalle, `personal` en el de un ticket', () => {
@@ -591,7 +597,7 @@ describe('🔴 V-02 · `viaje_version=7` (App Backend 2.179.2): la 6 sin claves 
       items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 0, my_bps: 10000, my_amount_cents: 1000 }],
       personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
       te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: false,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000, puedo_corregir: false,
     };
     expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket })).toMatchObject({ puedo_elegir: false, te_toca_cents: 1000 });
     // Una clave de más sigue siendo otra forma: «sin claves nuevas» de verdad.
@@ -670,7 +676,7 @@ describe('🔴 D278-2 · D284 · `viaje_version=9`: el servicio, los descuentos,
     items: [{ id: 'i', name: 'Taco', price_cents: 10000, quantity: 1, line_cents: 10000, remaining_bps: 0, my_bps: 5000, my_amount_cents: 5000 }],
     personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
     te_toca_cents: 6050, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: false,
-    pagadores: [{ miembro_id: 'm2', monto_cents: 12100 }], personal: false, ...ajustes, te_toca_platos_cents: 5000, ...cambios,
+    pagadores: [{ miembro_id: 'm2', monto_cents: 12100 }], personal: false, ...ajustes, te_toca_platos_cents: 5000, puedo_corregir: false, ...cambios,
   });
 
   it('las claves del contrato: cuatro en cada ticket y cinco en el detalle de un ticket', () => {
@@ -719,5 +725,67 @@ describe('🔴 D278-2 · D284 · `viaje_version=9`: el servicio, los descuentos,
     const limpio = { ...gasto, ticket: ticket({ forma: 'iguales', tipo_lugar: 'otro', pagaste_tu: true, pagado_por: 'm1',
       servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 10000, pagadores: [{ miembro_id: 'm1', monto_cents: 10000 }] }) };
     expect(decodeGastoCargado(limpio).total_cents).toBe(10000);
+  });
+});
+
+describe('🔴 D278-3 · `viaje_version=10`: corregir un ticket ya cargado (App Backend 2.182.0)', () => {
+  const ticket = (cambios: Record<string, unknown> = {}) => ({
+    id: 't', lugar: 'NATAMBRE', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
+    cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 10000, pagado_por: 'm2', pagaste_tu: false,
+    items: [{ id: 'i', name: 'Taco', price_cents: 10000, quantity: 1, line_cents: 10000, remaining_bps: 0, my_bps: 5000, my_amount_cents: 5000 }],
+    personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
+    te_toca_cents: 5000, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: true,
+    pagadores: [{ miembro_id: 'm2', monto_cents: 10000 }], personal: false, servicio_cents: 0, descuentos_cents: 0,
+    iva_aparte_cents: 0, total_cents: 10000, te_toca_platos_cents: 5000, puedo_corregir: true, ...cambios,
+  });
+  const sin = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+
+  it('el contrato: la 10 suma sólo `puedo_corregir`, y sólo en el detalle de un ticket', () => {
+    expect(V10.parametro).toBe('viaje_version=10');
+    expect(V10.detalle_de_ticket_suma).toEqual(['puedo_corregir']);
+    expect(V10.regla).toContain('fuera de ese detalle, la 10 responde como la 9');
+  });
+
+  it('el detalle de un ticket trae `puedo_corregir` booleano; sin él, o con otra forma, no se acepta', () => {
+    expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket() }).puedo_corregir).toBe(true);
+    expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_corregir: false, puedo_marcar_presentes: false }) })
+      .puedo_corregir).toBe(false);
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: sin(ticket(), 'puedo_corregir') })).toThrow();
+    for (const malo of ['true', 1, null]) {
+      expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_corregir: malo }) }), String(malo)).toThrow();
+    }
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_editar: true }) })).toThrow();
+  });
+
+  it('`puedo_corregir` es la misma condición que `puedo_marcar_presentes` (el dueño: abierto y cargó o pagó)', () => {
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_marcar_presentes: false }) })).toThrow();
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ puedo_corregir: false }) })).toThrow();
+  });
+
+  it('`PATCH …/tickets/:tid` responde `{contract, ticket}`: ni `ya_cargado` ni otra clave', () => {
+    expect(decodeTicketCorregido({ contract: CONTRATO.id, ticket: ticket({ lugar: 'Matambre' }) }).lugar).toBe('Matambre');
+    expect(() => decodeTicketCorregido({ contract: CONTRATO.id, ticket: ticket(), ya_cargado: null })).toThrow();
+    expect(() => decodeTicketCorregido({ ticket: ticket() })).toThrow();
+    expect(() => decodeTicketCorregido({ contract: 'otro/v1', ticket: ticket() })).toThrow();
+    expect(() => decodeTicketCorregido({ contract: CONTRATO.id, ticket: sin(ticket(), 'puedo_corregir') })).toThrow();
+  });
+
+  it('🔴 errorAlCorregir: los propios de corregir, y el resto como siempre', () => {
+    const e = (status: number, error: string, extra: Record<string, unknown> = {}) => new HttpError(status, { error, ...extra });
+    expect(errorAlCorregir(e(403, 'viaje_ticket_edit_forbidden'))).toEqual({ tipo: 'corregir_prohibido' });
+    expect(errorAlCorregir(e(404, 'viaje_ticket_not_found'))).toEqual({ tipo: 'ticket_no_encontrado' });
+    expect(errorAlCorregir(e(422, 'viaje_ticket_amount_invalid'))).toEqual({ tipo: 'monto_invalido' });
+    expect(errorAlCorregir(e(409, 'viaje_total_limit', { limit: 20000000000 }))).toEqual({ tipo: 'tope_del_viaje' });
+    expect(errorAlCorregir(e(422, 'viaje_ticket_item_unknown', { item_id: 'x' }))).toEqual({ tipo: 'renglon_desconocido' });
+    expect(errorAlCorregir(e(422, 'viaje_ticket_payers_total_mismatch', { monto_cents: 12000 })))
+      .toEqual({ tipo: 'pagadores_no_suman', totalCents: 12000 });
+    expect(errorAlCorregir(e(422, 'viaje_ticket_payer_unknown', { miembro_id: 'm9' }))).toEqual({ tipo: 'pagador_desconocido' });
+    expect(errorAlCorregir(e(409, 'viaje_not_open', { estado: 'esperando_pagos' }))).toEqual({ tipo: 'no_abierto' });
+    expect(errorAlCorregir(e(404, 'viaje_not_found'))).toEqual({ tipo: 'no_disponible' });
+    expect(errorAlCorregir(e(403, 'user_suspended'))).toEqual({ tipo: 'reintentar' });
+    expect(errorAlCorregir(e(400, 'validation_error'))).toEqual({ tipo: 'reintentar' });
+    // El mismo código con otro status no es el caso propio.
+    expect(errorAlCorregir(e(409, 'viaje_ticket_amount_invalid'))).toEqual({ tipo: 'reintentar' });
+    expect(errorAlCorregir(e(422, 'viaje_total_limit'))).toEqual({ tipo: 'reintentar' });
   });
 });

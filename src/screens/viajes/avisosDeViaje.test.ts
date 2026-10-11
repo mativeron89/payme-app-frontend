@@ -55,6 +55,16 @@ describe('AF-VIAJES · avisos de viaje · destino', () => {
       .toEqual({ page: 'viaje', param: V });
   });
 
+  it('🔴 D278-3 · «corrigió un ticket» (App Backend 2.182.0) lleva al ticket corregido; sin `ticket_id` válido, al viaje', () => {
+    expect(TIPOS_AVISO_VIAJE).toContain('viaje_ticket_corregido');
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_corregido', { viaje_id: V, ticket_id: TK }), true, NO_PENDIENTE))
+      .toEqual({ page: 'viaje-ticket', param: `${V}.${TK}` });
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_corregido', { viaje_id: V }), true, NO_PENDIENTE)).toEqual({ page: 'viaje', param: V });
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_corregido', { viaje_id: V, ticket_id: 'x.y' }), true, NO_PENDIENTE))
+      .toEqual({ page: 'viaje', param: V });
+    expect(destinoDeAvisoDeViaje(aviso('viaje_ticket_corregido', { ticket_id: TK }), true, NO_PENDIENTE)).toBeNull();
+  });
+
   it('🔴 sin Viajes, ninguno navega: la fila queda quieta', () => {
     for (const type of TIPOS_AVISO_VIAJE) {
       expect(destinoDeAvisoDeViaje(aviso(type, { viaje_id: V, ticket_id: TK }), false, NO_PENDIENTE), type).toBeNull();

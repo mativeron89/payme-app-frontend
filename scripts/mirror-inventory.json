@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "b3699c95fe1118582712930d3da92943669b9782",
+  "commit": "bd65b582bdd63f5894260017debfe1998a08944f",
   "total": 138,
   "archivos": [
     {
@@ -79,8 +79,8 @@
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "55169332ddb2c5fddc2cfc6cd56c86aca426f9fe40f8fbf791d240adfcefd359",
-      "bytes": 57720
+      "sha256": "da86f0931612b126c3aabf7895496bbf233cdd5dffaa8429bdfcf1357b4ef6b0",
+      "bytes": 63918
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -547,8 +547,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "2e18e3c37ccbd01a4b7ddf6105172bcb64ef00aa27f39203fe1b103dc7df1526",
-      "bytes": 11482
+      "sha256": "3054b015a42a17e3adcd3d85ecfdd6ded9810c204d7fd80d6c0c26899222b710",
+      "bytes": 11965
     },
     {
       "origen": "routes/webhooks.js",
@@ -685,8 +685,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "d9a4a25728765012e8ecab590b4b3c300e5d2be5ab609fc7d117e2734464f85e",
-      "bytes": 13102
+      "sha256": "195aef6bb8915c2d17b3cd3291e453a4ac695b57d48593b29c1c94f1e7d563e0",
+      "bytes": 13291
     },
     {
       "origen": "services/ocrRail.js",
@@ -787,8 +787,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "5cf4f4f721a8f164141c4a5db32a2f6dda6bbb6afa12bc596661a55ecf4dc7cc",
-      "bytes": 129085
+      "sha256": "61efc10ee83fb9387cde94faeaa75675741fbf717fb21274abcb89b1e5f17884",
+      "bytes": 143884
     },
     {
       "origen": "services/viajesCalculo.js",

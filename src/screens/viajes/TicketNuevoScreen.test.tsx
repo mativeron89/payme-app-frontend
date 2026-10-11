@@ -220,6 +220,7 @@ describe('AF-VIAJES · 1k · el ticket ya estaba en el viaje', () => {
     te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
     pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
     servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 220000, te_toca_platos_cents: 0,
+    puedo_corregir: false,
   } satisfies TicketDelViaje;
 
   const render = (d: YaCargado, ticket: TicketDelViaje | null = tk) => renderToStaticMarkup(
@@ -319,7 +320,7 @@ describe('🔴 D278-2 · D284 · Ticket nuevo con servicio e IVA aparte: el tota
           forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false, items: [], personas: [],
           te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
           servicio_cents: 22000, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 242000, te_toca_platos_cents: 0,
-          pagadores: [{ miembro_id: 'm-luis', monto_cents: 242000 }] }}
+          pagadores: [{ miembro_id: 'm-luis', monto_cents: 242000 }], puedo_corregir: false }}
         onElegir={nada} onEscanearOtro={nada} />,
     );
     expect(html).toContain('<span class="vjt-monto">$2,420</span>');

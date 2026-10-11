@@ -517,3 +517,121 @@
 .vjt-centrado {
   margin: 0 auto;
 }
+
+/* ─── D278-3 · D282-2 · corregir un ticket ya cargado ─── */
+
+/* «Corregir ticket» al final del detalle: en el scroll, no en el pie. */
+.vjt-corregir {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.vjr-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vjr-renglon {
+  padding: var(--sp-3) 0;
+}
+
+.vjr-renglon + .vjr-renglon {
+  border-top: 1px solid var(--border);
+}
+
+.vjr-cabeza,
+.vjr-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.vjr-fila {
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+
+.vjr-nombre {
+  flex: 1;
+  min-width: 0;
+}
+
+/* El mínimo táctil, en las dos dimensiones. */
+.vjr-paso,
+.vjr-sacar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  color: var(--text);
+}
+
+.vjr-paso {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+}
+
+.vjr-sacar {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+}
+
+.vjr-paso:disabled,
+.vjr-sacar:disabled {
+  opacity: 0.4;
+}
+
+.vjr-cant {
+  flex: none;
+  min-width: 1.6em;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text);
+}
+
+.vjr-precio {
+  flex: none;
+  width: 6.5em;
+  text-align: right;
+}
+
+/* Lo del renglón ocupa lo que sobra; si no entra (un monto grande a 375), baja a su propia línea, a la derecha. */
+.vjr-linea {
+  flex: 1 0 auto;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.vjr-agregar {
+  width: 100%;
+  margin-top: var(--sp-2);
+}
+
+/* Servicio, descuento e IVA aparte, en una fila. */
+.vjr-ajustes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+/* «Antes $X», debajo del total o del monto que cambió. */
+.vjr-antes {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  text-align: right;
+  color: var(--text-muted);
+}
