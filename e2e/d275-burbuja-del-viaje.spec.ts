@@ -99,7 +99,7 @@ for (const ancho of [375, 390]) {
       await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
     });
 
-    test('las medidas: 28 debajo de la tarjeta, 20 entre viajes, el pendiente 8 abajo y 24 adentro (también con el aviso)', async ({ page }) => {
+    test('las medidas: 28 debajo de la tarjeta, 20 entre viajes, «+ Gasto» y el pendiente 8 abajo, 24 adentro (también con el aviso)', async ({ page }) => {
       await conViajes(page);
       await sinMesas(page);
       // Lo de arriba que la semilla trae y el prototipo no (la invitación y el aviso de la foto) se oculta, para medir
@@ -112,6 +112,7 @@ for (const ancho of [375, 390]) {
       const g0 = await caja(page, '.viaje-grupo', 0);
       const g1 = await caja(page, '.viaje-grupo', 1);
       const b0 = await caja(page, 'button.viaje-burbuja', 0);
+      const gasto0 = await caja(page, 'button.viaje-gasto', 0);
       const p0 = await caja(page, 'button.viaje-pendiente', 0);
       const enIntermedios = await page.evaluate(() => {
         const t = document.querySelector('.mounted-card')!;
@@ -126,7 +127,11 @@ for (const ancho of [375, 390]) {
       expect(enIntermedios, 'entre la tarjeta y los viajes no ocupa lugar nada').toEqual([]);
       expect(Math.round(g0.top - tarjeta.bottom)).toBe(28);
       expect(Math.round(g1.top - g0.bottom)).toBe(20);
-      expect(Math.round(p0.top - b0.bottom)).toBe(8);
+      // D280 · «+ Gasto» 8 px debajo de la burbuja, a la derecha; el pendiente, 8 px debajo de ella.
+      expect(Math.round(gasto0.top - b0.bottom)).toBe(8);
+      expect(Math.round(b0.right - gasto0.right)).toBe(0);
+      expect(Math.round(gasto0.height)).toBe(44);
+      expect(Math.round(p0.top - gasto0.bottom)).toBe(8);
       expect(Math.round(p0.left - b0.left)).toBe(24);
       expect(Math.round(b0.left)).toBe(16);
       expect(Math.round(ancho - b0.right)).toBe(16);

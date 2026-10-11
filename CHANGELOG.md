@@ -11,6 +11,63 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.239.1 — Lo que faltó de la auditoría (la coma decimal, el período viejo, el teclado de Qué comes y el comprobante en inglés), el ticket de un viaje cerrado desde Estadísticas, cerrar y salir en Configuración (D279) y «+ Gasto» (D280) (2026-10-11)
+
+Orden AF-AUDITORIAS-PENDIENTES-Y-TICKET-CERRADO-20261011 (01c4f831…), con las adendas D279 (e3609c1b…) y D280
+(e752b2fe…), y App Backend 2.179.2 (inventario en e010b61, contenido de a94272d) para V-02. F-02, F-03, F-13 y F-14 los
+pedía la orden de 0.238.0 y la entrega no los hizo ni los declaró. Lo visible se cierra con la prueba de Mati en el
+iPhone (D63).
+
+1. **F-03 / V-04 · la coma decimal (hecho).** «12,50» se volvía $1,250 en la Carga manual: el lector borraba todas las
+   comas. Ahora un solo lector (`src/utils/montoEscrito.ts`) para la Carga manual y para «¿Quién pagó?»:
+   - **inequívocos:** sólo cifras; un separador con una o dos cifras es decimal, con coma o con punto («12,50», «12.5»);
+     comas de miles en grupos de tres, como en México, con punto decimal opcional («1,250», «1,250.00»); puntos de miles
+     con coma decimal («1.250,00») o varios puntos de miles («1.250.000»);
+   - **ambiguo, se rechaza sin adivinar:** un solo punto con tres cifras («1.250»). Debajo del campo: «No sabemos si es
+     con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.», sin total y con «Listo» apagado. En
+     «¿Quién pagó?», el mismo aviso antes que la suma;
+   - criterio aprobado por el Bibliotecario: «1,250» son miles y no se rechaza.
+2. **F-02 / V-05 · el período viejo (hecho), en las tres pantallas:** Tus restaurantes, Estadísticas (sus cuatro
+   pedidos) y Qué comes. Cada tanda lleva su época (`useTandaVigente`, sobre `RequestEpoch`, como Viajes): una respuesta
+   de un período anterior, o con la pantalla ya ida, no se escribe.
+3. **F-13 · el teclado de Qué comes (no estaba, aunque la auditoría de Viajes dijera que pasaba; hecho).** Las pestañas
+   inactivas tenían `tabIndex=-1` y no había manejo de teclas: «Ingrediente» y «Momento» no se alcanzaban. Ahora, como
+   pide ese patrón, las flechas pasan a la de al lado (con vuelta), Inicio a la primera y Fin a la última, y el foco va
+   con la elegida.
+4. **F-14 · el comprobante en inglés (no estaba; hecho).** «{0}: {1}» se traducía con una expresión de código. Ahora
+   conserva `{0}` y `{1}`, y una guarda recorre todo el diccionario EN (con Viajes): cada traducción tiene los mismos
+   marcadores que su clave y ninguna otra llave. Una sonda antes del arreglo mostró que era la única.
+5. **V-02 · «Ver ticket completo» con el viaje en Cerrados (hecho).** Con `viaje_version=7` (App Backend 2.179.2, la
+   6 sin claves nuevas) el detalle del ticket responde en sólo lectura en lugar del 409. Se abre el mismo ticket con
+   «Este viaje ya se cerró: el ticket es sólo para ver.»: nada para elegir, marcar ni borrar, y sin «Quién ya eligió»
+   («falta elegir» ya no sería cierto: lo no elegido se repartió al cerrar). Atrás vuelve a Tus restaurantes.
+   - El espejo va como si 2.179.2 estuviera servido: `contract/viajes-v1.json` de `a94272d` y el inventario de
+     `e010b61`, adoptado tal cual. Los hechos del dueño cambian sólo el commit y el sha de `routes/account.js`.
+6. **D279 · cerrar y salir en Configuración (hecho, sólo la pantalla).** Mati: «mandar cerrar viaje y salir del viaje a
+   configuración».
+   - «Cerrar viaje» y «Salir del viaje» van al pie de Configuración, con las mismas hojas, reglas y confirmaciones. Al
+     cerrar se vuelve a la pantalla del viaje, que ya espera pagos.
+   - En la pantalla del viaje, en su lugar: «Toca el [cámara] para cargar un ticket», con el estilo de D277, en el medio
+     del espacio libre entre «Configuración» y el círculo de Nueva, sin `fixed`.
+   - **Declarado:** esperando pagos no tiene Configuración: ahí «Salir del viaje» queda donde está (H02). No van ahora el
+     botón sólo para el creador ni la hora de cierre automático (después de App Backend 2.180.0).
+7. **D280 · «+ Gasto» (hecho).** Una píldora debajo de la burbuja de cada viaje abierto en Inicio, a la derecha y afuera
+   de ella, con las medidas y el `aria-label` («Cargar gasto en {viaje}») de Claude Design; abre la Carga manual de ese
+   viaje. Los restaurantes pendientes van debajo. **Declarado:** un viaje esperando pagos no la lleva (ya no se carga
+   nada en él).
+- **Pruebas:**
+  - **rojo en la base `20d66d6`:** 30 unitarias en 12 archivos (uno no carga, porque importa el lector nuevo) y 18 e2e
+    (las 12 nuevas y 6 de las que cambiaron por D279 y D280);
+  - **mutantes: 43, de los siete puntos** (27 unitarios y 16 en el navegador). Mueren 42.
+    - En la primera vuelta sobrevivía uno más, por un hueco de la prueba: sin `align-self` la píldora «+ Gasto» se estira
+      a todo el ancho y su borde derecho sigue coincidiendo. Ahora la prueba exige que sea angosta y empiece a la derecha.
+    - **Declarado, equivalente:** quitar `setConfiguracion(false)` después de cerrar no cambia la pantalla, porque con el
+      viaje esperando pagos Configuración ya no se dibuja. Lo vigila la prueba de la fuente;
+  - **e2e a 375** (D280 también a 390), con capturas. F-14 no se alcanza en el navegador: el comprobante sale después
+    de pagar y los pagos están cortados (`pago-completo.spec.ts` se saltea por lo mismo).
+- **Medido de paso:** el worktree nuevo no tenía `node_modules` propio y todo se resolvía contra el del checkout
+  principal (fallaban las guardas de aislamiento de tipos y de la versión de Vite). Se instaló con `npm ci`.
+
 ## 0.239.0 — La cámara de Nueva va al viaje en sus fechas, «¿Quiénes estuvieron?» en las tres formas, el gasto personal y el que no estuvo (D276); «No tienes mesas abiertas» en el medio del espacio vacío (D277) (2026-10-10)
 
 Orden AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010 (0072cfb9…), con D276 (2849a1a1…), App Backend 2.179.0 (inventario en

@@ -734,10 +734,33 @@
 .vjm-resumen { margin: 0 0 var(--sp-2); text-align: center; font-family: var(--font-display); font-weight: 700; color: var(--text); }
 
 /* ══ D255-7 · el viaje abierto ══
-   «Cerrar viaje» y «Salir del viaje» van abajo, un poco por encima de la barra:
-   el pie toma el espacio que sobra (`margin-top: auto`) y el aire de abajo se
-   mide contra el círculo de la barra, que sobresale 26 px. */
+   Lo de abajo toma el espacio que sobra y el aire de abajo se mide contra el
+   círculo de la barra, que sobresale 26 px. D279 · ya no son «Cerrar viaje» y
+   «Salir del viaje» (pasaron a Configuración, con el mismo pie): es el aviso
+   «Toca el [cámara] para cargar un ticket» (`.vjv-aviso-cargar`). */
 .has-appbar .scroll.vjv-scroll-abierto {
+  padding-bottom: calc(56px + var(--appbar-pie) + 26px + var(--sp-3));
+}
+/* En columna, cada uno conserva su alto (con poco lugar, el scroll crece; D277). */
+.vjv-scroll-abierto > * {
+  flex-shrink: 0;
+}
+/* D279 · el aviso de Inicio (D277) en el viaje: toma el resto del alto y queda en
+   el medio entre «Configuración» y el círculo de Nueva. Arriba lo separa el gap
+   (12) y abajo el aire del scroll (12): con su relleno, 24 px de cada lado como
+   mínimo. Nunca `fixed` (D256). */
+.vjv-aviso-cargar {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-3) var(--sp-4);
+  text-align: center;
+}
+/* D279 · Configuración lleva ahora el pie de «Cerrar viaje» y «Salir del viaje»:
+   el mismo aire contra el círculo que tenía la pantalla del viaje. */
+.has-appbar .scroll.vjcfg-scroll {
   padding-bottom: calc(56px + var(--appbar-pie) + 26px + var(--sp-3));
 }
 /* El monto, centrado entre la burbuja del encabezado y «Miembros»: arriba el

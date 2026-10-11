@@ -29,6 +29,7 @@ import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { colorEnPaleta, GEOMETRIA_E173, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
 import { AnilloSvg, type FormaAnillo } from './AnilloSvg';
 import { nombreDelPeriodo } from '../utils/meses';
+import { useTandaVigente } from './useTandaVigente';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -85,7 +86,11 @@ export function EstadisticasScreen() {
   /** AF-31 · el acceso a «Evolución» (2f). No depende del período: son 6 meses fijos. */
   const [evolucion, setEvolucion] = useState<Sondeo<Evolucion>>({ estado: 'cargando' });
 
+  /** F-02 · las respuestas de un período anterior no pisan las del elegido (las cuatro de la tanda). */
+  const nuevaTanda = useTandaVigente();
+
   const cargar = useCallback(() => {
+    const vigente = nuevaTanda();
     setFallo(false);
     setStats(null);
     setRestaurantes({ estado: 'cargando' });
@@ -93,27 +98,27 @@ export function EstadisticasScreen() {
     setEvolucion({ estado: 'cargando' });
     api
       .getStats(clave)
-      .then(setStats)
-      .catch(() => setFallo(true));
+      .then((s) => { if (vigente()) setStats(s); })
+      .catch(() => { if (vigente()) setFallo(true); });
     api
       .getStatsRestaurants(clave)
-      .then((datos) => setRestaurantes({ estado: 'listo', datos }))
+      .then((datos) => { if (vigente()) setRestaurantes({ estado: 'listo', datos }); })
       .catch((err) => {
-        setRestaurantes(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+        if (vigente()) setRestaurantes(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
     api
       .getStatsDishes(clave)
-      .then((datos) => setPlatos({ estado: 'listo', datos }))
+      .then((datos) => { if (vigente()) setPlatos({ estado: 'listo', datos }); })
       .catch((err) => {
-        setPlatos(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+        if (vigente()) setPlatos(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
     api
       .getStatsEvolution()
-      .then((datos) => setEvolucion({ estado: 'listo', datos }))
+      .then((datos) => { if (vigente()) setEvolucion({ estado: 'listo', datos }); })
       .catch((err) => {
-        setEvolucion(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+        if (vigente()) setEvolucion(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
-  }, [clave]);
+  }, [clave, nuevaTanda]);
 
   useEffect(() => {
     if (!vista.showAccountActivity) return;

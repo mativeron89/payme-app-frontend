@@ -32,6 +32,12 @@ describe('el monto tipeado, en centavos enteros', () => {
     expect(montoTipeado(entrada)).toBeNull();
   });
 
+  it('🔴 F-03 · la coma decimal: «12,50» es $12.50, no $1,250; «1.250» es ambiguo y no se acepta', () => {
+    expect(montoTipeado('12,50')).toBe(1250);
+    expect(montoTipeado('1.250,00')).toBe(125000);
+    expect(montoTipeado('1.250')).toBeNull();
+  });
+
   it('el tope del dueño para un gasto a mano: $1,000,000 sí, un centavo más no', () => {
     expect(montoTipeado('1,000,000')).toBe(100_000_000);
     expect(montoTipeado('1000000.01')).toBeNull();

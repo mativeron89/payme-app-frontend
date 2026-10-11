@@ -2,7 +2,7 @@ import { useId } from 'react';
 import type { MiembroViaje, PagadorPedido } from '../../api/viajes';
 import { useIdioma } from '../../i18n/idioma';
 import { formatMXN } from '../../utils/format';
-import { stringToCents } from '../../utils/money';
+import { leerMonto } from '../../utils/montoEscrito';
 import { nombreCompleto, type T } from './viajesView';
 import './viaje.css';
 import './ticket.css';
@@ -76,16 +76,13 @@ export function montoParaEscribir(cents: number): string {
   return resto === 0 ? String(pesos) : `${pesos}.${String(resto).padStart(2, '0')}`;
 }
 
-/** Lo escrito para un pagador, en centavos enteros mayores que cero, o `null`. */
+/**
+ * Lo escrito para un pagador, en centavos enteros mayores que cero, o `null`. F-03 · con el mismo lector que Carga
+ * manual (`leerMonto`): «12,50» es $12.50, no $1,250.
+ */
 export function montoEscrito(texto: string): number | null {
-  const limpio = texto.trim().replace(/[$,\s]/g, '');
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(limpio)) return null;
-  try {
-    const c = stringToCents(limpio);
-    return Number.isSafeInteger(c) && c > 0 ? c : null;
-  } catch {
-    return null;
-  }
+  const m = leerMonto(texto);
+  return m.tipo === 'ok' ? m.cents : null;
 }
 
 /** «Ajustar montos»: cada uno empieza con su parte igual. */
@@ -105,6 +102,8 @@ export interface RepartoDeQuienPago {
   readonly suma: number | null;
   /** Se puede mandar: uno solo, o varios con partes iguales o con montos que suman el total. */
   readonly valido: boolean;
+  /** F-03 · algún monto escrito se puede leer de dos formas («1.250»): se pide escribirlo de nuevo. */
+  readonly ambiguo: boolean;
 }
 
 export function repartoDeQuienPago(elegido: QuienPagoElegido, opciones: readonly OpcionDeQuienPago[], total: number | null): RepartoDeQuienPago {
@@ -112,11 +111,15 @@ export function repartoDeQuienPago(elegido: QuienPagoElegido, opciones: readonly
   const montos = elegido.montos;
   if (pagadores.length < 2 || !montos) {
     const partes = total === null || pagadores.length < 2 ? pagadores.map(() => null) : partesIguales(total, pagadores.length);
-    return { pagadores, partes, ajustado: false, suma: null, valido: true };
+    return { pagadores, partes, ajustado: false, suma: null, valido: true, ambiguo: false };
   }
-  const partes = pagadores.map((o) => montoEscrito(montos.get(o.id) ?? ''));
+  const leidos = pagadores.map((o) => leerMonto(montos.get(o.id) ?? ''));
+  const partes = leidos.map((m) => (m.tipo === 'ok' ? m.cents : null));
   const suma = partes.every((p) => p !== null) ? partes.reduce<number>((s, p) => s + p!, 0) : null;
-  return { pagadores, partes, ajustado: true, suma, valido: total !== null && suma === total };
+  return {
+    pagadores, partes, ajustado: true, suma, valido: total !== null && suma === total,
+    ambiguo: leidos.some((m) => m.tipo === 'ambiguo'),
+  };
 }
 
 /**
@@ -124,7 +127,10 @@ export function repartoDeQuienPago(elegido: QuienPagoElegido, opciones: readonly
  * si todavía no hay total.
  */
 export function avisoDeQuienPago(reparto: RepartoDeQuienPago, total: number | null, t: T): string | null {
-  if (reparto.valido || !reparto.ajustado || total === null) return null;
+  if (reparto.valido || !reparto.ajustado) return null;
+  // F-03 · un monto como «1.250» no se adivina: se dice antes que la suma.
+  if (reparto.ambiguo) return t('No sabemos si es con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.');
+  if (total === null) return null;
   return reparto.suma === null
     ? t('Escribe cuánto pagó cada uno. Tienen que sumar {0}.', formatMXN(total))
     : t('Los montos tienen que sumar {0}. Ahora suman {1}.', formatMXN(total), formatMXN(reparto.suma));

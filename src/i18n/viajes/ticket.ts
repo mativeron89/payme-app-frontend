@@ -75,5 +75,7 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   'Es tu gasto personal: no hay nada que elegir.': "It's your personal expense: there's nothing to choose.",
   '{0} ya eligió: no se puede desmarcar.': '{0} already chose: they can\'t be unchecked.',
   'Alguien ya eligió: no se puede desmarcar.': "Someone already chose: they can't be unchecked.",
+  // V-02 · el ticket de un viaje que ya no está abierto (desde Estadísticas): sólo para ver.
+  'Este viaje ya se cerró: el ticket es sólo para ver.': 'This trip is closed: the ticket is view-only.',
   'Ya elegiste: no te puedes desmarcar.': "You already chose: you can't be unchecked.",
 };

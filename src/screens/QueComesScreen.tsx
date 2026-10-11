@@ -17,6 +17,7 @@ import { fullName } from '../utils/identity';
 import { platosDistintos, platosTexto, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
 import { AnilloSvg } from './AnilloSvg';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
+import { useTandaVigente } from './useTandaVigente';
 
 /**
  * **Qué comes** — pantalla 2c de «Mis estadísticas», sólo la vista por PLATOS
@@ -56,6 +57,21 @@ type EstadoIngredientes =
 
 type Pestana = 'platos' | 'ingrediente' | 'momento';
 
+/**
+ * F-13 (auditoría Codex) · las pestañas usan el foco móvil (sólo la elegida está en el orden de Tab), y ese patrón
+ * promete el resto: las flechas pasan a la de al lado (con vuelta), Inicio a la primera y Fin a la última. Sin esto,
+ * «Ingrediente» y «Momento» no se alcanzaban con el teclado. Devuelve `null` con cualquier otra tecla.
+ */
+export function pestanaPorTecla(pestanas: readonly Pestana[], actual: Pestana, tecla: string): Pestana | null {
+  const i = pestanas.indexOf(actual);
+  if (i < 0 || pestanas.length === 0) return null;
+  if (tecla === 'ArrowRight') return pestanas[(i + 1) % pestanas.length]!;
+  if (tecla === 'ArrowLeft') return pestanas[(i - 1 + pestanas.length) % pestanas.length]!;
+  if (tecla === 'Home') return pestanas[0]!;
+  if (tecla === 'End') return pestanas[pestanas.length - 1]!;
+  return null;
+}
+
 export function QueComesScreen() {
   const { t } = useIdioma();
   const { session } = useAuth();
@@ -65,27 +81,31 @@ export function QueComesScreen() {
   const [ingredientes, setIngredientes] = useState<EstadoIngredientes>({ tipo: 'cargando' });
   const [pestana, setPestana] = useState<Pestana>('platos');
 
+  /** F-02 · las respuestas de un período anterior no pisan las del elegido. */
+  const nuevaTanda = useTandaVigente();
+
   const cargar = useCallback(() => {
+    const vigente = nuevaTanda();
     setEstado({ tipo: 'cargando' });
     setMomentos({ tipo: 'cargando' });
     setIngredientes({ tipo: 'cargando' });
     api
       .getStatsDishes(clave)
-      .then((datos) => setEstado({ tipo: 'lista', datos }))
+      .then((datos) => { if (vigente()) setEstado({ tipo: 'lista', datos }); })
       // 404, 413 `stats_range_too_large`, 500 o un rechazo del decodificador:
       // el mismo cartel. El dueño nunca manda datos parciales.
-      .catch(() => setEstado({ tipo: 'error' }));
+      .catch(() => { if (vigente()) setEstado({ tipo: 'error' }); });
     api
       .getStatsDayparts(clave)
-      .then((datos) => setMomentos({ tipo: 'lista', datos }))
-      .catch((err) => setMomentos(extractApiError(err).status === 404 ? { tipo: 'no_disponible' } : { tipo: 'error' }));
+      .then((datos) => { if (vigente()) setMomentos({ tipo: 'lista', datos }); })
+      .catch((err) => { if (vigente()) setMomentos(extractApiError(err).status === 404 ? { tipo: 'no_disponible' } : { tipo: 'error' }); });
     api
       .getStatsIngredients(clave)
-      .then((datos) => setIngredientes({ tipo: 'lista', datos }))
+      .then((datos) => { if (vigente()) setIngredientes({ tipo: 'lista', datos }); })
       // 404 = backend anterior a v2.115.0: la pestaña no se dibuja. 413, 500 o un
       // rechazo del decodificador: error con «Reintentar».
-      .catch((err) => setIngredientes(extractApiError(err).status === 404 ? { tipo: 'no_disponible' } : { tipo: 'error' }));
-  }, [clave]);
+      .catch((err) => { if (vigente()) setIngredientes(extractApiError(err).status === 404 ? { tipo: 'no_disponible' } : { tipo: 'error' }); });
+  }, [clave, nuevaTanda]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -112,6 +132,19 @@ export function QueComesScreen() {
   const platosDelMismoPeriodo = datos !== null && datos.period?.key === periodoDeLaVista?.key ? datos : null;
   const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
   const pestanaActiva: Pestana = verMomentos ? 'momento' : verIngredientes ? 'ingrediente' : 'platos';
+  /** Las pestañas que se ven, en su orden (las mismas condiciones que las dibujan). */
+  const visibles: readonly Pestana[] = [
+    'platos',
+    ...(conIngrediente ? ['ingrediente' as const] : []),
+    ...(conMomento ? ['momento' as const] : []),
+  ];
+  function alTeclado(e: React.KeyboardEvent<HTMLDivElement>) {
+    const otra = pestanaPorTecla(visibles, pestanaActiva, e.key);
+    if (!otra) return;
+    e.preventDefault();
+    setPestana(otra);
+    document.getElementById(`que-comes-tab-${otra}`)?.focus();
+  }
 
   return (
     <div className="screen has-appbar">
@@ -154,7 +187,7 @@ export function QueComesScreen() {
             (dos 404) no hay pestañas. */}
         <div className={conPestanas ? 'stat-tabs-shell' : undefined}>
           {conPestanas && (
-            <div className="seg stat-pestanas" role="tablist" aria-label={t('Qué comes')}>
+            <div className="seg stat-pestanas" role="tablist" aria-label={t('Qué comes')} onKeyDown={alTeclado}>
             <button
               type="button"
               id="que-comes-tab-platos"

@@ -34,6 +34,7 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
     viaje_version_4: { parametro: string; ticket_suma: string[] };
     viaje_version_5: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
     viaje_version_6: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
+    viaje_version_7: { since: string; parametro: string; regla: string; cerrado: string; uso: string };
   };
   colores: Record<string, string>;
 };
@@ -555,5 +556,31 @@ describe('🔴 D276 · `viaje_version=6`: quiénes estuvieron y el gasto persona
     expect(errorDeViaje(new MockApiError(409, 'viaje_ticket_personal'))).toEqual({ tipo: 'personal' });
     // Con otro status, no es lo mismo.
     expect(errorDeViaje(new HttpError(422, { error: 'viaje_ticket_not_present' }))).toEqual({ tipo: 'reintentar' });
+  });
+});
+
+describe('🔴 V-02 · `viaje_version=7` (App Backend 2.179.2): la 6 sin claves nuevas', () => {
+  const V7 = CONTRATO.negociaciones.viaje_version_7;
+
+  it('el parámetro exacto y lo que cambia: el detalle de un ticket con el viaje en Cerrados, en sólo lectura', () => {
+    expect(V7.parametro).toBe('viaje_version=7');
+    expect(V7.since).toBe('2.179.2');
+    expect(V7.regla).toContain('sin claves nuevas');
+    expect(V7.cerrado).toContain('`puedo_elegir` y `puedo_marcar_presentes` en false');
+    expect(V7.uso).toContain('stats_version=2');
+  });
+
+  it('el detalle en sólo lectura se decodifica con la forma de la 6, tal cual', () => {
+    const ticket = {
+      id: 't', lugar: 'Mariscos', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
+      cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 1000, pagado_por: 'm2', pagaste_tu: false,
+      items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 0, my_bps: 10000, my_amount_cents: 1000 }],
+      personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
+      te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: false,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false,
+    };
+    expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket })).toMatchObject({ puedo_elegir: false, te_toca_cents: 1000 });
+    // Una clave de más sigue siendo otra forma: «sin claves nuevas» de verdad.
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: { ...ticket, solo_lectura: true } })).toThrow();
   });
 });

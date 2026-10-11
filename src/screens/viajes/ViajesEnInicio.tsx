@@ -130,6 +130,19 @@ export function ViajesAbiertosVista({ viajes, pendientes = null, fallo, onReinte
                 <span className={`viaje-burbuja-monto viaje-burbuja-monto--${monto.tono}`}>{monto.texto}</span>
               </span>
             </button>
+            {/* D280 · «+ Gasto» (Claude Design, opción 3b): 8 px debajo de la burbuja, a la derecha y afuera de ella;
+                abre la Carga manual de ese viaje. Sólo con el viaje abierto: esperando pagos ya no se carga nada. */}
+            {v.estado === 'abierto' && (
+              <button
+                type="button"
+                className="viaje-gasto"
+                aria-label={t('Cargar gasto en {0}', v.nombre)}
+                onClick={() => navigate('viaje-gasto', v.id)}
+              >
+                <Icon name="plus" size={18} />
+                <span>{t('Gasto')}</span>
+              </button>
+            )}
             {(pendientes?.[v.id] ?? []).map((p) => {
               const lugar = p.lugar ?? etiquetaTipoLugar(p.tipo_lugar, t);
               return (

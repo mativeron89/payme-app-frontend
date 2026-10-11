@@ -213,6 +213,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       // D265 · su burbuja de Inicio pasa a «Esperando pagos».
       olvidarLoDeViajes();
       setHoja(null);
+      // D279 · se cierra desde Configuración: se vuelve a la pantalla del viaje, que ya espera pagos.
+      setConfiguracion(false);
       mostrar(v);
     } catch (err) {
       const e = errorDeViaje(err);
@@ -281,47 +283,9 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     if (!enviando) setHoja(null);
   };
 
-  if (configuracion && viaje?.estado === 'abierto') {
-    return (
-      <div className="screen has-appbar">
-        <ConfiguracionDelViaje
-          viaje={viaje}
-          userName={fullName(session) ?? undefined}
-          foto={viaje.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
-          onFotoCambiada={() => fotoDelViaje.recargar(viaje.id)}
-          onVolver={() => setConfiguracion(false)}
-          onActualizado={mostrar}
-          onYaSeCerro={() => {
-            setConfiguracion(false);
-            yaSeCerro();
-          }}
-        />
-        <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="screen has-appbar">
-      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viajes', 'abiertos')} />
-      <ViajeVista
-        carga={carga}
-        marcando={marcando}
-        onReintentar={cargar}
-        onVerViajes={() => navigate('viajes', 'abiertos')}
-        onVerBalance={() => navigate('viaje-balance', viajeId)}
-        onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
-        onCargaManual={() => navigate('viaje-gasto', viajeId)}
-        onConfiguracion={() => setConfiguracion(true)}
-        fotoDe={fotoDe}
-        fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
-        onCerrar={pedirCierre}
-        onSalir={() => setHoja({ tipo: 'salir' })}
-        onMarcar={(id, accion) => void marcar(id, accion)}
-      />
-      {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}
-      <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
-
+  /** Las hojas de cerrar y salir: las mismas en la pantalla del viaje y en Configuración (D279). */
+  const hojas = (
+    <>
       {viaje && hoja?.tipo === 'cerrar' && (
         <HojaModal key="cerrar" etiqueta={t('¿Cerrar {0}?', nombre)} inicial={inicial} onCerrar={cerrarHoja}>
           <HojaCerrarVista
@@ -352,6 +316,53 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
           <HojaNoPuedeSalirVista viaje={viaje} razon={hoja.razon} inicial={inicial} onEntendido={cerrarHoja} />
         </HojaModal>
       )}
+    </>
+  );
+
+  if (configuracion && viaje?.estado === 'abierto') {
+    return (
+      <div className="screen has-appbar">
+        <ConfiguracionDelViaje
+          viaje={viaje}
+          userName={fullName(session) ?? undefined}
+          foto={viaje.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
+          onFotoCambiada={() => fotoDelViaje.recargar(viaje.id)}
+          onVolver={() => setConfiguracion(false)}
+          onActualizado={mostrar}
+          onYaSeCerro={() => {
+            setConfiguracion(false);
+            yaSeCerro();
+          }}
+          onCerrarViaje={pedirCierre}
+          onSalirDelViaje={() => setHoja({ tipo: 'salir' })}
+        />
+        <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
+        {hojas}
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen has-appbar">
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viajes', 'abiertos')} />
+      <ViajeVista
+        carga={carga}
+        marcando={marcando}
+        onReintentar={cargar}
+        onVerViajes={() => navigate('viajes', 'abiertos')}
+        onVerBalance={() => navigate('viaje-balance', viajeId)}
+        onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
+        onCargaManual={() => navigate('viaje-gasto', viajeId)}
+        onConfiguracion={() => setConfiguracion(true)}
+        fotoDe={fotoDe}
+        fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
+        onSalir={() => setHoja({ tipo: 'salir' })}
+        onMarcar={(id, accion) => void marcar(id, accion)}
+      />
+      {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}
+      <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
+
+      {hojas}
     </div>
   );
 }
@@ -488,7 +499,6 @@ export interface ViajeVistaProps {
   /** D255 · la foto del viaje, si la hay, para su burbuja. */
   readonly fotoDelViaje?: string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
-  readonly onCerrar: () => void;
   readonly onSalir: () => void;
   readonly onMarcar: (transferenciaId: string, accion: AccionTransferencia) => void;
 }
@@ -571,10 +581,11 @@ function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string
  * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
  * Consumos.
  * D255-7 · el monto centrado entre la burbuja y «Miembros»; debajo de «Ver
- * balance del viaje», «Configuración»; «Cerrar viaje» (burbuja rojo clarito) y
- * «Salir del viaje» van abajo, un poco por encima de la barra.
+ * balance del viaje», «Configuración».
+ * D279 · «Cerrar viaje» y «Salir del viaje» pasaron a Configuración; en su lugar,
+ * «Toca el [cámara] para cargar un ticket», en el medio del espacio libre (D277).
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, fotoDe, onCerrar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, fotoDe }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
@@ -598,13 +609,16 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, 
         </span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
-      <div className="vjv-pie-abierto">
-        <button type="button" className="vjv-cerrar" onClick={onCerrar}>
-          {t('Cerrar viaje')}
-        </button>
-        <button type="button" className="vjv-salir" onClick={onSalir}>
-          {t('Salir del viaje')}
-        </button>
+      {/* D279 · Mati eligió «Toca el [cámara] para cargar un ticket»: la línea del aviso de Inicio, con la cámara de
+          Nueva, en el medio del espacio libre entre «Configuración» y el círculo (D277), sin `fixed`. */}
+      <div className="vjv-aviso-cargar">
+        <div className="aviso-sin-mesas-cuerpo">
+          <span>{t('Toca el')}</span>
+          <span className="aviso-sin-mesas-camara" role="img" aria-label={t('ícono de cámara')}>
+            <Icon name="camera" size={20} />
+          </span>
+          <span>{t('para cargar un ticket')}</span>
+        </div>
       </div>
     </>
   );

@@ -39,6 +39,7 @@ const render = (extra: Partial<Parameters<typeof ConfiguracionVista>[0]> = {}) =
     viaje={VIAJE} foto={null} texto="" busqueda={null} invitados={[LEO]} lleno={false} ocupado={null}
     editor={null} guardando={false}
     onVolver={nada} onTexto={nada} onAgregar={nada} onEditor={nada} onGuardarNombre={nada} onColor={nada} onFoto={nada}
+    onCerrarViaje={nada} onSalirDelViaje={nada}
     {...extra}
   />,
 );
@@ -198,5 +199,23 @@ describe('D255 · el cableado de nombre y fechas, color y foto', () => {
 
   it('subir o quitar la foto: después se vuelve a pedir la foto y el viaje (`has_photo`)', () => {
     expect(config).toMatch(/if \(archivo\) await api\.subirFotoDeViaje\(viaje\.id, archivo\);\s*else await api\.quitarFotoDeViaje\(viaje\.id, session\);\s*onFotoCambiada\(\);\s*onActualizado\(await api\.getViaje\(viaje\.id\)\);/);
+  });
+});
+
+describe('🔴 D279 · «Cerrar viaje» y «Salir del viaje», al pie de Configuración', () => {
+  it('lo último de la pantalla: «Cerrar viaje» (rojo clarito) y «Salir del viaje», con el aire del círculo', () => {
+    const html = render();
+    expect(html).toMatch(/<div class="vjv-pie-abierto"><button type="button" class="vjv-cerrar">Cerrar viaje<\/button><button type="button" class="vjv-salir">Salir del viaje<\/button><\/div><\/div>$/);
+    expect(html).toContain('class="scroll vj-scroll vjcfg-scroll"');
+  });
+
+  it('cada botón abre su hoja de siempre: la pantalla del viaje pasa las mismas', () => {
+    const fuente = readFileSync(new URL('./ViajeScreen.tsx', import.meta.url), 'utf8');
+    expect(fuente).toContain('onCerrarViaje={pedirCierre}');
+    expect(fuente).toContain("onSalirDelViaje={() => setHoja({ tipo: 'salir' })}");
+    // Las hojas se dibujan también con Configuración abierta.
+    expect(fuente.match(/\{hojas\}/g)).toHaveLength(2);
+    // Al cerrar, se vuelve a la pantalla del viaje (que ya espera pagos).
+    expect(fuente).toMatch(/setHoja\(null\);\s*\/\/ D279[^\n]*\n\s*setConfiguracion\(false\);\s*mostrar\(v\);/);
   });
 });

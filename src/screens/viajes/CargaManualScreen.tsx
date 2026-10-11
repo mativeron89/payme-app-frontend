@@ -6,7 +6,7 @@ import { AppHeaderBack } from '../../components/AppHeader';
 import { useToast } from '../../components/ui';
 import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
-import { stringToCents } from '../../utils/money';
+import { leerMonto } from '../../utils/montoEscrito';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import {
@@ -101,16 +101,13 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
   );
 }
 
-/** El monto tipeado, en centavos enteros, o `null` si no es un monto válido mayor que cero. */
+/**
+ * El monto tipeado, en centavos enteros, o `null` si no es un monto válido mayor que cero (hasta el tope del dueño).
+ * F-03 · lo lee `leerMonto`, el mismo lector que «¿Quién pagó?»: «12,50» es $12.50 y «1.250» se rechaza por ambiguo.
+ */
 export function montoTipeado(texto: string): number | null {
-  const limpio = texto.trim().replace(/[$,\s]/g, '');
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(limpio)) return null;
-  try {
-    const c = stringToCents(limpio);
-    return Number.isSafeInteger(c) && c > 0 && c <= MAX_GASTO_MANUAL_CENTS ? c : null;
-  } catch {
-    return null;
-  }
+  const m = leerMonto(texto);
+  return m.tipo === 'ok' && m.cents <= MAX_GASTO_MANUAL_CENTS ? m.cents : null;
 }
 
 export function CargaManualVista({ viaje, enviando = false, onListo }: {
@@ -126,6 +123,8 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
   const candidatos = useMemo(() => candidatosDelViaje(viaje.miembros, t), [viaje.miembros, t]);
   const opciones = useMemo(() => opcionesDeQuienPago(viaje.miembros, t), [viaje.miembros, t]);
   const cents = montoTipeado(monto);
+  // F-03 · «1.250» puede ser mil doscientos cincuenta o uno con veinticinco: no se adivina, se pide de nuevo.
+  const montoAmbiguo = leerMonto(monto).tipo === 'ambiguo';
   const reparto = repartoDeQuienPago(quienPago, opciones, cents);
   // D263 · con montos ajustados que no suman el total, «Listo» espera (el aviso lo dice arriba).
   const listo = descripcion.trim().length > 0 && cents !== null && reparto.valido;
@@ -158,6 +157,11 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
               onChange={(e) => setMonto(e.target.value.replace(/[^0-9.,$]/g, ''))}
             />
           </label>
+          {montoAmbiguo && (
+            <p className="vjq-aviso" role="status">
+              {t('No sabemos si es con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.')}
+            </p>
+          )}
           <SelectorDeQuienPago opciones={opciones} elegido={quienPago} total={cents} onCambio={setQuienPago} deshabilitado={enviando} />
         </section>
         <section className="vj-card">

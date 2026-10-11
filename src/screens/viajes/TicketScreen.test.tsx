@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ItemDelTicket, MiembroViaje, PersonaDelTicket, TicketDelViaje } from '../../api/viajes';
@@ -321,5 +322,41 @@ describe('🔴 D276 · el detalle de un ticket: quiénes estuvieron en las tres 
     expect(textoYaEligio('m-ana', MIEMBROS, es)).toBe('Ya elegiste: no te puedes desmarcar.');
     expect(textoYaEligio(null, MIEMBROS, es)).toBe('Alguien ya eligió: no se puede desmarcar.');
     expect(textoYaEligio('m-otro', MIEMBROS, es)).toBe('Alguien ya eligió: no se puede desmarcar.');
+  });
+});
+
+describe('🔴 V-02 · el ticket de un viaje cerrado (desde Estadísticas), sólo para ver', () => {
+  const es = (x: string, ...a: unknown[]) => traducir(x, 'es', ...a);
+  const CERRADO = 'Este viaje ya se cerró: el ticket es sólo para ver.';
+  const FROZEN: TicketDelViaje = { ...MARISCOS, puedo_elegir: false, puedo_marcar_presentes: false, sin_repartir_cents: 0 };
+
+  it('🔴 la línea arriba, y nada para elegir, marcar ni borrar', () => {
+    const html = render(FROZEN, { cerrado: true });
+    expect(html).toContain(CERRADO);
+    expect(html).not.toContain('>Listo<');
+    expect(html).not.toContain('¿Quiénes estuvieron?');
+    expect(html).not.toContain('Eliminar');
+    // «Falta elegir» ya no es cierto: al cerrar se repartió.
+    expect(html).not.toContain('Quién ya eligió');
+    expect(html).not.toContain('falta elegir');
+    // Lo mío se sigue viendo, con el total y lo que me toca.
+    expect(html).toContain('Total del ticket');
+    expect(html).toContain('Te toca');
+  });
+
+  it('manda sobre las otras líneas (el personal, el que no estuvo), sin el color del personal', () => {
+    expect(avisoDelTicket({ ...FROZEN, personal: true }, MIEMBROS, es, true)).toBe(CERRADO);
+    expect(avisoDelTicket({ ...FROZEN, personas: [persona('m-ana', false, false)] }, MIEMBROS, es, true)).toBe(CERRADO);
+    expect(render({ ...FROZEN, personal: true }, { cerrado: true })).toContain('<section class="vj-card vjt-aviso-ticket" role="note">');
+  });
+
+  it('control: con el viaje abierto, ninguna línea de cerrado', () => {
+    expect(render(MARISCOS)).not.toContain(CERRADO);
+    expect(avisoDelTicket(MARISCOS, MIEMBROS, es)).toBeNull();
+  });
+
+  it('la pantalla le pasa si el viaje ya no está abierto', () => {
+    const fuente = readFileSync(new URL('./TicketScreen.tsx', import.meta.url), 'utf8');
+    expect(fuente).toContain("cerrado={viaje.estado !== 'abierto'}");
   });
 });

@@ -114,8 +114,11 @@ describe('🔴 D275 · la burbuja del viaje: sólo la foto, el nombre y el monto
     expect(html).toContain('<span class="vj-insignia vj-insignia--burbuja vj-insignia--color" style="background:#15803D" aria-hidden="true">M</span>');
     expect(html).toContain('<span class="vj-insignia vj-insignia--burbuja" aria-hidden="true">O</span>');
     expect(html).not.toContain('blob:no');
-    // El color del viaje no tiñe la burbuja: sólo el `style` de la insignia.
-    expect(html.match(/style="/g)).toHaveLength(2);
+    // El color del viaje no tiñe la burbuja: sólo el `style` de la insignia. Los demás son los de los íconos («+ Gasto»,
+    // D280), que nunca llevan fondo.
+    const estilos = html.match(/style="[^"]*"/g) ?? [];
+    expect(estilos.filter((x) => x.includes('background'))).toEqual(['style="background:#6D28D9"', 'style="background:#15803D"']);
+    expect(estilos.filter((x) => !x.includes('background'))).toEqual(Array(3).fill('style="flex-shrink:0;display:block"'));
     const css = readFileSync(new URL('./viajes.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.vj-insignia--burbuja \{\s*width: 64px;\s*height: 64px;\s*border-radius: 18px;\s*font-size: 28px;/);
   });
@@ -365,5 +368,50 @@ describe('🔴 D265 · las pestañas de Inicio en negrita', () => {
     expect(fuente('../HomeScreen.tsx')).toMatch(/onSelect=\{\(id\) => setTab\(id as TabId\)\}\s*\/\/[^\n]*\n\s*negrita\s*\/>/);
     expect(fuente('../SocialScreen.tsx')).not.toContain('negrita');
     expect(fuente('./BalanceScreen.tsx')).not.toMatch(/<BubbleTabs[^>]*negrita/);
+  });
+});
+
+describe('🔴 D280 · «+ Gasto» debajo de la burbuja del viaje', () => {
+  const gastos = (html: string) => [...html.matchAll(/<button type="button" class="viaje-gasto" aria-label="([^"]*)">([\s\S]*?)<\/button>/g)]
+    .map((m) => ({ aria: m[1], texto: texto(m[2]!) }));
+
+  it('una píldora por viaje abierto, con «Gasto» a la vista y «Cargar gasto en {viaje}» para el lector de pantalla', () => {
+    const html = vista([enLista({}), enLista({ id: 'v-2', nombre: 'Holbox', mi_balance_cents: 0 })]);
+    expect(gastos(html)).toEqual([
+      { aria: 'Cargar gasto en Cancún 2026', texto: 'Gasto' },
+      { aria: 'Cargar gasto en Holbox', texto: 'Gasto' },
+    ]);
+    // El «+» es el ícono de la app, a 18 px.
+    expect(html).toMatch(/class="viaje-gasto"[^>]*><svg width="18" height="18"[^>]*><path d="M12 5v14"/);
+  });
+
+  it('🔴 un viaje esperando pagos no la lleva: ya no se carga nada', () => {
+    const html = vista([enLista({ estado: 'esperando_pagos', transferencias_pendientes: 2 }), enLista({ id: 'v-2', nombre: 'Holbox' })]);
+    expect(gastos(html)).toEqual([{ aria: 'Cargar gasto en Holbox', texto: 'Gasto' }]);
+  });
+
+  it('🔴 el orden en el grupo: la burbuja, «+ Gasto» y después los restaurantes pendientes; afuera de la burbuja', () => {
+    const p: PendientesDeViajes = { 'v-1': [{ ticket_id: 'tk-3', lugar: 'Tacos El Güero', tipo_lugar: 'restaurante', faltan: 1 }] };
+    const grupo = vista([enLista({})], { pendientes: p }).split('<div class="viaje-grupo">')[1]!;
+    const clases = [...grupo.matchAll(/<button type="button" class="([^"]+)"/g)].map((m) => m[1]);
+    expect(clases).toEqual(['viaje-burbuja', 'viaje-gasto', 'viaje-pendiente']);
+    // No está adentro de la burbuja: ésta sigue con sus tres cosas.
+    expect(burbujas(vista([enLista({})]))[0]!.texto).not.toContain('Gasto');
+  });
+
+  it('abre la Carga manual de ESE viaje', () => {
+    const fuente = readFileSync(new URL('./ViajesEnInicio.tsx', import.meta.url), 'utf8');
+    expect(fuente).toContain("onClick={() => navigate('viaje-gasto', v.id)}");
+  });
+
+  it('las medidas de la especificación: 44 de alto, 0 18 0 14, gap 8, borde, píldora, blanca, a la derecha', () => {
+    const css = readFileSync(new URL('./inicio.css', import.meta.url), 'utf8');
+    const regla = (sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf('}', css.indexOf(`${sel} {`)));
+    for (const m of ['align-self: flex-end;', 'min-height: 44px;', 'padding: 0 18px 0 14px;', 'gap: 8px;', 'border: 1px solid var(--border);',
+      'border-radius: var(--r-full);', 'background: var(--surface);', 'box-shadow: var(--sh-1);', 'font-family: var(--font-body);',
+      'font-size: 15px;', 'font-weight: 700;', 'color: var(--text);']) {
+      expect(regla('.viaje-gasto'), m).toContain(m);
+    }
+    expect(regla('.viaje-gasto svg path')).toContain('stroke-width: 2.2;');
   });
 });

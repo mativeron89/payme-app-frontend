@@ -39,6 +39,12 @@ function circuloDelViaje(page: Page) {
   return page.getByRole('button', { name: 'Escanear ticket para Cancún 2026', exact: true });
 }
 
+/** D279 · «Cerrar viaje» y «Salir del viaje» están en Configuración del viaje abierto. */
+async function aConfiguracion(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Configuración' }).click();
+  await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toBeVisible();
+}
+
 /** Navegación de la app (sin recargar: lo escaneado vive en memoria). */
 async function ir(page: Page, ruta: string): Promise<void> {
   await page.evaluate((u) => {
@@ -377,6 +383,7 @@ test('D245 · Balance: «Consumos» (el más nuevo arriba, abre el ticket) y «M
 test('1m/1n · cerrar con alguien sin elegir y el ida y vuelta de «Ya pagué»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
+  await aConfiguracion(page);
   await page.getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
   await expect(page.getByText(/Diego Torres todavía no eligió en Mariscos El Faro del 8 oct\. Si cierras ahora, los \$565 que faltan se le asignan a Diego\./)).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
@@ -402,6 +409,7 @@ test('1o/1p · «No me llegó» y «Recibí»: con todo pagado pasa a Cerrados',
 test('1q · salir: con consumos no; sin consumos sí', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
+  await aConfiguracion(page);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByText('Todavía no puedes salir de Cancún 2026', { exact: true })).toBeVisible();
@@ -427,6 +435,7 @@ test('1q · sin consumos se sale: la invitación aceptada y salir del viaje', as
   await page.getByRole('button', { name: 'Aceptar', exact: true }).click();
   await expect(page.getByText(/· Aceptaste$/)).toBeVisible();
   await ir(page, `/viaje/${MAZATLAN}`);
+  await aConfiguracion(page);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está: ni su burbuja (D265) ni en la pestaña.

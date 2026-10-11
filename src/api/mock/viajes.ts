@@ -53,8 +53,9 @@ const esManual = (t: TicketMock) => t.recibo_jti.startsWith(PREFIJO_GASTO_MANUAL
 interface OpcionesDeVersion {
   /** 2: D245 (2.172.0); 3: la 2 más `color` y `has_photo` (D255, 2.174.0); 4: la 3 más `puede_eliminar` (D256, 2.175.0);
    *  5: la 4 más `pagadores`, también en el detalle de un ticket (D263, 2.177.0);
-   *  6: la 5 más `presentes` y `personal` (D276, 2.179.0). */
-  readonly version?: 1 | 2 | 3 | 4 | 5 | 6;
+   *  6: la 5 más `presentes` y `personal` (D276, 2.179.0);
+   *  7: la 6 sin claves nuevas; el detalle de un ticket con el viaje en Cerrados, en sólo lectura (V-02, 2.179.2). */
+  readonly version?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
 }
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
@@ -369,7 +370,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 = 1) {
+function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -434,7 +435,7 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 = 1)
   };
 }
 
-function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 = 1) {
+function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1) {
   const b = balance(v);
   const r = b.porTicket.get(t.id)!;
   const ids = idPublico(v);
@@ -566,7 +567,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -1126,7 +1127,9 @@ export function mockVerTicket(id: string, tid: string, { version = 1 }: Opciones
   return ruta(() => {
     const v = miViaje(id);
     const t = ticketDe(v, tid);
-    if (estadoEfectivo(v) === 'cerrado') throw conflicto('viaje_closed');
+    // V-02 (2.179.2) · desde la 7, con el viaje en Cerrados, el mismo ticket en sólo lectura (la vista congelada:
+    // sin elegir ni marcar, sin repartir 0); hasta la 6, el 409 de siempre.
+    if (estadoEfectivo(v) === 'cerrado' && version < 7) throw conflicto('viaje_closed');
     return { contract: CONTRATO, ticket: vistaTicket(v, t, yo(), version) };
   });
 }

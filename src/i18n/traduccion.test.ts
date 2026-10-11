@@ -467,3 +467,30 @@ describe('🔴 el cableado · sin esto la app se ve entera en español y nadie s
     expect(src('../screens/HomeScreen.tsx')).toContain('const TABS: BubbleTab[]');
   });
 });
+
+/**
+ * 🔴 F-14 (auditoría Codex) · el comprobante en inglés mostraba una expresión de código: la traducción de «{0}: {1}»
+ * se había escrito con `{mesa.division_mode === 'igual' ? … }` en lugar de `{0}`. La guarda no mira esa entrada: mira
+ * TODO el diccionario que se exporta (con las pantallas de Viajes), porque el próximo error de copiar y pegar va a
+ * estar en otra.
+ */
+describe('🔴 F-14 · cada traducción interpola lo mismo que su clave', () => {
+  const marcadores = (s: string) => (s.match(/\{\d+\}/g) ?? []).sort();
+  const otrasLlaves = (s: string) => (s.match(/\{[^}]*\}/g) ?? []).filter((x) => !/^\{\d+\}$/.test(x));
+
+  it('los mismos {0}, {1}… que la clave, y ninguna otra llave', () => {
+    const malas = Object.entries(EN).filter(([clave, en]) =>
+      marcadores(clave).join() !== marcadores(en).join() || otrasLlaves(en).length > 0 || otrasLlaves(clave).length > 0);
+    expect(malas).toEqual([]);
+    // Control: el diccionario es el completo (con las pantallas de Viajes), no uno vacío.
+    expect(Object.keys(EN).length).toBeGreaterThan(1000);
+    expect(EN['Cancún 2026']).toBeUndefined();
+    expect(EN['¿Quiénes estuvieron?']).toBe('Who was there?');
+  });
+
+  it('el comprobante: «Mi parte: $12.50» traducido es «My share: $12.50»', () => {
+    expect(traducir('{0}: {1}', 'en', traducir('Mi parte', 'en'), '$12.50')).toBe('My share: $12.50');
+    expect(traducir('{0}: {1}', 'en', traducir('Mis consumos', 'en'), '$12.50')).toBe(`${traducir('Mis consumos', 'en')}: $12.50`);
+    expect(traducir('{0}: {1}', 'es', 'Mi parte', '$12.50')).toBe('Mi parte: $12.50');
+  });
+});

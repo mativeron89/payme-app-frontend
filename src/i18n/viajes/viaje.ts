@@ -84,6 +84,14 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Se divide entre los marcados. Desmarca a quien no va.': "It's split among those checked. Uncheck anyone who isn't in.",
   'Total {0}': 'Total {0}',
   'Cargaste el gasto.': 'You added the expense.',
+  // D280 · «+ Gasto» debajo de la burbuja del viaje en Inicio.
+  'Gasto': 'Expense',
+  'Cargar gasto en {0}': 'Add an expense to {0}',
+  // D279 · donde estaban «Cerrar viaje» y «Salir del viaje»: «Toca el [cámara] para cargar un ticket».
+  'para cargar un ticket': 'to add a ticket',
+  // F-03 · un monto como «1.250» se puede leer de dos formas: no se adivina.
+  'No sabemos si es con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.':
+    "We can't tell if that has decimals or thousands. Write it without a thousands separator: 1250 or 12.50.",
   'Escanear ticket para {0}': 'Scan a ticket for {0}',
   // D276-1 · dos viajes cubren hoy: la cámara de Nueva pregunta a cuál.
   '¿Para qué viaje?': 'Which trip is it for?',

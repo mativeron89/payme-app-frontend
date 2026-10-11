@@ -193,6 +193,7 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
         <TicketVista
           ticket={ticket}
           miembros={viaje.miembros}
+          cerrado={viaje.estado !== 'abierto'}
           seleccion={seleccion}
           abierto={abierto}
           ausentes={ausentes}
@@ -280,6 +281,11 @@ export interface TicketVistaProps {
   onListo: () => void;
   onPresente: (id: string) => void;
   onGuardarPresentes: () => void;
+  /**
+   * V-02 · el viaje ya no está abierto (esperando pagos o en Cerrados, abierto desde una visita de Estadísticas con
+   * `viaje_version=7`): el ticket es sólo para ver, y se dice arriba.
+   */
+  cerrado?: boolean;
 }
 
 export function TicketVista(props: TicketVistaProps) {
@@ -315,8 +321,10 @@ export function textoYaEligio(miembroId: string | null, miembros: readonly Miemb
 /**
  * D276-3 · D276-4 · lo que se dice arriba del ticket: un gasto personal (todo mío, no suma al viaje) o, en «por lo que
  * pidió cada uno», que no estuve y no elijo. `null` si no hay nada que decir.
+ * V-02 · con el viaje ya cerrado manda eso: el ticket es sólo para ver.
  */
-export function avisoDelTicket(ticket: TicketDelViaje, miembros: readonly MiembroViaje[], t: T): string | null {
+export function avisoDelTicket(ticket: TicketDelViaje, miembros: readonly MiembroViaje[], t: T, cerrado = false): string | null {
+  if (cerrado) return t('Este viaje ya se cerró: el ticket es sólo para ver.');
   if (ticket.personal) return t('Es tu gasto personal: sólo lo ves tú y no suma al total del viaje.');
   if (ticket.forma !== 'consumo') return null;
   const yo = miembros.find((m) => m.es_yo)?.id;
@@ -324,12 +332,16 @@ export function avisoDelTicket(ticket: TicketDelViaje, miembros: readonly Miembr
   return estuve ? null : t('No estuviste en este ticket: no eliges nada.');
 }
 
-function AvisoDelTicket({ ticket, miembros }: { ticket: TicketDelViaje; miembros: readonly MiembroViaje[] }) {
+function AvisoDelTicket({ ticket, miembros, cerrado = false }: {
+  ticket: TicketDelViaje;
+  miembros: readonly MiembroViaje[];
+  cerrado?: boolean;
+}) {
   const { t } = useIdioma();
-  const aviso = avisoDelTicket(ticket, miembros, t);
+  const aviso = avisoDelTicket(ticket, miembros, t, cerrado);
   if (!aviso) return null;
   return (
-    <section className={`vj-card vjt-aviso-ticket${ticket.personal ? ' vjt-personal' : ''}`} role="note">
+    <section className={`vj-card vjt-aviso-ticket${ticket.personal && !cerrado ? ' vjt-personal' : ''}`} role="note">
       <p className="vjt-texto">{aviso}</p>
     </section>
   );
@@ -410,7 +422,7 @@ function TotalVista(props: TicketVistaProps) {
   const varios = ticket.pagadores.length > 1;
   return (
     <div className="scroll vj-scroll">
-      <AvisoDelTicket ticket={ticket} miembros={miembros} />
+      <AvisoDelTicket ticket={ticket} miembros={miembros} cerrado={props.cerrado} />
       <section className="vj-card vjt-aviso">
         <span className="vjt-icono vjt-icono--centro" aria-hidden="true"><Icon name={iconoTipoLugar(ticket.tipo_lugar)} size={20} /></span>
         <h2 className="vjt-aviso-titulo">
@@ -439,7 +451,7 @@ function IgualesVista(props: TicketVistaProps) {
   const { t } = useIdioma();
   return (
     <div className="scroll vj-scroll">
-      <AvisoDelTicket ticket={ticket} miembros={miembros} />
+      <AvisoDelTicket ticket={ticket} miembros={miembros} cerrado={props.cerrado} />
       <section className="vj-card">
         <h2 className="vjt-card-titulo">{t('Se divide entre los que estuvieron')}</h2>
         <p className="vjt-texto">{nombresPresentes(ticket.personas, miembros, t)}</p>
@@ -459,9 +471,10 @@ function ConsumoVista(props: TicketVistaProps) {
   return (
     <>
       <div className="scroll vj-scroll">
-        <AvisoDelTicket ticket={ticket} miembros={miembros} />
-        {/* D276-3 · en un gasto personal nadie elige: no hay «Quién ya eligió». */}
-        {!ticket.personal && (
+        <AvisoDelTicket ticket={ticket} miembros={miembros} cerrado={props.cerrado} />
+        {/* D276-3 · en un gasto personal nadie elige: no hay «Quién ya eligió». V-02 · con el viaje cerrado tampoco: lo
+            que faltaba elegir ya se repartió al cerrar, y «falta elegir» no sería cierto. */}
+        {!ticket.personal && !props.cerrado && (
           <section className="vj-card" aria-labelledby="vjt-quien-eligio">
             <h2 id="vjt-quien-eligio" className="vjt-rotulo vjt-rotulo--arriba">{t('Quién ya eligió')}</h2>
             <ul className="vjt-chips vjt-chips--eleccion">

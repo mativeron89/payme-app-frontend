@@ -4,6 +4,7 @@ import { traducir } from '../../i18n/idioma';
 import {
   ajustarMontos,
   alternarPagador,
+  avisoDeQuienPago,
   conQuienPago,
   montoEscrito,
   montoParaEscribir,
@@ -160,5 +161,28 @@ describe('🔴 D255-6 · D263 · lo que se le manda al dueño', () => {
       { miembro_id: 'm-yo', monto_cents: 5000 }, { miembro_id: 'm-luis', monto_cents: 3000 }, { miembro_id: 'm-sofia', monto_cents: 2001 },
     ] });
     expect(r).not.toHaveProperty('pagado_por');
+  });
+});
+
+describe('🔴 F-03 · los montos de varios pagadores, con el mismo lector que Carga manual', () => {
+  it('«12,50» es $12.50 (antes $1,250), y «1,250» son miles', () => {
+    expect(montoEscrito('12,50')).toBe(1250);
+    expect(montoEscrito('1,250')).toBe(125000);
+    expect(montoEscrito('1.250,00')).toBe(125000);
+  });
+
+  it('🔴 un monto ambiguo («1.250») no suma y lo dice el aviso, antes que la suma', () => {
+    const e: QuienPagoElegido = { marcados: new Set(['m-yo', 'm-luis']), montos: new Map([['m-yo', '1.250'], ['m-luis', '50']]) };
+    const r = repartoDeQuienPago(e, OPCIONES, 130000);
+    expect(r).toMatchObject({ ajustado: true, ambiguo: true, valido: false, suma: null });
+    expect(avisoDeQuienPago(r, 130000, t)).toBe('No sabemos si es con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.');
+    // Sin total todavía, también.
+    expect(avisoDeQuienPago(repartoDeQuienPago(e, OPCIONES, null), null, t)).toBe(
+      'No sabemos si es con decimales o con miles. Escríbelo sin separador de miles: 1250 o 12.50.');
+    // Control: escrito sin ambigüedad, suma y no hay aviso.
+    const bien: QuienPagoElegido = { marcados: new Set(['m-yo', 'm-luis']), montos: new Map([['m-yo', '1250'], ['m-luis', '50']]) };
+    const rb = repartoDeQuienPago(bien, OPCIONES, 130000);
+    expect(rb).toMatchObject({ ambiguo: false, valido: true, suma: 130000 });
+    expect(avisoDeQuienPago(rb, 130000, t)).toBeNull();
   });
 });

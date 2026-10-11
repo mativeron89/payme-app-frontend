@@ -66,7 +66,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
   onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onConfiguracion: nada, onAbrirTicket: nada,
-  onCerrar: nada, onSalir: nada, onMarcar: nada,
+  onSalir: nada, onMarcar: nada,
 };
 
 const listo = (v: DetalleViaje): CargaDeViaje => ({ tipo: 'listo', viaje: v });
@@ -134,17 +134,31 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('🔴 D250 · D255-7 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Configuración», cerrar y salir', () => {
+  it('🔴 D250 · D255-7 · D279 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Configuración» y el aviso', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Configuración Cerrar viaje Salir del viaje$/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Configuración Toca el para cargar un ticket$/);
     expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
   });
 
-  it('🔴 D255-7 · «Cerrar viaje» (burbuja rojo clarito) y «Salir del viaje» van juntos en el pie; el scroll lleva su aire', () => {
-    expect(html).toMatch(/<div class="vjv-pie-abierto"><button type="button" class="vjv-cerrar">Cerrar viaje<\/button><button type="button" class="vjv-salir">Salir del viaje<\/button><\/div>/);
+  it('🔴 D279 · sin «Cerrar viaje» ni «Salir del viaje» (pasaron a Configuración): en su lugar, el aviso con la cámara', () => {
+    expect(leido).not.toMatch(/Cerrar viaje|Salir del viaje/);
+    expect(html).not.toContain('vjv-pie-abierto');
+    expect(html).toMatch(/<div class="vjv-aviso-cargar"><div class="aviso-sin-mesas-cuerpo"><span>Toca el<\/span><span class="aviso-sin-mesas-camara" role="img" aria-label="ícono de cámara"><svg/);
+    // Es lo último del viaje: va en el medio del espacio libre de ahí hasta el círculo de Nueva.
+    expect(html).toMatch(/para cargar un ticket<\/span><\/div><\/div><\/div>$/);
     expect(html).toContain('class="scroll vj-scroll vjv-scroll-abierto"');
     expect(html).not.toContain('btn btn-ghost');
+  });
+
+  it('🔴 D279 · el aviso toma el resto del alto y centra la línea; nunca fijo; nada se encoge', () => {
+    const css = readFileSync(new URL('./viaje.css', import.meta.url), 'utf8');
+    const regla = (sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf('}', css.indexOf(`${sel} {`)));
+    for (const m of ['flex: 1 0 auto;', 'justify-content: center;', 'padding: var(--sp-3) var(--sp-4);']) expect(regla('.vjv-aviso-cargar'), m).toContain(m);
+    expect(regla('.vjv-aviso-cargar')).not.toMatch(/position:\s*(fixed|absolute)/);
+    expect(regla('.vjv-scroll-abierto > *')).toContain('flex-shrink: 0;');
+    // El aire de abajo sigue medido contra el círculo de Nueva.
+    expect(regla('.has-appbar .scroll.vjv-scroll-abierto')).toContain('padding-bottom: calc(56px + var(--appbar-pie) + 26px + var(--sp-3));');
   });
 });
 

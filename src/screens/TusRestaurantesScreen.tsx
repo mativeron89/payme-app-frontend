@@ -19,6 +19,7 @@ import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
 import { useRegion } from '../preferences/RegionProvider';
 import { personalZoneCaption } from '../utils/personalDates';
 import { parametroDeTicket } from './viajes/viajesView';
+import { useTandaVigente } from './useTandaVigente';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -65,17 +66,21 @@ export function TusRestaurantesScreen() {
   /** AF-31 · el período elegido en 2a, conservado al navegar. */
   const clave = usePeriodoEstadisticas();
 
+  /** F-02 · la respuesta de un período anterior no pisa la del elegido. */
+  const nuevaTanda = useTandaVigente();
+
   const cargar = useCallback(() => {
+    const vigente = nuevaTanda();
     setEstado({ tipo: 'cargando' });
     setAbierto(null);
     setVisitaAbierta(null);
     api
       .getStatsRestaurants(clave)
-      .then((datos) => setEstado({ tipo: 'lista', datos }))
+      .then((datos) => { if (vigente()) setEstado({ tipo: 'lista', datos }); })
       // Todo error es el mismo cartel: 404, 413 o red. El dueño no manda datos
       // parciales, así que no hay nada a medias que mostrar.
-      .catch(() => setEstado({ tipo: 'error' }));
-  }, [clave]);
+      .catch(() => { if (vigente()) setEstado({ tipo: 'error' }); });
+  }, [clave, nuevaTanda]);
 
   useEffect(() => { cargar(); }, [cargar]);
 

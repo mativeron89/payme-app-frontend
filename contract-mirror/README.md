@@ -24,7 +24,23 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D276 · quiénes estuvieron y el gasto personal · App Backend v2.179.0 · 2026-10-10
+### V-02 · el ticket de un viaje cerrado · App Backend v2.179.2 · 2026-10-11
+
+Orden `AF-AUDITORIAS-PENDIENTES-Y-TICKET-CERRADO-20261011` (punto 5, V-02 de la auditoría de Viajes). Contrato con OK del
+Bibliotecario; el espejo va como si 2.179.2 estuviera servido (lo dijo el Bibliotecario, que no da el GREEN hasta que lo esté).
+
+- Contenido: owner **`a94272df24abcf55e0c8b3fcbec33e2b2a320664`** (v2.179.2: V-02, V-03, V-06 y la fecha sin hora de D278-1).
+- Inventario: el del owner en **`e010b613fb7aefabe9cc1c4bcd643cd46c6478f6`** (v2.179.2, commit B; `contract/mirror-inventory.json`, sha256
+  `52811d484c5360e2306913b92ce8fe72ba7b61a1f76953c6a12843753dd86d1b`), adoptado con `--adoptar-inventario` sin editarlo. Declara `a94272d`, 138 entradas.
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `dc9e61bec8e60fa18df31c8e158f56befb65b230a9816ad734dbc988239a1bc0`): `viaje_version=7` (la 6 sin claves nuevas; el detalle de un
+  ticket con el viaje en Cerrados, en sólo lectura), y los 404 de V-03 y el «Recibí» repetido de V-06.
+- Sólo por hash cambian, desde `66eafab`: `routes/account.js` (el instante de un ticket con fecha y sin hora, D278-1),
+  `routes/viajes.js` y `services/viajes.js`. Los hechos del dueño se regeneraron: cambian sólo el commit y el sha de
+  `routes/account.js`, ningún hecho.
+- `--integridad`: 13 copiados y 125 sólo por hash. `--paridad`: espejo = inventario = fuente en `a94272d`, 138/138.
+
+### Refresh anterior · D276 · quiénes estuvieron y el gasto personal · App Backend v2.179.0 · 2026-10-10
 
 Orden `AF-VIAJE-POR-DEFECTO-Y-PERSONAS-20261010` (D276). Scope del lease con `contract-mirror/**` y `scripts/**` (el espejo,
 su verificación y los hechos del dueño).

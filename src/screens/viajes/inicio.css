@@ -97,6 +97,31 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* D280 · «+ Gasto» (Claude Design, opción 3b): píldora blanca de 44, 8 px debajo de
+   la burbuja (el gap del grupo) y alineada a la derecha, afuera de ella; antes de
+   los restaurantes pendientes. El «+» de 18 px con trazo 2.2: el CSS le gana al
+   atributo de `Icon`. */
+.viaje-gasto {
+  align-self: flex-end;
+  min-height: 44px;
+  padding: 0 18px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.viaje-gasto svg path {
+  stroke-width: 2.2;
+}
 .viaje-burbuja-texto {
   flex: 1;
   min-width: 0;

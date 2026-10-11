@@ -69,6 +69,15 @@
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
   "negociaciones": {
+    "viaje_version_7": {
+      "since": "2.179.2",
+      "decision": "V-02 de la auditoría de Viajes por Codex (ops/codex-auditoria-viajes-20261010/INFORME.md); contrato con OK del Bibliotecario 2026-10-11T14:25:52Z",
+      "parametro": "viaje_version=7",
+      "regla": "La cadena exacta, en las mismas rutas que la 6. Es la 6 sin claves nuevas: el único cambio es GET /api/viajes/:id/tickets/:tid con el viaje en Cerrados, que responde 200 con el mismo `ticket` en sólo lectura en lugar de 409 viaje_closed. En GET /api/viajes la 7 sale como la 3. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte; la 6 y anteriores no cambian.",
+      "cerrado": "El detalle en sólo lectura: `puedo_elegir` y `puedo_marcar_presentes` en false, `sin_repartir_cents` 0, `te_toca_cents` = lo que quedó guardado al cerrar (lo elegido más lo no elegido que te tocó), `items[].my_bps` y `my_amount_cents` = lo que elegiste, y `remaining_bps` el agregado por plato, sin nombre (D247). Es la misma vista de un viaje esperando pagos.",
+      "quien": "Como con el viaje abierto: un miembro activo. El personal de otro, 404 viaje_ticket_not_found; quien no es miembro activo (también quien se fue), 404 viaje_not_found (n325). Elegir, marcar presentes y borrar siguen con 409 viaje_not_open.",
+      "uso": "Abrir el ticket desde una visita de Estadísticas: con stats_version=2, la visita trae `viaje_id` y `code` = el id del ticket."
+    },
     "viaje_version_6": {
       "since": "2.179.0",
       "decision": "276 (quiénes estuvieron y el gasto personal), plan OK del Bibliotecario 2026-10-11T01:31:00Z",
@@ -262,7 +271,8 @@
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null },
         "200": { "claves": ["contract", "ticket", "ya_cargado"], "cuando": "el reintento del mismo pedido (ya_cargado null), o un ticket que ya estaba en el viaje: `ticket` es el ya cargado y `ya_cargado` = {por, first_name, last_name, username, eliminada, en}" },
         "400": { "error": "validation_error" },
-        "404": { "cuerpo": { "error": "viaje_not_found" } },
+        "404": { "cuerpo": { "error": "viaje_not_found" },
+          "viaje_ticket_not_found": "v2.179.2 · V-03: si otro de los que pagaron lo borró entre la carga y la lectura de la respuesta (antes, un 500). Se cargó y se borró: un reintento con la misma idempotency_key lo vuelve a cargar (el limite_conocido de DELETE)." },
         "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_ticket_receipt_used", "viaje_tickets_limit", "viaje_total_limit"],
           "viaje_total_limit": ["error", "limit"] },
         "422": { "errores": ["viaje_ticket_receipt_invalid", "viaje_ticket_amount_invalid", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch", "viaje_ticket_persona_unknown"],
@@ -285,7 +295,8 @@
         "201": { "claves": ["contract", "ticket", "ya_cargado"], "ya_cargado": null, "ticket": "la forma de GET /:id/tickets/:tid" },
         "200": { "cuando": "el reintento del mismo pedido" },
         "400": { "error": "validation_error" },
-        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
+        "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)",
+          "viaje_ticket_not_found": "v2.179.2 · V-03: si otro de los que pagaron lo borró entre la carga y la lectura de la respuesta (antes, un 500). Se cargó y se borró: un reintento con la misma idempotency_key lo vuelve a cargar (el limite_conocido de DELETE)." },
         "409": { "errores": ["idempotency_key_conflict", "viaje_not_open", "viaje_tickets_limit", "viaje_total_limit"],
           "viaje_total_limit": ["error", "limit"] },
         "422": { "errores": ["viaje_ticket_persona_unknown", "viaje_ticket_payer_unknown", "viaje_ticket_payers_total_mismatch"], "claves": ["error", "miembro_id"],
@@ -355,15 +366,16 @@
           "nota": "`remaining_bps` es un agregado por plato, sin nombre: se ve qué parte de cada renglón ya está tomada (D247)."
         },
         "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"] },
-        "409": { "error": "viaje_closed", "cuando": "cerrado: lo propio está en GET /:id/resumen" }
+        "409": { "error": "viaje_closed", "cuando": "cerrado: lo propio está en GET /:id/resumen. v2.179.2 · V-02: con viaje_version=7, 200 en sólo lectura (negociaciones.viaje_version_7)" }
       }
     },
     "PUT /api/viajes/:id/tickets/:tid/seleccion": {
       "request": { "items": "0..100 de {item_id, fraction_bps de la mesa}, sin repetir; reemplaza lo propio", "listo": "boolean, obligatorio" },
       "respuestas": {
-        "200": { "claves": ["contract", "ticket"] },
+        "200": { "claves": ["contract", "ticket"], "cerrado_en_el_medio": "v2.179.2 · V-03: si el viaje se cerró entre la confirmación y la lectura de la respuesta, 200 con la vista en sólo lectura (puedo_elegir false); el cierre ya incluyó la elección." },
         "400": { "error": "validation_error" },
-        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)" },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)",
+          "despues_del_commit": "v2.179.2 · V-03: también si otro borró el ticket entre la confirmación y la lectura de la respuesta (antes, un 500). La elección confirmada no se repite." },
         "409": { "errores": ["viaje_not_open", "viaje_ticket_not_selectable", "viaje_ticket_personal", "viaje_ticket_not_in_snapshot", "viaje_ticket_not_present", "viaje_fraction_exceeds_item"], "viaje_fraction_exceeds_item": ["error", "item_id", "remaining_bps"],
           "viaje_ticket_personal": "v2.179.0 · D276: el gasto personal propio es todo de su dueño, sin elegir",
           "viaje_ticket_not_present": "v2.179.0 · D276: no estuviste en ese ticket; sólo eligen los presentes" },
@@ -375,7 +387,8 @@
       "regla": "Quien pagó o quien cargó (D255-6). Desde v2.177.0 (D263, extensión declarada en el plan) cualquiera de los que pagaron; si no, 409 viaje_ticket_not_yours. v2.179.0 · D276: en las tres formas (antes, sólo «iguales» con 409 viaje_ticket_not_equal_split, que ya no sale). En «consumo» no se puede desmarcar a quien ya eligió algo: 409 viaje_ticket_persona_ya_eligio {error, miembro_id}. Las transiciones entre personal y compartido están en `personal`.",
       "respuestas": {
         "200": { "claves": ["contract", "ticket"] },
-        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)" },
+        "404": { "errores": ["viaje_not_found", "viaje_ticket_not_found"], "viaje_ticket_not_found": "también el gasto personal de otro (D276)",
+          "despues_del_commit": "v2.179.2 · V-03: también si otro borró el ticket entre el cambio y la lectura de la respuesta (antes, un 500)." },
         "409": { "errores": ["viaje_not_open", "viaje_ticket_not_yours", "viaje_ticket_persona_ya_eligio"], "viaje_ticket_persona_ya_eligio": ["error", "miembro_id"] },
         "422": { "error": "viaje_ticket_persona_unknown", "claves": ["error", "miembro_id"] }
       }
@@ -414,7 +427,7 @@
     },
     "POST /api/viajes/:id/transferencias/:trid/{pague|deshacer|recibi|no-llego}": {
       "respuestas": {
-        "200": { "claves": ["contract", "transferencia", "viaje_estado", "transferencias_pendientes"], "nota": "Idempotente: repetir la marca no avisa dos veces." },
+        "200": { "claves": ["contract", "transferencia", "viaje_estado", "transferencias_pendientes"], "nota": "Idempotente: repetir la marca no avisa dos veces. v2.179.2 · V-06: también en Cerrados, sólo la marca ya hecha (repetir el último «Recibí»), sobre una transferencia propia en ese rol y no anulada: 200 igual, sin aviso ni reabrir el viaje. Cualquier otra marca en Cerrados sigue con 409 viaje_not_waiting_payments." },
         "404": { "errores": ["viaje_not_found", "viaje_transfer_not_found"] },
         "409": { "errores": ["viaje_not_waiting_payments", "viaje_transfer_not_yours", "viaje_transfer_voided", "viaje_transfer_state"] }
       }
@@ -455,7 +468,7 @@
     "que_cuenta": "Lo que consumiste vos de cada ticket escaneado, con el mismo balance del viaje: con el viaje abierto, lo elegido (más tu parte de «en partes iguales» o de «pagar el total»); cerrado, lo que quedó guardado al cerrar, con lo no elegido que te tocó. Lo no elegido va al monto de la visita y no a los platos. Se calcula al leer: cambiar lo elegido o eliminar el ticket cambia la estadística.",
     "platos": "«Por lo que pidió cada uno»: tu parte de cada renglón. «Pagar el total»: todos los renglones, para quien pagó. «En partes iguales»: sin platos, como una mesa «igual». v2.179.0 · D276: un gasto personal propio, todos los renglones enteros, con el monto entero y `division_mode` consumo.",
     "que_no_cuenta": "Los gastos a mano; los tickets de súper y de otro (D260 «sólo restaurantes», en la interpretación del Bibliotecario: cuentan restaurante, bar y café); un ticket en el que no consumiste nada; nunca lo de otro miembro.",
-    "instante": "La fecha y hora impresas del ticket, en hora de México; si falta alguna, cuando se cargó. Decide el período y el momento del día.",
+    "instante": "La fecha y hora impresas del ticket, en hora de México; sin fecha impresa, cuando se cargó. v2.179.2 · D278-1 (Mati: «La fecha del ticket»): con fecha y sin hora, el mediodía (12:00) de esa fecha, la hora técnica con OK del Bibliotecario (2026-10-11T14:25:52Z); antes, cuando se cargó. Decide el período (un ticket del 30/09 sin hora es de septiembre) y el momento del día: un ticket sin hora cuenta como «Comida» (lunch). En el orden de las visitas cuenta como las 12:00 de ese día; un empate exacto, por `code` (D270).",
     "restaurante": "Un viaje no guarda el RFC: el ticket va con el restaurante de una mesa de la misma respuesta cuyo nombre mostrado coincide (sin acentos, mayúsculas ni espacios de más), si es uno solo. Si no, en su propio grupo: id `viaje:` más el sha256 corto del nombre, categoría `cafe` para un café u `other`; sin lugar, id `viaje-ticket:<id del ticket>` y «Restaurante sin identificar». Nunca el RFC ni el folio.",
     "recibo_en_mesa_y_viaje": "Cuenta una sola vez: si el mismo recibo abrió una mesa que cuenta para vos, gana la mesa; si no, cuenta el ticket del viaje.",
     "visita": "`code` = el id del ticket (nunca es un código de mesa); `division_mode` consumo o igual; `created_at` = el instante. Con `stats_version=2` (cadena exacta, sólo en /stats/restaurants) cada visita suma `viaje_id` (null en una mesa); sin el parámetro, la forma de siempre.",

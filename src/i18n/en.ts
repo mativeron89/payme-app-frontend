@@ -766,7 +766,7 @@ export const EN: Record<string, string> = {
   "{0} te invitó a": "{0} invited you to",
   "{0} {1}": "{0} {1}",
   "{0} ···· {1}": "{0} ···· {1}",
-  "{0}: {1}": "{mesa.division_mode === 'igual' ? 'My share' : 'My items'}: {1}",
+  "{0}: {1}": "{0}: {1}",
   "¡Listo!": "All done!",
   "¡Te sumaste a la mesa!": "You joined the table!",
   "· Mesa": "· Table",

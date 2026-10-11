@@ -108,7 +108,7 @@ test.describe('D255 · tramo 1', () => {
     expect(await rebote()).toBe('auto');
   });
 
-  test('🔴 7 · el viaje: monto centrado, «Configuración» debajo de «Ver balance», «Cerrar viaje» rojo clarito y el pie arriba del círculo', async ({ page }) => {
+  test('🔴 7 · el viaje: monto centrado y «Configuración» debajo de «Ver balance»; «Cerrar viaje» rojo clarito y el pie arriba del círculo, ahora en Configuración (D279)', async ({ page }) => {
     await conViajes(page);
     // Alto, para que sobre lugar y el pie se vea abajo.
     await page.setViewportSize({ width: 375, height: 1000 });
@@ -122,6 +122,20 @@ test.describe('D255 · tramo 1', () => {
         abajo: miembros.top - monto.bottom,
         balance: r('.vjv-ver-balance:not(.vjv-configuracion)'),
         configuracion: r('.vjv-configuracion'),
+        hayCerrar: document.querySelectorAll('.vjv-cerrar, .vjv-salir').length,
+      };
+    });
+    expect(Math.abs(m.arriba - m.abajo)).toBeLessThanOrEqual(2);
+    expect(m.configuracion.top).toBeGreaterThan(m.balance.bottom);
+    expect(m.configuracion.top - m.balance.bottom).toBeLessThanOrEqual(16);
+    // D279 · en la pantalla del viaje ya no están: van en Configuración.
+    expect(m.hayCerrar).toBe(0);
+    await page.getByRole('button', { name: 'Configuración' }).click();
+    await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toBeVisible();
+    const c = await page.evaluate(() => {
+      const r = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+      return {
+        ultimo: r('.vjcfg-viaje'),
         cerrar: r('.vjv-cerrar'),
         salir: r('.vjv-salir'),
         circulo: r('.appbar-fab'),
@@ -129,16 +143,13 @@ test.describe('D255 · tramo 1', () => {
         colorCerrar: getComputedStyle(document.querySelector('.vjv-cerrar')!).color,
       };
     });
-    expect(Math.abs(m.arriba - m.abajo)).toBeLessThanOrEqual(2);
-    expect(m.configuracion.top).toBeGreaterThan(m.balance.bottom);
-    expect(m.configuracion.top - m.balance.bottom).toBeLessThanOrEqual(16);
-    // El pie va abajo: lo que sobra queda entre «Configuración» y «Cerrar viaje».
-    expect(m.cerrar.top - m.configuracion.bottom).toBeGreaterThan(60);
-    expect(m.salir.top).toBeGreaterThan(m.cerrar.bottom);
+    // El pie va abajo: lo que sobra queda entre la última tarjeta y «Cerrar viaje».
+    expect(c.cerrar.top - c.ultimo.bottom).toBeGreaterThan(60);
+    expect(c.salir.top).toBeGreaterThan(c.cerrar.bottom);
     // Un poco por encima de la barra: 12 sobre el círculo.
-    expect(Math.round(m.circulo.top - m.salir.bottom)).toBe(12);
-    expect(m.fondoCerrar).toBe('rgb(254, 242, 242)');
-    expect(m.colorCerrar).toBe('rgb(180, 35, 24)');
+    expect(Math.round(c.circulo.top - c.salir.bottom)).toBe(12);
+    expect(c.fondoCerrar).toBe('rgb(254, 242, 242)');
+    expect(c.colorCerrar).toBe('rgb(180, 35, 24)');
   });
 
   test('🔴 8 · Configuración: agregar a un amigo lo invita en el acto; quien ya está va sin «Agregar»; «Volver» regresa al viaje', async ({ page }) => {

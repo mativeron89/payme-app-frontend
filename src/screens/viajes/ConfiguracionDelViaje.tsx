@@ -65,7 +65,9 @@ export function cambiosDeNombreYFechas(
   return Object.keys(c).length > 0 ? c : null;
 }
 
-export function ConfiguracionDelViaje({ viaje, userName, foto, onFotoCambiada, onVolver, onActualizado, onYaSeCerro }: {
+export function ConfiguracionDelViaje({
+  viaje, userName, foto, onFotoCambiada, onVolver, onActualizado, onYaSeCerro, onCerrarViaje, onSalirDelViaje,
+}: {
   viaje: DetalleViaje;
   userName?: string;
   /** La URL de la foto del viaje en memoria, o `null`. */
@@ -75,6 +77,10 @@ export function ConfiguracionDelViaje({ viaje, userName, foto, onFotoCambiada, o
   onVolver: () => void;
   onActualizado: (v: DetalleViaje) => void;
   onYaSeCerro: () => void;
+  /** D279 · «Cerrar viaje»: la hoja de siempre, la de la pantalla del viaje. */
+  onCerrarViaje: () => void;
+  /** D279 · «Salir del viaje»: la hoja de siempre (D242, H02). */
+  onSalirDelViaje: () => void;
 }) {
   const { t } = useIdioma();
   const toast = useToast();
@@ -171,6 +177,8 @@ export function ConfiguracionDelViaje({ viaje, userName, foto, onFotoCambiada, o
       onGuardarNombre={(cambios) => void editar(cambios)}
       onColor={(color) => void editar({ color })}
       onFoto={(archivo) => void cambiarFoto(archivo)}
+      onCerrarViaje={onCerrarViaje}
+      onSalirDelViaje={onSalirDelViaje}
     />
   );
 }
@@ -196,6 +204,9 @@ export interface ConfiguracionVistaProps {
   readonly onColor: (color: ColorViaje | null) => void;
   /** Un archivo para subir, o `null` para quitar la foto. */
   readonly onFoto: (archivo: File | null) => void;
+  /** D279 · «Cerrar viaje» y «Salir del viaje», que estaban en la pantalla del viaje. */
+  readonly onCerrarViaje: () => void;
+  readonly onSalirDelViaje: () => void;
 }
 
 export function ConfiguracionVista(p: ConfiguracionVistaProps) {
@@ -209,7 +220,7 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
         {/* Plan OK (01:16:34Z): un solo título, sin el nombre del viaje debajo. */}
         <h1 className="title-card-title">{t('Configuración')}</h1>
       </div>
-      <div className="scroll vj-scroll">
+      <div className="scroll vj-scroll vjcfg-scroll">
         <section className="vj-card" aria-labelledby="vjcfg-agregar">
           <h2 className="vjc-etiqueta" id="vjcfg-agregar">{t('Agregar miembros')}</h2>
           <CampoDeBusqueda texto={p.texto} onTexto={p.onTexto} />
@@ -258,6 +269,17 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
             </li>
           </ul>
         </section>
+
+        {/* D279 · Mati: «mandar cerrar viaje y salir del viaje a configuración». Al pie, como estaban en la pantalla
+            del viaje, con las mismas hojas y reglas (cerrar con su vista previa; salir con D242 y H02). */}
+        <div className="vjv-pie-abierto">
+          <button type="button" className="vjv-cerrar" onClick={p.onCerrarViaje}>
+            {t('Cerrar viaje')}
+          </button>
+          <button type="button" className="vjv-salir" onClick={p.onSalirDelViaje}>
+            {t('Salir del viaje')}
+          </button>
+        </div>
       </div>
     </>
   );
