@@ -11,6 +11,74 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.238.1 — La burbuja del viaje con el diseño de Claude Design, el restaurante pendiente y «No tienes mesas abiertas» al pie (D275, D271) (2026-10-10)
+
+Orden AF-BURBUJA-DISENO-Y-RESTAURANTE-PENDIENTE-20261010 (4644c9f1…), con D275 (2d476407…), D271 (b21def53…) y la
+especificación de Claude Design `PANTALLA-burbuja-del-viaje.md` (7f385838…). Lo visible se cierra con la prueba de Mati en
+el iPhone (D63).
+
+- **D275 · la burbuja del viaje en Inicio,** con sólo la foto, el nombre y el monto. Mati: «No, es feo el diseño, vamos a
+  pedirle a Claude Design que diseñe la burbuja».
+  - **Salen** «Tu viaje abierto», «Te deben…», «Ver viaje →» y, en un viaje que espera pagos, «Esperando pagos ·
+    faltan N». Se ve igual que uno abierto, con su monto (Mati eligió «Igual que abierto»).
+  - **Toda la burbuja es el botón,** con las medidas de la especificación:
+    - alto mínimo 96, padding 16, radio 22, borde y sombra `--sh-1` + `--sh-3`;
+    - 28 px debajo de lo de arriba y 20 px entre viajes.
+  - **La foto:** 64×64, cuadrada redondeada (radio 18), porque el círculo queda para personas.
+    - Sin foto, la inicial blanca sobre el color del viaje.
+    - Sin color, el teal de la app, como antes.
+  - **El nombre,** en hasta dos líneas, con «…».
+  - **El monto:**
+    - verde si te deben (`$10,565.68`);
+    - el color del texto en cero (`$0`);
+    - rojo con el signo menos tipográfico (U+2212) si debes (`−$542`);
+    - centavos sólo si los hay. Nunca «saldo».
+  - **El `aria-label`:** «Holbox, te deben $10,565.68», «Holbox, debes $542» o «Holbox, estás al día».
+  - El orden de D265 no cambia: con mesas abiertas, los viajes van debajo de ellas.
+- **D271 · el restaurante con gente por elegir,** debajo de su viaje y separado (8 px abajo, 24 px adentro). Mati: «la
+  burbuja del restaurante tiene que figurar en inicio también para facilitar la carga».
+  - **Lleva** los cubiertos, el lugar (o el tipo) y «Faltan N por elegir», o «Falta 1 por elegir». Tocarla abre la
+    elección de ese ticket (`viaje-ticket`, como Balance).
+  - **Sale del detalle de cada viaje abierto** (`GET /api/viajes/:id`): son los tickets escaneados «por lo que pidió cada
+    uno» con `falta_que_elija > 0`, del más reciente al más viejo.
+    - Los gastos a mano y los de partes iguales no esperan a nadie.
+    - Se lee `falta_que_elija` y no `sin_repartir`. El dueño deja afuera de `sin_repartir` un ticket con todo asignado en
+      el que alguien no tocó «Listo», y D271 dice «hasta que elijan todos». Lo aprobó el Bibliotecario en la adenda.
+  - **Quién lo ve:** todos los del viaje, también quien ya eligió. Se va cuando eligieron todos.
+  - **El caché** (`ultimoVisto`, `inicio.pendientesDeViajes`) se guarda con el MISMO turno que la lista de viajes: si
+    cambió la cuenta o la generación, no se guarda ninguno de los dos.
+    - Se vuelve a pedir al volver a Inicio, y `olvidarLoDeViajes()` lo olvida.
+    - Un detalle que falla deja a su viaje sin pendientes, sin cartel.
+    - La guarda de T-01 declara este único `guardar` de más.
+- **D275 · «No tienes mesas abiertas», al pie:** el texto queda 40 px sobre la barra.
+  - En «Toca el … para abrir una», el «+» de antes pasa a ser el ícono de la cámara de Nueva, con «ícono de cámara»
+    para el lector de pantalla.
+  - Aparece sólo con la lista de mesas ya leída y vacía, y no en la pestaña Viajes (D246).
+  - **Lo pone la barra** (`AppBottomBar`, `aviso`): es ella la que sabe su alto. Ese alto ahora vive en una sola
+    variable, `--appbar-alto`, con el mismo valor que antes.
+    - No va `fixed`, por D256.
+    - Sin aviso, la barra se ve igual que siempre.
+  - **Va en una franja del color de la página que queda debajo de la barra,** y por eso su sombra se sigue viendo.
+    - Así el contenido que se desplaza no pasa por debajo del texto. El prototipo no lo muestra porque su contenido nunca
+      llega ahí.
+    - La franja también toma los toques: nadie toca algo que no ve.
+  - **Con el aviso, el contenido deja lugar abajo:** al final del scroll nada queda tapado, con y sin el inset del iPhone
+    (medido).
+  - **El círculo de Nueva** sobresale 26 px de la barra: entre él y el texto quedan 14 px.
+- **No se tocan** la barra (salvo el lugar del aviso), la cabecera ni la tarjeta Ver pagos / Ver perfil.
+- **Pruebas:**
+  - **rojo en la base `143e05f`:**
+    - 3 unitarias, y el archivo de la burbuja no carga porque importa lo nuevo;
+    - 18 e2e;
+  - **mutantes: mueren los 31,** cada uno por la prueba que lo vigila (24 unitarios y 7 en el navegador).
+    - Sobrevivía uno: el que sacaba `.home-mesa:empty`. Era redundante, porque la sección vacía no tiene alto y su
+      margen colapsa con los 28 px de los viajes, y salió.
+  - **e2e a 375 y 390 con capturas:**
+    - las medidas;
+    - el aviso;
+    - nada tapado;
+    - el pendiente.
+
 ## 0.238.0 — Seguridad D268: el espejo sólo con el contrato, Google atado a la pestaña que lo empezó, el alta con Google sin correo a mano y la invitación pendiente en la mesa; «Cerrados» sin la cantidad (D274) (2026-10-10)
 
 Orden AF-SEGURIDAD-D268-20261010 (9c0dc3af…), con App Backend 2.178.0 (inventario en 6424b1a, contenido de

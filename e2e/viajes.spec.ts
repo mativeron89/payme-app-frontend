@@ -429,7 +429,7 @@ test('1q · sin consumos se sale: la invitación aceptada y salir del viaje', as
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está: ni su burbuja (D265) ni en la pestaña.
   await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.viaje-card').filter({ hasText: 'Cancún 2026' })).toBeVisible();
+  await expect(page.locator('.viaje-burbuja').filter({ hasText: 'Cancún 2026' })).toBeVisible();
   await expect(page.getByText('Mazatlán diciembre', { exact: true })).toHaveCount(0);
 });
 

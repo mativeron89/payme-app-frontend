@@ -107,7 +107,7 @@ test.describe('D255 · tramo 2', () => {
     await expect(page.locator('.title-card')).toHaveCSS('background-color', 'rgb(109, 40, 217)');
     await expect(page.locator('.title-card-title')).toHaveCSS('color', 'rgb(255, 255, 255)');
     await ir(page, '/');
-    const insignia = page.locator('.viaje-card').filter({ hasText: 'Cancún 2026' }).locator('.vj-insignia');
+    const insignia = page.locator('.viaje-burbuja').filter({ hasText: 'Cancún 2026' }).locator('.vj-insignia');
     await expect(insignia).toHaveCSS('background-color', 'rgb(109, 40, 217)');
     await expect(insignia).toHaveCSS('color', 'rgb(255, 255, 255)');
     // Sin color: el teal claro de siempre.
@@ -132,7 +132,7 @@ test.describe('D255 · tramo 2', () => {
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page.locator('.title-card .vj-insignia-foto')).toBeVisible();
     await ir(page, '/');
-    await expect(page.locator('.viaje-card').filter({ hasText: 'Cancún 2026' }).locator('.vj-insignia-foto')).toBeVisible();
+    await expect(page.locator('.viaje-burbuja').filter({ hasText: 'Cancún 2026' }).locator('.vj-insignia-foto')).toBeVisible();
     await abrirConfiguracion(page);
     await page.getByRole('button', { name: /^Foto/ }).click();
     await page.getByRole('button', { name: 'Eliminar foto', exact: true }).click();

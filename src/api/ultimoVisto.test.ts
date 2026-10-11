@@ -271,13 +271,27 @@ describe('🔴 D237 · guardas: memoria sola, y sólo para mostrar', () => {
    * es el pedido) y es lo que se le pasa a `guardar`/`registrarSinLeer`. Sacarlo
    * dentro del `.then` volvería a tomar la cuenta de cuando llega la respuesta.
    */
+  /**
+   * D271 · los `guardar` de más que usan el turno de otro, declarados uno por uno: Inicio guarda con el MISMO turno la
+   * lista de viajes y, de esa misma cadena, los restaurantes pendientes de sus viajes (si cambió la cuenta o la
+   * generación, no se guarda ninguno). Cualquier otro `guardar` sin su propio turno sigue rompiendo esta guarda.
+   */
+  const GUARDADOS_DE_MAS: Readonly<Record<string, number>> = { '../screens/HomeScreen.tsx': 1 };
+
   it('🔴 T-01 · cada lector saca el turno justo antes de pedir y guarda con ese turno', () => {
     for (const ruta of LECTORES) {
       const lineas = FUENTES[ruta]!.split('\n');
       const turnos = lineas.flatMap((l, i) => (l.includes('ultimoVisto.turno()') ? [i] : []));
       const guardados = lineas.filter((l) => /ultimoVisto\.(guardar|registrarSinLeer)\s*[<(]/.test(l));
+      const dondeGuarda = lineas.flatMap((l, i) => (/ultimoVisto\.(guardar|registrarSinLeer)\s*[<(]/.test(l) ? [i] : []));
       expect(turnos.length, ruta).toBeGreaterThan(0);
-      expect(turnos.length, ruta).toBe(guardados.length);
+      expect(guardados.length - turnos.length, ruta).toBe(GUARDADOS_DE_MAS[ruta] ?? 0);
+      // Ningún `guardar` antes del primer turno, y ningún turno sin un `guardar` antes del turno siguiente.
+      expect(dondeGuarda[0], ruta).toBeGreaterThan(turnos[0]!);
+      turnos.forEach((i, k) => {
+        const fin = turnos[k + 1] ?? lineas.length;
+        expect(dondeGuarda.some((g) => g > i && g < fin), `${ruta}:${i + 1} · un turno que no guarda`).toBe(true);
+      });
       for (const i of turnos) {
         expect(lineas[i]!.trim(), ruta).toBe('const turno = ultimoVisto.turno();');
         const siguiente = lineas.slice(i + 1).find((l) => l.trim() !== '' && !l.trim().startsWith('//'))!;

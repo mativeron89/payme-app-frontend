@@ -65,38 +65,124 @@
   color: var(--text-muted);
 }
 
-/* ══ D265 · D267 · cada viaje abierto en Inicio, como una mesa abierta (`.mesa-card`) ══
-   El color del viaje queda en el círculo de la insignia; el del balance, sólo en su texto. La tarjeta es blanca. */
+/* ══ D265 · D275 · cada viaje abierto en Inicio, con el diseño de Claude Design (PANTALLA-burbuja-del-viaje.md §1) ══
+   Sólo la foto (o la inicial sobre el color del viaje), el nombre y el monto. El primer viaje va 28 px debajo de lo de
+   arriba y 20 px entre viajes; el color del viaje queda en la insignia y el del monto, en su texto. */
 .home-viajes {
-  display: block;
-  margin: var(--sp-3) var(--sp-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 28px var(--sp-4) 0;
 }
-.viaje-card-cabeza {
+/* El viaje y sus restaurantes pendientes (§2): separados 8 px, nunca adentro. */
+.viaje-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.viaje-burbuja {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  margin-top: var(--sp-2);
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--sh-1), var(--sh-3);
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.viaje-card-nombre {
+.viaje-burbuja-texto {
+  flex: 1;
   min-width: 0;
-  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Hasta dos líneas, después «…». */
+.viaje-burbuja-nombre {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
-/* Los textos y colores del balance del viaje (D245, `.vjv-monto-*`): el texto lo dice siempre; el color acompaña. */
-.viaje-card-balance {
-  margin-top: var(--sp-3);
+.viaje-burbuja-monto {
   font-family: var(--font-display);
-  font-size: var(--fs-h2);
+  font-size: 24px;
   line-height: 1.25;
   font-weight: 800;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
-.viaje-card-balance--a-favor { color: var(--success); }
-.viaje-card-balance--deuda { color: var(--danger); }
-.viaje-card-balance--cero { color: var(--text); }
-.viaje-card-balance--esperando {
-  font-size: var(--fs-body);
-  font-weight: 700;
-  color: var(--info);
+.viaje-burbuja-monto--a-favor { color: var(--success); }
+.viaje-burbuja-monto--cero { color: var(--text); }
+.viaje-burbuja-monto--deuda { color: var(--danger); }
+
+/* ══ D271 · D275 · el restaurante con gente por elegir (§2): debajo de su viaje, 24 px hacia adentro ══ */
+.viaje-pendiente {
+  box-sizing: border-box;
+  margin-left: 24px;
+  width: calc(100% - 24px);
+  min-height: 60px;
+  padding: 10px 12px 10px 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 0;
+  border-radius: 16px;
+  /* Más baja que la del viaje. */
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.viaje-card-ir { margin-left: auto; }
+.viaje-pendiente-ico {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--warning-tint); /* el `--warning-l` de la especificación: #FFFBEB */
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.viaje-pendiente-texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.viaje-pendiente-nombre {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.viaje-pendiente-faltan {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--warning);
+}
+.viaje-pendiente-ir {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+}

@@ -15,13 +15,19 @@ export function inicialDelViaje(nombre: string): string {
   return primera ? primera.toLocaleUpperCase('es-MX') : '·';
 }
 
-export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = false }: {
+export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = false, burbuja = false }: {
   nombre: string;
   color?: ColorViaje | null;
   foto?: string | null;
   grande?: boolean;
+  /**
+   * D275 · la de la burbuja del viaje en Inicio: 64×64, cuadrada redondeada (radio 18). Claude Design: «el círculo queda
+   * para personas; así el viaje no se confunde con un amigo».
+   */
+  burbuja?: boolean;
 }) {
-  const clase = `vj-insignia${grande ? ' vj-insignia--grande' : ''}${color ? ' vj-insignia--color' : ''}`;
+  const tamano = burbuja ? ' vj-insignia--burbuja' : grande ? ' vj-insignia--grande' : '';
+  const clase = `vj-insignia${tamano}${color ? ' vj-insignia--color' : ''}`;
   return (
     <span className={clase} style={color ? { background: COLORES_VIAJE[color] } : undefined} aria-hidden="true">
       {foto ? <img className="vj-insignia-foto" src={foto} alt="" /> : inicialDelViaje(nombre)}

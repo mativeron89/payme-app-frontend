@@ -132,8 +132,9 @@ describe('Inicio · la tercera pestaña depende de la capacidad', () => {
     }
   });
 
-  it('🔴 D246 · con la pestaña Viajes no se ve «No tienes mesas abiertas»', () => {
-    expect(home).toMatch(/tab !== 'viajes' && \(\s*<div className="mesa-empty">\s*<div className="mesa-empty-title">\{t\('No tienes mesas abiertas'\)\}/);
+  it('🔴 D246 · con la pestaña Viajes no se ve «No tienes mesas abiertas» (D275: ahora al pie, sobre la barra)', () => {
+    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';");
+    expect(home).toContain('<AppBottomBar active="home" aviso={avisoSinMesas ? <AvisoSinMesas /> : undefined} />');
   });
 });
 

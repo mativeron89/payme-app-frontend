@@ -95,6 +95,8 @@
      12 px y siguen arriba del indicador. Sin inset (Safari, computadora) no
      cambia: 8. Una sola variable: la barra y las pantallas que la miden. */
   --appbar-pie: max(8px, calc(env(safe-area-inset-bottom) - 12px));
+  /* D275 · el alto de la barra, en UN lugar: lo usan la barra y el aviso que flota sobre ella. */
+  --appbar-alto: calc(56px + var(--appbar-pie));
 
   /* ══════════════════════════════════════════════════════════════════════
      SISTEMA DE DISEÑO · tokens de ../diseno/SISTEMA_DISENO.md §1–§3
@@ -3053,6 +3055,56 @@ html.app-de-inicio-ios .app {
   z-index: 19;
 }
 
+/* D275 · lo que flota sobre la barra («No tienes mesas abiertas»): el texto 40 px
+   sobre su borde de arriba, centrado, con 16 px a los costados.
+   Va en una franja del color de la página que baja hasta la barra y queda DEBAJO
+   de ella (z-index 18 contra 19, como hermana y no como hija): así el contenido
+   que se desplaza no pasa por debajo del texto (el prototipo no lo muestra porque
+   su contenido nunca llega ahí) y la sombra de la barra se sigue viendo. Arriba,
+   20 px de fundido. Anclada a `.screen`, como la barra; nunca `fixed` (D256). */
+.appbar-aviso {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* mismo ancho que .app y la barra */
+  z-index: 18;
+  padding: 20px var(--sp-4) calc(var(--appbar-alto) + 40px);
+  background: linear-gradient(to bottom, transparent, var(--gray-l) 20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.aviso-sin-mesas-titulo {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--text);
+}
+.aviso-sin-mesas-cuerpo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.aviso-sin-mesas-camara {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+/* D275 · con el aviso al pie, el final del contenido queda encima de su franja:
+   la barra, los 40 px, el texto (~51) y el fundido (20), con margen. Lo mide
+   e2e/d275-burbuja-del-viaje.spec.ts, con y sin el inset de abajo. */
+.has-appbar .scroll.con-aviso-sin-mesas {
+  padding-bottom: calc(var(--appbar-alto) + 128px);
+}
+
 /* Fila propia arriba de la barra: acá vive lo dinámico (el importe), para que
    el nav item de abajo no cambie de texto según el estado. */
 .appbar-above {
@@ -3077,7 +3129,7 @@ html.app-de-inicio-ios .app {
      quedaban con ~52 pt de blanco debajo. Ahora el inset reemplaza a esos 8 px
      en vez de sumarse: los íconos bajan 8 px y siguen fuera de la zona del
      indicador. En Safari, con inset 0, la barra no cambia: 64 px y 8 px. */
-  height: calc(56px + var(--appbar-pie));
+  height: var(--appbar-alto);
   padding: 8px var(--sp-2) var(--appbar-pie);
 }
 

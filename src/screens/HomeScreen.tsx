@@ -34,7 +34,8 @@ import { useSinLeer } from '../components/useSinLeer';
 import { useViajesHabilitado, type ListaDeViajes } from '../api/viajes';
 import { inicioPideViajes, olvidarInicioEnViajes } from './viajes/inicioEnViajes';
 import { ListaDeCerrados, PanelViajes, useCerradosDeViajes } from './viajes/PestanaViajes';
-import { ViajesAbiertosEnInicio } from './viajes/ViajesEnInicio';
+import { restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes } from './viajes/ViajesEnInicio';
+import { AvisoSinMesas } from './AvisoSinMesas';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -193,6 +194,10 @@ export function HomeScreen() {
   const [viajesAbiertos, setViajesAbiertos] = useState<ListaDeViajes | null>(
     () => ultimoVisto.leer<ListaDeViajes>('inicio.viajesAbiertos') ?? null,
   );
+  // D271 · los restaurantes con gente por elegir de esos viajes: lo último visto, con el mismo dueño que la lista.
+  const [pendientesDeViajes, setPendientesDeViajes] = useState<PendientesDeViajes | null>(
+    () => ultimoVisto.leer<PendientesDeViajes>('inicio.pendientesDeViajes') ?? null,
+  );
   const [viajesFallaron, setViajesFallaron] = useState(false);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const unread = useSinLeer();
@@ -238,6 +243,10 @@ export function HomeScreen() {
   /**
    * D265 · los viajes abiertos, con la misma regla de la mesa (T-01): el turno se saca al pedir, lo que llega de otra
    * cuenta ni se guarda ni se muestra, y un error tardío de otra cuenta no borra nada. Sin Viajes, no se piden.
+   *
+   * D271 · después, el detalle de cada viaje abierto, para sus restaurantes con gente por elegir. Se guarda con el MISMO
+   * turno de la lista: si cambió la cuenta o la generación, no se guarda ninguno de los dos. Un detalle que falla deja a
+   * su viaje sin pendientes (lo guardado de él no se muestra como cierto): la burbuja del viaje sigue, y adentro está.
    */
   const cargarViajes = useCallback(() => {
     setViajesFallaron(false);
@@ -246,12 +255,23 @@ export function HomeScreen() {
       .getViajes('abiertos')
       .then((r) => {
         const g = ultimoVisto.guardar(turno, 'inicio.viajesAbiertos', r);
-        if (g) setViajesAbiertos(g.valor);
+        if (!g) return undefined;
+        setViajesAbiertos(g.valor);
+        const abiertos = r.viajes.filter((v) => v.estado === 'abierto');
+        return Promise.all(abiertos.map((v) => api.getViaje(v.id).then(
+          (d) => [v.id, restaurantesPendientes(d)] as const,
+          () => null,
+        ))).then((pares) => {
+          const pendientes: PendientesDeViajes = Object.fromEntries(pares.filter((p) => p !== null));
+          const p = ultimoVisto.guardar(turno, 'inicio.pendientesDeViajes', pendientes);
+          if (p) setPendientesDeViajes(p.valor);
+        });
       })
       .catch(() => {
         if (!ultimoVisto.esDeAhora(turno)) return;
-        ultimoVisto.olvidar('inicio.viajesAbiertos');
+        ultimoVisto.olvidar('inicio.viajesAbiertos', 'inicio.pendientesDeViajes');
         setViajesAbiertos(null);
+        setPendientesDeViajes(null);
         setViajesFallaron(true);
       });
   }, []);
@@ -289,6 +309,11 @@ export function HomeScreen() {
   // payload. D181 · una tarjeta por mesa, en ese orden (sin «+N más» ni hoja).
   const porUrgencia = openMesas ? ordenarPorUrgencia(openMesas.mesas) : [];
   const masked = '$ ••••';
+  /**
+   * D275 · «No tienes mesas abiertas» va al pie, sobre la barra, y sólo con la lista de mesas ya leída y vacía: ni
+   * cargando ni con error. D246 · en la pestaña Viajes no se muestra.
+   */
+  const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';
 
   return (
     <div className="screen has-appbar">
@@ -309,7 +334,8 @@ export function HomeScreen() {
         />}
       />
 
-      <div className="scroll">
+      {/* D275 · con el aviso al pie, el final del contenido queda encima de él y de la barra. */}
+      <div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>
         {aperturaPendiente && (
           <button type="button" className="note note-orange aviso-retome" onClick={() => navigate('scan')}>
             <b>{t('Dejaste una autorización sin confirmar.')}</b>{' '}
@@ -479,24 +505,16 @@ export function HomeScreen() {
                 );
               })}
             </div>
-          ) : (
-            /* Vacío REAL: sin borde —es el único estado que no lo lleva— y sin
-               botón propio. La acción ya está en el círculo naranja de la barra,
-               a un centímetro: duplicarla sería competirle. */
-            /* D246 · con la pestaña Viajes, el vacío de mesas no se muestra. */
-            tab !== 'viajes' && (
-              <div className="mesa-empty">
-                <div className="mesa-empty-title">{t('No tienes mesas abiertas')}</div>
-                <p className="mesa-empty-body">{t('Toca el + para abrir una')}</p>
-              </div>
-            )
-          )}
+          ) : null
+          /* Vacío REAL: la sección queda vacía (sin alto, su margen colapsa con los 28 px de los viajes) y el aviso
+             «No tienes mesas abiertas» va al pie, sobre la barra (D275, `avisoSinMesas`). */}
         </section>
 
-        {/* D265 · D267 · cada viaje abierto, como una mesa abierta: foto o inicial, nombre y balance. */}
+        {/* D265 · D275 · cada viaje abierto: foto o inicial, nombre y monto; debajo, sus restaurantes pendientes (D271). */}
         {conViajes && (
           <ViajesAbiertosEnInicio
             viajes={viajesAbiertos?.viajes ?? null}
+            pendientes={pendientesDeViajes}
             fallo={viajesFallaron}
             onReintentar={() => void cargarViajes()}
           />
@@ -596,7 +614,7 @@ export function HomeScreen() {
         )}
       </div>
 
-      <AppBottomBar active="home" />
+      <AppBottomBar active="home" aviso={avisoSinMesas ? <AvisoSinMesas /> : undefined} />
 
     </div>
   );

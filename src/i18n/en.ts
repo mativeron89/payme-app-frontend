@@ -652,7 +652,10 @@ export const EN: Record<string, string> = {
   "Tienes una apertura sin confirmar. Reinténtala tal cual antes de cambiar el ticket.": "You have an unconfirmed opening. Retry it as-is before changing the ticket.",
   "Tienes una apertura sin confirmar: reinténtala antes de cambiar la mesa": "You have an unconfirmed opening: retry it before changing the table",
   "Tipo de cocina favorito": "Favorite cuisine",
-  "Toca el + para abrir una": "Tap + to open one",
+  // D275 · «Toca el [cámara] para abrir una»: el ícono va entre los dos textos.
+  "Toca el": "Tap the",
+  "para abrir una": "to open one",
+  "ícono de cámara": "camera icon",
   "Todavía no agregaste amigos.": "You haven't added any friends yet.",
   "Todavía no creaste grupos.": "You haven't created any groups yet.",
   "Elegir a quién invitar": "Choose who to invite",

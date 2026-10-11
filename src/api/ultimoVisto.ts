@@ -40,6 +40,8 @@ export type ClaveUltimoVisto =
   | 'inicio.mesasAbiertas'
   /** D265 · los viajes abiertos, como burbujas en Inicio. */
   | 'inicio.viajesAbiertos'
+  /** D271 · los restaurantes con gente por elegir de esos viajes, con el MISMO turno que la lista. */
+  | 'inicio.pendientesDeViajes'
   | 'inicio.invitaciones'
   | 'inicio.avisoFoto'
   | 'sinLeer'
@@ -215,7 +217,7 @@ export function olvidarLoDeMesas(): void {
  * agregan, sacan o cambian de estado una burbuja.
  */
 export function olvidarLoDeViajes(): void {
-  ultimoVisto.olvidar('inicio.viajesAbiertos');
+  ultimoVisto.olvidar('inicio.viajesAbiertos', 'inicio.pendientesDeViajes');
 }
 
 /** Borra todo lo de Amigos (después de responder, bloquear o tocar grupos). */

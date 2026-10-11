@@ -143,6 +143,10 @@ const GLYPHS = {
      acordeón. Apunta abajo en reposo: la fila se expande hacia abajo empujando
      a las siguientes, y el glifo dice hacia dónde. */
   'chevron-down': { d: ['M6 9.5 12 15.5l6-6'] },
+  /* D275 · el chevron de la burbuja del restaurante pendiente: lleva a otra pantalla. */
+  'chevron-right': { d: ['m9 6 6 6-6 6'] },
+  /* D275 · los cubiertos del restaurante pendiente, con el trazo del prototipo de Claude Design. */
+  cubiertos: { d: ['M7 3v8', 'M5 3v5a2 2 0 0 0 4 0V3', 'M7 11v10', 'M17 21V3c-2 0-3.5 2.5-3.5 6s1.5 4 3.5 4'] },
   /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la
      observación del total. `info` va SIEMPRE con su texto al lado: el ícono
      solo no informa nada, y el sistema prohíbe que el color o el glifo sean el

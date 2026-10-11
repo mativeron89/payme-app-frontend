@@ -138,6 +138,14 @@
 }
 .vj-insignia--color { color: #fff; }
 .vj-insignia--grande { width: 48px; height: 48px; }
+/* D275 · la de la burbuja del viaje en Inicio: cuadrada redondeada, el círculo queda para personas. */
+.vj-insignia--burbuja {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  font-size: 28px;
+  line-height: 1;
+}
 .vj-insignia-foto {
   width: 100%;
   height: 100%;

@@ -1,52 +1,92 @@
-import type { ViajeEnLista } from '../../api/viajes';
+import type { DetalleViaje, TipoLugar, ViajeEnLista } from '../../api/viajes';
 import { Icon } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
 import { navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { InsigniaDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
-import { textoDeMiBalance, type T } from './viajesView';
+import { etiquetaTipoLugar, parametroDeTicket, type T } from './viajesView';
 import './viajes.css';
 import './inicio.css';
 
 /**
- * D265 · D267 · cada viaje abierto, en Inicio, como una burbuja grande «como si fuera una mesa abierta». Mati: «que
- * aparezca en la pantalla principal como una burbuja grande que tenga la foto y el nombre del viaje» y «tiene que tener
- * tres cosas, la foto, el nombre y la posición de saldo (con el color dependiendo cuál sea la posición)».
+ * D265 · cada viaje abierto, en Inicio, como una burbuja propia. D275 · con el diseño de Claude Design
+ * (`PANTALLA-burbuja-del-viaje.md`, §1): sólo la foto (o la inicial sobre el color del viaje), el nombre y el monto.
  *
- * - La foto o la inicial, sobre el color del viaje: el color del viaje queda en el círculo y nada más.
- * - El balance propio, con el texto de la app («Te deben $X», «Debes $X», «Estás a mano») y los colores del balance
- *   del viaje (D245). Nunca «saldo».
- * - Esperando pagos: «Esperando pagos · faltan N», sin monto. En ese estado `mi_balance_cents` es el balance congelado
- *   al cerrar y no baja con las transferencias: «Debes $X» podría ser falso si ya pagaste.
+ * - Salieron «Tu viaje abierto», «Te deben» y «Ver viaje →»: toda la burbuja es el botón y el color del monto dice la
+ *   dirección (verde si te deben, el del texto en cero, rojo con «−» si debes). Supersede, para la burbuja, el texto de
+ *   D267: el monto con su color es la posición.
+ * - Un viaje que espera pagos se ve igual que uno abierto, con su monto (Mati eligió «Igual que abierto»). Nunca «saldo».
  */
-export type BalanceDeLaBurbuja =
-  | { readonly tono: 'a-favor' | 'deuda' | 'cero'; readonly texto: string }
-  | { readonly tono: 'esperando'; readonly texto: string };
+export type TonoDelMonto = 'a-favor' | 'deuda' | 'cero';
 
-export function balanceDeLaBurbuja(
-  v: Pick<ViajeEnLista, 'estado' | 'mi_balance_cents' | 'transferencias_pendientes'>,
-  t: T,
-): BalanceDeLaBurbuja {
-  if (v.estado === 'esperando_pagos') {
-    return { tono: 'esperando', texto: t('Esperando pagos · faltan {0}', v.transferencias_pendientes ?? 0) };
-  }
-  const cents = v.mi_balance_cents ?? 0;
-  return { tono: cents > 0 ? 'a-favor' : cents < 0 ? 'deuda' : 'cero', texto: textoDeMiBalance(cents, t, formatMXN) };
+/** El monto de la burbuja: `formatMXN` (centavos sólo si los hay) y, si debes, el signo menos tipográfico (U+2212). */
+export function montoDeLaBurbuja(cents: number): { readonly tono: TonoDelMonto; readonly texto: string } {
+  if (cents < 0) return { tono: 'deuda', texto: `\u2212${formatMXN(-cents)}` };
+  return { tono: cents > 0 ? 'a-favor' : 'cero', texto: formatMXN(cents) };
+}
+
+/** Lo que oye el lector de pantalla: «Holbox, te deben $10,565.68», «Holbox, debes $542», «Holbox, estás al día». */
+export function etiquetaDeLaBurbuja(nombre: string, cents: number, t: T): string {
+  if (cents < 0) return t('{0}, debes {1}', nombre, formatMXN(-cents));
+  if (cents > 0) return t('{0}, te deben {1}', nombre, formatMXN(cents));
+  return t('{0}, estás al día', nombre);
+}
+
+/**
+ * D271 · un ticket del viaje con gente por elegir. Mati: «la burbuja del restaurante tiene que figurar en inicio también
+ * para facilitar la carga», la ven «Todos, hasta que elijan todos», y va «debajo de la burbuja del viaje, pero separada».
+ * Se guarda el dato del dueño, sin traducir: el caché no depende del idioma.
+ */
+export interface RestaurantePendiente {
+  readonly ticket_id: string;
+  readonly lugar: string | null;
+  readonly tipo_lugar: TipoLugar;
+  /** Cuántos del ticket no tocaron «Listo» (`falta_que_elija`). */
+  readonly faltan: number;
+}
+
+/** Por viaje (su id), sus restaurantes pendientes. Un viaje que no se pudo preguntar no está. */
+export type PendientesDeViajes = Readonly<Record<string, readonly RestaurantePendiente[]>>;
+
+/**
+ * Los tickets de un viaje ABIERTO en los que alguien todavía no eligió, en el orden del dueño (del más reciente al más
+ * viejo). Sólo los escaneados que se eligen por lo que pidió cada uno (`forma: 'consumo'`): los gastos a mano se reparten
+ * entre los presentes y nunca esperan a nadie. Se lee `falta_que_elija` y no `sin_repartir`: el dueño deja afuera de
+ * `sin_repartir` un ticket con todos los platos asignados en el que alguien no tocó «Listo», y D271 dice «hasta que
+ * elijan todos» (adenda del Bibliotecario, 2026-10-11).
+ */
+export function restaurantesPendientes(viaje: DetalleViaje): readonly RestaurantePendiente[] {
+  if (viaje.estado !== 'abierto') return [];
+  return viaje.tickets
+    .filter((tk) => tk.forma === 'consumo' && tk.origen === 'escaneo' && tk.falta_que_elija > 0)
+    .map((tk) => ({ ticket_id: tk.id, lugar: tk.lugar, tipo_lugar: tk.tipo_lugar, faltan: tk.falta_que_elija }));
+}
+
+/** «Faltan N por elegir»; con uno, «Falta 1 por elegir». */
+export function textoDeFaltan(n: number, t: T): string {
+  return n === 1 ? t('Falta 1 por elegir') : t('Faltan {0} por elegir', n);
+}
+
+/** Lo que oye el lector de pantalla: «La Parolaccia, faltan 2 por elegir». */
+export function etiquetaDelPendiente(lugar: string, n: number, t: T): string {
+  return n === 1 ? t('{0}, falta 1 por elegir', lugar) : t('{0}, faltan {1} por elegir', lugar, n);
 }
 
 /** Las burbujas, con las fotos de los viajes que tienen. */
-export function ViajesAbiertosEnInicio({ viajes, fallo, onReintentar }: {
+export function ViajesAbiertosEnInicio({ viajes, pendientes, fallo, onReintentar }: {
   viajes: readonly ViajeEnLista[] | null;
+  pendientes: PendientesDeViajes | null;
   fallo: boolean;
   onReintentar: () => void;
 }) {
   const { fotoDe } = useFotosDeViajes(viajes);
-  return <ViajesAbiertosVista viajes={viajes} fallo={fallo} onReintentar={onReintentar} fotoDe={fotoDe} />;
+  return <ViajesAbiertosVista viajes={viajes} pendientes={pendientes} fallo={fallo} onReintentar={onReintentar} fotoDe={fotoDe} />;
 }
 
 /** La vista pura. Cargando o sin viajes abiertos: nada. Sin poder preguntar: el error con «Reintentar». */
-export function ViajesAbiertosVista({ viajes, fallo, onReintentar, fotoDe = () => null }: {
+export function ViajesAbiertosVista({ viajes, pendientes = null, fallo, onReintentar, fotoDe = () => null }: {
   viajes: readonly ViajeEnLista[] | null;
+  pendientes?: PendientesDeViajes | null;
   fallo: boolean;
   onReintentar: () => void;
   fotoDe?: (viajeId: string) => string | null;
@@ -73,26 +113,49 @@ export function ViajesAbiertosVista({ viajes, fallo, onReintentar, fotoDe = () =
   if (!viajes || viajes.length === 0) return null;
   return (
     <section className="home-viajes" aria-label={t('Tus viajes abiertos')}>
-      <div className="home-mesas">
-        {viajes.map((v) => {
-          const balance = balanceDeLaBurbuja(v, t);
-          return (
-            <button key={v.id} type="button" className="mesa-card viaje-card" onClick={() => navigate('viaje', v.id)}>
-              <div className="mesa-top">
-                <span className="mesa-kicker">{t('Tu viaje abierto')}</span>
-              </div>
-              <div className="viaje-card-cabeza">
-                <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} grande />
-                <span className="mesa-name viaje-card-nombre">{v.nombre}</span>
-              </div>
-              <div className={`viaje-card-balance viaje-card-balance--${balance.tono}`}>{balance.texto}</div>
-              <div className="mesa-foot">
-                <span className="mesa-go viaje-card-ir">{t('Ver viaje →')}</span>
-              </div>
+      {viajes.map((v) => {
+        const cents = v.mi_balance_cents ?? 0;
+        const monto = montoDeLaBurbuja(cents);
+        return (
+          <div key={v.id} className="viaje-grupo">
+            <button
+              type="button"
+              className="viaje-burbuja"
+              aria-label={etiquetaDeLaBurbuja(v.nombre, cents, t)}
+              onClick={() => navigate('viaje', v.id)}
+            >
+              <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} burbuja />
+              <span className="viaje-burbuja-texto">
+                <span className="viaje-burbuja-nombre">{v.nombre}</span>
+                <span className={`viaje-burbuja-monto viaje-burbuja-monto--${monto.tono}`}>{monto.texto}</span>
+              </span>
             </button>
-          );
-        })}
-      </div>
+            {(pendientes?.[v.id] ?? []).map((p) => {
+              const lugar = p.lugar ?? etiquetaTipoLugar(p.tipo_lugar, t);
+              return (
+                <button
+                  key={p.ticket_id}
+                  type="button"
+                  className="viaje-pendiente"
+                  aria-label={etiquetaDelPendiente(lugar, p.faltan, t)}
+                  onClick={() => navigate('viaje-ticket', parametroDeTicket(v.id, p.ticket_id))}
+                >
+                  <span className="viaje-pendiente-ico" aria-hidden="true">
+                    <Icon name="cubiertos" size={20} />
+                  </span>
+                  <span className="viaje-pendiente-texto">
+                    <span className="viaje-pendiente-nombre">{lugar}</span>
+                    <span className="viaje-pendiente-faltan">{textoDeFaltan(p.faltan, t)}</span>
+                  </span>
+                  <span className="viaje-pendiente-ir" aria-hidden="true">
+                    <Icon name="chevron-right" size={18} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </section>
   );
 }

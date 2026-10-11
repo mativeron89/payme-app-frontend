@@ -73,7 +73,9 @@ describe('E173-2 · la barra inferior nunca queda fuera de lo visible', () => {
 
   it('captura 6 · el inset de abajo reemplaza los 8 px de la barra, no se suma', () => {
     const barra = regla('.appbar');
-    expect(efectivo(barra, 'height')).toBe('calc(56px + var(--appbar-pie))');
+    // D275 · el alto vive en UNA variable, que también usa el aviso que flota sobre la barra: la fórmula es la misma.
+    expect(efectivo(barra, 'height')).toBe('var(--appbar-alto)');
+    expect(efectivo(regla(':root'), '--appbar-alto')).toBe('calc(56px + var(--appbar-pie))');
     expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) var(--appbar-pie)');
   });
 
