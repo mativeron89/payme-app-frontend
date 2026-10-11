@@ -5,6 +5,7 @@ import { CardsPanel } from '../components/CardsPanel';
 import { goBack } from '../router';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **Tarjetas** — la pantalla real que lanza el acceso "Ver tarjetas" de la
@@ -26,7 +27,9 @@ export function TarjetasScreen() {
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Mis tarjetas')}</h1>
+        <FilaDeTitulo icono="tarjeta">
+          <h1 className="title-card-title">{t('Mis tarjetas')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         <CardsPanel />

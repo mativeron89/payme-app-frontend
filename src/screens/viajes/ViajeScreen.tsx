@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { createPortal } from 'react-dom';
 import { api } from '../../api';
 import {
-  COLORES_VIAJE,
   errorDeViaje,
   type AccionTransferencia,
   type DetalleViaje,
@@ -45,10 +44,11 @@ import {
 import { pedirInicioEnViajes } from './inicioEnViajes';
 import { circuloDelViaje, recordarNombreDeViaje } from './circuloDelViaje';
 import { ConfiguracionDelViaje } from './ConfiguracionDelViaje';
-import { InsigniaDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
+import { CuadroDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import './viajes.css';
 import './viaje.css';
 import { olvidarLoDeViajes } from '../../api/ultimoVisto';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · el viaje (`/viaje/<id>`): abierto (1g) con su hoja de
@@ -515,7 +515,9 @@ export function ViajeVista(props: ViajeVistaProps) {
     return (
       <>
         <div className="title-card">
-          <h1 className="title-card-title">{t('Viajes')}</h1>
+          <FilaDeTitulo icono="maleta">
+            <h1 className="title-card-title">{t('Viajes')}</h1>
+          </FilaDeTitulo>
         </div>
         <div className="scroll vj-scroll">
           <EstadoSinViaje carga={carga} onReintentar={props.onReintentar} onVerViajes={props.onVerViajes} />
@@ -537,34 +539,21 @@ export function ViajeVista(props: ViajeVistaProps) {
 }
 
 /**
- * D255 tramo 2 · la burbuja del viaje lleva su color (la paleta del dueño, con
- * texto blanco) y, si tiene, su foto junto al nombre. Sin color, la de siempre.
+ * D255 tramo 2 · la burbuja del viaje lleva su color y, si tiene, su foto.
+ * D285 · 0.242.0: la tarjeta queda blanca aunque el viaje tenga color (antes `vj-titulo-color` la pintaba entera): el
+ * color o la foto van sólo en el cuadro, a la izquierda del nombre.
  */
-function estiloDeBurbuja(v: DetalleViaje): { readonly className: string; readonly style?: { background: string } } {
-  return v.color
-    ? { className: 'title-card vj-titulo-color', style: { background: COLORES_VIAJE[v.color] } }
-    : { className: 'title-card' };
-}
-
-function NombreDelViaje({ viaje: v, foto }: { viaje: DetalleViaje; foto: string | null }) {
-  if (!foto) return <h1 className="title-card-title">{v.nombre}</h1>;
-  return (
-    <div className="vj-titulo-fila">
-      <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={foto} grande />
-      <h1 className="title-card-title">{v.nombre}</h1>
-    </div>
-  );
-}
-
 function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string | null }) {
   const { t } = useIdioma();
-  const burbuja = estiloDeBurbuja(v);
+  const cuadro = <CuadroDelViaje nombre={v.nombre} color={v.color} foto={foto} />;
   if (v.estado !== 'abierto') {
     const conChip = vistaDePagos(v.transferencias) !== 'resto';
     return (
-      <div {...burbuja}>
-        <NombreDelViaje viaje={v} foto={foto} />
-        <div className="title-card-sub">{t('Gasto del grupo {0}', formatMXN(v.gasto_del_grupo_cents))}</div>
+      <div className="title-card">
+        <FilaDeTitulo cuadro={cuadro}>
+          <h1 className="title-card-title">{v.nombre}</h1>
+          <div className="title-card-sub">{t('Gasto del grupo {0}', formatMXN(v.gasto_del_grupo_cents))}</div>
+        </FilaDeTitulo>
         {conChip && (
           <span className="vjv-chip vjv-chip-info vjv-titulo-chip">{t('Esperando pagos · faltan {0}', v.transferencias_pendientes)}</span>
         )}
@@ -573,8 +562,10 @@ function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string
   }
   // D245-2 · la burbuja dice sólo el nombre del viaje: sin fechas ni avatares.
   return (
-    <div {...burbuja}>
-      <NombreDelViaje viaje={v} foto={foto} />
+    <div className="title-card">
+      <FilaDeTitulo cuadro={cuadro}>
+        <h1 className="title-card-title">{v.nombre}</h1>
+      </FilaDeTitulo>
     </div>
   );
 }

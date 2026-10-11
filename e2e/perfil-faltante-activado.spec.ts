@@ -147,7 +147,7 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
 test('Notificaciones abre sólo el detalle acreditado y presenta el residual legacy literal', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Avisos' }).click();
-  await expect(page.getByRole('heading', { name: 'Notificaciones' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Avisos', exact: true, level: 1 })).toBeVisible();
 
   const toggle = page.getByRole('button', { name: 'Quién no pagó' });
   await expect(toggle).toBeVisible();
@@ -174,7 +174,7 @@ test('OFF, ausente, malformado, 2.2.0 supersedido y aviso desconocido apagan amb
   }
 
   await page.getByRole('button', { name: 'Avisos' }).click();
-  await expect(page.getByRole('heading', { name: 'Notificaciones' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Avisos', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Quién no pagó' })).toHaveCount(0);
   await expect(page.getByText('Se cobró el faltante de la mesa ($210) a tu garantía.')).toBeVisible();
 });

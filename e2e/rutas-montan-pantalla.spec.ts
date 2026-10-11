@@ -172,7 +172,7 @@ const ESPERADO: Record<PageId, Esperado> = {
   mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mesas' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escanea el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Configuración' } },
-  avisos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', nivel: 1 } },
+  avisos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Avisos', nivel: 1 } },
   // AF2 · LEGAL-3.0.0 / decisiones 33-37: Configuración › Notificaciones.
   notificaciones: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', exacto: true } },
 

@@ -41,7 +41,7 @@ async function acreditar(
   nombre: string,
   titleCard = true,
   titlePadding = { top: '16px', right: '18px', bottom: '16px', left: '18px' },
-  titleJustify: 'center' | 'space-between' = 'center',
+  titleJustify: 'center' | 'flex-start' = 'center',
 ): Promise<void> {
   const app = page.locator('.app');
   await expect(app).toBeVisible();
@@ -207,7 +207,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await expect(page.locator('.mounted-card')).toHaveCSS('border-top-left-radius', '0px');
 
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
   const garantiaAgregada = page.locator('.aviso-row--guarantee');
   await expect(garantiaAgregada).toHaveCount(1);
   await expect(garantiaAgregada).toHaveCSS('background-color', 'rgb(251, 231, 227)');
@@ -226,9 +226,8 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditarCamara(page);
   await sacarFoto(page);
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
-  await acreditar(page, '04-division', true, {
-    top: '10px', right: '18px', bottom: '12px', left: '18px',
-  });
+  // D285 (0.242.0): la tarjeta del ticket lleva el padding 16 / 18 de todas las tarjetas.
+  await acreditar(page, '04-division');
   const divisionScroll = await page.locator('.ticket-flow-scroll').evaluate((node) => ({
     clientHeight: node.clientHeight,
     scrollHeight: node.scrollHeight,
@@ -273,10 +272,9 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   });
   await page.getByRole('button', { name: 'Copiar link de invitación', exact: true }).click();
   await expect(page.locator('.toast')).toHaveText('Link de invitación copiado ✓');
-  // M04 (`9c78a7b`, v0.184.0): `.mesa-selection-title` pasó a una sola línea
-  // contextual con `padding: var(--sp-3) var(--sp-4)` (12px 16px) y `min-height: 0`,
-  // para que restaurante, código y modo no inflen la burbuja.
-  await acreditar(page, '07-mis-items', true, { top: '12px', right: '16px', bottom: '12px', left: '16px' });
+  // M04 (`9c78a7b`, v0.184.0) dejó `.mesa-selection-title` en 12px 16px; D285 (0.242.0) la lleva al padding
+  // 16 / 18 de todas las tarjetas, con el cuadro del ícono a la izquierda.
+  await acreditar(page, '07-mis-items');
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el censo se detiene en
@@ -297,17 +295,17 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await page.goto('/#/estadisticas');
   await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeVisible();
   // n226 · la tarjeta tiene DOS estados: mientras carga es la de título
-  // (centrada) y con los datos es la burbuja del mes (2a: período a la
-  // izquierda, dato a la derecha, `space-between`). Medir «lo que haya» hacía
+  // (centrada en vertical) y con los datos es la burbuja del mes (D285: el cuadro,
+  // el período y el dato a la derecha). Medir «lo que haya» hacía
   // que el censo pasara o fallara según la latencia del mock. Se mide el estado
   // FINAL, con su valor exacto; que el cambio no mueve nada lo prueba el test
   // de abajo.
   await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
   // E173-4 · el total de la burbuja de Estadísticas es `.est-total` (Claude Design).
   await expect(page.locator('.est-total')).toHaveText(/^\$[\d,]+(?:\.\d{2})?$/);
-  // E173-4 · la burbuja de Claude Design: padding 16 / 18 / 16 / 8 (el botón del
-  // período lleva su propio aire a la izquierda). `PANTALLA-estadisticas.md` §1.
-  await acreditar(page, '12-estadisticas', true, { top: '16px', right: '18px', bottom: '16px', left: '8px' }, 'space-between');
+  // D285 (0.242.0): la burbuja lleva el padding 16 / 18 de todas las tarjetas (antes 16 / 18 / 16 / 8, E173-4) y la
+  // fila arranca a la izquierda: el cuadro del ícono, el período y el dato a la derecha (`margin-left: auto`).
+  await acreditar(page, '12-estadisticas', true, undefined, 'flex-start');
 });
 
 /**
@@ -341,7 +339,8 @@ test('n226 · «Mis estadísticas»: la tarjeta pasa de título a burbuja del me
   expect(cargando.burbuja).toBe(false);
   await page.evaluate(() => (window as unknown as { __n226Soltar: () => void }).__n226Soltar());
   await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
-  await expect(tarjeta).toHaveCSS('justify-content', 'space-between');
+  // D285: la fila arranca a la izquierda; el dato va a la derecha por `margin-left: auto`.
+  await expect(tarjeta).toHaveCSS('justify-content', 'flex-start');
   const listo = await medir();
   expect(listo.burbuja).toBe(true);
   expect(listo.caja).toEqual(cargando.caja);

@@ -19,6 +19,7 @@ import { CuentasConectadas } from './CuentasConectadas';
 import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 import { GuiaAgregarAInicio, usePlataformaDeInstalacion } from '../instalar/GuiaAgregarAInicio';
 import { pedirInstalacion, tieneGuia, type PlataformaConGuia } from '../instalar/agregarAInicio';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -76,7 +77,9 @@ export function MasScreen() {
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Configuración')}</h1>
+        <FilaDeTitulo icono="engranaje">
+          <h1 className="title-card-title">{t('Configuración')}</h1>
+        </FilaDeTitulo>
       </div>
       {/* Longhands y no `padding: 16`: el shorthand inline PISA el
           `padding-bottom: 140px` de `.has-appbar .scroll`, y la última fila

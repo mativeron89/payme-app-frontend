@@ -132,7 +132,12 @@ test('Escaneo (cámara): la cabecera, la foto y los controles no se pisan', asyn
   expect(foto!.y + foto!.height).toBeLessThanOrEqual(controles!.y);
 });
 
-test('División muestra un acceso al ticket compacto, centrado y sin subtítulo', async ({ page }) => {
+/**
+ * D285 + D289 (0.242.0): la tarjeta del ticket va tal cual la especificación —la fila del título de 48, y debajo, a la
+ * izquierda, el total y «Ver el ticket», con 12 px entre las partes—. Ya no se pide menos de 150 px (mide unos 179):
+ * se mide que no tenga más que eso.
+ */
+test('División muestra un acceso al ticket compacto, a la izquierda y sin subtítulo', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await sacarFoto(page);
@@ -140,14 +145,17 @@ test('División muestra un acceso al ticket compacto, centrado y sin subtítulo'
   const card = page.locator('.ticket-title-card');
   const trigger = page.getByRole('button', { name: 'Ver el ticket', exact: true });
   await expect(trigger.locator('.tk-fold-sub')).toHaveCount(0);
-  const [cardBox, triggerBox] = await Promise.all([card.boundingBox(), trigger.boundingBox()]);
+  const [cardBox, triggerBox, filaBox, totalBox] = await Promise.all([
+    card.boundingBox(), trigger.boundingBox(), card.locator('.title-card-fila').boundingBox(),
+    card.locator('.ticket-title-amount').boundingBox(),
+  ]);
   await expect(card).not.toContainText('La Parolaccia');
-  expect(cardBox?.height).toBeLessThan(150);
+  // El borde (1 + 1), el padding (16 + 16), la fila, el total y el botón, con 12 px entre cada uno: nada más.
+  expect(cardBox!.height).toBeCloseTo(2 + 32 + filaBox!.height + 12 + totalBox!.height + 12 + triggerBox!.height, 0);
+  expect(filaBox!.height).toBe(48);
   expect(triggerBox?.width).toBeLessThan(180);
-  expect(Math.abs(
-    ((cardBox?.x ?? 0) + (cardBox?.width ?? 0) / 2)
-      - ((triggerBox?.x ?? 0) + (triggerBox?.width ?? 0) / 2),
-  )).toBeLessThanOrEqual(1);
+  // A la izquierda: donde empieza el contenido (borde 1 + padding 18).
+  expect(triggerBox!.x - cardBox!.x).toBeCloseTo(19, 0);
 });
 
 test('Configuración retira el cartel demo y conserva reinicio como fila compacta', async ({ page }) => {
@@ -162,7 +170,8 @@ test('Configuración retira el cartel demo y conserva reinicio como fila compact
 test('Notificaciones conserva la invitación sólo en su tarjeta accionable', async ({ page }) => {
   await ingresar(page);
   await page.goto('/#/avisos');
-  await expect(page.getByText('Notificaciones', { exact: true })).toHaveCount(1);
+  // D285-2 · la lista de la campana se llama «Avisos»: un solo título.
+  await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Sumarme', exact: true })).toBeVisible();
   await expect(page.locator('.aviso-row').filter({ hasText: 'Sofía Fernández te invitó a una mesa' }))
     .toHaveCount(0);

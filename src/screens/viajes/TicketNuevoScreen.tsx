@@ -50,6 +50,7 @@ import {
 import { etiquetaTipoLugar, iconoTipoLugar, nombreCompleto, nombreDelLugar, parametroDeTicket } from './viajesView';
 import './viajes.css';
 import './ticket.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · «Ticket nuevo» (diseño 1h) con «¿Quiénes estuvieron?»
@@ -248,8 +249,10 @@ function TituloTicketNuevo({ escanear, viajeNombre }: { escanear: boolean; viaje
   const { t } = useIdioma();
   return (
     <div className="title-card">
-      <h1 className="title-card-title">{escanear ? t('Escanear ticket') : t('Ticket nuevo')}</h1>
-      {viajeNombre && <div className="title-card-sub">{viajeNombre}</div>}
+      <FilaDeTitulo icono={escanear ? 'escanear' : 'recibo'}>
+        <h1 className="title-card-title">{escanear ? t('Escanear ticket') : t('Ticket nuevo')}</h1>
+        {viajeNombre && <div className="title-card-sub">{viajeNombre}</div>}
+      </FilaDeTitulo>
     </div>
   );
 }

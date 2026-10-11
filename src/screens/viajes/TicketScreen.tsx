@@ -51,6 +51,7 @@ import { iconoTipoLugar, nombreCompleto, nombreDePila, nombreDelLugar, type T } 
 import { circuloDelViaje } from './circuloDelViaje';
 import './viajes.css';
 import './ticket.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · un ticket del viaje: elegir lo que consumí (1i), «Pagar
@@ -319,10 +320,15 @@ export function TicketEstadoVista({ estado, onReintentar }: {
   const { t } = useIdioma();
   return (
     <>
-      {/* Sin el ticket no hay lugar que nombrar: la tarjeta de título queda
-          (el mismo alto) y, mientras carga, con la silueta del nombre. */}
+      {/* Sin el ticket no hay lugar que nombrar. D285 · la tarjeta lleva el recibo y dos siluetas en lugar del título,
+          mientras carga y también sin el ticket (fila 21 de la especificación). */}
       <div className="title-card">
-        {estado === 'cargando' && <span className="sk-line tall w55 vjt-centrado" aria-hidden="true" />}
+        <FilaDeTitulo icono="recibo">
+          <span className="title-card-siluetas" aria-hidden="true">
+            <span className="title-card-silueta" />
+            <span className="title-card-silueta title-card-silueta--sub" />
+          </span>
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
         {estado === 'cargando' ? (
@@ -388,8 +394,10 @@ export function TicketVista(props: TicketVistaProps) {
   return (
     <>
       <div className="title-card">
-        <h1 className="title-card-title">{nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t)}</h1>
-        <div className="title-card-sub">{subtituloDelTicket(ticket, miembros, idioma, t)}</div>
+        <FilaDeTitulo icono="recibo">
+          <h1 className="title-card-title">{nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t)}</h1>
+          <div className="title-card-sub">{subtituloDelTicket(ticket, miembros, idioma, t)}</div>
+        </FilaDeTitulo>
       </div>
       {ticket.forma === 'consumo' ? (
         <ConsumoVista {...props} />

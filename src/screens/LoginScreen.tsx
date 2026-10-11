@@ -58,6 +58,7 @@ import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
 import { useRecargaPorVersionNueva } from '../api/versionPublicada';
 import type { LegalAcceptanceRequest, LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * Login / registro según el contrato (routes/auth.js):
@@ -1837,46 +1838,49 @@ export function LoginScreen({
       </header>
 
       <div className="ingreso-burbuja">
-        <div className="ingreso-burbuja-titulo">
-          {pasoVincular
-            ? t('Conecta tu cuenta con Google')
-            : altaVuelta !== 'nada'
-              ? t('Crea tu cuenta con Google')
-            : mode === 'login'
-              // Decisión 74 de Mati, literal: «que diga solo Log in». Va igual en
-              // los dos idiomas y sin `t()`: una clave «Log in → Log in» la
-              // marcaría como copy sin traducir la guarda de `idioma.spec.ts`.
-              ? 'Log in'
-              : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
-        </div>
-        {/* Decisión 74: la burbuja de «Entrar» lleva SÓLO el título; el
-            subtítulo se quitó y la burbuja se ajusta sola (altura automática). */}
-        {altaVuelta === 'completar' && !pasoVincular && (
-          <div className="ingreso-burbuja-sub" role="status">
-            {t('Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».')}
+        {/* D285 · el mismo formato que la tarjeta de título: «Entrar» en «Log in»; «Persona con +» en el alta. */}
+        <FilaDeTitulo icono={!pasoVincular && altaVuelta === 'nada' && mode === 'login' ? 'entrar' : 'persona-mas'}>
+          <div className="ingreso-burbuja-titulo">
+            {pasoVincular
+              ? t('Conecta tu cuenta con Google')
+              : altaVuelta !== 'nada'
+                ? t('Crea tu cuenta con Google')
+              : mode === 'login'
+                // Decisión 74 de Mati, literal: «que diga solo Log in». Va igual en
+                // los dos idiomas y sin `t()`: una clave «Log in → Log in» la
+                // marcaría como copy sin traducir la guarda de `idioma.spec.ts`.
+                ? 'Log in'
+                : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
           </div>
-        )}
-        {altaVuelta === 'perfil' && !pasoVincular && (
-          <div className="ingreso-burbuja-sub" role="status">
-            {t('Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».')}
-          </div>
-        )}
-        {pasoGoogle && altaVuelta === 'nada' && !pasoVincular && (
-          <div className="ingreso-burbuja-sub" role="status">
-            {tieneCredencial
-              ? t('Revisa tus datos y toca «Crear mi cuenta».')
-              : perfilActivo
-                ? t('Google no nos dio tu nombre. Escríbelo y toca «Continuar con Google» otra vez.')
-                : pasoGoogleRedirect
-                  ? t('Toca «Continuar con Google» otra vez para crear tu cuenta.')
-                  : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
-          </div>
-        )}
-        {pasoVincular && (
-          <div className="ingreso-burbuja-sub" role="status">
-            {t('Ya tienes una cuenta con este correo. Escribe tu contraseña para conectarla con Google.')}
-          </div>
-        )}
+          {/* Decisión 74: la burbuja de «Entrar» lleva SÓLO el título; el
+              subtítulo se quitó y la burbuja se ajusta sola (altura automática). */}
+          {altaVuelta === 'completar' && !pasoVincular && (
+            <div className="ingreso-burbuja-sub" role="status">
+              {t('Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».')}
+            </div>
+          )}
+          {altaVuelta === 'perfil' && !pasoVincular && (
+            <div className="ingreso-burbuja-sub" role="status">
+              {t('Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».')}
+            </div>
+          )}
+          {pasoGoogle && altaVuelta === 'nada' && !pasoVincular && (
+            <div className="ingreso-burbuja-sub" role="status">
+              {tieneCredencial
+                ? t('Revisa tus datos y toca «Crear mi cuenta».')
+                : perfilActivo
+                  ? t('Google no nos dio tu nombre. Escríbelo y toca «Continuar con Google» otra vez.')
+                  : pasoGoogleRedirect
+                    ? t('Toca «Continuar con Google» otra vez para crear tu cuenta.')
+                    : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
+            </div>
+          )}
+          {pasoVincular && (
+            <div className="ingreso-burbuja-sub" role="status">
+              {t('Ya tienes una cuenta con este correo. Escribe tu contraseña para conectarla con Google.')}
+            </div>
+          )}
+        </FilaDeTitulo>
       </div>
 
       <div className="ingreso-cuerpo">

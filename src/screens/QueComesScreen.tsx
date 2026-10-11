@@ -18,6 +18,7 @@ import { platosDistintos, platosTexto, sufijoDePeriodo, vecesTexto, visitasTexto
 import { AnilloSvg } from './AnilloSvg';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { useTandaVigente } from './useTandaVigente';
+import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **Qué comes** — pantalla 2c de «Mis estadísticas», sólo la vista por PLATOS
@@ -152,6 +153,7 @@ export function QueComesScreen() {
       {conDatos || soportaPeriodo ? (
         <div className="title-card stat-burbuja">
           <h1 className="stat-oculto">{verIngredientes ? t('Qué comes · ingrediente') : t('Qué comes')}</h1>
+          <CuadroDeTarjeta icono="cubiertos" />
           <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} inicio={soportaPeriodo ? periodoDeLaVista?.start ?? null : null} />
           {conDatos && (
             <div className="stat-burbuja-dato">
@@ -177,7 +179,9 @@ export function QueComesScreen() {
         </div>
       ) : (
         <div className="title-card">
-          <h1 className="title-card-title">{t('Qué comes')}</h1>
+          <FilaDeTitulo icono="cubiertos">
+            <h1 className="title-card-title">{t('Qué comes')}</h1>
+          </FilaDeTitulo>
         </div>
       )}
 

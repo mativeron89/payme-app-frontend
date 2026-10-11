@@ -91,6 +91,7 @@ import {
   showClosedInformativeSelection,
   type InformativeSelectionState,
 } from './informativeSelectionView';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -2336,12 +2337,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           {/* La burbuja cierra el flujo con título y subtítulo. El tilde y el
               importe viven una sola vez, dentro del comprobante. */}
           <div className="title-card recibo-cierre">
-            <h1 className="recibo-cierre-tit">
-              {t('¡Listo!')}
-            </h1>
-            <div className="body-text">
-              {t('Pagaste tu parte de la mesa')}
-            </div>
+            {/* D285 · el cuadro de cierre: el único naranja de las tarjetas. */}
+            <FilaDeTitulo icono="check" cierre>
+              <h1 className="title-card-title recibo-cierre-tit">
+                {t('¡Listo!')}
+              </h1>
+              <div className="title-card-sub">
+                {t('Pagaste tu parte de la mesa')}
+              </div>
+            </FilaDeTitulo>
           </div>
         <div className="scroll flow-scroll recibo-flow-scroll">
           <div className="card recibo-card">
@@ -2490,17 +2494,27 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             {/* <h1> y no <div>: con la cabecera navy la pantalla se quedaba
                 SIN encabezado accesible, que es peor que el defecto de color
                 que vino a arreglarse. Mismo patrón que scan, Garantía y 3DS. */}
-            <h1 className="pay-title-lbl">
-              {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagar mi parte')}
-            </h1>
-            {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
-                de método. Es el dato que dice DÓNDE se está pagando. */}
-            {frozenScope && mesa?.restaurant?.name && (
-              <div className="pay-title-place">
-                {mesa.restaurant.name}
-                {mesa.restaurant.address ? ` · ${mesa.restaurant.address}` : ''}
-              </div>
-            )}
+            <FilaDeTitulo icono="tarjeta">
+              <h1 className="title-card-title pay-title-lbl">
+                {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagar mi parte')}
+              </h1>
+              {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
+                  de método. Es el dato que dice DÓNDE se está pagando. */}
+              {frozenScope && mesa?.restaurant?.name && (
+                <div className="title-card-sub pay-title-place">
+                  {mesa.restaurant.name}
+                  {mesa.restaurant.address ? ` · ${mesa.restaurant.address}` : ''}
+                </div>
+              )}
+              {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
+                  salía base + 15 % adivinado: un número en pantalla que la
+                  persona no eligió, que es el bug que esto cierra. */}
+              {!frozenScope && (
+                <div className="title-card-sub pay-title-breakdown">
+                  {mesa.division_mode === 'igual' ? t('Tu parte') : t('Consumos propios')} · {formatMXN(itemsAmount)}
+                </div>
+              )}
+            </FilaDeTitulo>
             {/* Con un intento congelado, el monto de la pantalla NO es el del
                 pago que quedó en el aire (tras una recarga la selección
                 arranca vacía). Mostrarlo sería mentir sobre lo que se reenvía. */}
@@ -2543,16 +2557,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   </div>
                 )}
               </>
-            ) : (
-              <>
-                {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
-                    salía base + 15 % adivinado: un número en pantalla que la
-                    persona no eligió, que es el bug que esto cierra. */}
-                <div className="pay-title-breakdown">
-                  {mesa.division_mode === 'igual' ? t('Tu parte') : t('Consumos propios')} · {formatMXN(itemsAmount)}
-                </div>
-              </>
-            )}
+            ) : null}
           </div>
         <div className="scroll flow-scroll pay-flow-scroll">
           {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta

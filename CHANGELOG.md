@@ -11,6 +11,82 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.242.0 — La tarjeta de título blanca con ícono y la pantalla de carga nueva (D285, D286 y D289) (2026-10-11)
+
+Orden AF-TARJETA-DE-TITULO-BLANCA-20261011 (a36dea66…). Autoridad: D285 (ce1eb33b…: Compartir en navy, la campana pasa a
+«Avisos», el título a la izquierda), D286 revisión 6 (1fcfb1dd…: la pantalla de carga del paquete, tal cual) y D289
+(f670890f…: «¿Cómo dividen?» con la tarjeta tal cual, aunque se desplace). Diseño: `PANTALLA-tarjeta-de-titulo-blanca.md`
+(e25d98bb…) y `PANTALLA-pantalla-de-carga.md` (d03f38b4…). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+1. **La tarjeta (hecho).** `src/components/TarjetaDeTitulo.tsx`: `CuadroDeTarjeta`, `FilaDeTitulo` y los 23 íconos de la
+   especificación, con su `path` tal cual.
+   - El contenedor pasa a blanco: borde de 1 px en `--border`, `--sh-2`, gap 12, alineado a la izquierda. Conserva el −42,
+     el alto mínimo de 83, el padding 16 / 18 y el radio 22.
+   - El cuadro: 48 × 48, radio 14, navy, el ícono de 22 en blanco con trazo 1.7. A su derecha, el título (22/800, 1.2) y
+     el subtítulo (14, 1.4).
+   - Cada pantalla conserva su contenedor y sus clases. Salen los arreglos que la contradecían: el celeste y el centrado
+     de `.pay-title` y `.recibo-cierre`, el padding de la mesa y de Estadísticas, el título de 19 px del ticket, los
+     subtítulos de 13.5 de compartir y 3DS, y `vj-titulo-color`.
+2. **Los casos especiales (hecho).**
+   - ¡Listo! lleva el único cuadro naranja, con el check de trazo 2.6. Compartir va en navy.
+   - El viaje (filas 14, 15 y 24) lleva la foto en el cuadro, o la inicial blanca sobre su color; la tarjeta queda blanca.
+     La fila 24 (el viaje cerrado) pide aparte el detalle del viaje, sólo por el color y la foto: el resumen no los trae.
+     Si falla, queda la inicial sobre el turquesa.
+   - Estadísticas, sin título visible: el cuadro, el período y el dato a la derecha.
+   - El ticket cargando o no disponible: el recibo y dos siluetas (170 × 16 y 110 × 12). También el viaje cerrado
+     mientras carga.
+   - El ingreso, con el mismo formato.
+   - El chip «Esperando pagos» en celeste con el texto teal, 14/700.
+3. **El contenido extra (hecho).** El total del ticket en 32/800; la nota con su ⓘ de 15 y el texto de 13.5; «Ver el
+   ticket» a la izquierda; la barra de avance de 8 px sobre `--border` y el reloj en `--brand-ink`. Ningún texto cambia
+   salvo «Avisos».
+4. **La campana (hecho).** «Notificaciones» → «Avisos»; las preferencias siguen «Notificaciones». En inglés (adenda,
+   opción a), «Alerts» y «Alerts, {0} unread»; las preferencias siguen «Notifications». Se actualizaron
+   `tandaChica0810.test.tsx:61`, `e2e/tanda-chica-0810.spec.ts:271` y los e2e que buscaban el título «Notificaciones» en
+   la lista.
+5. **La clase completa (hecho).** Enumerada desde el código, no desde una lista: 35 contenedores en 23 archivos cubren las
+   41 filas (las 40 del inventario de 0.239.0 y «Corregir ticket» de 0.241.0). Comparé 0.239.0 (`20d66d6`) con la base
+   (`df60e3f`): sólo se suma esa. El censo está en `TarjetaDeTitulo.test.tsx`; cada contenedor lleva su cuadro y ninguna
+   regla vuelve al celeste ni al centrado.
+6. **El gobierno local (hecho).** `CLAUDE.md` suma «Anatomía de la tarjeta de título (D285, 0.242.0)». `AGENTS.md` es un
+   puntero a `CLAUDE.md` y no cambia.
+7. **La pantalla de carga (hecho, D286).** En el `#splash` de `index.html`:
+   - la franja con `env(safe-area-inset-top)`;
+   - la zona y los cuatro triángulos, con su recorte y su degradado;
+   - el ícono de la sección 4, sin `xmlns` ni metadatos, de 128 px y centrado;
+   - la entrada del ícono en 240 ms con el retardo de 300 ms. Con «reducir movimiento», sin animación.
+   - Se conservan los tiempos (300 de retardo, 200 de entrada, 12 s de rendición, 500 de mínimo, 160 de fundido) y
+     `src/splash.ts`.
+   - `vercel.ts` cambia sólo `HASH_STYLE_SPLASH_APP`, el hash del `<style>` nuevo (adenda de las 21:30:05Z). El viejo se
+     va, no se suma `'unsafe-inline'`, y `csp.test.ts` pasa sin tocarlo.
+8. **Las pruebas (hecho).**
+   - `e2e/tarjeta-de-titulo-blanca.spec.ts` mide a 390 cada fila: los estilos de la tarjeta, el cuadro, el ícono, el
+     título y los casos especiales (viaje con color y con foto, ¡Listo!, siluetas, Estadísticas). También mide la
+     campana en inglés.
+   - `e2e/splash.spec.ts` mide la pantalla de carga a 375, 390 y 430, y la versión con «reducir movimiento».
+   - Más los tests de unidad y los mutantes.
+
+**Decidido durante la entrega (declarado):**
+- **D289 · «¿Cómo dividen?».** Con la tarjeta tal cual, la tarjeta del ticket mide unos 179 px. A 390 × 664 la pantalla
+  pasa de largo 31 px; a 375 × 667, 48 px.
+  - Mati eligió «El diseño tal cual»: ahí rige la regla «no entra», la de 320 × 568.
+  - `nombre-en-ticket`, `burbuja-abajo` y `af-correcciones-visuales-01` pasan a esa regla. Donde entra, la burbuja sigue
+    anclada abajo (D222).
+  - Al bajar del todo, el desplazamiento es entero y la tarjeta no: el aire de 8 px puede perder hasta 1 px de redondeo
+    (7,47 medido a 320 × 568). Por eso el mínimo pasa de 7,5 a 7.
+- **El encabezado de la mesa (decisión 77).** El cuadro le quita 62 px a la línea; a 390, «Restaurante sin identificar»
+  se recorta con «…» (le faltan 36 px). La decisión 77 ya lo admite y el Bibliotecario lo decidió así. La fijación
+  `mesa-encabezado-una-linea` pide ahora que se vean al menos 120 px del nombre (medido: 133).
+- **Las fijaciones viejas que D285 reemplaza.** El total de 26 px (`af-diseno-02`), el padding de 10 / 12 del ticket y
+  el de la mesa, `space-between` en Estadísticas (`af-rediseno-12-censo-visual`) y la tarjeta pintada del viaje
+  (`d255-tramo2`).
+- **La fila 41.** «Corregir ticket» lleva el lápiz, el de la carga manual: la especificación no la tenía.
+- **Un viaje sin color.** El cuadro usa el turquesa de la paleta (`#0F766E`, el del prototipo).
+- **«Ver el ticket».** El mismo botón de hoy (38 px), a la izquierda, como dice la especificación; el prototipo lo dibuja
+  de 44.
+- **El reloj de la mesa.** Siempre `--brand-ink`, como pide la especificación. Antes era ámbar, y `--brand-ink` sólo con
+  menos de una hora.
+
 ## 0.241.0 — Corregir un ticket o un gasto ya cargado, con el nombre del lugar (D278-3 y D282-2) (2026-10-11)
 
 Orden AF-VIAJES-CORREGIR-TICKET-20261011 (c1d8cf26…), n349. Autoridad: D278 punto 3 (d9a554e3…) y D282 punto 2

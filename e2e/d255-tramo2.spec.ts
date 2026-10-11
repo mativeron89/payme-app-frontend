@@ -106,8 +106,10 @@ test.describe('D255 · tramo 2', () => {
     await page.getByRole('radio', { name: 'Violeta', exact: true }).click();
     await expect(page.getByText('Guardamos los cambios.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
-    await expect(page.locator('.title-card')).toHaveCSS('background-color', 'rgb(109, 40, 217)');
-    await expect(page.locator('.title-card-title')).toHaveCSS('color', 'rgb(255, 255, 255)');
+    // D285 (0.242.0): la tarjeta queda blanca; el color del viaje va sólo en el cuadro, con la inicial blanca.
+    await expect(page.locator('.title-card')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(page.locator('.title-card .vj-cuadro')).toHaveCSS('background-color', 'rgb(109, 40, 217)');
+    await expect(page.locator('.title-card .vj-cuadro')).toHaveCSS('color', 'rgb(255, 255, 255)');
     await ir(page, '/');
     const insignia = page.locator('.viaje-burbuja').filter({ hasText: 'Cancún 2026' }).locator('.vj-insignia');
     await expect(insignia).toHaveCSS('background-color', 'rgb(109, 40, 217)');
@@ -120,7 +122,9 @@ test.describe('D255 · tramo 2', () => {
     await expect(page.getByRole('radiogroup', { name: 'Color' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Color/ })).toContainText('Sin color');
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
-    await expect(page.locator('.title-card')).toHaveCSS('background-color', 'rgb(228, 251, 252)');
+    // D285: sin color, el cuadro lleva el turquesa de la paleta y la tarjeta sigue blanca.
+    await expect(page.locator('.title-card')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(page.locator('.title-card .vj-cuadro')).toHaveCSS('background-color', 'rgb(15, 118, 110)');
   });
 
   test('🔴 9 · la foto: subirla, verla en la burbuja del viaje y en la de Inicio (D265); quitarla', async ({ page }) => {

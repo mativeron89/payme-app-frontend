@@ -20,9 +20,16 @@
   line-height: var(--lh-sm);
   color: var(--text-muted);
 }
-.vjv-titulo-chip {
-  align-self: center;
-  margin-top: var(--sp-2);
+/* D285 · el chip «Esperando pagos · faltan {n}», debajo de la fila del título y a la izquierda: celeste con el texto
+   teal (antes, blanco sobre la tarjeta celeste). */
+.vjv-chip.vjv-titulo-chip {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  color: var(--link);
+  font-size: var(--fs-sm);
+  font-weight: 700;
 }
 
 /* ─── Chips: el texto siempre dice el estado, el color acompaña ─── */
@@ -898,16 +905,4 @@
   position: absolute;
   color: #fff;
   filter: drop-shadow(0 0 1px rgba(16, 30, 59, 0.8));
-}
-
-/* ══ D255 · la burbuja del viaje con su color y su foto ══ */
-.title-card.vj-titulo-color .title-card-title,
-.title-card.vj-titulo-color .title-card-sub {
-  color: #fff;
-}
-.vj-titulo-fila {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-3);
 }

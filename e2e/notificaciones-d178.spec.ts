@@ -82,7 +82,7 @@ async function preparar(page: Page, opciones: { avisos?: typeof AVISOS; sinInvit
     }
   }, { avisos: opciones.avisos ?? AVISOS, sinInvitaciones: opciones.sinInvitaciones ?? false });
   await irEnLaApp(page, '/avisos');
-  await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
 }
 
 const acciones = (page: Page) => page.locator('.avisos-actions');
@@ -161,7 +161,7 @@ test.describe('D178 · Notificaciones rediseñadas', () => {
     await expect(foto).toBeVisible();
     expect(await foto.evaluate((img: HTMLImageElement) => [img.getBoundingClientRect().width, img.naturalWidth])).toEqual([40, 120]);
     await expect(page.locator('.inv-card img').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Avisos', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Avisos', exact: true })).toBeVisible();
     // Centrada: `scrollIntoViewIfNeeded` da por visible una fila a medias, debajo del «+».
     await fila.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await expect(fila).toBeInViewport({ ratio: 1 });

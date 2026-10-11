@@ -209,6 +209,26 @@ y propina, estados `pending → succeeded → processed` y expiración honesta.
 7. Commits en español, cambios quirúrgicos, sin `as any`, tests + typecheck +
    builds real y mock, versión + entrada de CHANGELOG por tier.
 
+## Anatomía de la tarjeta de título (D285, 0.242.0)
+
+La tarjeta que monta sobre la cabecera navy (`.title-card`, y `.ingreso-burbuja` en el ingreso) es **blanca** desde
+D285 (opción 4c de Claude Design, `PANTALLA-tarjeta-de-titulo-blanca.md`, e25d98bb…). Reemplaza a la celeste
+(`--teal-l`), que era la de todas las pantallas hasta 0.241.0.
+
+- **El contenedor:** margen `-42px 16px 0` (no cambia), alto mínimo 83, padding 16 18, radio 22, fondo `--surface`,
+  borde 1 px `--border` y sombra `--sh-2`. Es una columna con gap 12 entre la fila del título y el contenido extra.
+- **La fila del título** (`FilaDeTitulo`, `src/components/TarjetaDeTitulo.tsx`): el cuadro de 48 × 48 (radio 14,
+  `--action`, ícono de 22 en blanco), y a su derecha el título (Plus Jakarta Sans 22/800) y el subtítulo (DM Sans 14,
+  `--text-muted`, a 2 px), **alineados a la izquierda**.
+- **El ícono de cada pantalla** es el de la tabla de la especificación. El naranja (`--brand`, con el check) sólo va en
+  «¡Listo!».
+- **En un viaje**, el cuadro lleva la foto, o la inicial blanca sobre el color del viaje (`CuadroDelViaje`; sin color, el
+  turquesa de la paleta). La tarjeta queda blanca aunque el viaje tenga color.
+- **Lo que va adentro** (el total, la nota, «Ver el ticket», la barra con el reloj, el chip) va debajo de la fila,
+  alineado a la izquierda.
+- **Estadísticas** sigue sin título visible: cuadro, período y, a la derecha, el dato.
+- **No se tocan** las pestañas blancas de Inicio ni el pie de navegación.
+
 ## Ritual de trabajo
 
 1. **Checkpoint por tier**: plan concreto de las pantallas del tier (qué

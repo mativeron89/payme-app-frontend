@@ -16,7 +16,7 @@ async function enAvisos(page: Page, unirse: Record<string, unknown> = {}): Promi
   }, unirse);
   await ingresar(page);
   await page.goto('/avisos');
-  await expect(page.getByRole('heading', { name: 'Notificaciones', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
 }
 
 async function capturar(page: Page, nombre: string): Promise<void> {

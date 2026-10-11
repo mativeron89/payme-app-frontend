@@ -52,6 +52,6 @@ test('/scan/<viaje> es la cámara de la mesa de siempre', async ({ page }) => {
 test('Avisos no trae avisos de viajes', async ({ page }) => {
   await ingresar(page);
   await page.goto('/avisos');
-  await expect(page.getByRole('heading', { name: 'Notificaciones', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Avisos', level: 1 })).toBeVisible();
   await expect(page.getByText('te invitó al viaje', { exact: false })).toHaveCount(0);
 });

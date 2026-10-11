@@ -36,6 +36,23 @@ export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = f
 }
 
 /**
+ * D285 · el cuadro de la tarjeta de título de un viaje (el abierto, el que espera pagos y el cerrado): la foto del viaje
+ * o, sin foto, la inicial blanca sobre el color del viaje. La tarjeta queda blanca aunque el viaje tenga color: el color
+ * va sólo acá. Sin color, el turquesa de la paleta (el del prototipo de Claude Design).
+ */
+export function CuadroDelViaje({ nombre, color = null, foto = null }: {
+  nombre: string;
+  color?: ColorViaje | null;
+  foto?: string | null;
+}) {
+  return (
+    <span className="title-card-cuadro vj-cuadro" style={{ background: COLORES_VIAJE[color ?? 'turquesa'] }} aria-hidden="true">
+      {foto ? <img className="vj-insignia-foto" src={foto} alt="" /> : inicialDelViaje(nombre)}
+    </span>
+  );
+}
+
+/**
  * D255 · las fotos de los viajes que se muestran (la lista de Inicio, la
  * pantalla del viaje, Configuración), con `FotosDeViajes`. Devuelve la URL de la
  * foto de cada viaje (o `null`) y cómo pedir de nuevo la de uno.

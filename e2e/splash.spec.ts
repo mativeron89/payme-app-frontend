@@ -33,12 +33,92 @@ test('carga lenta: el splash asoma mientras tarda y se retira al montar', async 
 
   await page.goto('/');
 
-  // Mientras el módulo no llegó, lo único pintado es el splash: navy con el
-  // lockup adentro. `toBeVisible` acá afirma que ASOMÓ, que es la rama que
-  // la carga rápida no puede probar.
-  await expect(page.locator('#splash svg')).toBeVisible();
+  // Mientras el módulo no llegó, lo único pintado es el splash (D286: los
+  // triángulos y el ícono). `toBeVisible` acá afirma que ASOMÓ, que es la rama
+  // que la carga rápida no puede probar.
+  await expect(page.locator('#splash .carga__icono')).toBeVisible();
 
   // Llegó el módulo → monta la app → el splash cumple su mínimo y se va.
   await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   await expect(page.locator('#splash')).toHaveCount(0);
+});
+
+/**
+ * 🔴 D286 (revisión 6) · la pantalla de carga de `PANTALLA-pantalla-de-carga.md`, medida en el navegador a 375, 390 y
+ * 430: los cuatro triángulos sobre la zona entera, el ícono de 128 px centrado en el punto de encuentro, la franja de la
+ * barra de estado (en el navegador `env(safe-area-inset-top)` vale 0) y ningún texto.
+ */
+for (const ancho of [375, 390, 430] as const) {
+  test(`D286 · a ${ancho}: cuatro triángulos, el ícono centrado, la franja y sin texto`, async ({ page }) => {
+    await page.setViewportSize({ width: ancho, height: ancho === 375 ? 667 : ancho === 390 ? 844 : 932 });
+    await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
+      await new Promise((listo) => setTimeout(listo, 2_500));
+      await ruta.continue();
+    });
+    await page.goto('/');
+    const icono = page.locator('#splash .carga__icono');
+    await expect(icono).toBeVisible();
+    // Terminó de entrar: opacidad 1 y sin escala.
+    await expect.poll(() => icono.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    const medida = await page.evaluate(() => {
+      const caja = (sel: string) => {
+        const r = document.querySelector(sel)!.getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, h: r.height };
+      };
+      const triangulos = Array.from(document.querySelectorAll<HTMLElement>('#splash .t')).map((el) => ({
+        clase: el.className,
+        recorte: getComputedStyle(el).clipPath,
+        fondo: getComputedStyle(el).backgroundImage,
+        ...caja(`#splash .${el.className.split(' ')[1]}`),
+      }));
+      return {
+        zona: caja('#splash .carga__zona'),
+        icono: caja('#splash .carga__icono'),
+        franja: caja('#splash .carga__franja'),
+        franjaFondo: getComputedStyle(document.querySelector('#splash .carga__franja')!).backgroundColor,
+        triangulos,
+        texto: (document.getElementById('splash')!.textContent ?? '').trim(),
+        tieneText: document.querySelectorAll('#splash text, #splash tspan').length,
+      };
+    });
+    expect(medida.triangulos.map((t) => t.clase)).toEqual(['t t-arriba', 't t-izq', 't t-der', 't t-abajo']);
+    for (const t of medida.triangulos) {
+      expect(t.recorte, t.clase).toMatch(/^polygon\(/);
+      expect(t.fondo, t.clase).toMatch(/^linear-gradient\(/);
+      // Cada triángulo es la zona entera recortada (el degradé se calcula sobre la zona).
+      expect([t.x, t.y, t.w, t.h], t.clase).toEqual([medida.zona.x, medida.zona.y, medida.zona.w, medida.zona.h]);
+    }
+    expect(medida.zona).toMatchObject({ x: 0, w: ancho });
+    expect(medida.icono.w).toBeCloseTo(128, 0);
+    expect(medida.icono.h).toBeCloseTo(128, 0);
+    expect(medida.icono.x + medida.icono.w / 2).toBeCloseTo(medida.zona.x + medida.zona.w / 2, 0);
+    expect(medida.icono.y + medida.icono.h / 2).toBeCloseTo(medida.zona.y + medida.zona.h / 2, 0);
+    // La franja existe, navy, con el alto de la barra de estado (0 en el navegador).
+    expect(medida.franja.h).toBe(0);
+    expect(medida.franjaFondo).toBe('rgb(16, 30, 59)');
+    expect(medida.texto).toBe('');
+    expect(medida.tieneText).toBe(0);
+  });
+}
+
+test('D286 · con «reducir movimiento», el ícono aparece sin animación', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
+    await new Promise((listo) => setTimeout(listo, 1_500));
+    await ruta.continue();
+  });
+  await page.goto('/');
+  const icono = page.locator('#splash .carga__icono');
+  await expect(icono).toBeVisible();
+  expect(await icono.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+  const conMovimiento = await page.context().newPage();
+  await conMovimiento.emulateMedia({ reducedMotion: 'no-preference' });
+  await conMovimiento.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
+    await new Promise((listo) => setTimeout(listo, 1_500));
+    await ruta.continue();
+  });
+  await conMovimiento.goto('/');
+  await expect(conMovimiento.locator('#splash .carga__icono')).toBeVisible();
+  expect(await conMovimiento.locator('#splash .carga__icono').evaluate((el) => getComputedStyle(el).animationName)).toBe('carga-entra');
+  await conMovimiento.close();
 });

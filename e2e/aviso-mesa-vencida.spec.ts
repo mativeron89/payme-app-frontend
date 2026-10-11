@@ -20,7 +20,7 @@ test.describe('AF-34 · aviso de mesa vencida', () => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.avisos.v1', 'mesa_vencida'));
     await ingresar(page);
     await page.getByRole('button', { name: 'Avisos' }).click();
-    await expect(page.getByRole('heading', { name: 'Notificaciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
     const aviso = page.getByRole('button', { name: /La mesa PA-1099 en La Parolaccia se cerró por tiempo/ });
     await expect(aviso).toBeVisible();
     // El otro, sin código y con un motivo desconocido: se ve, no rompe y no es botón.
@@ -34,7 +34,7 @@ test.describe('AF-34 · aviso de mesa vencida', () => {
   test('sin la costura, Avisos sigue como estaba (testigo)', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Avisos' }).click();
-    await expect(page.getByRole('heading', { name: 'Notificaciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
     await expect(page.getByText(/se cerró por tiempo/)).toHaveCount(0);
   });
 });

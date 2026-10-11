@@ -23,6 +23,7 @@ import { alternarPresente, candidatosDelViaje, esGastoPersonal, idsPresentes, ll
 import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
 import './viajes.css';
 import './viaje.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * D244 · D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`).
@@ -90,7 +91,9 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
       ) : (
         <>
           <div className="title-card">
-            <h1 className="title-card-title">{t('Carga manual')}</h1>
+            <FilaDeTitulo icono="lapiz">
+              <h1 className="title-card-title">{t('Carga manual')}</h1>
+            </FilaDeTitulo>
           </div>
           <div className="scroll vj-scroll">
             <EstadoSinViaje carga={carga} onReintentar={cargar} onVerViajes={() => navigate('viajes', 'abiertos')} />
@@ -133,7 +136,9 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
     <>
       <div className="title-card">
         {/* Respuesta D del plan: un solo título, como el viaje y Balance. */}
-        <h1 className="title-card-title">{t('Carga manual')}</h1>
+        <FilaDeTitulo icono="lapiz">
+          <h1 className="title-card-title">{t('Carga manual')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
         <section className="vj-card vjm-campos">

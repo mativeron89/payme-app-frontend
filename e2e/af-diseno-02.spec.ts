@@ -133,8 +133,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(titulo).not.toContainText('Roma Norte, CDMX');
     await expect(titulo.getByText('$840', { exact: true })).toBeVisible();
     await expect(titulo.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
-    await expect(titulo.getByText('$840', { exact: true })).toHaveCSS('font-size', '26px');
-    await expect(titulo).toHaveCSS('text-align', 'center');
+    // D285 (0.242.0): el total va en 32/800 debajo de la fila del título, alineado a la izquierda.
+    await expect(titulo.getByText('$840', { exact: true })).toHaveCSS('font-size', '32px');
+    await expect(titulo).toHaveCSS('text-align', 'left');
 
     const stepper = page.locator('.division-stepper');
     await expect(stepper).toContainText('¿Cuántos son en la mesa?');

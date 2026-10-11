@@ -14,6 +14,7 @@ import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { useToast } from '../components/ui';
 import { goBack } from '../router';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * AF2 · Configuración › Notificaciones (decisiones 33-37 de Mati; E1 del dueño,
@@ -103,7 +104,9 @@ export function NotificacionesView({
     <div className="screen has-appbar">
       <AppHeaderBack userName={userName} onBack={() => goBack('mas')} />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Notificaciones')}</h1>
+        <FilaDeTitulo icono="controles">
+          <h1 className="title-card-title">{t('Notificaciones')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
         {/* Decisión 75 de Mati: sin la leyenda «Elige qué avisos quieres recibir

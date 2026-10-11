@@ -45,7 +45,7 @@ test.describe('E174-1 · «Marcar leídos» arriba de todo', () => {
     await ingresar(page);
     await conUnaSinLeer(page);
     await page.goto('/#/avisos');
-    await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
     const boton = page.getByRole('button', { name: 'Marcar leídos', exact: true });
     await expect(boton).toBeVisible();
     // Testigo de que la lista cargó: hay al menos una notificación.

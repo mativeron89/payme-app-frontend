@@ -27,6 +27,7 @@ import { iniciales } from './viajesView';
 import './viajes.css';
 import './crear.css';
 import { olvidarLoDeViajes } from '../../api/ultimoVisto';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · 1d «Crear viaje» y 1e «buscar por @usuario»
@@ -166,7 +167,9 @@ export function CrearViajeView(p: CrearViajeVistaProps) {
     <div className="screen vj-con-pie vjc">
       <AppHeaderBack userName={p.userName} onBack={p.onVolver} />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Crear viaje')}</h1>
+        <FilaDeTitulo icono="maleta-mas">
+          <h1 className="title-card-title">{t('Crear viaje')}</h1>
+        </FilaDeTitulo>
       </div>
 
       <div className="scroll vj-scroll">

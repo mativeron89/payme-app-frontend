@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { extractApiError } from '../../api/errors';
-import { errorDeViaje, type ResumenDeViaje } from '../../api/viajes';
+import { errorDeViaje, type ColorViaje, type ResumenDeViaje } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
@@ -14,12 +14,14 @@ import { fullName } from '../../utils/identity';
 import { etiquetaPorcion } from '../queConsumisteView';
 import { anchoDeBarra, lineaDelViaje } from './listasView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
+import { CuadroDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import { HojaModal, HojaNoPuedeSalirVista, HojaSalirVista } from './ViajeScreen';
 import type { PorQueNoPuedeSalir } from './viajeView';
 import { etiquetaTipoLugar, fechaCortaViaje, iconoTipoLugar, nombreDelLugar, type T } from './viajesView';
 import './viajes.css';
 import './viaje.css';
 import './listas.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · el detalle de un viaje cerrado (1s): `GET …/resumen`.
@@ -56,6 +58,10 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   const { t, idioma } = useIdioma();
   const { session } = useAuth();
   const [carga, setCarga] = useState<CargaDeResumen>({ estado: 'cargando' });
+  // D285 · el cuadro de la tarjeta: el resumen no trae el color ni la foto del viaje; los trae el detalle (que responde
+  // también con el viaje cerrado). Si no llega, queda la inicial sobre el turquesa.
+  const [delViaje, setDelViaje] = useState<{ readonly color: ColorViaje | null; readonly has_photo: boolean } | null>(null);
+  const fotos = useFotosDeViajes(delViaje?.has_photo ? [{ id: viajeId, has_photo: true }] : null);
   const [intento, setIntento] = useState(0);
   const [abiertos, setAbiertos] = useState<ReadonlySet<string>>(() => new Set());
   const toast = useToast();
@@ -101,6 +107,14 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
     return () => { vivo = false; };
   }, [viajeId, intento]);
 
+  useEffect(() => {
+    let vivo = true;
+    api.getViaje(viajeId)
+      .then((v) => { if (vivo) setDelViaje({ color: v.color, has_photo: v.has_photo }); })
+      .catch(() => { /* sin el detalle, el cuadro lleva la inicial: no es un error de la pantalla */ });
+    return () => { vivo = false; };
+  }, [viajeId]);
+
   const alternar = (ticketId: string) => {
     setAbiertos((prev) => {
       const sig = new Set(prev);
@@ -122,6 +136,8 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         onReintentar={() => setIntento((n) => n + 1)}
         onVerViajes={() => navigate('viajes', 'abiertos')}
         onSalir={() => setHoja({ tipo: 'salir' })}
+        color={delViaje?.color ?? null}
+        foto={delViaje?.has_photo ? fotos.fotoDe(viajeId) : null}
       />
       <AppBottomBar active={null} />
       {carga.estado === 'listo' && hoja?.tipo === 'salir' && (
@@ -155,24 +171,29 @@ export interface VistaDelViajeCerradoProps {
   readonly onVerViajes: () => void;
   /** H02 · «Salir del viaje», al pie del resumen. */
   readonly onSalir?: () => void;
+  /** D285 · el color y la foto del viaje, para el cuadro de la tarjeta. */
+  readonly color?: ColorViaje | null;
+  readonly foto?: string | null;
 }
 
 /** La tarjeta de título y el contenido: pura, sin red ni efectos. */
 export function VistaDelViajeCerrado({
-  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir,
+  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir, color = null, foto = null,
 }: VistaDelViajeCerradoProps) {
   if (carga.estado !== 'listo') {
     return (
       <>
         <div className="title-card">
-          {carga.estado === 'cargando' ? (
-            <div aria-hidden="true">
-              <span className="sk-line tall w55" style={{ margin: '0 auto var(--sp-2)' }} />
-              <span className="sk-line w70" style={{ margin: '0 auto' }} />
-            </div>
-          ) : (
-            <h1 className="title-card-title">{t('Viajes cerrados')}</h1>
-          )}
+          <FilaDeTitulo icono="archivo">
+            {carga.estado === 'cargando' ? (
+              <span className="title-card-siluetas" aria-hidden="true">
+                <span className="title-card-silueta" />
+                <span className="title-card-silueta title-card-silueta--sub" />
+              </span>
+            ) : (
+              <h1 className="title-card-title">{t('Viajes cerrados')}</h1>
+            )}
+          </FilaDeTitulo>
         </div>
         <div className="scroll vj-scroll">
           {carga.estado === 'cargando' ? (
@@ -213,12 +234,14 @@ export function VistaDelViajeCerrado({
   return (
     <>
       <div className="title-card">
-        <h1 className="title-card-title">{r.nombre}</h1>
-        <div className="title-card-sub">
-          {lineaDelViaje(r, idioma, t)}
-          {' · '}
-          {t('Cerrado')}
-        </div>
+        <FilaDeTitulo cuadro={<CuadroDelViaje nombre={r.nombre} color={color} foto={foto} />}>
+          <h1 className="title-card-title">{r.nombre}</h1>
+          <div className="title-card-sub">
+            {lineaDelViaje(r, idioma, t)}
+            {' · '}
+            {t('Cerrado')}
+          </div>
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
         <dl className="vj-card vjd-resumen">

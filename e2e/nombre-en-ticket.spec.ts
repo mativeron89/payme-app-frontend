@@ -73,6 +73,15 @@ async function medirVista(page: Page) {
   });
 }
 
+/** La misma medición con la vista bajada del todo; después vuelve arriba. */
+async function medirAlBajar(page: Page) {
+  const scroll = page.locator('.ticket-flow-scroll');
+  await scroll.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const m = await medirVista(page);
+  await scroll.evaluate((el) => { el.scrollTop = 0; });
+  return m;
+}
+
 /**
  * El alto que importa es el VISIBLE en el navegador del teléfono: la captura de
  * Mati (347×592, proporción 0,586) da unos 390×664 en Safari de un iPhone de
@@ -80,32 +89,45 @@ async function medirVista(page: Page) {
  * estados: sin número, con número en «En partes iguales» («c/u») y con número
  * en «Por lo que pidió cada uno» («base de propina · c/u», el rótulo más largo).
  * 390×844 y 430×932 quedan como control.
+ *
+ * 🔴 D289 (Mati, 2026-10-11, «El diseño tal cual»): con la tarjeta blanca de D285 la tarjeta del ticket mide unos
+ * 179 px y a 390×664 y 375×667 la pantalla ya no entra (31 y 48 px de más, medido). Ahí rige la regla «no entra»,
+ * como a 320×568: arriba no entra, y al bajar las tres formas y «¿Cuántos son?» quedan enteras, arriba de Continuar.
+ * Reemplaza al pedido 127 sólo en eso, y sólo en esta pantalla.
  */
-test.describe('AF-NOMBRE-EN-TICKET · «¿Cómo dividen?» en una sola vista', () => {
-  for (const [ancho, alto] of [[390, 664], [375, 667], [390, 844], [430, 932]] as const) {
-    test(`🔴 a ${ancho}×${alto}: las tres formas y «¿Cuántos son?» completo, sin desplazar, en los tres estados`, async ({ page }) => {
+test.describe('AF-NOMBRE-EN-TICKET · «¿Cómo dividen?» en una sola vista (y D289 donde no entra)', () => {
+  for (const [ancho, alto, entra] of [[390, 664, false], [375, 667, false], [390, 844, true], [430, 932, true]] as const) {
+    const como = entra ? 'sin desplazar' : 'al bajar (D289)';
+    test(`🔴 a ${ancho}×${alto}: las tres formas y «¿Cuántos son?» completo, ${como}, en los tres estados`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
       await hastaComoDividen(page);
       await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);
 
-      const sinNumero = await medirVista(page);
-      expect(sinNumero.tarjeta, JSON.stringify(sinNumero)).toBe(0);
-      expect(sinNumero.scrollTop).toBe(0);
-      expect(sinNumero.entra, `sin número · ${JSON.stringify(sinNumero)}`).toBe(true);
+      /** Donde entra, entera sin desplazar; donde no (D289), no entra arriba y sí al bajar. */
+      const acreditar = async (rotulo: string) => {
+        // Donde no entra, tocar el stepper desplaza la vista (Playwright lo trae a la vista): se mide desde arriba.
+        if (!entra) await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = 0; });
+        const arriba = await medirVista(page);
+        expect(arriba.scrollTop).toBe(0);
+        expect(arriba.entra, `${rotulo} · ${JSON.stringify(arriba)}`).toBe(entra);
+        if (entra) return { arriba };
+        const abajo = await medirAlBajar(page);
+        expect(abajo.entra, `${rotulo} al bajar · ${JSON.stringify(abajo)}`).toBe(true);
+        return { arriba, abajo };
+      };
+
+      const sinNumero = await acreditar('sin número');
+      expect(sinNumero.arriba.tarjeta, JSON.stringify(sinNumero)).toBe(0);
       await capturar(page, `como-dividen-${ancho}x${alto}-sin-numero`);
 
       await completarDivision(page);
       await expect(page.locator('.split-amt')).toBeVisible();
-      const igual = await medirVista(page);
-      expect(igual.scrollTop).toBe(0);
-      expect(igual.entra, `iguales con número · ${JSON.stringify(igual)}`).toBe(true);
+      const igual = await acreditar('iguales con número');
       await capturar(page, `como-dividen-${ancho}x${alto}-con-numero`);
 
       await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
       await expect(page.locator('.split-amt-lbl')).toHaveText('base de propina · c/u');
-      const consumo = await medirVista(page);
-      expect(consumo.scrollTop).toBe(0);
-      expect(consumo.entra, `consumo con número · ${JSON.stringify(consumo)}`).toBe(true);
+      const consumo = await acreditar('consumo con número');
       console.log(`VISTA ${ancho}x${alto}`, JSON.stringify({ sinNumero, igual, consumo }));
     });
   }

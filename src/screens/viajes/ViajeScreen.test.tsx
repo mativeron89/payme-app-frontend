@@ -94,23 +94,26 @@ describe('D245 · el viaje abierto, más simple', () => {
   const leido = texto(html);
 
   it('la burbuja dice sólo el nombre: sin fechas, sin avatares, sin «Tú, Luis…»', () => {
-    expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Cancún 2026<\/h1><\/div>/);
+    // D285 · la tarjeta blanca con el cuadro del viaje (sin color ni foto, la inicial sobre el turquesa) y el nombre solo.
+    expect(html).toMatch(/<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#0F766E" aria-hidden="true">C<\/span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026<\/h1><\/div><\/div><\/div>/);
     expect(leido).not.toContain('5–11 oct');
     expect(leido).not.toContain('Tú, Luis');
   });
 
-  it('🔴 D255 · con color, la burbuja va en ese color (texto blanco); con foto, la foto junto al nombre', () => {
+  it('🔴 D285 · la tarjeta queda blanca aunque el viaje tenga color: el color o la foto van sólo en el cuadro', () => {
     const conColor = renderToStaticMarkup(<ViajeVista carga={listo(viaje({ color: 'rojo' }))} marcando={null} {...ACCIONES} />);
-    expect(conColor).toMatch(/<div class="title-card vj-titulo-color" style="background:#B91C1C"><h1 class="title-card-title">Cancún 2026<\/h1><\/div>/);
+    expect(conColor).toContain('<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#B91C1C" aria-hidden="true">C</span>');
+    expect(conColor).not.toContain('vj-titulo-color');
     const conFoto = renderToStaticMarkup(
       <ViajeVista carga={listo(viaje({ color: 'azul', has_photo: true }))} marcando={null} {...ACCIONES} fotoDelViaje="blob:foto-viaje" />,
     );
-    expect(conFoto).toContain('<div class="vj-titulo-fila"><span class="vj-insignia vj-insignia--grande vj-insignia--color" style="background:#1D4ED8" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-viaje" alt=""/></span><h1 class="title-card-title">Cancún 2026</h1></div>');
-    // Esperando pagos, también.
+    expect(conFoto).toContain('<span class="title-card-cuadro vj-cuadro" style="background:#1D4ED8" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-viaje" alt=""/></span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026</h1></div>');
+    // Esperando pagos, también: blanca, con el color en el cuadro.
     const esperando = renderToStaticMarkup(
       <ViajeVista carga={listo(viaje({ color: 'naranja', estado: 'esperando_pagos', transferencias_pendientes: 1 }))} marcando={null} {...ACCIONES} />,
     );
-    expect(esperando).toContain('<div class="title-card vj-titulo-color" style="background:#C2410C">');
+    expect(esperando).toContain('<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#C2410C" aria-hidden="true">C</span>');
+    expect(esperando).not.toContain('vj-titulo-color');
   });
 
   it('🔴 enseguida el balance como monto: la deuda en rojo con «−», sin «Debes» a la vista', () => {

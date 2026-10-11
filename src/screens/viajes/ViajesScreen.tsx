@@ -13,6 +13,7 @@ import { agruparPorAnio, etiquetaDelViaje, lineaDelViaje, tonoDeBalance } from '
 import { textoDeMiBalance, type T } from './viajesView';
 import './viajes.css';
 import './listas.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * AF-VIAJES · D242 · Abiertos (1c) y Cerrados (1r): `GET /api/viajes?estado=…`.
@@ -77,7 +78,9 @@ export function VistaDeViajes({ estado, carga, t, idioma, onAbrir, onCrear, onRe
   return (
     <>
       <div className="title-card">
-        <h1 className="title-card-title">{estado === 'cerrados' ? t('Viajes cerrados') : t('Viajes abiertos')}</h1>
+        <FilaDeTitulo icono={estado === 'cerrados' ? 'archivo' : 'maleta'}>
+          <h1 className="title-card-title">{estado === 'cerrados' ? t('Viajes cerrados') : t('Viajes abiertos')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
         {carga.estado === 'cargando' ? (

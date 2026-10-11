@@ -34,6 +34,7 @@ import {
   lineasElegidas,
   seleccionCierraLaMesa,
 } from './antesDeCerrar';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -933,15 +934,17 @@ export function MesaDetailView({
     <div ref={pantallaRef} className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
-        {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
-        <h1 className="title-card-title">{esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}</h1>
-        <div className="title-card-sub mesa-selection-context">
-          {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
-              abiertas— y en UNA línea, restaurante · modalidad. */}
-          <span className="mesa-selection-context-main">{mesa.restaurant.name}</span>
-          <span aria-hidden="true">·</span>
-          <strong>{divisionLabel}</strong>
-        </div>
+        <FilaDeTitulo icono={esTitular ? 'tienda' : 'cubiertos'}>
+          {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
+          <h1 className="title-card-title">{esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}</h1>
+          <div className="title-card-sub mesa-selection-context">
+            {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
+                abiertas— y en UNA línea, restaurante · modalidad. */}
+            <span className="mesa-selection-context-main">{mesa.restaurant.name}</span>
+            <span aria-hidden="true">·</span>
+            <strong>{divisionLabel}</strong>
+          </div>
+        </FilaDeTitulo>
         {/* Regla 8 · la barra de avance y el reloj van dentro de la burbuja
             del título, fija al scroll. */}
         <div

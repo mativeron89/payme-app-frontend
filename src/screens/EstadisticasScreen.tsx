@@ -30,6 +30,7 @@ import { colorEnPaleta, GEOMETRIA_E173, porcentajesEnteros, porcionesDelAnillo }
 import { AnilloSvg, type FormaAnillo } from './AnilloSvg';
 import { nombreDelPeriodo } from '../utils/meses';
 import { useTandaVigente } from './useTandaVigente';
+import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -178,7 +179,9 @@ export function EstadisticasScreen() {
         />
       ) : (
         <div className="title-card">
-          <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
+          <FilaDeTitulo icono="barras">
+            <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
+          </FilaDeTitulo>
         </div>
       )}
 
@@ -372,6 +375,7 @@ function BurbujaDelPeriodo({
   return (
     <div className="title-card stat-burbuja est-burbuja">
       <h1 className="stat-oculto">{t('Mis estadísticas')}</h1>
+      <CuadroDeTarjeta icono="barras" />
       <SelectorDePeriodo clave={clave} disponible={selector} inicio={inicio} />
       <div className="est-total">{formatMXN(consumo.totalCents)}</div>
     </div>

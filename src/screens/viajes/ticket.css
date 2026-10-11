@@ -514,10 +514,6 @@
   color: var(--text);
 }
 
-.vjt-centrado {
-  margin: 0 auto;
-}
-
 /* ─── D278-3 · D282-2 · corregir un ticket ya cargado ─── */
 
 /* «Corregir ticket» al final del detalle: en el scroll, no en el pie. */

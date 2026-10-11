@@ -57,8 +57,11 @@ describe('D240 punto 5 · la campana con el número', () => {
     expect([1, 9, 10, 99].map(textoDeLaBurbuja)).toEqual(['1', '9', '9+', '9+']);
   });
 
-  it('EN: «Notifications, 3 unread»', () => {
-    expect(traducir('Avisos, {0} sin leer', 'en', 3)).toBe('Notifications, 3 unread');
+  // D285-2 · 0.242.0: la campana pasa a «Avisos» (en inglés, «Alerts»), distinta de las preferencias («Notifications»).
+  it('EN: «Alerts, 3 unread»', () => {
+    expect(traducir('Avisos, {0} sin leer', 'en', 3)).toBe('Alerts, 3 unread');
+    expect(traducir('Avisos', 'en')).toBe('Alerts');
+    expect(traducir('Notificaciones', 'en')).toBe('Notifications');
   });
 
   it('la burbuja de la campana ES la de Amigos: mismas medidas, rojo y número blanco, derivado y no copiado', () => {

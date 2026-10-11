@@ -29,6 +29,7 @@ async function medirLinea(page: Page) {
       alto: el.getBoundingClientRect().height,
       lh,
       nombreRecortado: main.scrollWidth > main.clientWidth,
+      anchoNombre: main.clientWidth,
       modoRecortado: modo.scrollWidth > modo.clientWidth,
       topNombre: main.getBoundingClientRect().top,
       topModo: modo.getBoundingClientRect().top,
@@ -52,7 +53,10 @@ for (const ancho of [390, 320]) {
     expect(m.alto).toBeLessThanOrEqual(m.lh * 1.5);
     expect(Math.abs(m.topNombre - m.topModo)).toBeLessThanOrEqual(2);
     expect(m.modoRecortado).toBe(false);
-    if (ancho === 390) expect(m.nombreRecortado).toBe(false);
+    // D285 (0.242.0): el cuadro del ícono le quita 62 px a la línea y a 390 el nombre se recorta con «…» (le faltan
+    // 36 px, medido). La decisión 77 ya lo admite; el Bibliotecario lo decidió así (opción a). Lo que no puede pasar es
+    // que el nombre se aplaste: a 390 se ven al menos 120 px de él (medido: 133).
+    if (ancho === 390) expect(m.anchoNombre).toBeGreaterThanOrEqual(120);
   });
 }
 

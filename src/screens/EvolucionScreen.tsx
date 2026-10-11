@@ -12,6 +12,7 @@ import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { mesCorto, mesLargo, pesosCortos } from '../utils/meses';
 import { nombreDeCocina } from '../utils/textosDeEstadisticas';
+import { CuadroDeTarjeta } from '../components/TarjetaDeTitulo';
 
 /**
  * **Evolución** — pantalla 2f de «Mis estadísticas» (AF-31, Roadmap n167).
@@ -63,6 +64,7 @@ export function EvolucionScreen() {
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('estadisticas')} />
       <div className="title-card stat-burbuja">
         <h1 className="stat-oculto">{t('Evolución')}</h1>
+        <CuadroDeTarjeta icono="tendencia" />
         <div className="stat-burbuja-periodo">{t('6 meses')}</div>
         {conDatos && (
           <div className="stat-burbuja-dato">

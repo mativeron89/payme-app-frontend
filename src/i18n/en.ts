@@ -128,7 +128,8 @@ export const EN: Record<string, string> = {
   "Asociadas": "Linked",
   "Autorizando": "Authorizing",
   "Autorizando…": "Authorizing…",
-  "Avisos": "Notifications",
+  // D285-2 · la campana y su lista son «Avisos»; «Notificaciones» (Notifications) queda para las preferencias.
+  "Avisos": "Alerts",
   "Ayer": "Yesterday",
   "Bloquear a {0}": "Block {0}",
   "Buscando…": "Searching…",
@@ -1233,7 +1234,7 @@ export const EN: Record<string, string> = {
   "Invitar amigos": "Invite friends",
   "Aquí aparecen tus invitaciones y los avisos de tus mesas.": "Your invitations and table notifications show up here.",
   // AF-TANDA-CHICA-0810 · D240 · la campana con el número (punto 5).
-  "Avisos, {0} sin leer": "Notifications, {0} unread",
+  "Avisos, {0} sin leer": "Alerts, {0} unread",
   // AF-TANDA-CHICA-0810 · D240 · la hoja antes del cierre (punto 8).
   "Revisar": "Review",
   "Revisa lo que elegiste: después de cerrar ya no se puede modificar.": "Check what you chose: once it closes, it can't be changed.",

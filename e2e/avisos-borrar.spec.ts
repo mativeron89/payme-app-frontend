@@ -51,7 +51,7 @@ const llamadas = (page: Page) => page.evaluate(
 
 async function abrirAvisos(page: Page): Promise<void> {
   await irEnLaApp(page, '/avisos');
-  await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
   await expect(page.locator('.aviso-row')).toHaveCount(AVISOS.length);
 }
 

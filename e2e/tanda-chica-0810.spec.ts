@@ -262,13 +262,14 @@ test.describe('D240 punto 5 · la campana con el número', () => {
     await expect(campana(page).locator('.hdr-badge')).toHaveCount(0);
   });
 
-  test('en inglés: «Notifications, 3 unread»', async ({ page }) => {
+  // D285-2 · 0.242.0: la campana pasa a «Avisos» (en inglés, «Alerts»).
+  test('en inglés: «Alerts, 3 unread»', async ({ page }) => {
     await ingresar(page);
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
     await page.reload();
     await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
     await inicioConAvisosEn(page, 3);
-    await expect(campana(page)).toHaveAccessibleName('Notifications, 3 unread');
+    await expect(campana(page)).toHaveAccessibleName('Alerts, 3 unread');
   });
 
   test('a 320 px con «9+» la burbuja no se sale de la pantalla', async ({ page }) => {

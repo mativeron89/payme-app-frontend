@@ -83,6 +83,7 @@ import { reservaDelMonto } from './reservaDelMonto';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -2147,15 +2148,17 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             AF-DISENO-02 reúne ubicación, total y acceso al detalle en la pieza
             única que fijan la maqueta y su HTML medido. */}
         <div className="title-card ticket-title-card">
-          <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
+          <FilaDeTitulo icono="dividir">
+            <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
+          </FilaDeTitulo>
           <div className="ticket-title-amount">{formatMXN(total)}</div>
           {/* D215 · D218 · «Dejarlo para los pagos»: con IVA agregado o con un
               descuento, lo que se divide es la suma de los platos. Se dice, sin
               ámbar y sin frenar nada. Una sola nota aunque sean las dos cosas. */}
           {desglose.tipo === 'cierra' && notaDeLoQueNoSeReparte(desglose.aparte, t) && (
             <p className="ticket-title-iva">
-              <Icon name="info" size={14} className="ico-inline" />{' '}
-              {notaDeLoQueNoSeReparte(desglose.aparte, t)}
+              <Icon name="info" size={15} className="ico-inline" />
+              <span>{notaDeLoQueNoSeReparte(desglose.aparte, t)}</span>
             </p>
           )}
           <div
@@ -2675,10 +2678,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           bellBlocked={busy || !!frozen || frozenRequiresReconciliation}
         />
         <div className="title-card gar-title">
-          <h1 className="title-card-title">{t('Garantiza la mesa')}</h1>
-          <div className="title-card-sub">
-            {t('Se retiene {0} hasta que todos paguen', formatMXN(total))}
-          </div>
+          <FilaDeTitulo icono="escudo">
+            <h1 className="title-card-title">{t('Garantiza la mesa')}</h1>
+            <div className="title-card-sub">
+              {t('Se retiene {0} hasta que todos paguen', formatMXN(total))}
+            </div>
+          </FilaDeTitulo>
         </div>
         <div className="scroll flow-scroll gar-flow-scroll">
           {error && (
@@ -2876,12 +2881,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           bellBlocked
         />
         {/* Defecto 2: el título y el subtítulo estaban sueltos en el cuerpo;
-            van en la tarjeta `--teal-l`, como todo el flujo. */}
+            van en la tarjeta de título, como todo el flujo (blanca desde D285). */}
         <div className="title-card tds-title">
-          <h1 className="title-card-title">{t('Tu banco pide confirmar')}</h1>
-          <div className="title-card-sub">
-            {t('La retención de')} {formatMXN(total)} {t('necesita que la confirmes con tu banco.')}
-          </div>
+          <FilaDeTitulo icono="banco">
+            <h1 className="title-card-title">{t('Tu banco pide confirmar')}</h1>
+            <div className="title-card-sub">
+              {t('La retención de')} {formatMXN(total)} {t('necesita que la confirmes con tu banco.')}
+            </div>
+          </FilaDeTitulo>
         </div>
         <div className="scroll flow-scroll tds-flow-scroll">
           {/* AF-DISENO-02 · la maqueta final manda que esta tarjeta explique
@@ -3057,10 +3064,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           backIcon="home"
         />
         <div className="title-card share-title">
-          <h1 className="title-card-title">{t('Compartir la mesa')}</h1>
-          <div className="title-card-sub">
-            {displayedRestaurantName ? `${displayedRestaurantName} · ` : ''}{t('Mesa {0}', code)}
-          </div>
+          <FilaDeTitulo icono="compartir">
+            <h1 className="title-card-title">{t('Compartir la mesa')}</h1>
+            <div className="title-card-sub">
+              {displayedRestaurantName ? `${displayedRestaurantName} · ` : ''}{t('Mesa {0}', code)}
+            </div>
+          </FilaDeTitulo>
         </div>
         <div className="scroll flow-scroll share-flow-scroll">
           <div className="share-card">

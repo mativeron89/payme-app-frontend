@@ -34,6 +34,7 @@ import {
   type Franja,
   type HistorialMesa,
 } from './historialView';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -430,7 +431,9 @@ export function MesasScreen() {
       {/* D223 · turno 2 · 2.1: la burbuja dice «Mesas» (antes «Historial»,
           §1.10), porque arriba del historial vive ahora «Unirme con código». */}
       <div className="title-card">
-        <h1 className="title-card-title">{t('Mesas')}</h1>
+        <FilaDeTitulo icono="mesa">
+          <h1 className="title-card-title">{t('Mesas')}</h1>
+        </FilaDeTitulo>
       </div>
 
       <div className="scroll history-scroll">

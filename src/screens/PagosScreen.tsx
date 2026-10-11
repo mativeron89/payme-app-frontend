@@ -12,6 +12,7 @@ import { goBack } from '../router';
 import { formatMXN } from '../utils/format';
 import { agruparPorMes } from './pagosView';
 import { fullName } from '../utils/identity';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **Pagos** — la pantalla real que lanza el acceso "Ver pagos" de la pestaña
@@ -89,7 +90,9 @@ export function PagosScreen() {
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Mis pagos')}</h1>
+        <FilaDeTitulo icono="recibo-de-pagos">
+          <h1 className="title-card-title">{t('Mis pagos')}</h1>
+        </FilaDeTitulo>
       </div>
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>

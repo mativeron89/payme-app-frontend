@@ -25,6 +25,13 @@ import { avisosVistos, espiarAvisos } from './_senales';
  *   a 4 px, sin pisarlas: es un scroll, y al bajar termina 8 px arriba.
  * - D231 sacó la fila de arriba de la barra («Completa nombre y precio…»): con
  *   el ticket incompleto o vacío la barra no cambia y la burbuja tampoco.
+ * - 🔴 D289 (Mati, 2026-10-11, «El diseño tal cual»): con la tarjeta blanca de
+ *   D285 la tarjeta del ticket mide unos 179 px y 375×667 y 390×664 ya no entran.
+ *   Ahí rige la regla «no entra», la de 320×568. Donde entra, la burbuja sigue
+ *   anclada abajo (D222).
+ * - Al bajar del todo, el desplazamiento es entero y la página no (la tarjeta
+ *   mide 179,19 px): el aire de 8 px puede perder hasta 1 px de redondeo. Por eso
+ *   el mínimo es 7 y no 7,5.
  */
 
 async function capturar(page: Page, nombre: string): Promise<void> {
@@ -71,8 +78,6 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
   for (const [ancho, alto, alto2] of [
     [390, 844, 'alta'],
     [430, 932, 'alta'],
-    [375, 667, 'baja'],
-    [390, 664, 'baja'],
   ] as const) {
     test(`🔴 a ${ancho}×${alto}: pegada abajo, a 12 px del círculo, sin pisar las opciones`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
@@ -98,22 +103,25 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
     });
   }
 
-  test('🔴 a 320×568 no entra: debajo de las opciones a 4 px, y al bajar termina a 8 px del círculo', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 568 });
-    await hastaComoDividen(page);
-    const arriba = await medir(page);
-    expect(arriba.sobra, JSON.stringify(arriba)).toBe(false);
-    expect(arriba.pisa, JSON.stringify(arriba)).toBe(false);
-    expect(arriba.cortada, JSON.stringify(arriba)).toBe(false);
-    expect(arriba.burbujaTop - arriba.ultimaOpcionBottom, JSON.stringify(arriba)).toBeGreaterThanOrEqual(3.5);
-    expect(arriba.burbujaTop - arriba.ultimaOpcionBottom, JSON.stringify(arriba)).toBeLessThanOrEqual(4.5);
-    await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
-    const abajo = await medir(page);
-    expect(abajo.cortada, JSON.stringify(abajo)).toBe(false);
-    expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeGreaterThanOrEqual(7.5);
-    expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeLessThanOrEqual(8.5);
-    console.log('BURBUJA 320x568', JSON.stringify({ arriba, abajo }));
-  });
+  for (const [ancho, alto] of [[320, 568], [375, 667], [390, 664]] as const) {
+    test(`🔴 a ${ancho}×${alto} no entra: debajo de las opciones a 4 px, y al bajar termina a 8 px del círculo`, async ({ page }) => {
+      await page.setViewportSize({ width: ancho, height: alto });
+      await hastaComoDividen(page);
+      const arriba = await medir(page);
+      expect(arriba.sobra, JSON.stringify(arriba)).toBe(false);
+      expect(arriba.pisa, JSON.stringify(arriba)).toBe(false);
+      expect(arriba.cortada, JSON.stringify(arriba)).toBe(false);
+      expect(arriba.burbujaTop - arriba.ultimaOpcionBottom, JSON.stringify(arriba)).toBeGreaterThanOrEqual(3.5);
+      expect(arriba.burbujaTop - arriba.ultimaOpcionBottom, JSON.stringify(arriba)).toBeLessThanOrEqual(4.5);
+      await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      const abajo = await medir(page);
+      expect(abajo.cortada, JSON.stringify(abajo)).toBe(false);
+      expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeGreaterThanOrEqual(7);
+      expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeLessThanOrEqual(8.5);
+      console.log(`BURBUJA ${ancho}x${alto}`, JSON.stringify({ arriba, abajo }));
+      await capturar(page, `burbuja-${ancho}x${alto}`);
+    });
+  }
 
   test('🔴 «¿Cuántos pagan?» (partes iguales) también queda abajo', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -131,7 +139,7 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
    * un consumo.»), que en la captura de Mati quedaba cortada detrás del círculo.
    * La barra no cambia de alto y la burbuja queda donde estaba, sin pisar nada.
    */
-  for (const [ancho, alto] of [[375, 667], [390, 844]] as const) {
+  for (const [ancho, alto, entra] of [[375, 667, false], [390, 844, true]] as const) {
     test(`🔴 D231 · a ${ancho}×${alto}, con un consumo incompleto: sin cartel, y nada se superpone`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
       await espiarAvisos(page);
@@ -156,12 +164,13 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
       expect(m.circuloTop, info).toBe(antes.circuloTop);
       expect(m.pisa, info).toBe(false);
       expect(m.cortada, info).toBe(false);
-      // Ni el círculo ni la barra tapan la burbuja.
-      expect(m.limite - m.burbujaBottom, info).toBeGreaterThanOrEqual(0);
+      // Donde entra, ni el círculo ni la barra tapan la burbuja. A 375×667 no entra (D289): queda abajo, al bajar.
+      expect(m.sobra, info).toBe(entra);
+      if (entra) expect(m.limite - m.burbujaBottom, info).toBeGreaterThanOrEqual(0);
       // Y al bajar del todo, termina arriba del círculo con su aire.
       await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
       const abajo = await medir(page);
-      expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeGreaterThanOrEqual(7.5);
+      expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeGreaterThanOrEqual(7);
       await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = 0; });
       await capturar(page, `burbuja-${ancho}x${alto}-incompleto`);
 
@@ -198,7 +207,12 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
     await expect(page.getByText('Agrega al menos un consumo.')).toHaveCount(0);
     const m = await medir(page);
     expect(m.pisa, JSON.stringify(m)).toBe(false);
-    expect(m.limite - m.burbujaBottom, JSON.stringify(m)).toBeGreaterThanOrEqual(0);
+    // A 375×667 no entra (D289): al bajar del todo, la burbuja termina arriba del círculo con su aire.
+    expect(m.sobra, JSON.stringify(m)).toBe(false);
+    await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    const abajo = await medir(page);
+    expect(abajo.limite - abajo.burbujaBottom, JSON.stringify(abajo)).toBeGreaterThanOrEqual(7);
+    await page.locator('.ticket-flow-scroll').evaluate((el) => { el.scrollTop = 0; });
 
     const avisosAntes = (await avisosVistos(page)).length;
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();

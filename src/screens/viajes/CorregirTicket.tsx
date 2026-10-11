@@ -37,6 +37,7 @@ import './viajes.css';
 import './viaje.css';
 import './crear.css';
 import './ticket.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * D278-3 · D282-2 · corregir un ticket ya cargado (un modo de la pantalla del ticket, P4 del plan): en un escaneado, el
@@ -81,8 +82,10 @@ export function CorregirTicketVista({
   return (
     <>
       <div className="title-card">
-        <h1 className="title-card-title">{gasto ? t('Corregir gasto') : t('Corregir ticket')}</h1>
-        {sub && <div className="title-card-sub">{sub}</div>}
+        <FilaDeTitulo icono="lapiz">
+          <h1 className="title-card-title">{gasto ? t('Corregir gasto') : t('Corregir ticket')}</h1>
+          {sub && <div className="title-card-sub">{sub}</div>}
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
         {borrador.tipo === 'gasto' ? (

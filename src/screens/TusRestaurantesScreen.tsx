@@ -20,6 +20,7 @@ import { useRegion } from '../preferences/RegionProvider';
 import { personalZoneCaption } from '../utils/personalDates';
 import { parametroDeTicket } from './viajes/viajesView';
 import { useTandaVigente } from './useTandaVigente';
+import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -106,6 +107,7 @@ export function TusRestaurantesScreen() {
       {conDatos || soportaPeriodo ? (
         <div className="title-card stat-burbuja">
           <h1 className="stat-oculto">{t('Tus restaurantes')}</h1>
+          <CuadroDeTarjeta icono="tienda" />
           <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} inicio={soportaPeriodo ? datos.period?.start ?? null : null} />
           {conDatos && (
             <div className="stat-burbuja-dato">
@@ -118,7 +120,9 @@ export function TusRestaurantesScreen() {
         </div>
       ) : (
         <div className="title-card">
-          <h1 className="title-card-title">{t('Tus restaurantes')}</h1>
+          <FilaDeTitulo icono="tienda">
+            <h1 className="title-card-title">{t('Tus restaurantes')}</h1>
+          </FilaDeTitulo>
         </div>
       )}
 

@@ -47,7 +47,8 @@ const render = (extra: Partial<Parameters<typeof ConfiguracionVista>[0]> = {}) =
 describe('🔴 D255-8 · Configuración del viaje', () => {
   it('el encabezado dice sólo «Configuración» (un solo título, plan OK)', () => {
     const html = render();
-    expect(html).toMatch(/<div class="title-card"><h1 class="title-card-title">Configuración<\/h1><\/div>/);
+    // D285 · la tarjeta blanca: el cuadro con el engranaje y el título solo.
+    expect(html).toMatch(/<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro" data-icono="engranaje" aria-hidden="true"><svg[^]*?<\/svg><\/span><div class="title-card-textos"><h1 class="title-card-title">Configuración<\/h1><\/div><\/div><\/div>/);
   });
 
   it('«Agregar miembros» con el buscador del alta; sin buscar, los invitados que faltan aceptar', () => {

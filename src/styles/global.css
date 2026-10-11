@@ -1199,24 +1199,32 @@ html.app-de-inicio-ios .app {
   text-align: center;
 }
 /* La burbuja se MONTA sobre la cabecera: -42px es el gesto del sistema. */
+/* D285 · el mismo formato que la tarjeta de título: blanca, el cuadro a la
+   izquierda y el título y el subtítulo alineados a la izquierda, sin «Volver». */
 .ingreso-burbuja {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 83px;
   margin: -42px 16px 0;
-  background: var(--teal-l);
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-2);
-  padding: 20px;
 }
 .ingreso-burbuja-titulo {
   font: 800 22px/1.2 var(--font-display);
   color: var(--text);
-  text-align: center;
-  letter-spacing: -0.015em;
+  text-align: left;
 }
 .ingreso-burbuja-sub {
-  margin-top: 4px;
-  font: 13.5px/1.45 var(--font-body);
+  margin-top: 0;
+  font: 14px/1.4 var(--font-body);
   color: var(--text-muted);
-  text-align: center;
+  text-align: left;
 }
 .ingreso-cuerpo {
   padding: 16px;
@@ -4767,9 +4775,12 @@ html.app-de-inicio-ios .app {
   align-items: center;
 }
 
-/* La tarjeta de título, montada sobre la banda. Lleva SIEMPRE el título
-   centrado; lo que va debajo depende de cada pantalla y puede no haber nada
-   (§1.4). En División va en --teal-l, no blanca. */
+/* La tarjeta de título, montada sobre la banda. Lo que va debajo de la fila del
+   título depende de cada pantalla y puede no haber nada (§1.4).
+   D285 · 0.242.0: blanca con el cuadro navy del ícono a la izquierda, el título y
+   el subtítulo alineados a la izquierda (opción 4c de Claude Design,
+   `PANTALLA-tarjeta-de-titulo-blanca.md`). Antes era --teal-l y centrada. El
+   margen de -42px sobre la cabecera no cambia. */
 /* Geometría medida por Diseño en §5 bis · E (2026-08-21): solape de 42px —el
    "sube 24px" de 2026-08-04 era el valor viejo—, radio 22px y una sombra mucho
    más chata que la de la tarjeta montada de primer nivel.
@@ -4792,13 +4803,72 @@ html.app-de-inicio-ios .app {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  /* D285 · entre la fila del título y el contenido extra. */
+  gap: 12px;
   margin: -42px var(--sp-4) 0;
   padding: 16px 18px;
   min-height: 83px;
   border-radius: var(--r-lg); /* 22px — el token ya valía lo que §E pide */
-  background: var(--teal-l);
-  box-shadow: 0 4px 16px rgba(16, 30, 59, 0.08);
-  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-2);
+  text-align: left;
+}
+
+/* D285 · la fila del título: el cuadro del ícono y, al lado, el título y el
+   subtítulo. */
+.title-card-fila {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.title-card-textos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* El cuadro: 48 × 48, radio 14, navy; el ícono en blanco (trazo 1.7, en el
+   componente). El de cierre («¡Listo!») es el único naranja. */
+.title-card-cuadro {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--action);
+  color: var(--on-dark);
+}
+
+.title-card-cuadro--cierre {
+  background: var(--brand);
+}
+
+/* D285 · el ticket del viaje cargando o no disponible (fila 21): dos siluetas en
+   lugar del título y del subtítulo, en vez de la tarjeta vacía. */
+.title-card-siluetas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-card-silueta {
+  width: 170px;
+  max-width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--border);
+}
+
+.title-card-silueta--sub {
+  width: 110px;
+  height: 12px;
+  border-radius: 6px;
 }
 
 .title-card-title {
@@ -4809,7 +4879,7 @@ html.app-de-inicio-ios .app {
   margin: 0;
   font-family: var(--font-display);
   font-size: 22px;
-  line-height: 1.25;
+  line-height: 1.2;
   font-weight: 800;
   color: var(--text);
 }
@@ -4851,12 +4921,13 @@ html.app-de-inicio-ios .app {
    con pestaña fusionada al estilo Inicio; Mati rechazó las dos.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Ubicación bajo el nombre del restaurante, centrada como él. */
+/* Bajo el título, alineado a la izquierda como él (D285): DM Sans 14 / 1.4, a
+   2 px (el `gap` de `.title-card-textos`). */
 .title-card-sub {
-  margin-top: var(--sp-1);
+  margin-top: 0;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  line-height: 1.4;
   color: var(--text-muted);
 }
 
@@ -5873,21 +5944,22 @@ button.qc-circulo::after {
 }
 
 /* AF-QUE-CONSUMISTE · regla 8 · en «¿Qué consumiste?» la barra y el reloj van
-   con los valores del diseño: barra de 7 px sobre blanco, lo elegido fuerte y
-   el reloj en ámbar (--warning, el ámbar de texto del sistema: el #A87C1F del
-   prototipo no llega a contraste sobre --teal-l). */
+   dentro de la tarjeta del título, lo elegido fuerte.
+   D285 · con la tarjeta blanca: la barra de 8 px sobre --border, a todo el ancho
+   de la tarjeta; debajo «{pagado} / {total} ({%})» en DM Sans 14 y el reloj en
+   --brand-ink (antes ámbar, por el contraste sobre --teal-l). */
 .mesa-selection-title .mi-progress {
-  height: 7px;
-  margin-top: 12px;
-  background: var(--surface);
+  height: 8px;
+  margin-top: 0;
+  background: var(--border);
 }
 
 .mesa-selection-title .mi-meta {
   align-items: center;
   gap: 7px;
-  margin-top: 9px;
-  font-family: var(--font-display);
-  font-size: 13.5px;
+  margin-top: -4px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
 }
 
 .mesa-selection-title .mi-meta-amt b {
@@ -5902,11 +5974,6 @@ button.qc-circulo::after {
 
 .mesa-selection-title .mi-count {
   font-weight: 700;
-  color: var(--warning);
-}
-
-/* Con menos de una hora sigue el naranja de siempre (--brand-ink). */
-.mesa-selection-title .mi-count.urgent {
   color: var(--brand-ink);
 }
 
@@ -5959,16 +6026,11 @@ button.qc-circulo::after {
    burbuja. Decisión 77 de Mati: sin el código de mesa y en UNA línea, así que
    ya no envuelve. Si no entra, se recorta el NOMBRE con «…»; la modalidad no
    se recorta nunca. Antes podía envolver sin truncar. */
-.mesa-selection-title {
-  min-height: 0;
-  padding: var(--sp-3) var(--sp-4);
-}
-
 .mesa-selection-context {
   display: flex;
   flex-wrap: nowrap;
   align-items: baseline;
-  justify-content: center;
+  justify-content: flex-start;
   column-gap: var(--sp-1);
   min-width: 0;
 }
@@ -7188,9 +7250,15 @@ button.qc-circulo::after {
 .stat-burbuja {
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  /* D285 · el cuadro con el ícono (el que dice en qué pantalla estás), el período y, a la derecha, el dato. */
+  gap: 14px;
   text-align: left;
+}
+
+.stat-burbuja > .stat-burbuja-dato,
+.stat-burbuja > .est-total {
+  margin-left: auto;
 }
 
 .stat-burbuja-periodo {
@@ -7217,9 +7285,9 @@ button.qc-circulo::after {
 }
 
 .stat-burbuja-contexto {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
-  color: var(--gray-d);
+  color: var(--text-muted);
 }
 
 .stat-anillo-card {
@@ -8396,7 +8464,6 @@ h1.gar-amount-lbl {
    `--teal-l` con texto navy, como el resto del flujo, y con el contexto del
    restaurante debajo del rótulo. */
 .pay-title {
-  background: var(--teal-l);
   margin-bottom: 16px;
 }
 .pay-title-lbl {
@@ -8407,13 +8474,7 @@ h1.gar-amount-lbl {
   color: var(--action);
   margin-bottom: 4px;
 }
-.pay-title-place {
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  color: var(--action);
-  opacity: 0.75;
-  margin-bottom: 6px;
-}
+
 /* El <h1> de la tarjeta de pago hereda el tamaño de etiqueta, no el de título:
    lo que pesa en la pantalla es el monto, no el rótulo. */
 h1.pay-title-lbl {
@@ -8447,16 +8508,7 @@ h1.pay-title-lbl {
 /* ── Comprobante · tanda 4 de fidelidad (2026-08-20) ──────────────────────
    El tilde vivía suelto sobre el fondo: el cierre estaba partido en dos. */
 .recibo-cierre {
-  background: var(--teal-l);
   margin-bottom: 14px;
-  text-align: center;
-}
-.recibo-cierre-tit {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: var(--fs-h1);
-  color: var(--action);
-  margin: 14px 0 6px;
 }
 /* El total en navy y más grande: en `--action-2` sobre blanco daba 2.6:1 —
    ilegible justo en el número más importante de la pantalla. */
@@ -8519,33 +8571,33 @@ h1.pay-title-lbl {
 /* P1 · Ticket + División: el contexto, el monto y el acceso al ticket son una
    sola tarjeta solapada. El detalle expandido conserva su cuerpo completo. */
 .ticket-title-card {
-  min-height: 0;
-  padding: 10px 18px 12px;
   overflow: hidden;
 }
 
-.ticket-title-card .title-card-title {
-  font-size: 19px;
-  line-height: 1.25;
-  font-weight: 800;
-}
-
+/* D285 · el total del ticket, debajo de la fila del título y a la izquierda: Plus Jakarta Sans 32/800. */
 .ticket-title-amount {
-  margin-top: 4px;
   font-family: var(--font-display);
-  font-size: 26px;
-  line-height: 1.05;
+  font-size: 32px;
+  line-height: 1.1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
-/* D215 · nota informativa del IVA agregado: sin ámbar, no es un error. */
+/* D215 · nota informativa del IVA agregado: sin ámbar, no es un error. D285 · el ícono ⓘ de 15 y DM Sans 13.5. */
 .ticket-title-iva {
-  margin: 4px 0 0;
+  display: flex;
+  gap: 6px;
+  margin: 0;
   font-family: var(--font-body);
-  font-size: var(--fs-sm);
+  font-size: 13.5px;
+  line-height: 1.45;
   color: var(--text-muted);
+}
+
+.ticket-title-iva .ico-inline {
+  flex: none;
+  margin-top: 2px;
 }
 
 .ticket-title-fold {
@@ -8588,12 +8640,6 @@ h1.pay-title-lbl {
 .share-title .title-card-title {
   font-size: 22px;
   font-weight: 800;
-}
-
-.share-title .title-card-sub {
-  margin-top: 5px;
-  font-size: 13.5px;
-  line-height: 1.45;
 }
 
 .share-card {
@@ -8950,23 +8996,16 @@ h1.pay-title-lbl {
 .pay-title {
   margin: -42px var(--sp-4) 0;
   border-radius: var(--r-lg);
-  text-align: center;
 }
 
 .pay-title-lbl,
 h1.pay-title-lbl {
   margin: 0;
   font-size: 22px;
-  line-height: 1.25;
+  line-height: 1.2;
   font-weight: 800;
   letter-spacing: 0;
   text-transform: none;
-}
-
-.pay-title-place {
-  margin: 2px 0 0;
-  font-size: 13.5px;
-  line-height: 1.45;
 }
 
 .pay-title-amount {
@@ -8980,11 +9019,7 @@ h1.pay-title-lbl {
 }
 
 .pay-title-breakdown {
-  margin-top: 4px;
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  color: var(--action);
-  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
 }
 
 .pay-flow-scroll {
@@ -9143,16 +9178,6 @@ h1.pay-title-lbl {
   text-align: center;
 }
 
-.receipt-screen .recibo-cierre-tit {
-  margin: var(--sp-3) 0 var(--sp-1);
-  font-size: 26px;
-}
-
-.receipt-screen .recibo-cierre .body-text {
-  font-size: 13.5px;
-  line-height: 1.45;
-}
-
 .recibo-flow-scroll {
   padding-top: var(--sp-4);
 }
@@ -9218,8 +9243,10 @@ h1.pay-title-lbl {
 }
 
 .ticket-title-fold {
+  /* D285 · el mismo botón de hoy, alineado a la izquierda. */
+  align-self: flex-start;
   width: fit-content;
-  margin: 8px auto 0;
+  margin: 0;
 }
 
 .ticket-title-fold .tk-fold-head {
@@ -9699,12 +9726,6 @@ h1.pay-title-lbl {
   font-weight: 800;
 }
 
-.tds-title .title-card-sub {
-  margin-top: 5px;
-  font-size: 13.5px;
-  line-height: 1.45;
-}
-
 .tds-flow-scroll {
   padding-top: var(--sp-4);
 }
@@ -10065,8 +10086,7 @@ h1.pay-title-lbl {
 
 /* §1 · la burbuja: el período a la izquierda, el total a la derecha. */
 .title-card.est-burbuja {
-  padding: 16px 18px 16px 8px;
-  box-shadow: 0 4px 16px rgba(16, 30, 59, 0.1);
+  padding: 16px 18px;
 }
 
 .est-total {

@@ -62,6 +62,7 @@ import { useShortfallDetailCapability } from '../api/privateFeatures';
 import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
 import { olvidarLoDeViajes } from '../api/ultimoVisto';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
@@ -461,8 +462,11 @@ export function AvisosScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} bellHere />
+      {/* D285-2 · Mati: «La campana pasa a «Avisos»»; las preferencias (Configuración › Notificaciones) siguen igual. */}
       <div className="title-card avisos-title-card">
-        <h1 className="title-card-title">{t('Notificaciones')}</h1>
+        <FilaDeTitulo icono="campana">
+          <h1 className="title-card-title">{t('Avisos')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll flow-scroll avisos-scroll">
         {/* D178 · la fila de acciones, arriba de todo (D174): a la izquierda cuántas

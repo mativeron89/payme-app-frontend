@@ -33,6 +33,7 @@ import { iniciales, nombreCompleto, rangoDeFechas, type T } from './viajesView';
 import './viajes.css';
 import './crear.css';
 import './viaje.css';
+import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 
 /**
  * D255-8 · «Configuración» del viaje, desde el botón debajo de «Ver balance del
@@ -248,7 +249,9 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
       <AppHeaderBack userName={p.userName} onBack={p.onVolver} />
       <div className="title-card">
         {/* Plan OK (01:16:34Z): un solo título, sin el nombre del viaje debajo. */}
-        <h1 className="title-card-title">{t('Configuración')}</h1>
+        <FilaDeTitulo icono="engranaje">
+          <h1 className="title-card-title">{t('Configuración')}</h1>
+        </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll vjcfg-scroll">
         <section className="vj-card" aria-labelledby="vjcfg-agregar">
