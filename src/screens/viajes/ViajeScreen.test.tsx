@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
-import { BalanceVista, PestanasDeBalance } from './BalanceScreen';
+import { BalanceVista, LugarAgrupado, PestanasDeBalance } from './BalanceScreen';
+import { agruparConsumos } from './consumosPorLugar';
 import {
   HojaCerrarVista,
   HojaNoPuedeSalirVista,
@@ -37,10 +38,12 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
-    puede_eliminar: false, presentes: [], personal: false, ...extra,
+    puede_eliminar: false, presentes: [], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, ...extra,
   } as const;
+  // D278-2 · el total impreso, con la identidad del contrato.
+  const total = extra.total_cents ?? t.monto_cents + t.servicio_cents + t.iva_aparte_cents - t.descuentos_cents;
   // D263 · con un solo pagador, uno con el total.
-  return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
+  return { ...t, total_cents: total, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: total }] };
 }
 
 const TICKETS: TicketEnViaje[] = [
@@ -55,7 +58,7 @@ function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
     creado_en: '2026-10-01T15:00:00.000Z', mi_miembro_id: IDS.yo, miembros: MIEMBROS, invitados: [],
     mi_balance_cents: -54200, gasto_del_grupo_cents: 666000, tickets: TICKETS,
     sin_repartir: [{ ticket_id: 'tk-1', lugar: 'Mariscos El Faro', fecha_ticket: '2026-10-08', monto_cents: 56500, faltan: [IDS.diego] }],
-    transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, ...extra,
+    transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null, ...extra,
   };
 }
 
@@ -461,5 +464,81 @@ describe('los textos de estas pantallas', () => {
 
   it('montos de centavos enteros: nada de «.00»', () => {
     expect(texto(vista(listo(viaje())))).not.toMatch(/\.00\b/);
+  });
+});
+
+describe('🔴 D281 · Balance › Consumos: el mismo lugar en una fila que se abre', () => {
+  const consumos = (tickets: TicketEnViaje[], deslizar?: Parameters<typeof BalanceVista>[0]['deslizar']) => renderToStaticMarkup(
+    <BalanceVista carga={listo(viaje({ tickets }))} opcion="consumos" onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} deslizar={deslizar} />,
+  );
+  // El dueño los manda del más reciente al más viejo: Mariscos (8 oct), Café (7 oct), el bar sin lugar (6 oct) y Mariscos (5 oct).
+  const OTRA_VEZ = ticket({ id: 'tk-4', lugar: 'MARISCOS  el faro ', fecha_ticket: '2026-10-05', falta_que_elija: 0, monto_cents: 41000, puede_eliminar: true });
+  const CON_REPETIDO = [...TICKETS, OTRA_VEZ];
+
+  it('una fila por lugar en la posición de su visita más reciente: lugar, «2 veces», el total y la flecha; cerrada', () => {
+    const html = consumos(CON_REPETIDO);
+    const filas = html.split('<li>').slice(1);
+    expect(filas).toHaveLength(3);
+    expect(filas[0]).toMatch(/^<button type="button" class="vjb-consumo vjb-lugar" aria-expanded="false" aria-controls="vjb-lugar-tk-1">/);
+    expect(texto(filas[0]!)).toBe('Mariscos El Faro 2 veces Falta que elijan $2,000');
+    expect(filas[0]).toContain('vjb-lugar-chev');
+    expect(filas[0]).not.toContain('vjb-visitas');
+    // Los que fueron una sola vez, como siempre.
+    expect(filas[1]).toMatch(/^<button type="button" class="vjb-consumo">/);
+    expect(texto(filas[1]!)).toBe('Café Caribe $380');
+    expect(texto(filas[2]!)).toBe('Bar $960');
+  });
+
+  it('sin repetidos, Consumos queda como antes', () => {
+    const html = consumos(TICKETS);
+    expect(html).not.toContain('vjb-lugar');
+    expect(html.split('<li>').slice(1).map((f) => f.startsWith('<button type="button" class="vjb-consumo">'))).toEqual([true, true, true]);
+  });
+
+  it('la fila del lugar no se desliza (eliminar es de cada visita); sin pendientes no lleva el chip', () => {
+    const deslizar = { abierta: null, onAbrir: nada, onCerrar: nada, onEliminar: nada };
+    const sinPendientes = CON_REPETIDO.map((tk) => ({ ...tk, falta_que_elija: 0, puede_eliminar: true }));
+    const filas = consumos(sinPendientes, deslizar).split('<li>').slice(1);
+    expect(filas[0]).toMatch(/^<button type="button" class="vjb-consumo vjb-lugar"/);
+    expect(filas[0]).not.toContain('Falta que elijan');
+    expect(filas[1]).toContain('deslizable');
+  });
+
+  it('abierta: cada visita con su fecha y su monto, en el orden del dueño, y la que se puede eliminar se desliza', () => {
+    const lugar = agruparConsumos(CON_REPETIDO)[0]!;
+    const deslizar = { abierta: null, onAbrir: nada, onCerrar: nada, onEliminar: nada };
+    const html = renderToStaticMarkup(
+      <LugarAgrupado lugar={lugar} abierto onAlternar={nada} onAbrirTicket={nada} deslizar={deslizar} />,
+    );
+    expect(html).toMatch(/aria-expanded="true" aria-controls="vjb-lugar-tk-1"/);
+    expect(html).toContain('class="vjb-lugar-chev abierto"');
+    expect(html).toContain('<ul class="vjb-visitas" id="vjb-lugar-tk-1" aria-label="Las veces en Mariscos El Faro">');
+    const visitas = html.split('<ul class="vjb-visitas"')[1]!.split('<li>').slice(1);
+    // La segunda se desliza: su «Eliminar» viene detrás.
+    expect(visitas.map((v) => texto(v))).toEqual(['8 oct Falta que elija 1 $1,590', '5 oct $410 Eliminar']);
+    expect(visitas[0]).not.toContain('deslizable');
+    expect(visitas[1]).toContain('deslizable');
+  });
+
+  it('el personal lleva su chip en la fila del lugar', () => {
+    const personales = [ticket({ id: 'p1', lugar: 'Oxxo', personal: true, falta_que_elija: 0, monto_cents: 5000 }),
+      ticket({ id: 'p2', lugar: 'OXXO', personal: true, falta_que_elija: 0, monto_cents: 7000 })];
+    const filas = consumos(personales).split('<li>').slice(1);
+    expect(filas).toHaveLength(1);
+    expect(texto(filas[0]!)).toBe('Oxxo 2 veces Personal $120');
+  });
+});
+
+describe('🔴 D278-2 · Balance › Consumos usa el total impreso', () => {
+  const consumos = (tickets: TicketEnViaje[]) => renderToStaticMarkup(
+    <BalanceVista carga={listo(viaje({ tickets }))} opcion="consumos" onReintentar={nada} onVerViajes={nada} onAbrirTicket={nada} />,
+  );
+  it('una visita y la fila del lugar suman `total_cents`, no los renglones', () => {
+    const conServicio = ticket({ id: 'tk-9', lugar: 'Café Caribe', monto_cents: 38000, servicio_cents: 3800, falta_que_elija: 0 });
+    expect(conServicio.total_cents).toBe(41800);
+    const sola = consumos([conServicio]);
+    expect(texto(sola)).toContain('Café Caribe $418');
+    const lugar = consumos([conServicio, ticket({ id: 'tk-10', lugar: 'CAFÉ CARIBE', monto_cents: 10000, falta_que_elija: 0 })]);
+    expect(texto(lugar)).toContain('Café Caribe 2 veces $518');
   });
 });

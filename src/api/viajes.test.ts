@@ -35,6 +35,8 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
     viaje_version_5: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
     viaje_version_6: { parametro: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
     viaje_version_7: { since: string; parametro: string; regla: string; cerrado: string; uso: string };
+    viaje_version_8: { since: string; parametro: string; regla: string; detalle_suma: string[]; lista_suma: string[] };
+    viaje_version_9: { since: string; parametro: string; regla: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
   };
   colores: Record<string, string>;
 };
@@ -47,6 +49,10 @@ const V4 = CONTRATO.negociaciones.viaje_version_4;
 const V5 = CONTRATO.negociaciones.viaje_version_5;
 /** D276 · App Backend 2.179.0: la 5 más `presentes` y `personal` en cada ticket, y `personal` en el detalle de un ticket. */
 const V6 = CONTRATO.negociaciones.viaje_version_6;
+/** D279 · App Backend 2.180.0: la 7 más `hora_cierre`, `puedo_cerrar` y `se_cierra_en` en el viaje, y `hora_cierre` en la lista. */
+const V8 = CONTRATO.negociaciones.viaje_version_8;
+/** D278-2 · D284 · App Backend 2.181.0: la 8 más los ajustes y el total impreso en cada ticket, y `te_toca_platos_cents`. */
+const V9 = CONTRATO.negociaciones.viaje_version_9;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -99,16 +105,19 @@ const detalle = (cambios: Record<string, unknown> = {}) => ({
   tickets: [{ id: 't1', lugar: null, tipo_lugar: 'bar', fecha_ticket: null, hora_ticket: null,
     cargado_en: '2026-10-02T00:00:00.000Z', forma: 'consumo', pagado_por: 'm2', pagaste_tu: false,
     te_toca_cents: 100, falta_que_elija: 1, sin_repartir_cents: 0, monto_cents: 200, origen: 'escaneo', puede_eliminar: false,
-    pagadores: [{ miembro_id: 'm2', monto_cents: 200 }], presentes: ['m1', 'm2'], personal: false }],
+    pagadores: [{ miembro_id: 'm2', monto_cents: 200 }], presentes: ['m1', 'm2'], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 200 }],
   sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
   color: null, has_photo: false,
+  // D279 · v8: cierra quien lo creó, sólo abierto.
+  hora_cierre: '23:59', puedo_cerrar: (cambios.estado ?? 'abierto') === 'abierto', se_cierra_en: null,
   ...cambios,
 });
 
 describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', () => {
-  it('el detalle de un viaje: las claves del contrato con `viaje_version=6`, ni una más', () => {
+  it('el detalle de un viaje: las claves del contrato con `viaje_version=8`, ni una más', () => {
     const claves = CONTRATO.rutas['GET /api/viajes/:id']!.respuestas['200']!.viaje as string[];
-    expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma].sort());
+    expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma, ...V8.detalle_suma].sort());
+    expect(V8.parametro).toBe('viaje_version=8');
     expect(V2.parametro).toBe('viaje_version=2');
     expect(V3.parametro).toBe('viaje_version=3');
     expect(V4.parametro).toBe('viaje_version=4');
@@ -116,7 +125,8 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
     expect(V5.parametro).toBe('viaje_version=5');
     expect(V6.parametro).toBe('viaje_version=6');
     expect(Object.keys(detalle().tickets[0]!).sort())
-      .toEqual([...V2.ticket, ...V4.ticket_suma, ...V5.ticket_suma, ...V6.ticket_suma].sort());
+      .toEqual([...V2.ticket, ...V4.ticket_suma, ...V5.ticket_suma, ...V6.ticket_suma, ...V9.ticket_suma].sort());
+    expect(V9.parametro).toBe('viaje_version=9');
     const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle() });
     expect(v.miembros.map((m) => m.first_name)).toEqual(['Yo', 'Luis']);
     expect(() => decodeDetalleViaje({ contract: 'otro/v1', viaje: detalle() })).toThrow();
@@ -158,9 +168,9 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
   it('la lista: Abiertos no trae cerrados y lo que no aplica llega en null', () => {
     const item = { id: 'v', nombre: 'A', fecha_desde: null, fecha_hasta: null, estado: 'abierto', personas: 2,
       mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
-      color: null, has_photo: false };
+      color: null, has_photo: false, hora_cierre: '23:59' };
     const claves = CONTRATO.rutas['GET /api/viajes']!.respuestas['200']!.viaje as string[];
-    expect(Object.keys(item).sort()).toEqual([...claves, ...V3.lista_suma].sort());
+    expect(Object.keys(item).sort()).toEqual([...claves, ...V3.lista_suma, ...V8.lista_suma].sort());
     const r = decodeListaDeViajes({ contract: CONTRATO.id, viajes: [item], counts: { abiertos: 1, cerrados: 0 } }, 'abiertos');
     expect(r.counts).toEqual({ abiertos: 1, cerrados: 0 });
     expect(() => decodeListaDeViajes({ contract: CONTRATO.id, viajes: [item], counts: { abiertos: 1, cerrados: 0 } }, 'cerrados')).toThrow();
@@ -173,9 +183,10 @@ describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', 
       items: [{ id: 'i', name: 'Taco', price_cents: 500, quantity: 2, line_cents: 1000, remaining_bps: 5000, my_bps: 5000, my_amount_cents: 500 }],
       personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
       te_toca_cents: 500, sin_repartir_cents: 500, puedo_elegir: true, puedo_marcar_presentes: false,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false };
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 500 };
     const claves = CONTRATO.rutas['GET /api/viajes/:id/tickets/:tid']!.respuestas['200']!.ticket as string[];
-    expect(Object.keys(ticket).sort()).toEqual([...claves, ...V5.detalle_de_ticket_suma, ...V6.detalle_de_ticket_suma].sort());
+    expect(Object.keys(ticket).sort())
+      .toEqual([...claves, ...V5.detalle_de_ticket_suma, ...V6.detalle_de_ticket_suma, ...V9.detalle_de_ticket_suma].sort());
     expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket }).items[0]!.my_amount_cents).toBe(500);
     const malo = { ...ticket, items: [{ ...ticket.items[0]!, remaining_bps: 10001 }] };
     expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: malo })).toThrow();
@@ -221,9 +232,12 @@ describe('D245 · `viaje_version=2`: las claves nuevas sólo con la negociación
       conTicket({ origen: 'ocr' }), conTicket({ origen: null })]) {
       expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: malo })).toThrow();
     }
-    const d = decodeDetalleViaje({ contract: CONTRATO.id, viaje: conTicket({ origen: 'manual', monto_cents: 0,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 0 }] }) });
-    expect(d.tickets[0]).toMatchObject({ origen: 'manual', monto_cents: 0 });
+    // D278-2 · con la 9 el total impreso es positivo (`totalDelTicket` del dueño lanza con 0): un ticket de $0 no llega.
+    expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: conTicket({ origen: 'manual', monto_cents: 0, total_cents: 0,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 0 }] }) })).toThrow();
+    const d = decodeDetalleViaje({ contract: CONTRATO.id, viaje: conTicket({ origen: 'manual', monto_cents: 1, total_cents: 1,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1 }] }) });
+    expect(d.tickets[0]).toMatchObject({ origen: 'manual', monto_cents: 1 });
     expect(d.miembros[1]).toMatchObject({ has_avatar: true, pagado_cents: 200 });
   });
 });
@@ -235,7 +249,7 @@ describe('D244 · el gasto a mano: `POST …/gastos`', () => {
     items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
     personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }, { miembro_id: 'm2', ya_eligio: true, presente: true }],
     te_toca_cents: 45000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
-    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }], personal: false,
+    pagadores: [{ miembro_id: 'm1', monto_cents: 90000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 45000,
   };
 
   it('responde como un ticket, con `ya_cargado` nulo: el pedido y la respuesta del contrato', () => {
@@ -338,7 +352,7 @@ describe('🔴 D255 · `viaje_version=3`: color y foto del viaje (App Backend 2.
   const sinClave = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
   const item = (cambios: Record<string, unknown> = {}) => ({ id: 'v', nombre: 'A', fecha_desde: null, fecha_hasta: null,
     estado: 'abierto', personas: 2, mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null,
-    terminado_en: null, color: null, has_photo: false, ...cambios });
+    terminado_en: null, color: null, has_photo: false, hora_cierre: '23:59', ...cambios });
   const lista = (i: Record<string, unknown>) => ({ contract: CONTRATO.id, viajes: [i], counts: { abiertos: 1, cerrados: 0 } });
 
   it('la paleta es la del contrato, con sus hex', () => {
@@ -478,7 +492,7 @@ describe('🔴 D263 · `viaje_version=5`: varios pagadores (App Backend 2.177.0)
         forma: 'iguales', monto_cents: 90000, pagado_por: 'm1', pagaste_tu,
         items: [{ id: 'i', name: 'Gasolina', price_cents: 90000, quantity: 1, line_cents: 90000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
         personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }], te_toca_cents: 0, sin_repartir_cents: 0,
-        puedo_elegir: false, puedo_marcar_presentes: true, pagadores, personal: false,
+        puedo_elegir: false, puedo_marcar_presentes: true, pagadores, personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 90000, te_toca_platos_cents: 0,
       },
     });
     const dos = [{ miembro_id: 'm1', monto_cents: 45000 }, { miembro_id: 'm2', monto_cents: 45000 }];
@@ -513,7 +527,7 @@ describe('🔴 D276 · `viaje_version=6`: quiénes estuvieron y el gasto persona
     items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 10000, my_bps: 0, my_amount_cents: 0 }],
     personas: [{ miembro_id: 'm1', ya_eligio: false, presente: true }],
     te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true,
-    pagadores: [{ miembro_id: 'm1', monto_cents: 1000 }], personal: true, ...extra,
+    pagadores: [{ miembro_id: 'm1', monto_cents: 1000 }], personal: true, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000, ...extra,
   });
 
   it('lo que suma la 6: `presentes` y `personal` en cada ticket del detalle, `personal` en el de un ticket', () => {
@@ -577,10 +591,133 @@ describe('🔴 V-02 · `viaje_version=7` (App Backend 2.179.2): la 6 sin claves 
       items: [{ id: 'i', name: 'Taco', price_cents: 1000, quantity: 1, line_cents: 1000, remaining_bps: 0, my_bps: 10000, my_amount_cents: 1000 }],
       personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
       te_toca_cents: 1000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: false,
-      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 1000 }], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 1000, te_toca_platos_cents: 1000,
     };
     expect(decodeTicketDelViaje({ contract: CONTRATO.id, ticket })).toMatchObject({ puedo_elegir: false, te_toca_cents: 1000 });
     // Una clave de más sigue siendo otra forma: «sin claves nuevas» de verdad.
     expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: { ...ticket, solo_lectura: true } })).toThrow();
+  });
+});
+
+describe('🔴 D279 · `viaje_version=8`: la hora de cierre, quién cierra y cuándo se cierra solo (App Backend 2.180.0)', () => {
+  const sinClave = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+  const item = (cambios: Record<string, unknown> = {}) => ({ id: 'v', nombre: 'A', fecha_desde: null, fecha_hasta: null,
+    estado: 'abierto', personas: 2, mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null,
+    terminado_en: null, color: null, has_photo: false, hora_cierre: '23:59', ...cambios });
+  const lista = (i: Record<string, unknown>) => ({ contract: CONTRATO.id, viajes: [i], counts: { abiertos: 1, cerrados: 0 } });
+  const viaje = (cambios: Record<string, unknown>) => decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle(cambios) });
+
+  it('las claves del contrato: tres en el viaje y una en la lista', () => {
+    expect(V8.detalle_suma).toEqual(['hora_cierre', 'puedo_cerrar', 'se_cierra_en']);
+    expect(V8.lista_suma).toEqual(['hora_cierre']);
+  });
+
+  it('sin cualquiera de ellas (la forma de la 7) no se acepta: la app pide la 8 siempre', () => {
+    for (const k of V8.detalle_suma) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: sinClave(detalle(), k) }), k).toThrow();
+    }
+    expect(() => decodeListaDeViajes(lista(sinClave(item(), 'hora_cierre')), 'abiertos')).toThrow();
+  });
+
+  it('`hora_cierre` es «HH:MM» de 00:00 a 23:59, en el viaje y en la lista', () => {
+    for (const ok of ['00:00', '07:30', '23:59']) {
+      expect(viaje({ hora_cierre: ok }).hora_cierre).toBe(ok);
+      expect(decodeListaDeViajes(lista(item({ hora_cierre: ok })), 'abiertos').viajes[0]!.hora_cierre).toBe(ok);
+    }
+    for (const malo of ['24:00', '7:30', '23:60', '23:59:00', '', null, 2359]) {
+      expect(() => viaje({ hora_cierre: malo }), String(malo)).toThrow();
+      expect(() => decodeListaDeViajes(lista(item({ hora_cierre: malo })), 'abiertos'), String(malo)).toThrow();
+    }
+  });
+
+  it('`puedo_cerrar` es un booleano, y sólo puede ser `true` con el viaje abierto', () => {
+    expect(viaje({ puedo_cerrar: true }).puedo_cerrar).toBe(true);
+    expect(viaje({ puedo_cerrar: false }).puedo_cerrar).toBe(false);
+    for (const malo of ['true', 1, null]) expect(() => viaje({ puedo_cerrar: malo }), String(malo)).toThrow();
+    expect(viaje({ estado: 'esperando_pagos', puedo_cerrar: false }).puedo_cerrar).toBe(false);
+    expect(() => viaje({ estado: 'esperando_pagos', puedo_cerrar: true })).toThrow();
+  });
+
+  it('`se_cierra_en` es un instante o null, y sólo abierto y con fecha hasta', () => {
+    const en = '2026-10-16T05:59:00.000Z';
+    expect(viaje({ fecha_hasta: '2026-10-15', se_cierra_en: en }).se_cierra_en).toBe(en);
+    expect(viaje({ fecha_hasta: '2026-10-15', se_cierra_en: null }).se_cierra_en).toBeNull();
+    for (const malo of ['mañana', '', 0]) {
+      expect(() => viaje({ fecha_hasta: '2026-10-15', se_cierra_en: malo }), String(malo)).toThrow();
+    }
+    expect(() => viaje({ fecha_hasta: null, se_cierra_en: en })).toThrow();
+    expect(() => viaje({ estado: 'esperando_pagos', puedo_cerrar: false, fecha_hasta: '2026-10-15', se_cierra_en: en })).toThrow();
+  });
+
+  it('el 403 `viaje_not_creator` es «no_creador»; otro 403 no', () => {
+    expect(errorDeViaje(new HttpError(403, { error: 'viaje_not_creator' }))).toEqual({ tipo: 'no_creador' });
+    expect(errorDeViaje(new MockApiError(403, 'viaje_not_creator'))).toEqual({ tipo: 'no_creador' });
+    expect(errorDeViaje(new MockApiError(403, 'forbidden'))).toEqual({ tipo: 'reintentar' });
+    expect(errorDeViaje(new MockApiError(409, 'viaje_not_creator'))).toEqual({ tipo: 'reintentar' });
+  });
+});
+
+describe('🔴 D278-2 · D284 · `viaje_version=9`: el servicio, los descuentos, el IVA aparte y el total impreso (App Backend 2.181.0)', () => {
+  const ajustes = { servicio_cents: 1000, descuentos_cents: 500, iva_aparte_cents: 1600, total_cents: 12100 };
+  const enDetalle = (cambios: Record<string, unknown>) => {
+    const v = detalle();
+    return { ...v, tickets: [{ ...v.tickets[0], monto_cents: 10000, ...ajustes,
+      pagadores: [{ miembro_id: 'm2', monto_cents: 12100 }], ...cambios }] };
+  };
+  const ticket = (cambios: Record<string, unknown> = {}) => ({
+    id: 't', lugar: 'Mariscos', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
+    cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 10000, pagado_por: 'm2', pagaste_tu: false,
+    items: [{ id: 'i', name: 'Taco', price_cents: 10000, quantity: 1, line_cents: 10000, remaining_bps: 0, my_bps: 5000, my_amount_cents: 5000 }],
+    personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
+    te_toca_cents: 6050, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: false,
+    pagadores: [{ miembro_id: 'm2', monto_cents: 12100 }], personal: false, ...ajustes, te_toca_platos_cents: 5000, ...cambios,
+  });
+
+  it('las claves del contrato: cuatro en cada ticket y cinco en el detalle de un ticket', () => {
+    expect(V9.ticket_suma).toEqual(['servicio_cents', 'descuentos_cents', 'iva_aparte_cents', 'total_cents']);
+    expect(V9.detalle_de_ticket_suma).toEqual(['servicio_cents', 'descuentos_cents', 'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents']);
+  });
+
+  it('con ajustes: el total es la identidad del contrato y los pagadores suman el total, no los renglones', () => {
+    const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: enDetalle({}) });
+    expect(v.tickets[0]).toMatchObject({ monto_cents: 10000, ...ajustes });
+    const t = decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket() });
+    expect(t).toMatchObject({ total_cents: 12100, te_toca_cents: 6050, te_toca_platos_cents: 5000 });
+    // Los pagadores con la suma de los renglones (la forma de la 8) no cuadran con un ticket con ajustes.
+    expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: enDetalle({ pagadores: [{ miembro_id: 'm2', monto_cents: 10000 }] }) })).toThrow();
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ pagadores: [{ miembro_id: 'm2', monto_cents: 10000 }] }) })).toThrow();
+  });
+
+  it('un total que no es renglones + servicio + IVA aparte − descuentos, o no positivo, es otra semántica', () => {
+    for (const malo of [{ total_cents: 12000 }, { total_cents: 10000 }, { servicio_cents: -1, total_cents: 12099 },
+      { iva_aparte_cents: 1.5 }, { descuentos_cents: '500' }, { total_cents: null }]) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: enDetalle(malo) }), JSON.stringify(malo)).toThrow();
+      expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket(malo) }), JSON.stringify(malo)).toThrow();
+    }
+    // Descuentos mayores que los renglones: el total impreso queda en 0 o menos, y el dueño no lo publica.
+    expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ servicio_cents: 0, iva_aparte_cents: 0,
+      descuentos_cents: 10000, total_cents: 0, pagadores: [{ miembro_id: 'm2', monto_cents: 0 }] }) })).toThrow();
+  });
+
+  it('sin cualquiera de las claves (la forma de la 8) no se acepta; `te_toca_platos_cents` es un entero ≥ 0', () => {
+    const sin = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+    for (const k of V9.ticket_suma) {
+      const v = enDetalle({});
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: { ...v, tickets: [sin(v.tickets[0]!, k)] } }), k).toThrow();
+    }
+    for (const k of V9.detalle_de_ticket_suma) expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: sin(ticket(), k) }), k).toThrow();
+    for (const malo of [-1, 1.5, null]) {
+      expect(() => decodeTicketDelViaje({ contract: CONTRATO.id, ticket: ticket({ te_toca_platos_cents: malo }) }), String(malo)).toThrow();
+    }
+  });
+
+  it('un gasto a mano no tiene recibo: su total es su monto', () => {
+    expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: enDetalle({ origen: 'manual' }) })).toThrow();
+    const gasto = { contract: CONTRATO.id, ya_cargado: null, ticket: ticket({ forma: 'iguales', tipo_lugar: 'otro', pagaste_tu: true,
+      pagado_por: 'm1', pagadores: [{ miembro_id: 'm1', monto_cents: 12100 }] }) };
+    expect(() => decodeGastoCargado(gasto)).toThrow();
+    const limpio = { ...gasto, ticket: ticket({ forma: 'iguales', tipo_lugar: 'otro', pagaste_tu: true, pagado_por: 'm1',
+      servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 10000, pagadores: [{ miembro_id: 'm1', monto_cents: 10000 }] }) };
+    expect(decodeGastoCargado(limpio).total_cents).toBe(10000);
   });
 });

@@ -13,6 +13,8 @@ import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
 import { circuloDelViaje } from './circuloDelViaje';
+import { agruparConsumos, type LugarConsumido } from './consumosPorLugar';
+import { fechaDelTicket } from './viajeView';
 import { iconoTipoLugar, nombreDelLugar, nombreDeMiembro, parametroDeTicket } from './viajesView';
 import './viajes.css';
 import './viaje.css';
@@ -37,6 +39,10 @@ import './viaje.css';
  * dueño dice `puede_eliminar` (quien lo cargó o quien lo pagó, con el viaje
  * abierto). Se elimina sin otra confirmación (Mati descartó la extra) y la
  * pantalla se actualiza con el viaje de la respuesta.
+ *
+ * D281 · en Consumos, los tickets y gastos del mismo lugar se juntan en una fila con el lugar, cuántas veces y el
+ * total, que al tocarla se abre y muestra cada uno con su fecha y su monto (`consumosPorLugar.ts`). Un lugar con una
+ * sola visita queda como antes.
  */
 export type OpcionDeBalance = 'consumos' | 'miembros';
 
@@ -164,31 +170,116 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
   deslizar?: DeslizarConsumo;
 }) {
   const { t } = useIdioma();
+  // D281 · qué lugares están abiertos, por su clave.
+  const [abiertos, setAbiertos] = useState<ReadonlySet<string>>(() => new Set());
   if (v.tickets.length === 0) return <p className="vjb-vacio">{t('Todavía no hay consumos.')}</p>;
+  const alternar = (clave: string) => setAbiertos((a) => {
+    const n = new Set(a);
+    if (!n.delete(clave)) n.add(clave);
+    return n;
+  });
   return (
     <ul className="vjb-consumos">
-      {v.tickets.map((tk) => (
-        <li key={tk.id}>
-          <ConGesto tk={tk} deslizar={deslizar} nombre={nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}>
-            <button type="button" className="vjb-consumo" onClick={() => onAbrirTicket(tk.id)}>
-              <span className="vjv-ticket-icono">
-                <Icon name={iconoTipoLugar(tk.tipo_lugar)} size={22} />
-              </span>
-              <span className="vjb-consumo-main">
-                <span className="vjb-consumo-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
-                {tk.falta_que_elija > 0 && (
-                  <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
-                )}
-                {/* D276-3 · un gasto personal: sólo lo veo yo y no suma al viaje. */}
-                {tk.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
-              </span>
-              {/* Respuesta A del plan: el total del ticket o del gasto (`monto_cents`). */}
-              <span className="vjb-consumo-monto">{formatMXN(tk.monto_cents)}</span>
-            </button>
-          </ConGesto>
+      {agruparConsumos(v.tickets).map((lugar) => (lugar.tickets.length === 1 ? (
+        <li key={lugar.tickets[0]!.id}>
+          <FilaDeConsumo tk={lugar.tickets[0]!} onAbrirTicket={onAbrirTicket} deslizar={deslizar} />
         </li>
-      ))}
+      ) : (
+        <li key={lugar.clave}>
+          <LugarAgrupado
+            lugar={lugar}
+            abierto={abiertos.has(lugar.clave)}
+            onAlternar={() => alternar(lugar.clave)}
+            onAbrirTicket={onAbrirTicket}
+            deslizar={deslizar}
+          />
+        </li>
+      )))}
     </ul>
+  );
+}
+
+/** Un ticket o gasto, como siempre: abre el ticket y, donde se puede, se desliza para eliminar. */
+function FilaDeConsumo({ tk, onAbrirTicket, deslizar }: {
+  tk: TicketEnViaje;
+  onAbrirTicket: (ticketId: string) => void;
+  deslizar?: DeslizarConsumo;
+}) {
+  const { t } = useIdioma();
+  return (
+    <ConGesto tk={tk} deslizar={deslizar} nombre={nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}>
+      <button type="button" className="vjb-consumo" onClick={() => onAbrirTicket(tk.id)}>
+        <span className="vjv-ticket-icono">
+          <Icon name={iconoTipoLugar(tk.tipo_lugar)} size={22} />
+        </span>
+        <span className="vjb-consumo-main">
+          <span className="vjb-consumo-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
+          {tk.falta_que_elija > 0 && (
+            <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
+          )}
+          {/* D276-3 · un gasto personal: sólo lo veo yo y no suma al viaje. */}
+          {tk.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
+        </span>
+        {/* Respuesta A del plan: el total del ticket o del gasto. D278-2 · el total impreso (`total_cents`). */}
+        <span className="vjb-consumo-monto">{formatMXN(tk.total_cents)}</span>
+      </button>
+    </ConGesto>
+  );
+}
+
+/**
+ * D281 · un lugar con dos o más visitas: la fila dice el lugar, cuántas veces y el total; al tocarla se abre con cada
+ * visita (fecha y monto), que abre su ticket y se desliza para eliminar como siempre. El nombre y el ícono, los del
+ * más reciente.
+ */
+export function LugarAgrupado({ lugar, abierto, onAlternar, onAbrirTicket, deslizar }: {
+  lugar: LugarConsumido;
+  abierto: boolean;
+  onAlternar: () => void;
+  onAbrirTicket: (ticketId: string) => void;
+  deslizar?: DeslizarConsumo;
+}) {
+  const { t, idioma } = useIdioma();
+  const reciente = lugar.tickets[0]!;
+  const nombre = nombreDelLugar(reciente.lugar, reciente.tipo_lugar, t);
+  const id = `vjb-lugar-${reciente.id}`;
+  return (
+    <>
+      <button type="button" className="vjb-consumo vjb-lugar" aria-expanded={abierto} aria-controls={id} onClick={onAlternar}>
+        <span className="vjv-ticket-icono">
+          <Icon name={iconoTipoLugar(reciente.tipo_lugar)} size={22} />
+        </span>
+        <span className="vjb-consumo-main">
+          <span className="vjb-consumo-lugar">{nombre}</span>
+          <span className="vjb-lugar-veces">{t('{0} veces', lugar.tickets.length)}</span>
+          {lugar.tickets.some((tk) => tk.falta_que_elija > 0) && (
+            <span className="vjv-chip vjv-chip-aviso">{t('Falta que elijan')}</span>
+          )}
+          {reciente.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
+        </span>
+        <span className="vjb-consumo-monto">{formatMXN(lugar.total_cents)}</span>
+        <Icon name="chevron-down" size={18} className={`vjb-lugar-chev${abierto ? ' abierto' : ''}`} />
+      </button>
+      {abierto && (
+        <ul className="vjb-visitas" id={id} aria-label={t('Las veces en {0}', nombre)}>
+          {lugar.tickets.map((tk) => (
+            <li key={tk.id}>
+              <ConGesto tk={tk} deslizar={deslizar} nombre={nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}>
+                <button type="button" className="vjb-consumo vjb-visita" onClick={() => onAbrirTicket(tk.id)}>
+                  <span className="vjb-consumo-main">
+                    <span className="vjb-visita-fecha">{fechaDelTicket(tk, idioma) ?? nombre}</span>
+                    {tk.falta_que_elija > 0 && (
+                      <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
+                    )}
+                  </span>
+                  <span className="vjb-consumo-monto">{formatMXN(tk.total_cents)}</span>
+                </button>
+              </ConGesto>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 

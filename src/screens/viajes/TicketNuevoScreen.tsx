@@ -30,6 +30,7 @@ import {
   type OpcionDeQuienPago,
   type QuienPagoElegido,
 } from './QuienPago';
+import { FilasDelTotal } from './FilasDelTotal';
 import { olvidarTicketEscaneado, ticketEscaneadoDe } from './ticketEscaneado';
 import {
   alternarPresente,
@@ -38,6 +39,7 @@ import {
   fechaYHoraLocal,
   ayudaDePresentes,
   esGastoPersonal,
+  filasDelTotal,
   idsPresentes,
   llaveParaPedido,
   pedidoDeCarga,
@@ -142,7 +144,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
     if (!ocr || enviando) return;
     // D255-6 · D263 · `pagado_por` sólo si pagó otro, `pagadores` si fueron varios; entran en la llave (otros
     // pagadores son otro pedido).
-    const reparto = repartoDeQuienPago(quienPago, opciones, totalDelEscaneo(ocr.items));
+    // D278-2 · con la 9, los pagadores suman el total impreso.
+    const reparto = repartoDeQuienPago(quienPago, opciones, totalDelEscaneo(ocr).total_cents);
     if (!reparto.valido) return;
     // D276-2 · quiénes estuvieron, SIEMPRE: va lo que se ve (plan OK del Bibliotecario). Entran en la llave.
     const pedido = { ...conQuienPago(pedidoDeCarga(ocr, forma, tipo), reparto), presentes: idsPresentes(candidatos, ausentes) };
@@ -366,7 +369,8 @@ export function DuplicadoVista({ viajeNombre, miMiembroId, miembros, dup, ticket
                 <span className="vjt-lugar">{nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t)}</span>
                 <span className="vjt-sub">{subtituloDelTicket(ticket, miembros, idioma, t, false)}</span>
               </span>
-              <span className="vjt-monto">{formatMXN(ticket.monto_cents)}</span>
+              {/* D278-2 · el total impreso. */}
+              <span className="vjt-monto">{formatMXN(ticket.total_cents)}</span>
             </div>
           )}
           <button type="button" className="btn btn-navy" onClick={onElegir}>{t('Elegir lo que consumí')}</button>
@@ -440,7 +444,10 @@ export function TicketNuevoVista({
 }) {
   const { t, idioma } = useIdioma();
   const fecha = fechaDelEscaneo(ocr.ticket_datetime, idioma);
-  const total = totalDelEscaneo(ocr.items);
+  // D278-2 · D284 · el total impreso (con el servicio, los descuentos y el IVA aparte): lo que se paga y lo que tienen que
+  // sumar los pagadores con la 9.
+  const escaneo = totalDelEscaneo(ocr);
+  const total = escaneo.total_cents;
   const reparto = repartoDeQuienPago(quienPago, opciones, total);
   const aviso = avisoDeQuienPago(reparto, total, t);
   const personal = esGastoPersonal(candidatos, ausentes, reparto.pagadores);
@@ -457,6 +464,8 @@ export function TicketNuevoVista({
             </span>
             <span className="vjt-monto vjt-monto--grande">{formatMXN(total)}</span>
           </div>
+          {/* D278-2 · D284 · con servicio, descuentos o IVA aparte, cómo se llega al total. */}
+          <FilasDelTotal filas={filasDelTotal(escaneo)} />
           <hr className="vjt-div" />
           {/* D255-6 · reemplaza «quien escanea primero pagó» (D240-17): quien carga elige quién pagó. */}
           <SelectorDeQuienPago opciones={opciones} elegido={quienPago} total={total} onCambio={onQuienPago} deshabilitado={enviando} />

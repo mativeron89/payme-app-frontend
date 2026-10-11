@@ -705,6 +705,14 @@
 .vjb-consumo-lugar { font-family: var(--font-display); font-size: var(--fs-body); font-weight: 700; }
 .vjb-consumo-monto { font-family: var(--font-display); font-size: var(--fs-body); font-weight: 800; font-variant-numeric: tabular-nums; }
 .vjb-vacio { margin: 0; padding: var(--sp-4) 0; text-align: center; color: var(--text-muted); font-family: var(--font-body); }
+/* D281 · un lugar con varias visitas: «{n} veces», el total y la flecha; abierto, cada visita debajo, con sangría
+   hasta el nombre (el ícono mide 44 y lo separa --sp-3). */
+.vjb-lugar-veces { font-family: var(--font-body); font-size: var(--fs-sm); color: var(--text-muted); }
+.vjb-lugar-chev { flex: none; color: var(--text-muted); transition: transform 0.15s; }
+.vjb-lugar-chev.abierto { transform: rotate(180deg); }
+.vjb-visitas { margin: 0 0 var(--sp-2); padding: 0 0 0 calc(44px + var(--sp-3)); list-style: none; }
+.vjb-visita { min-height: 48px; padding: var(--sp-1) 0; }
+.vjb-visita-fecha { font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600; }
 
 /* ══ D244 · la carga manual ══ */
 .vjm-campos { display: flex; flex-direction: column; gap: var(--sp-3); }
@@ -846,6 +854,14 @@
 }
 .vjcfg-chev { flex: none; color: var(--text-muted); transition: transform 0.15s; }
 .vjcfg-chev.abierto { transform: rotate(180deg); }
+/* D279 · cuándo se cierra solo, debajo de «Nombre y fechas». */
+.vjcfg-cierre {
+  margin: calc(var(--sp-2) * -1) 0 var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
 .vjcfg-editor {
   display: flex;
   flex-direction: column;

@@ -78,4 +78,6 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   // V-02 · el ticket de un viaje que ya no está abierto (desde Estadísticas): sólo para ver.
   'Este viaje ya se cerró: el ticket es sólo para ver.': 'This trip is closed: the ticket is view-only.',
   'Ya elegiste: no te puedes desmarcar.': "You already chose: you can't be unchecked.",
+  // D278-2 · D284 · el total impreso del ticket del viaje.
+  'Tus platos {0} · Tu parte del resto {1}': 'Your dishes {0} · Your share of the rest {1}',
 };

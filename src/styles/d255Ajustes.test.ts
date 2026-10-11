@@ -53,12 +53,12 @@ describe('🔴 D255 · los ajustes de CSS', () => {
     expect(efectivo(regla(GLOBAL, '.btabs.btabs-2'), 'grid-template-columns')).toBe('repeat(2, minmax(0, 1fr))');
   });
 
-  it('🔴 D261 · D262 · bajo «Volver», las pestañas a 8 px de la fila y en negrita; las de Inicio, como siempre', () => {
+  it('🔴 D261 · D262 · bajo «Volver», las pestañas a 8 px de la fila; las de Inicio, como siempre (la negrita, D283)', () => {
     expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btabs'), 'top')).toBe('0');
     expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btabs'), 'margin-top')).toBe('var(--sp-2)');
-    expect(efectivo(regla(GLOBAL, '.hdr-con-volver .btab'), 'font-weight')).toBe('700');
     expect(efectivo(regla(GLOBAL, '.btabs'), 'top')).toBe('15px');
-    expect(efectivo(regla(GLOBAL, '.btab'), 'font-weight')).toBe('500');
+    // D283 · la negrita de D262 pasó a toda la clase (`d279D281D283.test.ts`).
+    expect(efectivo(regla(GLOBAL, '.btab'), 'font-weight')).toBe('700');
   });
 
   it('🔴 5 · en TODA pantalla con pestañas en la cabecera, el scroll no rebota (no pantalla por pantalla)', () => {

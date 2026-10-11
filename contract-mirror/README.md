@@ -24,7 +24,29 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### V-02 · el ticket de un viaje cerrado · App Backend v2.179.2 · 2026-10-11
+### D279 y D278-2 · el cierre por el creador, la hora de cierre y el total impreso · App Backend v2.181.0 · 2026-10-11
+
+Orden `AF-VIAJES-CIERRE-CONSUMOS-Y-NEGRITA-20261011` (D279, D281, D282-3 y D283) y su adenda, punto 7 (D278-2 y D284).
+Según el Bibliotecario, el dueño 2.181.0 está servido (/ready 75/75). Reemplaza al espejo de 2.180.0 de esta misma
+orden, que no llegó a publicarse.
+
+- Contenido: owner **`b3699c95fe1118582712930d3da92943669b9782`** (v2.181.0: el servicio, los descuentos y el IVA
+  aparte, según lo consumido; sobre v2.180.0, `d9a3d2e`: cierra sólo el creador, la hora de cierre y el cierre
+  automático).
+- Inventario: el del owner en **`4e79a01a792064afb6f280aa409ec8c18e90785d`** (v2.181.0, commit B; `contract/mirror-inventory.json`,
+  sha256 `44981894cd71f694aee92699538388bd32e4c72f90ab7ea565697acfb7ea022a`), adoptado con `--adoptar-inventario` sin editarlo. Declara `b3699c9`, 138 entradas.
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `55169332ddb2c5fddc2cfc6cd56c86aca426f9fe40f8fbf791d240adfcefd359`):
+  - `viaje_version=9`: la 8 más `servicio_cents`, `descuentos_cents`, `iva_aparte_cents` y `total_cents` en cada ticket,
+    y `te_toca_platos_cents` en el detalle de un ticket;
+  - `viaje_version=8`: `hora_cierre`, `puedo_cerrar` y `se_cierra_en` en el viaje, y `hora_cierre` en la lista;
+  - `hora_cierre` en `POST` y `PATCH /api/viajes`, el 403 `viaje_not_creator` y `cierre_automatico`.
+- Sólo por hash cambian, desde `a94272d`: `routes/account.js` (D282-1), `routes/viajes.js`, `services/viajes.js` y
+  `services/viajesCalculo.js`. Los hechos del dueño se regeneraron: cambian sólo el commit y el sha de sus fuentes,
+  ningún hecho.
+- `--integridad`: 13 copiados y 125 sólo por hash. `--paridad`: espejo = inventario = fuente en `b3699c9`, 138/138.
+
+### Refresh anterior · V-02 · el ticket de un viaje cerrado · App Backend v2.179.2 · 2026-10-11
 
 Orden `AF-AUDITORIAS-PENDIENTES-Y-TICKET-CERRADO-20261011` (punto 5, V-02 de la auditoría de Viajes). Contrato con OK del
 Bibliotecario; el espejo va como si 2.179.2 estuviera servido (lo dijo el Bibliotecario, que no da el GREEN hasta que lo esté).

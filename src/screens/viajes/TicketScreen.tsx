@@ -12,7 +12,9 @@ import { goBack, navigate, replaceRoute } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
 import { bpsLabel } from '../mesaItemsView';
+import { montoDeDescuento } from '../desgloseDelTicket';
 import { etiquetaPorcion } from '../queConsumisteView';
+import { FilasDelTotal } from './FilasDelTotal';
 import { ListaDePresentes } from './TicketNuevoScreen';
 import {
   alternarPresente,
@@ -31,6 +33,7 @@ import {
   pagadoresDelTicket,
   subtituloDelTicket,
   teTocaConSeleccion,
+  filasDelTotal,
   topeDelPlato,
 } from './ticketView';
 import { iconoTipoLugar, nombreCompleto, nombreDePila, nombreDelLugar, type T } from './viajesView';
@@ -375,22 +378,35 @@ function EditarPresentes({ ticket, miembros, ausentes, guardando, onPresente, on
   );
 }
 
-/** «Total del ticket» y «Te toca», como en 1j. */
+/**
+ * «Total del ticket» y «Te toca», como en 1j. D278-2 · D284 · el total es el impreso; con servicio, descuentos o IVA
+ * aparte, primero cómo se llega a él, y debajo de «Te toca» lo de tus platos y tu parte del resto.
+ */
 function Totales({ ticket }: { ticket: TicketDelViaje }) {
   const { t } = useIdioma();
+  const filas = filasDelTotal(ticket);
   return (
     <section className="vj-card vjt-totales">
+      <FilasDelTotal filas={filas} />
       <div className="vjt-total-fila">
         <span className="vjt-total-rotulo">{t('Total del ticket')}</span>
-        <span className="vjt-total-monto">{formatMXN(ticket.monto_cents)}</span>
+        <span className="vjt-total-monto">{formatMXN(ticket.total_cents)}</span>
       </div>
       <hr className="vjt-div" />
       <div className="vjt-total-fila vjt-total-fila--toca">
         <span className="vjt-total-rotulo">{t('Te toca')}</span>
         <span className="vjt-total-monto">{formatMXN(ticket.te_toca_cents)}</span>
       </div>
+      {filas.length > 0 && <p className="vjt-toca-detalle">{detalleDeTeToca(ticket, t)}</p>}
     </section>
   );
+}
+
+/** D278-2 · «Tus platos $X · Tu parte del resto $Y»: el resto (servicio, IVA y descuentos) puede ser negativo. */
+function detalleDeTeToca(ticket: TicketDelViaje, t: T): string {
+  const resto = ticket.te_toca_cents - ticket.te_toca_platos_cents;
+  return t('Tus platos {0} · Tu parte del resto {1}', formatMXN(ticket.te_toca_platos_cents),
+    resto < 0 ? montoDeDescuento(-resto) : formatMXN(resto));
 }
 
 /** D263 · con varios, quiénes pagaron y cuánto cada uno. Con uno solo, ya lo dice la línea de arriba. */
@@ -503,7 +519,8 @@ function ConsumoVista(props: TicketVistaProps) {
           <div className="vjt-pie-fila">
             <span className="vjt-crece">
               <span className="vjt-pie-rotulo">{t('Te toca')}</span>
-              <span className="vjt-sub">{t('Total del ticket {0}', formatMXN(ticket.monto_cents))}</span>
+              {/* D278-2 · el total impreso. */}
+              <span className="vjt-sub">{t('Total del ticket {0}', formatMXN(ticket.total_cents))}</span>
             </span>
             <span className="vjt-monto vjt-monto--grande">{formatMXN(teTocaConSeleccion(ticket, seleccion))}</span>
           </div>

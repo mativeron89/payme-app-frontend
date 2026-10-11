@@ -222,6 +222,11 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       else if (e.tipo === 'no_disponible') {
         setHoja(null);
         noDisponible();
+      } else if (e.tipo === 'no_creador') {
+        // D279 · la pantalla quedó vieja: se explica sin pantalla de error y, al volver a pedirlo, el botón se va.
+        setHoja(null);
+        toast(t('Sólo quien creó el viaje puede cerrarlo.'));
+        void refrescar();
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
     } finally {
       setEnviando(false);

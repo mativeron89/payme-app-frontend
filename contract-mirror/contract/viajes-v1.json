@@ -35,7 +35,7 @@
     "consumo": "«Por lo que pidió cada uno»: cada presente del ticket (v2.179.0 · D276: sólo los que estuvieron) elige sus renglones con las porciones de la mesa (1/k para k=1..20, más 2/3 y 3/4). Quien completa un plato paga lo que queda (tolerancia de 100 bps). «Listo» marca que ya eligió.",
     "iguales": "«En partes iguales»: entre los presentes, todos marcados al cargar (D242-6); quien pagó destilda a quien no estuvo. El centavo de más va a los primeros, en el orden de los miembros.",
     "total": "«Pagar el total»: todo a quien pagó; a los demás no les toca nada.",
-    "monto_del_ticket": "La suma de los renglones (V3). Descuentos, cargos por servicio e IVA aparte no se reparten en esta versión.",
+    "monto_del_ticket": "`monto_cents` es la suma de los renglones (V3). v2.181.0 · D278-2 y D284: lo que se paga y se reparte es el TOTAL IMPRESO = renglones + servicio + IVA aparte − descuentos. Esos importes salen sólo del recibo firmado del escaneo (nunca del cuerpo) y se guardan sólo en los tickets que carga un cliente con viaje_version=9; los tickets viejos y los de un cliente ≤ 8 tienen 0, así que su total es la suma de los renglones, como siempre. El IVA es aparte sólo si los renglones del recibo suman el subtotal (o el subtotal más los descuentos); incluido, no se agrega; ambiguo (IVA incluido con un descuento igual al IVA), no se agrega. El reparto, en centavos exactos: «por lo que pidió cada uno», en proporción a lo consumido de los renglones por mayor resto (los centavos que faltan a los restos más grandes; en empate, el orden de los miembros), y con el viaje abierto lo no elegido es un bloque más (su parte queda sin repartir); «en partes iguales», el total entre los presentes; «pagar el total», el total a quien pagó (con varios pagadores, sus montos suman el total); un gasto personal, entero a su dueño. Nadie queda negativo, aunque el descuento supere lo que consumió alguien. Un gasto a mano no tiene recibo: su monto es su total.",
     "personas_del_ticket": "La foto de los miembros activos al cargarlo: un miembro nuevo no hereda tickets viejos.",
     "presentes": "v2.179.0 · D276: en las tres formas, quiénes estuvieron (`presentes` al cargar; sin el campo, todos, como hoy). Sólo los presentes participan: eligen en «consumo», reparten en «iguales», faltan y reciben avisos. Un gasto entre algunos mueve sólo los balances de esos y se netea en el balance final y en las transferencias (pagó − consumió, como siempre)."
   },
@@ -68,7 +68,38 @@
     "anulada_por_baja": "Una transferencia con una cuenta dada de baja: no se marca, no suma a «faltan» y no frena el paso a Cerrados (V5).",
     "cerrado": "El viaje pasa a Cerrados cuando ya no queda ninguna pendiente ni marcada."
   },
+  "cierre_automatico": {
+    "since": "2.180.0",
+    "decision": "279 (cerrar sólo el creador, la hora de cierre y el cierre automático) y 282-2 (sólo los que vencen después de la publicación); plan OK del Bibliotecario 2026-10-11T15:13:19Z",
+    "momento": "M = fecha_hasta + hora_cierre, en hora de México (America/Mexico_City, UTC−6 fijo). El viaje no guarda otro huso: un viaje al exterior cierra a la hora de México. A M en punto (por defecto, las 23:59:00 del último día) el viaje abierto pasa solo a «esperando pagos», con el mismo cálculo, las mismas transferencias y el paso directo a Cerrados sin ninguna, igual que el cierre a mano.",
+    "cuando_no": "Sin fecha_hasta, nunca. D-1: tampoco si M no es posterior a la creación del viaje (uno cargado a la vuelta lo cierra el creador). D282: tampoco si M no es posterior al corte.",
+    "corte": "La publicación: el `aplicada_en` de migrate_viajes_hora_cierre_v2.180.0.sql en schema_migrations (en producción, el deploy de 2.180.0). Sin esa fila, no se cierra solo (falla cerrado). Los viajes que vencieron antes siguen abiertos hasta que su creador los cierre.",
+    "mecanismo": "Bajo el lock del viaje, al empezar toda escritura y en las lecturas del viaje (el detalle, la lista, el detalle de un ticket, el resumen y la hoja de cierre), exacto al minuto: el pedido lo ve cerrado (una escritura recibe 409 viaje_not_open). Además, el barrido del timer (cada 30 s) para que los avisos lleguen aunque nadie abra Viajes. Idempotente: con el lock se vuelve a mirar que siga abierto y vencido.",
+    "avisos": "Los del cierre a mano (viaje_closed: «Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»), a todos los miembros activos, también al creador: nadie tocó el botón. `cerrado_por` queda en el creador (no se publica).",
+    "fechas": "D-2: las fechas siguen siendo de cualquier miembro (D255), salvo un PATCH que dejaría el viaje vencido ya, que es cerrarlo: sólo el creador (403 viaje_not_creator); si lo hace el creador, el viaje se cierra en ese mismo pedido."
+  },
   "negociaciones": {
+    "viaje_version_9": {
+      "since": "2.181.0",
+      "decision": "278-2 y 284 (el servicio, los descuentos y el IVA aparte, según lo consumido; migración aditiva aprobada por Mati); plan OK del Bibliotecario 2026-10-11T16:14:42Z",
+      "parametro": "viaje_version=9",
+      "regla": "La cadena exacta, en las mismas rutas que la 8. Es la 8 más las claves de abajo; en la lista de viajes, la 9 sale como la 8. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte; la 8 y anteriores no cambian de forma. Además, sólo un POST /:id/tickets con viaje_version=9 guarda los ajustes del recibo (dividir.monto_del_ticket).",
+      "ticket_suma": ["servicio_cents", "descuentos_cents", "iva_aparte_cents", "total_cents"],
+      "detalle_de_ticket_suma": ["servicio_cents", "descuentos_cents", "iva_aparte_cents", "total_cents", "te_toca_platos_cents"],
+      "total_cents": "El total impreso: monto_cents (los renglones) + servicio_cents + iva_aparte_cents − descuentos_cents.",
+      "te_toca_platos_cents": "Lo tuyo de los renglones, sin tu parte del ajuste. `te_toca_cents` es, en todas las versiones, tu parte del total (los platos más tu parte del servicio, el IVA aparte y los descuentos); sólo difiere en un ticket con ajustes."
+    },
+    "viaje_version_8": {
+      "since": "2.180.0",
+      "decision": "279; plan OK del Bibliotecario 2026-10-11T15:13:19Z",
+      "parametro": "viaje_version=8",
+      "regla": "La cadena exacta, en las mismas rutas que la 7. Es la 7 más tres claves en `viaje` y una en la lista. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte; la 7 y anteriores no cambian. En el detalle de un ticket en Cerrados, como la 7.",
+      "detalle_suma": ["hora_cierre", "puedo_cerrar", "se_cierra_en"],
+      "lista_suma": ["hora_cierre"],
+      "hora_cierre": "\"HH:MM\": la hora de cierre (23:59 si no se eligió).",
+      "puedo_cerrar": "boolean: sos quien creó el viaje, sos miembro activo y está abierto. Es también quien elige la hora de cierre.",
+      "se_cierra_en": "El instante ISO en que se cierra solo (M), o null si no se cierra solo: sin fecha hasta, creado después de M, M antes de la publicación, o ya no está abierto."
+    },
     "viaje_version_7": {
       "since": "2.179.2",
       "decision": "V-02 de la auditoría de Viajes por Codex (ops/codex-auditoria-viajes-20261010/INFORME.md); contrato con OK del Bibliotecario 2026-10-11T14:25:52Z",
@@ -176,7 +207,8 @@
         "fecha_desde": "YYYY-MM-DD | null, opcional (D242-5)",
         "fecha_hasta": "YYYY-MM-DD | null, opcional; no antes de fecha_desde",
         "miembros": "1..19 de {user_id} (un amigo aceptado) o {username} (lo que mostraría la búsqueda por @)",
-        "idempotency_key": "string 8..100, obligatorio"
+        "idempotency_key": "string 8..100, obligatorio",
+        "hora_cierre": "v2.180.0 · D279, opcional: \"HH:MM\" de 00:00 a 23:59; sin él, 23:59. En cualquier versión. Entra al hash del pedido sólo si vino."
       },
       "respuestas": {
         "201": { "claves": ["contract", "viaje"], "viaje": "ver GET /api/viajes/:id" },
@@ -279,6 +311,7 @@
           "viaje_ticket_amount_invalid": "también un ticket de más de $1,000,000 (limites.monto_ticket_cents, v2.173.2)",
           "viaje_ticket_payer_unknown": ["error", "miembro_id"],
           "viaje_ticket_payers_total_mismatch": ["error", "monto_cents"],
+          "viaje_ticket_payers_total_mismatch_monto": "v2.181.0 · D278-2: con viaje_version=9, `monto_cents` es el total impreso y los montos de los pagadores tienen que sumarlo; con ≤ 8, la suma de los renglones, como siempre.",
           "viaje_ticket_persona_unknown": ["error", "miembro_id"] }
       }
     },
@@ -309,12 +342,14 @@
         "nombre": "string 1..80, opcional",
         "fecha_desde": "YYYY-MM-DD | null, opcional",
         "fecha_hasta": "YYYY-MM-DD | null, opcional; contra la fecha_desde nueva o la guardada, fecha_desde <= fecha_hasta",
-        "color": "una clave de `colores` | null, opcional"
+        "color": "una clave de `colores` | null, opcional",
+        "hora_cierre": "v2.180.0 · D279, opcional: \"HH:MM\" de 00:00 a 23:59 (no admite null). Sólo el creador."
       },
-      "regla": "Cualquier miembro activo, con el viaje abierto (D255: «Cualquier miembro»). Al menos un campo; null borra una fecha o el color. Sin aviso a los demás.",
+      "regla": "Cualquier miembro activo, con el viaje abierto (D255: «Cualquier miembro»). Al menos un campo; null borra una fecha o el color. Sin aviso a los demás. v2.180.0 · D279: la hora de cierre, sólo el creador; y una fecha hasta que dejaría el viaje vencido ya, también sólo el creador (cierre_automatico.fechas). Si el creador lo deja vencido, se cierra en este pedido.",
       "respuestas": {
         "200": { "claves": ["contract", "viaje"], "nota": "`viaje` con la versión negociada" },
         "400": { "error": "validation_error" },
+        "403": { "error": "viaje_not_creator", "cuando": "v2.180.0 · D279: la hora de cierre, o una fecha hasta que lo cerraría ya, sin ser quien creó el viaje" },
         "404": { "cuerpo": { "error": "viaje_not_found" }, "cuando": "no existe o no sos miembro activo (n325)" },
         "409": { "error": "viaje_not_open", "claves": ["error", "estado"] }
       }
@@ -420,7 +455,8 @@
     },
     "POST /api/viajes/:id/cerrar": {
       "respuestas": {
-        "200": { "claves": ["contract", "viaje"], "nota": "D242-3: cualquier miembro activo, con aviso a todos los demás. Sin transferencias, pasa directo a Cerrados." },
+        "200": { "claves": ["contract", "viaje"], "nota": "D242-3, con aviso a todos los demás. v2.180.0 · D279: sólo quien creó el viaje. Sin transferencias, pasa directo a Cerrados." },
+        "403": { "error": "viaje_not_creator", "cuando": "v2.180.0 · D279: no sos quien creó el viaje, en todas las versiones. Después del 404 de n325 y antes del 409." },
         "404": { "cuerpo": { "error": "viaje_not_found" } },
         "409": { "error": "viaje_not_open", "claves": ["error", "estado"] }
       }

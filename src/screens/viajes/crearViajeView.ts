@@ -1,7 +1,9 @@
 import type { Friend } from '../../api/types';
 import { arrobaCoincide, arrobaVisible, consultaValida, normalizarUsername, USERNAME_MIN, type ResultadoArroba } from '../../api/username';
 import { MAX_MIEMBROS_VIAJE, type ErrorDeViaje, type MiembroPedido } from '../../api/viajes';
+import type { Idioma } from '../../i18n/idioma';
 import { fold } from '../../utils/format';
+import { fechaYHoraLocal } from './ticketView';
 import { iniciales, type T } from './viajesView';
 
 /**
@@ -146,17 +148,39 @@ export function fechasInvertidas(desde: string, hasta: string): boolean {
   return desde !== '' && hasta !== '' && hasta < desde;
 }
 
+// ─── D279 · la hora de cierre ─────────────────────────────────────────────
+
+/** Sin elegir, el dueño cierra a las 23:59 del último día. */
+export const HORA_DE_CIERRE_POR_DEFECTO = '23:59';
+const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** «HH:MM» de 00:00 a 23:59, lo que acepta el dueño. Un campo de hora vaciado no es una hora. */
+export function horaDeCierreValida(hora: string): boolean {
+  return HORA.test(hora);
+}
+
+/**
+ * La línea de cuándo se cierra solo, en la hora del teléfono: «Cierra solo el 15 oct a las 23:59». Sin
+ * `se_cierra_en` (sin fecha hasta, o ya no se cierra solo), nada.
+ */
+export function lineaDeCierre(seCierraEn: string | null, idioma: Idioma, t: T): string | null {
+  const local = fechaYHoraLocal(seCierraEn, idioma);
+  return local ? t('Cierra solo el {0} a las {1}', local.fecha, local.hora) : null;
+}
+
 export function puedeCrear({
-  nombre, agregados, desde, hasta, enviando,
+  nombre, agregados, desde, hasta, enviando, hora = HORA_DE_CIERRE_POR_DEFECTO,
 }: {
   readonly nombre: string;
   readonly agregados: readonly Candidato[];
   readonly desde: string;
   readonly hasta: string;
   readonly enviando: boolean;
+  /** D279 · cuenta sólo con «Al»: sin fecha hasta no hay hora de cierre. */
+  readonly hora?: string;
 }): boolean {
   return !enviando && nombre.trim().length > 0 && agregados.length >= 1 && agregados.length <= MAX_AGREGADOS
-    && !fechasInvertidas(desde, hasta);
+    && !fechasInvertidas(desde, hasta) && (hasta === '' || horaDeCierreValida(hora));
 }
 
 /** El pedido sin la llave: lo que el dueño compara para decidir si es «el mismo pedido». */
@@ -165,10 +189,22 @@ export interface ContenidoDelPedido {
   readonly fecha_desde: string | null;
   readonly fecha_hasta: string | null;
   readonly miembros: readonly MiembroPedido[];
+  /** D279 · sólo con fecha hasta. */
+  readonly hora_cierre?: string;
 }
 
-export function contenidoDelPedido(nombre: string, desde: string, hasta: string, agregados: readonly Candidato[]): ContenidoDelPedido {
-  return { nombre: nombre.trim(), fecha_desde: desde || null, fecha_hasta: hasta || null, miembros: miembrosDelPedido(agregados) };
+export function contenidoDelPedido(
+  nombre: string,
+  desde: string,
+  hasta: string,
+  agregados: readonly Candidato[],
+  hora = HORA_DE_CIERRE_POR_DEFECTO,
+): ContenidoDelPedido {
+  return {
+    nombre: nombre.trim(), fecha_desde: desde || null, fecha_hasta: hasta || null, miembros: miembrosDelPedido(agregados),
+    // D279 · la hora de cierre va sólo con fecha hasta: sin ella el viaje no se cierra solo.
+    ...(hasta !== '' ? { hora_cierre: hora } : {}),
+  };
 }
 
 export interface LlaveDelPedido {

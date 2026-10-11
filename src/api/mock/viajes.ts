@@ -17,9 +17,12 @@ import {
   viajesMockEncendido,
 } from './viajesSeam';
 import {
+  ajustesDeRecibo,
   balanceDelViaje,
+  consumoDelTicket,
   esPersonal,
   pagadoresDe,
+  totalDelTicket,
   precioInformativo,
   restanteDe,
   transferenciasMinimas,
@@ -54,8 +57,12 @@ interface OpcionesDeVersion {
   /** 2: D245 (2.172.0); 3: la 2 más `color` y `has_photo` (D255, 2.174.0); 4: la 3 más `puede_eliminar` (D256, 2.175.0);
    *  5: la 4 más `pagadores`, también en el detalle de un ticket (D263, 2.177.0);
    *  6: la 5 más `presentes` y `personal` (D276, 2.179.0);
-   *  7: la 6 sin claves nuevas; el detalle de un ticket con el viaje en Cerrados, en sólo lectura (V-02, 2.179.2). */
-  readonly version?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+   *  7: la 6 sin claves nuevas; el detalle de un ticket con el viaje en Cerrados, en sólo lectura (V-02, 2.179.2);
+   *  8: la 7 más `hora_cierre`, `puedo_cerrar` y `se_cierra_en` en el viaje, y `hora_cierre` en la lista (D279, 2.180.0);
+   *  9: la 8 más el servicio, los descuentos, el IVA aparte y el total impreso en cada ticket, y `te_toca_platos_cents`
+   *     en el detalle de un ticket; la lista, como la 8. Sólo un POST de ticket con la 9 guarda los ajustes (D278-2, D284,
+   *     2.181.0). */
+  readonly version?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 }
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
@@ -98,6 +105,10 @@ export interface TicketMock {
   fecha_ticket: string | null;
   hora_ticket: string | null;
   monto_cents: number;
+  /** D278-2 · D284 · lo que el recibo trae aparte, guardado sólo con un cliente 9. Sin ellos (lo viejo), 0. */
+  servicio_cents?: number;
+  descuentos_cents?: number;
+  iva_aparte_cents?: number;
   created_at: string;
   huella: string | null;
   recibo_jti: string;
@@ -141,6 +152,8 @@ export interface ViajeMock {
   color?: string | null;
   /** D255 · la foto: sus datos; los bytes viven en `fotosDeViajes`. */
   foto?: { revision: number; width: number; height: number; updated_at: string } | null;
+  /** D279 · «HH:MM». Sin él (lo sembrado y lo anterior), 23:59. */
+  hora_cierre?: string;
 }
 
 /** D255-6 · quien cargó el ticket (la idempotencia y marcar presentes son suyas). */
@@ -149,13 +162,22 @@ const cargadoPor = (t: TicketMock) => t.cargado_por ?? t.pagado_por;
 const esPagador = (t: TicketMock, u: string) => t.pagado_por === u || (t.pagadores ?? []).some((p) => p.user_id === u);
 /** D263 · `viaje_version=5`: los pagadores con lo que pagó cada uno, por su id de miembro. */
 const pagadoresPublicos = (t: TicketMock, ids: ReadonlyMap<string, string>) =>
-  pagadoresDe({ pagado_por: t.pagado_por, monto_cents: t.monto_cents, pagadores: t.pagadores })
-    .map((p) => ({ miembro_id: ids.get(p.user_id) ?? null, monto_cents: p.monto_cents }));
+  pagadoresDe(t).map((p) => ({ miembro_id: ids.get(p.user_id) ?? null, monto_cents: p.monto_cents }));
+/** D278-2 · D284 · la 9: los ajustes guardados y el total impreso (`ajustesPublicos` del dueño). */
+const ajustesPublicos = (t: TicketMock) => ({
+  servicio_cents: t.servicio_cents ?? 0, descuentos_cents: t.descuentos_cents ?? 0, iva_aparte_cents: t.iva_aparte_cents ?? 0,
+  total_cents: totalDelTicket(t),
+});
 
 export interface EstadoViajesMock {
   version: 1;
   viajes: ViajeMock[];
   avisos_sembrados: boolean;
+  /**
+   * D282 · «la publicación» del mock: el momento en que se sembró. Un viaje sólo se cierra solo si su momento de
+   * cierre es posterior. Un estado guardado antes no lo tiene: se fija al leerlo.
+   */
+  corte?: string;
 }
 
 let estado: EstadoViajesMock | null = null;
@@ -166,6 +188,10 @@ function cargar(): EstadoViajesMock {
     const raw = JSON.parse(localStorage.getItem(CLAVE_ESTADO_VIAJES_MOCK) ?? 'null') as EstadoViajesMock | null;
     if (raw && raw.version === 1 && Array.isArray(raw.viajes)) {
       estado = raw;
+      if (!estado.corte) {
+        estado.corte = ahora();
+        guardar();
+      }
       return estado;
     }
   } catch {
@@ -225,6 +251,37 @@ async function ruta<T>(fn: () => T): Promise<T> {
 // ─── Lectura ──────────────────────────────────────────────────────────────
 
 const ahora = () => new Date().toISOString();
+const horaDeCierre = (v: Pick<ViajeMock, 'hora_cierre'>) => v.hora_cierre ?? '23:59';
+
+/** D279 · M: la fecha hasta más la hora de cierre, en hora de México (UTC−6 fijo, como el contrato). */
+function momentoDeCierre(v: Pick<ViajeMock, 'fecha_hasta' | 'hora_cierre'>): number | null {
+  return v.fecha_hasta ? Date.parse(`${v.fecha_hasta}T${horaDeCierre(v)}:00-06:00`) : null;
+}
+
+/**
+ * D279 · D282 · se cierra solo (`SE_CIERRA_SOLO` del dueño): abierto, con fecha hasta, y M posterior a la creación (D-1)
+ * y a la publicación (D282).
+ */
+function seCierraSolo(v: ViajeMock): number | null {
+  const m = momentoDeCierre(v);
+  const corte = estado?.corte ? Date.parse(estado.corte) : null;
+  return v.estado === 'abierto' && m !== null && corte !== null && m > Date.parse(v.created_at) && m > corte ? m : null;
+}
+
+/**
+ * `se_cierra_en` de la 8. El mock no cierra solo (eso es del dueño, al leer y con su barrido): pasado M deja de
+ * anunciarlo, como el dueño, que a esa altura ya lo cerró.
+ */
+function seCierraEn(v: ViajeMock): string | null {
+  const m = seCierraSolo(v);
+  return m !== null && m > Date.now() ? new Date(m).toISOString() : null;
+}
+
+/** D-2 · ya venció: lo que un PATCH no puede dejar si no lo hace quien creó el viaje. */
+function vencido(v: ViajeMock): boolean {
+  const m = seCierraSolo(v);
+  return m !== null && m <= Date.now();
+}
 const esUuid = (s: unknown): s is string => typeof s === 'string'
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 const nuevoId = () => crypto.randomUUID();
@@ -291,6 +348,10 @@ function paraCalculo(v: ViajeMock, t: TicketMock): TicketParaCalculo {
     ...(t.cargado_por && { cargado_por: t.cargado_por }),
     monto_cents: t.monto_cents,
     ...(t.pagadores && { pagadores: t.pagadores }),
+    // D278-2 · D284 · los ajustes guardados (sólo con un cliente 9); sin ellos, 0.
+    servicio_cents: t.servicio_cents ?? 0,
+    descuentos_cents: t.descuentos_cents ?? 0,
+    iva_aparte_cents: t.iva_aparte_cents ?? 0,
     items: t.items.map((i) => ({ id: i.id, line_cents: lineaDe(i) })),
     personas: t.personas.map((p) => ({ user_id: p.user_id, presente: p.presente, listo: !!p.listo_en, vivo: vivoUser(v, p.user_id) })),
     selecciones: porOrden(t.selecciones, (s) => s.user_id),
@@ -321,10 +382,11 @@ function balance(v: ViajeMock, { cierre = false } = {}): Balance {
     // D276: el personal quedó congelado entero a su dueño y no suma al grupo.
     if (esPersonalMock(v, t)) {
       porTicket.set(t.id, { consumo: new Map(t.personas.map((p) => [p.user_id, p.consumo_final_cents ?? 0])),
-        asignado: new Map(), sinRepartir: 0, faltan: [], personal: true });
+        platos: platosCongelados(v, t), asignado: new Map(), sinRepartir: 0, faltan: [], personal: true });
       continue;
     }
-    gasto += t.monto_cents;
+    // v2.181.0 · D278-2: el gasto es el total impreso.
+    gasto += totalDelTicket(t);
     for (const p of pagadoresDe(t)) {
       sumar(pagado, p.user_id, p.monto_cents);
       sumar(bal, p.user_id, p.monto_cents);
@@ -338,10 +400,31 @@ function balance(v: ViajeMock, { cierre = false } = {}): Balance {
       sumar(consumido, p.user_id, c);
       sumar(bal, p.user_id, -c);
     }
-    porTicket.set(t.id, { consumo, asignado, sinRepartir: 0, faltan: [] });
+    porTicket.set(t.id, { consumo, platos: platosCongelados(v, t), asignado, sinRepartir: 0, faltan: [] });
   }
   if ([...bal.values()].reduce((s, x) => s + x, 0) !== 0) throw new Error('viaje_balance_no_cuadra');
   return { balance: bal, pagado, consumido, gasto, porTicket, congelado: true };
+}
+
+/**
+ * v2.181.0 · `platosCongelados` del dueño: cerrado, la parte de los renglones de cada uno (sin el ajuste). En «por lo que
+ * pidió cada uno», lo elegido más lo asignado al cerrar; en las otras formas, el mismo cálculo; el personal, los
+ * renglones enteros a su dueño.
+ */
+function platosCongelados(v: ViajeMock, t: TicketMock): Map<string, number> {
+  if (esPersonalMock(v, t)) return new Map([[cargadoPor(t), t.monto_cents]]);
+  if (t.forma !== 'consumo') return consumoDelTicket(paraCalculo(v, t)).platos;
+  const platos = new Map<string, number>();
+  const lineas = new Map(t.items.map((i) => [i.id, lineaDe(i)]));
+  const acumulado = new Map<string, { bps: number; monto: number }>();
+  for (const sel of porOrden(t.selecciones, (x) => x.user_id)) {
+    const previo = acumulado.get(sel.item_id) ?? { bps: 0, monto: 0 };
+    const precio = precioInformativo(lineas.get(sel.item_id)!, sel.fraction_bps, previo.bps, previo.monto);
+    acumulado.set(sel.item_id, { bps: previo.bps + sel.fraction_bps, monto: previo.monto + precio });
+    platos.set(sel.user_id, (platos.get(sel.user_id) ?? 0) + precio);
+  }
+  for (const p of t.personas) if (p.asignado_cierre_cents) platos.set(p.user_id, (platos.get(p.user_id) ?? 0) + p.asignado_cierre_cents);
+  return platos;
 }
 
 function mioPorPlato(t: TicketMock, u: string) {
@@ -370,7 +453,7 @@ function vistaTransferencia(v: ViajeMock, tr: TransferenciaMock, u: string) {
   };
 }
 
-function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1) {
+function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 1) {
   const est = estadoEfectivo(v);
   const cerrado = est === 'cerrado';
   const b = balance(v);
@@ -398,6 +481,8 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 
         presentes: t.personas.filter((p) => p.presente).map((p) => ids.get(p.user_id) ?? null),
         personal: esPersonalMock(v, t),
       }),
+      // D278-2 · D284 · con la 9: los ajustes y el total impreso.
+      ...(version >= 9 && ajustesPublicos(t)),
     };
   }).reverse();
   // D245: lo que pagó cada uno de su bolsillo, la suma de los tickets y gastos que cargó.
@@ -432,10 +517,16 @@ function vistaViaje(v: ViajeMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 
       .map((tr) => vistaTransferencia(v, tr, u)),
     transferencias_pendientes: pendientes(v).length,
     ...(version >= 3 && { color: v.color ?? null, has_photo: !!v.foto }),
+    // D279 · con la 8: la hora de cierre, si cierro yo (quien lo creó, abierto) y cuándo se cierra solo.
+    ...(version >= 8 && {
+      hora_cierre: horaDeCierre(v),
+      puedo_cerrar: est === 'abierto' && v.creado_por === u,
+      se_cierra_en: seCierraEn(v),
+    }),
   };
 }
 
-function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1) {
+function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 1) {
   const b = balance(v);
   const r = b.porTicket.get(t.id)!;
   const ids = idPublico(v);
@@ -466,10 +557,12 @@ function vistaTicket(v: ViajeMock, t: TicketMock, u: string, version: 1 | 2 | 3 
     ...(version >= 5 && { pagadores: pagadoresPublicos(t, ids) }),
     // D276 · con la 6, si es un gasto personal.
     ...(version >= 6 && { personal }),
+    // D278-2 · D284 · con la 9: los ajustes, el total impreso y lo tuyo de los renglones (`te_toca_cents` es tu parte del total).
+    ...(version >= 9 && { ...ajustesPublicos(t), te_toca_platos_cents: r.platos.get(u) ?? 0 }),
   };
 }
 
-function vistaEnLista(v: ViajeMock, u: string, version: 1 | 3 = 1) {
+function vistaEnLista(v: ViajeMock, u: string, version: 1 | 3 | 8 = 1) {
   const est = estadoEfectivo(v);
   const b = balance(v);
   return {
@@ -480,6 +573,7 @@ function vistaEnLista(v: ViajeMock, u: string, version: 1 | 3 = 1) {
     consumiste_cents: est === 'cerrado' ? b.consumido.get(u) ?? 0 : null,
     terminado_en: v.terminado_en,
     ...(version >= 3 && { color: v.color ?? null, has_photo: !!v.foto }),
+    ...(version >= 8 && { hora_cierre: horaDeCierre(v) }),
   };
 }
 
@@ -567,7 +661,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -575,8 +669,8 @@ export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { versio
     const abiertos: Array<ReturnType<typeof vistaEnLista>> = [];
     const cerrados: Array<ReturnType<typeof vistaEnLista>> = [];
     for (const v of mios) {
-      // D256 · en la lista la 4 sale como la 3 (como el dueño).
-      const item = vistaEnLista(v, u, version >= 3 ? 3 : 1);
+      // D256 · en la lista la 4 sale como la 3 (como el dueño); D279 · la 8 suma `hora_cierre`; la 9 sale como la 8.
+      const item = vistaEnLista(v, u, version >= 8 ? 8 : version >= 3 ? 3 : 1);
       (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
     }
     cerrados.sort((a, b) => (b.fecha_desde || b.terminado_en || '').localeCompare(a.fecha_desde || a.terminado_en || ''));
@@ -612,15 +706,19 @@ export function mockInvitacionesAViajes() {
 
 export function mockCrearViaje(body: unknown, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
-    if (!objeto(body) || !soloClaves(body, ['nombre', 'fecha_desde', 'fecha_hasta', 'miembros', 'idempotency_key'])) throw invalido();
+    if (!objeto(body) || !soloClaves(body, ['nombre', 'fecha_desde', 'fecha_hasta', 'miembros', 'idempotency_key', 'hora_cierre'])) throw invalido();
     const nombre = textoNormal(body.nombre, 80);
     const desde = body.fecha_desde ?? null;
     const hasta = body.fecha_hasta ?? null;
+    // D279 · la hora de cierre, opcional (en cualquier versión); sin ella, 23:59.
+    const hora = body.hora_cierre;
     if (!nombre || (desde !== null && !esFecha(desde)) || (hasta !== null && !esFecha(hasta))
-        || (desde && hasta && desde > hasta) || !clave(body.idempotency_key)) throw invalido();
+        || (desde && hasta && desde > hasta) || !clave(body.idempotency_key)
+        || (hora !== undefined && !(typeof hora === 'string' && HORA.test(hora)))) throw invalido();
     const pedidos = miembrosPedidos(body.miembros);
     const u = yo();
-    const pedido = hashDe({ nombre, fecha_desde: desde, fecha_hasta: hasta, miembros: pedidos });
+    // Entra al hash del pedido sólo si vino (contrato).
+    const pedido = hashDe({ nombre, fecha_desde: desde, fecha_hasta: hasta, miembros: pedidos, ...(hora !== undefined && { hora_cierre: hora }) });
     const previo = cargar().viajes.find((v) => v.creado_por === u && v.idempotency_key === body.idempotency_key);
     if (previo) {
       if (previo.pedido_hash !== pedido) throw conflicto('idempotency_key_conflict');
@@ -635,6 +733,7 @@ export function mockCrearViaje(body: unknown, { version = 1 }: OpcionesDeVersion
       id: nuevoId(), nombre, fecha_desde: desde as string | null, fecha_hasta: hasta as string | null,
       estado: 'abierto', created_at: new Date(t0).toISOString(), terminado_en: null, creado_por: u,
       idempotency_key: body.idempotency_key, pedido_hash: pedido,
+      ...(typeof hora === 'string' && { hora_cierre: hora }),
       miembros: [
         { id: nuevoId(), user_id: u, estado: 'activo', invitado_por: null, invitado_en: null, created_at: new Date(t0).toISOString(),
           first_name: yoMismo.first_name, last_name: yoMismo.last_name, username: yoMismo.username, eliminada: false },
@@ -696,7 +795,7 @@ export function mockInvitarAlViaje(id: string, body: unknown, { version = 1 }: O
  */
 export function mockEditarViaje(id: string, body: unknown, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
-    const claves = ['nombre', 'fecha_desde', 'fecha_hasta', 'color'];
+    const claves = ['nombre', 'fecha_desde', 'fecha_hasta', 'color', 'hora_cierre'];
     if (!objeto(body) || !soloClaves(body, claves) || Object.keys(body).length === 0) throw invalido();
     const nombre = body.nombre === undefined ? undefined : textoNormal(body.nombre, 80);
     if (body.nombre !== undefined && !nombre) throw invalido();
@@ -704,16 +803,30 @@ export function mockEditarViaje(id: string, body: unknown, { version = 1 }: Opci
       if (body[k] !== undefined && body[k] !== null && !esFecha(body[k])) throw invalido();
     }
     if (body.color !== undefined && body.color !== null && !(COLORES as readonly unknown[]).includes(body.color)) throw invalido();
+    // D279 · la hora de cierre: «HH:MM», sin null.
+    if (body.hora_cierre !== undefined && !(typeof body.hora_cierre === 'string' && HORA.test(body.hora_cierre))) throw invalido();
     const v = miViaje(id);
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     const desde = body.fecha_desde !== undefined ? body.fecha_desde as string | null : v.fecha_desde;
     const hasta = body.fecha_hasta !== undefined ? body.fecha_hasta as string | null : v.fecha_hasta;
     if (desde && hasta && desde > hasta) throw invalido();
+    const u = yo();
+    if (v.creado_por !== u) {
+      // D279 · la hora la elige quien creó el viaje; D-2 · y una fecha hasta que lo dejaría vencido ya es cerrarlo.
+      if (body.hora_cierre !== undefined) throw new Respuesta(403, 'viaje_not_creator');
+      if (body.fecha_hasta !== undefined && vencido({ ...v, fecha_hasta: hasta })) throw new Respuesta(403, 'viaje_not_creator');
+    }
     if (nombre) v.nombre = nombre;
     v.fecha_desde = desde;
     v.fecha_hasta = hasta;
     if (body.color !== undefined) v.color = body.color as string | null;
-    return { contract: CONTRATO, viaje: vistaViaje(v, yo(), version) };
+    if (body.hora_cierre !== undefined) v.hora_cierre = body.hora_cierre as string;
+    // Si quien lo creó lo dejó vencido, se cierra en este mismo pedido (como el dueño).
+    if (vencido(v)) {
+      cerrarInterno(v);
+      terminarSiCorresponde(v);
+    }
+    return { contract: CONTRATO, viaje: vistaViaje(v, u, version) };
   });
 }
 
@@ -829,8 +942,13 @@ export function mockSalirDeViaje(id: string) {
 
 // ─── Tickets ──────────────────────────────────────────────────────────────
 
-/** El recibo del mock (`or1.<payload>.<firma>`): el mock no verifica la firma (no tiene la clave). */
-function verificarRecibo(raw: unknown): { id: string; huella: string | null } {
+/**
+ * El recibo del mock (`or1.<payload>.<firma>`): el mock no verifica la firma (no tiene la clave). D278-2 · D284 · los
+ * ajustes salen del recibo (como el dueño, nunca del cuerpo).
+ */
+function verificarRecibo(raw: unknown): {
+  id: string; huella: string | null; ajustes: { servicio_cents: number; descuentos_cents: number; iva_aparte_cents: number };
+} {
   if (typeof raw !== 'string') throw new Respuesta(422, 'viaje_ticket_receipt_invalid', { reason: 'malformed' });
   const partes = raw.split('.');
   let payload: Record<string, unknown> | null = null;
@@ -846,7 +964,14 @@ function verificarRecibo(raw: unknown): { id: string; huella: string | null } {
     throw new Respuesta(422, 'viaje_ticket_receipt_invalid', { reason: 'malformed' });
   }
   if (payload.exp * 1000 < Date.now()) throw new Respuesta(422, 'viaje_ticket_receipt_invalid', { reason: 'expired' });
-  return { id: payload.jti, huella: typeof payload.h === 'string' ? payload.h : null };
+  const t = Array.isArray(payload.t) ? payload.t as Array<number | null> : null;
+  const ajustes = ajustesDeRecibo({
+    items: Array.isArray(payload.items) ? payload.items as Array<[unknown, number, number]> : [],
+    totales: t ? { subtotal_cents: t[0] as number, ...(t[1] !== null && t[1] !== undefined && { tax_cents: t[1] }) } : null,
+    descuentos: Array.isArray(payload.d) ? payload.d as number[] : null,
+    servicios: Array.isArray(payload.s) ? payload.s as number[] : null,
+  });
+  return { id: payload.jti, huella: typeof payload.h === 'string' ? payload.h : null, ajustes };
 }
 
 /**
@@ -988,7 +1113,12 @@ export function mockCargarTicket(id: string, body: unknown, { version = 1 }: Opc
     if (v.tickets.length >= MAX_TICKETS) throw conflicto('viaje_tickets_limit', { limit: MAX_TICKETS });
     const monto = b.items.reduce((s, i) => s + lineaDe(i), 0);
     if (!Number.isSafeInteger(monto) || monto <= 0) throw new Respuesta(422, 'viaje_ticket_amount_invalid');
-    const quien = pagadoresResueltos(v, b.pagado_por, b.pagadores, u, monto);
+    // D278-2 · D284 · con un cliente 9, el servicio, los descuentos y el IVA aparte del recibo; con ≤ 8, ninguno.
+    const ajustes = version >= 9 ? recibo.ok.ajustes : { servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0 };
+    const total = monto + ajustes.servicio_cents + ajustes.iva_aparte_cents - ajustes.descuentos_cents;
+    if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_GASTO_CENTS) throw new Respuesta(422, 'viaje_ticket_amount_invalid');
+    // Los pagadores suman el total impreso (sin ajustes, los renglones, como siempre).
+    const quien = pagadoresResueltos(v, b.pagado_por, b.pagadores, u, total);
     // D276 · quiénes estuvieron, ids de miembros activos (el 422 de siempre si no); sin el campo, todos.
     const activos = miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada);
     const porMiembro = new Map(activos.map((m) => [m.id, m.user_id]));
@@ -998,6 +1128,7 @@ export function mockCargarTicket(id: string, body: unknown, { version = 1 }: Opc
     const t: TicketMock = {
       id: nuevoId(), ...quien, ...(quien.pagado_por !== u && { cargado_por: u }), forma: b.forma, tipo_lugar: b.tipo_lugar, lugar: b.lugar,
       fecha_ticket: b.fecha_ticket, hora_ticket: b.hora_ticket, monto_cents: monto, created_at: ahora(),
+      ...(version >= 9 && ajustes),
       huella: recibo.ok.huella, recibo_jti: recibo.ok.id, idempotency_key: b.idempotency_key, pedido_hash: pedido,
       items: b.items.map((i) => ({ id: nuevoId(), nombre: i.name, price_cents: i.price_cents, quantity: i.quantity })),
       personas: activos.map((m) => ({
@@ -1304,6 +1435,8 @@ export function mockEliminarTicket(id: string, ticketId: string, { version = 1 }
 export function mockCerrarViaje(id: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);
+    // D279 · cierra sólo quien lo creó, en todas las versiones: después del 404 y antes del 409.
+    if (v.creado_por !== yo()) throw new Respuesta(403, 'viaje_not_creator');
     if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
     cerrarInterno(v);
     terminarSiCorresponde(v);
@@ -1522,7 +1655,7 @@ function semilla(yoMismo: PersonaViajeMock): EstadoViajesMock {
   const mazatlan = viaje(VIAJES_SEMILLA.mazatlan, 'Mazatlán diciembre', '2026-12-18', '2026-12-22', '2026-10-09T01:00:00.000Z', [sofia, diego]);
   mazatlan.miembros.push(miembro(Y, '2026-10-09T01:05:00.000Z', 'invitado', sofia.user_id));
 
-  return { version: 1, viajes: [cancun, monterrey, oaxaca, valle, mazatlan], avisos_sembrados: false };
+  return { version: 1, viajes: [cancun, monterrey, oaxaca, valle, mazatlan], avisos_sembrados: false, corte: new Date().toISOString() };
 }
 
 /**

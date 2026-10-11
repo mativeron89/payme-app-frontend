@@ -370,18 +370,15 @@ export function BubbleTabs({
   tabs,
   active,
   onSelect,
-  negrita = false,
 }: {
   tabs: BubbleTab[];
   active: string;
   onSelect: (id: string) => void;
-  /** D265 · los títulos en negrita, la elegida también (sólo Inicio lo pide). */
-  negrita?: boolean;
 }) {
   const { t } = useIdioma();
   return (
-    // D255-3 · con dos pestañas (Balance) van a medias, no en tercios.
-    <div className={`btabs${tabs.length === 2 ? ' btabs-2' : ''}${negrita ? ' btabs--negrita' : ''}`} role="tablist">
+    // D255-3 · con dos pestañas (Balance) van a medias, no en tercios. D283 · la negrita es de `.btab`, para todas.
+    <div className={`btabs${tabs.length === 2 ? ' btabs-2' : ''}`} role="tablist">
       {tabs.map((tab) => {
         const on = tab.id === active;
         return (

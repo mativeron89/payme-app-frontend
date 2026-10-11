@@ -238,3 +238,8 @@
   line-height: var(--lh-sm);
   font-weight: 600;
 }
+
+/* D279 · «Hora de cierre», debajo de «Al»: es la hora del último día. */
+.vjc-fecha.vjc-hora {
+  grid-column: 2;
+}

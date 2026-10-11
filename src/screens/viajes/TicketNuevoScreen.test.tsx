@@ -219,6 +219,7 @@ describe('AF-VIAJES · 1k · el ticket ya estaba en el viaje', () => {
     forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false, items: [], personas: [],
     te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
     pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
+    servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 220000, te_toca_platos_cents: 0,
   } satisfies TicketDelViaje;
 
   const render = (d: YaCargado, ticket: TicketDelViaje | null = tk) => renderToStaticMarkup(
@@ -282,5 +283,45 @@ describe('AF-VIAJES · Ticket nuevo · lo que no deja cargarlo', () => {
     const err = renderToStaticMarkup(<EstadoDeCargaVista estado="error" viajeNombre={null} onReintentar={nada} />);
     expect(err).toContain('No pudimos cargar el viaje');
     expect(err).toContain('Reintentar');
+  });
+});
+
+describe('🔴 D278-2 · D284 · Ticket nuevo con servicio e IVA aparte: el total impreso', () => {
+  const texto = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Renglones $1,020; IVA aparte $163.20 (los renglones suman el subtotal) y servicio $50: total $1,233.20.
+  const CON_AJUSTES: OcrResponse = { ...OCR, ticket_totals: { subtotal_cents: 102000, tax_cents: 16320 },
+    ticket_adjustments: [{ kind: 'service_charge', amount_cents: 5000 }] };
+
+  it('la tarjeta muestra cómo se llega al total y el total impreso', () => {
+    const html = nuevo('consumo', { ocr: CON_AJUSTES });
+    expect(html).toContain('<span class="vjt-monto vjt-monto--grande">$1,233.20</span>');
+    expect(texto(html)).toContain('Platos $1,020 IVA $163.20 Cargo por servicio $50');
+  });
+
+  it('«¿Quién pagó?» reparte el total impreso: es lo que tienen que sumar los pagadores con la 9', () => {
+    const html = nuevo('consumo', { ocr: CON_AJUSTES, quienPago: { marcados: new Set(['m-ana', 'm-sofia']), montos: null } });
+    // Partes iguales de $1,233.20.
+    expect(texto(quienPago(html))).toMatch(/\$616\.60.*\$616\.60/);
+    expect(texto(quienPago(html))).not.toContain('$510');
+  });
+
+  it('sin ajustes, la tarjeta queda como antes', () => {
+    const html = nuevo('consumo');
+    expect(html).not.toContain('vjt-ajustes');
+    expect(html).toContain('<span class="vjt-monto vjt-monto--grande">$1,020</span>');
+  });
+
+  it('el duplicado muestra el total impreso del ticket que ya estaba', () => {
+    const dup: YaCargado = { por: 'm-luis', first_name: 'Luis', last_name: 'Perez', username: 'luis.perez', eliminada: false, en: null };
+    const html = renderToStaticMarkup(
+      <DuplicadoVista viajeNombre="Cancún 2026" miMiembroId="m-ana" miembros={MIEMBROS} dup={dup}
+        ticket={{ id: 'tk', lugar: null, tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40', cargado_en: null,
+          forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false, items: [], personas: [],
+          te_toca_cents: 0, sin_repartir_cents: 0, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
+          servicio_cents: 22000, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 242000, te_toca_platos_cents: 0,
+          pagadores: [{ miembro_id: 'm-luis', monto_cents: 242000 }] }}
+        onElegir={nada} onEscanearOtro={nada} />,
+    );
+    expect(html).toContain('<span class="vjt-monto">$2,420</span>');
   });
 });

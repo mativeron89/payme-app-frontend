@@ -91,12 +91,13 @@ test.describe('🔴 D265 · D267 · el viaje abierto en Inicio', () => {
     await expect(burbuja(page, 'Puebla 2026').locator('.vj-insignia')).toHaveText('P');
   });
 
-  test('🔴 las pestañas de Inicio en negrita, la elegida también; las de Amigos, como siempre', async ({ page }) => {
+  test('🔴 las pestañas de Inicio en negrita, la elegida también (D283: también Amigos, ver d279-d281-d283.spec.ts)', async ({ page }) => {
     await conViajes(page);
     const pesos = (selector: string) => page.locator(selector).evaluateAll((xs) => xs.map((x) => getComputedStyle(x).fontWeight));
     await expect.poll(() => pesos('.btabs .btab')).toEqual(['700', '700', '700']);
     await ir(page, '/amigos');
     await expect(page.locator('.btabs .btab').first()).toBeVisible();
-    expect(new Set(await pesos('.btabs .btab'))).toEqual(new Set(['500']));
+    // D283 supersede «Amigos, como siempre» (D265): toda la clase va en negrita.
+    expect(new Set(await pesos('.btabs .btab'))).toEqual(new Set(['700']));
   });
 });

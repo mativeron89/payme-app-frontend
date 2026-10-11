@@ -24,9 +24,11 @@ const viaje = {
   miembros: [{ id: 'm1', ...persona, es_yo: true, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0 }],
   invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets: [], sin_repartir: [], transferencias: [],
   transferencias_pendientes: 0, color: 'azul', has_photo: true,
+  hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
 };
 const enLista = { id: VIAJE, nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, estado: 'abierto', personas: 1,
-  mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null, color: null, has_photo: false };
+  mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null, color: null, has_photo: false,
+  hora_cierre: '23:59' };
 const foto = { revision: 2, width: 512, height: 512, updated_at: '2026-10-10T03:00:00.000Z' };
 const ticket = {
   id: 't', lugar: 'Taxi', tipo_lugar: 'otro', fecha_ticket: null, hora_ticket: null, cargado_en: null, forma: 'iguales',
@@ -34,6 +36,7 @@ const ticket = {
   items: [{ id: 'i', name: 'Taxi', price_cents: 5000, quantity: 1, line_cents: 5000, remaining_bps: 0, my_bps: 0, my_amount_cents: 0 }],
   personas: [{ miembro_id: 'm1', ya_eligio: true, presente: true }],
   te_toca_cents: 5000, sin_repartir_cents: 0, puedo_elegir: false, puedo_marcar_presentes: true, personal: false,
+  servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 5000, te_toca_platos_cents: 5000,
 };
 
 const json = (body: unknown, status = 200) =>
@@ -75,8 +78,8 @@ afterEach(() => {
   reiniciarViajesParaTests();
 });
 
-describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-02)', () => {
-  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=7`, una sola vez y exacta', async () => {
+describe('fachada real · Viajes con App Backend 2.181.0 (`viaje_version=9`, D278-2)', () => {
+  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=9`, una sola vez y exacta', async () => {
     const v = await api.getViaje(VIAJE);
     expect(v).toMatchObject({ color: 'azul', has_photo: true });
     await api.crearViaje({ nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, miembros: [], idempotency_key: 'clave-de-prueba-1' });
@@ -89,7 +92,7 @@ describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-0
       `GET /api/viajes/${VIAJE}`, 'POST /api/viajes', `POST /api/viajes/${VIAJE}/aceptar`, `POST /api/viajes/${VIAJE}/cerrar`,
       `PATCH /api/viajes/${VIAJE}`, 'GET /api/viajes',
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['7']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['9']);
     expect(pedidos.at(-1)!.url.searchParams.getAll('estado')).toEqual(['abiertos']);
   });
 
@@ -97,6 +100,18 @@ describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-0
     await api.editarViaje(VIAJE, { nombre: 'Cancún 2027', fecha_hasta: null, color: null });
     expect(pedidos[0]!.method).toBe('PATCH');
     expect(pedidos[0]!.body).toEqual({ nombre: 'Cancún 2027', fecha_hasta: null, color: null });
+  });
+
+  it('🔴 D279 · la hora de cierre viaja tal cual al crear y al editar, y el viaje vuelve con las claves de la 8', async () => {
+    const v = await api.crearViaje({ nombre: 'Puebla', fecha_desde: '2026-10-20', fecha_hasta: '2026-10-23',
+      miembros: [{ user_id: 'u-2' }], idempotency_key: 'llave-de-prueba-1', hora_cierre: '18:30' });
+    expect(pedidos[0]!.method).toBe('POST');
+    expect(pedidos[0]!.body).toEqual({ nombre: 'Puebla', fecha_desde: '2026-10-20', fecha_hasta: '2026-10-23',
+      miembros: [{ user_id: 'u-2' }], idempotency_key: 'llave-de-prueba-1', hora_cierre: '18:30' });
+    expect(v).toMatchObject({ hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null });
+    await api.editarViaje(VIAJE, { hora_cierre: '20:00' });
+    expect(pedidos[1]!.method).toBe('PATCH');
+    expect(pedidos[1]!.body).toEqual({ hora_cierre: '20:00' });
   });
 
   it('🔴 D255 · la foto: PUT multipart con el campo `foto`, DELETE y GET por su ruta', async () => {
@@ -122,7 +137,7 @@ describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-0
     expect(pedidos[0]!.body).not.toHaveProperty('pagado_por');
   });
 
-  it('🔴 D263 · las rutas de ticket también piden `viaje_version=7`, una sola vez y exacta', async () => {
+  it('🔴 D263 · las rutas de ticket también piden `viaje_version=9`, una sola vez y exacta', async () => {
     await api.cargarTicketDeViaje(VIAJE, {
       ocr_receipt: 'or1.x.y', idempotency_key: 'ticket-de-prueba-1', forma: 'iguales', tipo_lugar: 'otro', lugar: 'Taxi',
       fecha_ticket: null, hora_ticket: null, items: [{ name: 'Taxi', price_cents: 5000, quantity: 1 }],
@@ -136,7 +151,7 @@ describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-0
       `POST /api/viajes/${VIAJE}/tickets`, `POST /api/viajes/${VIAJE}/gastos`, `GET /api/viajes/${VIAJE}/tickets/t`,
       `PUT /api/viajes/${VIAJE}/tickets/t/seleccion`, `PUT /api/viajes/${VIAJE}/tickets/t/presentes`,
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['7']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['9']);
   });
 
   it('🔴 D276-2 · el ticket escaneado lleva `presentes` tal cual (lo que se ve, siempre)', async () => {
@@ -199,23 +214,23 @@ describe('fachada real · Viajes con App Backend 2.179.2 (`viaje_version=7`, V-0
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros/m%2F1/avatar`);
   });
 
-  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=7` con sólo `{ miembros }`', async () => {
+  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=9` con sólo `{ miembros }`', async () => {
     const v = await api.invitarAlViaje(VIAJE, [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }]);
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('POST');
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros`);
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['7']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['9']);
     expect(pedidos[0]!.body).toEqual({ miembros: [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }] });
   });
 
-  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=7`, sin cuerpo, y devuelve el viaje', async () => {
+  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=9`, sin cuerpo, y devuelve el viaje', async () => {
     const v = await api.eliminarTicketDeViaje('a/b', 't/1');
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('DELETE');
     expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/tickets/t%2F1');
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['7']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['9']);
     expect([...pedidos[0]!.url.searchParams.keys()]).toEqual(['viaje_version']);
     expect(pedidos[0]!.body).toBeUndefined();
   });

@@ -8,10 +8,12 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { fullName } from '../../utils/identity';
 import { CampoDeBusqueda, FilaPersona, ResultadosDeBusqueda, useBuscadorDeMiembros } from './BuscadorDeMiembros';
+import { CampoHoraDeCierre } from './CampoHoraDeCierre';
 import {
   contenidoDelPedido,
   fechasInvertidas,
   filaDe,
+  HORA_DE_CIERRE_POR_DEFECTO,
   llaveParaElPedido,
   MAX_AGREGADOS,
   mensajeAlCrear,
@@ -30,7 +32,8 @@ import { olvidarLoDeViajes } from '../../api/ultimoVisto';
  * AF-VIAJES · D242 · 1d «Crear viaje» y 1e «buscar por @usuario»
  * (`POST /api/viajes`).
  *
- * Nombre (obligatorio), fechas Del/Al (opcionales, D242-5) y miembros: amigos
+ * Nombre (obligatorio), fechas Del/Al (opcionales, D242-5), con «Al» la hora de cierre (D279, 23:59 por defecto) y
+ * miembros: amigos
  * aceptados (por su id) o lo que muestra la búsqueda por @ (por su @), hasta 19
  * más yo. A cada uno le llega una invitación; entran al aceptarla. Al crear, se
  * va directo al viaje.
@@ -47,6 +50,7 @@ export function CrearViajeScreen() {
   const [nombre, setNombre] = useState('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
+  const [hora, setHora] = useState(HORA_DE_CIERRE_POR_DEFECTO);
   const [agregados, setAgregados] = useState<readonly Candidato[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +75,8 @@ export function CrearViajeScreen() {
   }
 
   async function crear() {
-    if (!puedeCrear({ nombre, agregados, desde, hasta, enviando })) return;
-    const contenido = contenidoDelPedido(nombre, desde, hasta, agregados);
+    if (!puedeCrear({ nombre, agregados, desde, hasta, enviando, hora })) return;
+    const contenido = contenidoDelPedido(nombre, desde, hasta, agregados, hora);
     const actual = llaveParaElPedido(llave.current, contenido, newIdempotencyKey);
     llave.current = actual;
     setEnviando(true);
@@ -98,6 +102,7 @@ export function CrearViajeScreen() {
       nombre={nombre}
       desde={desde}
       hasta={hasta}
+      hora={hora}
       texto={texto}
       yo={{
         iniciales: iniciales({ first_name: u?.first_name ?? null, last_name: u?.last_name ?? null, username: null, eliminada: false }),
@@ -108,11 +113,12 @@ export function CrearViajeScreen() {
       lleno={agregados.length >= MAX_AGREGADOS}
       error={error}
       enviando={enviando}
-      puedeCrear={puedeCrear({ nombre, agregados, desde, hasta, enviando })}
+      puedeCrear={puedeCrear({ nombre, agregados, desde, hasta, enviando, hora })}
       onVolver={() => goBack('home')}
       onNombre={(v) => { cambio(); setNombre(v); }}
       onDesde={(v) => { cambio(); setDesde(v); }}
       onHasta={(v) => { cambio(); setHasta(v); }}
+      onHora={(v) => { cambio(); setHora(v); }}
       onTexto={setTexto}
       onAgregar={agregar}
       onQuitar={quitar}
@@ -128,6 +134,8 @@ export interface CrearViajeVistaProps {
   readonly nombre: string;
   readonly desde: string;
   readonly hasta: string;
+  /** D279 · la hora de cierre, «HH:MM»; se ve y se manda sólo con «Al». */
+  readonly hora: string;
   readonly texto: string;
   readonly yo: { readonly iniciales: string; readonly arroba: string | null };
   readonly agregados: readonly FilaDePersona[];
@@ -142,6 +150,7 @@ export interface CrearViajeVistaProps {
   readonly onNombre: (v: string) => void;
   readonly onDesde: (v: string) => void;
   readonly onHasta: (v: string) => void;
+  readonly onHora: (v: string) => void;
   readonly onTexto: (v: string) => void;
   readonly onAgregar: (clave: string) => void;
   readonly onQuitar: (clave: string) => void;
@@ -205,6 +214,8 @@ export function CrearViajeView(p: CrearViajeVistaProps) {
                 onChange={(e) => p.onHasta(e.target.value)}
               />
             </div>
+            {/* D279 · sin «Al» el viaje no se cierra solo: no hay hora que elegir. */}
+            {p.hasta !== '' && <CampoHoraDeCierre id="vjc-hora" hora={p.hora} onHora={p.onHora} />}
           </div>
           {invertidas && (
             <p id="vjc-fechas-error" className="vjc-error" role="alert">

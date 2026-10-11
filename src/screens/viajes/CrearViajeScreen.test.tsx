@@ -13,6 +13,7 @@ function props(extra: Partial<CrearViajeVistaProps> = {}): CrearViajeVistaProps 
     nombre: 'Cancún 2026',
     desde: '',
     hasta: '',
+    hora: '23:59',
     texto: '',
     yo: { iniciales: 'AL', arroba: '@ana.lopez' },
     agregados: [LUIS, SOFIA],
@@ -21,7 +22,7 @@ function props(extra: Partial<CrearViajeVistaProps> = {}): CrearViajeVistaProps 
     error: null,
     enviando: false,
     puedeCrear: true,
-    onVolver: nada, onNombre: nada, onDesde: nada, onHasta: nada, onTexto: nada,
+    onVolver: nada, onNombre: nada, onDesde: nada, onHasta: nada, onHora: nada, onTexto: nada,
     onAgregar: nada, onQuitar: nada, onCrear: nada,
     ...extra,
   };
@@ -145,5 +146,22 @@ describe('AF-VIAJES · 1e · buscar en Amigos y por @usuario', () => {
     expect(sinResultados(busqueda({ arrobaCorta: true, fase: 'quieta' }))).toBe(false);
     expect(sinResultados(busqueda({ amigos: [DIEGO_T] }))).toBe(false);
     expect(sinResultados(busqueda({ yaAgregados: [LUIS] }))).toBe(false);
+  });
+});
+
+describe('🔴 D279 · Crear viaje: la hora de cierre junto a las fechas', () => {
+  it('con «Al», el campo «Hora de cierre» en la celda de «Al», con su valor', () => {
+    const html = render(props({ desde: '2026-10-20', hasta: '2026-10-23', hora: '18:30' }));
+    expect(html).toMatch(/<div class="vjc-fecha vjc-hora"><label class="vjc-sub" for="vjc-hora">Hora de cierre<\/label><input id="vjc-hora" class="input vjc-input" type="time" required="" value="18:30"\/><\/div><\/div>/);
+  });
+
+  it('sin «Al», no hay hora que elegir', () => {
+    expect(render(props({ desde: '2026-10-20' }))).not.toContain('Hora de cierre');
+    expect(render(props())).not.toContain('vjc-hora');
+  });
+
+  it('una hora vaciada se marca inválida', () => {
+    expect(render(props({ hasta: '2026-10-23', hora: '' }))).toMatch(/id="vjc-hora"[^>]*aria-invalid="true"/);
+    expect(render(props({ hasta: '2026-10-23', hora: '23:59' }))).not.toMatch(/id="vjc-hora"[^>]*aria-invalid/);
   });
 });

@@ -37,6 +37,7 @@ const MARISCOS: TicketDelViaje = {
   personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', false)],
   te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
   pagadores: [{ miembro_id: 'm-luis', monto_cents: 220000 }],
+  servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 220000, te_toca_platos_cents: 53000,
 };
 
 function render(ticket: TicketDelViaje, extra: Partial<TicketVistaProps> = {}) {
@@ -128,7 +129,7 @@ describe('AF-VIAJES · 1i · elegir lo que consumí', () => {
 
 describe('AF-VIAJES · 1j · «Pagar el total»', () => {
   const CAFE: TicketDelViaje = {
-    ...MARISCOS, lugar: 'Café Caribe', tipo_lugar: 'cafe', fecha_ticket: '2026-10-07', forma: 'total', monto_cents: 38000,
+    ...MARISCOS, lugar: 'Café Caribe', tipo_lugar: 'cafe', fecha_ticket: '2026-10-07', forma: 'total', monto_cents: 38000, total_cents: 38000,
     pagado_por: 'm-diego', items: [], te_toca_cents: 0, puedo_elegir: false, pagadores: [{ miembro_id: 'm-diego', monto_cents: 38000 }],
   };
 
@@ -153,7 +154,7 @@ describe('AF-VIAJES · 1j · «Pagar el total»', () => {
 
 describe('AF-VIAJES · «En partes iguales»', () => {
   const BAR: TicketDelViaje = {
-    ...MARISCOS, lugar: 'Bar La Ola', tipo_lugar: 'bar', forma: 'iguales', monto_cents: 96000, pagado_por: 'm-ana',
+    ...MARISCOS, lugar: 'Bar La Ola', tipo_lugar: 'bar', forma: 'iguales', monto_cents: 96000, total_cents: 96000, pagado_por: 'm-ana',
     pagaste_tu: true, items: [], te_toca_cents: 24000, puedo_elegir: false,
     personas: [persona('m-ana'), persona('m-luis'), persona('m-sofia'), persona('m-diego', true, false)],
     pagadores: [{ miembro_id: 'm-ana', monto_cents: 96000 }],
@@ -358,5 +359,39 @@ describe('🔴 V-02 · el ticket de un viaje cerrado (desde Estadísticas), sól
   it('la pantalla le pasa si el viaje ya no está abierto', () => {
     const fuente = readFileSync(new URL('./TicketScreen.tsx', import.meta.url), 'utf8');
     expect(fuente).toContain("cerrado={viaje.estado !== 'abierto'}");
+  });
+});
+
+describe('🔴 D278-2 · D284 · el total impreso en el ticket del viaje', () => {
+  const texto = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Renglones $2,200, IVA aparte $352, servicio $150 y descuento $100: total $2,602.
+  const CON_AJUSTES: TicketDelViaje = {
+    ...MARISCOS, puedo_elegir: false, iva_aparte_cents: 35200, servicio_cents: 15000, descuentos_cents: 10000, total_cents: 260200,
+    te_toca_cents: 62700, te_toca_platos_cents: 53000, pagadores: [{ miembro_id: 'm-luis', monto_cents: 260200 }],
+  };
+
+  it('con ajustes: platos, IVA, cargo por servicio y descuento, el total impreso, «Te toca» y su detalle', () => {
+    const html = render(CON_AJUSTES);
+    const totales = html.slice(html.indexOf('vjt-totales'));
+    expect(totales).toContain('<dl class="vjt-ajustes">');
+    expect(texto(totales)).toMatch(/Platos \$2,200 IVA \$352 Cargo por servicio \$150 Descuento −\$100 Total del ticket \$2,602 Te toca \$627 Tus platos \$530 · Tu parte del resto \$97/);
+  });
+
+  it('el resto puede ser negativo (descuentos mayores que el servicio y el IVA): con el signo menos', () => {
+    const html = render({ ...CON_AJUSTES, iva_aparte_cents: 0, servicio_cents: 0, descuentos_cents: 20000, total_cents: 200000,
+      te_toca_cents: 48200, pagadores: [{ miembro_id: 'm-luis', monto_cents: 200000 }] });
+    expect(texto(html)).toContain('Tus platos $530 · Tu parte del resto −$48');
+  });
+
+  it('sin ajustes, como antes: ni filas ni detalle, y el total es la suma de los renglones', () => {
+    const html = render({ ...MARISCOS, puedo_elegir: false });
+    expect(html).not.toContain('vjt-ajustes');
+    expect(html).not.toContain('vjt-toca-detalle');
+    expect(texto(html)).toContain('Total del ticket $2,200');
+  });
+
+  it('eligiendo, el pie dice el total impreso', () => {
+    const html = render({ ...CON_AJUSTES, puedo_elegir: true });
+    expect(html).toContain('<span class="vjt-sub">Total del ticket $2,602</span>');
   });
 });

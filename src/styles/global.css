@@ -3655,7 +3655,9 @@ html.app-de-inicio-ios .app {
      se probó casi no se veía — es un bug corregido, no una opción. */
   background: none;
   color: var(--on-dark-muted);
-  font-weight: 500;
+  /* D283 · Mati: «Las letras del encabezado tienen que estar en negrita». Es de la clase, no de cada pantalla: así
+     Inicio (D265), Balance (D262), Amigos y cualquier encabezado con pestañas nuevo quedan en negrita sin pedirlo. */
+  font-weight: 700;
   border-radius: 12px 12px 0 0;
 }
 
@@ -3665,11 +3667,11 @@ html.app-de-inicio-ios .app {
   justify-content: center;
 }
 
-/* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. */
+/* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. D283 · también en negrita. */
 .btab.on {
   background: var(--surface);
   color: var(--text);
-  font-weight: 500;
+  font-weight: 700;
   box-shadow: none;
 }
 
@@ -3741,17 +3743,10 @@ html.app-de-inicio-ios .app {
    franja salía de `.btabs` (10 de margen + 15 de `top`): 25 px de banda vacía.
    Bajo «Volver» queda en 8, y la banda baja 17 (214 → 197) para que la tarjeta
    siga pegada a la pestaña. Las de Inicio no cambian.
-   D262 · Mati: los títulos de las pestañas, en negrita (la elegida también). */
+   D262 · la negrita de Balance pasó a `.btab` con D283 (toda la clase). */
 .hdr-con-volver .btabs {
   top: 0;
   margin-top: var(--sp-2);
-}
-.hdr-con-volver .btab {
-  font-weight: 700;
-}
-/* D265 · Mati: «Las letras de la pantalla de inicio (Cuenta, Estadisticas y Viajes) tienen que estar en negrita». */
-.btabs--negrita .btab {
-  font-weight: 700;
 }
 .hdr-tabbed.hdr-con-volver > .hdr-row:first-child {
   height: auto;

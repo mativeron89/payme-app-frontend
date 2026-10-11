@@ -329,8 +329,6 @@ export function HomeScreen() {
           ]}
           active={tab}
           onSelect={(id) => setTab(id as TabId)}
-          // D265 · Mati: «Las letras de la pantalla de inicio (Cuenta, Estadisticas y Viajes) tienen que estar en negrita».
-          negrita
         />}
       />
 

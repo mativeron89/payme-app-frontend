@@ -21,4 +21,7 @@ export const EN_VIAJES_CREAR: Record<string, string> = {
   'No encontramos a esa persona. Revísalo.': "We couldn't find that person. Check it.",
   'Un viaje admite hasta 20 personas.': 'A trip can have up to 20 people.',
   'Muchas invitaciones seguidas. Prueba en unos minutos.': 'Too many invitations in a row. Try again in a few minutes.',
+  // D279 · la hora de cierre y cuándo se cierra solo.
+  'Hora de cierre': 'Closing time',
+  'Cierra solo el {0} a las {1}': 'Closes automatically on {0} at {1}',
 };

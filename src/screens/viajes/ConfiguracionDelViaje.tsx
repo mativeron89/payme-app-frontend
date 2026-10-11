@@ -16,7 +16,18 @@ import { Icon } from '../../components/Icon';
 import { useToast } from '../../components/ui';
 import { useIdioma } from '../../i18n/idioma';
 import { CampoDeBusqueda, FilaPersona, ResultadosDeBusqueda, useBuscadorDeMiembros } from './BuscadorDeMiembros';
-import { fechasInvertidas, filaDe, mensajeAlCrear, miembrosDelPedido, type Candidato, type FilaDePersona, type VistaDeBusqueda } from './crearViajeView';
+import { CampoHoraDeCierre } from './CampoHoraDeCierre';
+import {
+  fechasInvertidas,
+  filaDe,
+  horaDeCierreValida,
+  lineaDeCierre,
+  mensajeAlCrear,
+  miembrosDelPedido,
+  type Candidato,
+  type FilaDePersona,
+  type VistaDeBusqueda,
+} from './crearViajeView';
 import { InsigniaDelViaje } from './InsigniaDelViaje';
 import { iniciales, nombreCompleto, rangoDeFechas, type T } from './viajesView';
 import './viajes.css';
@@ -35,6 +46,8 @@ import './viaje.css';
  *   y la foto. Cada cambio se guarda con `PATCH /api/viajes/:id` o
  *   `PUT`/`DELETE …/foto`. El color y la foto se ven en la burbuja del viaje y en
  *   su tarjeta de Abiertos y Cerrados.
+ * - D279 (App Backend 2.180.0, `viaje_version=8`): «Cerrar viaje» sólo para quien creó el viaje (`puedo_cerrar`), que
+ *   es también quien elige la hora de cierre, junto a las fechas. Con `se_cierra_en`, la línea de cuándo se cierra solo.
  */
 export type EditorDelViaje = 'nombre' | 'color' | 'foto' | null;
 
@@ -51,18 +64,30 @@ export function nombreDelColor(color: ColorViaje | null, t: T): string {
   }
 }
 
-/** Sólo lo que cambió del nombre y las fechas; `null` si no cambió nada. */
+/**
+ * Sólo lo que cambió del nombre, las fechas y (D279) la hora de cierre; `null` si no cambió nada. La hora va sólo si
+ * cambió, con fecha hasta, y si la puede elegir quien mira (`puedo_cerrar`): a los demás el dueño les responde 403.
+ */
 export function cambiosDeNombreYFechas(
-  viaje: Pick<DetalleViaje, 'nombre' | 'fecha_desde' | 'fecha_hasta'>,
+  viaje: Pick<DetalleViaje, 'nombre' | 'fecha_desde' | 'fecha_hasta' | 'hora_cierre' | 'puedo_cerrar'>,
   nombre: string,
   desde: string,
   hasta: string,
+  hora: string = viaje.hora_cierre,
 ): EditarViajePedido | null {
-  const c: { nombre?: string; fecha_desde?: string | null; fecha_hasta?: string | null } = {};
+  const c: { nombre?: string; fecha_desde?: string | null; fecha_hasta?: string | null; hora_cierre?: string } = {};
   if (nombre.trim() !== viaje.nombre) c.nombre = nombre.trim();
   if ((desde || null) !== viaje.fecha_desde) c.fecha_desde = desde || null;
   if ((hasta || null) !== viaje.fecha_hasta) c.fecha_hasta = hasta || null;
+  if (viaje.puedo_cerrar && hasta !== '' && hora !== viaje.hora_cierre) c.hora_cierre = hora;
   return Object.keys(c).length > 0 ? c : null;
+}
+
+/** D279 · el 403 `viaje_not_creator` del PATCH: la hora la elige quien creó el viaje, y dejarlo vencido es cerrarlo. */
+export function avisoSinSerCreador(cambios: EditarViajePedido, t: T): string {
+  return cambios.hora_cierre !== undefined
+    ? t('Sólo quien creó el viaje cambia la hora de cierre.')
+    : t('Con esa fecha el viaje se cerraría ahora, y eso sólo lo hace quien lo creó.');
 }
 
 export function ConfiguracionDelViaje({
@@ -130,7 +155,11 @@ export function ConfiguracionDelViaje({
       setEditor(null);
       toast(t('Guardamos los cambios.'));
     } catch (err) {
-      errorAlGuardar(err);
+      if (errorDeViaje(err).tipo === 'no_creador') {
+        // D279 · se explica, sin pantalla de error, y el viaje se vuelve a pedir (lo que podía cambiar quedó viejo).
+        toast(avisoSinSerCreador(cambios, t));
+        api.getViaje(viaje.id).then(onActualizado, () => undefined);
+      } else errorAlGuardar(err);
     } finally {
       setGuardando(false);
     }
@@ -213,6 +242,7 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
   const { t, idioma } = useIdioma();
   const v = p.viaje;
   const fechas = rangoDeFechas(v.fecha_desde, v.fecha_hasta, idioma);
+  const cierre = lineaDeCierre(v.se_cierra_en, idioma, t);
   return (
     <>
       <AppHeaderBack userName={p.userName} onBack={p.onVolver} />
@@ -252,6 +282,8 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
               >
                 <span className="vjcfg-fila-valor">{fechas ? `${v.nombre} · ${fechas}` : v.nombre}</span>
               </FilaDeEditor>
+              {/* D279 · cuándo se cierra solo, en la hora del teléfono. Sin `se_cierra_en`, nada. */}
+              {cierre && <p className="vjcfg-cierre">{cierre}</p>}
               {p.editor === 'nombre' && <EditorDeNombre viaje={v} guardando={p.guardando} onGuardar={p.onGuardarNombre} onCancelar={() => p.onEditor('nombre')} />}
             </li>
             <li>
@@ -273,9 +305,12 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
         {/* D279 · Mati: «mandar cerrar viaje y salir del viaje a configuración». Al pie, como estaban en la pantalla
             del viaje, con las mismas hojas y reglas (cerrar con su vista previa; salir con D242 y H02). */}
         <div className="vjv-pie-abierto">
-          <button type="button" className="vjv-cerrar" onClick={p.onCerrarViaje}>
-            {t('Cerrar viaje')}
-          </button>
+          {/* D279 · cierra a mano sólo quien creó el viaje (`puedo_cerrar`). */}
+          {v.puedo_cerrar && (
+            <button type="button" className="vjv-cerrar" onClick={p.onCerrarViaje}>
+              {t('Cerrar viaje')}
+            </button>
+          )}
           <button type="button" className="vjv-salir" onClick={p.onSalirDelViaje}>
             {t('Salir del viaje')}
           </button>
@@ -320,9 +355,12 @@ function EditorDeNombre({ viaje, guardando, onGuardar, onCancelar }: {
   const [nombre, setNombre] = useState(viaje.nombre);
   const [desde, setDesde] = useState(viaje.fecha_desde ?? '');
   const [hasta, setHasta] = useState(viaje.fecha_hasta ?? '');
+  const [hora, setHora] = useState(viaje.hora_cierre);
   const invertidas = fechasInvertidas(desde, hasta);
-  const cambios = cambiosDeNombreYFechas(viaje, nombre, desde, hasta);
-  const valido = nombre.trim().length > 0 && !invertidas;
+  // D279 · la hora la elige quien creó el viaje, y sólo con fecha hasta.
+  const conHora = viaje.puedo_cerrar && hasta !== '';
+  const cambios = cambiosDeNombreYFechas(viaje, nombre, desde, hasta, hora);
+  const valido = nombre.trim().length > 0 && !invertidas && (!conHora || horaDeCierreValida(hora));
   return (
     <div className="vjcfg-editor">
       <label className="vjc-etiqueta" htmlFor="vjcfg-nombre">{t('Nombre del viaje')}</label>
@@ -346,6 +384,7 @@ function EditorDeNombre({ viaje, guardando, onGuardar, onCancelar }: {
           <input id="vjcfg-al" className="input vjc-input" type="date" value={hasta} min={desde || undefined}
             aria-invalid={invertidas || undefined} onChange={(e) => setHasta(e.target.value)} />
         </div>
+        {conHora && <CampoHoraDeCierre id="vjcfg-hora" hora={hora} onHora={setHora} />}
       </div>
       {invertidas && <p className="vjc-error" role="alert">{t('La fecha «Al» no puede ser antes de «Del».')}</p>}
       <div className="vjcfg-botones">

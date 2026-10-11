@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { CONTRATO_VIAJES, decodeDetalleViaje } from '../../api/viajes';
 import { partirPorViaje } from './BuscadorDeMiembros';
 import { traducir } from '../../i18n/idioma';
-import { cambiosDeNombreYFechas, ConfiguracionVista, nombreDelColor } from './ConfiguracionDelViaje';
+import { avisoSinSerCreador, cambiosDeNombreYFechas, ConfiguracionVista, nombreDelColor } from './ConfiguracionDelViaje';
 import { sinResultados, type Candidato, type VistaDeBusqueda } from './crearViajeView';
 
 /**
@@ -24,7 +24,7 @@ const VIAJE = decodeDetalleViaje({
     miembros: [{ id: 'm1', ...persona, es_yo: true, balance_cents: 0, falta_elegir: 0, has_avatar: false, pagado_cents: 0 }],
     invitados: [{ id: 'm2', first_name: 'Leo', last_name: 'Paz', username: null, eliminada: false }],
     mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
-    color: null, has_photo: false,
+    color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
   },
 });
 const LEO = { clave: 'm2', nombre: 'Leo Paz', iniciales: 'LP', arroba: null };
@@ -172,7 +172,7 @@ describe('D255-8 · el cableado', () => {
 });
 
 describe('D255 · lo que se manda al editar el nombre y las fechas', () => {
-  const V = { nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: null };
+  const V = { nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: null, hora_cierre: '23:59', puedo_cerrar: true };
 
   it('sólo lo que cambió; vacío es borrar la fecha; sin cambios, nada', () => {
     expect(cambiosDeNombreYFechas(V, 'Cancún 2026', '2026-10-05', '')).toBeNull();
@@ -217,5 +217,56 @@ describe('🔴 D279 · «Cerrar viaje» y «Salir del viaje», al pie de Configu
     expect(fuente.match(/\{hojas\}/g)).toHaveLength(2);
     // Al cerrar, se vuelve a la pantalla del viaje (que ya espera pagos).
     expect(fuente).toMatch(/setHoja\(null\);\s*\/\/ D279[^\n]*\n\s*setConfiguracion\(false\);\s*mostrar\(v\);/);
+  });
+});
+
+describe('🔴 D279 · Configuración con `viaje_version=8`: el botón para quien lo creó, la hora y cuándo se cierra solo', () => {
+  const t = (x: string, ...a: unknown[]) => traducir(x, 'es', ...a);
+  const viaje = (cambios: Partial<typeof VIAJE>) => ({ ...VIAJE, ...cambios });
+
+  it('«Cerrar viaje» sólo con `puedo_cerrar`; «Salir del viaje» siempre', () => {
+    expect(render()).toContain('class="vjv-cerrar">Cerrar viaje<');
+    const ajeno = render({ viaje: viaje({ puedo_cerrar: false }) });
+    expect(ajeno).not.toContain('Cerrar viaje');
+    expect(ajeno).toMatch(/<div class="vjv-pie-abierto"><button type="button" class="vjv-salir">Salir del viaje<\/button><\/div><\/div>$/);
+  });
+
+  it('la hora de cierre, en «Nombre y fechas», sólo para quien lo creó y con fecha hasta', () => {
+    const conHora = render({ editor: 'nombre' });
+    expect(conHora).toMatch(/<label class="vjc-sub" for="vjcfg-hora">Hora de cierre<\/label><input id="vjcfg-hora" class="input vjc-input" type="time" required="" value="23:59"\/>/);
+    // Va en la grilla de las fechas, en la celda de «Al».
+    expect(conHora).toMatch(/<div class="vjc-fechas" role="group" aria-label="Fechas">.*<div class="vjc-fecha vjc-hora">.*<\/div><\/div>/);
+    expect(render({ editor: 'nombre', viaje: viaje({ puedo_cerrar: false }) })).not.toContain('Hora de cierre');
+    expect(render({ editor: 'nombre', viaje: viaje({ fecha_hasta: null }) })).not.toContain('Hora de cierre');
+    expect(render({ editor: 'nombre', viaje: viaje({ hora_cierre: '18:30' }) })).toContain('value="18:30"');
+  });
+
+  it('con `se_cierra_en`, la línea debajo de «Nombre y fechas», en la hora del teléfono; sin ella, nada', () => {
+    const en = new Date(2026, 9, 11, 23, 59).toISOString();
+    const html = render({ viaje: viaje({ se_cierra_en: en }) });
+    expect(html).toContain('<p class="vjcfg-cierre">Cierra solo el 11 oct a las 23:59</p>');
+    // Debajo de la fila, antes de «Color».
+    expect(texto(html)).toMatch(/Nombre y fechas.*Cierra solo el 11 oct a las 23:59.*Color/);
+    // La ve también quien no lo creó (es del viaje).
+    expect(render({ viaje: viaje({ se_cierra_en: en, puedo_cerrar: false }) })).toContain('Cierra solo el');
+    expect(render()).not.toContain('vjcfg-cierre');
+  });
+
+  it('el PATCH lleva la hora sólo si cambió, con fecha hasta y si la puede elegir quien mira', () => {
+    expect(cambiosDeNombreYFechas(VIAJE, 'Cancún 2026', '2026-10-05', '2026-10-11', '20:00')).toEqual({ hora_cierre: '20:00' });
+    expect(cambiosDeNombreYFechas(VIAJE, 'Cancún 2026', '2026-10-05', '2026-10-11', '23:59')).toBeNull();
+    expect(cambiosDeNombreYFechas(VIAJE, 'Cancún 2026', '2026-10-05', '2026-10-11')).toBeNull();
+    expect(cambiosDeNombreYFechas(viaje({ puedo_cerrar: false }), 'Cancún 2026', '2026-10-05', '2026-10-11', '20:00')).toBeNull();
+    expect(cambiosDeNombreYFechas(VIAJE, 'Cancún 2026', '2026-10-05', '', '20:00')).toEqual({ fecha_hasta: null });
+  });
+
+  it('el 403 `viaje_not_creator` del PATCH se explica según lo que se quiso cambiar', () => {
+    expect(avisoSinSerCreador({ hora_cierre: '20:00' }, t)).toBe('Sólo quien creó el viaje cambia la hora de cierre.');
+    expect(avisoSinSerCreador({ fecha_hasta: '2026-10-12' }, t)).toBe('Con esa fecha el viaje se cerraría ahora, y eso sólo lo hace quien lo creó.');
+  });
+
+  it('🔴 cerrar sin haberlo creado (la pantalla quedó vieja): sin pantalla de error, el aviso y el viaje de nuevo', () => {
+    const fuente = readFileSync(new URL('./ViajeScreen.tsx', import.meta.url), 'utf8');
+    expect(fuente).toMatch(/e\.tipo === 'no_creador'\) \{[^}]*setHoja\(null\);[^}]*toast\(t\('Sólo quien creó el viaje puede cerrarlo\.'\)\);[^}]*void refrescar\(\);/);
   });
 });

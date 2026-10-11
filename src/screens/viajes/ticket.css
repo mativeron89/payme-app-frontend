@@ -395,6 +395,39 @@
   color: var(--text);
 }
 
+/* D278-2 · D284 · los platos y lo que el recibo trae aparte, sobre «Total del ticket», en el tono de su rótulo. */
+.vjt-ajustes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-2);
+}
+.vjt-ajuste {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.vjt-ajuste dt,
+.vjt-ajuste dd {
+  margin: 0;
+}
+.vjt-ajuste dd {
+  font-variant-numeric: tabular-nums;
+}
+/* «Tus platos … · Tu parte del resto …», debajo de «Te toca». */
+.vjt-toca-detalle {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: right;
+}
+
 /* D263 · «Quiénes pagaron»: cada uno con lo que pagó. */
 .vjt-pagadores {
   display: flex;

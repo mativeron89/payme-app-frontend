@@ -11,6 +11,79 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.240.0 — Cerrar sólo quien creó el viaje y la hora de cierre (D279), los consumos del viaje por lugar (D281), las pestañas del encabezado en negrita (D283) y el total impreso del ticket (D278-2 y D284) (2026-10-11)
+
+Orden AF-VIAJES-CIERRE-CONSUMOS-Y-NEGRITA-20261011 (60825999…), con la adenda del punto 7 (D278-2 d9a554e3…, D284
+7134aa03…). Dueño: App Backend 2.181.0 (inventario en 4e79a01, contenido de b3699c9), que incluye 2.180.0 (d9a3d2e). Lo
+visible se cierra con la prueba de Mati en el iPhone (D63).
+
+1. **D279 · «Cerrar viaje» sólo para quien creó el viaje (hecho).**
+   - En Configuración, el botón se ve sólo con `puedo_cerrar`. «Salir del viaje» no cambia.
+   - Si de todos modos llega un 403 `viaje_not_creator` (la pantalla quedó vieja), se cierra la hoja, aparece «Sólo
+     quien creó el viaje puede cerrarlo.», sin pantalla de error, y el viaje se vuelve a pedir: el botón se va.
+2. **D279 · la hora de cierre (hecho).**
+   - **Crear viaje:** con «Al» elegido, el campo «Hora de cierre» (23:59 por defecto) en la celda de «Al». Va en el
+     pedido sólo con fecha hasta; sin «Al», no aparece.
+   - **Configuración:** el mismo campo en «Nombre y fechas», sólo para quien creó el viaje y con fecha hasta. El PATCH
+     lleva la hora sólo si cambió.
+   - **El 403 del PATCH, con su aviso:** «Sólo quien creó el viaje cambia la hora de cierre.», y para una fecha hasta que
+     lo dejaría vencido, «Con esa fecha el viaje se cerraría ahora, y eso sólo lo hace quien lo creó.».
+   - **La línea:** con `se_cierra_en`, debajo de «Nombre y fechas», «Cierra solo el 23 oct a las 18:30», en la hora del
+     teléfono. Sin `se_cierra_en`, nada.
+   - **Declarado:**
+     - el formato de fecha es el de la app («23 oct»), no «23/10»;
+     - Crear viaje no muestra la línea: hasta crearlo, el dueño no la publica.
+3. **D281 · Balance › Consumos por lugar (hecho).**
+   - Los tickets y gastos del mismo lugar van en una fila: el lugar, «{n} veces» y el total. Al tocarla se abre y muestra
+     cada visita con su fecha y su monto; cada visita abre su ticket y se desliza para eliminar donde se puede.
+   - Los lugares van del más reciente al más viejo, en el orden del dueño, y adentro también. Un lugar con una sola
+     visita queda como antes.
+   - **La clave del lugar (declarada, `consumosPorLugar.ts`):** sin espacios de los costados ni repetidos, sin mayúsculas
+     y sin tilde, acento grave ni diéresis. La ñ se conserva.
+   - **Lo que no se junta:** sin lugar, cada ticket es su fila. El personal se junta sólo con otros personales del mismo
+     lugar y conserva su chip.
+   - **Ticket y gasto:** se juntan si se llaman igual. La fila usa el nombre y el ícono del más reciente.
+   - **El chip:** con alguna visita por elegir, la fila lleva «Falta que elijan»; cada visita, su «Falta que elija {n}».
+4. **D283 · las pestañas del encabezado en negrita, en toda la clase (hecho).**
+   - La clase es `BubbleTabs`: Inicio, Amigos y Balance del viaje (censo en `d279D281D283.test.ts`).
+   - El peso pasa a `.btab` y `.btab.on` (700), y salen la prop `negrita` y las reglas `.btabs--negrita` y
+     `.hdr-con-volver .btab`: una pantalla nueva con pestañas en el encabezado queda en negrita sin pedirlo.
+   - Las guardas que pedían «Amigos, como siempre» (D265) se actualizaron por D283.
+5. **`viaje_version=9` (hecho; la orden pedía la 8 y la adenda del punto 7, la 9).**
+   - Las 27 rutas que pedían la 7 piden la 9 (la 8 más los ajustes).
+   - El decoder exige con su forma las claves de la 8 (`hora_cierre`, `puedo_cerrar`, `se_cierra_en` y `hora_cierre` en
+     la lista) y las de la 9.
+   - Espejo de 2.181.0 (`contract/viajes-v1.json` a94e905… → 55169332…), inventario adoptado, paridad 138/138, hechos
+     regenerados (no cambia ninguno).
+6. **Las pruebas (punto 6 de la orden): hechas.** Detalle abajo.
+7. **D278-2 · D284 · el total impreso (hecho, adenda).**
+   - Con la 9, cada ticket trae servicio, descuentos, IVA aparte y `total_cents`, y el detalle trae
+     `te_toca_platos_cents`.
+   - **El ticket del viaje:** en «Total del ticket», con algún ajuste, las filas «Platos», «IVA», «Cargo por servicio» y
+     «Descuento» (sólo lo mayor que 0), y el total impreso. Debajo de «Te toca», «Tus platos {0} · Tu parte del resto
+     {1}». Sin ajustes se ve como antes.
+   - **Balance y la fila del lugar** usan `total_cents`.
+   - **Ticket nuevo:** el total impreso sale de lo que publica el OCR (`ticket_totals` y `ticket_adjustments`), con la
+     regla de `ajustesDeRecibo` del dueño; el recibo es opaco y no se lee. Lo usan la tarjeta, sus filas y «¿Quién
+     pagó?»: con la 9, los pagadores tienen que sumar el total impreso. El duplicado muestra `total_cents`.
+   - **Declarado:**
+     - mientras se elige, la vista previa de «Te toca» reparte el total en proporción a los platos. Puede diferir en un
+       centavo del mayor resto del dueño; al guardar, manda la del dueño;
+     - sin `ticket_totals` ni ajustes publicados, el total es el de los renglones;
+     - el mock responde la 9 con el port de `viajesCalculo.js` 2.181.0. Comparado con el del dueño: 800 casos al azar,
+       ninguno en error, 268 con ajustes, todos iguales.
+
+**Pruebas.**
+- **Rojo primero en `4d20fca`:**
+  - D279, D281 y D283: 43 unitarias, más 3 archivos que no cargan;
+  - la 9: 60 unitarias.
+- **e2e a 375 en `e2e/d279-d281-d283.spec.ts`:** el botón con y sin `puedo_cerrar`, el 403 al cerrar y el del PATCH, la
+  hora al crear y al configurar, la línea, el agrupado, la negrita en las tres pantallas y la 9 del escaneo a Balance.
+- **Mutantes:** unitarios, 54. Mueren todos, salvo U53 (la fachada del mock pidiendo la 8 al cargar), que mata el e2e
+  E16. Cuatro sobrevivían en la primera pasada (U35, U45, U50 y U54): se agregaron sus pruebas y mueren. De e2e, 17:
+  mueren 16. E10 (sacar el colapso de espacios de la clave) es equivalente en el navegador, porque el gasto a mano
+  guarda la descripción normalizada; lo mata U21.
+
 ## 0.239.1 — Lo que faltó de la auditoría (la coma decimal, el período viejo, el teclado de Qué comes y el comprobante en inglés), el ticket de un viaje cerrado desde Estadísticas, cerrar y salir en Configuración (D279) y «+ Gasto» (D280) (2026-10-11)
 
 Orden AF-AUDITORIAS-PENDIENTES-Y-TICKET-CERRADO-20261011 (01c4f831…), con las adendas D279 (e3609c1b…) y D280

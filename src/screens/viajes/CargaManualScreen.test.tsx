@@ -16,7 +16,7 @@ const MIEMBROS = [
 const VIAJE = {
   id: 'v-1', nombre: 'Cancún 2026', fecha_desde: null, fecha_hasta: null, estado: 'abierto', creado_en: null,
   mi_miembro_id: 'm-yo', miembros: MIEMBROS, invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0,
-  tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false,
+  tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
 } as const satisfies DetalleViaje;
 
 const texto = (html: string) => html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();

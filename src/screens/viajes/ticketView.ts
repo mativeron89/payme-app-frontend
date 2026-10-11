@@ -1,3 +1,4 @@
+import { sumaDeTipo } from '../../api/contractResponses';
 import { denominatorBps } from '../../api/mesaPresentation';
 import type { OcrResponse } from '../../api/types';
 import type {
@@ -7,6 +8,7 @@ import type {
   MiembroViaje,
   PersonaDelTicket,
   TicketDelViaje,
+  TicketEnViaje,
   TipoLugar,
 } from '../../api/viajes';
 import type { Idioma } from '../../i18n/idioma';
@@ -25,10 +27,63 @@ import { fechaCortaViaje, listaDeNombres, nombreCompleto, nombreDePila, type T }
  * escaneado (lo que todavía no está en el dueño).
  */
 
+// ─── D278-2 · D284 · el total impreso: servicio, descuentos e IVA aparte ───────
+
+type ConAjustes = Pick<TicketEnViaje, 'monto_cents' | 'servicio_cents' | 'descuentos_cents' | 'iva_aparte_cents'>;
+
+/** El ticket trae algo aparte de los renglones (servicio, descuentos o IVA aparte). Uno viejo, nunca. */
+export function conAjustes(t: ConAjustes): boolean {
+  return t.servicio_cents > 0 || t.descuentos_cents > 0 || t.iva_aparte_cents > 0;
+}
+
+export type FilaDelTotal = { readonly clave: 'platos' | 'iva' | 'servicio' | 'descuento'; readonly cents: number };
+
+/**
+ * Cómo se llega al total impreso, en el orden de la cuenta (como «Ver el ticket» de las mesas): los platos, el IVA
+ * aparte, el cargo por servicio y el descuento, sólo los mayores que 0. Sin ajustes, nada: el ticket se ve como antes.
+ */
+export function filasDelTotal(t: ConAjustes): FilaDelTotal[] {
+  if (!conAjustes(t)) return [];
+  const filas: FilaDelTotal[] = [{ clave: 'platos', cents: t.monto_cents }];
+  if (t.iva_aparte_cents > 0) filas.push({ clave: 'iva', cents: t.iva_aparte_cents });
+  if (t.servicio_cents > 0) filas.push({ clave: 'servicio', cents: t.servicio_cents });
+  if (t.descuentos_cents > 0) filas.push({ clave: 'descuento', cents: t.descuentos_cents });
+  return filas;
+}
+
+export interface TotalDelEscaneo extends ConAjustes {
+  /** Lo que se paga y lo que tienen que sumar los pagadores con `viaje_version=9`. */
+  readonly total_cents: number;
+}
+
+/**
+ * D278-2 · D284 · el total impreso de un ticket recién escaneado, con la regla de `ajustesDeRecibo` del dueño, sobre lo
+ * que publica la lectura (el recibo firmado es opaco para el cliente). Con `adjustments_version=2` y
+ * `totals_version=1` la lectura publica los mismos totales y ajustes que firma el recibo:
+ * - el servicio y los descuentos, la suma de cada tipo;
+ * - el IVA es aparte sólo si los renglones suman el subtotal (o el subtotal más los descuentos, si el subtotal ya viene
+ *   descontado); ambiguo (IVA incluido con un descuento igual al IVA), no se agrega.
+ * Sin nada de eso, el total es la suma de los renglones, como antes.
+ */
+export function totalDelEscaneo(ocr: Pick<OcrResponse, 'items' | 'ticket_totals' | 'ticket_adjustments'>): TotalDelEscaneo {
+  const renglones = sumaDeRenglones(ocr.items);
+  const servicio = sumaDeTipo(ocr.ticket_adjustments, 'service_charge');
+  const descuentos = sumaDeTipo(ocr.ticket_adjustments, 'discount');
+  const t = ocr.ticket_totals;
+  const iva = t?.tax_cents ?? 0;
+  const aparte = !!t && iva > 0 && (t.subtotal_cents === renglones
+    || (t.subtotal_cents === renglones - descuentos && descuentos !== iva));
+  const ivaAparte = aparte ? iva : 0;
+  return {
+    monto_cents: renglones, servicio_cents: servicio, descuentos_cents: descuentos, iva_aparte_cents: ivaAparte,
+    total_cents: renglones + servicio + ivaAparte - descuentos,
+  };
+}
+
 // ─── El ticket recién escaneado (1h) ──────────────────────────────────────
 
-/** El total impreso del escaneo: Σ precio × cantidad, en centavos enteros. */
-export function totalDelEscaneo(items: OcrResponse['items']): number {
+/** La suma de los renglones del escaneo: Σ precio × cantidad, en centavos enteros. */
+export function sumaDeRenglones(items: OcrResponse['items']): number {
   return items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
 }
 
@@ -319,7 +374,11 @@ export function montoDelPlato(item: ItemDelTicket, bps: number): number {
  */
 export function teTocaConSeleccion(ticket: TicketDelViaje, seleccion: ReadonlyMap<string, number>): number {
   if (seleccionSinCambios(ticket.items, seleccion)) return ticket.te_toca_cents;
-  return ticket.items.reduce((s, i) => s + montoDelPlato(i, seleccion.get(i.id) ?? 0), 0);
+  const platos = ticket.items.reduce((s, i) => s + montoDelPlato(i, seleccion.get(i.id) ?? 0), 0);
+  // D278-2 · con ajustes, lo tuyo del total impreso en proporción a tus platos. El dueño reparte por mayor resto entre
+  // todos (y lo no elegido): esta vista previa puede diferir en un centavo; al guardar, manda la del dueño.
+  if (!conAjustes(ticket) || ticket.monto_cents <= 0) return platos;
+  return Math.round((platos * ticket.total_cents) / ticket.monto_cents);
 }
 
 /** El cuerpo de «Listo»: lo elegido, en el orden del ticket. */

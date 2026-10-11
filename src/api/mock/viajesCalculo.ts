@@ -11,6 +11,12 @@ import { fractionAmount, splitEqual } from '../../utils/money';
  * producto lo importa (`viajesCalculo.test.ts` lo vigila).
  *
  * Todo en centavos enteros.
+ *
+ * v2.181.0 · D278-2 y D284 · el TOTAL IMPRESO del ticket (`totalDelTicket`) = renglones (`monto_cents`) + servicio + IVA
+ * aparte − descuentos. Es lo que pagó quien pagó y lo que se reparte: en «por lo que pidió cada uno», en proporción a lo
+ * consumido de los renglones (`repartirPorMayorResto`; abierto, lo no elegido es un bloque más y su parte queda sin
+ * repartir); en «iguales», por partes iguales; en «total», a quien pagó; el personal, entero a su dueño. `platos` es la
+ * parte de los renglones. Sin ajustes, todo sale igual que antes. Port de `viajesCalculo.js` 2.181.0 (`b3699c9`).
  */
 
 export const MAX_MIEMBROS = 20;
@@ -36,8 +42,12 @@ export interface TicketParaCalculo {
   /** D276 · quien lo cargó, si no es quien lo pagó (como `cargado_por` del dueño). */
   readonly cargado_por?: string;
   readonly monto_cents: number;
-  /** D263 · lo que pagó cada uno, en el orden en que se cargaron. Sin la lista, `pagado_por` pagó todo. */
+  /** D263 · lo que pagó cada uno, en el orden en que se cargaron. Sin la lista, `pagado_por` pagó todo (el total). */
   readonly pagadores?: ReadonlyArray<{ readonly user_id: string; readonly monto_cents: number }>;
+  /** D278-2 · D284 · los ajustes del recibo; sin ellos (lo viejo, un cliente ≤ 8, un gasto a mano), 0. */
+  readonly servicio_cents?: number;
+  readonly descuentos_cents?: number;
+  readonly iva_aparte_cents?: number;
   readonly items: ReadonlyArray<{ readonly id: string; readonly line_cents: number }>;
   /** En el orden de los miembros. */
   readonly personas: ReadonlyArray<{ readonly user_id: string; readonly presente: boolean; readonly listo: boolean; readonly vivo: boolean }>;
@@ -45,11 +55,60 @@ export interface TicketParaCalculo {
   readonly selecciones: ReadonlyArray<{ readonly item_id: string; readonly user_id: string; readonly fraction_bps: number }>;
 }
 
-/** D263 · los pagadores de un ticket con lo que pagó cada uno (como `pagadoresDe` del dueño). */
-export function pagadoresDe(t: Pick<TicketParaCalculo, 'pagado_por' | 'monto_cents' | 'pagadores'>):
+type ConAjustes = Pick<TicketParaCalculo, 'monto_cents' | 'servicio_cents' | 'descuentos_cents' | 'iva_aparte_cents'>;
+
+/** v2.181.0 · `totalDelTicket` del dueño: los renglones más el servicio y el IVA aparte, menos los descuentos. */
+export function totalDelTicket(t: ConAjustes): number {
+  const total = t.monto_cents + (t.servicio_cents ?? 0) + (t.iva_aparte_cents ?? 0) - (t.descuentos_cents ?? 0);
+  if (!Number.isSafeInteger(total) || total <= 0) throw new Error('viaje_ticket_monto_invalido');
+  return total;
+}
+
+/**
+ * v2.181.0 · `repartirPorMayorResto` del dueño: `total` en proporción a `pesos` (enteros ≥ 0, alguno > 0); a cada uno el
+ * piso de su parte y los centavos que faltan a los restos más grandes (en empate, al primero). Con BigInt.
+ */
+export function repartirPorMayorResto(total: number, pesos: readonly number[]): number[] {
+  const W = pesos.reduce((s, p) => s + BigInt(p), 0n);
+  if (W <= 0n) throw new Error('viaje_reparto_sin_pesos');
+  const T = BigInt(total);
+  const partes = pesos.map((p) => (T * BigInt(p)) / W);
+  const restos = pesos.map((p, i) => ({ i, r: (T * BigInt(p)) % W }))
+    .sort((x, y) => (y.r > x.r ? 1 : y.r < x.r ? -1 : x.i - y.i));
+  let faltan = T - partes.reduce((s, x) => s + x, 0n);
+  for (let k = 0; faltan > 0n; k += 1, faltan -= 1n) partes[restos[k]!.i]! += 1n;
+  return partes.map(Number);
+}
+
+/**
+ * v2.181.0 · `ajustesDeRecibo` del dueño, sobre el recibo del mock (`items` como `[huella, precio, cantidad]`, `t` =
+ * `[subtotal, IVA | null]` o null, `d` los descuentos y `s` los cargos por servicio). El IVA es aparte sólo si los
+ * renglones suman el subtotal (o el subtotal más los descuentos, si el subtotal ya viene descontado); ambiguo (IVA
+ * incluido con un descuento igual al IVA), no se agrega.
+ */
+export function ajustesDeRecibo(recibo: {
+  readonly items: ReadonlyArray<readonly [unknown, number, number]>;
+  readonly totales: { readonly subtotal_cents: number; readonly tax_cents?: number } | null;
+  readonly descuentos: readonly number[] | null;
+  readonly servicios?: readonly number[] | null;
+}): { servicio_cents: number; descuentos_cents: number; iva_aparte_cents: number } {
+  const suma = (xs: readonly number[] | null | undefined) => (xs ?? []).reduce((s, c) => s + c, 0);
+  const servicio = suma(recibo.servicios);
+  const descuentos = suma(recibo.descuentos);
+  const renglones = recibo.items.reduce((s, [, precio, cantidad]) => s + precio * cantidad, 0);
+  const t = recibo.totales;
+  const iva = t?.tax_cents ?? 0;
+  const aparte = !!t && iva > 0 && (t.subtotal_cents === renglones
+    || (t.subtotal_cents === renglones - descuentos && descuentos !== iva));
+  return { servicio_cents: servicio, descuentos_cents: descuentos, iva_aparte_cents: aparte ? iva : 0 };
+}
+
+/** D263 · los pagadores de un ticket con lo que pagó cada uno (como `pagadoresDe` del dueño; v2.181.0: suman el total). */
+export function pagadoresDe(t: Pick<TicketParaCalculo, 'pagado_por' | 'pagadores'> & ConAjustes):
   ReadonlyArray<{ readonly user_id: string; readonly monto_cents: number }> {
-  const lista = t.pagadores && t.pagadores.length ? t.pagadores : [{ user_id: t.pagado_por, monto_cents: t.monto_cents }];
-  if (lista.reduce((s, p) => s + p.monto_cents, 0) !== t.monto_cents) throw new Error('viaje_ticket_pagadores_no_cuadran');
+  const total = totalDelTicket(t);
+  const lista = t.pagadores && t.pagadores.length ? t.pagadores : [{ user_id: t.pagado_por, monto_cents: total }];
+  if (lista.reduce((s, p) => s + p.monto_cents, 0) !== total) throw new Error('viaje_ticket_pagadores_no_cuadran');
   return lista;
 }
 
@@ -69,7 +128,10 @@ export function repartirProporcional(total: number, pesos: readonly number[]): n
 }
 
 export interface ConsumoDelTicket {
+  /** v2.181.0 · lo de cada uno del TOTAL impreso (sin ajustes, los renglones). */
   readonly consumo: Map<string, number>;
+  /** v2.181.0 · lo de cada uno de los renglones, sin su parte del ajuste. */
+  readonly platos: Map<string, number>;
   readonly asignado: Map<string, number>;
   readonly sinRepartir: number;
   readonly faltan: string[];
@@ -95,21 +157,28 @@ export function consumoDelTicket(t: TicketParaCalculo, { cierre = false } = {}):
   const consumo = new Map<string, number>();
   const asignado = new Map<string, number>();
   if (!Number.isSafeInteger(t.monto_cents) || t.monto_cents <= 0) throw new Error('viaje_ticket_monto_invalido');
+  // v2.181.0 · D278-2: lo que se reparte es el total impreso; `platos`, la parte de los renglones.
+  const total = totalDelTicket(t);
+  const platos = new Map<string, number>();
   // D276: el personal es todo de su dueño, en cualquier forma y sin elegir.
   if (esPersonal(t)) {
-    sumar(consumo, t.cargado_por ?? t.pagado_por, t.monto_cents);
-    return { consumo, asignado, sinRepartir: 0, faltan: [], personal: true };
+    sumar(consumo, t.cargado_por ?? t.pagado_por, total);
+    sumar(platos, t.cargado_por ?? t.pagado_por, t.monto_cents);
+    return { consumo, platos, asignado, sinRepartir: 0, faltan: [], personal: true };
   }
   if (t.forma === 'total') {
-    // D263: con varios pagadores, cada uno consumió lo que pagó.
-    for (const p of pagadoresDe(t)) sumar(consumo, p.user_id, p.monto_cents);
-    return { consumo, asignado, sinRepartir: 0, faltan: [] };
+    // D263: con varios pagadores, cada uno consumió lo que pagó (los renglones, en la misma proporción).
+    const pagos = pagadoresDe(t);
+    for (const p of pagos) sumar(consumo, p.user_id, p.monto_cents);
+    repartirPorMayorResto(t.monto_cents, pagos.map((p) => p.monto_cents)).forEach((c, i) => sumar(platos, pagos[i]!.user_id, c));
+    return { consumo, platos, asignado, sinRepartir: 0, faltan: [] };
   }
   if (t.forma === 'iguales') {
     const presentes = t.personas.filter((p) => p.presente);
     if (!presentes.length) throw new Error('viaje_ticket_sin_presentes');
-    splitEqual(t.monto_cents, presentes.length).forEach((c, i) => sumar(consumo, presentes[i]!.user_id, c));
-    return { consumo, asignado, sinRepartir: 0, faltan: [] };
+    splitEqual(total, presentes.length).forEach((c, i) => sumar(consumo, presentes[i]!.user_id, c));
+    splitEqual(t.monto_cents, presentes.length).forEach((c, i) => sumar(platos, presentes[i]!.user_id, c));
+    return { consumo, platos, asignado, sinRepartir: 0, faltan: [] };
   }
   const lineas = new Map(t.items.map((i) => [i.id, i.line_cents]));
   const acumulado = new Map<string, { bps: number; monto: number }>();
@@ -138,7 +207,17 @@ export function consumoDelTicket(t: TicketParaCalculo, { cierre = false } = {}):
     });
     sinRepartir = 0;
   }
-  return { consumo, asignado, sinRepartir, faltan };
+  // Hasta acá, `consumo` son los renglones. Sin ajustes, es también lo que se reparte, como siempre.
+  if (total === t.monto_cents) return { consumo, platos: consumo, asignado, sinRepartir, faltan };
+  // v2.181.0 · D278-2: el total impreso, en proporción a lo de los renglones, por mayor resto en el orden de los miembros;
+  // abierto, lo no elegido es un bloque más (al final) y su parte queda sin repartir.
+  const orden = [...t.personas.map((p) => p.user_id).filter((u) => consumo.has(u)),
+    ...[...consumo.keys()].filter((u) => !t.personas.some((p) => p.user_id === u))];
+  const pesos = [...orden.map((u) => consumo.get(u)!), ...(sinRepartir > 0 ? [sinRepartir] : [])];
+  const partes = repartirPorMayorResto(total, pesos);
+  const conAjuste = new Map<string, number>();
+  orden.forEach((u, i) => sumar(conAjuste, u, partes[i]!));
+  return { consumo: conAjuste, platos: consumo, asignado, sinRepartir: sinRepartir > 0 ? partes[orden.length]! : 0, faltan };
 }
 
 export interface BalanceDelViaje {
@@ -160,9 +239,11 @@ export function balanceDelViaje(miembros: readonly string[], tickets: readonly T
     porTicket.set(t.id, r);
     // D276: el personal no suma al gasto del grupo ni mueve balances.
     if (r.personal) continue;
-    gasto += t.monto_cents;
+    // v2.181.0 · D278-2: el gasto y lo pagado son el total impreso.
+    const total = totalDelTicket(t);
+    gasto += total;
     // A quien pagó se le acredita lo asignado: en vivo, lo no elegido no es de nadie.
-    const acreditado = t.monto_cents - r.sinRepartir;
+    const acreditado = total - r.sinRepartir;
     // D263: con varios, en proporción a lo que pagó cada uno.
     const pagadores = pagadoresDe(t);
     const partes = repartirProporcional(acreditado, pagadores.map((p) => p.monto_cents));

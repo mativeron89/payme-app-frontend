@@ -10,6 +10,9 @@ import {
   contenidoDelPedido,
   fechasInvertidas,
   filaDe,
+  HORA_DE_CIERRE_POR_DEFECTO,
+  horaDeCierreValida,
+  lineaDeCierre,
   llaveParaElPedido,
   MAX_AGREGADOS,
   mensajeAlCrear,
@@ -164,5 +167,38 @@ describe('AF-VIAJES · la fila de una persona', () => {
     expect(filaDe(candidatoDeAmigo(sofia), false).arroba).toBeNull();
     expect(filaDe(candidatoDeAmigo(leo), true).arroba).toBeNull();
     expect(filaDe(candidatoDeArroba(arroba('mariana', 'Mariana', 'Díaz')), false).arroba, 'lo que mostró la búsqueda ya es un @').toBe('@mariana');
+  });
+});
+
+describe('🔴 D279 · la hora de cierre al crear', () => {
+  const leo = { id: 'u-leo', first_name: 'Leo', last_name: 'Paz', username: null } as unknown as Friend;
+  const ok = { nombre: 'Cancún', agregados: [candidatoDeAmigo(leo)], desde: '', hasta: '', enviando: false };
+
+  it('23:59 por defecto, y vale «HH:MM» de 00:00 a 23:59', () => {
+    expect(HORA_DE_CIERRE_POR_DEFECTO).toBe('23:59');
+    for (const h of ['00:00', '07:05', '23:59']) expect(horaDeCierreValida(h), h).toBe(true);
+    for (const h of ['', '24:00', '7:05', '23:60', '23:59:00']) expect(horaDeCierreValida(h), h).toBe(false);
+  });
+
+  it('la hora va en el pedido sólo con «Al»: sin fecha hasta el viaje no se cierra solo', () => {
+    expect(contenidoDelPedido('X', '', '2026-10-23', [], '18:30')).toMatchObject({ fecha_hasta: '2026-10-23', hora_cierre: '18:30' });
+    expect(contenidoDelPedido('X', '', '2026-10-23', [])).toMatchObject({ hora_cierre: '23:59' });
+    expect(contenidoDelPedido('X', '2026-10-20', '', [], '18:30')).not.toHaveProperty('hora_cierre');
+  });
+
+  it('con «Al», una hora vaciada o mal escrita no deja crear; sin «Al», la hora no cuenta', () => {
+    expect(puedeCrear({ ...ok, hasta: '2026-10-23', hora: '18:30' })).toBe(true);
+    expect(puedeCrear({ ...ok, hasta: '2026-10-23', hora: '' })).toBe(false);
+    expect(puedeCrear({ ...ok, hasta: '2026-10-23', hora: '25:00' })).toBe(false);
+    expect(puedeCrear({ ...ok, hasta: '', hora: '' })).toBe(true);
+  });
+
+  it('la línea de cuándo se cierra solo, en la hora del teléfono; sin `se_cierra_en`, nada', () => {
+    // Construido en la hora local de quien corre la prueba, como la del teléfono.
+    const en = new Date(2026, 9, 15, 23, 59).toISOString();
+    expect(lineaDeCierre(en, 'es', t)).toBe('Cierra solo el 15 oct a las 23:59');
+    expect(lineaDeCierre(new Date(2026, 11, 2, 7, 5).toISOString(), 'es', t)).toBe('Cierra solo el 2 dic a las 07:05');
+    expect(lineaDeCierre(null, 'es', t)).toBeNull();
+    expect(lineaDeCierre('mañana', 'es', t)).toBeNull();
   });
 });

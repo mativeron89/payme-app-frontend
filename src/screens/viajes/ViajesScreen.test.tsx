@@ -25,7 +25,7 @@ function viaje(extra: Partial<ViajeEnLista>): ViajeEnLista {
   return {
     id: 'v', nombre: 'Viaje', fecha_desde: null, fecha_hasta: null, estado: 'abierto', personas: 2,
     mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
-    color: null, has_photo: false, ...extra,
+    color: null, has_photo: false, hora_cierre: '23:59', ...extra,
   };
 }
 

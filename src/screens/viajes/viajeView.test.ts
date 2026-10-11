@@ -41,10 +41,12 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
     id: 'tk-1', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: IDS.luis, pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 1, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
-    puede_eliminar: false, presentes: [], personal: false, ...extra,
+    puede_eliminar: false, presentes: [], personal: false, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, ...extra,
   } as const;
+  // D278-2 · el total impreso, con la identidad del contrato.
+  const total = extra.total_cents ?? t.monto_cents + t.servicio_cents + t.iva_aparte_cents - t.descuentos_cents;
   // D263 · con un solo pagador, uno con el total.
-  return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
+  return { ...t, total_cents: total, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: total }] };
 }
 
 function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
@@ -53,7 +55,7 @@ function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
     creado_en: '2026-10-01T15:00:00.000Z', mi_miembro_id: IDS.yo, miembros: MIEMBROS, invitados: [],
     mi_balance_cents: -54200, gasto_del_grupo_cents: 666000,
     tickets: [ticket({}), ticket({ id: 'tk-2', lugar: null, tipo_lugar: 'bar', pagado_por: IDS.yo, pagaste_tu: true, fecha_ticket: '2026-10-06', forma: 'iguales', falta_que_elija: 0 })],
-    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, ...extra,
+    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null, ...extra,
   };
 }
 

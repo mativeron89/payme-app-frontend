@@ -30,7 +30,7 @@ function enLista(extra: Partial<ViajeEnLista>): ViajeEnLista {
   return {
     id: 'v-1', nombre: 'Cancún 2026', fecha_desde: '2026-10-05', fecha_hasta: '2026-10-11', estado: 'abierto', personas: 4,
     mi_balance_cents: -54200, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null,
-    color: null, has_photo: false, ...extra,
+    color: null, has_photo: false, hora_cierre: '23:59', ...extra,
   };
 }
 
@@ -161,7 +161,8 @@ function ticket(extra: Partial<TicketEnViaje>): TicketEnViaje {
     id: 'tk-1', lugar: 'La Parolaccia', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', pagado_por: 'm-luis', pagaste_tu: false,
     te_toca_cents: 53000, falta_que_elija: 2, sin_repartir_cents: 56500, monto_cents: 159000, origen: 'escaneo',
-    puede_eliminar: false, pagadores: [{ miembro_id: 'm-luis', monto_cents: 159000 }], presentes: [], personal: false, ...extra,
+    puede_eliminar: false, pagadores: [{ miembro_id: 'm-luis', monto_cents: 159000 }], presentes: [], personal: false,
+    servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 159000, ...extra,
   };
 }
 
@@ -169,7 +170,7 @@ function detalle(tickets: TicketEnViaje[], extra: Partial<DetalleViaje> = {}): D
   return {
     id: 'v-1', nombre: 'Cancún 2026', fecha_desde: null, fecha_hasta: null, estado: 'abierto', creado_en: null,
     mi_miembro_id: 'm-ana', miembros: [], invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets,
-    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, ...extra,
+    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null, ...extra,
   };
 }
 
@@ -354,20 +355,15 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
   });
 });
 
-describe('🔴 D265 · las pestañas de Inicio en negrita', () => {
+describe('🔴 D265 → D283 · las pestañas del encabezado en negrita, en toda la clase', () => {
   const tabs = [{ id: 'cuenta', label: 'Cuenta' }, { id: 'estadisticas', label: 'Estadísticas' }, { id: 'viajes', label: 'Viajes' }];
 
-  it('`negrita` suma la clase; sin ella, como siempre', () => {
-    expect(renderToStaticMarkup(<BubbleTabs tabs={tabs} active="cuenta" onSelect={nada} negrita />))
-      .toMatch(/^<div class="btabs btabs--negrita" role="tablist">/);
+  it('D283 supersede «sólo Inicio» (D265): `BubbleTabs` ya no tiene la prop ni la clase `btabs--negrita`; el peso es de `.btab`', () => {
     expect(renderToStaticMarkup(<BubbleTabs tabs={tabs} active="cuenta" onSelect={nada} />)).toMatch(/^<div class="btabs" role="tablist">/);
-  });
-
-  it('sólo Inicio la pide: Amigos y Balance no', () => {
     const fuente = (ruta: string) => readFileSync(new URL(ruta, import.meta.url), 'utf8');
-    expect(fuente('../HomeScreen.tsx')).toMatch(/onSelect=\{\(id\) => setTab\(id as TabId\)\}\s*\/\/[^\n]*\n\s*negrita\s*\/>/);
-    expect(fuente('../SocialScreen.tsx')).not.toContain('negrita');
-    expect(fuente('./BalanceScreen.tsx')).not.toMatch(/<BubbleTabs[^>]*negrita/);
+    for (const ruta of ['../HomeScreen.tsx', '../SocialScreen.tsx', './BalanceScreen.tsx', '../../components/AppHeader.tsx']) {
+      expect(fuente(ruta), ruta).not.toMatch(/negrita\s*[=/}]|btabs--negrita/);
+    }
   });
 });
 

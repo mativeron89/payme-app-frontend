@@ -163,6 +163,8 @@ export interface ViajeEnLista {
   readonly color: ColorViaje | null;
   /** D255 · `viaje_version=3`: la foto sale por `GET /api/viajes/:id/foto`. */
   readonly has_photo: boolean;
+  /** D279 · `viaje_version=8` (App Backend 2.180.0): la hora de cierre, «HH:MM» (23:59 si no se eligió). */
+  readonly hora_cierre: string;
 }
 
 export interface ListaDeViajes {
@@ -224,6 +226,15 @@ export interface TicketEnViaje {
   readonly presentes: readonly string[];
   /** D276 · un gasto personal: sólo yo estuve y lo pagué yo. Sólo puede ser mío (el de otro no aparece). */
   readonly personal: boolean;
+  /**
+   * D278-2 · D284 · `viaje_version=9` (App Backend 2.181.0): lo que el recibo trae aparte de los renglones. Un ticket viejo,
+   * uno de un cliente anterior o un gasto a mano, en 0.
+   */
+  readonly servicio_cents: number;
+  readonly descuentos_cents: number;
+  readonly iva_aparte_cents: number;
+  /** El total impreso: `monto_cents` (los renglones) + servicio + IVA aparte − descuentos. Lo que se paga y se reparte. */
+  readonly total_cents: number;
 }
 
 /**
@@ -274,6 +285,15 @@ export interface DetalleViaje {
   /** D255 · `viaje_version=3`. */
   readonly color: ColorViaje | null;
   readonly has_photo: boolean;
+  /** D279 · `viaje_version=8` (App Backend 2.180.0): la hora de cierre, «HH:MM» (23:59 si no se eligió). */
+  readonly hora_cierre: string;
+  /** D279 · `viaje_version=8`: soy quien creó el viaje y está abierto. Es también quien elige la hora de cierre. */
+  readonly puedo_cerrar: boolean;
+  /**
+   * D279 · `viaje_version=8`: el instante en que se cierra solo, o `null` si no se cierra solo (sin fecha hasta,
+   * creado después, vencido antes de la publicación o ya no abierto).
+   */
+  readonly se_cierra_en: string | null;
 }
 
 export interface ItemDelTicket {
@@ -315,6 +335,13 @@ export interface TicketDelViaje {
   readonly pagadores: readonly PagadorDelTicket[];
   /** D276 · `viaje_version=6`: un gasto personal (todo de su dueño, sin elegir). Los presentes están en `personas`. */
   readonly personal: boolean;
+  /** D278-2 · D284 · `viaje_version=9`: como en el ticket del detalle del viaje. */
+  readonly servicio_cents: number;
+  readonly descuentos_cents: number;
+  readonly iva_aparte_cents: number;
+  readonly total_cents: number;
+  /** D278-2 · `viaje_version=9`: lo tuyo de los renglones, sin tu parte del ajuste. `te_toca_cents` es tu parte del total. */
+  readonly te_toca_platos_cents: number;
 }
 
 /** Quién cargó (y pagó) un ticket que ya estaba en el viaje (diseño 1k). */
@@ -388,6 +415,8 @@ export interface CrearViajePedido {
   readonly fecha_hasta: string | null;
   readonly miembros: readonly MiembroPedido[];
   readonly idempotency_key: string;
+  /** D279 · «HH:MM»; sin él, 23:59. La pantalla lo manda sólo con fecha hasta. */
+  readonly hora_cierre?: string;
 }
 
 export interface ItemPedido {
@@ -445,6 +474,8 @@ export interface EditarViajePedido {
   readonly fecha_desde?: string | null;
   readonly fecha_hasta?: string | null;
   readonly color?: ColorViaje | null;
+  /** D279 · «HH:MM», sólo quien creó el viaje (403 `viaje_not_creator` a los demás). No admite null. */
+  readonly hora_cierre?: string;
 }
 
 /** D255 · `PUT /api/viajes/:id/foto` → `{ foto }`. */
@@ -478,6 +509,15 @@ const texto = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 const textoONull = (v: unknown): v is string | null => v === null || texto(v);
 const fechaONull = (v: unknown): v is string | null => v === null || (typeof v === 'string' && FECHA.test(v));
 const horaONull = (v: unknown): v is string | null => v === null || (typeof v === 'string' && HORA.test(v));
+const esHora = (v: unknown): v is string => typeof v === 'string' && HORA.test(v);
+
+/** D278-2 · D284 · la 9: los ajustes son enteros ≥ 0 y `total_cents` es la identidad del contrato, positiva. */
+function ajustesValidos(t: Record<string, unknown>): boolean {
+  return noNegativo(t.servicio_cents) && noNegativo(t.descuentos_cents) && noNegativo(t.iva_aparte_cents)
+    && noNegativo(t.total_cents) && (t.total_cents as number) > 0
+    && t.total_cents === (t.monto_cents as number) + (t.servicio_cents as number) + (t.iva_aparte_cents as number)
+      - (t.descuentos_cents as number);
+}
 const instanteONull = (v: unknown): v is string | null => v === null || (typeof v === 'string' && !Number.isNaN(Date.parse(v)));
 const enteroONull = (v: unknown): v is number | null => v === null || entero(v);
 const noNegativoONull = (v: unknown): v is number | null => v === null || noNegativo(v);
@@ -536,11 +576,12 @@ function persona(o: Record<string, unknown>, endpoint: string): PersonaViaje {
 function viajeEnLista(raw: unknown): ViajeEnLista {
   const e = 'viajes.lista';
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'personas', 'mi_balance_cents',
-    'transferencias_pendientes', 'consumiste_cents', 'terminado_en', 'color', 'has_photo'], e);
+    'transferencias_pendientes', 'consumiste_cents', 'terminado_en', 'color', 'has_photo', 'hora_cierre'], e);
   exigir(texto(o.id) && texto(o.nombre) && fechaONull(o.fecha_desde) && fechaONull(o.fecha_hasta)
     && esEstado(o.estado) && noNegativo(o.personas) && enteroONull(o.mi_balance_cents)
     && noNegativoONull(o.transferencias_pendientes) && noNegativoONull(o.consumiste_cents)
-    && instanteONull(o.terminado_en) && colorONull(o.color) && typeof o.has_photo === 'boolean', e);
+    && instanteONull(o.terminado_en) && colorONull(o.color) && typeof o.has_photo === 'boolean'
+    && esHora(o.hora_cierre), e);
   // Lo que no aplica a su estado llega en null (nota del contrato).
   const cerrado = o.estado === 'cerrado';
   exigir(cerrado === (o.mi_balance_cents === null) && cerrado === (o.consumiste_cents !== null)
@@ -548,7 +589,10 @@ function viajeEnLista(raw: unknown): ViajeEnLista {
   return o as unknown as ViajeEnLista;
 }
 
-/** `GET /api/viajes?estado=…&viaje_version=3` → `{ contract, viajes, counts }`; cada viaje con `color` y `has_photo` (D255). */
+/**
+ * `GET /api/viajes?estado=…&viaje_version=8` → `{ contract, viajes, counts }`; cada viaje con `color` y `has_photo` (D255)
+ * y `hora_cierre` (D279).
+ */
 export function decodeListaDeViajes(raw: unknown, estado: 'abiertos' | 'cerrados'): ListaDeViajes {
   const e = 'viajes.lista';
   const b = cuerpo(raw, ['viajes', 'counts'], e);
@@ -590,11 +634,15 @@ function transferencia(raw: unknown, e: string): TransferenciaViaje {
 function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'creado_en', 'mi_miembro_id',
     'miembros', 'invitados', 'mi_balance_cents', 'gasto_del_grupo_cents', 'tickets', 'sin_repartir',
-    'transferencias', 'transferencias_pendientes', 'color', 'has_photo'], e);
+    'transferencias', 'transferencias_pendientes', 'color', 'has_photo', 'hora_cierre', 'puedo_cerrar', 'se_cierra_en'], e);
   exigir(texto(o.id) && texto(o.nombre) && fechaONull(o.fecha_desde) && fechaONull(o.fecha_hasta)
     && esEstado(o.estado) && instanteONull(o.creado_en) && texto(o.mi_miembro_id) && entero(o.mi_balance_cents)
     && noNegativo(o.gasto_del_grupo_cents) && noNegativo(o.transferencias_pendientes)
-    && colorONull(o.color) && typeof o.has_photo === 'boolean', e);
+    && colorONull(o.color) && typeof o.has_photo === 'boolean'
+    && esHora(o.hora_cierre) && typeof o.puedo_cerrar === 'boolean' && instanteONull(o.se_cierra_en), e);
+  // D279 · cierra quien lo creó, sólo abierto; y se cierra solo sólo abierto y con fecha hasta (contrato v8).
+  exigir((!o.puedo_cerrar || o.estado === 'abierto')
+    && (o.se_cierra_en === null || (o.estado === 'abierto' && o.fecha_hasta !== null)), e);
   const cerrado = o.estado === 'cerrado';
   const miembros = lista(o.miembros, e, (x): MiembroViaje => {
     const m = objeto(x, ['id', ...CLAVES_PERSONA, 'es_yo', 'balance_cents', 'falta_elegir', 'has_avatar', 'pagado_cents'], e);
@@ -617,14 +665,18 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
       'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
-      'puede_eliminar', 'pagadores', 'presentes', 'personal'], e);
+      'puede_eliminar', 'pagadores', 'presentes', 'personal', 'servicio_cents', 'descuentos_cents', 'iva_aparte_cents',
+      'total_cents'], e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
       && noNegativo(t.sin_repartir_cents) && noNegativo(t.monto_cents)
       && (ORIGENES_TICKET as readonly unknown[]).includes(t.origen) && typeof t.puede_eliminar === 'boolean'
-      && typeof t.personal === 'boolean', e);
-    const pagadores = pagadoresDe(t.pagadores, t.monto_cents as number, t.pagado_por, e);
+      && typeof t.personal === 'boolean' && ajustesValidos(t)
+      // Un gasto a mano no tiene recibo: su monto es su total.
+      && (t.origen !== 'manual' || t.total_cents === t.monto_cents), e);
+    // D278-2 · con la 9, los pagadores suman el total impreso.
+    const pagadores = pagadoresDe(t.pagadores, t.total_cents as number, t.pagado_por, e);
     return { ...(t as unknown as TicketEnViaje), pagadores, presentes: presentesDe(t.presentes, e) };
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
@@ -653,13 +705,17 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
     transferencias_pendientes: o.transferencias_pendientes as number,
     color: o.color as ColorViaje | null,
     has_photo: o.has_photo as boolean,
+    hora_cierre: o.hora_cierre as string,
+    puedo_cerrar: o.puedo_cerrar as boolean,
+    se_cierra_en: o.se_cierra_en as string | null,
   };
 }
 
 /**
  * `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` y `PATCH /api/viajes/:id`
- * → `{ contract, viaje }`. Sólo la forma de `viaje_version=3` (D255, App Backend 2.174.0: la 2 más `color` y
- * `has_photo`): la fachada la pide SIEMPRE en esas rutas, así las claves nuevas nunca llegan sin pedirlas.
+ * → `{ contract, viaje }`. Sólo la forma de `viaje_version=8` (D279, App Backend 2.180.0: la 7 más `hora_cierre`,
+ * `puedo_cerrar` y `se_cierra_en`; la 3 sumó `color` y `has_photo`): la fachada la pide SIEMPRE en esas rutas, así
+ * las claves nuevas nunca llegan sin pedirlas.
  */
 export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle'): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);
@@ -694,6 +750,7 @@ export function decodeRevisionDeTicket(raw: unknown): Duplicado | null {
 
 /**
  * D263 · `pagadores` de la 5: de 1 a 20, claves exactas, los montos suman el total y el primero es `pagado_por`.
+ * D278-2 · con la 9, el total es el impreso (`total_cents`).
  */
 function pagadoresDe(raw: unknown, montoCents: number, pagadoPor: unknown, e: string): readonly PagadorDelTicket[] {
   const xs = lista(raw, e, (x): PagadorDelTicket => {
@@ -719,14 +776,16 @@ function presentesDe(raw: unknown, e: string): readonly string[] {
 function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
   const t = objeto(raw, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
     'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
-    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal'], e);
+    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal', 'servicio_cents', 'descuentos_cents',
+    'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents'], e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
     && textoONull(t.pagado_por) && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents)
     && noNegativo(t.sin_repartir_cents) && typeof t.puedo_elegir === 'boolean'
     && typeof t.puedo_marcar_presentes === 'boolean' && typeof t.personal === 'boolean'
     // Un personal es todo de su dueño: nunca se elige en él.
-    && !(t.personal === true && t.puedo_elegir === true), e);
+    && !(t.personal === true && t.puedo_elegir === true)
+    && ajustesValidos(t) && noNegativo(t.te_toca_platos_cents), e);
   const items = lista(t.items, e, (x): ItemDelTicket => {
     const i = objeto(x, ['id', 'name', 'price_cents', 'quantity', 'line_cents', 'remaining_bps', 'my_bps', 'my_amount_cents'], e);
     exigir(texto(i.id) && texto(i.name) && noNegativo(i.price_cents) && noNegativo(i.quantity) && i.quantity >= 1
@@ -739,7 +798,8 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
     exigir(textoONull(p.miembro_id) && typeof p.ya_eligio === 'boolean' && typeof p.presente === 'boolean', e);
     return p as unknown as PersonaDelTicket;
   }, 40);
-  const pagadores = pagadoresDe(t.pagadores, t.monto_cents as number, t.pagado_por, e);
+  // D278-2 · con la 9, los pagadores suman el total impreso.
+  const pagadores = pagadoresDe(t.pagadores, t.total_cents as number, t.pagado_por, e);
   return { ...(t as unknown as TicketDelViaje), items, personas, pagadores };
 }
 
@@ -781,7 +841,8 @@ export function decodeGastoCargado(
   const b = cuerpo(raw, ['ticket', 'ya_cargado'], e);
   exigir(b.ya_cargado === null, e);
   const t = ticketDetalle(b.ticket, e);
-  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro', e);
+  // Un gasto a mano no tiene recibo: ni servicio, ni descuentos, ni IVA aparte (D278-2).
+  exigir(t.forma === 'iguales' && t.tipo_lugar === 'otro' && t.total_cents === t.monto_cents, e);
   if (pedido.pagadores) {
     const pedidos = pedido.pagadores;
     exigir(t.pagadores.length === pedidos.length && t.pagadores.every((p, i) => p.miembro_id === pedidos[i]!.miembro_id
@@ -867,6 +928,8 @@ export function decodeResumenDeViaje(raw: unknown, viajeId: string): ResumenDeVi
 export type ErrorDeViaje =
   | { readonly tipo: 'no_disponible' }
   | { readonly tipo: 'no_abierto' }
+  /** D279 · 403 `viaje_not_creator`: cerrar, cambiar la hora de cierre o dejarlo vencido, sin haberlo creado. */
+  | { readonly tipo: 'no_creador' }
   | { readonly tipo: 'recibo_usado' }
   | { readonly tipo: 'recibo_invalido' }
   | { readonly tipo: 'miembro_no_encontrado'; readonly username: string | null }
@@ -933,6 +996,7 @@ export function errorDeViaje(err: unknown): ErrorDeViaje {
       || code === 'viaje_transfer_not_found')) return { tipo: 'no_disponible' };
   if (status === 409 && (code === 'viaje_not_open' || code === 'viaje_closed'
       || code === 'viaje_not_waiting_payments' || code === 'viaje_invitation_not_pending')) return { tipo: 'no_abierto' };
+  if (status === 403 && code === 'viaje_not_creator') return { tipo: 'no_creador' };
   if (status === 409 && code === 'viaje_ticket_receipt_used') return { tipo: 'recibo_usado' };
   if (status === 422 && code === 'viaje_ticket_receipt_invalid') return { tipo: 'recibo_invalido' };
   if (status === 422 && code === 'viaje_member_not_found') {

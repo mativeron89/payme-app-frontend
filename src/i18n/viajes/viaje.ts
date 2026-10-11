@@ -125,4 +125,12 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Elegir foto': 'Choose photo',
   'Muchas fotos seguidas. Prueba en unos minutos.': 'Too many photos in a row. Try again in a few minutes.',
   'Esa foto no sirve: usa una JPG, PNG o WEBP de hasta 5 MB.': "That photo won't work: use a JPG, PNG, or WEBP up to 5 MB.",
+  // D279 · cerrar sólo quien lo creó (403 `viaje_not_creator`).
+  'Sólo quien creó el viaje puede cerrarlo.': 'Only the person who created the trip can close it.',
+  'Sólo quien creó el viaje cambia la hora de cierre.': 'Only the person who created the trip can change the closing time.',
+  'Con esa fecha el viaje se cerraría ahora, y eso sólo lo hace quien lo creó.': 'With that date the trip would close now, and only the person who created it can do that.',
+  // D281 · Balance › Consumos, el mismo lugar en una fila.
+  '{0} veces': '{0} times',
+  'Falta que elijan': 'Still to choose',
+  'Las veces en {0}': 'Times at {0}',
 };

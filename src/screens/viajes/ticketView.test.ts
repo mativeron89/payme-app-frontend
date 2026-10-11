@@ -9,7 +9,9 @@ import {
   candidatosDelTicket,
   candidatosDelViaje,
   chipsDeEleccion,
+  conAjustes,
   esGastoPersonal,
+  filasDelTotal,
   fechaDelEscaneo,
   fechaYHoraLocal,
   idsPresentes,
@@ -25,6 +27,7 @@ import {
   teTocaConSeleccion,
   textoDelPago,
   topeDelPlato,
+  sumaDeRenglones,
   totalDelEscaneo,
 } from './ticketView';
 
@@ -52,10 +55,13 @@ function ticket(extra: Partial<TicketDelViaje> = {}): TicketDelViaje {
     id: 'tk', lugar: 'Mariscos El Faro', tipo_lugar: 'restaurante', fecha_ticket: '2026-10-08', hora_ticket: '21:40',
     cargado_en: '2026-10-09T03:40:00.000Z', forma: 'consumo', monto_cents: 220000, pagado_por: 'm-luis', pagaste_tu: false,
     items: [], personas: [persona('m-luis'), persona('m-ana'), persona('m-sofia'), persona('m-diego', false)],
-    te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false, ...extra,
+    te_toca_cents: 53000, sin_repartir_cents: 56500, puedo_elegir: true, puedo_marcar_presentes: false, personal: false,
+    servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, te_toca_platos_cents: 53000, ...extra,
   } as const;
+  // D278-2 · el total impreso, con la identidad del contrato.
+  const total = extra.total_cents ?? t.monto_cents + t.servicio_cents + t.iva_aparte_cents - t.descuentos_cents;
   // D263 · con un solo pagador, uno con el total.
-  return { ...t, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: t.monto_cents }] };
+  return { ...t, total_cents: total, pagadores: extra.pagadores ?? [{ miembro_id: t.pagado_por, monto_cents: total }] };
 }
 
 const ocr = (extra: Partial<OcrResponse> = {}): OcrResponse => ({
@@ -73,9 +79,10 @@ const ocr = (extra: Partial<OcrResponse> = {}): OcrResponse => ({
 });
 
 describe('AF-VIAJES · Ticket nuevo (1h) · lo leído', () => {
-  it('el total es Σ precio × cantidad, en centavos enteros', () => {
-    expect(totalDelEscaneo(ocr().items)).toBe(28500 + 14000 * 4);
-    expect(totalDelEscaneo([])).toBe(0);
+  it('la suma de los renglones es Σ precio × cantidad, en centavos enteros; sin ajustes, es el total', () => {
+    expect(sumaDeRenglones(ocr().items)).toBe(28500 + 14000 * 4);
+    expect(sumaDeRenglones([])).toBe(0);
+    expect(totalDelEscaneo(ocr())).toEqual({ monto_cents: 84500, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 84500 });
   });
 
   it('«9 oct · 14:20»; sin hora sólo la fecha; sin fecha nada', () => {
@@ -264,5 +271,59 @@ describe('D276-2 · la ayuda de «¿Quiénes estuvieron?»', () => {
     expect(ayudaDePresentes('consumo', t)).toBe('Sólo eligen los que estuvieron. Desmarca a quien no estuvo.');
     expect(ayudaDePresentes('iguales', t)).toBe('Se divide entre los marcados. Desmarca a quien no estuvo.');
     expect(ayudaDePresentes('total', t)).toBeNull();
+  });
+});
+
+describe('🔴 D278-2 · D284 · el total impreso (servicio, descuentos e IVA aparte)', () => {
+  // Renglones: 28500 + 14000 × 4 = 84500.
+  const conTotales = (extra: Partial<OcrResponse>) => totalDelEscaneo(ocr(extra));
+
+  it('el escaneo, con la regla de `ajustesDeRecibo` del dueño', () => {
+    // IVA aparte: los renglones suman el subtotal.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 84500, tax_cents: 13520 } }))
+      .toEqual({ monto_cents: 84500, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 13520, total_cents: 98020 });
+    // IVA incluido: los renglones suman el subtotal más el IVA; no se agrega.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 72845, tax_cents: 11655 } }).total_cents).toBe(84500);
+    // Servicio y descuento, con el subtotal ya descontado e IVA aparte.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 79500, tax_cents: 12720 },
+      ticket_adjustments: [{ kind: 'discount', amount_cents: 5000 }, { kind: 'service_charge', amount_cents: 8500 }] }))
+      .toEqual({ monto_cents: 84500, servicio_cents: 8500, descuentos_cents: 5000, iva_aparte_cents: 12720, total_cents: 100720 });
+    // Subtotal sin descontar (igual a los renglones) con un descuento igual al IVA: no es ambiguo, el IVA es aparte.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 84500, tax_cents: 5000 },
+      ticket_adjustments: [{ kind: 'discount', amount_cents: 5000 }] })).toMatchObject({ iva_aparte_cents: 5000, total_cents: 84500 });
+    // Ambiguo: el descuento es igual al IVA; no se agrega el IVA.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 79500, tax_cents: 5000 },
+      ticket_adjustments: [{ kind: 'discount', amount_cents: 5000 }] }).iva_aparte_cents).toBe(0);
+    // Sin IVA impreso: sólo los ajustes.
+    expect(conTotales({ ticket_totals: { subtotal_cents: 84500 }, ticket_adjustments: [{ kind: 'service_charge', amount_cents: 1000 }] }).total_cents)
+      .toBe(85500);
+    // Sin nada: los renglones, como antes.
+    expect(conTotales({}).total_cents).toBe(84500);
+  });
+
+  it('las filas: sólo con algún ajuste, en el orden de la cuenta y sólo lo mayor que 0', () => {
+    const base = { monto_cents: 1000, servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0 };
+    expect(conAjustes(base)).toBe(false);
+    expect(filasDelTotal(base)).toEqual([]);
+    expect(filasDelTotal({ ...base, servicio_cents: 100, descuentos_cents: 50, iva_aparte_cents: 160 })).toEqual([
+      { clave: 'platos', cents: 1000 }, { clave: 'iva', cents: 160 }, { clave: 'servicio', cents: 100 }, { clave: 'descuento', cents: 50 }]);
+    expect(filasDelTotal({ ...base, descuentos_cents: 50 })).toEqual([{ clave: 'platos', cents: 1000 }, { clave: 'descuento', cents: 50 }]);
+    expect(conAjustes({ ...base, iva_aparte_cents: 1 })).toBe(true);
+  });
+
+  it('la vista previa de «Te toca»: sin cambios, la del dueño; con ajustes, tus platos en proporción al total', () => {
+    const t = ticket({ monto_cents: 10000, servicio_cents: 1000, items: [
+      { id: 'i1', name: 'A', price_cents: 6000, quantity: 1, line_cents: 6000, remaining_bps: 10000, my_bps: 0, my_amount_cents: 0 },
+      { id: 'i2', name: 'B', price_cents: 4000, quantity: 1, line_cents: 4000, remaining_bps: 10000, my_bps: 0, my_amount_cents: 0 },
+    ], te_toca_cents: 0 });
+    expect(t.total_cents).toBe(11000);
+    expect(teTocaConSeleccion(t, new Map())).toBe(0);
+    // 6000 de platos sobre 10000 de renglones: 6600 de 11000.
+    expect(teTocaConSeleccion(t, new Map([['i1', 10000]]))).toBe(6600);
+    // Un tercio de A: 2000 de platos, 2200 del total.
+    expect(teTocaConSeleccion(t, new Map([['i1', 3333]]))).toBe(2200);
+    // Sin ajustes, sólo los platos (como antes).
+    const sin = ticket({ monto_cents: 10000, items: t.items, te_toca_cents: 0 });
+    expect(teTocaConSeleccion(sin, new Map([['i1', 10000]]))).toBe(6000);
   });
 });
