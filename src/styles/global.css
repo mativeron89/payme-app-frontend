@@ -6119,7 +6119,10 @@ button.qc-circulo::after {
   font-family: var(--font-display);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  font-weight: 500;
+  /* D299 · Mati: «Poner en negrita ver pagos y configuración». El peso de las pestañas del encabezado (D283, `.btab`),
+     en la clase: así «Ver pagos» y «Ver perfil» (Inicio › Cuenta), «Ver mis estadísticas», «Nuevo amigo» y «Nuevo
+     grupo» (Amigos) quedan iguales a Inicio › Viajes, que ya lo estaba (`.vj-lanzador .launch-label`, D255). */
+  font-weight: 700;
   color: var(--text);
 }
 

@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.245.2 — «Ver pagos» y «Ver perfil» en negrita (D299) (2026-10-12)
+
+Orden AF-VER-PAGOS-Y-VER-PERFIL-EN-NEGRITA-20261012 (23bc92d8…). Autoridad: D299 (97ba05b3…). Mati, con una captura de
+Inicio › Cuenta: «Poner en negrita ver pagos y configuracion». El del engranaje dice «Ver perfil». Lo visible se cierra
+con la prueba de Mati en el iPhone (D63).
+
+1. **Inicio › Cuenta (hecho).** «Ver pagos» y «Ver perfil» van en negrita con el peso de las pestañas del encabezado
+   (D283, `.btab`: 700). Son `Launcher`, así que la negrita va en su clase (`.launch-label`, de 500 a 700).
+2. **La clase completa (hecho).** Enumerada desde el código, con una prueba de unidad que la vigila:
+   - `.launch-label` la pintan `Launcher` y el lanzador de Inicio › Viajes;
+   - `Launcher` lo usan Inicio y Amigos.
+   - Quedan en negrita:
+     - Inicio › Cuenta: «Ver tarjetas» (cuando se muestra), «Ver pagos» y «Ver perfil»;
+     - Inicio › Estadísticas: «Ver mis estadísticas»;
+     - Amigos: «Nuevo amigo» y «Nuevo grupo».
+   - Inicio › Viajes ya estaba en 700 (`.vj-lanzador .launch-label`, D255) y queda igual.
+3. **Lo que no cambia (hecho).** Los íconos (22), el tamaño (14), la familia, el color, el alto de los botones (84) y lo
+   que hace cada uno.
+4. **Las pruebas (hecho).** Ver «Pruebas».
+
+**Pruebas:**
+- **Unidad nueva:** `src/styles/lanzadoresEnNegrita.test.ts` (4):
+  - el peso de la clase igual al de `.btab` y `.btab.on`;
+  - ninguna regla que le baje el peso a un `.launch-label`;
+  - lo demás de la clase, sin cambios;
+  - quién pinta la clase, desde el código.
+- **e2e nueva:** `e2e/lanzadores-en-negrita.spec.ts` (10, a 375 y 390):
+  - el peso computado (700, el de la pestaña activa), el tamaño, el alto y el ícono de cada lanzador;
+  - Inicio › Cuenta con los pagos apagados («Ver pagos» y «Ver perfil», con sus acciones) y con «Ver tarjetas» a la
+    vista;
+  - Estadísticas, Viajes y Amigos (con Grupos).
+- **Rojo primero sobre `3656783`:**
+  - unidad: 2 de 4 (las otras 2 son lo que no cambia y el censo);
+  - e2e: 8 de 10 (las 2 verdes son Viajes, que ya estaba en negrita).
+- **Mutantes:** 5 de 5, cazados por la unidad y por la e2e: vuelve a 500, en 600, una regla que lo baja en Cuenta, otro
+  tamaño, y `Launcher` sin la clase.
+- **Gates** (los del CI, en local), todos en 0:
+  - el espejo con `--integridad` y `--aliases`;
+  - `npm test`: 296 archivos, 4811 pruebas y 1 omitida, con `--corrida`;
+  - typecheck;
+  - build real con el `VITE_API_URL` del CI, más `--artefacto dist`.
+- **e2e completa** (config real, cuatro proyectos): 1373 de 1373 en verde.
+
 ## 0.245.1 — Eliminar un amigo deslizando (D295); la pantalla de carga, 2 s (D292-2); la Configuración del viaje en un engranaje (D297) (2026-10-12)
 
 Orden AF-ELIMINAR-AMIGO-DESLIZANDO-20261012 (8b879373…), con dos adendas en la fila: D292-2 (0b105ad2…, 19:48:08Z) y
