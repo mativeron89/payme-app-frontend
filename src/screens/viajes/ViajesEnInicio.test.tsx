@@ -9,6 +9,7 @@ import { AvisoSinMesas } from '../AvisoSinMesas';
 import {
   etiquetaDeLaBurbuja,
   etiquetaDelPendiente,
+  hayRestaurantesPendientes,
   montoDeLaBurbuja,
   restaurantesPendientes,
   textoDeFaltan,
@@ -304,6 +305,36 @@ describe('🔴 D265 · D271 · el cableado en Inicio', () => {
   });
 });
 
+/**
+ * 🔴 D275 §3 (pantalla 1g) · el aviso «No tienes mesas abiertas» no aparece con un restaurante pendiente de un viaje
+ * abierto. Mati lo vio en su iPhone: Holbox con «LAS HAMACAS · Falta 1 por elegir» y el aviso igual.
+ */
+describe('🔴 D275 §3 · ¿hay restaurantes pendientes en los viajes de Inicio?', () => {
+  const v = (id: string, estado: ViajeEnLista['estado'] = 'abierto') => ({ id, estado });
+  const hamacas = [{ ticket_id: 't1', lugar: 'LAS HAMACAS', tipo_lugar: 'restaurante' as const, faltan: 1 }];
+
+  it('con un restaurante pendiente, sí (aunque otro viaje no se haya podido leer)', () => {
+    expect(hayRestaurantesPendientes([v('holbox')], { holbox: hamacas }, false)).toBe(true);
+    expect(hayRestaurantesPendientes([v('holbox'), v('cancun')], { holbox: hamacas }, false)).toBe(true);
+  });
+
+  it('leídos todos y sin pendientes, no; tampoco sin viajes abiertos (esperando pagos no espera a nadie)', () => {
+    expect(hayRestaurantesPendientes([v('holbox'), v('cancun')], { holbox: [], cancun: [] }, false)).toBe(false);
+    expect(hayRestaurantesPendientes([], null, false)).toBe(false);
+    expect(hayRestaurantesPendientes([v('mty', 'esperando_pagos')], {}, false)).toBe(false);
+    expect(hayRestaurantesPendientes([v('mty', 'esperando_pagos')], null, false)).toBe(false);
+  });
+
+  it('todavía no se sabe (null): la lista sin leer, los pendientes sin leer, un detalle que falló, o la lista con error', () => {
+    expect(hayRestaurantesPendientes(null, null, false)).toBeNull();
+    expect(hayRestaurantesPendientes([v('holbox')], null, false)).toBeNull();
+    expect(hayRestaurantesPendientes([v('holbox'), v('cancun')], { holbox: [] }, false)).toBeNull();
+    expect(hayRestaurantesPendientes([v('holbox')], { holbox: [] }, true)).toBeNull();
+    // Una clave del prototipo de los objetos no es un viaje leído.
+    expect(hayRestaurantesPendientes([v('constructor')], {}, false)).toBeNull();
+  });
+});
+
 describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en el medio del espacio libre', () => {
   const home = readFileSync(new URL('../HomeScreen.tsx', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
@@ -318,7 +349,9 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
   });
 
   it('🔴 sólo con la lista de mesas leída y vacía (ni cargando ni con error), y no en la pestaña Viajes (D246)', () => {
-    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';");
+    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'\n    && sinPendientesDeViajes;");
+    // D275 §3 (1g) · con un restaurante pendiente, o mientras los pendientes no se leyeron, tampoco.
+    expect(home).toContain("const sinPendientesDeViajes = !conViajes\n    || hayRestaurantesPendientes(viajesAbiertos?.viajes ?? null, pendientesDeViajes, viajesFallaron) === false;");
     expect(home).toContain('{avisoSinMesas && <AvisoSinMesas />}');
     // Ya no vive en la sección de la mesa.
     expect(home).not.toContain('mesa-empty');

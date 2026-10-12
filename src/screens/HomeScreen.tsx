@@ -34,7 +34,9 @@ import { useSinLeer } from '../components/useSinLeer';
 import { useViajesHabilitado, type ListaDeViajes } from '../api/viajes';
 import { inicioPideViajes, olvidarInicioEnViajes } from './viajes/inicioEnViajes';
 import { ListaDeCerrados, PanelViajes, useCerradosDeViajes } from './viajes/PestanaViajes';
-import { restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes } from './viajes/ViajesEnInicio';
+import {
+  hayRestaurantesPendientes, restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes,
+} from './viajes/ViajesEnInicio';
 import { AvisoSinMesas } from './AvisoSinMesas';
 
 /**
@@ -312,8 +314,15 @@ export function HomeScreen() {
   /**
    * D275 · «No tienes mesas abiertas», sólo con la lista de mesas ya leída y vacía: ni cargando ni con error. D246 · en
    * la pestaña Viajes no se muestra. D277 · va al final del contenido, centrado en el espacio libre.
+   *
+   * 🔴 D275 §3 (pantalla 1g) · con un restaurante pendiente de un viaje abierto (D271) tampoco: «Con alguna mesa
+   * abierta, el aviso no aparece». Con Viajes encendido se ve sólo si ya se sabe que no hay pendientes. Mientras se leen
+   * o si fallaron no se ve: no se afirma «no tienes» sin haber leído (`hayRestaurantesPendientes`).
    */
-  const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes';
+  const sinPendientesDeViajes = !conViajes
+    || hayRestaurantesPendientes(viajesAbiertos?.viajes ?? null, pendientesDeViajes, viajesFallaron) === false;
+  const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'
+    && sinPendientesDeViajes;
 
   return (
     <div className="screen has-appbar">

@@ -20,29 +20,31 @@ async function entrar(page: Page, { viajes }: { viajes: boolean }): Promise<void
   await ingresar(page);
 }
 
-/** Sin mesas abiertas: el estado del mock, editado y releído (el mock lo lee al cargar). */
-async function sinMesas(page: Page): Promise<void> {
+/**
+ * Sin mesas abiertas: el estado del mock, editado y releído (el mock lo lee al cargar). Con Viajes, además sin
+ * restaurantes pendientes: D275 §3 (1g, 0.242.1) no muestra el aviso con uno pendiente, y la semilla trae Mariscos El
+ * Faro, donde Diego no eligió.
+ */
+async function sinMesas(page: Page, { viajes }: { viajes: boolean }): Promise<void> {
   await page.evaluate(() => {
     const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
     for (const m of st.mesas) m.openedByUser = false;
     st.joinedMesaCodes = [];
     localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
   });
+  if (viajes) {
+    await page.evaluate((k) => {
+      type Ticket = { id: string; personas: Array<{ listo_en: string | null }> };
+      const e = JSON.parse(localStorage.getItem(k)!) as { viajes: Array<{ id: string; tickets: Ticket[] }> };
+      const cancun = e.viajes.find((v) => v.id === 'd1000000-0000-4000-8000-000000000001')!;
+      for (const p of cancun.tickets.find((x) => x.id === 'd2000000-0000-4000-8000-000000000105')!.personas) {
+        p.listo_en = p.listo_en ?? '2026-10-11T01:00:00.000Z';
+      }
+      localStorage.setItem(k, JSON.stringify(e));
+    }, ESTADO_VIAJES);
+  }
   await page.reload();
   await expect(page.locator('.aviso-sin-mesas')).toBeVisible();
-}
-
-/** En «Fonda Doña Mary» faltan dos: un viaje con dos restaurantes pendientes, para llenar la página. */
-async function dosPendientes(page: Page): Promise<void> {
-  await page.evaluate((k) => {
-    type Ticket = { lugar: string; personas: Array<{ listo_en: string | null }> };
-    const e = JSON.parse(localStorage.getItem(k)!) as { viajes: Array<{ id: string; tickets: Ticket[] }> };
-    const cancun = e.viajes.find((v) => v.id === 'd1000000-0000-4000-8000-000000000001')!;
-    for (const p of cancun.tickets.find((x) => x.lugar === 'Fonda Doña Mary')!.personas.slice(1, 3)) p.listo_en = null;
-    localStorage.setItem(k, JSON.stringify(e));
-  }, ESTADO_VIAJES);
-  await page.reload();
-  await expect(page.locator('button.viaje-pendiente')).toHaveCount(2);
 }
 
 /** Lo que hace falta para ver si está centrado: lo último de arriba que ocupa lugar, el texto y el círculo de Nueva. */
@@ -81,7 +83,7 @@ for (const ancho of [375, 390]) {
     ] as const) {
       test(`🔴 ${caso.nombre}: el texto, en el medio del espacio libre hasta el círculo de Nueva`, async ({ page }) => {
         await entrar(page, { viajes: caso.viajes });
-        await sinMesas(page);
+        await sinMesas(page, { viajes: caso.viajes });
         // Lo que la semilla trae y el prototipo no (la invitación y el aviso de la foto), oculto con CSS: con eso a la
         // vista, a 812 de alto ya no queda espacio libre (es el caso de abajo).
         await expect(page.locator('section[aria-label="Te invitaron"]')).toBeVisible();
@@ -105,7 +107,7 @@ for (const ancho of [375, 390]) {
       });
     }
 
-    for (const [viajes, inset] of [[true, 0], [true, 34], [false, 0]] as const) test(`🔴 sin espacio (${viajes ? 'muchos viajes' : 'sin viajes, con la semilla'}, inset de abajo ${inset}): debajo del contenido, con el aire mínimo, y nada queda tapado`, async ({ page, browserName }) => {
+    for (const [viajes, inset] of [[true, 0], [true, 34], [false, 0]] as const) test(`🔴 sin espacio (${viajes ? 'con viajes, sin pendientes' : 'sin viajes, con la semilla'}, inset de abajo ${inset}): debajo del contenido, con el aire mínimo, y nada queda tapado`, async ({ page, browserName }) => {
       // El iPhone con indicador de inicio: la barra crece (`--appbar-pie`) y el aviso sube con ella. El inset se emula
       // por CDP, que es de Chromium (la suite corre en Chromium); sin `test.skip`, que `corteGuard` no permite.
       if (inset > 0 && browserName === 'chromium') {
@@ -115,8 +117,7 @@ for (const ancho of [375, 390]) {
         });
       }
       await entrar(page, { viajes });
-      await sinMesas(page);
-      if (viajes) await dosPendientes(page);
+      await sinMesas(page, { viajes });
       // Con la página llena: la invitación y el aviso de la foto de la semilla se quedan.
       await expect(page.locator('section[aria-label="Te invitaron"]')).toBeVisible();
       await expect(page.locator('.friend-avatar-notice')).toBeVisible();
@@ -138,7 +139,7 @@ for (const ancho of [375, 390]) {
 
     test('nunca fijo (D256): se desplaza con el contenido', async ({ page }) => {
       await entrar(page, { viajes: true });
-      await sinMesas(page);
+      await sinMesas(page, { viajes: true });
       await expect(page.locator('.aviso-sin-mesas')).not.toHaveCSS('position', 'fixed');
       await expect(page.locator('.aviso-sin-mesas')).not.toHaveCSS('position', 'absolute');
     });

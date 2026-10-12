@@ -137,17 +137,37 @@ for (const ancho of [375, 390]) {
       expect(Math.round(ancho - b0.right)).toBe(16);
       expect(b0.height).toBeGreaterThanOrEqual(96);
       expect(p0.height).toBeGreaterThanOrEqual(60);
-      // Sin mesas, con el aviso: la columna de D277 no cambia ninguna de estas medidas (sus márgenes no colapsan).
-      await expect(aviso(page)).toBeVisible();
+      // D275 §3 (1g, 0.242.1) · con el restaurante pendiente, el aviso no aparece.
+      await expect(aviso(page)).toHaveCount(0);
       await capturar(page, 'medidas');
+      // Sin pendientes, con el aviso: la columna de D277 no cambia ninguna de estas medidas (sus márgenes no colapsan).
+      await editarViajes(page, 'eligieron-todos');
+      await page.addStyleTag({ content: 'section[aria-label="Te invitaron"], .friend-avatar-notice { display: none !important; }' });
+      await expect(aviso(page)).toBeVisible();
+      const tarjeta2 = await caja(page, '.mounted-card');
+      const g0b = await caja(page, '.viaje-grupo', 0);
+      const g1b = await caja(page, '.viaje-grupo', 1);
+      const b0b = await caja(page, 'button.viaje-burbuja', 0);
+      const gasto0b = await caja(page, 'button.viaje-gasto', 0);
+      expect(Math.round(g0b.top - tarjeta2.bottom)).toBe(28);
+      expect(Math.round(g1b.top - g0b.bottom)).toBe(20);
+      expect(Math.round(gasto0b.top - b0b.bottom)).toBe(8);
+      expect(Math.round(b0b.right - gasto0b.right)).toBe(0);
+      expect(Math.round(b0b.left)).toBe(16);
+      await capturar(page, 'medidas-con-aviso');
     });
 
-    test('el aviso: sólo sin mesas, con la cámara; nunca en la pestaña Viajes ni con mesas abiertas', async ({ page }) => {
+    test('el aviso: sólo sin mesas, con la cámara; nunca en la pestaña Viajes, con mesas abiertas ni con un restaurante pendiente', async ({ page }) => {
       await conViajes(page);
       // Con la mesa de la semilla abierta, no hay aviso.
       await expect(page.locator('.home-mesas .mesa-card').first()).toBeVisible();
       await expect(aviso(page)).toHaveCount(0);
       await sinMesas(page);
+      // D275 §3 (1g, 0.242.1) · con el restaurante pendiente de la semilla (Mariscos El Faro), tampoco.
+      await expect(pendientes(page)).toHaveCount(1);
+      await expect(aviso(page)).toHaveCount(0);
+      await editarViajes(page, 'eligieron-todos');
+      await expect(pendientes(page)).toHaveCount(0);
       await expect(aviso(page)).toHaveText('No tienes mesas abiertasToca elpara abrir una');
       await expect(aviso(page).getByRole('img', { name: 'ícono de cámara' })).toBeVisible();
       await expect(page.getByText('Toca el + para abrir una')).toHaveCount(0);

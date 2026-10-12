@@ -62,6 +62,33 @@ export function restaurantesPendientes(viaje: DetalleViaje): readonly Restaurant
     .map((tk) => ({ ticket_id: tk.id, lugar: tk.lugar, tipo_lugar: tk.tipo_lugar, faltan: tk.falta_que_elija }));
 }
 
+/**
+ * D275 §3 · ¿hay algún restaurante pendiente (D271) en los viajes abiertos de Inicio? Lo pide el aviso «No tienes mesas
+ * abiertas»: «Con alguna mesa abierta, el aviso no aparece (ver 1g)». En el prototipo de Claude Design,
+ * `noMesas = !trips.some(t => t.pending.length)`. Mati lo vio en su iPhone: Holbox con «LAS HAMACAS · Falta 1 por elegir»
+ * y el aviso igual.
+ *
+ * - `true`: alguno de los que se leyeron tiene un pendiente. Alcanza aunque otro viaje no se haya podido leer.
+ * - `false`: se leyeron todos y ninguno tiene. También sin viajes abiertos.
+ * - `null`: todavía no se sabe. La lista o un detalle no llegó, o falló. Como con las mesas: no se afirma «no tienes» sin
+ *   haber leído.
+ */
+export function hayRestaurantesPendientes(
+  viajes: readonly Pick<ViajeEnLista, 'id' | 'estado'>[] | null,
+  pendientes: PendientesDeViajes | null,
+  fallaron: boolean,
+): boolean | null {
+  if (fallaron || viajes === null) return null;
+  // Sólo los abiertos tienen pendientes (`restaurantesPendientes`): esperando pagos no espera a nadie.
+  const abiertos = viajes.filter((v) => v.estado === 'abierto');
+  // Sólo lo leído de ESE viaje: una clave propia (un id como «constructor» no lee el prototipo de los objetos).
+  const leido = (id: string) => (pendientes !== null && Object.prototype.hasOwnProperty.call(pendientes, id) ? pendientes[id]! : null);
+  if (abiertos.some((v) => (leido(v.id)?.length ?? 0) > 0)) return true;
+  if (abiertos.length === 0) return false;
+  if (abiertos.some((v) => leido(v.id) === null)) return null;
+  return false;
+}
+
 /** «Faltan N por elegir»; con uno, «Falta 1 por elegir». */
 export function textoDeFaltan(n: number, t: T): string {
   return n === 1 ? t('Falta 1 por elegir') : t('Faltan {0} por elegir', n);

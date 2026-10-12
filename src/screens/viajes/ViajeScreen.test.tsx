@@ -507,7 +507,7 @@ describe('🔴 D281 · Balance › Consumos: el mismo lugar en una fila que se a
     expect(filas[1]).toContain('deslizable');
   });
 
-  it('abierta: cada visita con su fecha y su monto, en el orden del dueño, y la que se puede eliminar se desliza', () => {
+  it('abierta: cada visita con su fecha y su monto, de la más reciente a la más vieja (W-01), y la que se puede eliminar se desliza', () => {
     const lugar = agruparConsumos(CON_REPETIDO)[0]!;
     const deslizar = { abierta: null, onAbrir: nada, onCerrar: nada, onEliminar: nada };
     const html = renderToStaticMarkup(
@@ -524,7 +524,8 @@ describe('🔴 D281 · Balance › Consumos: el mismo lugar en una fila que se a
   });
 
   it('el personal lleva su chip en la fila del lugar', () => {
-    const personales = [ticket({ id: 'p1', lugar: 'Oxxo', personal: true, falta_que_elija: 0, monto_cents: 5000 }),
+    // W-01 · con la misma visita, desempata la carga: «Oxxo» se cargó después, así que es el más reciente y nombra la fila.
+    const personales = [ticket({ id: 'p1', lugar: 'Oxxo', personal: true, falta_que_elija: 0, monto_cents: 5000, cargado_en: '2026-10-09T04:00:00.000Z' }),
       ticket({ id: 'p2', lugar: 'OXXO', personal: true, falta_que_elija: 0, monto_cents: 7000 })];
     const filas = consumos(personales).split('<li>').slice(1);
     expect(filas).toHaveLength(1);

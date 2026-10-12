@@ -11,6 +11,51 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.242.1 — Balance por la visita, la cámara al cambiar de cuenta y el aviso con un restaurante pendiente (auditoría de Codex) (2026-10-12)
+
+Orden AF-AUDITORIA-CODEX-W01-W02-20261011 (6f79e969…). Autoridad: la auditoría de Codex, D287 (`INFORME.md` dbb9356c…),
+contra decisiones vigentes: D281, D278-1, D276-1 y D275 §3. Sin cambios de contrato ni de App Backend. Lo visible se
+cierra con la prueba de Mati en el iPhone (D63).
+
+1. **W-01 · Balance ordena por la visita, no por la carga (hecho).**
+   - `consumosPorLugar.ts` ordena por `instanteDeLaVisita` ANTES de agrupar. Cada lugar va donde está su visita más
+     reciente y, adentro, de la más reciente a la más vieja.
+   - El instante es el que el dueño ya usa en Estadísticas: la fecha y la hora impresas en hora de México (UTC−6 fijo);
+     con fecha y sin hora, las 12:00; sin fecha, la carga.
+   - Desempate estable: la carga y después el id, de mayor a menor. Un ticket sin ningún instante va al final.
+   - **Medido:** el detalle con `viaje_version=10` trae `fecha_ticket`, `hora_ticket` y `cargado_en`; no falta ningún
+     campo. Un gasto a mano no tiene fecha en el contrato (`POST …/gastos` no la pide), así que va por su carga.
+2. **W-02 · la precarga de la cámara no queda trabada al cambiar de cuenta (hecho).**
+   - La petición en vuelo guarda el `turno()` de quien la pidió (la cuenta y la generación). Con otra cuenta, B pide la
+     suya aunque la de A siga pendiente.
+   - El final tardío de A sólo limpia la petición si sigue siendo la suya.
+   - Lo de A nunca se guarda bajo B: ya lo frenaba `recordarViajesAbiertos`.
+3. **El aviso «No tienes mesas abiertas» con un restaurante pendiente (hecho, D275 §3, pantalla 1g).** Mati lo vio con
+   LAS HAMACAS en Holbox.
+   - `hayRestaurantesPendientes` da sí, no o todavía no se sabe. Con Viajes encendido, el aviso se ve sólo cuando ya se
+     sabe que no hay ninguno.
+   - Mientras se leen los pendientes, si fallan o si un detalle no llegó, no se ve: no se afirma «no tienes» sin haber
+     leído. Sin Viajes, como antes.
+4. **Las pruebas (hecho).**
+   - Unidad: el instante; dos lugares y uno solo con la fecha impresa y la carga opuestas; con y sin hora; gastos a mano
+     mezclados; el desempate. A→B y A→B→A con respuestas fuera de orden. Los tres valores del aviso.
+   - e2e a 375 (`auditoria-codex-w01-w02.spec.ts`):
+     - Balance con dos lugares y con uno solo más un gasto;
+     - la cámara de B desde Más, sin pasar por Inicio (A→B y A→B→A);
+     - el aviso con un pendiente, sin pendientes, con una mesa, mientras cargan y si fallan.
+
+**Declarado:**
+- **Las pruebas que afirmaban el defecto.** `d275-burbuja-del-viaje` y `d277-aviso-centrado` armaban «sin mesas» con la
+  semilla, que trae a Mariscos El Faro pendiente, y esperaban el aviso. Ahora lo esperan sin pendientes (Diego elige), y
+  `d275` afirma que con el pendiente no está.
+  - Las medidas de D277 y D275 no cambiaron.
+  - «Sin espacio» con viajes ya no se arma con dos pendientes, sino con los viajes sin pendientes: la página sigue
+    desplazándose.
+- **Las fijaciones de unidad.** `PestanaViajes` y `ViajesEnInicio` fijaban el texto exacto de `avisoSinMesas`; ahora
+  fijan el nuevo.
+- **El ayudante de `consumosPorLugar.test.ts`** carga cada ticket un minuto antes que el anterior, como manda la lista el
+  dueño.
+
 ## 0.242.0 — La tarjeta de título blanca con ícono y la pantalla de carga nueva (D285, D286 y D289) (2026-10-11)
 
 Orden AF-TARJETA-DE-TITULO-BLANCA-20261011 (a36dea66…). Autoridad: D285 (ce1eb33b…: Compartir en navy, la campana pasa a
