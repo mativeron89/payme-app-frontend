@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SPLASH_APARICION_MS,
-  SPLASH_MINIMO_VISIBLE_MS,
+  MINIMO_DE_ESTE_BUILD_MS,
+  SPLASH_ENTRADA_ICONO_MS,
+  SPLASH_ENTRADA_ICONO_RETARDO_MS,
+  SPLASH_MINIMO_MS,
+  SPLASH_RENDICION_MS,
   demoraDeRetiro,
 } from './splash';
 
-const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx'], {
+const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx', '/src/styles/global.css'], {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -13,44 +16,101 @@ const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx'], {
 
 const INDEX = CRUDOS['/index.html'];
 const MAIN = CRUDOS['/src/main.tsx'];
+const GLOBAL = CRUDOS['/src/styles/global.css']!;
 
-describe('splash de carga · «B sólo cuando tarda» (Mati, 2026-08-19)', () => {
-  /**
-   * La decisión entera está en esta función: antes del retardo de aparición
-   * el splash no existió para nadie; después, cumple su mínimo visible.
-   */
-  it('carga rápida → null: el splash se retira sin haberse visto', () => {
-    expect(demoraDeRetiro(0)).toBeNull();
-    expect(demoraDeRetiro(120)).toBeNull();
-    expect(demoraDeRetiro(SPLASH_APARICION_MS)).toBeNull();
+/** Las fuentes que podrían nombrar la marca de la e2e: el código, las pruebas, los scripts y la configuración. */
+const FUENTES = import.meta.glob(
+  ['/src/**/*.{ts,tsx}', '/e2e/**/*.{ts,mjs}', '/scripts/**/*.{ts,mjs,sh}', '/*.{ts,json,html}', '/.github/**/*.yml'],
+  { query: '?raw', import: 'default', eager: true },
+) as Record<string, string>;
+
+describe('🔴 D292 · la pantalla de carga siempre, al menos 1 segundo (Mati, 2026-10-12)', () => {
+  /** La decisión entera está en esta función: lo que falta para completar el segundo desde que empezó a cargar. */
+  it('la app monta antes del segundo: espera lo que falta', () => {
+    expect(SPLASH_MINIMO_MS).toBe(1_000);
+    expect(demoraDeRetiro(0)).toBe(1_000);
+    expect(demoraDeRetiro(120)).toBe(880);
+    expect(demoraDeRetiro(999)).toBe(1);
   });
 
-  it('🔴 el anti-flash: si asomó, completa el mínimo visible', () => {
-    // Montó a los 310ms: asomó hace 10, le faltan 490 del mínimo de 500.
-    expect(demoraDeRetiro(310)).toBe(490);
-    // El caso que produciría el parpadeo de 1ms si esto fuera un booleano.
-    expect(demoraDeRetiro(SPLASH_APARICION_MS + 1)).toBe(SPLASH_MINIMO_VISIBLE_MS - 1);
-  });
-
-  it('carga lenta → 0: ya cumplió el mínimo, se funde sin esperar más', () => {
-    expect(demoraDeRetiro(SPLASH_APARICION_MS + SPLASH_MINIMO_VISIBLE_MS)).toBe(0);
+  it('la app tarda más: ya cumplió el segundo, se funde enseguida (nunca una demora negativa)', () => {
+    expect(demoraDeRetiro(SPLASH_MINIMO_MS)).toBe(0);
     expect(demoraDeRetiro(5_000)).toBe(0);
-    // Y nunca negativo: un setTimeout con demora negativa es un bug callado.
     expect(demoraDeRetiro(60_000)).toBe(0);
   });
 
+  it('con otro mínimo (el del servidor de la e2e: 0), se funde enseguida', () => {
+    expect(demoraDeRetiro(0, 0)).toBe(0);
+    expect(demoraDeRetiro(300, 0)).toBe(0);
+  });
+
+  it('🔴 en este build (sin la marca), el mínimo es el segundo', () => {
+    expect(MINIMO_DE_ESTE_BUILD_MS).toBe(1_000);
+  });
+
   /**
-   * 🔴 EL DRIFT ENTRE LAS DOS COPIAS. El retardo de aparición vive dos veces:
-   * en el CSS inline de `index.html` (tiene que pintar antes de que exista
-   * ningún módulo) y en `SPLASH_APARICION_MS` (gobierna el retiro). Si alguien
-   * ajusta el CSS a 150ms sin tocar la constante, `demoraDeRetiro` cree que un
-   * splash visible nunca asomó y lo arranca a mitad del fundido — exactamente
-   * el flash que la orden prohíbe. Este test hace que esa edición sea roja.
+   * 🔴 La marca de la e2e no es un atajo de producción: sólo vale con `DEV` (en un `vite build` es `false` constante), y
+   * sólo la nombran `splash.ts` (que la lee) y `playwright.config.ts` (que la pone en el servidor de desarrollo de la e2e).
+   * Si alguien la nombra en otro lado —Vercel, el CI, un script— esto se pone rojo.
    */
-  it('🔴 el retardo del CSS y el de splash.ts son EL MISMO número', () => {
-    const anim = INDEX.match(/animation:\s*\n?\s*splash-aparecer\s+\d+ms\s+ease\s+(\d+)ms/);
-    expect(anim, 'index.html perdió la animación splash-aparecer con su retardo').not.toBeNull();
-    expect(Number(anim![1])).toBe(SPLASH_APARICION_MS);
+  it('🔴 la marca de la e2e sólo vale en desarrollo, y sólo la nombran splash.ts y playwright.config.ts (y la e2e que afirma que no está en el build)', () => {
+    const quienes = Object.entries(FUENTES)
+      .filter(([ruta, codigo]) => !ruta.endsWith('/splash.test.ts') && codigo.includes('VITE_E2E_CARGA_SIN_MINIMO'))
+      .map(([ruta]) => ruta)
+      .sort();
+    expect(quienes).toEqual(['/e2e/splash.spec.ts', '/playwright.config.ts', '/src/splash.ts']);
+    // La e2e de la pantalla de carga la nombra sólo para afirmar que NO llegó al build.
+    const spec = FUENTES['/e2e/splash.spec.ts']!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
+    expect(spec.split('\n').filter((l) => l.includes('VITE_E2E_CARGA_SIN_MINIMO')).map((l) => l.trim()))
+      .toEqual(["expect(codigo).not.toContain('VITE_E2E_CARGA_SIN_MINIMO');"]);
+    const fuente = FUENTES['/src/splash.ts']!.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(fuente).toContain("import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : SPLASH_MINIMO_MS");
+    expect(fuente.match(/VITE_E2E_CARGA_SIN_MINIMO/g)).toHaveLength(1);
+    // En la configuración, sólo en el servidor de desarrollo (5176): ni en los builds de la CSP ni en otro lado.
+    // Sólo el código de la configuración: los comentarios que la explican no la ponen.
+    const config = FUENTES['/playwright.config.ts']!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
+    const lineas = config.split('\n').filter((l) => l.includes('VITE_E2E_CARGA_SIN_MINIMO'));
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0]).toMatch(/VITE_E2E_CARGA_SIN_MINIMO=1 npx --no-install vite --port 5176 --strictPort --mode mock/);
+    expect(lineas[0]).not.toMatch(/vite build/);
+  });
+
+  /**
+   * 🔴 Se ve desde el primer cuadro: el `#splash` no nace transparente ni espera para aparecer. Antes nacía en opacidad 0
+   * y aparecía con `splash-aparecer … 300ms`: un primer cuadro sin la pantalla.
+   */
+  it('🔴 el #splash se ve desde el primer cuadro: sin opacidad 0 ni animación de entrada', () => {
+    const regla = INDEX.match(/\n\s*#splash\s*{([^}]*)}/)?.[1] ?? '';
+    expect(regla).toContain('background: #101e3b;');
+    expect(regla).not.toMatch(/opacity/);
+    expect(regla.replace(/\s+/g, ' ')).toContain('animation: splash-rendirse 400ms ease 12s forwards;');
+    expect(INDEX).not.toMatch(/splash-aparecer/);
+  });
+
+  /** 🔴 EL DRIFT ENTRE LAS DOS COPIAS: los tiempos del CSS y los de `splash.ts` son EL MISMO número. */
+  it('🔴 la entrada del ícono y la rendición del CSS son las de splash.ts', () => {
+    const icono = INDEX.match(/animation: carga-entra (\d+)ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) (\d+)ms both;/);
+    expect(icono, 'index.html perdió la entrada del ícono').not.toBeNull();
+    expect(Number(icono![1])).toBe(SPLASH_ENTRADA_ICONO_MS);
+    expect(Number(icono![2])).toBe(SPLASH_ENTRADA_ICONO_RETARDO_MS);
+    expect(SPLASH_ENTRADA_ICONO_MS).toBe(240);
+    expect(SPLASH_ENTRADA_ICONO_RETARDO_MS).toBe(0);
+    const rendicion = INDEX.match(/splash-rendirse\s+\d+ms\s+ease\s+(\d+)s\s+forwards/);
+    expect(rendicion).not.toBeNull();
+    expect(Number(rendicion![1]) * 1000).toBe(SPLASH_RENDICION_MS);
+    // El segundo termina mucho antes que la rendición: la pantalla no se rinde mientras cumple su mínimo.
+    expect(SPLASH_MINIMO_MS).toBeLessThan(SPLASH_RENDICION_MS);
+  });
+
+  /**
+   * «Reducir movimiento» se contiene desde `global.css` (enlazada después del `<style>`): sin animación de entrada que
+   * apagar, queda la rendición a los MISMOS 12 s, sin su fundido.
+   */
+  it('🔴 «reducir movimiento» (global.css): sólo la rendición, a los mismos 12 s, sin su fundido', () => {
+    const regla = GLOBAL.match(/@media \(prefers-reduced-motion: reduce\)\s*{\s*#splash\s*{\s*animation:\s*([^;]+);\s*}\s*}/);
+    expect(regla, 'global.css perdió la regla de «reducir movimiento» del splash').not.toBeNull();
+    expect(regla![1]).toBe(`splash-rendirse 1ms linear ${SPLASH_RENDICION_MS / 1000}s forwards`);
+    expect(GLOBAL).not.toMatch(/splash-aparecer/);
   });
 
   it('el splash de index.html existe, es decorativo y navy', () => {
@@ -109,11 +169,11 @@ describe('splash de carga · «B sólo cuando tarda» (Mati, 2026-08-19)', () =>
       expect(splash.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim()).toBe('');
     });
 
-    it('🔴 el ícono entra en 240 ms cuando aparece la pantalla (no antes) y, con «reducir movimiento», sin animación', () => {
+    it('🔴 el ícono entra en 240 ms desde que aparece la pantalla (D292: sin retardo) y, con «reducir movimiento», sin animación', () => {
       const conMovimiento = INDEX.match(/@media \(prefers-reduced-motion: no-preference\)\s*{\s*#splash \.carga__icono\s*{\s*animation: carga-entra (\d+)ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) (\d+)ms both;/);
       expect(conMovimiento, 'falta la entrada del ícono dentro de prefers-reduced-motion: no-preference').not.toBeNull();
-      expect(Number(conMovimiento![1])).toBe(240);
-      expect(Number(conMovimiento![2])).toBe(SPLASH_APARICION_MS);
+      expect(Number(conMovimiento![1])).toBe(SPLASH_ENTRADA_ICONO_MS);
+      expect(Number(conMovimiento![2])).toBe(SPLASH_ENTRADA_ICONO_RETARDO_MS);
       // Fuera del @media, el ícono no tiene animación: con «reducir movimiento» aparece quieto.
       expect(regla('#splash .carga__icono')).not.toContain('animation');
       expect(INDEX).toMatch(/@keyframes carga-entra\s*{\s*from\s*{\s*opacity: 0;\s*transform: translate\(-50%, -50%\) scale\(0\.92\);\s*}\s*}/);

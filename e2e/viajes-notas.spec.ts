@@ -51,11 +51,16 @@ async function alPizarron(page: Page, id: string = CANCUN): Promise<void> {
 }
 
 /**
- * Cambia el estado del dueño en el mock y recarga en Inicio (el mock lo relee al cargar la página). `yo` es mi cuenta del
+ * Cambia el estado del dueño en el mock y vuelve a Inicio (el mock lo relee al cargar la página). `yo` es mi cuenta del
  * mock.
+ *
+ * 🔴 La edición se hace desde una página pública (`/privacy`), que no carga el mock: si se hacía dentro de la app, un
+ * pedido del mock que arrancaba después guardaba su estado en memoria encima y la edición se perdía. Pasó en la e2e
+ * completa de 0.244.1, con carga: «4 personas» en vez de 7, y Oaxaca seguía cerrado.
  */
 async function editarEstado(page: Page, fn: string, arg: unknown = null): Promise<void> {
-  await irEnLaApp(page, '/home');
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
   await page.evaluate(({ k, fn: f, arg: a }) => {
     const e = JSON.parse(localStorage.getItem(k)!);
     const yo = JSON.parse(localStorage.getItem('payme_mock_state_v1')!).user.id;
@@ -63,7 +68,7 @@ async function editarEstado(page: Page, fn: string, arg: unknown = null): Promis
     new Function('e', 'a', 'yo', f)(e, a, yo);
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO, fn, arg });
-  await page.reload();
+  await page.goto('/home');
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
@@ -96,7 +101,10 @@ for (const ancho of [375, 390] as const) {
         return { alto: r.height, radio: cs.borderRadius, color: cs.color, punto: getComputedStyle(p).backgroundColor,
           anchoPunto: p.getBoundingClientRect().width, doc: document.documentElement.scrollWidth };
       });
-      expect(m).toMatchObject({ alto: 56, radio: '16px', color: 'rgb(10, 123, 128)', punto: 'rgb(255, 107, 53)', anchoPunto: 8 });
+      // D293 · el radio de sus vecinas («Ver balance del viaje» y «Configuración»): 22.
+      const vecinas = await page.locator('.vjv-ver-balance').evaluateAll((xs) => xs.map((x) => getComputedStyle(x).borderRadius));
+      expect(vecinas).toEqual(['22px', '22px']);
+      expect(m).toMatchObject({ alto: 56, radio: '22px', color: 'rgb(10, 123, 128)', punto: 'rgb(255, 107, 53)', anchoPunto: 8 });
       expect(m.doc).toBeLessThanOrEqual(ancho);
       await fila(page).click();
       await expect(page).toHaveURL(new RegExp(`/viaje-notas/${CANCUN}$`));

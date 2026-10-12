@@ -45,20 +45,23 @@
          `D-FUENTES-1` y NO se vuelven a poner. El `@font-face` vive en
          `src/styles/global.css`, junto al resto del sistema. -->
     <style>
-      /* Splash de carga · decisión de Mati 2026-08-19, etiqueta literal
-         «B sólo cuando tarda»: aparece ÚNICAMENTE mientras la app de verdad
-         está cargando. Cero tiempo fijo, cero espera artificial.
+      /* Splash de carga · D292 (Mati, 2026-10-12, «Siempre al abrir
+         (Recomendada)», con la adenda «Hagamoslo de un segundo mejor»): aparece
+         en cada apertura o recarga, también por un link o un QR de mesa, desde
+         el primer cuadro, y queda al menos 1 s (lo cuenta `src/splash.ts` desde
+         que empezó a cargar la página). Reemplaza «B sólo cuando tarda»
+         (2026-08-19), que lo mostraba sólo si la app tardaba más de 300 ms.
 
          Vive acá, inline, a propósito: es lo ÚNICO que pinta ANTES de que
          cargue el grafo de módulos — si viviera en global.css llegaría junto
          con la app y ya no tendría a quién tapar.
 
-         Los tres tiempos y su porqué (espejados en `src/splash.ts`, y hay un
-         test que impide que las dos copias se separen):
-         · 300ms de retardo de aparición — si la app monta antes, el splash
-           no se ve NUNCA (el caso rápido que eligió Mati).
-         · 200ms de fundido de entrada.
-         · 12s de rendición — si el grafo de módulos muere (ya pasó:
+         Los tiempos (espejados en `src/splash.ts`, y hay un test que impide que
+         las dos copias se separen):
+         · se ve desde el primer cuadro: sin retardo y sin fundido de entrada;
+         · el ícono entra en 240 ms desde que aparece (con «reducir
+           movimiento», quieto);
+         · 12 s de rendición — si el grafo de módulos muere (ya pasó:
            ERR_NETWORK_CHANGED, 2026-08-10), el splash se retira solo en vez
            de quedar eterno tapando una app muerta con cara de viva. Vuelve
            al blanco de hoy, que es feo pero no miente.
@@ -75,10 +78,7 @@
         inset: 0;
         z-index: 9999;
         background: #101e3b;
-        opacity: 0;
-        animation:
-          splash-aparecer 200ms ease 300ms forwards,
-          splash-rendirse 400ms ease 12s forwards;
+        animation: splash-rendirse 400ms ease 12s forwards;
       }
       /* La franja de la barra de estado: con la app instalada, la hora y la
          batería van en blanco encima (`black-translucent` y `viewport-fit=cover`
@@ -121,8 +121,8 @@
         background: linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%);
       }
       /* El ícono: 128 × 128 fijo (igual de 375 a 430), centrado en el punto de
-         encuentro. Entra en 240 ms cuando aparece la pantalla (el mismo retardo
-         de 300 ms), no antes; con «reducir movimiento», sin animación. */
+         encuentro. Entra en 240 ms desde que aparece la pantalla (retardo 0:
+         D292); con «reducir movimiento», sin animación. */
       #splash .carga__icono {
         position: absolute;
         left: 50%;
@@ -133,14 +133,11 @@
       }
       @media (prefers-reduced-motion: no-preference) {
         #splash .carga__icono {
-          animation: carga-entra 240ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
+          animation: carga-entra 240ms cubic-bezier(0.2, 0.8, 0.2, 1) 0ms both;
         }
       }
       @keyframes carga-entra {
         from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
-      }
-      @keyframes splash-aparecer {
-        to { opacity: 1; }
       }
       @keyframes splash-rendirse {
         to { opacity: 0; visibility: hidden; }

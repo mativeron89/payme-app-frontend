@@ -1,46 +1,193 @@
 /**
- * Splash de carga en navegador real — las dos ramas de «B sólo cuando tarda».
+ * La pantalla de carga en un navegador real · D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)» y la adenda
+ * «Hagamoslo de un segundo mejor»): aparece en cada apertura o recarga, también por un link o un QR de mesa, desde el
+ * primer cuadro, y queda al menos 1 s desde que empezó a cargar la página. Si la app tarda más, sigue hasta que monte.
+ * Después, el fundido.
  *
- * La lógica de tiempos ya está cubierta pura en `src/splash.test.ts`; acá se
- * prueba lo que sin navegador no se puede: que el elemento de verdad
- * aparece cuando la carga tarda, y de verdad sale del árbol cuando no.
+ * 🔴 Corre en el proyecto `pantalla-de-carga`, contra el BUILD mock con la CSP real (`e2e/csp/servidor.mjs`, 5188): ahí
+ * no está la marca de la e2e (`VITE_E2E_CARGA_SIN_MINIMO`, que sólo pone el servidor de desarrollo de las demás
+ * pruebas) y un `vite build` la apaga igual. Es el comportamiento que se publica, con el hash nuevo del `<style>`.
  *
- * La carga lenta se FUERZA demorando la respuesta del módulo de entrada
- * (`main.tsx`) por ruta interceptada: es la única manera de que localhost
- * tarde — servido desde la misma máquina, el caso lento no ocurre solo.
+ * Cómo se mide: un script que corre antes que la página muestrea cada cuadro (`requestAnimationFrame`) desde el
+ * principio. Anota cuándo aparece el `#splash` y con qué opacidad, cuándo monta la app (`#root` con contenido) y cuándo
+ * sale del árbol. Los tiempos son `performance.now()`: desde que empezó a cargar la página, como el mínimo.
+ *
+ * La carga lenta se FUERZA demorando el módulo de entrada del build (lo lee de `index.html`): servido desde la misma
+ * máquina, el caso lento no ocurre solo.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
-test('carga rápida: la app abre directo y el splash no queda en el árbol', async ({ page }) => {
-  await ingresar(page);
-  // No alcanza con "no visible": el retiro lo SACA del DOM. Un splash
-  // invisible pero presente sería un fixed z-index 9999 esperando volver.
-  await expect(page.locator('#splash')).toHaveCount(0);
-});
+/** El mínimo de D292 y el fundido de `src/splash.ts`. */
+const MINIMO_MS = 1_000;
+const FUNDIDO_MS = 160;
 
-test('carga lenta: el splash asoma mientras tarda y se retira al montar', async ({ page }) => {
-  // 🔴 El glob `**/src/main.tsx` NO matchea cuando Vite sirve el módulo con
-  // query (`?v=…`, `?t=…`), y lo hace según el estado de su caché de deps. Ese
-  // era el intermitente: sin intercepción no hay demora, la app monta rápido,
-  // el splash NUNCA asoma y la aserción cae. **El test no era frágil por
-  // carga: le erraba al recurso.** Con regex matchea las dos formas.
-  await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
-    // Bien pasado el retardo de aparición (300ms), lejos del timeout global.
-    await new Promise((listo) => setTimeout(listo, 1_200));
+interface Muestra {
+  readonly t: number;
+  readonly opacidad: number;
+}
+interface Carga {
+  readonly muestras: Muestra[];
+  /** El primer cuadro con el `#splash` en el árbol. */
+  readonly vistoEn: number | null;
+  readonly montoEn: number | null;
+  readonly retiradoEn: number | null;
+}
+
+/** El muestreo, antes que la página: cada cuadro, la opacidad del `#splash`, el montaje y el retiro. */
+async function medirLaCarga(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number }>; vistoEn: number | null; montoEn: number | null; retiradoEn: number | null } };
+    w.__carga = { muestras: [], vistoEn: null, montoEn: null, retiradoEn: null };
+    const cuadro = () => {
+      const t = performance.now();
+      const el = document.getElementById('splash');
+      const root = document.getElementById('root');
+      if (w.__carga.montoEn === null && root && root.childElementCount > 0) w.__carga.montoEn = t;
+      if (el) {
+        if (w.__carga.vistoEn === null) w.__carga.vistoEn = t;
+        w.__carga.muestras.push({ t, opacidad: Number(getComputedStyle(el).opacity) });
+      } else if (w.__carga.vistoEn !== null) {
+        w.__carga.retiradoEn = t;
+        return;
+      }
+      requestAnimationFrame(cuadro);
+    };
+    requestAnimationFrame(cuadro);
+  });
+}
+
+/** Espera a que el splash salga del árbol y devuelve lo medido. */
+async function laCarga(page: Page): Promise<Carga> {
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 15_000 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __carga: Carga }).__carga.retiradoEn)).not.toBeNull();
+  return page.evaluate(() => (window as unknown as { __carga: Carga }).__carga);
+}
+
+/** El módulo de entrada del build, leído de su `index.html` (con hash en el nombre). */
+async function moduloDeEntrada(page: Page): Promise<string> {
+  const html = await (await page.request.get('/')).text();
+  const src = html.match(/<script type="module"[^>]*src="([^"]+)"/)?.[1];
+  expect(src, 'el index.html del build no tiene el módulo de entrada').toBeTruthy();
+  return src!;
+}
+
+/** Demora el módulo de entrada: la app tarda en montar. */
+async function demorarLaApp(page: Page, ms: number): Promise<void> {
+  const src = await moduloDeEntrada(page);
+  await page.route((url) => url.pathname === src, async (ruta) => {
+    await new Promise((listo) => setTimeout(listo, ms));
     await ruta.continue();
   });
+}
 
-  await page.goto('/');
+/** Lo común: se vio desde el primer cuadro, entero hasta el segundo, y se fue con el fundido. */
+function esperarUnSegundoEntero(c: Carga): void {
+  expect(c.vistoEn, 'el #splash nunca estuvo en el árbol').not.toBeNull();
+  // 🔴 Desde el primer cuadro: entero, sin aparecer de a poco (antes nacía en 0 y aparecía a los 300 ms).
+  expect(c.muestras[0]!.opacidad, 'el primer cuadro con el #splash no lo muestra entero').toBe(1);
+  // Entero todo el primer segundo.
+  const antesDelSegundo = c.muestras.filter((m) => m.t < MINIMO_MS);
+  expect(antesDelSegundo.length).toBeGreaterThan(0);
+  expect(antesDelSegundo.filter((m) => m.opacidad !== 1), 'el #splash dejó de verse entero antes del segundo').toEqual([]);
+  // Se va recién después del segundo y el fundido.
+  expect(c.retiradoEn!).toBeGreaterThanOrEqual(MINIMO_MS + FUNDIDO_MS);
+}
 
-  // Mientras el módulo no llegó, lo único pintado es el splash (D286: los
-  // triángulos y el ícono). `toBeVisible` acá afirma que ASOMÓ, que es la rama
-  // que la carga rápida no puede probar.
-  await expect(page.locator('#splash .carga__icono')).toBeVisible();
+test.describe('🔴 D292 · la pantalla de carga, al menos 1 segundo en cada apertura', () => {
+  test('aparece de entrada y queda al menos 1 s aunque la app monte antes; después, el fundido', async ({ page }) => {
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    // La premisa: la app montó antes del segundo (si no, este caso no estaría probando nada).
+    expect(c.montoEn, 'la app no montó').not.toBeNull();
+    expect(c.montoEn!, 'la app tardó más de un segundo: este caso no probaría el mínimo').toBeLessThan(MINIMO_MS);
+    esperarUnSegundoEntero(c);
+    // Con la app ya montada debajo, el splash siguió entero hasta el segundo.
+    expect(c.muestras.filter((m) => m.t >= c.montoEn! && m.t < MINIMO_MS).every((m) => m.opacidad === 1)).toBe(true);
+    // El fundido: hay cuadros a medio camino, después del segundo.
+    const fundido = c.muestras.filter((m) => m.opacidad > 0.05 && m.opacidad < 0.95);
+    expect(fundido.length, 'se fue de golpe, sin fundido').toBeGreaterThan(0);
+    expect(Math.min(...fundido.map((m) => m.t))).toBeGreaterThanOrEqual(MINIMO_MS);
+    // Y no más que eso: con la app lista antes, el fundido arranca al cumplir el segundo, no después (holgura para el
+    // reloj del navegador de pruebas).
+    expect(Math.min(...fundido.map((m) => m.t)), 'esperó de más: el mínimo es 1 s').toBeLessThan(MINIMO_MS + 400);
+    expect(c.retiradoEn!).toBeLessThan(MINIMO_MS + FUNDIDO_MS + 600);
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  });
 
-  // Llegó el módulo → monta la app → el splash cumple su mínimo y se va.
-  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
-  await expect(page.locator('#splash')).toHaveCount(0);
+  test('también al recargar: otra vez desde el primer cuadro y otro segundo entero', async ({ page }) => {
+    await medirLaCarga(page);
+    await page.goto('/');
+    await laCarga(page);
+    await page.reload();
+    esperarUnSegundoEntero(await laCarga(page));
+  });
+
+  test('si la app tarda más, sigue hasta que monta, y entonces se va (sin esperar otro segundo)', async ({ page }) => {
+    await demorarLaApp(page, 2_500);
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    expect(c.montoEn!).toBeGreaterThanOrEqual(2_500);
+    // Entero hasta que montó la app.
+    expect(c.muestras.filter((m) => m.t < c.montoEn!).filter((m) => m.opacidad !== 1)).toEqual([]);
+    // Se fue enseguida después de montar: el fundido y nada más (sin un segundo extra).
+    expect(c.retiradoEn! - c.montoEn!).toBeLessThan(700);
+    esperarUnSegundoEntero(c);
+  });
+
+  for (const [nombre, ruta] of [
+    ['un link de mesa', '/mesa/PA-1234?t=token-de-prueba'],
+    ['un QR de mesa', '/?r=qr-de-prueba'],
+  ] as const) {
+    test(`por ${nombre} también: desde el primer cuadro y al menos 1 s`, async ({ page }) => {
+      await medirLaCarga(page);
+      await page.goto(ruta);
+      const c = await laCarga(page);
+      expect(c.montoEn!).toBeLessThan(MINIMO_MS);
+      esperarUnSegundoEntero(c);
+    });
+  }
+
+  test('con la sesión iniciada, cada apertura también (no sólo la primera)', async ({ page }) => {
+    await ingresar(page);
+    await medirLaCarga(page);
+    await page.reload();
+    const c = await laCarga(page);
+    esperarUnSegundoEntero(c);
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  });
+
+  test('con «reducir movimiento»: el ícono quieto, y el mismo segundo entero', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await medirLaCarga(page);
+    await page.goto('/');
+    const icono = page.locator('#splash .carga__icono');
+    await expect(icono).toBeVisible();
+    expect(await icono.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+    esperarUnSegundoEntero(await laCarga(page));
+  });
+
+  test('sin «reducir movimiento», el ícono entra con su animación desde que aparece la pantalla', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await demorarLaApp(page, 1_500);
+    await page.goto('/');
+    const icono = page.locator('#splash .carga__icono');
+    await expect(icono).toBeVisible();
+    const anim = await icono.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { nombre: cs.animationName, duracion: cs.animationDuration, retardo: cs.animationDelay };
+    });
+    expect(anim).toEqual({ nombre: 'carga-entra', duracion: '0.24s', retardo: '0s' });
+  });
+
+  test('🔴 la marca de la e2e no llegó al build: el módulo de entrada no la nombra', async ({ page }) => {
+    const src = await moduloDeEntrada(page);
+    const codigo = await (await page.request.get(src)).text();
+    expect(codigo.length).toBeGreaterThan(1_000);
+    expect(codigo).not.toContain('VITE_E2E_CARGA_SIN_MINIMO');
+  });
 });
 
 /**
@@ -51,10 +198,7 @@ test('carga lenta: el splash asoma mientras tarda y se retira al montar', async 
 for (const ancho of [375, 390, 430] as const) {
   test(`D286 · a ${ancho}: cuatro triángulos, el ícono centrado, la franja y sin texto`, async ({ page }) => {
     await page.setViewportSize({ width: ancho, height: ancho === 375 ? 667 : ancho === 390 ? 844 : 932 });
-    await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
-      await new Promise((listo) => setTimeout(listo, 2_500));
-      await ruta.continue();
-    });
+    await demorarLaApp(page, 2_500);
     await page.goto('/');
     const icono = page.locator('#splash .carga__icono');
     await expect(icono).toBeVisible();
@@ -100,25 +244,3 @@ for (const ancho of [375, 390, 430] as const) {
     expect(medida.tieneText).toBe(0);
   });
 }
-
-test('D286 · con «reducir movimiento», el ícono aparece sin animación', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
-    await new Promise((listo) => setTimeout(listo, 1_500));
-    await ruta.continue();
-  });
-  await page.goto('/');
-  const icono = page.locator('#splash .carga__icono');
-  await expect(icono).toBeVisible();
-  expect(await icono.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
-  const conMovimiento = await page.context().newPage();
-  await conMovimiento.emulateMedia({ reducedMotion: 'no-preference' });
-  await conMovimiento.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
-    await new Promise((listo) => setTimeout(listo, 1_500));
-    await ruta.continue();
-  });
-  await conMovimiento.goto('/');
-  await expect(conMovimiento.locator('#splash .carga__icono')).toBeVisible();
-  expect(await conMovimiento.locator('#splash .carga__icono').evaluate((el) => getComputedStyle(el).animationName)).toBe('carga-entra');
-  await conMovimiento.close();
-});

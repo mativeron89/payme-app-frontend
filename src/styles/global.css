@@ -10003,12 +10003,13 @@ h1.pay-title-lbl {
    especificidad, gana la última: por eso alcanza con `#splash` y no hace
    falta `!important`.
 
-   🔴 **Qué se hace y qué NO.** No se apaga el splash: se le sacan las
-   TRANSICIONES conservando sus tiempos. La aparición sigue a los 300 ms —el
-   «B sólo cuando tarda» que eligió Mati, para que una carga rápida no
-   parpadee— y la rendición a los 12 s sigue existiendo, que es la que evita
-   un splash eterno tapando una app muerta. Lo único que desaparece es el
-   fundido, que es la parte que `prefers-reduced-motion` pide sacar.
+   🔴 **Qué se hace y qué NO.** No se apaga el splash: se le saca la
+   TRANSICIÓN conservando su tiempo. D292 (2026-10-12): el splash se ve desde
+   el primer cuadro, sin animación de entrada, así que lo único animado es la
+   rendición a los 12 s —la que evita un splash eterno tapando una app
+   muerta—. Con «reducir movimiento» sigue a los 12 s, sin su fundido, que es
+   la parte que `prefers-reduced-motion` pide sacar. (El fundido de salida al
+   montar lo pone `src/splash.ts` por estilo en línea.)
 
    ⚠️ **Límite honesto:** en el build de producción esta hoja es un `<link>` y
    aplica temprano; en `npm run dev` la inyecta el módulo, así que llega
@@ -10019,9 +10020,7 @@ h1.pay-title-lbl {
 
 @media (prefers-reduced-motion: reduce) {
   #splash {
-    animation:
-      splash-aparecer 1ms linear 300ms forwards,
-      splash-rendirse 1ms linear 12s forwards;
+    animation: splash-rendirse 1ms linear 12s forwards;
   }
 }
 

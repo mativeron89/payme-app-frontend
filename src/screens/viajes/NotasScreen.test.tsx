@@ -241,8 +241,10 @@ describe('🔴 D290 · las medidas de la especificación', () => {
     return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
   };
 
-  it('§1 · la fila: 56 de alto, padding 0 16, radio 16, la sombra, gap 10, cian oscuro 16/700; el punto de 8 naranja', () => {
-    for (const d of ['min-height: 56px;', 'padding: 0 16px;', 'border-radius: 16px;', 'box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);',
+  it('§1 · la fila: 56 de alto, padding 0 16, el radio de sus vecinas (D293), la sombra, gap 10, cian oscuro 16/700; el punto de 8 naranja', () => {
+    // D293 · Mati: «Igualarla a las vecinas»: el radio de «Ver balance del viaje» y «Configuración» (`.vj-card`).
+    expect(readFileSync(new URL('./viajes.css', import.meta.url), 'utf8')).toMatch(/\.vj-card \{[^}]*border-radius: var\(--r-lg\);/);
+    for (const d of ['min-height: 56px;', 'padding: 0 16px;', 'border-radius: var(--r-lg);', 'box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);',
       'gap: 10px;', 'font-size: 16px;', 'font-weight: 700;', 'color: var(--link);']) expect(regla('.nts-fila'), d).toContain(d);
     for (const d of ['width: 8px;', 'height: 8px;', 'background: var(--brand);']) expect(regla('.nts-punto'), d).toContain(d);
     expect(regla('.nts-fila-resumen')).toContain('font-size: 14px;');

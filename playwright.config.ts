@@ -116,7 +116,9 @@ export default defineConfig({
       name: 'movil',
       // n186 · los specs de `e2e/csp/` corren en sus propios proyectos, contra
       // el BUILD con la CSP obligatoria; no contra el servidor de desarrollo.
-      testIgnore: /[\\/]csp[\\/]/,
+      // D292 · `splash.spec.ts` también: la pantalla de carga se prueba contra el
+      // build, sin la marca que este servidor le pone (ver `webServer`).
+      testIgnore: /[\\/]csp[\\/]|[\\/]splash\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },
@@ -148,6 +150,25 @@ export default defineConfig({
       testMatch: /[\\/]csp[\\/]landing\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5189' },
     },
+    /**
+     * D292 · la pantalla de carga (al menos 1 s en cada apertura) se prueba contra
+     * el BUILD mock con la CSP real (el servidor de `csp-app`): ahí no está la marca
+     * `VITE_E2E_CARGA_SIN_MINIMO`, y un `vite build` la apaga igual (`DEV` es
+     * `false`), así que es el comportamiento que se publica, con el hash nuevo del
+     * `<style>`. `servidor.mjs` devuelve `index.html` en cualquier ruta: el link de
+     * mesa también se prueba acá.
+     */
+    {
+      name: 'pantalla-de-carga',
+      testMatch: /[\\/]splash\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        baseURL: 'http://127.0.0.1:5188',
+      },
+    },
   ],
 
   /**
@@ -171,7 +192,10 @@ export default defineConfig({
    */
   webServer: [
     {
-      command: 'npx --no-install vite --port 5176 --strictPort --mode mock',
+      // D292 · sólo este servidor (desarrollo, el de las ~1300 pruebas de siempre) lleva la marca: ahí la pantalla de
+      // carga se va al montar, sin el segundo de mínimo en cada carga. `src/splash.ts` la lee sólo con `DEV`. La
+      // pantalla de carga misma se prueba en el proyecto `pantalla-de-carga`, contra el build, sin la marca.
+      command: 'VITE_E2E_CARGA_SIN_MINIMO=1 npx --no-install vite --port 5176 --strictPort --mode mock',
       url: 'http://localhost:5176',
       reuseExistingServer: false,
       timeout: 60_000,

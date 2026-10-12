@@ -131,6 +131,8 @@ export const EN: Record<string, string> = {
   "Autorizando…": "Authorizing…",
   // D285-2 · la campana y su lista son «Avisos»; «Notificaciones» (Notifications) queda para las preferencias.
   "Avisos": "Alerts",
+  // D293 · con invitaciones arriba, la lista de los avisos comunes: «Otros avisos», no otra vez «Avisos».
+  "Otros avisos": "Other alerts",
   "Ayer": "Yesterday",
   "Bloquear a {0}": "Block {0}",
   "Buscando…": "Searching…",

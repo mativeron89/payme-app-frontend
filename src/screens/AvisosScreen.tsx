@@ -593,8 +593,9 @@ export function AvisosScreen() {
             <p className="aviso-empty-texto">{t('Aquí aparecen tus invitaciones y los avisos de tus mesas.')}</p>
           </div>
         )}
-        {/* D178 · con invitaciones arriba, los avisos llevan su rótulo: son otra cosa. */}
-        {invitations.length > 0 && hayNotificaciones && <h2 className="sectlabel">{t('Avisos')}</h2>}
+        {/* D178 · con invitaciones arriba, los avisos llevan su rótulo: son otra cosa. D293 · Mati: «Otros avisos», para
+            no repetir el título «Avisos» de la pantalla. */}
+        {invitations.length > 0 && hayNotificaciones && <h2 className="sectlabel">{t('Otros avisos')}</h2>}
         {/* D178 · una sola tarjeta con separadores, no una tarjeta por aviso. */}
         {hayNotificaciones && (
         <div className="avisos-lista">

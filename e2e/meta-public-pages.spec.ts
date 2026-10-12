@@ -781,23 +781,25 @@ test.describe('accesibilidad y reflow', () => {
         return r;
       });
 
-    // limpio: con movimiento, el fundido de 200ms/400ms
+    // limpio: con movimiento, el fundido de 400ms de la rendición. D292 · ya no hay animación de entrada: la pantalla
+    // de carga se ve desde el primer cuadro.
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/privacy');
     await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
     const conMovimiento = await animacionDelSplash();
     expect(conMovimiento.dur, 'la sonda no ve la animación original: mediría en vacío')
-      .toBe('0.2s, 0.4s');
+      .toBe('0.4s');
+    expect(conMovimiento.delay).toBe('12s');
 
     // reducido: sin fundido, MISMOS tiempos de aparición y rendición
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
     const reducido = await animacionDelSplash();
-    expect(reducido.dur, 'sigue habiendo fundido con reduced-motion').toBe('0.001s, 0.001s');
+    expect(reducido.dur, 'sigue habiendo fundido con reduced-motion').toBe('0.001s');
     expect(
       reducido.delay,
-      'se perdieron los tiempos: el splash debe seguir apareciendo a 300ms y rindiéndose a 12s',
+      'se perdió el tiempo: el splash debe seguir rindiéndose a los 12s',
     ).toBe(conMovimiento.delay);
 
     await page.emulateMedia({ reducedMotion: null });

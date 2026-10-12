@@ -1,7 +1,9 @@
 /* ══ D290 · Notas del viaje (PANTALLA-notas-del-viaje.md, 2c3b396f…, y el turno 2 del prototipo) ══
    Ancho de referencia 390. Tarjetas blancas con la sombra de la especificación, 10 entre tarjetas. */
 
-/* ─── §1 · la fila «Notas» del viaje ─── */
+/* ─── §1 · la fila «Notas» del viaje ───
+   D293 (Mati: «Igualarla a las vecinas»): el radio es el de «Ver balance del viaje» y «Configuración» (`--r-lg`, 22),
+   no el 16 de la especificación. */
 .nts-fila {
   display: flex;
   align-items: center;
@@ -10,7 +12,7 @@
   min-height: 56px;
   padding: 0 16px;
   border: none;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
   font-family: var(--font-display);

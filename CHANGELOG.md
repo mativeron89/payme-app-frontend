@@ -11,6 +11,92 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.244.1 — La pantalla de carga siempre, al menos 1 segundo (D292); «Otros avisos» y el radio de «Notas» (D293) (2026-10-12)
+
+Orden AF-PANTALLA-DE-CARGA-DOS-SEGUNDOS-20261012 (86aa5823…). Autoridad: D292 (f760281e…, «Siempre al abrir
+(Recomendada)») y su adenda (b05267b0…): Mati, «Hagamoslo de un segundo mejor». **El mínimo es 1 s.** Reemplaza «B sólo
+cuando tarda» (2026-08-19). Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+1. **Aparece enseguida (hecho).** El `#splash` de `index.html` se ve desde el primer cuadro: ya no nace en opacidad 0 ni
+   espera 300 ms. Sale `splash-aparecer`.
+2. **Queda al menos 1 s desde que empezó a cargar la página (hecho).** `src/splash.ts`, `SPLASH_MINIMO_MS = 1_000`, contado
+   con `performance.now()` desde el inicio de la navegación.
+   - Si la app monta antes, espera lo que falta.
+   - Si tarda más, sigue hasta que monte y se funde enseguida, sin otro segundo.
+   - Después, el fundido de 160 ms de siempre.
+   - Medido en el build con la CSP real: visible desde los 28 ms y entero; la app montó a los 91 ms; el fundido arrancó a
+     los 1026 ms y se fue a los 1257 ms. Con la app demorada 2,5 s: montó a los 2592 ms y se fue a los 2866 ms.
+3. **También por un link o un QR de mesa (hecho).** `/mesa/PA-…?t=…` y `/?r=…`: desde el primer cuadro y al menos 1 s.
+   Medido: visible a los 8 ms y fundido a los 1032 ms.
+4. **Lo que no cambia (hecho).**
+   - El diseño de D286.
+   - La entrada del ícono de 240 ms, que ahora arranca al aparecer (retardo 0).
+   - «Reducir movimiento»: el ícono queda quieto, y `global.css` deja sólo la rendición, sin su fundido.
+   - El retiro a los 12 s si la app no carga.
+5. **Los tiempos, espejados (hecho).**
+   - La entrada del ícono (240 y 0) y la rendición (12 s) viven en el `<style>` y en constantes de `splash.ts`.
+     `splash.test.ts` impide que se separen, también contra la regla de «reducir movimiento» de `global.css`.
+   - `HASH_STYLE_SPLASH_APP` se recalculó en `vercel.ts` y `csp.test.ts` pasa sin tocarla.
+6. **Las pruebas (hecho).** Ver «Pruebas».
+
+**Las pruebas e2e y el segundo (OK del Bibliotecario a la opción A, 2026-10-12T13:40:42Z, con su condición):**
+- **Producción:** `splash.ts` aplica siempre 1 s. La excepción es `import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1'`: en un `vite build` `DEV` es `false` constante, así que aunque alguien ponga la variable en Vercel o en el CI, el build que se publica aplica el segundo.
+- **`playwright.config.ts` (declarado):**
+  - Sólo el servidor de desarrollo de la e2e (5176) arranca con la marca. Las demás pruebas no esperan el segundo en cada carga.
+  - El proyecto nuevo `pantalla-de-carga` corre `e2e/splash.spec.ts` contra el build mock con la CSP real (el servidor de `csp-app`, 5188), sin la marca.
+- **Guardas:**
+  - La marca sólo la nombran `splash.ts` (que la lee) y `playwright.config.ts` (que la pone, sólo en 5176). La e2e también la nombra, pero sólo para afirmar que no está en el build.
+  - El módulo de entrada del build no la contiene.
+
+**D293 · dos detalles de la prueba de Mati:**
+- **«Otros avisos» (adenda 7ded7366…, hecho).** En la campana, con invitaciones arriba, la sección de los avisos comunes
+  pasa de «Avisos» a «Otros avisos» («Other alerts»). «Te invitaron» y el título «Avisos» / «Alerts» no cambian.
+  - Antes de cambiarlo medí que la sección que repetía «Avisos» no era la de las invitaciones (ésa ya decía «Te
+    invitaron»). Mati volvió a elegir con la captura.
+- **El radio de «Notas» (hecho).** La fila «Notas» del viaje toma el de «Ver balance del viaje» y «Configuración»
+  (`--r-lg`, 22).
+
+**Declarado:**
+- **Pruebas existentes cambiadas:**
+  - `src/splash.test.ts`: los tiempos de «B sólo cuando tarda» pasan a los de D292;
+  - `e2e/splash.spec.ts` ahora corre en `pantalla-de-carga`;
+  - `meta-public-pages` «REDUCED-MOTION»: queda una sola animación, la rendición;
+  - `notificaciones-d178`: el h2 «Otros avisos»;
+  - `NotasScreen.test` y `viajes-notas`: el radio 22.
+- **Un intermitente de 0.244.0, encontrado y corregido:** `editarEstado` de `viajes-notas.spec.ts` editaba el estado del
+  mock dentro de la app. Un pedido del mock que arrancaba después guardaba su memoria encima y la edición se perdía. En
+  la e2e completa de 0.244.1 cayeron 2 pruebas («4 personas» en vez de 7; Oaxaca seguía cerrado).
+  - Reproducido con el helper viejo: 4 de 96 con 6 workers × 3 repeticiones.
+  - Ahora la edición se hace desde `/privacy`, que no carga el mock: 0 de 96 en las mismas condiciones.
+- **El orden de entrada al decidir:** la adenda del segundo llegó antes de programar. El nombre de la orden y de la rama
+  conserva «dos segundos».
+- **Fuera de alcance, para después:** los restaurantes de los viajes en Mesas (D293 punto 2) van en 0.245.0, con App
+  Backend 2.184.0.
+
+**Pruebas:**
+- **Unidad:**
+  - `splash.test.ts` (16): el segundo, el espejo de los tiempos, la marca sólo en desarrollo y «reducir movimiento»;
+  - `AvisosScreen.test` suma «Otros avisos»;
+  - `NotasScreen.test`, el radio.
+- **e2e `pantalla-de-carga`** (12, contra el build con la CSP real), con un muestreo por cuadro:
+  - aparece entero desde el primer cuadro;
+  - al menos 1 s aunque la app monte antes, y no mucho más;
+  - otra vez al recargar;
+  - sigue si la app tarda;
+  - el fundido;
+  - link y QR de mesa;
+  - con la sesión iniciada;
+  - «reducir movimiento» e ícono;
+  - la marca, fuera del build;
+  - D286 a 375, 390 y 430.
+- **Rojo sobre `377c29b`:**
+  - unidad: 11 tests en 3 archivos;
+  - e2e `pantalla-de-carga`: 8 de los 9 de D292 (el de la marca pasa en la base, que no la tiene);
+  - e2e D293: 3 de 3.
+- **Mutantes:** 15 de 15 cazados. Sólo contra la e2e:
+  - T01 (mínimo de 2 s) sobrevivía: la e2e sólo pedía «al menos 1 s». Sumé el tope «no mucho más» y cae.
+  - T05 (la marca sin `DEV`) no es visible en un build, que no la lleva: lo caza la guarda de fuente.
+
 ## 0.244.0 — El pizarrón de notas del viaje (D290) (2026-10-12)
 
 Orden AF-VIAJES-NOTAS-20261012 (617c33c6…). Autoridad: D290, revisiones 1 y 2 (55524b8b…). Mati eligió «Todos ven, cada

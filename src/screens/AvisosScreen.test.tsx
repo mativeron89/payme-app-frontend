@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { reconciledReadDestination } from './AvisosScreen';
 import { TIPOS_AVISO_VIAJE } from './viajes/avisosDeViaje';
 import type { AppNotification } from '../api/types';
+import { traducir } from '../i18n/idioma';
 
 const SOURCE = readFileSync(new URL('./AvisosScreen.tsx', import.meta.url), 'utf8');
 const CSS = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
@@ -81,5 +82,19 @@ describe('M04 · Avisos', () => {
     expect(SOURCE).toContain('<span className="inv-mesa-code"> / {inv.mesaCode}</span>');
     expect(SOURCE).toContain('className="scroll flow-scroll avisos-scroll"');
     expect(CSS).toMatch(/\.avisos-scroll\s*\{[\s\S]*?padding-top:\s*var\(--sp-6\);/);
+  });
+
+  /**
+   * 🔴 D293 (adenda «Otros avisos», 7ded7366…) · con invitaciones arriba, la lista de los avisos comunes lleva su rótulo,
+   * y no repite el título de la pantalla: «Otros avisos» («Other alerts»). «Te invitaron» y el título «Avisos» no cambian.
+   */
+  it('🔴 D293 · con invitaciones, la sección de abajo es «Otros avisos»; el título sigue «Avisos» y la de arriba «Te invitaron»', () => {
+    expect(SOURCE).toContain(`{invitations.length > 0 && hayNotificaciones && <h2 className="sectlabel">{t('Otros avisos')}</h2>}`);
+    expect(SOURCE).toContain(`<h2 className="sectlabel">{t('Te invitaron')}</h2>`);
+    expect(SOURCE).toContain(`<h1 className="title-card-title">{t('Avisos')}</h1>`);
+    // «Avisos» queda sólo en el título: ningún rótulo de sección lo repite.
+    expect(SOURCE.match(/<h2[^>]*>\{t\('Avisos'\)\}<\/h2>/g)).toBeNull();
+    expect(traducir('Otros avisos', 'en')).toBe('Other alerts');
+    expect(traducir('Avisos', 'en')).toBe('Alerts');
   });
 });

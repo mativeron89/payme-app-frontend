@@ -161,7 +161,10 @@ test.describe('D178 · Notificaciones rediseñadas', () => {
     await expect(foto).toBeVisible();
     expect(await foto.evaluate((img: HTMLImageElement) => [img.getBoundingClientRect().width, img.naturalWidth])).toEqual([40, 120]);
     await expect(page.locator('.inv-card img').first()).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'Avisos', exact: true })).toBeVisible();
+    // D293 · con invitaciones arriba, los avisos comunes van bajo «Otros avisos»: «Avisos» queda sólo como título.
+    await expect(page.getByRole('heading', { level: 2, name: 'Otros avisos', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Avisos', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 1, name: 'Avisos', exact: true })).toBeVisible();
     // Centrada: `scrollIntoViewIfNeeded` da por visible una fila a medias, debajo del «+».
     await fila.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await expect(fila).toBeInViewport({ ratio: 1 });
