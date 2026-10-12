@@ -11,6 +11,51 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.243.0 — «+ Gasto» unido a la burbuja del viaje y el monto nuevo (D291) (2026-10-12)
+
+Orden AF-BOTON-GASTO-Y-MONTO-20261012 (e70ebfe8…). Autoridad: D291, revisión 2 (07ad4d56…). Del paquete de Claude Design
+entran sólo el botón 2a y el monto 3a. Mati eligió dejar el aviso de mesas centrado, como hoy (D277, con la regla de
+0.242.1). Diseño: `PANTALLA-burbuja-del-viaje.md` (91594da4…), §1 (el monto) y §1 bis («+ Gasto»). Lo visible se cierra
+con la prueba de Mati en el iPhone (D63).
+
+1. **«+ Gasto», opción 2a (hecho).** La burbuja del viaje pasa a una tarjeta (`.viaje-tarjeta`) con el borde, el radio
+   22, la sombra y el alto mínimo de 96 que tenía.
+   - Adentro van el botón del viaje, un divisor de 1 px en `--border` y un cuadrado de 76 a todo el alto, con el «+» de
+     22 (trazo 2.2) y «Gasto» en Plus Jakarta Sans 14/700.
+   - Su aria-label es «Cargar un gasto a mano en {viaje}» («Add a manual expense to {trip}»). Abre la Carga manual de ese
+     viaje.
+   - Sale la píldora suelta de D280.
+2. **Dos blancos de toque (hecho).** Son dos `<button>` hermanos, ninguno dentro del otro, de 44 × 44 o más. El anillo
+   de foco va por dentro: con `overflow: hidden`, por fuera quedaría cortado.
+3. **Esperando pagos o cerrado (hecho).** La misma tarjeta, sin divisor ni botón: la burbuja ocupa todo el ancho.
+4. **El monto, opción 3a (hecho).** Plus Jakarta Sans 26/600, alto de línea 1.2, interletra −0.01em y `tabular-nums`, en
+   una sola línea. Los colores y el formato no cambian.
+   - **Adenda del Bibliotecario (03:09:12Z, opción a):** con el cuadrado al lado, a 320 «−$10,565.68» no entraba a 26 y
+     se partía después del «−». Ahora el monto nunca se parte, nunca se corta y nunca se mete en el padding.
+   - Si a 26 no entra en una línea, `MontoDeLaBurbuja` lo baja sólo lo necesario, con un mínimo de 16. Se mide al
+     montar, al cambiar el ancho y cuando cargan las fuentes.
+   - Con montos normales sigue en 26 a 375 y a 390. El cuadrado de 76 y la foto de 64 no cambian.
+5. **Lo que no cambia (hecho).** El restaurante pendiente (8 debajo de la tarjeta, sangría 24), el aviso de mesas, la
+   pestaña Viajes y el pie.
+6. **Las pruebas (hecho).**
+   - Unidad: el marcado de la tarjeta, los dos botones hermanos, sin botón esperando pagos, el CSS, el monto 3a y el
+     tamaño que entra.
+   - e2e a 375 y 390 (`boton-gasto-y-monto.spec.ts`):
+     - los dos blancos de 44 × 44 o más, con el toque en el centro de cada uno;
+     - el divisor de 1 px y sin desborde;
+     - uno, dos y esperando pagos;
+     - cada blanco a su lugar;
+     - el monto 26/600.
+   - Los tres casos de la adenda: −$10,565.68 a 320, −$100,565.68 a 375 y −$542 a 390.
+   - Que se vuelva a medir cuando la fuente llega tarde: Plus Jakarta Sans demorada a 320, con un monto real de
+     −$10,565.68.
+
+**Declarado:**
+- **Las pruebas que medían la píldora de D280** pasan a la tarjeta: `d275-burbuja-del-viaje` (las medidas),
+  `auditorias-pendientes` (el D280) y `d265-d267` (el fondo blanco ahora lo lleva la tarjeta).
+- **Un monto que ni a 16 entra** (siete cifras a 320) queda en 16 y se pasa de su columna. No está entre los casos que
+  pidió la adenda.
+
 ## 0.242.1 — Balance por la visita, la cámara al cambiar de cuenta y el aviso con un restaurante pendiente (auditoría de Codex) (2026-10-12)
 
 Orden AF-AUDITORIA-CODEX-W01-W02-20261011 (6f79e969…). Autoridad: la auditoría de Codex, D287 (`INFORME.md` dbb9356c…),

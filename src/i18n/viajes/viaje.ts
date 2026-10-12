@@ -84,9 +84,10 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Se divide entre los marcados. Desmarca a quien no va.': "It's split among those checked. Uncheck anyone who isn't in.",
   'Total {0}': 'Total {0}',
   'Cargaste el gasto.': 'You added the expense.',
-  // D280 · «+ Gasto» debajo de la burbuja del viaje en Inicio.
+  // D280 → D291 · «+ Gasto», unido a la burbuja del viaje en Inicio.
   'Gasto': 'Expense',
-  'Cargar gasto en {0}': 'Add an expense to {0}',
+  // D291 · el aria-label del cuadrado «+ Gasto» (opción 2a).
+  'Cargar un gasto a mano en {0}': 'Add a manual expense to {0}',
   // D279 · donde estaban «Cerrar viaje» y «Salir del viaje»: «Toca el [cámara] para cargar un ticket».
   'para cargar un ticket': 'to add a ticket',
   // F-03 · un monto como «1.250» se puede leer de dos formas: no se adivina.

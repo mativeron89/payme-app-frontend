@@ -10,9 +10,12 @@ import {
   etiquetaDeLaBurbuja,
   etiquetaDelPendiente,
   hayRestaurantesPendientes,
+  MONTO_MINIMO_PX,
+  MONTO_PX,
   montoDeLaBurbuja,
   restaurantesPendientes,
   textoDeFaltan,
+  tamanoDelMonto,
   ViajesAbiertosVista,
   type PendientesDeViajes,
 } from './ViajesEnInicio';
@@ -105,6 +108,40 @@ describe('🔴 D275 · la burbuja del viaje: sólo la foto, el nombre y el monto
     expect(css).toContain('.viaje-burbuja-monto--deuda { color: var(--danger); }');
   });
 
+  it('🔴 D291 · adenda 03:09:12Z: si a 26 no entra, baja sólo lo necesario, con 16 de mínimo; si entra, 26', () => {
+    expect(MONTO_PX).toBe(26);
+    expect(MONTO_MINIMO_PX).toBe(16);
+    // Entra (o justo): 26.
+    expect(tamanoDelMonto(154, 154)).toBe(26);
+    expect(tamanoDelMonto(169, 60)).toBe(26);
+    // No entra: proporcional, redondeado hacia abajo a la décima (−$10,565.68 a 320: 141 en 99).
+    expect(tamanoDelMonto(99, 141)).toBe(18.2);
+    expect(tamanoDelMonto(99, 141) * 141 / 26).toBeLessThanOrEqual(99);
+    // Nunca menos de 16.
+    expect(tamanoDelMonto(50, 400)).toBe(16);
+    // Sin medida (todavía sin layout), el de siempre.
+    expect(tamanoDelMonto(0, 141)).toBe(26);
+    expect(tamanoDelMonto(Number.NaN, 141)).toBe(26);
+  });
+
+  it('🔴 D291 · el monto va en una línea y lo mide su componente', () => {
+    const css = readFileSync(new URL('./inicio.css', import.meta.url), 'utf8');
+    const regla = css.slice(css.indexOf('.viaje-burbuja-monto {'), css.indexOf('}', css.indexOf('.viaje-burbuja-monto {')));
+    expect(regla).toContain('white-space: nowrap;');
+    const fuente = readFileSync(new URL('./ViajesEnInicio.tsx', import.meta.url), 'utf8');
+    expect(fuente).toContain('<MontoDeLaBurbuja tono={monto.tono} texto={monto.texto} />');
+    expect(fuente).toMatch(/const useEfectoDeMedida = typeof window === 'undefined' \? useEffect : useLayoutEffect;/);
+  });
+
+  it('🔴 D291 · el monto, opción 3a: Plus Jakarta Sans 26/600, alto de línea 1.2, interletra −0.01em y cifras tabulares', () => {
+    const css = readFileSync(new URL('./inicio.css', import.meta.url), 'utf8');
+    const regla = css.slice(css.indexOf('.viaje-burbuja-monto {'), css.indexOf('}', css.indexOf('.viaje-burbuja-monto {')));
+    for (const m of ['font-family: var(--font-display);', 'font-size: 26px;', 'line-height: 1.2;', 'font-weight: 600;',
+      'letter-spacing: -0.01em;', 'font-variant-numeric: tabular-nums;']) {
+      expect(regla, m).toContain(m);
+    }
+  });
+
   it('🔴 la foto, cuadrada redondeada, sobre el color del viaje; sin foto, la inicial; sin color, el teal de la app', () => {
     const html = vista([
       enLista({ color: 'violeta', has_photo: true }),
@@ -137,9 +174,15 @@ describe('🔴 D275 · la burbuja del viaje: sólo la foto, el nombre y el monto
     const de = (selector: string) => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
     expect(de('.home-viajes')).toMatch(/gap: 20px;[\s\S]*margin: 28px var\(--sp-4\) 0;/);
     expect(de('.viaje-grupo')).toContain('gap: 8px;');
-    for (const m of ['min-height: 96px;', 'padding: 16px;', 'gap: 14px;', 'border: 1px solid var(--border);', 'border-radius: 22px;', 'box-shadow: var(--sh-1), var(--sh-3);']) {
+    // D291 (2a) · el borde, el radio, la sombra y el alto pasan a la tarjeta; la zona del viaje conserva padding y gap.
+    for (const m of ['min-height: 96px;', 'display: flex;', 'align-items: stretch;', 'overflow: hidden;', 'background: var(--surface);',
+      'border: 1px solid var(--border);', 'border-radius: 22px;', 'box-shadow: var(--sh-1), var(--sh-3);']) {
+      expect(de('.viaje-tarjeta'), m).toContain(m);
+    }
+    for (const m of ['flex: 1;', 'min-width: 0;', 'padding: 16px;', 'gap: 14px;', 'background: transparent;', 'border: 0;']) {
       expect(de('.viaje-burbuja'), m).toContain(m);
     }
+    expect(de('.viaje-burbuja')).not.toMatch(/box-shadow|border-radius|min-height/);
     for (const m of ['margin-left: 24px;', 'width: calc(100% - 24px);', 'min-height: 60px;', 'padding: 10px 12px 10px 10px;', 'gap: 12px;', 'border-radius: 16px;']) {
       expect(de('.viaje-pendiente'), m).toContain(m);
     }
@@ -400,32 +443,46 @@ describe('🔴 D265 → D283 · las pestañas del encabezado en negrita, en toda
   });
 });
 
-describe('🔴 D280 · «+ Gasto» debajo de la burbuja del viaje', () => {
+describe('🔴 D291 · «+ Gasto», opción 2a: unido a la burbuja, a la derecha', () => {
   const gastos = (html: string) => [...html.matchAll(/<button type="button" class="viaje-gasto" aria-label="([^"]*)">([\s\S]*?)<\/button>/g)]
     .map((m) => ({ aria: m[1], texto: texto(m[2]!) }));
+  const tarjetas = (html: string) => html.split('<div class="viaje-tarjeta">').slice(1).map((t) => t.split('<div class="viaje-grupo">')[0]!);
 
-  it('una píldora por viaje abierto, con «Gasto» a la vista y «Cargar gasto en {viaje}» para el lector de pantalla', () => {
+  it('un cuadrado por viaje abierto, con «Gasto» a la vista y «Cargar un gasto a mano en {viaje}» para el lector de pantalla', () => {
     const html = vista([enLista({}), enLista({ id: 'v-2', nombre: 'Holbox', mi_balance_cents: 0 })]);
     expect(gastos(html)).toEqual([
-      { aria: 'Cargar gasto en Cancún 2026', texto: 'Gasto' },
-      { aria: 'Cargar gasto en Holbox', texto: 'Gasto' },
+      { aria: 'Cargar un gasto a mano en Cancún 2026', texto: 'Gasto' },
+      { aria: 'Cargar un gasto a mano en Holbox', texto: 'Gasto' },
     ]);
-    // El «+» es el ícono de la app, a 18 px.
-    expect(html).toMatch(/class="viaje-gasto"[^>]*><svg width="18" height="18"[^>]*><path d="M12 5v14"/);
+    // El «+» es el ícono de la app, a 22 px.
+    expect(html).toMatch(/class="viaje-gasto"[^>]*><svg width="22" height="22"[^>]*><path d="M12 5v14"/);
+    expect(traducir('Cargar un gasto a mano en {0}', 'en', 'Holbox')).toBe('Add a manual expense to Holbox');
   });
 
-  it('🔴 un viaje esperando pagos no la lleva: ya no se carga nada', () => {
+  it('🔴 en la misma tarjeta: el botón del viaje, el divisor y el de gasto, hermanos (nunca un botón dentro de otro)', () => {
+    const tarjeta = tarjetas(vista([enLista({})]))[0]!;
+    expect(tarjeta).toMatch(/^<button type="button" class="viaje-burbuja"[^>]*>[\s\S]*?<\/button><span class="viaje-tarjeta-divisor" aria-hidden="true"><\/span><button type="button" class="viaje-gasto"[^>]*>[\s\S]*?<\/button><\/div>/);
+    // Ninguno de los dos tiene otro botón adentro.
+    for (const boton of tarjeta.split('</button>').slice(0, 2)) expect(boton.match(/<button/g)).toHaveLength(1);
+    // La burbuja sigue con sus tres cosas: el gasto no está adentro de ella.
+    expect(burbujas(vista([enLista({})]))[0]!.texto).not.toContain('Gasto');
+  });
+
+  it('🔴 un viaje esperando pagos no lo lleva: sin divisor ni botón, la burbuja ocupa toda la tarjeta', () => {
     const html = vista([enLista({ estado: 'esperando_pagos', transferencias_pendientes: 2 }), enLista({ id: 'v-2', nombre: 'Holbox' })]);
-    expect(gastos(html)).toEqual([{ aria: 'Cargar gasto en Holbox', texto: 'Gasto' }]);
+    expect(gastos(html)).toEqual([{ aria: 'Cargar un gasto a mano en Holbox', texto: 'Gasto' }]);
+    const [esperando, abierto] = tarjetas(html);
+    expect(esperando).toMatch(/^<button type="button" class="viaje-burbuja"[^>]*>[\s\S]*?<\/button><\/div>/);
+    expect(esperando).not.toContain('viaje-tarjeta-divisor');
+    expect(abierto).toContain('viaje-tarjeta-divisor');
   });
 
-  it('🔴 el orden en el grupo: la burbuja, «+ Gasto» y después los restaurantes pendientes; afuera de la burbuja', () => {
+  it('🔴 el orden en el grupo: la tarjeta y después los restaurantes pendientes, afuera de ella', () => {
     const p: PendientesDeViajes = { 'v-1': [{ ticket_id: 'tk-3', lugar: 'Tacos El Güero', tipo_lugar: 'restaurante', faltan: 1 }] };
     const grupo = vista([enLista({})], { pendientes: p }).split('<div class="viaje-grupo">')[1]!;
     const clases = [...grupo.matchAll(/<button type="button" class="([^"]+)"/g)].map((m) => m[1]);
     expect(clases).toEqual(['viaje-burbuja', 'viaje-gasto', 'viaje-pendiente']);
-    // No está adentro de la burbuja: ésta sigue con sus tres cosas.
-    expect(burbujas(vista([enLista({})]))[0]!.texto).not.toContain('Gasto');
+    expect(grupo.indexOf('</div><button type="button" class="viaje-pendiente"')).toBeGreaterThan(0);
   });
 
   it('abre la Carga manual de ESE viaje', () => {
@@ -433,14 +490,16 @@ describe('🔴 D280 · «+ Gasto» debajo de la burbuja del viaje', () => {
     expect(fuente).toContain("onClick={() => navigate('viaje-gasto', v.id)}");
   });
 
-  it('las medidas de la especificación: 44 de alto, 0 18 0 14, gap 8, borde, píldora, blanca, a la derecha', () => {
+  it('las medidas de la especificación (§1 bis): 76 de ancho, columna centrada con gap 4, 14/700; divisor de 1 px; el foco por dentro', () => {
     const css = readFileSync(new URL('./inicio.css', import.meta.url), 'utf8');
     const regla = (sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf('}', css.indexOf(`${sel} {`)));
-    for (const m of ['align-self: flex-end;', 'min-height: 44px;', 'padding: 0 18px 0 14px;', 'gap: 8px;', 'border: 1px solid var(--border);',
-      'border-radius: var(--r-full);', 'background: var(--surface);', 'box-shadow: var(--sh-1);', 'font-family: var(--font-body);',
-      'font-size: 15px;', 'font-weight: 700;', 'color: var(--text);']) {
+    for (const m of ['flex: none;', 'width: 76px;', 'flex-direction: column;', 'align-items: center;', 'justify-content: center;', 'gap: 4px;',
+      'background: transparent;', 'border: 0;', 'font-family: var(--font-display);', 'font-size: 14px;', 'font-weight: 700;', 'color: var(--text);']) {
       expect(regla('.viaje-gasto'), m).toContain(m);
     }
+    expect(regla('.viaje-gasto')).not.toMatch(/border-radius|box-shadow|align-self/);
     expect(regla('.viaje-gasto svg path')).toContain('stroke-width: 2.2;');
+    for (const m of ['flex: none;', 'width: 1px;', 'background: var(--border);']) expect(regla('.viaje-tarjeta-divisor'), m).toContain(m);
+    expect(regla('.viaje-tarjeta > button:focus-visible')).toMatch(/outline: 2px solid var\(--action\);\s*outline-offset: -3px;/);
   });
 });

@@ -292,28 +292,28 @@ test.describe('🔴 6 · D279 · cerrar y salir en Configuración; en el viaje, 
 });
 
 for (const ancho of [375, 390]) {
-  test.describe(`🔴 7 · D280 · «+ Gasto» a ${ancho}`, () => {
+  test.describe(`🔴 7 · D280 → D291 · «+ Gasto» a ${ancho}`, () => {
     test.use({ viewport: { width: ancho, height: 812 } });
 
-    test('debajo de la burbuja, a la derecha, antes de los pendientes; abre la Carga manual de ese viaje', async ({ page }) => {
+    test('unido a la burbuja, a la derecha, antes de los pendientes; abre la Carga manual de ese viaje', async ({ page }) => {
       await conViajes(page);
       const grupo = page.locator('.viaje-grupo').filter({ hasText: 'Cancún 2026' });
-      const gasto = grupo.getByRole('button', { name: 'Cargar gasto en Cancún 2026', exact: true });
+      // D291 · el aria-label de la opción 2a.
+      const gasto = grupo.getByRole('button', { name: 'Cargar un gasto a mano en Cancún 2026', exact: true });
       await expect(gasto).toHaveText('Gasto');
       // El pendiente de Mariscos llega con el detalle del viaje, después de la lista.
       await expect(grupo.locator('.viaje-pendiente')).toBeVisible();
       const m = await grupo.evaluate((g) => {
         const r = (s: string) => g.querySelector(s)!.getBoundingClientRect();
-        return { b: r('.viaje-burbuja'), g: r('.viaje-gasto'), p: r('.viaje-pendiente') };
+        return { t: r('.viaje-tarjeta'), b: r('.viaje-burbuja'), g: r('.viaje-gasto'), p: r('.viaje-pendiente') };
       });
-      expect(Math.round(m.g.top - m.b.bottom)).toBe(8);
-      expect(Math.round(m.b.right - m.g.right)).toBe(0);
-      // Una píldora, no una franja: angosta y empezando a la derecha (sin `align-self` se estiraría a todo el ancho).
-      expect(m.g.width).toBeLessThan(m.b.width / 2);
-      expect(m.g.left).toBeGreaterThan(m.b.left + m.b.width / 2);
-      expect(Math.round(m.g.height)).toBe(44);
-      expect(Math.round(m.p.top - m.g.bottom)).toBe(8);
-      // Esperando pagos no la lleva.
+      // D291 (2a) · un cuadrado de 76 adentro de la tarjeta, a la derecha y a todo su alto; la zona del viaje a su izquierda.
+      expect(Math.round(m.g.width)).toBe(76);
+      expect(Math.round(m.t.right - m.g.right)).toBe(1);
+      expect(Math.round(m.g.height)).toBe(Math.round(m.t.height - 2));
+      expect(m.b.right).toBeLessThanOrEqual(m.g.left);
+      expect(Math.round(m.p.top - m.t.bottom)).toBe(8);
+      // Esperando pagos no lo lleva.
       await expect(page.locator('.viaje-grupo').filter({ hasText: 'Monterrey' }).locator('.viaje-gasto')).toHaveCount(0);
       await grupo.scrollIntoViewIfNeeded();
       await capturar(page, 'd280-gasto');

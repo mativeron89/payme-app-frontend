@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { DetalleViaje, TipoLugar, ViajeEnLista } from '../../api/viajes';
 import { Icon } from '../../components/Icon';
 import { useIdioma } from '../../i18n/idioma';
@@ -23,6 +24,64 @@ export type TonoDelMonto = 'a-favor' | 'deuda' | 'cero';
 export function montoDeLaBurbuja(cents: number): { readonly tono: TonoDelMonto; readonly texto: string } {
   if (cents < 0) return { tono: 'deuda', texto: `\u2212${formatMXN(-cents)}` };
   return { tono: cents > 0 ? 'a-favor' : 'cero', texto: formatMXN(cents) };
+}
+
+/**
+ * D291 · el monto, opción 3a: Plus Jakarta Sans 26/600. Con el cuadrado «+ Gasto» al lado, a 320 un monto grande no entra
+ * en una línea a 26. Adenda del Bibliotecario (2026-10-12T03:09:12Z, opción a): el monto nunca se parte, nunca se corta y
+ * nunca se mete en el padding; si a 26 no entra, baja sólo lo necesario, hasta 16 como mínimo. El cuadrado y la foto no
+ * cambian.
+ */
+export const MONTO_PX = 26;
+export const MONTO_MINIMO_PX = 16;
+
+/** El tamaño con el que un texto que a 26 mide `necesario` entra en `disponible` (la medida escala con la letra). */
+export function tamanoDelMonto(disponible: number, necesario: number): number {
+  if (!(disponible > 0) || !(necesario > disponible)) return MONTO_PX;
+  return Math.max(MONTO_MINIMO_PX, Math.floor(((MONTO_PX * disponible) / necesario) * 10) / 10);
+}
+
+// En el navegador se mide antes de pintar (sin un cuadro con el monto desbordado); en el servidor no hay nada que medir.
+const useEfectoDeMedida = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/**
+ * El monto en una sola línea (`white-space: nowrap`). Se mide al montar, al cambiar el ancho de su columna y cuando
+ * terminan de cargar las fuentes (antes, el ancho es el de la letra de reemplazo).
+ */
+function MontoDeLaBurbuja({ tono, texto }: { readonly tono: TonoDelMonto; readonly texto: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEfectoDeMedida(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let vivo = true;
+    let medido = -1;
+    const medir = (siempre: boolean) => {
+      if (!vivo) return;
+      const disponible = el.clientWidth;
+      // Cambiar la letra cambia el alto, no el ancho: el observador vuelve a avisar y acá se corta.
+      if (!siempre && disponible === medido) return;
+      medido = disponible;
+      el.style.fontSize = '';
+      let tam = tamanoDelMonto(disponible, el.scrollWidth);
+      // La proporción es casi exacta; si por redondeo todavía no entra, se baja de a medio píxel.
+      for (let vuelta = 0; vuelta < 20; vuelta += 1) {
+        el.style.fontSize = tam === MONTO_PX ? '' : `${tam}px`;
+        if (el.scrollWidth <= el.clientWidth || tam <= MONTO_MINIMO_PX) break;
+        tam = Math.max(MONTO_MINIMO_PX, tam - 0.5);
+      }
+    };
+    medir(true);
+    void document.fonts?.ready.then(() => medir(true));
+    if (typeof ResizeObserver === 'undefined') {
+      const alCambiar = () => medir(false);
+      window.addEventListener('resize', alCambiar);
+      return () => { vivo = false; window.removeEventListener('resize', alCambiar); };
+    }
+    const ro = new ResizeObserver(() => medir(false));
+    ro.observe(el);
+    return () => { vivo = false; ro.disconnect(); };
+  }, [texto]);
+  return <span ref={ref} className={`viaje-burbuja-monto viaje-burbuja-monto--${tono}`}>{texto}</span>;
 }
 
 /** Lo que oye el lector de pantalla: «Holbox, te deben $10,565.68», «Holbox, debes $542», «Holbox, estás al día». */
@@ -145,31 +204,38 @@ export function ViajesAbiertosVista({ viajes, pendientes = null, fallo, onReinte
         const monto = montoDeLaBurbuja(cents);
         return (
           <div key={v.id} className="viaje-grupo">
-            <button
-              type="button"
-              className="viaje-burbuja"
-              aria-label={etiquetaDeLaBurbuja(v.nombre, cents, t)}
-              onClick={() => navigate('viaje', v.id)}
-            >
-              <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} burbuja />
-              <span className="viaje-burbuja-texto">
-                <span className="viaje-burbuja-nombre">{v.nombre}</span>
-                <span className={`viaje-burbuja-monto viaje-burbuja-monto--${monto.tono}`}>{monto.texto}</span>
-              </span>
-            </button>
-            {/* D280 · «+ Gasto» (Claude Design, opción 3b): 8 px debajo de la burbuja, a la derecha y afuera de ella;
-                abre la Carga manual de ese viaje. Sólo con el viaje abierto: esperando pagos ya no se carga nada. */}
-            {v.estado === 'abierto' && (
+            {/* D291 · «+ Gasto», opción 2a (`PANTALLA-burbuja-del-viaje.md` §1 bis): unido a la burbuja, a la derecha, en
+                la misma tarjeta y separado por un divisor. Son dos `<button>` hermanos, nunca uno dentro del otro: la
+                zona del viaje entra al viaje y el cuadrado abre la Carga manual. Sólo con el viaje abierto; esperando
+                pagos ya no se carga nada y la burbuja ocupa todo el ancho. */}
+            <div className="viaje-tarjeta">
               <button
                 type="button"
-                className="viaje-gasto"
-                aria-label={t('Cargar gasto en {0}', v.nombre)}
-                onClick={() => navigate('viaje-gasto', v.id)}
+                className="viaje-burbuja"
+                aria-label={etiquetaDeLaBurbuja(v.nombre, cents, t)}
+                onClick={() => navigate('viaje', v.id)}
               >
-                <Icon name="plus" size={18} />
-                <span>{t('Gasto')}</span>
+                <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} burbuja />
+                <span className="viaje-burbuja-texto">
+                  <span className="viaje-burbuja-nombre">{v.nombre}</span>
+                  <MontoDeLaBurbuja tono={monto.tono} texto={monto.texto} />
+                </span>
               </button>
-            )}
+              {v.estado === 'abierto' && (
+                <>
+                  <span className="viaje-tarjeta-divisor" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="viaje-gasto"
+                    aria-label={t('Cargar un gasto a mano en {0}', v.nombre)}
+                    onClick={() => navigate('viaje-gasto', v.id)}
+                  >
+                    <Icon name="plus" size={22} />
+                    <span>{t('Gasto')}</span>
+                  </button>
+                </>
+              )}
+            </div>
             {(pendientes?.[v.id] ?? []).map((p) => {
               const lugar = p.lugar ?? etiquetaTipoLugar(p.tipo_lugar, t);
               return (

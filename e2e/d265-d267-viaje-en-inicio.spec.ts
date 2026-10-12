@@ -48,8 +48,9 @@ test.describe('🔴 D265 · D267 · el viaje abierto en Inicio', () => {
     // D275 · esperando pagos se ve igual que abierto, con su monto.
     await expect(balance(page, 'Monterrey fin de semana')).toHaveText('$1,050');
     await expect(balance(page, 'Monterrey fin de semana')).toHaveCSS('color', 'rgb(4, 120, 87)');
-    // El color del balance no tiñe la tarjeta, que es blanca como la de una mesa.
-    await expect(burbuja(page, 'Cancún 2026')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    // El color del balance no tiñe la tarjeta, que es blanca como la de una mesa. D291 (0.243.0): el blanco lo lleva la
+    // tarjeta que une la burbuja con «+ Gasto»; la burbuja es transparente adentro.
+    await expect(page.locator('.viaje-tarjeta').filter({ hasText: 'Cancún 2026' })).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(page.getByText(/saldo/i)).toHaveCount(0);
     await burbuja(page, 'Cancún 2026').scrollIntoViewIfNeeded();
     await capturar(page, 'd265-01-inicio-con-viajes');

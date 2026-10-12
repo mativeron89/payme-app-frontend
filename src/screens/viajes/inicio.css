@@ -80,40 +80,65 @@
   flex-direction: column;
   gap: 8px;
 }
-.viaje-burbuja {
+/* D291 · «+ Gasto», opción 2a (§1 bis): la tarjeta lleva el borde, el radio, la sombra y el
+   alto de la burbuja; adentro, el botón del viaje, el divisor y el botón de gasto, uno al
+   lado del otro y a todo el alto. `overflow: hidden` recorta los dos al radio de 22. */
+.viaje-tarjeta {
   box-sizing: border-box;
   width: 100%;
   min-height: 96px;
-  padding: 16px;
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: stretch;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 22px;
   box-shadow: var(--sh-1), var(--sh-3);
+}
+/* Con `overflow: hidden` un anillo de foco por fuera quedaría cortado: va por dentro, con el de
+   Configuración del viaje (`.vjcfg-fila`). */
+.viaje-tarjeta > button:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -3px;
+}
+.viaje-burbuja {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: transparent;
+  border: 0;
   text-align: left;
   color: var(--text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-/* D280 · «+ Gasto» (Claude Design, opción 3b): píldora blanca de 44, 8 px debajo de
-   la burbuja (el gap del grupo) y alineada a la derecha, afuera de ella; antes de
-   los restaurantes pendientes. El «+» de 18 px con trazo 2.2: el CSS le gana al
-   atributo de `Icon`. */
+/* 1 px en `--border` (#E2E8F0), a todo el alto de la tarjeta. */
+.viaje-tarjeta-divisor {
+  flex: none;
+  width: 1px;
+  background: var(--border);
+}
+/* 76 de ancho y el alto de la tarjeta; el «+» de 22 con trazo 2.2 (el CSS le gana al
+   atributo de `Icon`) y «Gasto» en Plus Jakarta Sans 14/700. */
 .viaje-gasto {
-  align-self: flex-end;
-  min-height: 44px;
-  padding: 0 18px 0 14px;
+  box-sizing: border-box;
+  flex: none;
+  width: 76px;
+  padding: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  background: var(--surface);
-  box-shadow: var(--sh-1);
-  font-family: var(--font-body);
-  font-size: 15px;
+  justify-content: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.2;
   font-weight: 700;
   color: var(--text);
   cursor: pointer;
@@ -142,11 +167,14 @@
   overflow: hidden;
   overflow-wrap: anywhere;
 }
+/* D291 · el monto, opción 3a: Plus Jakarta Sans 26/600, alto de línea 1.2. En una sola línea:
+   si a 26 no entra, `MontoDeLaBurbuja` lo baja lo necesario (mínimo 16; adenda 03:09:12Z). */
 .viaje-burbuja-monto {
+  white-space: nowrap;
   font-family: var(--font-display);
-  font-size: 24px;
-  line-height: 1.25;
-  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 600;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
