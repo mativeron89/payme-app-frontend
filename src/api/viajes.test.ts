@@ -40,6 +40,7 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
     viaje_version_8: { since: string; parametro: string; regla: string; detalle_suma: string[]; lista_suma: string[] };
     viaje_version_9: { since: string; parametro: string; regla: string; ticket_suma: string[]; detalle_de_ticket_suma: string[] };
     viaje_version_10: { since: string; parametro: string; regla: string; detalle_de_ticket_suma: string[]; puedo_corregir: string };
+    viaje_version_11: { since: string; parametro: string; regla: string; detalle_suma: string[]; notas: string };
   };
   colores: Record<string, string>;
 };
@@ -58,6 +59,8 @@ const V8 = CONTRATO.negociaciones.viaje_version_8;
 const V9 = CONTRATO.negociaciones.viaje_version_9;
 /** D278-3 · App Backend 2.182.0: la 9 más `puedo_corregir` en el detalle de un ticket. */
 const V10 = CONTRATO.negociaciones.viaje_version_10;
+/** D290 · App Backend 2.183.0: la 10 más `notas` en el detalle del viaje. */
+const V11 = CONTRATO.negociaciones.viaje_version_11;
 
 const conf = (viajes: unknown) => ({ features: { viajes } });
 
@@ -115,13 +118,15 @@ const detalle = (cambios: Record<string, unknown> = {}) => ({
   color: null, has_photo: false,
   // D279 · v8: cierra quien lo creó, sólo abierto.
   hora_cierre: '23:59', puedo_cerrar: (cambios.estado ?? 'abierto') === 'abierto', se_cierra_en: null,
+  // D290 · v11: el resumen del pizarrón de notas.
+  notas: { escribieron: 1, total: 2, nuevo: false },
   ...cambios,
 });
 
 describe('decodificadores · claves exactas, `contract` exacto, falla cerrado', () => {
-  it('el detalle de un viaje: las claves del contrato con `viaje_version=8`, ni una más', () => {
+  it('el detalle de un viaje: las claves del contrato con `viaje_version=11`, ni una más', () => {
     const claves = CONTRATO.rutas['GET /api/viajes/:id']!.respuestas['200']!.viaje as string[];
-    expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma, ...V8.detalle_suma].sort());
+    expect(Object.keys(detalle()).sort()).toEqual([...claves, ...V3.detalle_suma, ...V8.detalle_suma, ...V11.detalle_suma].sort());
     expect(V8.parametro).toBe('viaje_version=8');
     expect(V2.parametro).toBe('viaje_version=2');
     expect(V3.parametro).toBe('viaje_version=3');
@@ -725,6 +730,36 @@ describe('🔴 D278-2 · D284 · `viaje_version=9`: el servicio, los descuentos,
     const limpio = { ...gasto, ticket: ticket({ forma: 'iguales', tipo_lugar: 'otro', pagaste_tu: true, pagado_por: 'm1',
       servicio_cents: 0, descuentos_cents: 0, iva_aparte_cents: 0, total_cents: 10000, pagadores: [{ miembro_id: 'm1', monto_cents: 10000 }] }) };
     expect(decodeGastoCargado(limpio).total_cents).toBe(10000);
+  });
+});
+
+describe('🔴 D290 · `viaje_version=11`: el resumen del pizarrón de notas en el detalle (App Backend 2.183.0)', () => {
+  const sin = (o: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+
+  it('el contrato: la 11 suma sólo `notas`, y sólo en el detalle del viaje', () => {
+    expect(V11.parametro).toBe('viaje_version=11');
+    expect(V11.detalle_suma).toEqual(['notas']);
+    expect(V11.regla).toContain('en el detalle de un ticket y en la lista de viajes, la 11 responde como la 10');
+    expect(V11.notas).toContain('{escribieron, total, nuevo}');
+  });
+
+  it('el detalle trae `notas` con sus tres claves; sin ella, o con otra forma, no se acepta', () => {
+    const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({ notas: { escribieron: 2, total: 2, nuevo: true } }) });
+    expect(v.notas).toEqual({ escribieron: 2, total: 2, nuevo: true });
+    expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: sin(detalle(), 'notas') })).toThrow();
+    for (const malo of [
+      null, {}, { escribieron: 0, total: 2 }, { escribieron: 0, total: 2, nuevo: false, saldo: 0 },
+      { escribieron: 3, total: 2, nuevo: false }, { escribieron: -1, total: 2, nuevo: false },
+      { escribieron: 1.5, total: 2, nuevo: false }, { escribieron: 0, total: 2, nuevo: 'no' },
+    ]) {
+      expect(() => decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({ notas: malo }) }), JSON.stringify(malo)).toThrow();
+    }
+  });
+
+  it('con el viaje cerrado también llega (las notas quedan para leer)', () => {
+    const v = decodeDetalleViaje({ contract: CONTRATO.id, viaje: detalle({ estado: 'cerrado', puedo_cerrar: false,
+      notas: { escribieron: 0, total: 2, nuevo: false } }) });
+    expect(v.notas.total).toBe(2);
   });
 });
 

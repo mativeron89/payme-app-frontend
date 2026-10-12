@@ -1,0 +1,95 @@
+/** D290 · EN del pizarrón de notas del viaje. El diseño no trae inglés: lo escribió App Frontend. */
+export const EN_VIAJES_NOTAS: Record<string, string> = {
+  // §1 · la fila del viaje.
+  'Notas': 'Notes',
+  'Hay notas nuevas': 'There are new notes',
+  '{0} de {1} escribieron': '{0} of {1} wrote',
+  // §2 · el pizarrón.
+  'Tu apartado': 'Your section',
+  'Tu apartado · {0}': 'Your section · {0}',
+  'Apartado de {0}': "{0}'s section",
+  '1 nota': '1 note',
+  '{0} notas': '{0} notes',
+  '1 lista': '1 list',
+  '{0} listas': '{0} lists',
+  'Todavía no anotó nada': "Hasn't written anything yet",
+  'Todavía no anotaste nada': "You haven't written anything yet",
+  'Anota un plan o arma una lista. Todos los del viaje lo ven; sólo tú lo editas.':
+    'Write down a plan or make a list. Everyone on the trip sees it; only you can edit it.',
+  'Escribir nota': 'Write a note',
+  'Armar lista': 'Make a list',
+  'Nota': 'Note',
+  'Lista': 'List',
+  'Ver todo': 'See all',
+  '{0} de {1}': '{0} of {1}',
+  'Editar o borrar la nota': 'Edit or delete the note',
+  'Editar o borrar la lista': 'Edit or delete the list',
+  'tildado': 'checked',
+  'sin tildar': 'unchecked',
+  'Llegaste al tope de {0} notas y listas. Borra una para sumar otra.':
+    "You've reached the limit of {0} notes and lists. Delete one to add another.",
+  'No pudimos cargar las notas': "We couldn't load the notes",
+  // §4 · muchas personas.
+  'Personas del viaje': 'People on the trip',
+  'Con notas · {0}': 'With notes · {0}',
+  'Sin notas todavía · {0}': 'No notes yet · {0}',
+  '{0} no dejó notas': "{0} didn't leave notes",
+  '{0} no dejaron notas': "{0} didn't leave notes",
+  // §5 · cerrado, y la cuenta que no escribe.
+  'El viaje se cerró el {0}. Las notas quedan para leer; ya nadie puede editarlas.':
+    'The trip closed on {0}. The notes stay to read; nobody can edit them anymore.',
+  'El viaje se cerró. Las notas quedan para leer; ya nadie puede editarlas.':
+    'The trip closed. The notes stay to read; nobody can edit them anymore.',
+  'Tu cuenta está suspendida. Puedes leer las notas, pero no escribir.':
+    'Your account is suspended. You can read the notes, but not write.',
+  // El apartado de otro.
+  'Notas · {0}': 'Notes · {0}',
+  'Sólo {0} puede escribir en su apartado.': 'Only {0} can write in their section.',
+  // §3 · las hojas.
+  'Nota nueva': 'New note',
+  'Lista nueva': 'New list',
+  'Editar nota': 'Edit note',
+  'Editar lista': 'Edit list',
+  'Escribe un plan, un horario, un dato…': 'Write a plan, a time, a detail…',
+  'La ven todos los del viaje.': 'Everyone on the trip sees it.',
+  'Las tildas después, en tu apartado.': 'You check them off later, in your section.',
+  'Título de la lista': 'List title',
+  'Agregar ítem': 'Add item',
+  'Ítem {0}': 'Item {0}',
+  'ítem {0}': 'item {0}',
+  'Quitar {0}': 'Remove {0}',
+  'Te quedan {0}': '{0} left',
+  'Llegaste a {0}': 'You reached {0}',
+  '{0} / {1}': '{0} / {1}',
+  '{0} / {1} ítems': '{0} / {1} items',
+  'Llegaste a {0} ítems': 'You reached {0} items',
+  'Tu nota': 'Your note',
+  'Borrar nota': 'Delete note',
+  'Borrar lista': 'Delete list',
+  // Lo que pasó.
+  'Nota agregada': 'Note added',
+  'Lista agregada': 'List added',
+  'Nota guardada': 'Note saved',
+  'Lista guardada': 'List saved',
+  'Nota borrada': 'Note deleted',
+  'Lista borrada': 'List deleted',
+  // Los errores del dueño (la orden, punto 6).
+  'Sólo puedes cambiar lo tuyo.': 'You can only change your own.',
+  'Esta nota cambió en otro lado. Si guardas, reemplazas esa versión.':
+    'This note changed somewhere else. If you save, you replace that version.',
+  'Esta lista cambió en otro lado. Si guardas, reemplazas esa versión.':
+    'This list changed somewhere else. If you save, you replace that version.',
+  'Cambió en otro lado. Mira cómo quedó antes de borrarla.': 'It changed somewhere else. Check how it looks before deleting it.',
+  'No pudimos guardarla. Prueba de nuevo.': "We couldn't save it. Try again.",
+  'No pudimos guardarla. Revisa el texto y prueba de nuevo.': "We couldn't save it. Check the text and try again.",
+  'No pudimos borrarla. Prueba de nuevo.': "We couldn't delete it. Try again.",
+  'No pudimos tildarlo. Prueba de nuevo.': "We couldn't check it off. Try again.",
+  'La lista cambió en otro lado. Vuelve a editarla.': 'The list changed somewhere else. Edit it again.',
+  'Escribe algo para guardar.': 'Write something to save.',
+  'Una nota puede tener hasta 500 caracteres.': 'A note can have up to 500 characters.',
+  'Hay un carácter que no se puede guardar. Bórralo y prueba de nuevo.': "There's a character that can't be saved. Delete it and try again.",
+  'El título puede tener hasta 80 caracteres.': 'The title can have up to 80 characters.',
+  'Cada ítem puede tener hasta 80 caracteres.': 'Each item can have up to 80 characters.',
+  'La lista necesita al menos un ítem.': 'The list needs at least one item.',
+  'Una lista puede tener hasta 30 ítems.': 'A list can have up to 30 items.',
+};

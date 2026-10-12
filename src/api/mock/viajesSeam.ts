@@ -112,3 +112,25 @@ export function seamDeCorregirMock(valor: 'ya_no_estaba' | 'cerrado' | 'prohibid
   try { localStorage.removeItem(CLAVE_CORREGIR_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
   return true;
 }
+
+/**
+ * D290 · una escritura del pizarrón de notas, una sola vez (el seam se consume):
+ * - `respuesta_perdida`: crear se guarda y la respuesta no llega (500); el reintento con la misma clave la devuelve;
+ * - `otra_pestana`: otra pestaña editó esa nota justo antes; el dueño contesta 409 `viaje_nota_version_conflict` con mi
+ *   apartado;
+ * - `ya_no_estaba`: otra pestaña la borró justo antes; 404 `viaje_nota_not_found`;
+ * - `se_cerro`: quien lo creó cerró el viaje justo antes; 409 `viaje_not_open`;
+ * - `suspendida`: 403 `user_suspended`;
+ * - `no_es_tuya`: 403 `viaje_nota_not_yours`;
+ * - `invalido`: 400 `validation_error` con `texto_control`.
+ */
+export const CLAVE_NOTAS_MOCK = 'payme.app.mock.viajes.notas.v1';
+
+export type SeamDeNotas = 'respuesta_perdida' | 'otra_pestana' | 'ya_no_estaba' | 'se_cerro' | 'suspendida' | 'no_es_tuya' | 'invalido';
+
+/** Lee y consume el seam de las notas: `true` una sola vez si vale `valor`. */
+export function seamDeNotasMock(valor: SeamDeNotas): boolean {
+  if (leer(CLAVE_NOTAS_MOCK) !== valor) return false;
+  try { localStorage.removeItem(CLAVE_NOTAS_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
+  return true;
+}

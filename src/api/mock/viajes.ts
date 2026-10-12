@@ -14,7 +14,7 @@ import {
 import { persist as persistirStore, state as store } from './store';
 import {
   avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeCorregirMock, seamDeEliminarMock, seamDeGastoMock,
-  seamDeSeleccionMock, viajesMockEncendido,
+  seamDeNotasMock, seamDeSeleccionMock, viajesMockEncendido,
 } from './viajesSeam';
 import {
   ajustesDeRecibo,
@@ -64,10 +64,11 @@ interface OpcionesDeVersion {
    *  9: la 8 más el servicio, los descuentos, el IVA aparte y el total impreso en cada ticket, y `te_toca_platos_cents`
    *     en el detalle de un ticket; la lista, como la 8. Sólo un POST de ticket con la 9 guarda los ajustes (D278-2, D284,
    *     2.181.0);
-   *  10: la 9 más `puedo_corregir` en el detalle de un ticket; fuera de él, como la 9 (D278-3, 2.182.0). */
+   *  10: la 9 más `puedo_corregir` en el detalle de un ticket; fuera de él, como la 9 (D278-3, 2.182.0);
+   *  11: la 10 más `notas` en el detalle del viaje; en la lista y en el detalle de un ticket, como la 10 (D290, 2.183.0). */
   readonly version?: Version;
 }
-type Version = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+type Version = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 /** D255 · la paleta del contrato (`colores`): se guarda la clave. */
 const COLORES = ['azul', 'verde', 'violeta', 'rojo', 'naranja', 'turquesa'] as const;
@@ -158,6 +159,27 @@ export interface ViajeMock {
   foto?: { revision: number; width: number; height: number; updated_at: string } | null;
   /** D279 · «HH:MM». Sin él (lo sembrado y lo anterior), 23:59. */
   hora_cierre?: string;
+  /** D290 · cuándo se cerró (pasó a esperando pagos): el `cerrado_en` del pizarrón. Sin él (lo anterior), null. */
+  cerrado_en?: string | null;
+  /** D290 · el pizarrón: las entradas de todos, las de cada autor en su orden. Sin él (lo anterior), ninguna. */
+  notas?: NotaMock[];
+  /** D290 · la última visita de cada uno al pizarrón (`viaje_notas_vistas`). */
+  vistas_notas?: Record<string, string>;
+}
+
+/** D290 · una nota o una lista del pizarrón (`viaje_notas` y `viaje_nota_items` del dueño). */
+export interface NotaMock {
+  id: string;
+  user_id: string;
+  tipo: 'nota' | 'lista';
+  texto: string | null;
+  titulo: string | null;
+  items: Array<{ id: string; texto: string; tildado: boolean }>;
+  version: number;
+  creado_en: string;
+  actualizado_en: string;
+  idempotency_key: string;
+  pedido_hash: string;
 }
 
 /** D255-6 · quien cargó el ticket (la idempotencia y marcar presentes son suyas). */
@@ -527,6 +549,8 @@ function vistaViaje(v: ViajeMock, u: string, version: Version = 1) {
       puedo_cerrar: est === 'abierto' && v.creado_por === u,
       se_cierra_en: seCierraEn(v),
     }),
+    // D290 · con la 11: el resumen del pizarrón de notas, al final.
+    ...(version >= 11 && { notas: resumenDeNotas(v, u) }),
   };
 }
 
@@ -667,7 +691,7 @@ function resolverMiembros(pedidos: ReadonlyArray<{ user_id: string } | { usernam
 
 // ─── Rutas: viajes y miembros ─────────────────────────────────────────────
 
-export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 } = {}) {
+export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { version = 1 }: { readonly version?: 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 } = {}) {
   return ruta(() => {
     const u = yo();
     const mios = cargar().viajes.filter((v) => esActivo(v, u))
@@ -675,7 +699,8 @@ export function mockListarViajes(estadoPedido: 'abiertos' | 'cerrados', { versio
     const abiertos: Array<ReturnType<typeof vistaEnLista>> = [];
     const cerrados: Array<ReturnType<typeof vistaEnLista>> = [];
     for (const v of mios) {
-      // D256 · en la lista la 4 sale como la 3 (como el dueño); D279 · la 8 suma `hora_cierre`; la 9 y la 10 salen como la 8.
+      // D256 · en la lista la 4 sale como la 3 (como el dueño); D279 · la 8 suma `hora_cierre`; la 9, la 10 y la 11 salen
+      // como la 8.
       const item = vistaEnLista(v, u, version >= 8 ? 8 : version >= 3 ? 3 : 1);
       (item.estado === 'cerrado' ? cerrados : abiertos).push(item);
     }
@@ -1403,6 +1428,7 @@ function cerrarInterno(v: ViajeMock): void {
   }
   v.transferencias = transferencias.map((x, k) => ({ id: nuevoId(), orden: k, de_user: x.de, a_user: x.a, monto_cents: x.monto_cents, estado: 'pendiente' }));
   v.estado = 'esperando_pagos';
+  v.cerrado_en = ahora();
 }
 
 /**
@@ -1716,6 +1742,342 @@ export function mockResumenDeViaje(id: string) {
   });
 }
 
+// ─── El pizarrón de notas (D290, App Backend 2.183.0) ─────────────────────
+// Las reglas de `services/viajesNotas.js` del dueño: todos los miembros activos leen todo, cada uno escribe lo suyo; con
+// el viaje esperando pagos o cerrado, todo queda para leer. Los mismos límites, el mismo orden de errores y la misma
+// concurrencia (la `version` que vi, la clave de idempotencia y el apartado en los 409).
+
+const LIMITES_NOTAS = Object.freeze({
+  entradas_por_miembro: 20, caracteres_nota: 500, items_por_lista: 30, caracteres_item: 80, caracteres_titulo: 80,
+});
+// Los controles C0 y C1, salvo el tab y el salto de línea (`CONTROLES` del dueño).
+// eslint-disable-next-line no-control-regex
+const CONTROLES = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/u;
+
+class NotaInvalida extends Error {
+  constructor(readonly issues: Array<{ path: string; message: string }>) {
+    super('validation_error');
+  }
+}
+const notaInvalida = (path: string, message: string) => new NotaInvalida([{ path, message }]);
+
+/** Una nota: NFC, `\r\n` → `\n`, sin los extremos; conserva saltos y tabs. */
+function textoDeNota(raw: unknown, path: string): string {
+  if (typeof raw !== 'string') throw notaInvalida(path, 'invalido');
+  const s = raw.normalize('NFC').replace(/\r\n?/g, '\n').trim();
+  if (s.length < 1) throw notaInvalida(path, 'texto_vacio');
+  if (s.length > LIMITES_NOTAS.caracteres_nota) throw notaInvalida(path, 'texto_max_500');
+  if (CONTROLES.test(s)) throw notaInvalida(path, 'texto_control');
+  return s;
+}
+
+/** Un título o un ítem: de una línea, con los espacios colapsados. */
+function lineaDeNota(raw: unknown, path: string, max: number, mensajeMax: string): string {
+  if (typeof raw !== 'string') throw notaInvalida(path, 'invalido');
+  const s = raw.normalize('NFC').replace(/\s+/gu, ' ').trim();
+  if (s.length < 1) throw notaInvalida(path, 'texto_vacio');
+  if (s.length > max) throw notaInvalida(path, mensajeMax);
+  if (CONTROLES.test(s)) throw notaInvalida(path, 'texto_control');
+  return s;
+}
+
+function objetoEstricto(raw: unknown, permitidas: readonly string[], path = ''): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw notaInvalida(path, 'invalido');
+  const extra = Object.keys(raw).find((k) => !permitidas.includes(k));
+  if (extra !== undefined) throw notaInvalida(path, 'unrecognized_keys');
+  return raw as Record<string, unknown>;
+}
+
+function itemsDeNota(raw: unknown, conId: boolean): Array<{ id?: string; texto: string }> {
+  if (!Array.isArray(raw)) throw notaInvalida('items', 'invalido');
+  const items = raw.map((x, k) => {
+    const o = objetoEstricto(x, conId ? ['id', 'texto'] : ['texto'], `items.${k}`);
+    if (o.id !== undefined && !esUuid(o.id)) throw notaInvalida(`items.${k}.id`, 'invalido');
+    const texto = lineaDeNota(o.texto, `items.${k}.texto`, LIMITES_NOTAS.caracteres_item, 'item_max_80');
+    return o.id !== undefined ? { id: o.id as string, texto } : { texto };
+  });
+  if (items.length < 1) throw notaInvalida('items', 'items_min_1');
+  if (items.length > LIMITES_NOTAS.items_por_lista) throw notaInvalida('items', 'items_max_30');
+  const ids = items.flatMap((i) => (i.id ? [i.id] : []));
+  if (new Set(ids).size !== ids.length) throw notaInvalida('items', 'item_repetido');
+  return items;
+}
+
+function versionDeNota(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1 || raw > 2147483647) throw notaInvalida('version', 'invalido');
+  return raw;
+}
+
+/** Corre la validación y la convierte en el 400 del dueño. */
+function validarNota<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof NotaInvalida) throw new Respuesta(400, 'validation_error', { issues: err.issues });
+    throw err;
+  }
+}
+
+/** Quiénes tienen apartado: los miembros activos con cuenta viva, en el orden de los miembros (`autoresDelPizarron`). */
+const autoresDelPizarron = (v: ViajeMock) => miembrosEnOrden(v).filter((m) => m.estado === 'activo' && !m.eliminada);
+const notasDe = (v: ViajeMock, u: string) => (v.notas ?? []).filter((n) => n.user_id === u);
+/** La última vez que escribió (crear o editar), o null. */
+const ultimaEscritura = (xs: readonly NotaMock[]) => xs.reduce<string | null>((max, n) => (!max || n.actualizado_en > max ? n.actualizado_en : max), null);
+
+function vistaEntrada(n: NotaMock) {
+  const cola = { version: n.version, creado_en: n.creado_en, actualizado_en: n.actualizado_en };
+  if (n.tipo === 'nota') return { id: n.id, tipo: 'nota', texto: n.texto, ...cola };
+  return { id: n.id, tipo: 'lista', titulo: n.titulo, items: n.items.map((i) => ({ id: i.id, texto: i.texto, tildado: i.tildado })), ...cola };
+}
+
+function vistaApartado(m: MiembroMock, u: string, v: ViajeMock) {
+  const entradas = notasDe(v, m.user_id);
+  return { miembro_id: m.id, ...persona(m), has_avatar: !m.eliminada && CON_FOTO.has(m.user_id), es_yo: m.user_id === u,
+    actualizado_en: ultimaEscritura(entradas), entradas: entradas.map(vistaEntrada) };
+}
+
+/** `viaje_version=11` · el resumen de la fila «Notas»: lo de quien salió no cuenta. */
+function resumenDeNotas(v: ViajeMock, u: string) {
+  const autores = new Set(autoresDelPizarron(v).map((m) => m.user_id));
+  const visita = v.vistas_notas?.[u] ?? null;
+  const visibles = (v.notas ?? []).filter((n) => autores.has(n.user_id));
+  return {
+    escribieron: new Set(visibles.map((n) => n.user_id)).size,
+    total: autores.size,
+    nuevo: visibles.some((n) => n.user_id !== u && (visita === null || n.actualizado_en > visita)),
+  };
+}
+
+/** Mi apartado; el viaje dejó de tenerme como activo en el medio: el 404 del viaje. */
+function miApartadoDeNotas(v: ViajeMock, u: string) {
+  const m = autoresDelPizarron(v).find((x) => x.user_id === u);
+  if (!m) throw noEncontrado();
+  return vistaApartado(m, u, v);
+}
+
+/** `GET /api/viajes/:id/notas` · el pizarrón. Marca mi visita, también cerrado. */
+export function mockNotasDeViaje(id: string) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    v.vistas_notas = { ...v.vistas_notas, [u]: ahora() };
+    const autores = autoresDelPizarron(v);
+    const posicion = new Map(autores.map((m, k) => [m.user_id, k]));
+    const ultima = (m: MiembroMock) => ultimaEscritura(notasDe(v, m.user_id));
+    const otros = autores.filter((m) => m.user_id !== u);
+    const conNotas = otros.filter((m) => ultima(m) !== null)
+      .sort((a, b) => ultima(b)!.localeCompare(ultima(a)!) || posicion.get(a.user_id)! - posicion.get(b.user_id)!);
+    const sinNotas = otros.filter((m) => ultima(m) === null);
+    const orden = [...autores.filter((m) => m.user_id === u), ...conNotas, ...sinNotas];
+    const r = resumenDeNotas(v, u);
+    return {
+      contract: CONTRATO,
+      pizarron: {
+        viaje_id: v.id, nombre: v.nombre, estado: estadoEfectivo(v), cerrado_en: v.cerrado_en ?? null,
+        // El mock no tiene cuentas suspendidas: con el viaje abierto, escribo.
+        editable: v.estado === 'abierto',
+        total: r.total, escribieron: r.escribieron, limites: LIMITES_NOTAS,
+        apartados: orden.map((m) => vistaApartado(m, u, v)),
+      },
+    };
+  });
+}
+
+/** La respuesta de una escritura, con mi apartado (y en un 409 de concurrencia, también). */
+function conMiApartado(v: ViajeMock, u: string, extra: Record<string, unknown> = {}) {
+  return { contract: CONTRATO, ...extra, apartado: miApartadoDeNotas(v, u) };
+}
+const conflictoConApartado = (v: ViajeMock, u: string, error: string) =>
+  new Respuesta(409, error, { apartado: miApartadoDeNotas(v, u) });
+
+/** Los cuatro primeros pasos de una escritura sobre una nota (`puedoEscribir` del dueño). */
+function notaParaEscribir(v: ViajeMock, u: string, nid: unknown): NotaMock {
+  const n = esUuid(nid) ? (v.notas ?? []).find((x) => x.id === nid) : undefined;
+  // La de quien salió no existe para nadie mientras esté afuera.
+  const autor = n ? v.miembros.find((m) => m.user_id === n.user_id) : undefined;
+  if (!n || autor?.estado !== 'activo') throw new Respuesta(404, 'viaje_nota_not_found');
+  if (seamDeNotasMock('ya_no_estaba')) {
+    v.notas = (v.notas ?? []).filter((x) => x.id !== n.id);
+    guardar();
+    throw new Respuesta(404, 'viaje_nota_not_found');
+  }
+  abiertaParaNotas(v);
+  if (n.user_id !== u || seamDeNotasMock('no_es_tuya')) throw new Respuesta(403, 'viaje_nota_not_yours');
+  if (seamDeNotasMock('suspendida')) throw new Respuesta(403, 'user_suspended');
+  return n;
+}
+
+/** El 409 de un viaje que no está abierto (con el seam, quien lo creó lo cerró justo antes). */
+function abiertaParaNotas(v: ViajeMock): void {
+  if (v.estado === 'abierto' && seamDeNotasMock('se_cerro')) {
+    cerrarInterno(v);
+    terminarSiCorresponde(v);
+    guardar();
+  }
+  if (v.estado !== 'abierto') throw conflicto('viaje_not_open', { estado: v.estado });
+}
+
+/** `POST /api/viajes/:id/notas` · una nota o una lista mía, al final de mi apartado. */
+export function mockCrearNota(id: string, body: unknown) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    abiertaParaNotas(v);
+    if (seamDeNotasMock('suspendida')) throw new Respuesta(403, 'user_suspended');
+    const pedido = validarNota(() => {
+      if (seamDeNotasMock('invalido')) throw notaInvalida('texto', 'texto_control');
+      const tipo = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).tipo : undefined;
+      if (tipo !== 'nota' && tipo !== 'lista') throw notaInvalida('tipo', 'tipo_invalido');
+      const o = objetoEstricto(body, tipo === 'nota' ? ['idempotency_key', 'tipo', 'texto'] : ['idempotency_key', 'tipo', 'titulo', 'items']);
+      if (typeof o.idempotency_key !== 'string' || o.idempotency_key.length < 8 || o.idempotency_key.length > 100) {
+        throw notaInvalida('idempotency_key', 'invalido');
+      }
+      return tipo === 'nota'
+        ? { clave: o.idempotency_key, tipo: 'nota' as const, texto: textoDeNota(o.texto, 'texto') }
+        : { clave: o.idempotency_key, tipo: 'lista' as const, titulo: lineaDeNota(o.titulo, 'titulo', LIMITES_NOTAS.caracteres_titulo, 'titulo_max_80'),
+          items: itemsDeNota(o.items, false) };
+    });
+    const { clave, ...sinClave } = pedido;
+    const hash = JSON.stringify(sinClave);
+    // El reintento va antes que el tope: la que ya está no choca con él.
+    const ya = (v.notas ?? []).find((n) => n.user_id === u && n.idempotency_key === clave);
+    if (ya) {
+      if (ya.pedido_hash !== hash) throw conflicto('idempotency_key_conflict');
+      return conMiApartado(v, u, { entrada_id: ya.id });
+    }
+    if (notasDe(v, u).length >= LIMITES_NOTAS.entradas_por_miembro) {
+      throw conflicto('viaje_notas_limit', { limit: LIMITES_NOTAS.entradas_por_miembro });
+    }
+    const en = ahora();
+    const n: NotaMock = {
+      id: nuevoId(), user_id: u, tipo: pedido.tipo, texto: pedido.tipo === 'nota' ? pedido.texto : null,
+      titulo: pedido.tipo === 'lista' ? pedido.titulo : null,
+      items: pedido.tipo === 'lista' ? pedido.items.map((i) => ({ id: nuevoId(), texto: i.texto, tildado: false })) : [],
+      version: 1, creado_en: en, actualizado_en: en, idempotency_key: clave, pedido_hash: hash,
+    };
+    v.notas = [...(v.notas ?? []), n];
+    if (seamDeNotasMock('respuesta_perdida')) {
+      guardar();
+      throw new Respuesta(500, 'internal_error');
+    }
+    return conMiApartado(v, u, { entrada_id: n.id });
+  });
+}
+
+/** `PATCH /api/viajes/:id/notas/:nid` · con la `version` que vi. */
+export function mockEditarNota(id: string, nid: string, body: unknown) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    const n = notaParaEscribir(v, u, nid);
+    type Edicion = { version: number; texto?: string; titulo?: string; items?: Array<{ id?: string; texto: string }> };
+    const b = validarNota((): Edicion => {
+      if (seamDeNotasMock('invalido')) throw notaInvalida('texto', 'texto_control');
+      if (n.tipo === 'nota') {
+        const o = objetoEstricto(body, ['version', 'texto']);
+        return { version: versionDeNota(o.version), texto: textoDeNota(o.texto, 'texto') };
+      }
+      const o = objetoEstricto(body, ['version', 'titulo', 'items']);
+      const version = versionDeNota(o.version);
+      const titulo = o.titulo === undefined ? undefined
+        : lineaDeNota(o.titulo, 'titulo', LIMITES_NOTAS.caracteres_titulo, 'titulo_max_80');
+      const items = o.items === undefined ? undefined : itemsDeNota(o.items, true);
+      if (titulo === undefined && items === undefined) throw notaInvalida('', 'nada_para_editar');
+      return { version, titulo, items };
+    });
+    const items = b.items ?? null;
+    if (n.tipo === 'lista' && items) {
+      const ajeno = items.find((i) => i.id && !n.items.some((x) => x.id === i.id));
+      if (ajeno) throw new Respuesta(422, 'viaje_nota_item_unknown', { item_id: ajeno.id });
+    }
+    if (seamDeNotasMock('otra_pestana')) {
+      // Otra pestaña la editó justo antes.
+      n.version += 1;
+      n.actualizado_en = ahora();
+      if (n.tipo === 'nota') n.texto = `${n.texto} (editada en otra pestaña)`.slice(0, LIMITES_NOTAS.caracteres_nota);
+      else n.titulo = `${n.titulo} ·`.slice(0, LIMITES_NOTAS.caracteres_titulo);
+      guardar();
+    }
+    if (b.version !== n.version) throw conflictoConApartado(v, u, 'viaje_nota_version_conflict');
+    const nuevoTitulo = n.tipo === 'lista' ? (b.titulo ?? n.titulo) : null;
+    const cambia = n.tipo === 'nota'
+      ? b.texto !== n.texto
+      : nuevoTitulo !== n.titulo || (items !== null && (items.length !== n.items.length
+        || items.some((i, k) => (i.id ?? null) !== n.items[k]!.id || i.texto !== n.items[k]!.texto)));
+    if (!cambia) return conMiApartado(v, u);
+    if (n.tipo === 'nota' && b.texto !== undefined) n.texto = b.texto;
+    if (n.tipo === 'lista') {
+      n.titulo = nuevoTitulo ?? n.titulo;
+      // Con `id`, conserva su tilde; sin `id`, uno nuevo sin tildar; el que no viene, se saca.
+      if (items) n.items = items.map((i) => (i.id ? { ...n.items.find((x) => x.id === i.id)!, texto: i.texto } : { id: nuevoId(), texto: i.texto, tildado: false }));
+    }
+    n.version += 1;
+    n.actualizado_en = ahora();
+    return conMiApartado(v, u);
+  });
+}
+
+/** `DELETE /api/viajes/:id/notas/:nid?version=N` · con la `version` que vi. No es «nuevo». */
+export function mockBorrarNota(id: string, nid: string, query: unknown) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    const n = notaParaEscribir(v, u, nid);
+    const version = validarNota(() => {
+      const o = objetoEstricto(query, ['version']);
+      if (typeof o.version !== 'string' || !/^[1-9][0-9]{0,9}$/.test(o.version)) throw notaInvalida('version', 'version_invalida');
+      return Number(o.version);
+    });
+    if (seamDeNotasMock('otra_pestana')) {
+      n.version += 1;
+      n.actualizado_en = ahora();
+      guardar();
+    }
+    if (version !== n.version) throw conflictoConApartado(v, u, 'viaje_nota_version_conflict');
+    v.notas = (v.notas ?? []).filter((x) => x.id !== n.id);
+    return conMiApartado(v, u);
+  });
+}
+
+/** `PUT /api/viajes/:id/notas/:nid/items/:iid` · un estado: dos veces es un solo efecto. No sube la versión. */
+export function mockTildarItemDeNota(id: string, nid: string, iid: string, body: unknown) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    const n = notaParaEscribir(v, u, nid);
+    const tildado = validarNota(() => {
+      const o = objetoEstricto(body, ['tildado']);
+      if (typeof o.tildado !== 'boolean') throw notaInvalida('tildado', 'invalido');
+      return o.tildado;
+    });
+    const item = n.items.find((i) => i.id === iid);
+    if (!item) throw new Respuesta(404, 'viaje_nota_item_not_found');
+    item.tildado = tildado;
+    return conMiApartado(v, u);
+  });
+}
+
+/** `PUT /api/viajes/:id/notas/orden` · todas las mías, en el orden nuevo. No es «nuevo». */
+export function mockOrdenarNotas(id: string, body: unknown) {
+  return ruta(() => {
+    const v = miViaje(id);
+    const u = yo();
+    abiertaParaNotas(v);
+    if (seamDeNotasMock('suspendida')) throw new Respuesta(403, 'user_suspended');
+    const ids = validarNota(() => {
+      const o = objetoEstricto(body, ['ids']);
+      if (!Array.isArray(o.ids) || o.ids.length < 1 || o.ids.length > LIMITES_NOTAS.entradas_por_miembro
+        || !o.ids.every(esUuid) || new Set(o.ids).size !== o.ids.length) throw notaInvalida('ids', 'invalido');
+      return o.ids as string[];
+    });
+    const mias = notasDe(v, u);
+    if (ids.length !== mias.length || !mias.every((m) => ids.includes(m.id))) throw conflictoConApartado(v, u, 'viaje_notas_order_mismatch');
+    const otras = (v.notas ?? []).filter((n) => n.user_id !== u);
+    v.notas = [...otras, ...ids.map((x) => mias.find((m) => m.id === x)!)];
+    return conMiApartado(v, u);
+  });
+}
+
 // ─── La semilla: el viaje del prototipo de Mati ───────────────────────────
 
 /**
@@ -1856,6 +2218,32 @@ function semilla(yoMismo: PersonaViajeMock): EstadoViajesMock {
   // Mazatlán diciembre · Sofía me invitó (1f).
   const mazatlan = viaje(VIAJES_SEMILLA.mazatlan, 'Mazatlán diciembre', '2026-12-18', '2026-12-22', '2026-10-09T01:00:00.000Z', [sofia, diego]);
   mazatlan.miembros.push(miembro(Y, '2026-10-09T01:05:00.000Z', 'invitado', sofia.user_id));
+
+  // D290 · cuándo se cerró cada uno (el `cerrado_en` del pizarrón), fijo para la semilla.
+  monterrey.cerrado_en = '2026-09-22T15:00:00.000Z';
+  oaxaca.cerrado_en = '2026-08-18T15:00:00.000Z';
+  valle.cerrado_en = '2026-07-07T15:00:00.000Z';
+  // D290 · el pizarrón, al final para no correr los ids de lo de arriba. Cancún (2b): la nota larga de Luis y la lista de
+  // Sofía; el mío y el de Diego, vacíos. Oaxaca, cerrado (2h): mi nota y mi lista, y la nota de Carla.
+  const nota = (v: ViajeMock, p: PersonaViajeMock, en: string, e: { texto: string } | { titulo: string; items: Array<[string, boolean]> }) => {
+    const n: NotaMock = {
+      id: id('d9'), user_id: p.user_id, tipo: 'texto' in e ? 'nota' : 'lista', texto: 'texto' in e ? e.texto : null,
+      titulo: 'titulo' in e ? e.titulo : null,
+      items: 'items' in e ? e.items.map(([texto, tildado]) => ({ id: id('d9'), texto, tildado })) : [],
+      version: 1, creado_en: en, actualizado_en: en, idempotency_key: id('d7'), pedido_hash: 'semilla',
+    };
+    v.notas = [...(v.notas ?? []), n];
+  };
+  nota(cancun, sofia, '2026-10-08T20:00:00.000Z', { titulo: 'Súper del lunes',
+    items: [['Agua (6 litros)', true], ['Fruta', false], ['Hielo', true], ['Tortillas', false], ['Salsa', false]] });
+  nota(cancun, luis, '2026-10-09T14:00:00.000Z', { texto: 'Llegamos el domingo a las 14:20 en el vuelo Y4 312. Ya tengo una '
+    + 'camioneta para seis en el aeropuerto: la recojo yo y paso por ustedes al hotel. El lunes vamos al cenote Ik Kil; '
+    + 'salimos a las 7:30 para ganarle a la fila. La entrada se paga en efectivo, no aceptan tarjeta. Si alguien se marea '
+    + 'en carretera, avísenme y le guardo el asiento de adelante.' });
+  nota(oaxaca, Y, '2026-08-13T18:00:00.000Z', { texto: 'Llevo la bocina y el cargador grande.' });
+  nota(oaxaca, Y, '2026-08-13T18:05:00.000Z', { titulo: 'Para llevar',
+    items: [['Protector solar', true], ['Gorra', true], ['Efectivo', false]] });
+  nota(oaxaca, carla, '2026-08-18T16:00:00.000Z', { texto: 'Gracias por organizar. Las fotos están en el álbum compartido del grupo.' });
 
   return { version: 1, viajes: [cancun, monterrey, oaxaca, valle, mazatlan], avisos_sembrados: false, corte: new Date().toISOString() };
 }

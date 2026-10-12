@@ -214,7 +214,8 @@ function detalle(tickets: TicketEnViaje[], extra: Partial<DetalleViaje> = {}): D
   return {
     id: 'v-1', nombre: 'Cancún 2026', fecha_desde: null, fecha_hasta: null, estado: 'abierto', creado_en: null,
     mi_miembro_id: 'm-ana', miembros: [], invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets,
-    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null, ...extra,
+    sin_repartir: [], transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
+    notas: { escribieron: 0, total: 1, nuevo: false }, ...extra,
   };
 }
 

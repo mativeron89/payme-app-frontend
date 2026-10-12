@@ -46,6 +46,8 @@ import { TicketScreen } from './screens/viajes/TicketScreen';
 import { BalanceScreen } from './screens/viajes/BalanceScreen';
 import { ViajeCerradoScreen } from './screens/viajes/ViajeCerradoScreen';
 import { CargaManualScreen } from './screens/viajes/CargaManualScreen';
+import { NotasScreen } from './screens/viajes/NotasScreen';
+import { leerParametroDeNotas } from './screens/viajes/notasView';
 import { leerParametroDeTicket } from './screens/viajes/viajesView';
 
 function Shell() {
@@ -384,6 +386,14 @@ function Shell() {
       // D244/D245 · la carga manual de un gasto del viaje.
       case 'viaje-gasto':
         return route.param ? <CargaManualScreen key={route.param} viajeId={route.param} /> : <ViajesScreen estado="abiertos" />;
+      // D290 · el pizarrón de notas, y el apartado de otro (`<viaje>.<miembro>`). La clave es el viaje: ir y volver
+      // entre el pizarrón y un apartado no lo vuelve a pedir.
+      case 'viaje-notas': {
+        const notas = leerParametroDeNotas(route.param);
+        return notas
+          ? <NotasScreen key={notas.viajeId} viajeId={notas.viajeId} miembroId={notas.miembroId} />
+          : <ViajesScreen estado="abiertos" />;
+      }
       // D252 · con sesión, el link de invitación no cambia nada: lleva a Amigos.
       case 'invitacion':
         return <InvitacionConSesion />;

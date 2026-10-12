@@ -114,6 +114,15 @@ import {
 } from './viajes';
 import * as mockViajes from './mock/viajes';
 import {
+  decodeEscrituraDeNotas,
+  decodePizarron,
+  type Apartado,
+  type EscrituraDeNotas,
+  type PedidoDeEdicion,
+  type PedidoDeNotaNueva,
+  type Pizarron,
+} from './viajesNotas';
+import {
   aplicarConfigLinkDeInvitacion,
   assertLinkDeInvitacion,
   conReferido,
@@ -630,13 +639,14 @@ export interface Api {
   /** D255 · `PATCH /api/viajes/:id`: nombre, fechas y color (cualquier miembro, con el viaje abierto). */
   editarViaje(id: string, cambios: EditarViajePedido): Promise<DetalleViaje>;
   /**
-   * D256 · `DELETE /api/viajes/:id/tickets/:tid?viaje_version=10` (App Backend 2.175.0): elimina un ticket o un gasto.
+   * D256 · `DELETE /api/viajes/:id/tickets/:tid` (App Backend 2.175.0; hoy con `viaje_version=11`): elimina un ticket o un
+   * gasto.
    * Pueden quien lo cargó o quien pagó, con el viaje abierto; devuelve el viaje con la cuenta recalculada.
    */
   eliminarTicketDeViaje(id: string, ticketId: string): Promise<DetalleViaje>;
   /**
-   * D278-3 · D282-2 · `PATCH /api/viajes/:id/tickets/:tid?viaje_version=10` (App Backend 2.182.0): corrige un ticket o un
-   * gasto ya cargado y devuelve el ticket corregido. Sin clave de idempotencia: el dueño es idempotente por contenido.
+   * D278-3 · D282-2 · `PATCH /api/viajes/:id/tickets/:tid` (App Backend 2.182.0; hoy con `viaje_version=11`): corrige un
+   * ticket o un gasto ya cargado y devuelve el ticket corregido. Sin clave de idempotencia: el dueño es idempotente por contenido.
    */
   corregirTicketDeViaje(id: string, ticketId: string, pedido: CorreccionDeTicket): Promise<TicketDelViaje>;
   /** D255 · `PUT /api/viajes/:id/foto`: jpeg, png o webp, hasta 5 MiB; el dueño la re-codifica. */
@@ -663,6 +673,21 @@ export interface Api {
   cerrarViaje(id: string): Promise<DetalleViaje>;
   marcarTransferenciaDeViaje(id: string, transferenciaId: string, accion: AccionTransferencia): Promise<MarcaDeTransferencia>;
   getResumenDeViaje(id: string): Promise<ResumenDeViaje>;
+  /**
+   * D290 · el pizarrón de notas (App Backend 2.183.0). `GET /api/viajes/:id/notas`: todos los apartados; marca mi visita
+   * (apaga el punto de «nuevo»), también con el viaje cerrado. 🔴 Es texto de las personas: la fachada no lo guarda.
+   */
+  getNotasDeViaje(id: string): Promise<Pizarron>;
+  /** D290 · `POST /api/viajes/:id/notas`: una nota o una lista mía, con su clave de idempotencia. Devuelve mi apartado. */
+  crearNotaDeViaje(id: string, pedido: PedidoDeNotaNueva): Promise<EscrituraDeNotas>;
+  /** D290 · `PATCH /api/viajes/:id/notas/:nid`: con la `version` que vi. Devuelve mi apartado. */
+  editarNotaDeViaje(id: string, notaId: string, pedido: PedidoDeEdicion): Promise<Apartado>;
+  /** D290 · `DELETE /api/viajes/:id/notas/:nid?version=N`. Devuelve mi apartado. */
+  borrarNotaDeViaje(id: string, notaId: string, version: number): Promise<Apartado>;
+  /** D290 · `PUT /api/viajes/:id/notas/:nid/items/:iid`: tildar es un estado (dos veces, un solo efecto). */
+  tildarItemDeNota(id: string, notaId: string, itemId: string, tildado: boolean): Promise<Apartado>;
+  /** D290 · `PUT /api/viajes/:id/notas/orden`: todas las mías, en el orden nuevo. La pantalla todavía no ordena. */
+  ordenarNotasDeViaje(id: string, ids: readonly string[]): Promise<Apartado>;
 
   // ─── AF-LINK-DE-INVITACION · D252 · App Backend 2.173.0 (`contract/invitacion-personal-v1.json`) ───
   // Sólo con `features.invite_link` encendida: si no, no se pide nada.
@@ -1285,7 +1310,7 @@ const realApi: Api = {
     assertViajesHabilitado();
     // D276-1 · la cuenta se fija al pedir: lo que llega de otra no queda para la cámara de Nueva.
     const turno = ultimoVisto.turno();
-    const l = decodeListaDeViajes(await httpRequest<unknown>('GET', `/viajes?estado=${encodeURIComponent(estado)}&viaje_version=10`), estado);
+    const l = decodeListaDeViajes(await httpRequest<unknown>('GET', `/viajes?estado=${encodeURIComponent(estado)}&viaje_version=11`), estado);
     if (estado === 'abiertos') recordarViajesAbiertos(turno, l.viajes);
     return l;
   },
@@ -1295,30 +1320,30 @@ const realApi: Api = {
   },
   crearViaje: async (req) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes?viaje_version=10', req), 'viajes.crear');
+    return decodeDetalleViaje(await httpRequest<unknown>('POST', '/viajes?viaje_version=11', req), 'viajes.crear');
   },
   invitarAlViaje: async (id, miembros) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'POST', `/viajes/${encodeURIComponent(id)}/miembros?viaje_version=10`, { miembros },
+      'POST', `/viajes/${encodeURIComponent(id)}/miembros?viaje_version=11`, { miembros },
     ), 'viajes.invitar');
   },
   editarViaje: async (id, cambios) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'PATCH', `/viajes/${encodeURIComponent(id)}?viaje_version=10`, cambios,
+      'PATCH', `/viajes/${encodeURIComponent(id)}?viaje_version=11`, cambios,
     ), 'viajes.editar');
   },
   eliminarTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'DELETE', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=10`,
+      'DELETE', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`,
     ), 'viajes.eliminarTicket');
   },
   corregirTicketDeViaje: async (id, ticketId, pedido) => {
     assertViajesHabilitado();
     return decodeTicketCorregido(await httpRequest<unknown>(
-      'PATCH', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=10`, pedido,
+      'PATCH', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`, pedido,
     ));
   },
   subirFotoDeViaje: async (id, foto) => {
@@ -1338,12 +1363,12 @@ const realApi: Api = {
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}?viaje_version=10`));
+    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}?viaje_version=11`));
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'POST', `/viajes/${encodeURIComponent(id)}/aceptar?viaje_version=10`,
+      'POST', `/viajes/${encodeURIComponent(id)}/aceptar?viaje_version=11`,
     ), 'viajes.aceptar');
   },
   rechazarViaje: async (id) => {
@@ -1360,11 +1385,11 @@ const realApi: Api = {
   },
   cargarTicketDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeTicketCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets?viaje_version=10`, req));
+    return decodeTicketCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets?viaje_version=11`, req));
   },
   cargarGastoDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeGastoCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/gastos?viaje_version=10`, req), req);
+    return decodeGastoCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/gastos?viaje_version=11`, req), req);
   },
   getAvatarDeMiembroDeViaje: async (id, miembroId, expectedSession) => {
     assertViajesHabilitado();
@@ -1376,19 +1401,19 @@ const realApi: Api = {
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=10`,
+      'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`,
     ));
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/seleccion?viaje_version=10`, req,
+      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/seleccion?viaje_version=11`, req,
     ), 'viajes.seleccion');
   },
   marcarPresentesEnTicket: async (id, ticketId, presentes) => {
     assertViajesHabilitado();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/presentes?viaje_version=10`, { presentes },
+      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/presentes?viaje_version=11`, { presentes },
     ), 'viajes.presentes');
   },
   getCierreDeViaje: async (id) => {
@@ -1398,7 +1423,7 @@ const realApi: Api = {
   cerrarViaje: async (id) => {
     assertViajesHabilitado();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'POST', `/viajes/${encodeURIComponent(id)}/cerrar?viaje_version=10`,
+      'POST', `/viajes/${encodeURIComponent(id)}/cerrar?viaje_version=11`,
     ), 'viajes.cerrar');
   },
   marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
@@ -1410,6 +1435,38 @@ const realApi: Api = {
   getResumenDeViaje: async (id) => {
     assertViajesHabilitado();
     return decodeResumenDeViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/resumen`), id);
+  },
+  getNotasDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodePizarron(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/notas`), id);
+  },
+  crearNotaDeViaje: async (id, pedido) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/notas`, pedido), true, 'viajes.notas.crear');
+  },
+  editarNotaDeViaje: async (id, notaId, pedido) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await httpRequest<unknown>(
+      'PATCH', `/viajes/${encodeURIComponent(id)}/notas/${encodeURIComponent(notaId)}`, pedido,
+    ), false, 'viajes.notas.editar').apartado;
+  },
+  borrarNotaDeViaje: async (id, notaId, version) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await httpRequest<unknown>(
+      'DELETE', `/viajes/${encodeURIComponent(id)}/notas/${encodeURIComponent(notaId)}?version=${encodeURIComponent(String(version))}`,
+    ), false, 'viajes.notas.borrar').apartado;
+  },
+  tildarItemDeNota: async (id, notaId, itemId, tildado) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await httpRequest<unknown>(
+      'PUT', `/viajes/${encodeURIComponent(id)}/notas/${encodeURIComponent(notaId)}/items/${encodeURIComponent(itemId)}`, { tildado },
+    ), false, 'viajes.notas.tildar').apartado;
+  },
+  ordenarNotasDeViaje: async (id, ids) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await httpRequest<unknown>(
+      'PUT', `/viajes/${encodeURIComponent(id)}/notas/orden`, { ids: [...ids] },
+    ), false, 'viajes.notas.ordenar').apartado;
   },
   getLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();
@@ -1692,7 +1749,7 @@ const mockApi: Api = {
   getViajes: async (estado) => {
     assertViajesHabilitado();
     const turno = ultimoVisto.turno();
-    const l = decodeListaDeViajes(await mockViajes.mockListarViajes(estado, { version: 10 }), estado);
+    const l = decodeListaDeViajes(await mockViajes.mockListarViajes(estado, { version: 11 }), estado);
     if (estado === 'abiertos') recordarViajesAbiertos(turno, l.viajes);
     return l;
   },
@@ -1702,23 +1759,23 @@ const mockApi: Api = {
   },
   crearViaje: async (req) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockCrearViaje(req, { version: 10 }), 'viajes.crear');
+    return decodeDetalleViaje(await mockViajes.mockCrearViaje(req, { version: 11 }), 'viajes.crear');
   },
   invitarAlViaje: async (id, miembros) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockInvitarAlViaje(id, { miembros }, { version: 10 }), 'viajes.invitar');
+    return decodeDetalleViaje(await mockViajes.mockInvitarAlViaje(id, { miembros }, { version: 11 }), 'viajes.invitar');
   },
   editarViaje: async (id, cambios) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockEditarViaje(id, cambios, { version: 10 }), 'viajes.editar');
+    return decodeDetalleViaje(await mockViajes.mockEditarViaje(id, cambios, { version: 11 }), 'viajes.editar');
   },
   eliminarTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockEliminarTicket(id, ticketId, { version: 10 }), 'viajes.eliminarTicket');
+    return decodeDetalleViaje(await mockViajes.mockEliminarTicket(id, ticketId, { version: 11 }), 'viajes.eliminarTicket');
   },
   corregirTicketDeViaje: async (id, ticketId, pedido) => {
     assertViajesHabilitado();
-    return decodeTicketCorregido(await mockViajes.mockCorregirTicket(id, ticketId, pedido, { version: 10 }));
+    return decodeTicketCorregido(await mockViajes.mockCorregirTicket(id, ticketId, pedido, { version: 11 }));
   },
   subirFotoDeViaje: async (id, foto) => {
     assertViajesHabilitado();
@@ -1735,11 +1792,11 @@ const mockApi: Api = {
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id, { version: 10 }));
+    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id, { version: 11 }));
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockAceptarViaje(id, { version: 10 }), 'viajes.aceptar');
+    return decodeDetalleViaje(await mockViajes.mockAceptarViaje(id, { version: 11 }), 'viajes.aceptar');
   },
   rechazarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1755,11 +1812,11 @@ const mockApi: Api = {
   },
   cargarTicketDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeTicketCargado(await mockViajes.mockCargarTicket(id, req, { version: 10 }));
+    return decodeTicketCargado(await mockViajes.mockCargarTicket(id, req, { version: 11 }));
   },
   cargarGastoDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeGastoCargado(await mockViajes.mockCargarGasto(id, req, { version: 10 }), req);
+    return decodeGastoCargado(await mockViajes.mockCargarGasto(id, req, { version: 11 }), req);
   },
   getAvatarDeMiembroDeViaje: async (id, miembroId) => {
     assertViajesHabilitado();
@@ -1767,15 +1824,15 @@ const mockApi: Api = {
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
-    return decodeTicketDelViaje(await mockViajes.mockVerTicket(id, ticketId, { version: 10 }));
+    return decodeTicketDelViaje(await mockViajes.mockVerTicket(id, ticketId, { version: 11 }));
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();
-    return decodeTicketDelViaje(await mockViajes.mockElegirEnTicket(id, ticketId, req, { version: 10 }), 'viajes.seleccion');
+    return decodeTicketDelViaje(await mockViajes.mockElegirEnTicket(id, ticketId, req, { version: 11 }), 'viajes.seleccion');
   },
   marcarPresentesEnTicket: async (id, ticketId, presentes) => {
     assertViajesHabilitado();
-    return decodeTicketDelViaje(await mockViajes.mockMarcarPresentes(id, ticketId, { presentes }, { version: 10 }), 'viajes.presentes');
+    return decodeTicketDelViaje(await mockViajes.mockMarcarPresentes(id, ticketId, { presentes }, { version: 11 }), 'viajes.presentes');
   },
   getCierreDeViaje: async (id) => {
     assertViajesHabilitado();
@@ -1783,7 +1840,7 @@ const mockApi: Api = {
   },
   cerrarViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockCerrarViaje(id, { version: 10 }), 'viajes.cerrar');
+    return decodeDetalleViaje(await mockViajes.mockCerrarViaje(id, { version: 11 }), 'viajes.cerrar');
   },
   marcarTransferenciaDeViaje: async (id, transferenciaId, accion) => {
     assertViajesHabilitado();
@@ -1792,6 +1849,30 @@ const mockApi: Api = {
   getResumenDeViaje: async (id) => {
     assertViajesHabilitado();
     return decodeResumenDeViaje(await mockViajes.mockResumenDeViaje(id), id);
+  },
+  getNotasDeViaje: async (id) => {
+    assertViajesHabilitado();
+    return decodePizarron(await mockViajes.mockNotasDeViaje(id), id);
+  },
+  crearNotaDeViaje: async (id, pedido) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await mockViajes.mockCrearNota(id, pedido), true, 'viajes.notas.crear');
+  },
+  editarNotaDeViaje: async (id, notaId, pedido) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await mockViajes.mockEditarNota(id, notaId, pedido), false, 'viajes.notas.editar').apartado;
+  },
+  borrarNotaDeViaje: async (id, notaId, version) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await mockViajes.mockBorrarNota(id, notaId, { version: String(version) }), false, 'viajes.notas.borrar').apartado;
+  },
+  tildarItemDeNota: async (id, notaId, itemId, tildado) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await mockViajes.mockTildarItemDeNota(id, notaId, itemId, { tildado }), false, 'viajes.notas.tildar').apartado;
+  },
+  ordenarNotasDeViaje: async (id, ids) => {
+    assertViajesHabilitado();
+    return decodeEscrituraDeNotas(await mockViajes.mockOrdenarNotas(id, { ids: [...ids] }), false, 'viajes.notas.ordenar').apartado;
   },
   getLinkDeInvitacion: async () => {
     assertLinkDeInvitacion();

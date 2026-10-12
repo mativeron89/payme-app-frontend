@@ -25,6 +25,7 @@ const VIAJE = decodeDetalleViaje({
     invitados: [{ id: 'm2', first_name: 'Leo', last_name: 'Paz', username: null, eliminada: false }],
     mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets: [], sin_repartir: [], transferencias: [], transferencias_pendientes: 0,
     color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
+    notas: { escribieron: 0, total: 1, nuevo: false },
   },
 });
 const LEO = { clave: 'm2', nombre: 'Leo Paz', iniciales: 'LP', arroba: null };

@@ -265,6 +265,14 @@ export interface TransferenciaViaje {
   readonly mia: 'debo' | 'me_deben' | null;
 }
 
+/** D290 · `viaje_version=11` · el resumen del pizarrón de notas en el detalle (el pizarrón vive en `viajesNotas.ts`). */
+export interface ResumenDeNotas {
+  readonly escribieron: number;
+  readonly total: number;
+  /** Otro autor creó o editó algo después de mi última visita: el punto naranja de la fila. Abrir el pizarrón lo apaga. */
+  readonly nuevo: boolean;
+}
+
 export interface DetalleViaje {
   readonly id: string;
   readonly nombre: string;
@@ -294,6 +302,8 @@ export interface DetalleViaje {
    * creado después, vencido antes de la publicación o ya no abierto).
    */
   readonly se_cierra_en: string | null;
+  /** D290 · `viaje_version=11` (App Backend 2.183.0): «{escribieron} de {total} escribieron» y el punto de «nuevo». */
+  readonly notas: ResumenDeNotas;
 }
 
 export interface ItemDelTicket {
@@ -601,7 +611,8 @@ const CLAVES_PERSONA = ['first_name', 'last_name', 'username', 'eliminada'] as c
 const nombreONull = (v: unknown): v is string | null => v === null || typeof v === 'string';
 const vacioANull = (v: string | null): string | null => (v && v.trim() ? v : null);
 
-function persona(o: Record<string, unknown>, endpoint: string): PersonaViaje {
+/** D290 · también la usa el pizarrón de notas (`viajesNotas.ts`): un apartado lleva la persona como el detalle. */
+export function persona(o: Record<string, unknown>, endpoint: string): PersonaViaje {
   exigir(nombreONull(o.first_name) && nombreONull(o.last_name) && textoONull(o.username)
     && typeof o.eliminada === 'boolean', endpoint);
   return {
@@ -671,10 +682,17 @@ function transferencia(raw: unknown, e: string): TransferenciaViaje {
   return o as unknown as TransferenciaViaje;
 }
 
+function decodeResumenDeNotas(raw: unknown, e: string): ResumenDeNotas {
+  const o = objeto(raw, ['escribieron', 'total', 'nuevo'], e);
+  exigir(noNegativo(o.escribieron) && noNegativo(o.total) && o.escribieron <= o.total && typeof o.nuevo === 'boolean', e);
+  return { escribieron: o.escribieron as number, total: o.total as number, nuevo: o.nuevo as boolean };
+}
+
 function viajeDetalle(raw: unknown, e: string): DetalleViaje {
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'creado_en', 'mi_miembro_id',
     'miembros', 'invitados', 'mi_balance_cents', 'gasto_del_grupo_cents', 'tickets', 'sin_repartir',
-    'transferencias', 'transferencias_pendientes', 'color', 'has_photo', 'hora_cierre', 'puedo_cerrar', 'se_cierra_en'], e);
+    'transferencias', 'transferencias_pendientes', 'color', 'has_photo', 'hora_cierre', 'puedo_cerrar', 'se_cierra_en',
+    'notas'], e);
   exigir(texto(o.id) && texto(o.nombre) && fechaONull(o.fecha_desde) && fechaONull(o.fecha_hasta)
     && esEstado(o.estado) && instanteONull(o.creado_en) && texto(o.mi_miembro_id) && entero(o.mi_balance_cents)
     && noNegativo(o.gasto_del_grupo_cents) && noNegativo(o.transferencias_pendientes)
@@ -748,14 +766,15 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
     hora_cierre: o.hora_cierre as string,
     puedo_cerrar: o.puedo_cerrar as boolean,
     se_cierra_en: o.se_cierra_en as string | null,
+    notas: decodeResumenDeNotas(o.notas, e),
   };
 }
 
 /**
  * `GET /api/viajes/:id`, `POST /api/viajes`, `…/aceptar`, `…/miembros`, `…/cerrar` y `PATCH /api/viajes/:id`
- * → `{ contract, viaje }`. Sólo la forma de `viaje_version=8` (D279, App Backend 2.180.0: la 7 más `hora_cierre`,
- * `puedo_cerrar` y `se_cierra_en`; la 3 sumó `color` y `has_photo`): la fachada la pide SIEMPRE en esas rutas, así
- * las claves nuevas nunca llegan sin pedirlas.
+ * → `{ contract, viaje }`. Sólo la forma de `viaje_version=11` (D290, App Backend 2.183.0: la 10 más `notas`; la 8 sumó
+ * `hora_cierre`, `puedo_cerrar` y `se_cierra_en`; la 3, `color` y `has_photo`): la fachada la pide SIEMPRE en esas
+ * rutas, así las claves nuevas nunca llegan sin pedirlas.
  */
 export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle'): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);

@@ -5,6 +5,7 @@ import { EN_VIAJES_CERRADO } from './cerrado';
 import { EN_VIAJES_COMUN } from './comun';
 import { EN_VIAJES_CREAR } from './crear';
 import { EN_VIAJES_LISTAS } from './listas';
+import { EN_VIAJES_NOTAS } from './notas';
 import { EN_VIAJES_TICKET } from './ticket';
 import { EN_VIAJES_VIAJE } from './viaje';
 
@@ -16,7 +17,7 @@ import { EN_VIAJES_VIAJE } from './viaje';
  */
 const PARTES = {
   comun: EN_VIAJES_COMUN, listas: EN_VIAJES_LISTAS, crear: EN_VIAJES_CREAR, viaje: EN_VIAJES_VIAJE,
-  ticket: EN_VIAJES_TICKET, avisos: EN_VIAJES_AVISOS, cerrado: EN_VIAJES_CERRADO,
+  ticket: EN_VIAJES_TICKET, avisos: EN_VIAJES_AVISOS, cerrado: EN_VIAJES_CERRADO, notas: EN_VIAJES_NOTAS,
 };
 const BASE = readFileSync(new URL('../en.ts', import.meta.url), 'utf8');
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

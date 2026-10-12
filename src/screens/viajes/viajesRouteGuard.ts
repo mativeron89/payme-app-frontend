@@ -16,6 +16,7 @@ import { replaceRoute, type PageId } from '../../router';
  */
 export const PAGINAS_DE_VIAJES: ReadonlySet<PageId> = new Set<PageId>([
   'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
+  'viaje-notas',
 ]);
 
 export function esPaginaDeViajes(page: PageId): boolean {

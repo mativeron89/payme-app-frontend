@@ -11,6 +11,148 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.244.0 — El pizarrón de notas del viaje (D290) (2026-10-12)
+
+Orden AF-VIAJES-NOTAS-20261012 (617c33c6…). Autoridad: D290, revisiones 1 y 2 (55524b8b…). Mati eligió «Todos ven, cada
+uno escribe el suyo», «Texto y listas con tildes», «Los del diseño» (los límites), «Punto naranja en la fila» y «Debajo de
+«Lugares visitados»». Diseño: `PANTALLA-notas-del-viaje.md` (2c3b396f…) manda; del prototipo entra el turno 2 (2a–2h).
+Dueño: App Backend 2.183.0 (contenido `5f5bb01`, inventario `6506c27`). Lo visible se cierra con la prueba de Mati en el
+iPhone (D63).
+
+1. **La fila «Notas» (hecho).** Va en el viaje abierto, entre «Ver balance del viaje» y «Configuración». Tiene el ícono
+   de notas, «Notas», el punto naranja cuando `notas.nuevo` (aria-label «Hay notas nuevas») y «{n} de {total}
+   escribieron». Medidas de la especificación: 56 de alto, radio 16, gap 10, cian oscuro 16/700 y el punto de 8.
+   - **Cerrado:** debajo de «Lugares visitados».
+   - **Esperando pagos:** antes de «Salir del viaje».
+   - **Sin el resumen:** si el detalle no llegó, la fila va sin número ni punto.
+2. **El pizarrón (hecho).** Es la ruta nueva `/viaje-notas/<viaje>`, con la tarjeta de título blanca, el cuadro navy con
+   el ícono de notas y «{viaje} · {n} personas».
+   - **Mi apartado:** va primero, con la cabecera celeste («Tú», «Tu apartado · {resumen}»).
+   - **Los de los demás:** sólo para leer. La nota de otro se corta a 4 líneas, con «Ver todo».
+   - **Con 6 o más personas:** la tira de fotos fija, «Con notas · n» (el último que escribió, primero) y «Sin notas
+     todavía · n» en una línea.
+   - **El apartado de otro** (`/viaje-notas/<viaje>.<miembro>`): todo su texto, «Sólo {nombre} puede escribir en su
+     apartado.» y anterior / siguiente de 48. «Volver» regresa al pizarrón.
+3. **Escribir lo mío (hecho).**
+   - La hoja desde abajo: «Nota nueva» y «Lista nueva», con la agarradera, Cancelar, Guardar y el velo.
+   - Editar y borrar, desde el menú ⋯.
+   - Tildar tocando todo el renglón (44 de alto, `role="checkbox"`).
+   - **Ordenar:** la especificación no lo pide, así que no hay control para eso. La fachada (`PUT …/notas/orden`) y el mock
+     ya están.
+4. **Los límites, a la vista (hecho).**
+   - Topes: 500 por nota, 80 por título y por ítem, 30 ítems por lista.
+   - El contador: «120 / 500»; desde el 80 %, la píldora ámbar «Te quedan {n}»; en el tope, «Llegaste a 500».
+   - Los ítems: «{n} / 30 ítems» y «Llegaste a 30 ítems».
+   - En el tope, el campo ya no deja escribir (`maxLength` y el recorte), «Agregar» se apaga y pegar de más tampoco pasa.
+   - Con 20 entradas, «+ Nota» y «+ Lista» se apagan y aparece el aviso del tope.
+   - Los caracteres se cuentan con el `.length` de JS, como el dueño.
+5. **Cerrado (hecho).** La tarjeta con candado: «El viaje se cerró el {fecha}. Las notas quedan para leer; ya nadie puede
+   editarlas.» La fecha es `cerrado_en`, en hora de México. Ningún apartado tiene controles, tampoco el mío, y las
+   tildes quedan como estaban.
+6. **Los errores del dueño, explicados (hecho).** `errorDeNotas` y `reaccionAlError`:
+   - 404 del viaje: «Este viaje ya no está disponible.»
+   - 404 de la nota o del ítem: «Ya no estaba», y se vuelve a leer el pizarrón.
+   - 403 `viaje_nota_not_yours`: «Sólo puedes cambiar lo tuyo.»
+   - 403 `user_suspended`: «Tu cuenta está suspendida. Escríbenos.»
+   - 409 `viaje_not_open`: «El viaje ya no está abierto», y el pizarrón pasa a sólo lectura.
+   - 409 de versión: se aplica el apartado que trae la respuesta.
+     - Editando, la hoja sigue abierta con lo que escribí y avisa: «Esta nota cambió en otro lado. Si guardas, reemplazas
+       esa versión.»
+     - Borrando, no borra.
+   - 409 de orden: se aplica el apartado que trae.
+   - 409 de idempotencia: la próxima vez va una clave nueva.
+   - 409 `viaje_notas_limit`: el aviso del tope.
+   - 400: el mensaje de cada `issue`, en la hoja.
+   - 422 `viaje_nota_item_unknown`: «La lista cambió en otro lado.»
+7. **La negociación (hecho).**
+   - `viaje_version=11` en todas las rutas de Viajes que la llevaban.
+   - El detalle exige `notas: {escribieron, total, nuevo}` con claves exactas.
+   - Las seis rutas de notas van sin `viaje_version`, y sus decodificadores son de claves exactas:
+     - el mío primero;
+     - `total` y `escribieron` como los define el dueño;
+     - `editable` sólo abierto;
+     - una respuesta de escritura sólo se acepta con MI apartado.
+   - Espejo D268: cambia sólo `contract/viajes-v1.json`. El inventario del dueño se adoptó (140) y los hechos se
+     regeneraron (no cambia ningún hecho).
+8. **Las pruebas (hecho).** Ver «Pruebas» abajo.
+
+**Privacidad.** El pizarrón vive sólo en el estado de la pantalla: ni `localStorage`, ni lo último visto, ni un log.
+- Cada pedido saca el turno de la cuenta (T-01) antes de pedir, y su respuesta o su error se aplica sólo si la cuenta
+  sigue siendo la misma.
+- Al cambiar de cuenta, la pantalla se vacía en el acto (`alVaciarse`) y vuelve a pedir.
+- El texto no va a la consola ni a analítica.
+
+**El mock** replica las reglas de `services/viajesNotas.js` del dueño:
+- las seis rutas, con el mismo orden de errores, la normalización y los mensajes;
+- la clave de idempotencia y la `version` con el apartado en los 409;
+- «nuevo» por la visita, y que quien sale queda oculto;
+- el resumen con la 11.
+
+Sus seams, en `payme.app.mock.viajes.notas.v1`: `respuesta_perdida`, `otra_pestana`, `ya_no_estaba`, `se_cerro`,
+`suspendida`, `no_es_tuya` e `invalido`. La semilla: en Cancún, la nota de Luis y la lista de Sofía; en Oaxaca (cerrado),
+mi nota, mi lista y la nota de Carla.
+
+**Declarado:**
+- **Adendas de alcance del Bibliotecario:**
+  - 05:28:22Z: `vercel.ts` lleva `viaje-notas` en `PAGINAS_APP` y en `PAGINAS_CON_PARAMETRO`, para que recargar la ruta
+    no dé 404.
+  - 05:29:43Z: la guarda `scripts/despliegue.test.ts` suma `viaje-notas` a su lista literal. Espera 41 sources y 43
+    rewrites, sin cambiar ningún criterio.
+- **Lo que la especificación no fija, y elegí:**
+  - **Esperando pagos:** la misma tarjeta con candado, con el día de `cerrado_en`, que es cuando se cerró el viaje.
+  - **Abierto pero sin poder escribir** (la cuenta suspendida): «Tu cuenta está suspendida. Puedes leer las notas, pero
+    no escribir.»
+  - **Cerrado y con menos de 6:** los que no escribieron van juntos («Luis, Sofía y Pablo no dejaron notas»), como el 2h
+    del prototipo.
+  - **El menú ⋯:** una hoja con «Editar nota/lista», «Borrar nota/lista» (sin otra confirmación) y «Cancelar».
+  - **Los avisos:** «Nota agregada/guardada/borrada» y «Lista agregada/guardada/borrada».
+  - **Fotos:** el avatar lleva la foto cuando el dueño la publica (regla n164, como en Balance); si no, las iniciales.
+  - **Mi nota:** va entera en el pizarrón; sólo la de otro se corta a 4 líneas.
+- **Diferencias con la especificación:**
+  - **La sombra:** la especificación dice `rgba(15,31,61,.06)`, el navy viejo. La guarda de colores migrados lo prohíbe,
+    así que va `rgba(16,30,59,.06)`.
+  - **El radio de la fila:** «Notas» lleva el 16 de la especificación. «Ver balance» y «Configuración» siguen con su 22.
+    Se ve la diferencia; lo decide Mati en el iPhone.
+- **La semilla del mock:** la nota de Luis dice «Ya tengo una camioneta» y no «Renté una camioneta», como el prototipo. La
+  guarda de voseo marca «Renté». Es sólo dato de ejemplo.
+- **Pruebas existentes cambiadas:**
+  - la negociación pasa de 10 a 11 en `viajesNegociacion`, `viajes.test` y los dos tests del mock;
+  - los fixtures del detalle llevan `notas`;
+  - el censo de la tarjeta de título pasa a 38 contenedores en 24 archivos;
+  - el orden de la pantalla del viaje suma «Notas»;
+  - `viajes.i18n` suma `notas`;
+  - `rutas-montan-pantalla` suma `viaje-notas`.
+  - `d255-ajustes` 7: «Configuración» ya no va pegada a «Ver balance». Ahora mide «Notas» debajo de «Ver balance» y
+    «Configuración» debajo de «Notas», cada una a 16 o menos.
+
+**Pruebas:**
+- **Unidad nueva:** 72 tests.
+  - `viajesNotas.test.ts` (13): claves exactas, las reglas del dueño, MI apartado, los errores tipados y el `.length`.
+  - `mockViajesNotas.test.ts` (15): quién ve y quién escribe, los límites con sus mensajes, la idempotencia, la versión,
+    tildar, «nuevo», la 11, cerrado, quien sale, ordenar y los seams.
+  - `notasView.test.ts` (16).
+  - `NotasScreen.test.tsx` (28): quién ve y quién escribe, cerrado, muchos, el apartado de otro, la fila y dónde va, las
+    hojas, las medidas de la especificación y la privacidad.
+- **e2e** `viajes-notas.spec.ts`, 32 tests:
+  - a 375 y 390: la fila con el punto que se apaga, el pizarrón, escribir una nota, armar y tildar una lista y leer el
+    apartado de otro;
+  - los límites (500, 80, 30 y 20);
+  - cerrado y esperando pagos;
+  - el menú ⋯ (editar y borrar una nota, editar una lista);
+  - la concurrencia: doble toque al guardar y al tildar, la respuesta perdida y el 409 de versión;
+  - los errores del dueño;
+  - la privacidad, con otra familia y con otra persona de la misma familia: las notas desaparecen en el acto, y la
+    respuesta tardía de A no se muestra;
+  - 7 personas.
+- **Rojo sobre `f00a81e`:**
+  - unidad: 47 tests en 11 archivos;
+  - e2e: los 32 de notas y `d255-ajustes` 7.
+- **Mutantes:** 42 de 42 cazados (40, más K08 replantado con un ancla única y S11). Contra el e2e solo:
+  - S02 (doble toque) y S05 (la clave de cada intento) caen.
+  - S03 (sin el turno al leer), S04 (sin volver a pedir) y S11 (sin vaciar) sobrevivían al e2e con «otra familia»:
+    `AuthProvider` remonta la app al cambiar de familia y las guardas de la pantalla no se ejercitaban.
+  - Se sumó el caso «otra persona de la misma familia», que no remonta, y los tres caen.
+
 ## 0.243.0 — «+ Gasto» unido a la burbuja del viaje y el monto nuevo (D291) (2026-10-12)
 
 Orden AF-BOTON-GASTO-Y-MONTO-20261012 (e70ebfe8…). Autoridad: D291, revisión 2 (07ad4d56…). Del paquete de Claude Design

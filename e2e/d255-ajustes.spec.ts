@@ -108,7 +108,7 @@ test.describe('D255 · tramo 1', () => {
     expect(await rebote()).toBe('auto');
   });
 
-  test('🔴 7 · el viaje: monto centrado y «Configuración» debajo de «Ver balance»; «Cerrar viaje» rojo clarito y el pie arriba del círculo, ahora en Configuración (D279)', async ({ page }) => {
+  test('🔴 7 · el viaje: monto centrado; «Configuración» debajo de «Ver balance», con «Notas» en el medio (D290); «Cerrar viaje» rojo clarito y el pie arriba del círculo, ahora en Configuración (D279)', async ({ page }) => {
     await conViajes(page);
     // Alto, para que sobre lugar y el pie se vea abajo.
     await page.setViewportSize({ width: 375, height: 1000 });
@@ -122,12 +122,16 @@ test.describe('D255 · tramo 1', () => {
         abajo: miembros.top - monto.bottom,
         balance: r('.vjv-ver-balance:not(.vjv-configuracion)'),
         configuracion: r('.vjv-configuracion'),
+        // D290 · 0.244.0: la fila «Notas» va entre las dos.
+        notas: r('.nts-fila'),
         hayCerrar: document.querySelectorAll('.vjv-cerrar, .vjv-salir').length,
       };
     });
     expect(Math.abs(m.arriba - m.abajo)).toBeLessThanOrEqual(2);
-    expect(m.configuracion.top).toBeGreaterThan(m.balance.bottom);
-    expect(m.configuracion.top - m.balance.bottom).toBeLessThanOrEqual(16);
+    expect(m.notas.top).toBeGreaterThan(m.balance.bottom);
+    expect(m.notas.top - m.balance.bottom).toBeLessThanOrEqual(16);
+    expect(m.configuracion.top).toBeGreaterThan(m.notas.bottom);
+    expect(m.configuracion.top - m.notas.bottom).toBeLessThanOrEqual(16);
     // D279 · en la pantalla del viaje ya no están: van en Configuración.
     expect(m.hayCerrar).toBe(0);
     await page.getByRole('button', { name: 'Configuración' }).click();

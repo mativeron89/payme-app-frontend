@@ -219,6 +219,7 @@ const ESPERADO: Record<PageId, Esperado> = {
   'viaje-balance': { tipo: 'redirige', a: /:\d+\/home$/ },
   'viaje-cerrado': { tipo: 'redirige', a: /:\d+\/home$/ },
   'viaje-gasto': { tipo: 'redirige', a: /:\d+\/home$/ },
+  'viaje-notas': { tipo: 'redirige', a: /:\d+\/home$/ },
 
   /** D252 · con sesión, el link de invitación no cambia nada: lleva a Amigos. */
   invitacion: { tipo: 'redirige', a: /:\d+\/amigos$/ },

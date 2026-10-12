@@ -24,7 +24,28 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D278-3 y D282-2 · corregir un ticket ya cargado · App Backend v2.182.0 · 2026-10-11
+### D290 · el pizarrón de notas del viaje · App Backend v2.183.0 · 2026-10-12
+
+Orden `AF-VIAJES-NOTAS-20261012` (D290, revisiones 1 y 2). Según la orden, el dueño 2.183.0 está servido.
+
+- Contenido: owner **`5f5bb01e3272088b2c46bf9f9d88883b927a656b`** (v2.183.0: el pizarrón de notas, sus seis rutas y
+  `viaje_version=11`).
+- Inventario: el del owner en **`6506c2790349ad4a124e7652439ae577ea998c63`** (v2.183.0, commit B;
+  `contract/mirror-inventory.json`, sha256 `a9ae87b9d476e4b61a896172dd872716eec31e7bb2bcabfea4f18302d1614f08`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `5f5bb01`, 140 entradas (dos nuevas).
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `d59814470af27d89f7f2b4a2a5d91b47552248f7ba6c695f757786d72c9fc4ca`):
+  - la sección `notas` (quién lee y quién escribe, el apartado, el orden, los límites, «nuevo», cerrado, quien sale, la
+    cuenta, la concurrencia y la privacidad) y `limites.notas`;
+  - las rutas `GET`/`POST /api/viajes/:id/notas`, `PATCH`/`DELETE …/notas/:nid`, `PUT …/notas/:nid/items/:iid` y
+    `PUT …/notas/orden`, con su orden de errores;
+  - `viaje_version=11`: la 10 más `notas` en el detalle del viaje (en la lista y en el detalle de un ticket, como la 10).
+- Sólo por hash, desde `bd65b58`: cambian `routes/viajes.js` y `services/viajes.js`; entran
+  `db/migrate_viajes_notas_v2.183.0.sql` y `services/viajesNotas.js`. Los hechos del dueño se regeneraron: cambia sólo
+  el commit, ningún hecho.
+- `--integridad`: 13 copiados y 127 sólo por hash. `--paridad`: espejo = inventario = fuente en `5f5bb01`, 140/140.
+
+### Refresh anterior · D278-3 y D282-2 · corregir un ticket ya cargado · App Backend v2.182.0 · 2026-10-11
 
 Orden `AF-VIAJES-CORREGIR-TICKET-20261011` (D278-3 y D282-2, n349). Según la orden, el dueño 2.182.0 está servido
 (/ready 75/75).

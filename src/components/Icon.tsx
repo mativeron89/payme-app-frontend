@@ -145,6 +145,18 @@ const GLYPHS = {
   'chevron-down': { d: ['M6 9.5 12 15.5l6-6'] },
   /* D275 · el chevron de la burbuja del restaurante pendiente: lleva a otra pantalla. */
   'chevron-right': { d: ['m9 6 6 6-6 6'] },
+  /* D290 · las notas del viaje: la fila del viaje, el cuadro del pizarrón y el «anterior» del apartado de otro, con los
+     trazos del prototipo de Claude Design. Los tres puntos son el menú ⋯ de una nota mía; la ✕ saca un ítem de la lista. */
+  notas: { d: ['M5 3h14v18H5z', 'M9 8h6', 'M9 12h6', 'M9 16h3'] },
+  'chevron-left': { d: ['m15 6-6 6 6 6'] },
+  x: { d: ['M6 6l12 12', 'M18 6 6 18'] },
+  'tres-puntos': {
+    f: [
+      'M6 10.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z',
+      'M12 10.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z',
+      'M18 10.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z',
+    ],
+  },
   /* D275 · los cubiertos del restaurante pendiente, con el trazo del prototipo de Claude Design. */
   cubiertos: { d: ['M7 3v8', 'M5 3v5a2 2 0 0 0 4 0V3', 'M7 11v10', 'M17 21V3c-2 0-3.5 2.5-3.5 6s1.5 4 3.5 4'] },
   /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la

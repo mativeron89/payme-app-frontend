@@ -107,6 +107,11 @@ export const PAGES = [
   'viaje-cerrado',
   /** D244/D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`). */
   'viaje-gasto',
+  /**
+   * D290 · el pizarrón de notas del viaje (`/viaje-notas/<id>`) y el apartado de otro (`/viaje-notas/<viaje>.<miembro>`,
+   * como el ticket).
+   */
+  'viaje-notas',
   /** D252 · el link de invitación (`/invitacion/<código>`): sin sesión, al alta con el código; con sesión, a Amigos. */
   'invitacion',
 ] as const;

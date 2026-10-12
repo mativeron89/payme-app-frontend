@@ -26,8 +26,8 @@ function storage(extra: Record<string, string> = {}) {
 
 /** D263 · la fachada pide siempre `viaje_version=5` (la 4 más `pagadores`, también en las rutas de ticket), y el
  *  decodificador sólo acepta esa forma. */
-/** La versión que negocia la fachada (D278-3, 2.182.0: la 10, la 9 más `puedo_corregir` en el detalle de un ticket). */
-const VF = { version: 10 } as const;
+/** La versión que negocia la fachada (D290, 2.183.0: la 11, la 10 más `notas` en el detalle del viaje). */
+const VF = { version: 11 } as const;
 
 async function subject() {
   const m = await import('./viajes');

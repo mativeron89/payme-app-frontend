@@ -58,7 +58,8 @@ function viaje(extra: Partial<DetalleViaje> = {}): DetalleViaje {
     creado_en: '2026-10-01T15:00:00.000Z', mi_miembro_id: IDS.yo, miembros: MIEMBROS, invitados: [],
     mi_balance_cents: -54200, gasto_del_grupo_cents: 666000, tickets: TICKETS,
     sin_repartir: [{ ticket_id: 'tk-1', lugar: 'Mariscos El Faro', fecha_ticket: '2026-10-08', monto_cents: 56500, faltan: [IDS.diego] }],
-    transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null, ...extra,
+    transferencias: [], transferencias_pendientes: 0, color: null, has_photo: false, hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
+    notas: { escribieron: 0, total: 4, nuevo: false }, ...extra,
   };
 }
 
@@ -69,7 +70,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
   onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onConfiguracion: nada, onAbrirTicket: nada,
-  onSalir: nada, onMarcar: nada,
+  onSalir: nada, onMarcar: nada, onNotas: nada,
 };
 
 const listo = (v: DetalleViaje): CargaDeViaje => ({ tipo: 'listo', viaje: v });
@@ -140,9 +141,9 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('🔴 D250 · D255-7 · D279 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Configuración» y el aviso', () => {
+  it('🔴 D250 · D255-7 · D279 · D290 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas», «Configuración» y el aviso', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Configuración Toca el para cargar un ticket$/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Notas 0 de 4 escribieron Configuración Toca el para cargar un ticket$/);
     expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
   });

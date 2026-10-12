@@ -1,0 +1,741 @@
+/* ══ D290 · Notas del viaje (PANTALLA-notas-del-viaje.md, 2c3b396f…, y el turno 2 del prototipo) ══
+   Ancho de referencia 390. Tarjetas blancas con la sombra de la especificación, 10 entre tarjetas. */
+
+/* ─── §1 · la fila «Notas» del viaje ─── */
+.nts-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--link);
+  text-align: left;
+  cursor: pointer;
+}
+.nts-fila-icono path { stroke-width: 2; }
+.nts-fila-espacio { flex: 1; }
+.nts-punto {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+}
+.nts-fila-resumen {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.nts-fila-chev { color: var(--link); }
+.nts-fila-chev path { stroke-width: 2.2; }
+
+/* ─── §2 · el pizarrón ─── */
+.vj-scroll.nts-scroll { gap: 10px; }
+/* En la columna del scroll nada se encoge: una tarjeta con `overflow: hidden` (la mía, las filas) quedaría en 0 de alto. */
+.nts-scroll > * { flex-shrink: 0; }
+
+.nts-apartado {
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
+  list-style: none;
+}
+.nts-apartado-mio {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  scroll-margin-top: 92px;
+}
+.nts-mio-cabecera {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--teal-l);
+}
+.nts-mio-cuerpo {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nts-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nts-quien {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nts-nombre {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nts-resumen {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* El avatar: 40, las iniciales en Plus Jakarta 14/800. El mío navy con letras blancas; los demás celeste. */
+.nts-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+}
+.nts-avatar-mio { background: var(--action); color: var(--on-dark); }
+.nts-avatar-foto { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.nts-entradas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* La nota: fondo de página, radio 14, padding 12 14, 16/1.5. */
+.nts-nota {
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 14px;
+}
+.nts-nota-texto {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nts-nota-con-ver-todo { padding-bottom: 4px; }
+/* En el pizarrón, la nota de otro: 4 líneas y «Ver todo». */
+.nts-nota-recortada {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+.nts-ver-todo {
+  min-height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--link);
+  cursor: pointer;
+}
+.nts-ver-todo path { stroke-width: 2.2; }
+/* La mía, con el menú ⋯ a la derecha. */
+.nts-nota-mia {
+  min-height: 52px;
+  padding: 4px 0 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nts-nota-mia .nts-nota-texto { flex: 1; min-width: 0; padding: 8px 0; }
+
+/* El menú ⋯: 44 × 44, los puntos en gris. */
+.nts-menu {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* La lista: título 15.5/700, «2 de 4» y los renglones (44 los míos, 40 los de otro). */
+.nts-lista {
+  padding: 10px 14px 6px;
+  background: var(--bg);
+  border-radius: 14px;
+}
+.nts-lista-mia { padding: 4px 0 8px 14px; }
+.nts-lista-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.nts-lista-mia .nts-lista-cabecera { padding-bottom: 0; }
+.nts-lista-titulo {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nts-lista-cuenta {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.nts-items { margin: 0; padding: 0; list-style: none; }
+.nts-item {
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+.nts-items-mios .nts-item {
+  min-height: 44px;
+  padding-right: 14px;
+  cursor: pointer;
+}
+.nts-item-texto {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nts-item-tildado { color: var(--text-muted); text-decoration: line-through; }
+
+/* La casilla: 22 × 22, radio 7. Vacía, borde 2 gris; tildada, cian oscuro con el check blanco de trazo 3. */
+.nts-casilla {
+  box-sizing: border-box;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 2px solid var(--text-muted);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nts-casilla-tildada {
+  border-color: var(--teal-txt);
+  background: var(--teal-txt);
+  color: var(--on-dark);
+}
+.nts-casilla-tildada path { stroke-width: 3; }
+
+/* Mis controles: «+ Nota» y «+ Lista» en dos columnas de 44. */
+.nts-mis-botones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.nts-mas {
+  box-sizing: border-box;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.nts-mas:disabled { color: var(--text-muted); cursor: default; }
+.nts-mas-signo { color: var(--link); }
+.nts-mas-signo path { stroke-width: 2.2; }
+.nts-tope {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--warning);
+}
+
+/* Mi apartado vacío: el lápiz en un círculo celeste de 48, el título 17/800 y los dos botones de 48. */
+.nts-vacio {
+  padding: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.nts-vacio-icono {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 6px;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+.nts-vacio-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+.nts-vacio-ayuda {
+  max-width: 300px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.nts-vacio-botones {
+  align-self: stretch;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.btn.nts-boton-48 { min-height: 48px; }
+.btn.nts-boton-borde {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.btn.nts-boton-borrar {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--danger);
+}
+.nts-mio-nada {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
+/* §5 · cerrado: la tarjeta con candado. */
+.nts-candado {
+  margin: 0;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.nts-candado-icono {
+  box-sizing: content-box;
+  width: 20px;
+  height: 20px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+}
+
+/* §4 · 6 o más: la tira fija, «Con notas» y «Sin notas todavía». */
+.nts-tira {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 0;
+  padding: 10px 0 8px;
+  background: var(--bg);
+}
+.nts-tira-lista {
+  margin: 0;
+  padding: 4px 12px;
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nts-tira-persona {
+  flex: none;
+  width: 60px;
+  min-height: 64px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nts-avatar-tira { width: 44px; height: 44px; font-size: 13px; }
+.nts-avatar-tira.nts-avatar-mio { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--teal-txt); }
+.nts-tira-nombre {
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.nts-seccion,
+.nts-scroll .vj-seccion {
+  margin: 6px 0 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.nts-filas { padding: 0; gap: 0; overflow: hidden; }
+.nts-filas li + li { border-top: 1px solid var(--border); }
+.nts-fila-persona {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.nts-fila-persona .nts-fila-chev { color: var(--text-muted); }
+.nts-sin-notas {
+  padding: 14px 16px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.nts-superpuestos { flex: none; display: flex; }
+.nts-avatar-chico {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--surface);
+  font-size: 11px;
+}
+.nts-avatar-chico + .nts-avatar-chico { margin-left: -8px; }
+.nts-sin-notas-texto {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* El apartado de otro: la inicial en el cuadro, «Sólo {nombre} puede escribir…», anterior / siguiente de 48. */
+.nts-cuadro-persona {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--teal-l);
+  color: var(--teal-txt);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+}
+.nts-cuadro-persona img { width: 100%; height: 100%; object-fit: cover; }
+.nts-solo {
+  margin: 0;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.nts-solo path { stroke-width: 2; }
+.nts-anterior-siguiente {
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.nts-anterior-siguiente .btn {
+  box-sizing: border-box;
+  padding: 0 14px;
+  gap: 8px;
+  justify-content: flex-start;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+.nts-anterior-siguiente .btn:last-child { justify-content: flex-end; }
+.nts-anterior-siguiente path { stroke-width: 2.2; }
+
+/* ─── §3 · la hoja de edición ─── */
+.sheet.nts-hoja {
+  max-height: 88vh;
+  max-height: 88dvh;
+  padding: 8px 16px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 24px 24px 0 0;
+}
+.nts-hoja-agarradera {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.nts-hoja-barra {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.nts-hoja-cancelar {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--link);
+  cursor: pointer;
+}
+.nts-hoja-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+.nts-hoja-guardar {
+  justify-self: end;
+  height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--action);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--on-dark);
+  cursor: pointer;
+}
+.nts-hoja-guardar:disabled { opacity: 0.45; cursor: default; }
+.nts-campo-nota:focus { outline: none; }
+.nts-campo-nota:focus-visible,
+.nts-campo-titulo:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--teal-l); }
+.nts-campo-titulo:focus { border-color: var(--teal-txt); }
+.nts-campo-nota {
+  box-sizing: border-box;
+  width: 100%;
+  height: 200px;
+  padding: 14px;
+  border: 1.5px solid var(--teal-txt);
+  border-radius: 16px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  resize: none;
+}
+.nts-campo {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--text);
+}
+.nts-campo-titulo {
+  flex: none;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+/* Los ítems y «Agregar ítem», en una sola caja con borde (2e). */
+.nts-hoja-caja {
+  flex: none;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.nts-hoja-items {
+  max-height: 236px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.nts-hoja-items[hidden] { display: none; }
+.nts-hoja-item {
+  height: 48px;
+  padding-left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nts-hoja-item + .nts-hoja-item { border-top: 1px solid var(--border); }
+.nts-quitar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.nts-quitar path { stroke-width: 2.2; }
+.nts-hoja-agregar {
+  height: 48px;
+  padding-left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nts-hoja-items:not([hidden]) + .nts-hoja-agregar { border-top: 1px solid var(--border); }
+/* El foco: dentro de la caja, un anillo por dentro (la caja recorta lo de afuera). */
+.nts-hoja-caja .nts-campo:focus { outline: none; }
+.nts-hoja-caja .nts-campo:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; border-radius: 8px; }
+.nts-hoja-agregar-signo { color: var(--link); }
+.nts-hoja-agregar-signo path { stroke-width: 2.2; }
+.nts-agregar {
+  flex: none;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--link);
+  cursor: pointer;
+}
+.nts-agregar:disabled { color: var(--text-muted); cursor: default; }
+.nts-hoja-pie {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nts-hoja-ayuda {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+/* El contador: 13.5 gris; desde el 80 %, píldora ámbar. */
+.nts-contador {
+  flex: none;
+  align-self: flex-end;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nts-contador-cerca {
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  background: var(--warning-tint);
+  color: var(--warning);
+  font-weight: 700;
+}
+.nts-hoja-pie .nts-contador { align-self: auto; }
+.nts-hoja-mensaje {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+/* El menú ⋯ de una entrada mía: editar y borrar. */
+.nts-menu-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nts-menu-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nts-menu-acciones .btn { gap: 8px; }
+.nts-menu-cancelar { align-self: center; }

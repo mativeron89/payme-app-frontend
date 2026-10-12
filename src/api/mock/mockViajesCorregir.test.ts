@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const CLAVE_ESTADO = 'payme.app.mock.viajes.estado.v1';
-const VF = { version: 10 } as const;
+/** La versión que negocia la fachada (D290: la 11; en el detalle de un ticket, como la 10). */
+const VF = { version: 11 } as const;
 
 function storage(extra: Record<string, string> = {}) {
   const values = new Map<string, string>([

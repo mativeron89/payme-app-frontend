@@ -629,6 +629,8 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   const PAGINAS_CON_PARAMETRO = [
     'mesa', 'transferir',
     'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
+    // D290 · el pizarrón de notas, `/viaje-notas/<viaje>` y `/viaje-notas/<viaje>.<miembro>`.
+    'viaje-notas',
     // D252 · el link de invitación, `/invitacion/<código>`.
     'invitacion',
   ] as const;

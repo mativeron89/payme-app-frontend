@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { extractApiError } from '../../api/errors';
-import { errorDeViaje, type ColorViaje, type ResumenDeViaje } from '../../api/viajes';
+import { errorDeViaje, type ColorViaje, type ResumenDeNotas, type ResumenDeViaje } from '../../api/viajes';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
@@ -16,6 +16,7 @@ import { anchoDeBarra, lineaDelViaje } from './listasView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
 import { CuadroDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
 import { HojaModal, HojaNoPuedeSalirVista, HojaSalirVista } from './ViajeScreen';
+import { FilaDeNotas } from './FilaDeNotas';
 import type { PorQueNoPuedeSalir } from './viajeView';
 import { etiquetaTipoLugar, fechaCortaViaje, iconoTipoLugar, nombreDelLugar, type T } from './viajesView';
 import './viajes.css';
@@ -60,7 +61,12 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   const [carga, setCarga] = useState<CargaDeResumen>({ estado: 'cargando' });
   // D285 · el cuadro de la tarjeta: el resumen no trae el color ni la foto del viaje; los trae el detalle (que responde
   // también con el viaje cerrado). Si no llega, queda la inicial sobre el turquesa.
-  const [delViaje, setDelViaje] = useState<{ readonly color: ColorViaje | null; readonly has_photo: boolean } | null>(null);
+  // D290 · y el resumen de las notas (`viaje_version=11`), para la fila «Notas».
+  const [delViaje, setDelViaje] = useState<{
+    readonly color: ColorViaje | null;
+    readonly has_photo: boolean;
+    readonly notas: ResumenDeNotas;
+  } | null>(null);
   const fotos = useFotosDeViajes(delViaje?.has_photo ? [{ id: viajeId, has_photo: true }] : null);
   const [intento, setIntento] = useState(0);
   const [abiertos, setAbiertos] = useState<ReadonlySet<string>>(() => new Set());
@@ -110,7 +116,7 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   useEffect(() => {
     let vivo = true;
     api.getViaje(viajeId)
-      .then((v) => { if (vivo) setDelViaje({ color: v.color, has_photo: v.has_photo }); })
+      .then((v) => { if (vivo) setDelViaje({ color: v.color, has_photo: v.has_photo, notas: v.notas }); })
       .catch(() => { /* sin el detalle, el cuadro lleva la inicial: no es un error de la pantalla */ });
     return () => { vivo = false; };
   }, [viajeId]);
@@ -138,6 +144,8 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         onSalir={() => setHoja({ tipo: 'salir' })}
         color={delViaje?.color ?? null}
         foto={delViaje?.has_photo ? fotos.fotoDe(viajeId) : null}
+        notas={delViaje?.notas ?? null}
+        onNotas={() => navigate('viaje-notas', viajeId)}
       />
       <AppBottomBar active={null} />
       {carga.estado === 'listo' && hoja?.tipo === 'salir' && (
@@ -174,11 +182,14 @@ export interface VistaDelViajeCerradoProps {
   /** D285 · el color y la foto del viaje, para el cuadro de la tarjeta. */
   readonly color?: ColorViaje | null;
   readonly foto?: string | null;
+  /** D290 · el resumen de las notas (del detalle; `null` mientras no llega) y la fila que abre el pizarrón. */
+  readonly notas?: ResumenDeNotas | null;
+  readonly onNotas?: () => void;
 }
 
 /** La tarjeta de título y el contenido: pura, sin red ni efectos. */
 export function VistaDelViajeCerrado({
-  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir, color = null, foto = null,
+  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir, color = null, foto = null, notas = null, onNotas,
 }: VistaDelViajeCerradoProps) {
   if (carga.estado !== 'listo') {
     return (
@@ -303,6 +314,8 @@ export function VistaDelViajeCerrado({
             </ul>
           </>
         )}
+        {/* D290 · Mati: «Debajo de «Lugares visitados»». Las notas quedan para leer. */}
+        {onNotas && <FilaDeNotas resumen={notas} onAbrir={onNotas} />}
         {onSalir && (
           <button type="button" className="vjv-salir" onClick={onSalir}>
             {t('Salir del viaje')}

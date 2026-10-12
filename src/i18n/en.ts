@@ -48,6 +48,7 @@ import { EN_VIAJES_CERRADO } from './viajes/cerrado';
 import { EN_VIAJES_COMUN } from './viajes/comun';
 import { EN_VIAJES_CREAR } from './viajes/crear';
 import { EN_VIAJES_LISTAS } from './viajes/listas';
+import { EN_VIAJES_NOTAS } from './viajes/notas';
 import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
@@ -1278,4 +1279,6 @@ export const EN: Record<string, string> = {
   ...EN_VIAJES_TICKET,
   ...EN_VIAJES_AVISOS,
   ...EN_VIAJES_CERRADO,
+  // D290 · el pizarrón de notas del viaje.
+  ...EN_VIAJES_NOTAS,
 };

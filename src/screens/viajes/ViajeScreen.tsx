@@ -49,6 +49,7 @@ import './viajes.css';
 import './viaje.css';
 import { olvidarLoDeViajes } from '../../api/ultimoVisto';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { FilaDeNotas } from './FilaDeNotas';
 
 /**
  * AF-VIAJES · D242 · el viaje (`/viaje/<id>`): abierto (1g) con su hoja de
@@ -134,7 +135,8 @@ export function useDetalleViaje(viajeId: string): {
  */
 export function useFotosDeMiembros(
   viajeId: string,
-  miembros: readonly MiembroViaje[] | null,
+  /** D290 · también los apartados del pizarrón de notas: alcanza con el id de miembro y `has_avatar`. */
+  miembros: ReadonlyArray<Pick<MiembroViaje, 'id' | 'has_avatar'>> | null,
 ): (miembroId: string) => string | null {
   const { session } = useAuth();
   const sesionRef = useRef(session);
@@ -359,6 +361,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         onCargaManual={() => navigate('viaje-gasto', viajeId)}
         onConfiguracion={() => setConfiguracion(true)}
+        onNotas={() => navigate('viaje-notas', viajeId)}
         fotoDe={fotoDe}
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
         onSalir={() => setHoja({ tipo: 'salir' })}
@@ -499,6 +502,8 @@ export interface ViajeVistaProps {
   readonly onCargaManual: () => void;
   /** D255-8 · «Configuración» del viaje abierto. */
   readonly onConfiguracion: () => void;
+  /** D290 · la fila «Notas»: el pizarrón del viaje. */
+  readonly onNotas: () => void;
   /** D245 · la foto de un miembro, si la hay (si no, iniciales). */
   readonly fotoDe?: (miembroId: string) => string | null;
   /** D255 · la foto del viaje, si la hay, para su burbuja. */
@@ -581,7 +586,7 @@ function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string
  * D279 · «Cerrar viaje» y «Salir del viaje» pasaron a Configuración; en su lugar,
  * «Toca el [cámara] para cargar un ticket», en el medio del espacio libre (D277).
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, fotoDe }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, onNotas, fotoDe }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
@@ -598,6 +603,8 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, 
         <span>{t('Ver balance del viaje')}</span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
+      {/* D290 · «Notas», entre «Ver balance del viaje» y «Configuración». */}
+      <FilaDeNotas resumen={v.notas} onAbrir={onNotas} />
       <button type="button" className="vj-card vjv-ver-balance vjv-configuracion" onClick={onConfiguracion}>
         <span className="vjv-configuracion-texto">
           <Icon name="settings" size={20} />
@@ -680,7 +687,7 @@ export function DesplegableMiembros({ miembros, abiertoInicial = false, fotoDe }
   );
 }
 
-function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir, onNotas }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   const vista = vistaDePagos(v.transferencias);
   const mias = v.transferencias.filter((tr) => tr.mia === 'debo');
@@ -724,6 +731,8 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir }: ViajeVistaPro
         )}
         <p className="vjv-pie-texto">{t('Cuando todas estén pagadas, el viaje pasa a Cerrados.')}</p>
         <NotaNoMueveDinero />
+        {/* D290 · esperando pagos, las notas quedan para leer: la fila, antes de «Salir del viaje». */}
+        <FilaDeNotas resumen={v.notas} onAbrir={onNotas} />
         <BotonSalir onSalir={onSalir} />
       </>
     );
@@ -773,6 +782,7 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir }: ViajeVistaPro
         </>
       )}
       <NotaNoMueveDinero />
+      <FilaDeNotas resumen={v.notas} onAbrir={onNotas} />
       <BotonSalir onSalir={onSalir} />
     </>
   );

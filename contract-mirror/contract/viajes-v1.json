@@ -78,7 +78,32 @@
     "avisos": "Los del cierre a mano (viaje_closed: «Se cerró {viaje}. Debes {monto}.» / «… Te deben {monto}.» / «… Estás a mano.»), a todos los miembros activos, también al creador: nadie tocó el botón. `cerrado_por` queda en el creador (no se publica).",
     "fechas": "D-2: las fechas siguen siendo de cualquier miembro (D255), salvo un PATCH que dejaría el viaje vencido ya, que es cerrarlo: sólo el creador (403 viaje_not_creator); si lo hace el creador, el viaje se cierra en ese mismo pedido."
   },
+  "notas": {
+    "since": "2.183.0",
+    "decision": "290 (el pizarrón de notas del viaje; migración aditiva aprobada por Mati); plan OK del Bibliotecario 2026-10-12T03:10:41Z",
+    "regla": "Cada miembro activo tiene su apartado. Todos los miembros activos leen todo; cada uno crea, edita, borra, ordena y tilda sólo lo suyo (el de otro: 403 viaje_nota_not_yours). Notas de texto y listas con tildes, sin fotos. Quien no es miembro activo recibe el 404 viaje_not_found de n325.",
+    "entrada": "Una nota {id, tipo: \"nota\", texto, version, creado_en, actualizado_en} o una lista {id, tipo: \"lista\", titulo, items: [{id, texto, tildado}], version, creado_en, actualizado_en}, en el orden que elige su autor.",
+    "apartado": "{miembro_id, first_name, last_name, username, eliminada, has_avatar, es_yo, actualizado_en, entradas}: la persona como en el detalle del viaje (has_avatar con la regla n164). `actualizado_en`: la última vez que creó o editó algo (null si no tiene nada).",
+    "orden_de_los_apartados": "El mío primero; después los que escribieron, del último que escribió al primero; al final los que no tienen nada, en el orden de los miembros.",
+    "limites": { "entradas_por_miembro": 20, "caracteres_nota": 500, "items_por_lista": 30, "caracteres_item": 80, "caracteres_titulo": 80 },
+    "caracteres": "Se cuentan como el `.length` de JavaScript (unidades UTF-16), como el resto de los textos de Viajes: un emoji suele contar 2. El contador del front tiene que contar igual para no dejar escribir lo que el servidor rechaza. La base cuenta puntos de código, que nunca son más.",
+    "normalizacion": "Una nota: NFC, los saltos \\r\\n pasan a \\n, se recortan los extremos y conserva los saltos y los tabs; no admite otros caracteres de control. Un título o un ítem: de una línea, con los espacios colapsados.",
+    "nuevo": "Hay algo nuevo para mí si alguno de los otros autores creó o editó una nota o una lista después de mi última visita (sin visita, si hay algo). Tildar, ordenar y borrar no son «nuevo» ni «escribió». Abrir el pizarrón (GET) marca la visita, también con el viaje cerrado.",
+    "cerrado": "Esperando pagos o cerrado: todo queda para leer, para todos los miembros activos (D290); ninguna escritura (409 viaje_not_open {error, estado}), y las tildes quedan como estaban. La regla «cada uno ve sólo lo suyo» (D240-17) es de montos: no alcanza a las notas.",
+    "quien_sale": "Sus notas quedan ocultas, no se borran (D242-2: «Salir no borra nada»): no se muestran ni cuentan en `escribieron` ni en el «nuevo», y una nota suya es el 404 viaje_nota_not_found. Si lo reinvitan y acepta, las encuentra como estaban. Se borran con el viaje y con la cuenta.",
+    "cuenta": "Una cuenta suspendida se sigue leyendo pero no escribe (403 user_suspended). La baja de una cuenta (anonimización) borra sus notas, sus listas y sus visitas; no tiene apartado.",
+    "concurrencia": "Todas las escrituras van bajo el lock del viaje. Crear: la clave de idempotencia es por persona y viaje; el reintento devuelve la misma entrada (200) y la misma clave con otro pedido da 409 idempotency_key_conflict (si la entrada se borró, el reintento la crea de nuevo). Editar y borrar llevan la `version` que vi: si cambió, 409 viaje_nota_version_conflict con mi apartado actual; una edición sin cambios responde 200 sin subir la versión. Tildar es un estado: dos veces es un solo efecto y no sube la versión. Ordenar exige exactamente todas mis entradas: si no, 409 viaje_notas_order_mismatch con mi apartado.",
+    "privacidad": "Las ven sólo los miembros activos del viaje. El texto nunca va a un log, al outbox, a OPS, a Estadísticas ni a un aviso (no hay aviso en la campana: el «nuevo» es el punto de la fila). Desde v2.183.0, un JSON mal formado en cualquier ruta se registra como «json_invalido», sin su texto (server.js)."
+  },
   "negociaciones": {
+    "viaje_version_11": {
+      "since": "2.183.0",
+      "decision": "290 (el pizarrón de notas); plan OK del Bibliotecario 2026-10-12T03:10:41Z",
+      "parametro": "viaje_version=11",
+      "regla": "La cadena exacta, en las mismas rutas que la 10. Es la 10 más `notas` en el detalle del viaje (GET /:id y las respuestas que devuelven el viaje); en el detalle de un ticket y en la lista de viajes, la 11 responde como la 10. Sin el parámetro, con otro valor o repetido, todo sale como siempre, byte por byte.",
+      "detalle_suma": ["notas"],
+      "notas": "{escribieron, total, nuevo}: «{n} de {total} escribieron» y el punto de «nuevo» (ver `notas.nuevo`). Sin aviso en la campana."
+    },
     "viaje_version_10": {
       "since": "2.182.0",
       "decision": "278-3 (corregir un ticket); plan OK del Bibliotecario 2026-10-11T17:00:24Z",
@@ -184,7 +209,8 @@
   "formas": ["consumo", "iguales", "total"],
   "limites": { "miembros": 20, "tickets": 200, "renglones": 100, "lista": 100, "monto_ticket_cents": 100000000, "total_viaje_cents": 20000000000,
     "miembros_cuentan": "v2.173.2 (T-04): al invitar, el tope de 20 cuenta a los activos e invitados con cuenta viva y a todo el que tiene historia en el viaje (pagó un ticket o está en la foto de alguno), aunque haya salido o dado de baja su cuenta: así el cierre nunca ve más de 20 saldos.",
-    "montos": "v2.173.2 (T-03): un ticket escaneado o un gasto a mano, hasta $1,000,000; el total del viaje, hasta 200 de esos. Los totales (gasto del grupo, pagado y consumido) son enteros seguros." },
+    "montos": "v2.173.2 (T-03): un ticket escaneado o un gasto a mano, hasta $1,000,000; el total del viaje, hasta 200 de esos. Los totales (gasto del grupo, pagado y consumido) son enteros seguros.",
+    "notas": { "entradas_por_miembro": 20, "caracteres_nota": 500, "items_por_lista": 30, "caracteres_item": 80, "caracteres_titulo": 80 } },
   "privacidad": {
     "miembros_ven": "De los demás: nombre y @usuario (sin foto), quién pagó cada ticket, quién ya eligió y el balance de cada uno. Esperando pagos: todas las transferencias.",
     "nunca": "El RFC ni el folio del ticket.",
@@ -521,6 +547,94 @@
         "404": { "cuerpo": { "error": "viaje_not_found" } },
         "409": { "error": "viaje_not_closed" }
       }
+    },
+    "GET /api/viajes/:id/notas": {
+      "since": "2.183.0 (D290)",
+      "regla": "El pizarrón. Marca mi visita, también con el viaje cerrado.",
+      "respuestas": {
+        "200": {
+          "claves": ["contract", "pizarron"],
+          "pizarron": ["viaje_id", "nombre", "estado", "cerrado_en", "editable", "total", "escribieron", "limites", "apartados"],
+          "editable": "el viaje está abierto y mi cuenta está activa",
+          "total": "los miembros activos con cuenta viva",
+          "escribieron": "de esos, los que tienen al menos una entrada",
+          "apartados": "ver notas.apartado y notas.orden_de_los_apartados"
+        },
+        "404": { "cuerpo": { "error": "viaje_not_found" } }
+      }
+    },
+    "POST /api/viajes/:id/notas": {
+      "since": "2.183.0 (D290)",
+      "request_nota": { "idempotency_key": "string 8..100", "tipo": "nota", "texto": "1..500" },
+      "request_lista": { "idempotency_key": "string 8..100", "tipo": "lista", "titulo": "1..80", "items": "1..30 de {texto 1..80}" },
+      "regla": "Al final de mi apartado. El reintento con la misma clave y el mismo pedido responde 200 con la misma entrada, también si ya llegué al tope.",
+      "respuestas": {
+        "201": { "claves": ["contract", "entrada_id", "apartado"], "apartado": "el mío, completo" },
+        "200": { "cuando": "el reintento" },
+        "400": { "error": "validation_error", "mensajes": ["tipo_invalido", "texto_vacio", "texto_max_500", "texto_control", "titulo_max_80", "item_max_80", "items_min_1", "items_max_30"] },
+        "403": { "errores": ["user_suspended"] },
+        "404": { "cuerpo": { "error": "viaje_not_found" } },
+        "409": { "errores": ["viaje_not_open", "idempotency_key_conflict", "viaje_notas_limit"], "viaje_notas_limit": "{error, limit: 20}" }
+      },
+      "orden_de_errores": "404 viaje_not_found (n325) → 409 viaje_not_open → 403 user_suspended → 400 → 409 idempotency_key_conflict → 409 viaje_notas_limit."
+    },
+    "PATCH /api/viajes/:id/notas/:nid": {
+      "since": "2.183.0 (D290)",
+      "request_nota": { "version": "la que vi", "texto": "1..500" },
+      "request_lista": {
+        "version": "la que vi",
+        "titulo": "1..80, opcional",
+        "items": "opcional: la lista COMPLETA de 1..30 {id?, texto 1..80}, sin repetir id. Con id, un ítem que existe (conserva su tilde; uno que no es de esa lista: 422 viaje_nota_item_unknown {error, item_id}); sin id, uno nuevo, sin tildar; uno que existe y no viene, se saca. Sin `tildado`: una pestaña vieja no destilda."
+      },
+      "regla": "Sólo la mía, con al menos un campo además de `version`. Sube la versión y `actualizado_en` (es «nuevo» para los demás); una edición sin cambios responde 200 sin subirla.",
+      "respuestas": {
+        "200": { "claves": ["contract", "apartado"] },
+        "400": { "error": "validation_error" },
+        "403": { "errores": ["viaje_nota_not_yours", "user_suspended"] },
+        "404": { "errores": ["viaje_not_found", "viaje_nota_not_found"], "viaje_nota_not_found": "no es de este viaje, ya se borró o es de quien salió" },
+        "409": { "errores": ["viaje_not_open", "viaje_nota_version_conflict"], "viaje_nota_version_conflict": "{error, apartado}: el mío actual" },
+        "422": { "errores": ["viaje_nota_item_unknown"] }
+      },
+      "orden_de_errores": "404 viaje_not_found (n325) → 404 viaje_nota_not_found → 409 viaje_not_open → 403 viaje_nota_not_yours → 403 user_suspended → 400/422 → 409 viaje_nota_version_conflict."
+    },
+    "DELETE /api/viajes/:id/notas/:nid": {
+      "since": "2.183.0 (D290)",
+      "request": { "query": "version=N (la que vi), obligatoria" },
+      "regla": "Sólo la mía, con sus ítems. No es «nuevo» para los demás. Una que ya se borró: 404 viaje_nota_not_found.",
+      "respuestas": {
+        "200": { "claves": ["contract", "apartado"] },
+        "400": { "error": "validation_error" },
+        "403": { "errores": ["viaje_nota_not_yours", "user_suspended"] },
+        "404": { "errores": ["viaje_not_found", "viaje_nota_not_found"] },
+        "409": { "errores": ["viaje_not_open", "viaje_nota_version_conflict"], "viaje_nota_version_conflict": "{error, apartado}: el mío actual" }
+      },
+      "orden_de_errores": "El de PATCH."
+    },
+    "PUT /api/viajes/:id/notas/:nid/items/:iid": {
+      "since": "2.183.0 (D290)",
+      "request": { "tildado": "boolean" },
+      "regla": "Un ítem de una lista mía. Es un estado: tildar dos veces es un solo efecto; no sube la versión ni es «nuevo». Un ítem que no es de esa lista (o una nota, que no tiene ítems): 404 viaje_nota_item_not_found.",
+      "respuestas": {
+        "200": { "claves": ["contract", "apartado"] },
+        "400": { "error": "validation_error" },
+        "403": { "errores": ["viaje_nota_not_yours", "user_suspended"] },
+        "404": { "errores": ["viaje_not_found", "viaje_nota_not_found", "viaje_nota_item_not_found"] },
+        "409": { "errores": ["viaje_not_open"] }
+      },
+      "orden_de_errores": "El de PATCH; el 404 del ítem, después de la validación."
+    },
+    "PUT /api/viajes/:id/notas/orden": {
+      "since": "2.183.0 (D290)",
+      "request": { "ids": "todas mis entradas, en el orden nuevo, sin repetir (1..20)" },
+      "regla": "No es «nuevo». Si el conjunto no es exactamente el mío (otra pestaña creó o borró una), 409 viaje_notas_order_mismatch con mi apartado.",
+      "respuestas": {
+        "200": { "claves": ["contract", "apartado"] },
+        "400": { "error": "validation_error" },
+        "403": { "errores": ["user_suspended"] },
+        "404": { "cuerpo": { "error": "viaje_not_found" } },
+        "409": { "errores": ["viaje_not_open", "viaje_notas_order_mismatch"], "viaje_notas_order_mismatch": "{error, apartado}: el mío actual" }
+      },
+      "orden_de_errores": "404 viaje_not_found (n325) → 409 viaje_not_open → 403 user_suspended → 400 → 409 viaje_notas_order_mismatch."
     }
   },
   "avisos": {

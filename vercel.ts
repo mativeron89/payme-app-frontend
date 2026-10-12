@@ -62,6 +62,8 @@ const PAGINAS_APP = [
   'viajes', 'viaje-nuevo', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado',
   // D244/D245 · la carga manual.
   'viaje-gasto',
+  // D290 · el pizarrón de notas del viaje.
+  'viaje-notas',
   // D252 · el link de invitación.
   'invitacion',
 ];
@@ -72,6 +74,8 @@ const PAGINAS_APP = [
 const PAGINAS_CON_PARAMETRO = [
   'mesa', 'transferir',
   'scan', 'viajes', 'viaje', 'viaje-ticket-nuevo', 'viaje-ticket', 'viaje-balance', 'viaje-cerrado', 'viaje-gasto',
+  // D290 · `/viaje-notas/<viaje>` y `/viaje-notas/<viaje>.<miembro>`.
+  'viaje-notas',
   // D252 · `/invitacion/<código>`.
   'invitacion',
 ];

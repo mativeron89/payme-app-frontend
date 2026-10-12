@@ -25,7 +25,24 @@ const viaje = {
   invitados: [], mi_balance_cents: 0, gasto_del_grupo_cents: 0, tickets: [], sin_repartir: [], transferencias: [],
   transferencias_pendientes: 0, color: 'azul', has_photo: true,
   hora_cierre: '23:59', puedo_cerrar: true, se_cierra_en: null,
+  notas: { escribieron: 1, total: 1, nuevo: false },
 };
+// D290 · el pizarrón: mi apartado con una nota y una lista.
+const NOTA = '0e000000-0000-4000-8000-0000000000a1';
+const LISTA = '0e000000-0000-4000-8000-0000000000a2';
+const ITEM = '0e000000-0000-4000-8000-0000000000a3';
+const miApartado = {
+  miembro_id: 'm1', ...persona, has_avatar: false, es_yo: true, actualizado_en: '2026-10-12T03:00:00.000Z',
+  entradas: [
+    { id: NOTA, tipo: 'nota', texto: 'El sábado reservo la lancha', version: 1, creado_en: '2026-10-12T03:00:00.000Z',
+      actualizado_en: '2026-10-12T03:00:00.000Z' },
+    { id: LISTA, tipo: 'lista', titulo: 'Para llevar', items: [{ id: ITEM, texto: 'Gorra', tildado: true }], version: 2,
+      creado_en: '2026-10-11T03:00:00.000Z', actualizado_en: '2026-10-11T03:00:00.000Z' },
+  ],
+};
+const limites = { entradas_por_miembro: 20, caracteres_nota: 500, items_por_lista: 30, caracteres_item: 80, caracteres_titulo: 80 };
+const pizarron = { viaje_id: VIAJE, nombre: 'Cancún', estado: 'abierto', cerrado_en: null, editable: true, total: 1,
+  escribieron: 1, limites, apartados: [miApartado] };
 const enLista = { id: VIAJE, nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, estado: 'abierto', personas: 1,
   mi_balance_cents: 0, transferencias_pendientes: null, consumiste_cents: null, terminado_en: null, color: null, has_photo: false,
   hora_cierre: '23:59' };
@@ -63,6 +80,12 @@ beforeEach(() => {
       return json({ contract: CONTRATO_VIAJES, ticket });
     }
     if (url.pathname.endsWith('/avatar')) return json({ error: 'avatar_not_found' }, 404);
+    // D290 · el pizarrón y sus escrituras.
+    if (url.pathname.endsWith('/notas') && (init?.method ?? 'GET') === 'GET') return json({ contract: CONTRATO_VIAJES, pizarron });
+    if (url.pathname.endsWith('/notas') && init?.method === 'POST') {
+      return json({ contract: CONTRATO_VIAJES, entrada_id: NOTA, apartado: miApartado }, 201);
+    }
+    if (url.pathname.includes('/notas/')) return json({ contract: CONTRATO_VIAJES, apartado: miApartado });
     if (url.pathname.endsWith('/foto') && init?.method === 'PUT') return json({ foto }, 201);
     if (url.pathname.endsWith('/foto') && init?.method === 'DELETE') return new Response(null, { status: 204 });
     if (url.pathname.endsWith('/foto')) return json({ error: 'viaje_photo_not_found' }, 404);
@@ -78,8 +101,8 @@ afterEach(() => {
   reiniciarViajesParaTests();
 });
 
-describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D278-3)', () => {
-  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=10`, una sola vez y exacta', async () => {
+describe('fachada real · Viajes con App Backend 2.183.0 (`viaje_version=11`, D290)', () => {
+  it('🔴 D256 · las rutas que devuelven `viaje`, y la lista, piden `viaje_version=11`, una sola vez y exacta', async () => {
     const v = await api.getViaje(VIAJE);
     expect(v).toMatchObject({ color: 'azul', has_photo: true });
     await api.crearViaje({ nombre: 'Cancún', fecha_desde: null, fecha_hasta: null, miembros: [], idempotency_key: 'clave-de-prueba-1' });
@@ -92,7 +115,7 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
       `GET /api/viajes/${VIAJE}`, 'POST /api/viajes', `POST /api/viajes/${VIAJE}/aceptar`, `POST /api/viajes/${VIAJE}/cerrar`,
       `PATCH /api/viajes/${VIAJE}`, 'GET /api/viajes',
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['10']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['11']);
     expect(pedidos.at(-1)!.url.searchParams.getAll('estado')).toEqual(['abiertos']);
   });
 
@@ -137,7 +160,7 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
     expect(pedidos[0]!.body).not.toHaveProperty('pagado_por');
   });
 
-  it('🔴 D263 · las rutas de ticket también piden `viaje_version=10`, una sola vez y exacta', async () => {
+  it('🔴 D263 · las rutas de ticket también piden `viaje_version=11`, una sola vez y exacta', async () => {
     await api.cargarTicketDeViaje(VIAJE, {
       ocr_receipt: 'or1.x.y', idempotency_key: 'ticket-de-prueba-1', forma: 'iguales', tipo_lugar: 'otro', lugar: 'Taxi',
       fecha_ticket: null, hora_ticket: null, items: [{ name: 'Taxi', price_cents: 5000, quantity: 1 }],
@@ -153,7 +176,7 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
       `PUT /api/viajes/${VIAJE}/tickets/t/seleccion`, `PUT /api/viajes/${VIAJE}/tickets/t/presentes`,
       `PATCH /api/viajes/${VIAJE}/tickets/t`,
     ]);
-    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['10']);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['11']);
   });
 
   it('🔴 D276-2 · el ticket escaneado lleva `presentes` tal cual (lo que se ve, siempre)', async () => {
@@ -216,28 +239,28 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros/m%2F1/avatar`);
   });
 
-  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=10` con sólo `{ miembros }`', async () => {
+  it('🔴 D255-8 · «Agregar miembros» va a `POST /api/viajes/:id/miembros?viaje_version=11` con sólo `{ miembros }`', async () => {
     const v = await api.invitarAlViaje(VIAJE, [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }]);
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('POST');
     expect(pedidos[0]!.url.pathname).toBe(`/api/viajes/${VIAJE}/miembros`);
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['10']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['11']);
     expect(pedidos[0]!.body).toEqual({ miembros: [{ user_id: 'c1000000-0000-4000-8000-000000000001' }, { username: 'leo.paz' }] });
   });
 
-  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=10`, sin cuerpo, y devuelve el viaje', async () => {
+  it('🔴 D256 · eliminar va a `DELETE /api/viajes/:id/tickets/:tid?viaje_version=11`, sin cuerpo, y devuelve el viaje', async () => {
     const v = await api.eliminarTicketDeViaje('a/b', 't/1');
     expect(v.id).toBe(VIAJE);
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('DELETE');
     expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/tickets/t%2F1');
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['10']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['11']);
     expect([...pedidos[0]!.url.searchParams.keys()]).toEqual(['viaje_version']);
     expect(pedidos[0]!.body).toBeUndefined();
   });
 
-  it('🔴 D278-3 · corregir va a `PATCH /api/viajes/:id/tickets/:tid?viaje_version=10` con el pedido tal cual', async () => {
+  it('🔴 D278-3 · corregir va a `PATCH /api/viajes/:id/tickets/:tid?viaje_version=11` con el pedido tal cual', async () => {
     const pedido = { lugar: 'Matambre', items: [{ id: 'i', name: 'Taxi', price_cents: 6000, quantity: 1 }, { name: 'Propina', price_cents: 500, quantity: 1 }],
       pagadores: [{ miembro_id: 'm1', monto_cents: 6500 }] };
     const t = await api.corregirTicketDeViaje('a/b', 't/1', pedido);
@@ -245,7 +268,7 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0]!.method).toBe('PATCH');
     expect(pedidos[0]!.url.pathname).toBe('/api/viajes/a%2Fb/tickets/t%2F1');
-    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['10']);
+    expect(pedidos[0]!.url.searchParams.getAll('viaje_version')).toEqual(['11']);
     expect([...pedidos[0]!.url.searchParams.keys()]).toEqual(['viaje_version']);
     expect(pedidos[0]!.body).toEqual(pedido);
   });
@@ -254,6 +277,43 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
     const { puedo_corregir: _, ...de9 } = ticket;
     vi.stubGlobal('fetch', vi.fn(async () => json({ contract: CONTRATO_VIAJES, ticket: de9 })));
     await expect(api.corregirTicketDeViaje(VIAJE, 't', { lugar: null })).rejects.toThrow();
+  });
+
+  it('🔴 D290 · el pizarrón y sus escrituras: rutas exactas, cuerpos tal cual y SIN `viaje_version`', async () => {
+    const p = await api.getNotasDeViaje(VIAJE);
+    expect(p.apartados[0]!.entradas.map((e) => e.tipo)).toEqual(['nota', 'lista']);
+    const alta = await api.crearNotaDeViaje(VIAJE, { idempotency_key: 'nota-de-prueba-1', tipo: 'nota', texto: 'Hola' });
+    expect(alta.entrada_id).toBe(NOTA);
+    await api.crearNotaDeViaje(VIAJE, { idempotency_key: 'lista-de-prueba-1', tipo: 'lista', titulo: 'Súper', items: [{ texto: 'Hielo' }] });
+    await api.editarNotaDeViaje(VIAJE, NOTA, { version: 1, texto: 'Chau' });
+    await api.editarNotaDeViaje(VIAJE, LISTA, { version: 2, titulo: 'Para llevar', items: [{ id: ITEM, texto: 'Gorra' }, { texto: 'Toalla' }] });
+    await api.borrarNotaDeViaje(VIAJE, NOTA, 3);
+    await api.tildarItemDeNota(VIAJE, LISTA, ITEM, false);
+    await api.ordenarNotasDeViaje(VIAJE, [LISTA, NOTA]);
+    expect(pedidos.map((x) => `${x.method} ${x.url.pathname}${x.url.search}`)).toEqual([
+      `GET /api/viajes/${VIAJE}/notas`, `POST /api/viajes/${VIAJE}/notas`, `POST /api/viajes/${VIAJE}/notas`,
+      `PATCH /api/viajes/${VIAJE}/notas/${NOTA}`, `PATCH /api/viajes/${VIAJE}/notas/${LISTA}`,
+      `DELETE /api/viajes/${VIAJE}/notas/${NOTA}?version=3`, `PUT /api/viajes/${VIAJE}/notas/${LISTA}/items/${ITEM}`,
+      `PUT /api/viajes/${VIAJE}/notas/orden`,
+    ]);
+    expect(pedidos.map((x) => x.body)).toEqual([
+      undefined,
+      { idempotency_key: 'nota-de-prueba-1', tipo: 'nota', texto: 'Hola' },
+      { idempotency_key: 'lista-de-prueba-1', tipo: 'lista', titulo: 'Súper', items: [{ texto: 'Hielo' }] },
+      { version: 1, texto: 'Chau' },
+      { version: 2, titulo: 'Para llevar', items: [{ id: ITEM, texto: 'Gorra' }, { texto: 'Toalla' }] },
+      undefined,
+      { tildado: false },
+      { ids: [LISTA, NOTA] },
+    ]);
+    for (const x of pedidos) expect(x.url.searchParams.getAll('viaje_version'), x.url.pathname).toEqual([]);
+  });
+
+  it('🔴 D290 · una respuesta de escritura que no trae MI apartado, o un alta cuya entrada no está, no se acepta', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ contract: CONTRATO_VIAJES, apartado: { ...miApartado, es_yo: false } })));
+    await expect(api.tildarItemDeNota(VIAJE, LISTA, ITEM, true)).rejects.toThrow();
+    vi.stubGlobal('fetch', vi.fn(async () => json({ contract: CONTRATO_VIAJES, entrada_id: 'otra', apartado: miApartado }, 201)));
+    await expect(api.crearNotaDeViaje(VIAJE, { idempotency_key: 'nota-de-prueba-2', tipo: 'nota', texto: 'x' })).rejects.toThrow();
   });
 
   it('D255-8 · el id del viaje va codificado en la ruta de «Agregar miembros»', async () => {
@@ -273,6 +333,9 @@ describe('fachada real · Viajes con App Backend 2.182.0 (`viaje_version=10`, D2
     await expect(api.getFotoDeViaje(VIAJE, loadSession()!)).rejects.toThrow('viajes_not_available');
     await expect(api.eliminarTicketDeViaje(VIAJE, 't')).rejects.toThrow('viajes_not_available');
     await expect(api.corregirTicketDeViaje(VIAJE, 't', { lugar: 'x' })).rejects.toThrow('viajes_not_available');
+    await expect(api.getNotasDeViaje(VIAJE)).rejects.toThrow('viajes_not_available');
+    await expect(api.crearNotaDeViaje(VIAJE, { idempotency_key: 'nota-de-prueba-3', tipo: 'nota', texto: 'x' })).rejects.toThrow('viajes_not_available');
+    await expect(api.tildarItemDeNota(VIAJE, LISTA, ITEM, true)).rejects.toThrow('viajes_not_available');
     expect(pedidos).toHaveLength(0);
   });
 });
