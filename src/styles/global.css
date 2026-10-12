@@ -6758,6 +6758,18 @@ button.qc-circulo::after {
   }
 }
 
+/* D295 · cada amigo de la lista va en su FilaDeslizable. La fila queda sola dentro del frente (siempre `:last-child`,
+   que le saca la línea): la línea entre amigos la pone el envoltorio. Sin radio propio: lo recorta la tarjeta (`.card`,
+   con `overflow: hidden`), así el rojo de un amigo del medio no tiene esquinas. Va después de `.deslizable`: a igual
+   especificidad gana la última. */
+.amigo-deslizable {
+  border-radius: 0;
+}
+
+.amigo-deslizable:not(:last-child) {
+  border-bottom: 1px solid var(--gray-l);
+}
+
 /* AF-BORRAR-MESAS · el aviso con «Deshacer», arriba de la barra de abajo. Dura
    más que un aviso común (8 s) porque tiene una acción. */
 .aviso-deshacer {

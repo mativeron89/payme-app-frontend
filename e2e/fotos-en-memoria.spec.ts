@@ -195,7 +195,10 @@ test.describe('E173-3 · fotos de Amigos en memoria (decisión 175)', () => {
     const antesSofia = await llamadasDe(page, 'Sofía Fernández');
 
     page.once('dialog', (d) => { void d.accept(); });
-    await page.getByRole('button', { name: 'Quitar a Juan', exact: true }).click();
+    // D295 · la ✕ salió: «Eliminar» aparece al deslizar; sin gesto, por teclado (el foco abre la fila).
+    const eliminar = page.getByRole('button', { name: 'Eliminar Juan López', exact: true });
+    await eliminar.focus();
+    await page.keyboard.press('Enter');
     await expect(fila(page, 'Juan López')).toHaveCount(0);
     // La lista recién traída ya no lo tiene: su foto se revoca.
     await expect.poll(() => blobVivo(page, srcJuan!)).toBe(false);

@@ -29,7 +29,7 @@ async function ir(page: Page, ruta: string): Promise<void> {
 test('🔴 D259 · Configuración, sin «Les llega una invitación…» ni el título «El viaje»; las tres filas siguen', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await page.getByRole('button', { name: 'Configuración del viaje', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Agregar miembros', exact: true })).toBeVisible();
   await expect(page.getByText('Les llega una invitación', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'El viaje', exact: true })).toHaveCount(0);

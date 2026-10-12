@@ -185,13 +185,15 @@ describe('D290 · la fila «Notas» (PANTALLA §1)', () => {
     expect(traducir('Hay notas nuevas', 'en')).toBe('There are new notes');
   });
 
-  it('🔴 dónde va: abierto, entre «Ver balance del viaje» y «Configuración»; esperando pagos, antes de «Salir»; cerrado, debajo de «Lugares visitados»', () => {
+  it('🔴 dónde va: abierto, debajo de «Ver balance del viaje» (D297: «Configuración» pasó a la tarjeta); esperando pagos, antes de «Salir»; cerrado, debajo de «Lugares visitados»', () => {
     const viaje = readFileSync(new URL('./ViajeScreen.tsx', import.meta.url), 'utf8');
     const abierto = viaje.slice(viaje.indexOf('function ViajeAbierto'), viaje.indexOf('export function MontoDeBalance'));
     const i = (s: string) => abierto.indexOf(s);
     expect(i("t('Ver balance del viaje')")).toBeGreaterThan(0);
     expect(i('<FilaDeNotas')).toBeGreaterThan(i("t('Ver balance del viaje')"));
-    expect(i("t('Configuración')")).toBeGreaterThan(i('<FilaDeNotas'));
+    // D297 · después de «Notas» ya no va la fila «Configuración»: sigue el aviso de la cámara.
+    expect(abierto).not.toContain("t('Configuración')");
+    expect(i('className="vjv-aviso-cargar"')).toBeGreaterThan(i('<FilaDeNotas'));
     const esperando = viaje.slice(viaje.indexOf('function EsperandoPagos'), viaje.indexOf('export function BotonSalir'));
     expect(esperando.match(/<FilaDeNotas resumen=\{v\.notas\} onAbrir=\{onNotas\} \/>\s*<BotonSalir/g)).toHaveLength(2);
     // El cerrado, pintado: la fila va enseguida de la lista de lugares.

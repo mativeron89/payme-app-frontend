@@ -29,7 +29,7 @@ async function ir(page: Page, ruta: string): Promise<void> {
 async function aConfiguracion(page: Page, viajeId: string, nombre: string): Promise<void> {
   await ir(page, `/viaje/${viajeId}`);
   await expect(page.getByRole('heading', { name: nombre, level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await page.getByRole('button', { name: 'Configuración del viaje', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toBeVisible();
 }
 
@@ -109,7 +109,7 @@ test.describe('🔴 D279 · la hora de cierre y cuándo se cierra solo', () => {
     const pedido = await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.crear-viaje.v1')!) as Record<string, unknown>);
     expect(pedido).toMatchObject({ fecha_desde: '2026-10-20', fecha_hasta: '2026-10-23', hora_cierre: '18:30' });
     // En Configuración, cuándo se cierra solo, en la hora del teléfono.
-    await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+    await page.getByRole('button', { name: 'Configuración del viaje', exact: true }).click();
     await expect(page.getByText('Cierra solo el 23 oct a las 18:30', { exact: true })).toBeVisible();
   });
 
@@ -122,7 +122,7 @@ test.describe('🔴 D279 · la hora de cierre y cuándo se cierra solo', () => {
     await page.getByRole('button', { name: 'Agregar', exact: true }).first().click();
     await page.getByRole('button', { name: 'Crear viaje', exact: true }).click();
     await expect(page).toHaveURL(/\/viaje\/[0-9a-f-]{36}$/);
-    await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+    await page.getByRole('button', { name: 'Configuración del viaje', exact: true }).click();
     await expect(page.getByText('Cierra solo el 23 oct a las 23:59', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: /Nombre y fechas/ }).click();
     await page.getByLabel('Hora de cierre').fill('20:00');

@@ -783,10 +783,47 @@
 .vjv-scroll-abierto .vjv-monto {
   margin: 0 0 var(--sp-1);
 }
-.vjv-configuracion-texto {
-  display: inline-flex;
+/* D297 · la Configuración del viaje abierto, en un cuadrado con el engranaje a la derecha de la tarjeta de título, como
+   «+ Gasto» en la burbuja de Inicio (D291): la tarjeta flex, el divisor de 1 px en `--border` y el cuadrado a todo el
+   alto. La caja de la tarjeta (D285: padding 16/18, alto mínimo 83) no cambia: el divisor y el cuadrado llegan a los
+   bordes con márgenes negativos, que en una fila flex estirada suman al alto (el contenido más los 16 + 16). */
+.title-card.vjv-titulo-con-engranaje {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+}
+.vjv-titulo-con-engranaje > .title-card-fila {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+}
+.vjv-titulo-divisor {
+  flex: none;
+  width: 1px;
+  margin: -16px 0 -16px 12px;
+  background: var(--border);
+}
+/* 76 de ancho, como «+ Gasto», y el alto de la tarjeta: un blanco de toque cómodo (más de 44 × 44). */
+.vjv-titulo-engranaje {
+  box-sizing: border-box;
+  flex: none;
+  width: 76px;
+  margin: -16px -18px -16px 0;
+  padding: 0;
+  display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Con `overflow: hidden` un anillo de foco por fuera quedaría cortado: va por dentro, como en «+ Gasto». */
+.vjv-titulo-engranaje:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -3px;
 }
 .vjv-pie-abierto {
   margin-top: auto;

@@ -102,6 +102,8 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Ticket para {0}': 'Ticket for {0}',
   'Alguien ya no está en el viaje. Revisa entre quiénes.': 'Someone is no longer on the trip. Check who it is split among.',
   // D255-8 · Configuración del viaje.
+  // D297 · el engranaje de la tarjeta de título (sólo el ícono: es su nombre accesible).
+  'Configuración del viaje': 'Trip settings',
   'Agregar miembros': 'Add members',
   'Ya están en el viaje': 'Already on the trip',
   'Le mandamos la invitación a {0}.': 'We sent {0} an invitation.',

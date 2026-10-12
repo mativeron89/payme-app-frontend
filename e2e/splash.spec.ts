@@ -1,8 +1,8 @@
 /**
- * La pantalla de carga en un navegador real · D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)» y la adenda
- * «Hagamoslo de un segundo mejor»): aparece en cada apertura o recarga, también por un link o un QR de mesa, desde el
- * primer cuadro, y queda al menos 1 s desde que empezó a cargar la página. Si la app tarda más, sigue hasta que monte.
- * Después, el fundido.
+ * La pantalla de carga en un navegador real · D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)»; la adenda 1 la
+ * dejó en 1 s y la adenda 2, «Aumenta a dos segundos el icono de carga inicial», en 2 s): aparece en cada apertura o
+ * recarga, también por un link o un QR de mesa, desde el primer cuadro, y queda al menos 2 s desde que empezó a cargar la
+ * página. Si la app tarda más, sigue hasta que monte. Después, el fundido.
  *
  * 🔴 Corre en el proyecto `pantalla-de-carga`, contra el BUILD mock con la CSP real (`e2e/csp/servidor.mjs`, 5188): ahí
  * no está la marca de la e2e (`VITE_E2E_CARGA_SIN_MINIMO`, que sólo pone el servidor de desarrollo de las demás
@@ -18,8 +18,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
-/** El mínimo de D292 y el fundido de `src/splash.ts`. */
-const MINIMO_MS = 1_000;
+/** El mínimo de D292 (adenda 2) y el fundido de `src/splash.ts`. */
+const MINIMO_MS = 2_000;
 const FUNDIDO_MS = 160;
 
 interface Muestra {
@@ -81,72 +81,73 @@ async function demorarLaApp(page: Page, ms: number): Promise<void> {
   });
 }
 
-/** Lo común: se vio desde el primer cuadro, entero hasta el segundo, y se fue con el fundido. */
-function esperarUnSegundoEntero(c: Carga): void {
+/** Lo común: se vio desde el primer cuadro, entero hasta cumplir el mínimo, y se fue con el fundido. */
+function esperarElMinimoEntero(c: Carga): void {
   expect(c.vistoEn, 'el #splash nunca estuvo en el árbol').not.toBeNull();
   // 🔴 Desde el primer cuadro: entero, sin aparecer de a poco (antes nacía en 0 y aparecía a los 300 ms).
   expect(c.muestras[0]!.opacidad, 'el primer cuadro con el #splash no lo muestra entero').toBe(1);
-  // Entero todo el primer segundo.
-  const antesDelSegundo = c.muestras.filter((m) => m.t < MINIMO_MS);
-  expect(antesDelSegundo.length).toBeGreaterThan(0);
-  expect(antesDelSegundo.filter((m) => m.opacidad !== 1), 'el #splash dejó de verse entero antes del segundo').toEqual([]);
-  // Se va recién después del segundo y el fundido.
+  // Entero hasta cumplir el mínimo.
+  const antesDelMinimo = c.muestras.filter((m) => m.t < MINIMO_MS);
+  expect(antesDelMinimo.length).toBeGreaterThan(0);
+  expect(antesDelMinimo.filter((m) => m.opacidad !== 1), 'el #splash dejó de verse entero antes del mínimo').toEqual([]);
+  // Se va recién después del mínimo y el fundido.
   expect(c.retiradoEn!).toBeGreaterThanOrEqual(MINIMO_MS + FUNDIDO_MS);
 }
 
-test.describe('🔴 D292 · la pantalla de carga, al menos 1 segundo en cada apertura', () => {
-  test('aparece de entrada y queda al menos 1 s aunque la app monte antes; después, el fundido', async ({ page }) => {
+test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada apertura', () => {
+  test('aparece de entrada y queda al menos 2 s aunque la app monte antes; después, el fundido', async ({ page }) => {
     await medirLaCarga(page);
     await page.goto('/');
     const c = await laCarga(page);
-    // La premisa: la app montó antes del segundo (si no, este caso no estaría probando nada).
+    // La premisa: la app montó antes del mínimo (si no, este caso no estaría probando nada).
     expect(c.montoEn, 'la app no montó').not.toBeNull();
-    expect(c.montoEn!, 'la app tardó más de un segundo: este caso no probaría el mínimo').toBeLessThan(MINIMO_MS);
-    esperarUnSegundoEntero(c);
-    // Con la app ya montada debajo, el splash siguió entero hasta el segundo.
+    expect(c.montoEn!, 'la app tardó más que el mínimo: este caso no lo probaría').toBeLessThan(MINIMO_MS);
+    esperarElMinimoEntero(c);
+    // Con la app ya montada debajo, el splash siguió entero hasta el mínimo.
     expect(c.muestras.filter((m) => m.t >= c.montoEn! && m.t < MINIMO_MS).every((m) => m.opacidad === 1)).toBe(true);
-    // El fundido: hay cuadros a medio camino, después del segundo.
+    // El fundido: hay cuadros a medio camino, después del mínimo.
     const fundido = c.muestras.filter((m) => m.opacidad > 0.05 && m.opacidad < 0.95);
     expect(fundido.length, 'se fue de golpe, sin fundido').toBeGreaterThan(0);
     expect(Math.min(...fundido.map((m) => m.t))).toBeGreaterThanOrEqual(MINIMO_MS);
-    // Y no más que eso: con la app lista antes, el fundido arranca al cumplir el segundo, no después (holgura para el
+    // Y no más que eso: con la app lista antes, el fundido arranca al cumplir el mínimo, no después (holgura para el
     // reloj del navegador de pruebas).
-    expect(Math.min(...fundido.map((m) => m.t)), 'esperó de más: el mínimo es 1 s').toBeLessThan(MINIMO_MS + 400);
+    expect(Math.min(...fundido.map((m) => m.t)), 'esperó de más: el mínimo es 2 s').toBeLessThan(MINIMO_MS + 400);
     expect(c.retiradoEn!).toBeLessThan(MINIMO_MS + FUNDIDO_MS + 600);
     await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   });
 
-  test('también al recargar: otra vez desde el primer cuadro y otro segundo entero', async ({ page }) => {
+  test('también al recargar: otra vez desde el primer cuadro y otra vez el mínimo entero', async ({ page }) => {
     await medirLaCarga(page);
     await page.goto('/');
     await laCarga(page);
     await page.reload();
-    esperarUnSegundoEntero(await laCarga(page));
+    esperarElMinimoEntero(await laCarga(page));
   });
 
-  test('si la app tarda más, sigue hasta que monta, y entonces se va (sin esperar otro segundo)', async ({ page }) => {
-    await demorarLaApp(page, 2_500);
+  test('si la app tarda más, sigue hasta que monta, y entonces se va (sin esperar otro mínimo)', async ({ page }) => {
+    // 3,5 s: bien por encima del mínimo de 2 s (con 2,5 s quedaba a medio segundo).
+    await demorarLaApp(page, 3_500);
     await medirLaCarga(page);
     await page.goto('/');
     const c = await laCarga(page);
-    expect(c.montoEn!).toBeGreaterThanOrEqual(2_500);
+    expect(c.montoEn!).toBeGreaterThanOrEqual(3_500);
     // Entero hasta que montó la app.
     expect(c.muestras.filter((m) => m.t < c.montoEn!).filter((m) => m.opacidad !== 1)).toEqual([]);
-    // Se fue enseguida después de montar: el fundido y nada más (sin un segundo extra).
+    // Se fue enseguida después de montar: el fundido y nada más (sin otro mínimo).
     expect(c.retiradoEn! - c.montoEn!).toBeLessThan(700);
-    esperarUnSegundoEntero(c);
+    esperarElMinimoEntero(c);
   });
 
   for (const [nombre, ruta] of [
     ['un link de mesa', '/mesa/PA-1234?t=token-de-prueba'],
     ['un QR de mesa', '/?r=qr-de-prueba'],
   ] as const) {
-    test(`por ${nombre} también: desde el primer cuadro y al menos 1 s`, async ({ page }) => {
+    test(`por ${nombre} también: desde el primer cuadro y al menos 2 s`, async ({ page }) => {
       await medirLaCarga(page);
       await page.goto(ruta);
       const c = await laCarga(page);
       expect(c.montoEn!).toBeLessThan(MINIMO_MS);
-      esperarUnSegundoEntero(c);
+      esperarElMinimoEntero(c);
     });
   }
 
@@ -155,18 +156,18 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 1 segundo en cada ape
     await medirLaCarga(page);
     await page.reload();
     const c = await laCarga(page);
-    esperarUnSegundoEntero(c);
+    esperarElMinimoEntero(c);
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
   });
 
-  test('con «reducir movimiento»: el ícono quieto, y el mismo segundo entero', async ({ page }) => {
+  test('con «reducir movimiento»: el ícono quieto, y el mismo mínimo entero', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await medirLaCarga(page);
     await page.goto('/');
     const icono = page.locator('#splash .carga__icono');
     await expect(icono).toBeVisible();
     expect(await icono.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
-    esperarUnSegundoEntero(await laCarga(page));
+    esperarElMinimoEntero(await laCarga(page));
   });
 
   test('sin «reducir movimiento», el ícono entra con su animación desde que aparece la pantalla', async ({ page }) => {

@@ -26,6 +26,11 @@ async function entrar(page: Page, { viajes }: { viajes: boolean }): Promise<void
  * Faro, donde Diego no eligió.
  */
 async function sinMesas(page: Page, { viajes }: { viajes: boolean }): Promise<void> {
+  // 🔴 0.245.1 · se edita desde `/privacy`, que no carga el mock, y se vuelve a donde estaba: dentro de la app, un pedido
+  // del mock que salía en el medio guardaba su memoria encima y la edición se perdía (la clase de `viajes-notas`, 0.244.1).
+  const donde = page.url();
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
   await page.evaluate(() => {
     const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
     for (const m of st.mesas) m.openedByUser = false;
@@ -43,7 +48,7 @@ async function sinMesas(page: Page, { viajes }: { viajes: boolean }): Promise<vo
       localStorage.setItem(k, JSON.stringify(e));
     }, ESTADO_VIAJES);
   }
-  await page.reload();
+  await page.goto(donde);
   await expect(page.locator('.aviso-sin-mesas')).toBeVisible();
 }
 

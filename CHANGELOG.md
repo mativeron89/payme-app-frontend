@@ -11,6 +11,105 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.245.1 — Eliminar un amigo deslizando (D295); la pantalla de carga, 2 s (D292-2); la Configuración del viaje en un engranaje (D297) (2026-10-12)
+
+Orden AF-ELIMINAR-AMIGO-DESLIZANDO-20261012 (8b879373…), con dos adendas en la fila: D292-2 (0b105ad2…, 19:48:08Z) y
+D297 (75daca7a…, 19:51:23Z). PayMe no mueve dinero. Lo visible se cierra con la prueba de Mati en el iPhone (D63).
+
+**D295 · eliminar un amigo deslizando** (`3cd0931e…`). Mati: «Cambia el formato de eliminar amigos por el de desplazar
+a la izquierda y que aparezca el botón de eliminar».
+1. **Sale la ✕ (hecho).** En Amigos, la ✕ de cada fila (30×30, debajo de los 44) ya no está.
+2. **Deslizar muestra «Eliminar» (hecho).** Cada amigo va en `FilaDeslizable`, el componente de Mesas: el mismo gesto, el
+   mismo umbral (pasada la mitad de 96 queda abierta), el mismo rojo (`--danger`) y una sola fila abierta a la vez (la
+   guarda la pantalla).
+3. **«Eliminar» hace lo que hacía la ✕ (hecho).** «¿Quitar a {nombre} de tus amigos?», «Amigo quitado», «No se pudo
+   quitar de tus amigos» y las mismas recargas. Primero cierra la fila.
+4. **Sin gesto (hecho).** Lo da `FilaDeslizable`, sin tocarlo: «Eliminar {nombre}» está en el orden de tabulación y, con
+   el foco, la fila se abre. El botón mide 96 × el alto de la fila (66).
+5. **Lo que no cambia (hecho).** Tocar la fila (no hace nada), la búsqueda, «Nuevo amigo», «Invita a alguien»,
+   Solicitudes y Grupos, incluida la ✕ de los miembros de un grupo.
+   - Cada amigo queda solo dentro del frente del deslizable, y por eso siempre es `:last-child` y pierde su línea. Ahora
+     la línea entre amigos la pone el envoltorio.
+   - El envoltorio no tiene radio propio, así el rojo de un amigo del medio no tiene esquinas.
+6. **Las pruebas (hecho).** Ver «Pruebas».
+
+**D292 · adenda 2 · la pantalla de carga, al menos 2 segundos** (`0b105ad2…`). Mati, después de ver 0.244.1: «Aumenta a
+dos segundos el icono de carga inicial».
+- `SPLASH_MINIMO_MS` pasa de 1000 a 2000.
+- Todo lo demás de 0.244.1 sigue igual:
+  - aparece enseguida, también por un link o un QR de mesa;
+  - si la app tarda, sigue hasta que monte;
+  - el fundido y el retiro a los 12 s;
+  - la excepción con `DEV` del servidor de desarrollo de la e2e.
+- `index.html` no cambia (el mínimo no vive en el `<style>`), y el hash de la CSP tampoco.
+
+**D297 · la Configuración del viaje, en un engranaje en la tarjeta** (`75daca7a…`). Mati, con las capturas de Holbox y
+de su burbuja: «… ponele el ícono de configuración a la burbuja con el formato que está en la segunda imagen como
++ gasto, la línea de separación y el símbolo de configuración». Eligió «Sólo el engranaje (Recomendada)».
+- Con el viaje abierto, la tarjeta de título suma a la derecha el divisor de 1 px en `--border` y un cuadrado de 76 con
+  sólo el engranaje, a todo el alto: el formato de «+ Gasto» de la burbuja de Inicio (D291).
+- La caja de la tarjeta (D285) no cambia: padding 16/18, alto mínimo 83 y el cuadro del viaje a 19 del borde. El divisor
+  y el cuadrado llegan a los bordes con márgenes negativos.
+- `aria-label` «Configuración del viaje» («Trip settings»). Tocarlo abre la Configuración, con el mismo `onConfiguracion`
+  de la fila.
+- Sale la fila «Configuración». Esperando pagos no había fila, y no hay engranaje.
+
+**Declarado:**
+- **Pruebas existentes cambiadas:**
+  - D295:
+    - `e2e/fotos-en-memoria.spec.ts`: «Quitar a Juan» pasa a «Eliminar Juan López», por teclado.
+    - En inglés sale «Quitar a {0}», que quedaba huérfano.
+  - D292-2:
+    - `src/splash.test.ts` y `e2e/splash.spec.ts`: el mínimo de 2 s.
+    - El caso de la app demorada pasa de 2,5 s a 3,5 s: con 2,5 s quedaba a medio segundo del mínimo nuevo.
+  - D297:
+    - `ViajeScreen.test.tsx`: la tarjeta del viaje abierto y el orden.
+    - `NotasScreen.test.tsx`: después de «Notas» sigue el aviso.
+    - `d255-ajustes` y `auditorias-pendientes` miden desde «Notas».
+    - `viajes-notas`: el orden, y la vecina del radio, que ahora es una sola.
+    - `d259-d262`, `d279-d281-d283` (3) y `tarjeta-de-titulo-blanca`: el botón «Configuración» exacto pasa a
+      «Configuración del viaje». Las demás lo buscaban sin `exact` y siguen andando.
+
+- **Dos intermitentes que ya estaban, corregidos** (la clase que en 0.245.0 quedó con 9 specs nombrados):
+  - Cuáles: `auditoria-codex-w01-w02` (`editarCancun` y `sinMesas`) y `d277-aviso-centrado` (`sinMesas`). Cayeron en la
+    e2e completa de este candidato.
+  - La causa es la misma clase: editaban el estado del mock dentro de la app y recargaban, y un pedido del mock en vuelo
+    guardaba su memoria encima.
+  - Medido con 10 workers y 30 repeticiones de las dos pruebas que caían: 13 de 90 en la base `339b91f` y 9 de 90 en el
+    candidato.
+  - Ahora editan desde `/privacy` y vuelven a donde estaban: 90/90 con la misma carga, y las dos specs enteras ×5, 100/100.
+  - **Quedan 7 de la clase, sin tocar:** `auditorias-pendientes`, `boton-gasto-y-monto`, `d256-scroll`,
+    `d275-burbuja-del-viaje`, `pie-app-de-inicio`, `tarjeta-de-titulo-blanca` y `viajes-corregir-ticket`.
+
+**Pruebas:**
+- **Unidad nuevas o cambiadas:**
+  - `amigosDeslizables.test.ts` (5): el componente, una sola abierta, la acción de la ✕ en orden, sin ✕ (y la de Grupos
+    sigue) y el CSS;
+  - `splash.test.ts`: el mínimo de 2 s;
+  - `ViajeScreen.test.tsx` suma 6 de D297: el engranaje y su nombre, sin la fila, esperando pagos sin engranaje, el
+    cableado, «Trip settings» y el CSS.
+- **e2e nuevas:**
+  - `amigos-deslizar.spec.ts` (16, a 375 y 390): sin ✕, deslizar, poco vuelve, tocar la fila cierra, una sola abierta, la
+    confirmación y el aviso, cancelar, el error, por teclado y lo que no cambia;
+  - `viaje-engranaje.spec.ts` (10, a 375 y 390): la geometría (76, a todo el alto, el divisor de 1 px en `--border`, la
+    caja de D285), abre la Configuración, por teclado, esperando pagos sin engranaje y un nombre largo.
+- **Rojo primero sobre `339b91f`:**
+  - D295: unidad 5/5; e2e 16/16, más la de `fotos-en-memoria` que quitaba a un amigo.
+  - D292-2: unidad 2; e2e de la carga 6 de 12 (las otras 6 no dependen del mínimo).
+  - D297: unidad 9; `viaje-engranaje` 8 de 10 (las 2 verdes son «esperando pagos no tiene engranaje», que ya era así).
+- **Mutantes:** 31 de 31 cazados.
+  - D295: 15 (`logs/mutantes-amigos.txt`).
+  - Las adendas: 16 (`logs/mutantes-adendas.txt`).
+  - Los que cayeron por una guarda de fuente o de traducción se replantaron sólo contra la e2e, y caen también: 6 de
+    amigos y 8 de las adendas.
+- **Gates** (los del CI, en local), todos en 0:
+  - el espejo con `--integridad` y `--aliases`;
+  - `npm test`: 295 archivos, 4807 pruebas y 1 omitida, con `--corrida`;
+  - typecheck;
+  - build real con el `VITE_API_URL` del CI, más `--artefacto dist`.
+- **e2e completa** (config real, cuatro proyectos): 1361 verdes y 2 rojas, las dos de arriba, ya corregidas.
+  - La pantalla de carga contra el build con la CSP real: 12/12 con 2 s.
+
 ## 0.245.0 — Los restaurantes de mis viajes, también en Mesas (D293) (2026-10-12)
 
 Orden AF-RESTAURANTES-DE-VIAJE-EN-MESAS-20261012 (f434a423…). Autoridad: D293 (57a569a1…). Mati eligió «Un restaurante

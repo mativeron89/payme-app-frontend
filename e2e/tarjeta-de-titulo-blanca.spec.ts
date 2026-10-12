@@ -282,7 +282,7 @@ test('viajes · listas, crear, viaje abierto, configuración', async ({ page }) 
   expect([abierto.cuadro!.fondo, abierto.cuadro!.img]).toEqual([TURQUESA, false]);
   await expect(tarjeta(page).locator('.vj-cuadro')).toHaveText('C');
   await expect(tarjeta(page).locator('.vj-cuadro')).toHaveCSS('color', 'rgb(255, 255, 255)');
-  await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await page.getByRole('button', { name: 'Configuración del viaje', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toBeVisible();
   await medir(page, '17', tarjeta(page), ESPERADO['17']!);
 });

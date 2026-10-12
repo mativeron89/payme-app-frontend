@@ -83,13 +83,13 @@ for (const ancho of [375, 390] as const) {
   test.describe(`D290 · a ${ancho}`, () => {
     test.use({ viewport: { width: ancho, height: ancho === 375 ? 667 : 844 } });
 
-    test('🔴 la fila «Notas»: entre «Ver balance» y «Configuración», con «2 de 4 escribieron» y el punto, que se apaga al abrir', async ({ page }) => {
+    test('🔴 la fila «Notas»: debajo de «Ver balance» (D297: «Configuración» pasó a la tarjeta), con «2 de 4 escribieron» y el punto, que se apaga al abrir', async ({ page }) => {
       await conViajes(page);
       await alViaje(page, CANCUN);
       const textos = await page.locator('.vjv-scroll-abierto > button').allTextContents();
       const i = textos.findIndex((x) => x.startsWith('Ver balance del viaje'));
-      expect(textos.slice(i, i + 3).map((x) => x.replace(/\s+/g, ' ').trim()))
-        .toEqual(['Ver balance del viaje', 'Notas2 de 4 escribieron', 'Configuración']);
+      expect(textos.slice(i).map((x) => x.replace(/\s+/g, ' ').trim()))
+        .toEqual(['Ver balance del viaje', 'Notas2 de 4 escribieron']);
       await expect(fila(page).getByRole('img', { name: 'Hay notas nuevas', exact: true })).toBeVisible();
       await expect(fila(page)).toHaveAccessibleName('Notas Hay notas nuevas 2 de 4 escribieron');
       await capturar(page, 'fila-con-punto');
@@ -101,9 +101,9 @@ for (const ancho of [375, 390] as const) {
         return { alto: r.height, radio: cs.borderRadius, color: cs.color, punto: getComputedStyle(p).backgroundColor,
           anchoPunto: p.getBoundingClientRect().width, doc: document.documentElement.scrollWidth };
       });
-      // D293 · el radio de sus vecinas («Ver balance del viaje» y «Configuración»): 22.
+      // D293 · el radio de su vecina, «Ver balance del viaje»: 22. (D297: «Configuración» pasó al engranaje de la tarjeta.)
       const vecinas = await page.locator('.vjv-ver-balance').evaluateAll((xs) => xs.map((x) => getComputedStyle(x).borderRadius));
-      expect(vecinas).toEqual(['22px', '22px']);
+      expect(vecinas).toEqual(['22px']);
       expect(m).toMatchObject({ alto: 56, radio: '22px', color: 'rgb(10, 123, 128)', punto: 'rgb(255, 107, 53)', anchoPunto: 8 });
       expect(m.doc).toBeLessThanOrEqual(ancho);
       await fila(page).click();

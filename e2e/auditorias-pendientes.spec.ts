@@ -260,7 +260,8 @@ test.describe('🔴 6 · D279 · cerrar y salir en Configuración; en el viaje, 
     const m = await page.evaluate(() => {
       const r = (s: string) => document.querySelector(s)!.getBoundingClientRect();
       const linea = r('.vjv-aviso-cargar .aviso-sin-mesas-cuerpo');
-      return { arriba: linea.top - r('.vjv-configuracion').bottom, abajo: r('.appbar-fab').top - linea.bottom, pos: getComputedStyle(document.querySelector('.vjv-aviso-cargar')!).position };
+      // D297 · la última fila antes del aviso es «Notas»: «Configuración» pasó al engranaje de la tarjeta.
+      return { arriba: linea.top - r('.nts-fila').bottom, abajo: r('.appbar-fab').top - linea.bottom, pos: getComputedStyle(document.querySelector('.vjv-aviso-cargar')!).position };
     });
     expect(Math.abs(m.arriba - m.abajo)).toBeLessThanOrEqual(1);
     expect(m.arriba).toBeGreaterThan(24);

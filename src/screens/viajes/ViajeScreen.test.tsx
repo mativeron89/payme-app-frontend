@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { traducir } from '../../i18n/idioma';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
 import { BalanceVista, LugarAgrupado, PestanasDeBalance } from './BalanceScreen';
 import { agruparConsumos } from './consumosPorLugar';
@@ -96,14 +97,15 @@ describe('D245 · el viaje abierto, más simple', () => {
 
   it('la burbuja dice sólo el nombre: sin fechas, sin avatares, sin «Tú, Luis…»', () => {
     // D285 · la tarjeta blanca con el cuadro del viaje (sin color ni foto, la inicial sobre el turquesa) y el nombre solo.
-    expect(html).toMatch(/<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#0F766E" aria-hidden="true">C<\/span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026<\/h1><\/div><\/div><\/div>/);
+    // D297 · y, a la derecha, el divisor y el engranaje de la Configuración.
+    expect(html).toMatch(/<div class="title-card vjv-titulo-con-engranaje"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#0F766E" aria-hidden="true">C<\/span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026<\/h1><\/div><\/div><span class="vjv-titulo-divisor" aria-hidden="true"><\/span><button type="button" class="vjv-titulo-engranaje" aria-label="Configuración del viaje"><svg[^>]*>[\s\S]*?<\/svg><\/button><\/div>/);
     expect(leido).not.toContain('5–11 oct');
     expect(leido).not.toContain('Tú, Luis');
   });
 
   it('🔴 D285 · la tarjeta queda blanca aunque el viaje tenga color: el color o la foto van sólo en el cuadro', () => {
     const conColor = renderToStaticMarkup(<ViajeVista carga={listo(viaje({ color: 'rojo' }))} marcando={null} {...ACCIONES} />);
-    expect(conColor).toContain('<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#B91C1C" aria-hidden="true">C</span>');
+    expect(conColor).toContain('<div class="title-card vjv-titulo-con-engranaje"><div class="title-card-fila"><span class="title-card-cuadro vj-cuadro" style="background:#B91C1C" aria-hidden="true">C</span>');
     expect(conColor).not.toContain('vj-titulo-color');
     const conFoto = renderToStaticMarkup(
       <ViajeVista carga={listo(viaje({ color: 'azul', has_photo: true }))} marcando={null} {...ACCIONES} fotoDelViaje="blob:foto-viaje" />,
@@ -141,9 +143,10 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('🔴 D250 · D255-7 · D279 · D290 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas», «Configuración» y el aviso', () => {
-    // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Notas 0 de 4 escribieron Configuración Toca el para cargar un ticket$/);
+  it('🔴 D250 · D255-7 · D279 · D290 · D297 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas» y el aviso', () => {
+    // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto. D297: la fila «Configuración» pasó al
+    // engranaje de la tarjeta de título.
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Notas 0 de 4 escribieron Toca el para cargar un ticket$/);
     expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
   });
@@ -545,5 +548,58 @@ describe('🔴 D278-2 · Balance › Consumos usa el total impreso', () => {
     expect(texto(sola)).toContain('Café Caribe $418');
     const lugar = consumos([conServicio, ticket({ id: 'tk-10', lugar: 'CAFÉ CARIBE', monto_cents: 10000, falta_que_elija: 0 })]);
     expect(texto(lugar)).toContain('Café Caribe 2 veces $518');
+  });
+});
+
+/**
+ * 🔴 D297 · la Configuración del viaje pasa al engranaje de la tarjeta de título (Mati eligió «Sólo el engranaje
+ * (Recomendada)»), en el formato de «+ Gasto» de la burbuja de Inicio: el divisor de 1 px y el cuadrado a todo el alto.
+ */
+describe('🔴 D297 · el engranaje de la Configuración, en la tarjeta del viaje', () => {
+  const fuente = readFileSync(new URL('./ViajeScreen.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('./viaje.css', import.meta.url), 'utf8');
+  const abierto = vista(listo(viaje()));
+
+  it('abierto: el engranaje sin texto, con «Configuración del viaje» como nombre accesible, después del divisor', () => {
+    expect(abierto.match(/class="vjv-titulo-engranaje"/g)).toHaveLength(1);
+    expect(abierto).toMatch(/<span class="vjv-titulo-divisor" aria-hidden="true"><\/span><button type="button" class="vjv-titulo-engranaje" aria-label="Configuración del viaje"><svg[^>]*>[\s\S]*?<\/svg><\/button>/);
+    // Sólo el ícono: el botón no tiene texto propio.
+    const boton = abierto.slice(abierto.indexOf('class="vjv-titulo-engranaje"'), abierto.indexOf('</button>', abierto.indexOf('class="vjv-titulo-engranaje"')));
+    expect(texto(`<b ${boton}`)).toBe('');
+  });
+
+  it('🔴 la fila «Configuración» de abajo ya no está', () => {
+    expect(abierto).not.toContain('vjv-configuracion');
+    expect(texto(abierto)).not.toContain('Configuración');
+    expect(fuente).not.toContain("t('Configuración')");
+  });
+
+  it('esperando pagos (y cerrado) no había fila: tampoco hay engranaje', () => {
+    const esperando = vista(listo(viaje({ estado: 'esperando_pagos', transferencias_pendientes: 1 })));
+    expect(esperando).not.toContain('vjv-titulo-engranaje');
+    expect(esperando).not.toContain('vjv-titulo-con-engranaje');
+    expect(esperando).toContain('<div class="title-card"><div class="title-card-fila">');
+  });
+
+  it('tocarlo abre la Configuración, como la fila: el mismo `onConfiguracion` de la pantalla', () => {
+    expect(fuente).toContain('<TarjetaDeTitulo viaje={v} foto={props.fotoDelViaje ?? null} onConfiguracion={props.onConfiguracion} />');
+    expect(fuente).toContain('<button type="button" className="vjv-titulo-engranaje" aria-label={t(\'Configuración del viaje\')} onClick={onConfiguracion}>');
+    expect(fuente).toContain('onConfiguracion={() => setConfiguracion(true)}');
+  });
+
+  it('la traducción: «Trip settings»', () => {
+    expect(traducir('Configuración del viaje', 'en')).toBe('Trip settings');
+  });
+
+  it('CSS: la tarjeta flex con su caja de D285, el divisor de 1 px en --border y el cuadrado de 76 a todo el alto', () => {
+    const regla = (selector: string) => {
+      const i = css.indexOf(`\n${selector} {`);
+      expect(i, selector).toBeGreaterThan(0);
+      return css.slice(i, css.indexOf('}', i));
+    };
+    expect(regla('.title-card.vjv-titulo-con-engranaje')).toMatch(/flex-direction: row;\s*align-items: stretch;\s*gap: 0;\s*overflow: hidden;/);
+    expect(regla('.title-card.vjv-titulo-con-engranaje')).not.toContain('padding');
+    expect(regla('.vjv-titulo-divisor')).toMatch(/width: 1px;\s*margin: -16px 0 -16px 12px;\s*background: var\(--border\);/);
+    expect(regla('.vjv-titulo-engranaje')).toMatch(/width: 76px;\s*margin: -16px -18px -16px 0;/);
   });
 });

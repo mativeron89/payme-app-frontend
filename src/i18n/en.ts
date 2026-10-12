@@ -582,7 +582,6 @@ export const EN: Record<string, string> = {
   "Pídele a quien te invitó que te comparta uno nuevo.": "Ask whoever invited you to share a new one.",
   "Queda {0}": "{0} left",
   "Quedó todo pago": "Everything was paid",
-  "Quitar a {0}": "Remove {0}",
   "Quitar a {0} del grupo": "Remove {0} from the group",
   "Quitar tarjeta {0}": "Remove card {0}",
   "Rechazar": "Decline",

@@ -108,7 +108,7 @@ test.describe('D255 · tramo 1', () => {
     expect(await rebote()).toBe('auto');
   });
 
-  test('🔴 7 · el viaje: monto centrado; «Configuración» debajo de «Ver balance», con «Notas» en el medio (D290); «Cerrar viaje» rojo clarito y el pie arriba del círculo, ahora en Configuración (D279)', async ({ page }) => {
+  test('🔴 7 · el viaje: monto centrado; «Notas» debajo de «Ver balance» (D290), y «Configuración» en el engranaje de la tarjeta (D297); «Cerrar viaje» rojo clarito y el pie arriba del círculo, ahora en Configuración (D279)', async ({ page }) => {
     await conViajes(page);
     // Alto, para que sobre lugar y el pie se vea abajo.
     await page.setViewportSize({ width: 375, height: 1000 });
@@ -120,9 +120,11 @@ test.describe('D255 · tramo 1', () => {
       return {
         arriba: monto.top - titulo.bottom,
         abajo: miembros.top - monto.bottom,
-        balance: r('.vjv-ver-balance:not(.vjv-configuracion)'),
-        configuracion: r('.vjv-configuracion'),
-        // D290 · 0.244.0: la fila «Notas» va entre las dos.
+        balance: r('.vjv-ver-balance'),
+        // D297 · 0.245.1: la fila «Configuración» pasó al engranaje de la tarjeta de título.
+        filasDeConfiguracion: document.querySelectorAll('.vjv-configuracion').length,
+        engranajes: document.querySelectorAll('.title-card .vjv-titulo-engranaje').length,
+        // D290 · 0.244.0: la fila «Notas», debajo de «Ver balance».
         notas: r('.nts-fila'),
         hayCerrar: document.querySelectorAll('.vjv-cerrar, .vjv-salir').length,
       };
@@ -130,8 +132,7 @@ test.describe('D255 · tramo 1', () => {
     expect(Math.abs(m.arriba - m.abajo)).toBeLessThanOrEqual(2);
     expect(m.notas.top).toBeGreaterThan(m.balance.bottom);
     expect(m.notas.top - m.balance.bottom).toBeLessThanOrEqual(16);
-    expect(m.configuracion.top).toBeGreaterThan(m.notas.bottom);
-    expect(m.configuracion.top - m.notas.bottom).toBeLessThanOrEqual(16);
+    expect([m.filasDeConfiguracion, m.engranajes]).toEqual([0, 1]);
     // D279 · en la pantalla del viaje ya no están: van en Configuración.
     expect(m.hayCerrar).toBe(0);
     await page.getByRole('button', { name: 'Configuración' }).click();

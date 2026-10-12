@@ -533,7 +533,7 @@ export function ViajeVista(props: ViajeVistaProps) {
   const v = carga.viaje;
   return (
     <>
-      <TarjetaDeTitulo viaje={v} foto={props.fotoDelViaje ?? null} />
+      <TarjetaDeTitulo viaje={v} foto={props.fotoDelViaje ?? null} onConfiguracion={props.onConfiguracion} />
       {/* La clave por estado: al cerrarse el viaje la pantalla es otra y
           arranca arriba, no donde estaba el botón «Cerrar viaje». */}
       <div key={v.estado} className={`scroll vj-scroll ${v.estado === 'abierto' ? 'vjv-scroll-abierto' : ''}`}>
@@ -547,8 +547,16 @@ export function ViajeVista(props: ViajeVistaProps) {
  * D255 tramo 2 · la burbuja del viaje lleva su color y, si tiene, su foto.
  * D285 · 0.242.0: la tarjeta queda blanca aunque el viaje tenga color (antes `vj-titulo-color` la pintaba entera): el
  * color o la foto van sólo en el cuadro, a la izquierda del nombre.
+ * D297 · 0.245.1 (Mati eligió «Sólo el engranaje (Recomendada)»): con el viaje abierto, la Configuración pasa a un
+ * cuadrado con el engranaje a la derecha de la tarjeta, separado por una línea vertical, en el formato de «+ Gasto» de
+ * la burbuja de Inicio (D291): la tarjeta flex, el divisor de 1 px en `--border` y el cuadrado a todo el alto. Sale la
+ * fila «Configuración» de abajo. Esperando pagos no había fila, y no hay engranaje.
  */
-function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string | null }) {
+function TarjetaDeTitulo({ viaje: v, foto, onConfiguracion }: {
+  viaje: DetalleViaje;
+  foto: string | null;
+  onConfiguracion: () => void;
+}) {
   const { t } = useIdioma();
   const cuadro = <CuadroDelViaje nombre={v.nombre} color={v.color} foto={foto} />;
   if (v.estado !== 'abierto') {
@@ -567,10 +575,14 @@ function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string
   }
   // D245-2 · la burbuja dice sólo el nombre del viaje: sin fechas ni avatares.
   return (
-    <div className="title-card">
+    <div className="title-card vjv-titulo-con-engranaje">
       <FilaDeTitulo cuadro={cuadro}>
         <h1 className="title-card-title">{v.nombre}</h1>
       </FilaDeTitulo>
+      <span className="vjv-titulo-divisor" aria-hidden="true" />
+      <button type="button" className="vjv-titulo-engranaje" aria-label={t('Configuración del viaje')} onClick={onConfiguracion}>
+        <Icon name="settings" size={22} />
+      </button>
     </div>
   );
 }
@@ -582,11 +594,11 @@ function TarjetaDeTitulo({ viaje: v, foto }: { viaje: DetalleViaje; foto: string
  * manual» lado a lado y «Ver balance del viaje». Los tickets pasan a Balance ›
  * Consumos.
  * D255-7 · el monto centrado entre la burbuja y «Miembros»; debajo de «Ver
- * balance del viaje», «Configuración».
+ * balance del viaje», «Configuración» (D297: pasó al engranaje de la tarjeta).
  * D279 · «Cerrar viaje» y «Salir del viaje» pasaron a Configuración; en su lugar,
  * «Toca el [cámara] para cargar un ticket», en el medio del espacio libre (D277).
  */
-function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, onNotas, fotoDe }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   return (
     <>
@@ -603,17 +615,11 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onConfiguracion, 
         <span>{t('Ver balance del viaje')}</span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
-      {/* D290 · «Notas», entre «Ver balance del viaje» y «Configuración». */}
+      {/* D290 · «Notas», debajo de «Ver balance del viaje». D297: la fila «Configuración» que seguía pasó al engranaje
+          de la tarjeta de título. */}
       <FilaDeNotas resumen={v.notas} onAbrir={onNotas} />
-      <button type="button" className="vj-card vjv-ver-balance vjv-configuracion" onClick={onConfiguracion}>
-        <span className="vjv-configuracion-texto">
-          <Icon name="settings" size={20} />
-          {t('Configuración')}
-        </span>
-        <Icon name="chevron-down" size={18} className="vjv-chev" />
-      </button>
       {/* D279 · Mati eligió «Toca el [cámara] para cargar un ticket»: la línea del aviso de Inicio, con la cámara de
-          Nueva, en el medio del espacio libre entre «Configuración» y el círculo (D277), sin `fixed`. */}
+          Nueva, en el medio del espacio libre entre «Notas» y el círculo (D277), sin `fixed`. */}
       <div className="vjv-aviso-cargar">
         <div className="aviso-sin-mesas-cuerpo">
           <span>{t('Toca el')}</span>

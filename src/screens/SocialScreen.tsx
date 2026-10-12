@@ -9,6 +9,7 @@ import {
   AppHeader, AppHeaderBack, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
+import { FilaDeslizable } from '../components/FilaDeslizable';
 import { navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
 import { fold, relTime } from '../utils/format';
@@ -92,6 +93,11 @@ export function SocialScreen() {
   const [friends, setFriends] = useState<Friend[] | null>(() => ultimoVisto.leer<Friend[]>('amigos.amigos') ?? null);
   const [friendsRevision, setFriendsRevision] = useState(0);
   const [filtroAmigos, setFiltroAmigos] = useState('');
+  /**
+   * D295 · Mati: «Cambia el formato de eliminar amigos por el de desplazar a la izquierda y que aparezca el botón de
+   * eliminar». El amigo con «Eliminar» a la vista (una sola fila a la vez), como en Mesas.
+   */
+  const [amigoDeslizado, setAmigoDeslizado] = useState<string | null>(null);
   /**
    * AF-USERNAME-D104 · decisión 104: debajo del nombre va el @ (`ArrobaDebajo`),
    * nunca el `payme_id`, y el filtro busca por lo que se ve.
@@ -545,42 +551,48 @@ export function SocialScreen() {
                     : t('Sin resultados para esa búsqueda.')}
                 </div>
               )}
+              {/* D295 · cada amigo en su `FilaDeslizable` (el de Mesas): deslizar a la izquierda deja ver «Eliminar»,
+                  que hace lo que hacía la ✕. Sin gesto, «Eliminar {nombre}» está en el orden de tabulación y con el
+                  foco la fila se abre. */}
               {amigosVisibles?.map((f) => (
-                <div key={f.id} className="friend-row" style={{ cursor: 'default' }}>
-                  <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} hasAvatar={f.has_avatar} />
-                  <div className="fr-name">
-                    <div className="n">{f.full_name}</div>
-                    <ArrobaDebajo username={f.username} />
+                <FilaDeslizable
+                  key={f.id}
+                  className="amigo-deslizable"
+                  abierta={amigoDeslizado === f.id}
+                  onAbrir={() => setAmigoDeslizado(f.id)}
+                  onCerrar={() => setAmigoDeslizado((actual) => (actual === f.id ? null : actual))}
+                  nombre={f.full_name}
+                  onEliminar={async () => {
+                    setAmigoDeslizado(null);
+                    if (!window.confirm(t('¿Quitar a {0} de tus amigos?', f.full_name))) return;
+                    try {
+                      await api.removeFriend(f.id);
+                      toast(t('Amigo quitado'));
+                      loadFriends();
+                      loadRequests();
+                    } catch {
+                      toast(t('No se pudo quitar de tus amigos'));
+                    }
+                  }}
+                >
+                  <div className="friend-row" style={{ cursor: 'default' }}>
+                    <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} hasAvatar={f.has_avatar} />
+                    <div className="fr-name">
+                      <div className="n">{f.full_name}</div>
+                      <ArrobaDebajo username={f.username} />
+                    </div>
+                    {walletRailEnabled && (
+                      <button
+                        className="btn"
+                        style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-legacy-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
+                        onClick={() => navigate('transferir', f.payme_id)}
+                        aria-label={`Transferir a ${f.full_name}`}
+                      >
+                        <Icon name="arrow-up-right" size={16} />
+                      </button>
+                    )}
                   </div>
-                  {walletRailEnabled && (
-                    <button
-                      className="btn"
-                      style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-legacy-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
-                      onClick={() => navigate('transferir', f.payme_id)}
-                      aria-label={`Transferir a ${f.full_name}`}
-                    >
-                      <Icon name="arrow-up-right" size={16} />
-                    </button>
-                  )}
-                  <button
-                    className="back-btn"
-                    style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
-                    aria-label={t('Quitar a {0}', f.first_name)}
-                    onClick={async () => {
-                      if (!window.confirm(t('¿Quitar a {0} de tus amigos?', f.full_name))) return;
-                      try {
-                        await api.removeFriend(f.id);
-                        toast(t('Amigo quitado'));
-                        loadFriends();
-                        loadRequests();
-                      } catch {
-                        toast(t('No se pudo quitar de tus amigos'));
-                      }
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
+                </FilaDeslizable>
               ))}
             </div>
           </div>

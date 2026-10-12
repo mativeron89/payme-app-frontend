@@ -1,21 +1,23 @@
 /**
  * Retiro del splash de carga — la mitad con criterio de `index.html`.
  *
- * D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)», y la adenda «Hagamoslo de un segundo mejor»): la pantalla de
- * carga aparece en cada apertura o recarga —también por un link o un QR de mesa—, desde el primer cuadro, y queda **al
- * menos 1 segundo desde que empezó a cargar la página**. Si la app tarda más, sigue hasta que monte. Después, el fundido
- * de siempre. Reemplaza «B sólo cuando tarda» (2026-08-19), que la mostraba sólo si la app tardaba más de 300 ms.
+ * D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)»): la pantalla de carga aparece en cada apertura o recarga
+ * —también por un link o un QR de mesa—, desde el primer cuadro, y queda **al menos 2 segundos desde que empezó a cargar
+ * la página**. Si la app tarda más, sigue hasta que monte. Después, el fundido de siempre. Reemplaza «B sólo cuando
+ * tarda» (2026-08-19), que la mostraba sólo si la app tardaba más de 300 ms.
+ * - Adenda 1 («Hagamoslo de un segundo mejor»): 1 s, publicado en 0.244.1.
+ * - Adenda 2 (0.245.1), después de ver ese segundo: «Aumenta a dos segundos el icono de carga inicial». Vuelve a 2 s.
  *
  * La APARICIÓN la gobierna CSS puro en `index.html` (tiene que pintar antes de que exista ningún módulo). Este módulo
- * gobierna el RETIRO: cuánto falta para completar el segundo, y el fundido. «Desde que empezó a cargar» es
+ * gobierna el RETIRO: cuánto falta para completar el mínimo, y el fundido. «Desde que empezó a cargar» es
  * `performance.now()`, que corre desde el inicio de la navegación (también en una recarga y en un link de mesa).
  *
  * Los tiempos que también vive el CSS están ESPEJADOS a mano (la entrada del ícono y la rendición de 12 s).
  * `splash.test.ts` impide que las dos copias se separen.
  */
 
-/** D292 · el mínimo visible, desde que empezó a cargar la página (la adenda: 1 s, no 2). */
-export const SPLASH_MINIMO_MS = 1_000;
+/** D292 · el mínimo visible, desde que empezó a cargar la página (la adenda 2: 2 s; la 1 lo había dejado en 1 s). */
+export const SPLASH_MINIMO_MS = 2_000;
 
 /** Duración del fundido de salida. */
 export const SPLASH_FUNDIDO_MS = 160;
@@ -28,10 +30,10 @@ export const SPLASH_ENTRADA_ICONO_RETARDO_MS = 0;
 export const SPLASH_RENDICION_MS = 12_000;
 
 /**
- * El mínimo de ESTE build. Siempre 1 s, salvo en el servidor de desarrollo de la e2e, que arranca con
- * `VITE_E2E_CARGA_SIN_MINIMO=1` (`playwright.config.ts`): ahí las ~1300 pruebas de siempre no esperan el segundo en cada
+ * El mínimo de ESTE build. Siempre 2 s, salvo en el servidor de desarrollo de la e2e, que arranca con
+ * `VITE_E2E_CARGA_SIN_MINIMO=1` (`playwright.config.ts`): ahí las ~1300 pruebas de siempre no esperan el mínimo en cada
  * carga. 🔴 Con `DEV` delante (condición del Bibliotecario, 2026-10-12T13:40:42Z): en un `vite build` `DEV` es `false`
- * constante, así que aunque alguien ponga la variable en Vercel o en el CI, el build que se publica aplica el segundo. La
+ * constante, así que aunque alguien ponga la variable en Vercel o en el CI, el build que se publica aplica el mínimo. La
  * pantalla de carga misma se prueba contra el build (`e2e/splash.spec.ts`, proyecto `pantalla-de-carga`), sin la marca.
  */
 export const MINIMO_DE_ESTE_BUILD_MS = import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : SPLASH_MINIMO_MS;

@@ -24,16 +24,17 @@ const FUENTES = import.meta.glob(
   { query: '?raw', import: 'default', eager: true },
 ) as Record<string, string>;
 
-describe('🔴 D292 · la pantalla de carga siempre, al menos 1 segundo (Mati, 2026-10-12)', () => {
-  /** La decisión entera está en esta función: lo que falta para completar el segundo desde que empezó a cargar. */
-  it('la app monta antes del segundo: espera lo que falta', () => {
-    expect(SPLASH_MINIMO_MS).toBe(1_000);
-    expect(demoraDeRetiro(0)).toBe(1_000);
-    expect(demoraDeRetiro(120)).toBe(880);
-    expect(demoraDeRetiro(999)).toBe(1);
+describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 2026-10-12, adenda 2)', () => {
+  /** La decisión entera está en esta función: lo que falta para completar el mínimo desde que empezó a cargar. */
+  it('la app monta antes del mínimo: espera lo que falta', () => {
+    expect(SPLASH_MINIMO_MS).toBe(2_000);
+    expect(demoraDeRetiro(0)).toBe(2_000);
+    expect(demoraDeRetiro(120)).toBe(1_880);
+    expect(demoraDeRetiro(1_000)).toBe(1_000);
+    expect(demoraDeRetiro(1_999)).toBe(1);
   });
 
-  it('la app tarda más: ya cumplió el segundo, se funde enseguida (nunca una demora negativa)', () => {
+  it('la app tarda más: ya cumplió el mínimo, se funde enseguida (nunca una demora negativa)', () => {
     expect(demoraDeRetiro(SPLASH_MINIMO_MS)).toBe(0);
     expect(demoraDeRetiro(5_000)).toBe(0);
     expect(demoraDeRetiro(60_000)).toBe(0);
@@ -44,8 +45,8 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 1 segundo (Mati, 2
     expect(demoraDeRetiro(300, 0)).toBe(0);
   });
 
-  it('🔴 en este build (sin la marca), el mínimo es el segundo', () => {
-    expect(MINIMO_DE_ESTE_BUILD_MS).toBe(1_000);
+  it('🔴 en este build (sin la marca), el mínimo son los 2 s', () => {
+    expect(MINIMO_DE_ESTE_BUILD_MS).toBe(2_000);
   });
 
   /**
@@ -98,7 +99,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 1 segundo (Mati, 2
     const rendicion = INDEX.match(/splash-rendirse\s+\d+ms\s+ease\s+(\d+)s\s+forwards/);
     expect(rendicion).not.toBeNull();
     expect(Number(rendicion![1]) * 1000).toBe(SPLASH_RENDICION_MS);
-    // El segundo termina mucho antes que la rendición: la pantalla no se rinde mientras cumple su mínimo.
+    // El mínimo termina mucho antes que la rendición: la pantalla no se rinde mientras lo cumple.
     expect(SPLASH_MINIMO_MS).toBeLessThan(SPLASH_RENDICION_MS);
   });
 

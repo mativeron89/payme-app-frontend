@@ -31,9 +31,23 @@ async function conViajes(page: Page): Promise<void> {
 
 type TicketSemilla = { id: string; lugar: string; fecha_ticket: string | null; hora_ticket: string | null; personas: Array<{ listo_en: string | null }> };
 
-/** Cambia los tickets de Cancún en el estado del mock (el mock lo lee al cargar) y recarga. */
+/**
+ * 🔴 0.245.1 · la edición del estado del mock se hace desde una página pública (`/privacy`), que no carga el mock, y
+ * después se vuelve a donde estaba. Antes se editaba dentro de la app y se recargaba: un pedido del mock que salía en el
+ * medio guardaba su memoria encima y la edición se perdía. La misma clase que `editarEstado` de `viajes-notas` (0.244.1)
+ * y `editarViajes` de `d276` (0.245.0).
+ */
+async function fueraDeLaApp(page: Page, editar: () => Promise<void>): Promise<void> {
+  const donde = page.url();
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
+  await editar();
+  await page.goto(donde);
+}
+
+/** Cambia los tickets de Cancún en el estado del mock (el mock lo lee al cargar) y vuelve a cargar. */
 async function editarCancun(page: Page, cambio: 'mariscos-el-5' | 'mariscos-el-5-y-cafe-se-llama-mariscos' | 'eligieron-todos'): Promise<void> {
-  await page.evaluate(({ k, cambio: c, cancun, mariscos }) => {
+  await fueraDeLaApp(page, () => page.evaluate(({ k, cambio: c, cancun, mariscos }) => {
     const e = JSON.parse(localStorage.getItem(k)!) as { viajes: Array<{ id: string; tickets: TicketSemilla[] }> };
     const tickets = e.viajes.find((v) => v.id === cancun)!.tickets;
     const m = tickets.find((x) => x.id === mariscos)!;
@@ -47,20 +61,18 @@ async function editarCancun(page: Page, cambio: 'mariscos-el-5' | 'mariscos-el-5
       if (c === 'mariscos-el-5-y-cafe-se-llama-mariscos') tickets.find((x) => x.lugar === 'Café Caribe')!.lugar = 'Mariscos El Faro';
     }
     localStorage.setItem(k, JSON.stringify(e));
-  }, { k: ESTADO_VIAJES, cambio, cancun: CANCUN, mariscos: MARISCOS });
-  await page.reload();
+  }, { k: ESTADO_VIAJES, cambio, cancun: CANCUN, mariscos: MARISCOS }));
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
 /** Sin mesas abiertas: el estado del mock, editado y releído. */
 async function sinMesas(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  await fueraDeLaApp(page, () => page.evaluate(() => {
     const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
     for (const m of st.mesas) m.openedByUser = false;
     st.joinedMesaCodes = [];
     localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
-  });
-  await page.reload();
+  }));
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
