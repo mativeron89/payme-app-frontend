@@ -157,7 +157,6 @@ export const EN: Record<string, string> = {
   "Cargando integrantes…": "Loading members…",
   "Cargando mesa…": "Loading table…",
   "Cargando tarjetas…": "Loading cards…",
-  "Cargando tu historial": "Loading your history",
   "Cargando tu mesa": "Loading your table",
   "Cargando tus estadísticas": "Loading your stats",
   "Cargando tus pagos": "Loading your payments",
@@ -514,6 +513,9 @@ export const EN: Record<string, string> = {
   "No pudimos cargar tus mesas": "We couldn't load your tables",
   "Cargando tus mesas": "Loading your tables",
   "Ver más mesas": "See more tables",
+  // D293 · los restaurantes de mis viajes en Mesas: el aviso si fallan y el de una página de más que no llegó.
+  "No pudimos cargar los restaurantes de tus viajes": "We couldn't load the restaurants from your trips",
+  "No pudimos cargar más. Prueba de nuevo.": "We couldn't load more. Try again.",
   // AF-18 · campos aditivos del dueño v2.93.0 (G-27 y G-34).
   "1 persona": "1 person",
   "{0} personas": "{0} people",

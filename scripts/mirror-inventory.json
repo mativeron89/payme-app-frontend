@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "5f5bb01e3272088b2c46bf9f9d88883b927a656b",
-  "total": 140,
+  "commit": "cb463893358176b730b98fdf508863ed26c8ed53",
+  "total": 141,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -79,8 +79,8 @@
     {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "d59814470af27d89f7f2b4a2a5d91b47552248f7ba6c695f757786d72c9fc4ca",
-      "bytes": 74635
+      "sha256": "269b9b56aeb49f61108e2edc6b105a1592d8a19c202b6db609628e410ca8c443",
+      "bytes": 77241
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -427,8 +427,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "e70c4817aa7e9506e33d587c2c534004c4133f3be3d2a48544e1a6e97403206b",
-      "bytes": 65597
+      "sha256": "c19eaf44aec24fa28ff52e98657f5efd91b15cc97eceb2c43275e1a10899a2bd",
+      "bytes": 60862
     },
     {
       "origen": "routes/auth.js",
@@ -553,8 +553,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "6d98e093d742a530b340757ec3ac77179b4c66ccb2b7f64d40d48ad8e326c851",
-      "bytes": 13103
+      "sha256": "d102a5924c9f5eec67ebc5cdd0c09140a6b4d9bd8d10c2e2a0f9a30ba3bbee36",
+      "bytes": 13478
     },
     {
       "origen": "routes/webhooks.js",
@@ -807,6 +807,12 @@
       "destino": "services/viajesNotas.js",
       "sha256": "28d39ed83f1f9edc10096eed0eaf1af294a4a20fcf99d3df77b1e9b0d85fad82",
       "bytes": 19097
+    },
+    {
+      "origen": "services/viajesVisitas.js",
+      "destino": "services/viajesVisitas.js",
+      "sha256": "c94e0e91bb7bc40402f91ecaae7681c556b9250b1540a2d5439968b5775268c2",
+      "bytes": 11785
     },
     {
       "origen": "services/walletRail.js",

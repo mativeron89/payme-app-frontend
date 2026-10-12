@@ -122,6 +122,7 @@ import {
   type PedidoDeNotaNueva,
   type Pizarron,
 } from './viajesNotas';
+import { decodeVisitasDeViajes, type PaginaDeVisitas } from './viajesVisitas';
 import {
   aplicarConfigLinkDeInvitacion,
   assertLinkDeInvitacion,
@@ -688,6 +689,11 @@ export interface Api {
   tildarItemDeNota(id: string, notaId: string, itemId: string, tildado: boolean): Promise<Apartado>;
   /** D290 · `PUT /api/viajes/:id/notas/orden`: todas las mías, en el orden nuevo. La pantalla todavía no ordena. */
   ordenarNotasDeViaje(id: string, ids: readonly string[]): Promise<Apartado>;
+  /**
+   * D293 · `GET /api/viajes/visitas` (App Backend 2.184.0): mis tickets de restaurante, bar o café de mis viajes, para la
+   * lista de Mesas. De a 20 (el default del dueño), con su cursor opaco.
+   */
+  getVisitasDeViajes(params?: { cursor?: string }): Promise<PaginaDeVisitas>;
 
   // ─── AF-LINK-DE-INVITACION · D252 · App Backend 2.173.0 (`contract/invitacion-personal-v1.json`) ───
   // Sólo con `features.invite_link` encendida: si no, no se pide nada.
@@ -1440,6 +1446,13 @@ const realApi: Api = {
     assertViajesHabilitado();
     return decodePizarron(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/notas`), id);
   },
+  getVisitasDeViajes: async (params) => {
+    assertViajesHabilitado();
+    const qs = new URLSearchParams();
+    if (params?.cursor) qs.set('cursor', params.cursor);
+    const s = qs.toString();
+    return decodeVisitasDeViajes(await httpRequest<unknown>('GET', `/viajes/visitas${s ? `?${s}` : ''}`));
+  },
   crearNotaDeViaje: async (id, pedido) => {
     assertViajesHabilitado();
     return decodeEscrituraDeNotas(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/notas`, pedido), true, 'viajes.notas.crear');
@@ -1853,6 +1866,10 @@ const mockApi: Api = {
   getNotasDeViaje: async (id) => {
     assertViajesHabilitado();
     return decodePizarron(await mockViajes.mockNotasDeViaje(id), id);
+  },
+  getVisitasDeViajes: async (params) => {
+    assertViajesHabilitado();
+    return decodeVisitasDeViajes(await mockViajes.mockVisitasDeViajes(params?.cursor ? { cursor: params.cursor } : {}));
   },
   crearNotaDeViaje: async (id, pedido) => {
     assertViajesHabilitado();

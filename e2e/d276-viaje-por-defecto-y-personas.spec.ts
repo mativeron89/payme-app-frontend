@@ -57,7 +57,15 @@ async function ir(page: Page, ruta: string): Promise<void> {
 }
 
 /** Cambia el estado de los viajes del mock y recarga (el mock lo lee al cargar). */
+/**
+ * 🔴 0.245.0 · la edición se hace desde una página pública (`/privacy`), que no carga el mock, y después se vuelve a
+ * Inicio. Antes se editaba dentro de la app y se recargaba: un pedido del mock que salía en el medio guardaba su
+ * memoria encima y la edición se perdía («Tulum 2026» no aparecía). Medido con 10 workers y 40 repeticiones: 5 y 1 de
+ * 40 en la base `4651793`, 6 y 7 en el candidato. La misma clase que `editarEstado` de `viajes-notas` (0.244.1).
+ */
 async function editarViajes(page: Page, cambio: 'sin-fecha-hasta' | 'dos-viajes' | 'monterrey-hoy'): Promise<void> {
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Aviso de privacidad' })).toBeVisible();
   await page.evaluate(({ k, cambio: c, tulum }) => {
     const e = JSON.parse(localStorage.getItem(k)!) as { viajes: Array<Record<string, unknown> & { id: string; nombre: string }> };
     const cancun = e.viajes.find((v) => v.id === 'd1000000-0000-4000-8000-000000000001')!;
@@ -70,7 +78,7 @@ async function editarViajes(page: Page, cambio: 'sin-fecha-hasta' | 'dos-viajes'
     } else e.viajes.push({ ...structuredClone(cancun), id: tulum, nombre: 'Tulum 2026', tickets: [], transferencias: [] });
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO_VIAJES, cambio, tulum: TULUM });
-  await page.reload();
+  await page.goto('/home');
   await expect(circulo(page)).toBeVisible();
 }
 

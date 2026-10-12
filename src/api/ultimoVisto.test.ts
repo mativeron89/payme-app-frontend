@@ -2,6 +2,7 @@
  * D237 · «lo último visto»: de quién es, cuándo se vacía, que lo igual no se
  * vuelve a dibujar, y dónde se puede leer (sólo pantallas que MUESTRAN).
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CLAVES_DE_AMIGOS, CLAVES_DE_MESAS, UltimoVisto, subioSinLeer, type ClaveUltimoVisto } from './ultimoVisto';
 
@@ -115,8 +116,15 @@ describe('D237 · lo último visto, en memoria y por cuenta', () => {
     for (const clave of CLAVES_DE_MESAS) expect(cache.leer(clave)).toBeUndefined();
     for (const clave of CLAVES_DE_AMIGOS) expect(cache.leer(clave)).toBe(1);
     expect(cache.leer('sinLeer')).toBe(1);
-    expect(CLAVES_DE_MESAS).toEqual(['inicio.mesasAbiertas', 'inicio.invitaciones', 'mesas.tusMesas', 'mesas.historial']);
+    // D293 · las visitas de viaje de Mesas también dependen de las mesas (ocultar la mesa de un recibo vuelve visita al ticket).
+    expect(CLAVES_DE_MESAS).toEqual(['inicio.mesasAbiertas', 'inicio.invitaciones', 'mesas.tusMesas', 'mesas.historial', 'mesas.visitas']);
     expect(CLAVES_DE_AMIGOS).toEqual(['amigos.amigos', 'amigos.grupos', 'amigos.solicitudes']);
+  });
+
+  it('D293 · después de crear, aceptar, salir o cerrar un viaje, también se olvidan las visitas de viaje de Mesas', () => {
+    const fuente = readFileSync(new URL('./ultimoVisto.ts', import.meta.url), 'utf8');
+    const cuerpo = fuente.slice(fuente.indexOf('export function olvidarLoDeViajes(): void {'));
+    expect(cuerpo.slice(0, cuerpo.indexOf('\n}\n'))).toContain("ultimoVisto.olvidar('mesas.visitas');");
   });
 
   it('🔴 al llegar el sin leer: si SUBIÓ se borra lo de las mesas, y nada más', () => {
@@ -314,8 +322,9 @@ describe('🔴 D237 · guardas: memoria sola, y sólo para mostrar', () => {
         expect(cuerpo[0]!.trim(), `${ruta}:${i + 2}`).toBe('if (!ultimoVisto.esDeAhora(turno)) return;');
       });
     }
-    // Inicio, invitaciones, tus mesas, historial, amigos, grupos y (D265) los viajes abiertos de Inicio.
-    expect(vistos).toBe(7);
+    // Inicio, invitaciones, tus mesas, historial, amigos, grupos, (D265) los viajes abiertos de Inicio y (D293) los
+    // restaurantes de viaje de Mesas.
+    expect(vistos).toBe(8);
   });
 
   it('ni la mesa, ni el alta, ni la cámara, ni Avisos lo leen', () => {

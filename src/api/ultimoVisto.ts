@@ -47,16 +47,22 @@ export type ClaveUltimoVisto =
   | 'sinLeer'
   | 'mesas.tusMesas'
   | 'mesas.historial'
+  /** D293 · la primera página de mis restaurantes de viaje en Mesas. */
+  | 'mesas.visitas'
   | 'amigos.amigos'
   | 'amigos.grupos'
   | 'amigos.solicitudes';
 
-/** Lo que depende de las mesas: se borra después de cualquier acción sobre una mesa. */
+/**
+ * Lo que depende de las mesas: se borra después de cualquier acción sobre una mesa. D293 · también las visitas de viaje
+ * de Mesas: un ticket cuyo recibo abrió una mesa que cuenta para mí no es visita, y ocultar esa mesa lo vuelve visita.
+ */
 export const CLAVES_DE_MESAS: readonly ClaveUltimoVisto[] = [
   'inicio.mesasAbiertas',
   'inicio.invitaciones',
   'mesas.tusMesas',
   'mesas.historial',
+  'mesas.visitas',
 ];
 
 /** Lo de Amigos: se borra después de aceptar, rechazar, cancelar, bloquear o tocar grupos. */
@@ -224,6 +230,8 @@ export function alOlvidarLoDeViajes(fn: () => void): void {
 
 export function olvidarLoDeViajes(): void {
   ultimoVisto.olvidar('inicio.viajesAbiertos', 'inicio.pendientesDeViajes');
+  // D293 · las visitas de Mesas también: salir de un viaje las saca, y cerrarlo fija lo que me toca.
+  ultimoVisto.olvidar('mesas.visitas');
   for (const fn of [...alOlvidarViajes]) fn();
 }
 

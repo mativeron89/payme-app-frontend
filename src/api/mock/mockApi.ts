@@ -885,7 +885,14 @@ export function installPrivateFeatureMockFixtureForTests(
   return () => { privateFeatureFixture = previous; };
 }
 
+/**
+ * D293 · `error` exacto: `GET /api/config` contesta 500 (sin la config no se sabe si Viajes está encendido, y Mesas no
+ * se queda esperando). No se consume.
+ */
+const CLAVE_CONFIG_MOCK = 'payme.app.mock.config.v1';
+
 export async function mockGetConfig(): Promise<AppConfig> {
+  if (leerSeam(CLAVE_CONFIG_MOCK) === 'error') return fail(500, 'internal_error');
   return delay({
     version: 'mock',
     currency: 'mxn',

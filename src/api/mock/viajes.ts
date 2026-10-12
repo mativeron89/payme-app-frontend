@@ -14,7 +14,7 @@ import {
 import { persist as persistirStore, state as store } from './store';
 import {
   avisoEliminadoMock, CLAVE_ESTADO_VIAJES_MOCK, limiteDeViajesMock, seamDeCorregirMock, seamDeEliminarMock, seamDeGastoMock,
-  seamDeNotasMock, seamDeSeleccionMock, viajesMockEncendido,
+  seamDeNotasMock, seamDeSeleccionMock, seamDeVisitasMock, viajesMockEncendido,
 } from './viajesSeam';
 import {
   ajustesDeRecibo,
@@ -1738,6 +1738,115 @@ export function mockResumenDeViaje(id: string) {
         por_tipo_de_lugar: TIPOS_LUGAR.filter((t) => porTipo.get(t)! > 0).map((t) => ({ tipo_lugar: t, monto_cents: porTipo.get(t)! })),
         lugares,
       },
+    };
+  });
+}
+
+// ─── Mis restaurantes de viaje en Mesas (D293, App Backend 2.184.0) ─────────
+// `services/viajesVisitas.js` del dueño: la regla de Estadísticas (D260). Mis tickets de restaurante, bar o café de mis
+// viajes como miembro activo, sin gastos a mano y en los que me toca algo (el monto de la visita, mayor que 0), del más
+// reciente al más viejo, con el cursor y los 400 del dueño. 🔴 Lo que el mock no replica, declarado: un ticket cuyo
+// recibo abrió una mesa mía (el mock no abre mesas desde el recibo de un ticket de viaje).
+
+const TIPOS_DE_VISITA: readonly TipoLugar[] = ['restaurante', 'bar', 'cafe'];
+const LIMITE_VISITAS = 20;
+const LIMITE_VISITAS_MAXIMO = 50;
+
+/** El instante del dueño (`INSTANTE_DEL_TICKET`): la fecha y hora impresas en México (sin hora, las 12:00); sin fecha, cuando se cargó. */
+function instanteDelTicket(t: TicketMock): string {
+  return t.fecha_ticket ? new Date(`${t.fecha_ticket}T${t.hora_ticket ?? '12:00'}:00-06:00`).toISOString() : t.created_at;
+}
+
+interface VisitaMock {
+  ticket_id: string;
+  viaje: { id: string; nombre: string; color: string | null; has_photo: boolean };
+  lugar: string | null;
+  tipo_lugar: TipoLugar;
+  instante: string;
+  te_toca_cents: number;
+}
+
+/** `seamDeVisitasMock() === 'muchas'`: 25 visitas sintéticas, una cada hora desde hace media hora. */
+function visitasSinteticas(cancun: ViajeMock | undefined): VisitaMock[] {
+  const t0 = Date.now();
+  return Array.from({ length: 25 }, (_, k) => ({
+    ticket_id: `d2000000-0000-4000-8000-${String(900 + k).padStart(12, '0')}`,
+    viaje: { id: VIAJES_SEMILLA.cancun, nombre: cancun?.nombre ?? 'Cancún 2026', color: cancun?.color ?? null, has_photo: !!cancun?.foto },
+    lugar: `Restaurante de viaje ${k + 1}`,
+    tipo_lugar: 'restaurante',
+    instante: new Date(t0 - (k + 0.5) * 3_600_000).toISOString(),
+    te_toca_cents: 10_000 + k * 100,
+  }));
+}
+
+function cursorDeVisitas(raw: unknown): { t: string; id: string } | null | undefined {
+  if (raw === undefined) return null;
+  if (typeof raw !== 'string' || raw.length > 200 || !/^[A-Za-z0-9_-]+$/.test(raw)) return undefined;
+  try {
+    const json = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))) as unknown;
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return undefined;
+    const o = json as Record<string, unknown>;
+    if (Object.keys(o).sort().join(',') !== 'id,t' || typeof o.t !== 'string' || Number.isNaN(Date.parse(o.t))
+      || typeof o.id !== 'string') return undefined;
+    return { t: o.t, id: o.id };
+  } catch {
+    return undefined;
+  }
+}
+
+const emitirCursorDeVisitas = (v: VisitaMock) =>
+  btoa(JSON.stringify({ t: v.instante, id: v.ticket_id })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+let pedidosDeVisitas = 0;
+/** Para las pruebas: cuántas veces se pidieron mis visitas (Mesas las vuelve a pedir después de ocultar una mesa). */
+export function pedidosDeVisitasMock(): number {
+  return pedidosDeVisitas;
+}
+
+/** `GET /api/viajes/visitas?limit=&cursor=` — sólo esas dos claves; `limit` de 1 a 50 (20 por defecto). */
+export function mockVisitasDeViajes(query: Record<string, unknown> = {}) {
+  pedidosDeVisitas += 1;
+  return ruta(() => {
+    if (seamDeVisitasMock() === 'error') throw new Respuesta(500, 'internal_error');
+    if (Object.keys(query).some((k) => k !== 'limit' && k !== 'cursor')) throw invalido();
+    let limit = LIMITE_VISITAS;
+    if (query.limit !== undefined) {
+      if (typeof query.limit !== 'string' || !/^[1-9][0-9]{0,2}$/.test(query.limit) || Number(query.limit) > LIMITE_VISITAS_MAXIMO) {
+        throw invalido();
+      }
+      limit = Number(query.limit);
+    }
+    const cursor = cursorDeVisitas(query.cursor);
+    if (cursor === undefined) throw invalido();
+    const u = yo();
+    const todas: VisitaMock[] = [];
+    for (const v of cargar().viajes) {
+      if (!v.miembros.some((m) => m.user_id === u && m.estado === 'activo')) continue;
+      const b = balance(v);
+      for (const t of v.tickets) {
+        if (esManual(t) || !TIPOS_DE_VISITA.includes(t.tipo_lugar)) continue;
+        const teToca = b.porTicket.get(t.id)?.consumo.get(u) ?? 0;
+        if (teToca <= 0) continue;
+        todas.push({
+          ticket_id: t.id,
+          viaje: { id: v.id, nombre: v.nombre, color: v.color ?? null, has_photo: !!v.foto },
+          lugar: t.lugar, tipo_lugar: t.tipo_lugar, instante: instanteDelTicket(t), te_toca_cents: teToca,
+        });
+      }
+    }
+    if (seamDeVisitasMock() === 'muchas') todas.push(...visitasSinteticas(cargar().viajes.find((x) => x.id === VIAJES_SEMILLA.cancun)));
+    // `instante` DESC y, en un empate, `ticket_id` DESC; el cursor, por las dos (el keyset del dueño).
+    todas.sort((a, c) => Date.parse(c.instante) - Date.parse(a.instante) || c.ticket_id.localeCompare(a.ticket_id));
+    const despues = cursor === null ? todas : todas.filter((x) => {
+      const d = Date.parse(x.instante) - Date.parse(cursor.t);
+      return d < 0 || (d === 0 && x.ticket_id < cursor.id);
+    });
+    const pagina = despues.slice(0, limit);
+    const ultima = pagina[pagina.length - 1];
+    return {
+      contract: CONTRATO,
+      visitas: pagina,
+      page: { limit, next_cursor: despues.length > limit && ultima ? emitirCursorDeVisitas(ultima) : null },
     };
   });
 }

@@ -14,7 +14,7 @@ byte a byte el suyo) y se verifican por su sha256:
   hash; nada más en el espejo; y los hechos del dueño, de los mismos archivos que
   el inventario.
 - `node scripts/verificar-mirror.mjs --paridad` (local, con el repo del dueño): los
-  138, copiados o no, contra la fuente.
+  del inventario, copiados o no, contra la fuente.
 - Lo que las pruebas del front leían del código del servidor está en
   `scripts/hechos-del-dueno.json`: salidas de vectores sintéticos que genera SÓLO
   EN LOCAL `scripts/generar-hechos-del-dueno.mjs` (nunca en el CI).
@@ -24,7 +24,26 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D290 · el pizarrón de notas del viaje · App Backend v2.183.0 · 2026-10-12
+### D293 · los restaurantes de mis viajes en Mesas · App Backend v2.184.0 · 2026-10-12
+
+Orden `AF-RESTAURANTES-DE-VIAJE-EN-MESAS-20261012` (D293). Según la orden, el dueño 2.184.0 está servido.
+
+- Contenido: owner **`cb463893358176b730b98fdf508863ed26c8ed53`** (v2.184.0: `GET /api/viajes/visitas`).
+- Inventario: el del owner en **`286c2087a4116e9a5f9fc3b590d143869cbfc2ef`** (v2.184.0, commit B;
+  `contract/mirror-inventory.json`, sha256 `dab21b44fe204e53be9f3d48903c1f3aa01af2a6c8d803d782df25d2a3c35eaa`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `cb46389`, 141 entradas (una nueva).
+- **13 archivos espejados**, los mismos. Cambia uno: `contract/viajes-v1.json` (sha256
+  `269b9b56aeb49f61108e2edc6b105a1592d8a19c202b6db609628e410ca8c443`):
+  - la ruta `GET /api/viajes/visitas`: mis tickets de restaurante, bar o café de mis viajes, con la regla de
+    Estadísticas, para la lista de Mesas; cada visita trae `ticket_id`, el viaje (`id`, `nombre`, `color`,
+    `has_photo`), `lugar`, `tipo_lugar`, `instante` y `te_toca_cents`; el orden, el cursor, los límites y los 400;
+  - `estadisticas.en_mesas`: la misma regla alimenta esa ruta.
+- Sólo por hash, desde `5f5bb01`: cambian `routes/account.js` y `routes/viajes.js`; entra
+  `services/viajesVisitas.js`. Los hechos del dueño se regeneraron: cambian el commit y el sha de
+  `routes/account.js`, ningún hecho.
+- `--integridad`: 13 copiados y 128 sólo por hash. `--paridad`: espejo = inventario = fuente en `cb46389`, 141/141.
+
+### Refresh anterior · D290 · el pizarrón de notas del viaje · App Backend v2.183.0 · 2026-10-12
 
 Orden `AF-VIAJES-NOTAS-20261012` (D290, revisiones 1 y 2). Según la orden, el dueño 2.183.0 está servido.
 

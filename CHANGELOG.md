@@ -11,6 +11,135 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.245.0 — Los restaurantes de mis viajes, también en Mesas (D293) (2026-10-12)
+
+Orden AF-RESTAURANTES-DE-VIAJE-EN-MESAS-20261012 (f434a423…). Autoridad: D293 (57a569a1…). Mati eligió «Un restaurante
+de un viaje» y «Sí, con el nombre del viaje (Recomendada)». Dueño: App Backend 2.184.0, `GET /api/viajes/visitas`
+(contenido `cb46389`, inventario `286c208`). PayMe no mueve dinero. Lo visible se cierra con la prueba de Mati en el
+iPhone (D63).
+
+**La decisión de diseño (declarada en el plan, sin esperar OK, D168).** Antes, Mesas tenía dos partes: arriba las mesas
+(`/mesas/mine`), sin encabezados de mes, y abajo los pagos (`/account/history`), agrupados por mes. Para cumplir a la vez
+los puntos 1 y 3, Mesas pasa a ser **una sola lista por fecha, con sus grupos por mes: mesas, restaurantes de viaje y
+pagos juntos.** Cada renglón es el de siempre; lo que cambia es que las mesas quedan dentro de su mes, por fecha.
+
+1. **La mezcla (hecho).** `src/screens/mesasEnLinea.ts`, pura.
+   - Las tres listas se mezclan por fecha, de la más reciente a la más vieja. En un empate van primero las mesas,
+     después los viajes y después los pagos.
+   - Las mesas y las visitas paginan con su cursor; los pagos llegan completos, como siempre.
+   - Un renglón se muestra sólo mientras ninguna lista con más por pedir se quedó sin renglones cargados: lo visible es
+     siempre un prefijo de la mezcla completa. «Ver más mesas» pide la página de la lista que frena. Nada se saltea ni
+     se repite, y lo que ya se veía no se mueve.
+   - Si una lista falla, sale de la mezcla con su aviso arriba y «Reintentar»; las otras se siguen viendo. Para los
+     viajes: «No pudimos cargar los restaurantes de tus viajes».
+   - Si falla una página de «Ver más», lo que se veía queda, con «No pudimos cargar más. Prueba de nuevo.», y el botón
+     reintenta.
+   - Con Viajes apagado, Mesas queda como antes: los viajes no se piden y no hay aviso. Sin la config para saberlo,
+     Mesas la pide; si no llega, sigue sin los viajes, nunca esperando para siempre.
+2. **El renglón de un viaje (hecho).** `src/screens/FilaDeVisitaDeViaje.tsx`.
+   - El ícono del tipo de lugar, el lugar (o su tipo, si el ticket no lo leyó) y «8 oct · Restaurante».
+   - La marca del viaje: un cuadrado chico (18, radio 5; D275, el círculo es de las personas) con la foto, o la
+     inicial blanca sobre el color del viaje, y su nombre.
+   - A la derecha, «Te toca», el texto del ticket del viaje, y `te_toca_cents` tal como llega.
+   - Tocarlo abre el ticket dentro del viaje (`/viaje-ticket/<viaje>.<ticket>`), abierto o cerrado. La app ya negocia
+     `viaje_version=11`, que cubre el «7 o más» del contrato para un viaje cerrado.
+3. **Los grupos por mes (hecho).** La regla del historial: el mes en la zona elegida, el mismo de la fecha de la fila.
+   Ahora vale para mesas, viajes y pagos.
+4. **Lo que no cambia (hecho).** La mesa, con su gesto de «Eliminar», su detalle y «ocultar»; el pago, con su acordeón y
+   su gesto. Los renglones de viaje no se ocultan: el dueño no lo ofrece. Queda declarado.
+5. **Cambiar de cuenta (hecho, T-01).**
+   - La primera página de visitas se guarda en lo último visto (`mesas.visitas`) con el turno de quien pidió; una
+     respuesta de otra cuenta no se guarda ni se muestra.
+   - «Ver más» lleva la generación de su lista: una página pedida antes de cambiar de cuenta se descarta al llegar.
+   - `alVaciarse` borra de la pantalla, en el acto, las visitas, las mesas y los pagos de A, y pide los de B. Con otra
+     persona de la misma familia la app no se remonta.
+6. **Las pruebas (hecho).** Ver «Pruebas».
+
+**El espejo:** `contract/viajes-v1.json` copiado de `cb46389` (la ruta `GET /api/viajes/visitas` y
+`estadisticas.en_mesas`). El inventario de `286c208` se adoptó sin editarlo: 141, con `services/viajesVisitas.js`. Los
+hechos del dueño se regeneraron: cambian el commit y el sha de `routes/account.js`, ningún hecho. La procedencia vigente
+está en `contract-mirror/README.md`.
+
+**Declarado:**
+- **La disposición de Mesas cambia** (ver la decisión de diseño): las mesas pasan a sus meses.
+- **Pruebas existentes cambiadas:**
+  - `ultimoVisto.test.ts`: `CLAVES_DE_MESAS` suma `mesas.visitas`, y los `catch` que miran el turno pasan de 7 a 8.
+  - `e2e/d276-viaje-por-defecto-y-personas.spec.ts`: `editarViajes`, ver abajo.
+  - `e2e/tus-mesas.spec.ts`: la región «Tus mesas» es ahora la lista entera. «Hanzo Sushi» (la mesa en curso) se
+    busca entre las mesas, no en todo el texto, porque el pago de Hanzo Sushi del historial también está ahí.
+- **Un solo esqueleto** mientras carga la lista, «Cargando tus mesas». Sale «Cargando tu historial», también del
+  diccionario en inglés.
+- **Si falla una página de «Ver más mesas»**, lo ya visible queda y el botón reintenta. Antes, la sección entera pasaba
+  al cartel de error.
+- **Al cambiar de cuenta** se vacían también las mesas y los pagos de A, no sólo las visitas.
+- **Después de ocultar o deshacer** se vuelven a pedir las visitas. El dueño excluye un ticket cuyo recibo abrió una
+  mesa mía, y ocultar esa mesa lo vuelve visita. También se olvidan con `olvidarLoDeViajes`, después de crear, aceptar,
+  salir o cerrar un viaje.
+- **El mock** replica la regla del dueño sobre la semilla de Viajes, salvo el ticket cuyo recibo abrió una mesa mía: el
+  mock no abre mesas desde el recibo de un ticket de viaje.
+  - Seams nuevos: `payme.app.mock.viajes.visitas.v1` (`error`, o `muchas`: 25 visitas sintéticas) y
+    `payme.app.mock.config.v1` (`error`).
+  - Contador para las pruebas: `pedidosDeVisitasMock()`.
+- **En la e2e del cambio de cuenta, B tiene su @ en el mock.** Sin él, la puerta «Elige tu @usuario» tapa la app a los
+  pocos segundos, y un «no se ve nada de A» pasaría por la causa equivocada. Además, después de cada espera hay un
+  control positivo: la lista de B sigue a la vista.
+- **Un intermitente que ya estaba, corregido:** `d276-viaje-por-defecto-y-personas` («dos viajes que cubren hoy»; «Tulum
+  2026» no aparecía).
+  - Cayó en la e2e focal y en la e2e completa.
+  - Su `editarViajes` editaba el estado del mock dentro de la app y recargaba. Un pedido del mock que salía en el medio
+    guardaba su memoria encima. Es la misma clase que `editarEstado` de `viajes-notas` (0.244.1).
+  - Medido con 10 workers y 40 repeticiones: en la base `4651793`, 1 y 5 de 40; en el candidato, 6 y 7 de 40.
+  - Ahora edita desde `/privacy` y vuelve a Inicio: 120/120 (las tres pruebas que editan) y 60/60.
+  - **El resto de la clase, sin tocar:** otros 9 specs escriben el estado de Viajes del mock dentro de la app y recargan.
+    No se vieron caer en la e2e completa.
+    - `auditoria-codex-w01-w02`, `auditorias-pendientes`, `boton-gasto-y-monto`;
+    - `d256-scroll`, `d275-burbuja-del-viaje`, `d277-aviso-centrado`;
+    - `pie-app-de-inicio`, `tarjeta-de-titulo-blanca`, `viajes-corregir-ticket`.
+- `contract-mirror/README.md`: «los 138» del encabezado de D268 pasa a «los del inventario», sin un número que se pudra.
+
+**Pruebas:**
+- **Unidad nuevas:**
+  - `viajesVisitas.test.ts` (9): las claves exactas, los tipos, `page`, el orden, los repetidos y la fachada (real y mock, cada una detrás de la capacidad).
+  - `mockViajesVisitas.test.ts` (10):
+    - la regla del dueño sobre la semilla y el monto igual al del ticket;
+    - el instante y quien salió;
+    - el gasto a mano y otra persona;
+    - el cursor sin repetir ni saltear, el empate y los 400;
+    - Viajes apagado y los seams.
+  - `mesasEnLinea.test.ts` (10):
+    - la mezcla, con la propiedad del prefijo sobre 300 juegos de listas al azar (semilla fija) y «Ver más» hasta el final;
+    - lo que frena y lo que no participa;
+    - el renglón sin fecha y los meses en la zona elegida;
+    - el estado de las visitas y el agregado sin repetir.
+  - `FilaDeVisitaDeViaje.test.tsx` (6): el renglón, la marca (color, sin color y foto), los íconos, sin el nombre del lugar, y el botón al ticket sin el gesto.
+  - `ultimoVisto.test.ts` suma uno: `olvidarLoDeViajes` también olvida las visitas.
+- **e2e:** `e2e/mesas-viajes.spec.ts` (25).
+  - A 375 y 390: la mezcla y sus meses, el renglón y su marca, y tocar para abrir el ticket (abierto y cerrado).
+  - A 390:
+    - la foto;
+    - las dos paginaciones;
+    - una página de «Ver más» que falla;
+    - cada fuente que falla, y el vacío con falla;
+    - Viajes apagado y la config que no llega;
+    - ocultar vuelve a pedir las visitas;
+    - T-01 con otra familia y con otra persona de la misma familia: lo de A desaparece en el acto, y lo que llega tarde de A (primera página, más visitas y más mesas) no aparece en la lista de B.
+- **Rojo primero sobre `4651793`:**
+  - Unidad: 13 pruebas en rojo y 3 archivos que no importan (no existían los módulos).
+  - e2e: 21 de las 25 nuevas en rojo. Las 4 verdes en la base son lo que no cambia: Viajes apagado, sin la config, y dos de T-01 con otra familia, donde la app ya se remontaba.
+- **Mutantes:** 63 de 63 cazados (`logs/mutantes.txt` y `logs/mutantes-k15-k16.txt` en la carpeta de la corrida).
+  - Cubren el decodificador, el mock, la mezcla, el renglón, el CSS de la marca, la pantalla (T-01, «Ver más», los avisos, ocultar, la config y los meses) y lo último visto.
+  - K15 (la fachada real sin la capacidad) sobrevivió en la primera tanda: la guarda de fuente miraba 400 caracteres que llegaban al método siguiente. Se acotó al cuerpo del método y, replantado con K16 (el mock), cae.
+- **Gates** (los del CI, en local), todos en 0:
+  - el espejo con `--integridad` y `--aliases`;
+  - `npm test`: 294 archivos, 4796 pruebas y 1 omitida, con `--corrida`;
+  - typecheck;
+  - build real con el `VITE_API_URL` del CI, más `--artefacto dist`.
+- **e2e completa** (config real, cuatro proyectos): 1336 verdes y 1 roja, la de `d276` de arriba.
+  - Con el arreglo, `d276` entera da 17/17.
+  - `mesas-viajes` y `tus-mesas`, con el spec final, dan 30/30.
+  - Los mutantes de T-01 se volvieron a plantar con el spec final y caen los 4.
+
+
 ## 0.244.1 — La pantalla de carga siempre, al menos 1 segundo (D292); «Otros avisos» y el radio de «Notas» (D293) (2026-10-12)
 
 Orden AF-PANTALLA-DE-CARGA-DOS-SEGUNDOS-20261012 (86aa5823…). Autoridad: D292 (f760281e…, «Siempre al abrir

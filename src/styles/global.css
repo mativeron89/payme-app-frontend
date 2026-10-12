@@ -6870,6 +6870,43 @@ button.qc-circulo::after {
   color: var(--text);
 }
 
+/* D293 · el renglón de un viaje en Mesas: debajo del lugar, la marca del viaje (su foto o su inicial sobre su color) con
+   su nombre; a la derecha, lo que me toca con su rótulo, el del ticket del viaje. */
+.vj-visita-viaje {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: var(--sp-1);
+}
+
+.vj-visita-viaje-nombre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vj-visita-monto {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.vj-visita-rotulo {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* Gira de abajo a arriba al abrir. Con movimiento reducido cambia igual, sin
    transición: la dirección del glifo es información, la animación no. */
 .hist-chevron {

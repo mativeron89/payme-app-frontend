@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
@@ -25,7 +25,6 @@ import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/label
 import { useRegion } from '../preferences/RegionProvider';
 import { personalDateLabel, personalZoneCaption } from '../utils/personalDates';
 import {
-  agruparPorMes,
   FRANJA_LABEL,
   franjaDe,
   mesasCerradas,
@@ -35,6 +34,20 @@ import {
   type HistorialMesa,
 } from './historialView';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { useCapacidadViajes, viajesHabilitado } from '../api/viajes';
+import type { VisitaDeViaje } from '../api/viajesVisitas';
+import { FilaDeVisitaDeViaje } from './FilaDeVisitaDeViaje';
+import { useFotosDeViajes } from './viajes/InsigniaDelViaje';
+import {
+  agregarSinRepetir,
+  agruparLineaPorMes,
+  claveDeRenglon,
+  estadoDeLasVisitas,
+  instanteDeRenglon,
+  mezclarPorFecha,
+  type FuenteDeMesas,
+  type RenglonDeMesas,
+} from './mesasEnLinea';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -73,6 +86,13 @@ function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]
  * `GET /account/movements/:id`. Una mesa puede contener varios intentos
  * propios —pagar varias partes está ratificado—, por eso se consultan TODOS
  * los IDs agrupados y nunca se inventa un detalle a partir del total visible.
+ *
+ * D293 (Mati: «Un restaurante de un viaje» y «Sí, con el nombre del viaje (Recomendada)») · los restaurantes, bares y
+ * cafés de mis viajes también están acá. Mesas es UNA lista por fecha, de la más reciente a la más vieja, en sus grupos
+ * por mes: mis mesas, mis restaurantes de viaje y mis pagos, mezclados sin saltear ni repetir (`mesasEnLinea.ts`). Cada
+ * renglón es el de siempre —la mesa con su gesto y su detalle, el pago con su acordeón— y el del viaje, nuevo
+ * (`FilaDeVisitaDeViaje`). Antes las mesas iban arriba sin mes y los pagos abajo por mes: con una sola lista los viajes
+ * quedan junto a las mesas y en sus meses a la vez.
  */
 /** AF-24 · el texto de cómo terminó cada mesa, con un `t('…')` literal por caso. */
 function textoEstadoTuMesa(e: EstadoTuMesa, t: (s: string, ...a: unknown[]) => string): string {
@@ -107,6 +127,12 @@ interface PrimeraPaginaDeTusMesas {
   readonly nextCursor: string | null;
 }
 
+/** D293 · lo que se guarda de mis restaurantes de viaje: la primera página y su cursor. */
+interface PrimeraPaginaDeVisitas {
+  readonly visitas: VisitaDeViaje[];
+  readonly nextCursor: string | null;
+}
+
 export function MesasScreen() {
   const { presentationZone } = useRegion();
   const { t, locale } = useIdioma();
@@ -123,9 +149,9 @@ export function MesasScreen() {
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
   /**
    * AF-24 · «Tus mesas», de `GET /api/mesas/mine`. Con los pagos apagados, el
-   * historial de PAGOS de abajo queda vacío aunque la persona haya estado en
-   * varias mesas; esta lista es la única que las muestra. Se carga aparte y
-   * falla aparte: un error acá no tapa los pagos, ni al revés.
+   * historial de PAGOS queda vacío aunque la persona haya estado en varias
+   * mesas; esta lista es la única que las muestra. Se carga aparte y falla
+   * aparte: un error acá no tapa los pagos, ni al revés.
    */
   const [misMesas, setMisMesas] = useState<TuMesa[] | null>(
     () => ultimoVisto.leer<PrimeraPaginaDeTusMesas>('mesas.tusMesas')?.mesas ?? null,
@@ -135,9 +161,32 @@ export function MesasScreen() {
   );
   const [falloMesas, setFalloMesas] = useState(false);
   const [cargandoMasMesas, setCargandoMasMesas] = useState(false);
+  /**
+   * D293 · mis restaurantes de viaje (`GET /api/viajes/visitas`), sólo con Viajes encendido. Se cargan y fallan aparte,
+   * como las otras dos listas.
+   */
+  const capacidadViajes = useCapacidadViajes();
+  const [configFallo, setConfigFallo] = useState(false);
+  const [visitas, setVisitas] = useState<VisitaDeViaje[] | null>(
+    () => ultimoVisto.leer<PrimeraPaginaDeVisitas>('mesas.visitas')?.visitas ?? null,
+  );
+  const [cursorVisitas, setCursorVisitas] = useState<string | null>(
+    () => ultimoVisto.leer<PrimeraPaginaDeVisitas>('mesas.visitas')?.nextCursor ?? null,
+  );
+  const [falloVisitas, setFalloVisitas] = useState(false);
+  const [cargandoMasVisitas, setCargandoMasVisitas] = useState(false);
+  /** D293 · falló una página de «Ver más»: lo que ya se veía queda, y el botón reintenta. */
+  const [falloMas, setFalloMas] = useState(false);
+  /**
+   * D293 · cada carga de cero de una lista sube su generación: una página de «Ver más» pedida antes llega tarde y no se
+   * pega a la lista nueva.
+   */
+  const generacionMesas = useRef(0);
+  const generacionVisitas = useRef(0);
 
   const cargarMisMesas = useCallback((desdeCero: boolean) => {
     setFalloMesas(false);
+    generacionMesas.current += 1;
     // D237 · con lo último visto en pantalla se pide por detrás; «Reintentar»
     // empieza de cero.
     if (desdeCero) setMisMesas(null);
@@ -165,18 +214,80 @@ export function MesasScreen() {
   const cargarMasMesas = useCallback(() => {
     if (!cursorMesas || cargandoMasMesas) return;
     setCargandoMasMesas(true);
+    setFalloMas(false);
+    // T-01 · otra cuenta (o ninguna) vacía lo último visto, y `alVaciarse` vuelve a cargar de cero: sube la generación y
+    // esta página, de la cuenta anterior, se descarta al llegar.
+    const generacion = generacionMesas.current;
+    const vigente = () => generacion === generacionMesas.current;
     api.getMyMesas({ cursor: cursorMesas, detail: 'items' })
       .then((r) => {
+        if (!vigente()) return;
         setMisMesas((actual) => [...(actual ?? []), ...r.mesas]);
         setCursorMesas(r.nextCursor);
       })
-      .catch(() => setFalloMesas(true))
+      // D293 · lo que ya se veía queda: el botón reintenta la misma página.
+      .catch(() => { if (vigente()) setFalloMas(true); })
       .finally(() => setCargandoMasMesas(false));
   }, [cursorMesas, cargandoMasMesas]);
 
   useEffect(() => {
     cargarMisMesas(false);
   }, [cargarMisMesas]);
+
+  const cargarVisitas = useCallback((desdeCero: boolean) => {
+    if (!viajesHabilitado()) return;
+    setFalloVisitas(false);
+    generacionVisitas.current += 1;
+    if (desdeCero) setVisitas(null);
+    // T-01 · la cuenta se toma AL PEDIR.
+    const turno = ultimoVisto.turno();
+    api.getVisitasDeViajes()
+      .then((r) => {
+        const g = ultimoVisto.guardar<PrimeraPaginaDeVisitas>(turno, 'mesas.visitas', {
+          visitas: [...r.visitas],
+          nextCursor: r.nextCursor,
+        });
+        if (!g) return;
+        setVisitas(g.valor.visitas);
+        setCursorVisitas(g.valor.nextCursor);
+      })
+      .catch(() => {
+        if (!ultimoVisto.esDeAhora(turno)) return;
+        ultimoVisto.olvidar('mesas.visitas');
+        setVisitas(null);
+        setFalloVisitas(true);
+      });
+  }, []);
+
+  const cargarMasVisitas = useCallback(() => {
+    if (!cursorVisitas || cargandoMasVisitas) return;
+    setCargandoMasVisitas(true);
+    setFalloMas(false);
+    // T-01 · otra cuenta (o ninguna) vacía lo último visto, y `alVaciarse` vuelve a cargar de cero: sube la generación y
+    // esta página, de la cuenta anterior, se descarta al llegar.
+    const generacion = generacionVisitas.current;
+    const vigente = () => generacion === generacionVisitas.current;
+    api.getVisitasDeViajes({ cursor: cursorVisitas })
+      .then((r) => {
+        if (!vigente()) return;
+        setVisitas((actual) => agregarSinRepetir(actual, r.visitas));
+        setCursorVisitas(r.nextCursor);
+      })
+      .catch(() => { if (vigente()) setFalloMas(true); })
+      .finally(() => setCargandoMasVisitas(false));
+  }, [cursorVisitas, cargandoMasVisitas]);
+
+  useEffect(() => {
+    if (capacidadViajes === 'encendida') cargarVisitas(false);
+  }, [capacidadViajes, cargarVisitas]);
+
+  // D293 · sin saber todavía si Viajes está encendido, la lista espera la config; si no llega, sigue sin los viajes.
+  useEffect(() => {
+    if (capacidadViajes !== 'pendiente') return undefined;
+    let vivo = true;
+    api.getConfig().catch(() => { if (vivo) setConfigFallo(true); });
+    return () => { vivo = false; };
+  }, [capacidadViajes]);
 
   const cargarDetalle = useCallback((mesaCode: string, paymentIds: readonly string[]) => {
     setDetalles((actual) => ({ ...actual, [mesaCode]: 'loading' }));
@@ -244,16 +355,44 @@ export function MesasScreen() {
   }, [aviso]);
 
   /**
+   * 🔴 D293 · T-01 · otra cuenta (o ninguna): lo de la anterior se borra de la pantalla en el acto —sus mesas, sus pagos
+   * y sus restaurantes de viaje— y se vuelve a pedir con la de ahora. Con otra persona de la misma familia la app no se
+   * remonta: sin esto, B vería la lista de A hasta que llegara la suya.
+   */
+  useEffect(() => ultimoVisto.alVaciarse(() => {
+    setVisitas(null);
+    setCursorVisitas(null);
+    setFalloVisitas(false);
+    setMisMesas(null);
+    setCursorMesas(null);
+    setFalloMesas(false);
+    setPagos(null);
+    setFallo(false);
+    setFalloMas(false);
+    setAbierta(null);
+    setMesaPropiaAbierta(null);
+    setDetalles({});
+    setDeslizada(null);
+    setPreguntaMesa(null);
+    setAviso(null);
+    cargarMisMesas(false);
+    cargarHistorial(false);
+    cargarVisitas(false);
+  }), [cargarMisMesas, cargarHistorial, cargarVisitas]);
+
+  /**
    * Después de borrar o deshacer: lo guardado de las mesas (Tus mesas, el
    * historial, Inicio) y la campana se olvidan —el aviso de una mesa borrada
    * también sale—, y las listas se vuelven a pedir: el dueño ya las filtra.
+   * D293 · también las visitas: ocultar la mesa que abrió el recibo de un ticket de viaje vuelve visita a ese ticket.
    */
   const olvidarYRecargar = useCallback(() => {
     olvidarLoDeMesas();
     ultimoVisto.olvidar('sinLeer');
     cargarMisMesas(false);
     cargarHistorial(false);
-  }, [cargarMisMesas, cargarHistorial]);
+    cargarVisitas(false);
+  }, [cargarMisMesas, cargarHistorial, cargarVisitas]);
 
   const cerrarDeslizada = useCallback((tarjeta: TarjetaDeslizada) => {
     setDeslizada((actual) => (mismaTarjeta(actual, tarjeta) ? null : actual));
@@ -307,118 +446,256 @@ export function MesasScreen() {
       .catch((err: unknown) => fallaAlBorrar(err, 'pago'));
   }, [deshacer, fallaAlBorrar, olvidarYRecargar, t]);
 
-  // D237 · la primera carga muestra sus esqueletos sólo si tarda más de 300 ms.
-  const esperaTusMesasVisible = useEsperaVisible(misMesas === null && !falloMesas);
-  const esperaHistorialVisible = useEsperaVisible(pagos === null && !fallo);
+  // ─── D293 · UNA lista por fecha: mesas, viajes y pagos ───────────────────
+  const cerradas = useMemo(() => (pagos ? mesasCerradas(pagos) : null), [pagos]);
+  const tusMesas = useMemo(() => (misMesas ? misMesas.filter((m) => !tuMesaEnCurso(m.status)) : null), [misMesas]);
+  const estadoVisitas = estadoDeLasVisitas({
+    capacidad: capacidadViajes, configFallo, fallo: falloVisitas, cargadas: visitas !== null,
+  });
+  const mezcla = useMemo(() => mezclarPorFecha<FuenteDeMesas, RenglonDeMesas>([
+    {
+      clave: 'mesas',
+      estado: falloMesas ? 'fallo' : tusMesas === null ? 'cargando' : 'lista',
+      renglones: (tusMesas ?? []).map((mesa) => ({ tipo: 'mesa', mesa })),
+      hayMas: cursorMesas !== null,
+    },
+    {
+      clave: 'viajes',
+      estado: estadoVisitas,
+      renglones: (visitas ?? []).map((visita) => ({ tipo: 'viaje', visita })),
+      hayMas: cursorVisitas !== null,
+    },
+    {
+      clave: 'pagos',
+      estado: fallo ? 'fallo' : cerradas === null ? 'cargando' : 'lista',
+      renglones: (cerradas ?? []).map((mesa) => ({ tipo: 'pago', mesa })),
+      hayMas: false,
+    },
+  ], instanteDeRenglon), [tusMesas, falloMesas, cursorMesas, estadoVisitas, visitas, cursorVisitas, cerradas, fallo]);
+  const meses = useMemo(
+    () => agruparLineaPorMes(mezcla.renglones, locale, presentationZone),
+    [mezcla, locale, presentationZone],
+  );
+  /** Las fotos de los viajes que aparecen (D255), una vez por viaje. */
+  const viajesDeLasVisitas = useMemo(() => {
+    if (!visitas) return null;
+    const porId = new Map(visitas.map((v) => [v.viaje.id, { id: v.viaje.id, has_photo: v.viaje.has_photo }]));
+    return [...porId.values()];
+  }, [visitas]);
+  const { fotoDe } = useFotosDeViajes(viajesDeLasVisitas);
 
-  const cerradas = pagos ? mesasCerradas(pagos) : null;
-  const grupos = cerradas ? agruparPorMes(cerradas, locale, presentationZone) : [];
-  const tusMesas = misMesas ? misMesas.filter((m) => !tuMesaEnCurso(m.status)) : null;
-  /** El vacío «Todavía no cerraste…» sólo si NINGUNA de las dos listas tiene nada. */
-  const sinTusMesas = tusMesas !== null && tusMesas.length === 0 && !falloMesas && cursorMesas === null;
+  const cargandoMas = cargandoMasMesas || cargandoMasVisitas;
+  const verMas = () => {
+    if (mezcla.conMas.includes('mesas')) cargarMasMesas();
+    if (mezcla.conMas.includes('viajes')) cargarMasVisitas();
+  };
 
-  const seccionTusMesas = falloMesas ? (
-    <div className="state-error" role="alert">
+  // D237 · la primera carga muestra su esqueleto sólo si tarda más de 300 ms.
+  const esperaVisible = useEsperaVisible(mezcla.renglones.length === 0 && mezcla.cargando);
+  /** El vacío «Todavía no cerraste…» sólo si ninguna lista tiene nada y ninguna falló. */
+  const vacio = !falloMesas && !fallo && !falloVisitas && mezcla.renglones.length === 0 && !mezcla.cargando
+    && mezcla.conMas.length === 0;
+  const hayLista = mezcla.renglones.length > 0 || (!mezcla.cargando && mezcla.conMas.length > 0);
+
+  const avisoDeFuente = (titulo: string, reintentar: () => void, alerta: boolean) => (
+    <div className="state-error" role={alerta ? 'alert' : undefined}>
       <div className="state-error-row">
         <Icon name="x-circle" size={22} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="state-error-title">{t('No pudimos cargar tus mesas')}</div>
+          <div className="state-error-title">{titulo}</div>
           <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
         </div>
       </div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => cargarMisMesas(true)}>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={reintentar}>
         {t('Reintentar')}
       </button>
     </div>
-  ) : tusMesas === null ? (
-    esperaTusMesasVisible ? (
-      <div aria-busy="true" aria-label={t('Cargando tus mesas')}>
-        <div className="pago-row sk">
-          <span className="sk-line w55" />
-          <span className="sk-line w40" />
-        </div>
-      </div>
-    ) : null
-  ) : tusMesas.length > 0 || cursorMesas ? (
-    <section className="tus-mesas" aria-label={t('Tus mesas')}>
-      {tusMesas.map((m) => {
-        const eleccion = textoEleccion(m, t);
-        const conDetalle = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0;
-        const detalleAbierto = conDetalle && mesaPropiaAbierta === m.code;
-        const fila = (
-          <>
-            <span aria-hidden="true">
-              <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
-            </span>
-            <div className="hist-main">
-              <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
-              <div className="hist-meta">
-                {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t, presentationZone)}{' · '}</>}
-                {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
-              </div>
-              {eleccion && <div className="hist-meta">{eleccion}</div>}
-            </div>
-            {conDetalle && (
-              <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
-                <Icon name="chevron-down" size={20} />
-              </span>
-            )}
-          </>
-        );
-        const claveGesto = tarjetaDeTusMesas(m.code);
-        return (
-          <div key={m.id} className={`hist-item tu-mesa ${detalleAbierto ? 'on' : ''}`}>
-            <ConGesto
-              activo={sePuedeOcultar(capacidad, m.status)}
-              abierta={mismaTarjeta(deslizada, claveGesto)}
-              onAbrir={() => setDeslizada(claveGesto)}
-              onCerrar={() => cerrarDeslizada(claveGesto)}
-              nombre={m.restaurante ?? t('Mesa {0}', m.code)}
-              onEliminar={() => setPreguntaMesa(m)}
-            >
-            {conDetalle ? (
-              <button
-                type="button"
-                className="hist-row"
-                aria-expanded={detalleAbierto}
-                onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
-              >
-                {fila}
-              </button>
-            ) : (
-              <div className="hist-row">{fila}</div>
-            )}
-            {/* Decisión 100 de Mati: plato, porción y monto en UNA línea, en
-                columnas, con el criterio de Tus restaurantes (AF-STATS-BURBUJA):
-                la columna del «½» sólo ocupa lugar si alguna línea la tiene. */}
-            {detalleAbierto && m.items && (
-              <div
-                className={m.items.some((item) => item.fractionBps < 10000)
-                  ? 'hist-detail hist-detail--con-porcion'
-                  : 'hist-detail'}
-                aria-label={t('Lo que elegiste')}
-              >
-                {/* D240 punto 16 · los iguales juntos, con la cantidad antes. */}
-                {agruparPropios(m.items).map((g) => (
-                  <div key={g.key} className="hist-detail-row">
-                    <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
-                    <span className="hist-detail-name">{nombreConCantidad(g.cantidad, g.primero.name)}</span>
-                    <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            </ConGesto>
+  );
+
+  const filaDeMesa = (m: TuMesa) => {
+    const eleccion = textoEleccion(m, t);
+    const conDetalle = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0;
+    const detalleAbierto = conDetalle && mesaPropiaAbierta === m.code;
+    const fila = (
+      <>
+        <span aria-hidden="true">
+          <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
+        </span>
+        <div className="hist-main">
+          <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
+          <div className="hist-meta">
+            {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t, presentationZone)}{' · '}</>}
+            {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
           </div>
-        );
-      })}
-      {cursorMesas && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={cargarMasMesas} disabled={cargandoMasMesas}>
-          {cargandoMasMesas ? t('Cargando…') : t('Ver más mesas')}
+          {eleccion && <div className="hist-meta">{eleccion}</div>}
+        </div>
+        {conDetalle && (
+          <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
+            <Icon name="chevron-down" size={20} />
+          </span>
+        )}
+      </>
+    );
+    const claveGesto = tarjetaDeTusMesas(m.code);
+    return (
+      <div key={`mesa:${m.id}`} className={`hist-item tu-mesa ${detalleAbierto ? 'on' : ''}`}>
+        <ConGesto
+          activo={sePuedeOcultar(capacidad, m.status)}
+          abierta={mismaTarjeta(deslizada, claveGesto)}
+          onAbrir={() => setDeslizada(claveGesto)}
+          onCerrar={() => cerrarDeslizada(claveGesto)}
+          nombre={m.restaurante ?? t('Mesa {0}', m.code)}
+          onEliminar={() => setPreguntaMesa(m)}
+        >
+        {conDetalle ? (
+          <button
+            type="button"
+            className="hist-row"
+            aria-expanded={detalleAbierto}
+            onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
+          >
+            {fila}
+          </button>
+        ) : (
+          <div className="hist-row">{fila}</div>
+        )}
+        {/* Decisión 100 de Mati: plato, porción y monto en UNA línea, en
+            columnas, con el criterio de Tus restaurantes (AF-STATS-BURBUJA):
+            la columna del «½» sólo ocupa lugar si alguna línea la tiene. */}
+        {detalleAbierto && m.items && (
+          <div
+            className={m.items.some((item) => item.fractionBps < 10000)
+              ? 'hist-detail hist-detail--con-porcion'
+              : 'hist-detail'}
+            aria-label={t('Lo que elegiste')}
+          >
+            {/* D240 punto 16 · los iguales juntos, con la cantidad antes. */}
+            {agruparPropios(m.items).map((g) => (
+              <div key={g.key} className="hist-detail-row">
+                <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
+                <span className="hist-detail-name">{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        </ConGesto>
+      </div>
+    );
+  };
+
+  const filaDePago = (m: HistorialMesa) => {
+    const franja = franjaDe(m.date, presentationZone);
+    const on = abierta === m.mesa_code;
+    const detalle = detalles[m.mesa_code];
+    const claveGesto = tarjetaDelHistorial(m.mesa_code);
+    return (
+      <div key={`pago:${m.mesa_code}`} className={`hist-item ${on ? 'on' : ''}`}>
+        <ConGesto
+          activo={sePuedeOcultar(capacidad, m.mesa_status)}
+          abierta={mismaTarjeta(deslizada, claveGesto)}
+          onAbrir={() => setDeslizada(claveGesto)}
+          onCerrar={() => cerrarDeslizada(claveGesto)}
+          nombre={m.restaurant}
+          onEliminar={() => borrarPagos(m)}
+        >
+        <button
+          type="button"
+          className="hist-row"
+          aria-expanded={on}
+          onClick={() => abrirDetalle(m.mesa_code, m.payment_ids)}
+        >
+          <span aria-hidden="true">
+            <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} />
+          </span>
+          <div className="hist-main">
+            <div className="hist-rest">{m.restaurant}</div>
+            <div className="hist-meta">
+              {fechaDeFila(m.date, locale, t, presentationZone)}
+              {franja && (
+                <>
+                  {' · '}
+                  {t(FRANJA_LABEL[franja])}{' '}
+                  <Icon
+                    name={FRANJA_ICON[franja]}
+                    size={14}
+                    className="ico-inline"
+                  />
+                </>
+              )}
+            </div>
+          </div>
+          <div className="hist-amt">{formatMXN(m.amount_cents)}</div>
+          <span className={`hist-chevron ${on ? 'on' : ''}`} aria-hidden="true">
+            <Icon name="chevron-down" size={20} />
+          </span>
         </button>
-      )}
-    </section>
-  ) : null;
+        {on && (
+          <div className="hist-detail" aria-live="polite">
+            {detalle === 'loading' && (
+              <div className="loading">{t('Cargando detalle…')}</div>
+            )}
+            {detalle === 'error' && (
+              <div className="state-error hist-detail-error" role="alert">
+                <div className="state-error-title">{t('No pudimos cargar el detalle')}</div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => cargarDetalle(m.mesa_code, m.payment_ids)}
+                >
+                  {t('Reintentar')}
+                </button>
+              </div>
+            )}
+            {Array.isArray(detalle) && detalle.map((movement, paymentIndex) => (
+              <section key={movement.id} className="hist-payment" aria-label={t('Pago {0}', paymentIndex + 1)}>
+                {/* D240 punto 16 · los iguales de este pago, juntos. */}
+                {movement.items.length > 0 ? agruparDelPago(movement.id, movement.items).map((g) => (
+                  <div key={g.key} className="hist-detail-row">
+                    <span className="hist-detail-name">
+                      <span>{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                      {g.primero.declared_fraction_bps != null && (
+                        <span className="hist-detail-declared">
+                          {t('Declaraste {0}', bpsLabel(g.primero.declared_fraction_bps))}
+                        </span>
+                      )}
+                    </span>
+                    {g.montoCents != null && (
+                      <span className="hist-detail-amount">{formatMXN(g.montoCents)}</span>
+                    )}
+                  </div>
+                )) : (
+                  <p className="hist-detail-empty">{t('Este pago no declaró consumos.')}</p>
+                )}
+                {movement.tip_amount_cents > 0 && (
+                  <div className="hist-detail-row hist-detail-tip">
+                    <span>{t('Propina')}</span>
+                    <span className="hist-detail-amount">{formatMXN(movement.tip_amount_cents)}</span>
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+        </ConGesto>
+      </div>
+    );
+  };
+
+  const renglon = (r: RenglonDeMesas) => {
+    switch (r.tipo) {
+      case 'mesa': return filaDeMesa(r.mesa);
+      case 'pago': return filaDePago(r.mesa);
+      case 'viaje': return (
+        <FilaDeVisitaDeViaje
+          key={claveDeRenglon(r)}
+          visita={r.visita}
+          foto={r.visita.viaje.has_photo ? fotoDe(r.visita.viaje.id) : null}
+          zona={presentationZone}
+        />
+      );
+    }
+  };
 
   return (
     <div className="screen has-appbar">
@@ -442,149 +719,50 @@ export function MesasScreen() {
         <UnirmeConCodigo />
         {zoneCaption && <p className="caption">{zoneCaption}</p>}
 
-        {seccionTusMesas}
+        {/* D293 · una lista que falla tiene su aviso, arriba; las otras se siguen viendo. */}
+        {falloMesas && avisoDeFuente(t('No pudimos cargar tus mesas'), () => cargarMisMesas(true), true)}
+        {falloVisitas && avisoDeFuente(t('No pudimos cargar los restaurantes de tus viajes'), () => cargarVisitas(true), true)}
+        {fallo && avisoDeFuente(t('No pudimos cargar tu historial'), () => cargarHistorial(true), false)}
 
-        {fallo && !pagos ? (
-          <div className="state-error">
-            <div className="state-error-row">
-              <Icon name="x-circle" size={22} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="state-error-title">{t('No pudimos cargar tu historial')}</div>
-                <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
-              </div>
-            </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => cargarHistorial(true)}>
-              {t('Reintentar')}
-            </button>
-          </div>
-        ) : cerradas === null ? (
-          /* D237 · Mati, en su video: 4 filas esqueleto (1 + estas 3) y después
-             eran 2 mesas, y saltaba el alto. Una fila neutra por sección, y sólo
-             si la primera carga tarda más de 300 ms. */
-          esperaHistorialVisible ? (
-            <div aria-busy="true" aria-label={t('Cargando tu historial')}>
+        {hayLista ? (
+          <section className="tus-mesas" aria-label={t('Tus mesas')}>
+            {meses.map((g) => (
+              <section key={g.key} aria-label={g.label === 'Sin fecha' ? t('Sin fecha') : g.label}>
+                <h2 className="mes-sticky">{g.label === 'Sin fecha' ? t('Sin fecha') : g.label}</h2>
+                {g.renglones.map(renglon)}
+              </section>
+            ))}
+            {!mezcla.cargando && mezcla.conMas.length > 0 && (
+              <>
+                {falloMas && (
+                  <p className="state-error-body" role="alert">{t('No pudimos cargar más. Prueba de nuevo.')}</p>
+                )}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={verMas} disabled={cargandoMas}>
+                  {cargandoMas ? t('Cargando…') : t('Ver más mesas')}
+                </button>
+              </>
+            )}
+          </section>
+        ) : mezcla.cargando ? (
+          /* D237 · Mati, en su video: 4 filas esqueleto y después eran 2 mesas, y
+             saltaba el alto. Una fila neutra, y sólo si la primera carga tarda
+             más de 300 ms. */
+          esperaVisible ? (
+            <div aria-busy="true" aria-label={t('Cargando tus mesas')}>
               <div className="pago-row sk">
                 <span className="sk-line w55" />
                 <span className="sk-line w40" />
               </div>
             </div>
           ) : null
-        ) : cerradas.length === 0 ? (
+        ) : vacio ? (
           /* Vacío REAL: sin borde, único estado del sistema que no lo lleva.
-             AF-24 · y sólo si tampoco hay «Tus mesas»: con los pagos apagados,
+             AF-24 · y sólo si ninguna lista tiene nada: con los pagos apagados,
              no tener pagos no es no haber estado en ninguna mesa. */
-          sinTusMesas ? (
-            <div className="mesa-empty">
-              <div className="mesa-empty-title">{t('Todavía no cerraste ninguna mesa.')}</div>
-            </div>
-          ) : null
-        ) : (
-          <>
-            {grupos.map((g) => (
-              <section key={g.key} aria-label={g.label === 'Sin fecha' ? t('Sin fecha') : g.label}>
-                <h2 className="mes-sticky">{g.label === 'Sin fecha' ? t('Sin fecha') : g.label}</h2>
-                {g.mesas.map((m) => {
-                  const franja = franjaDe(m.date, presentationZone);
-                  const on = abierta === m.mesa_code;
-                  const detalle = detalles[m.mesa_code];
-                  const claveGesto = tarjetaDelHistorial(m.mesa_code);
-                  return (
-                    <div key={m.mesa_code} className={`hist-item ${on ? 'on' : ''}`}>
-                      <ConGesto
-                        activo={sePuedeOcultar(capacidad, m.mesa_status)}
-                        abierta={mismaTarjeta(deslizada, claveGesto)}
-                        onAbrir={() => setDeslizada(claveGesto)}
-                        onCerrar={() => cerrarDeslizada(claveGesto)}
-                        nombre={m.restaurant}
-                        onEliminar={() => borrarPagos(m)}
-                      >
-                      <button
-                        type="button"
-                        className="hist-row"
-                        aria-expanded={on}
-                        onClick={() => abrirDetalle(m.mesa_code, m.payment_ids)}
-                      >
-                        <span aria-hidden="true">
-                          <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} />
-                        </span>
-                        <div className="hist-main">
-                          <div className="hist-rest">{m.restaurant}</div>
-                          <div className="hist-meta">
-                            {fechaDeFila(m.date, locale, t, presentationZone)}
-                            {franja && (
-                              <>
-                                {' · '}
-                                {t(FRANJA_LABEL[franja])}{' '}
-                                <Icon
-                                  name={FRANJA_ICON[franja]}
-                                  size={14}
-                                  className="ico-inline"
-                                />
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="hist-amt">{formatMXN(m.amount_cents)}</div>
-                        <span className={`hist-chevron ${on ? 'on' : ''}`} aria-hidden="true">
-                          <Icon name="chevron-down" size={20} />
-                        </span>
-                      </button>
-                      {on && (
-                        <div className="hist-detail" aria-live="polite">
-                          {detalle === 'loading' && (
-                            <div className="loading">{t('Cargando detalle…')}</div>
-                          )}
-                          {detalle === 'error' && (
-                            <div className="state-error hist-detail-error" role="alert">
-                              <div className="state-error-title">{t('No pudimos cargar el detalle')}</div>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => cargarDetalle(m.mesa_code, m.payment_ids)}
-                              >
-                                {t('Reintentar')}
-                              </button>
-                            </div>
-                          )}
-                          {Array.isArray(detalle) && detalle.map((movement, paymentIndex) => (
-                            <section key={movement.id} className="hist-payment" aria-label={t('Pago {0}', paymentIndex + 1)}>
-                              {/* D240 punto 16 · los iguales de este pago, juntos. */}
-                              {movement.items.length > 0 ? agruparDelPago(movement.id, movement.items).map((g) => (
-                                <div key={g.key} className="hist-detail-row">
-                                  <span className="hist-detail-name">
-                                    <span>{nombreConCantidad(g.cantidad, g.primero.name)}</span>
-                                    {g.primero.declared_fraction_bps != null && (
-                                      <span className="hist-detail-declared">
-                                        {t('Declaraste {0}', bpsLabel(g.primero.declared_fraction_bps))}
-                                      </span>
-                                    )}
-                                  </span>
-                                  {g.montoCents != null && (
-                                    <span className="hist-detail-amount">{formatMXN(g.montoCents)}</span>
-                                  )}
-                                </div>
-                              )) : (
-                                <p className="hist-detail-empty">{t('Este pago no declaró consumos.')}</p>
-                              )}
-                              {movement.tip_amount_cents > 0 && (
-                                <div className="hist-detail-row hist-detail-tip">
-                                  <span>{t('Propina')}</span>
-                                  <span className="hist-detail-amount">{formatMXN(movement.tip_amount_cents)}</span>
-                                </div>
-                              )}
-                            </section>
-                          ))}
-                        </div>
-                      )}
-                      </ConGesto>
-                    </div>
-                  );
-                })}
-              </section>
-            ))}
-
-          </>
-        )}
+          <div className="mesa-empty">
+            <div className="mesa-empty-title">{t('Todavía no cerraste ninguna mesa.')}</div>
+          </div>
+        ) : null}
 
       </div>
 

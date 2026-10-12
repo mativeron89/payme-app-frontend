@@ -134,3 +134,17 @@ export function seamDeNotasMock(valor: SeamDeNotas): boolean {
   try { localStorage.removeItem(CLAVE_NOTAS_MOCK); } catch { /* sin almacenamiento: igual una vez por pedido */ }
   return true;
 }
+
+/**
+ * D293 · `GET /api/viajes/visitas` (mis restaurantes de viaje en Mesas). No se consume: vale mientras esté puesto.
+ * - `error`: el dueño contesta 500.
+ * - `muchas`: además de la semilla, 25 visitas sintéticas de Cancún 2026, una cada hora desde hace media hora: caen entre
+ *   las 23 mesas de `payme.app.mock.mis_mesas.v1 = muchas` (una cada hora desde hace una), así las dos listas paginan
+ *   mezcladas. Sólo para la paginación: sus tickets no existen en el viaje.
+ */
+export const CLAVE_VISITAS_MOCK = 'payme.app.mock.viajes.visitas.v1';
+
+export function seamDeVisitasMock(): 'error' | 'muchas' | null {
+  const v = leer(CLAVE_VISITAS_MOCK);
+  return v === 'error' || v === 'muchas' ? v : null;
+}

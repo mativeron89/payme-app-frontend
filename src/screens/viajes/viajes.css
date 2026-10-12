@@ -146,6 +146,14 @@
   font-size: 28px;
   line-height: 1;
 }
+/* D293 · la marca del viaje en un renglón de Mesas: chica y cuadrada redondeada (el círculo queda para personas, D275). */
+.vj-insignia--marca {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1;
+}
 .vj-insignia-foto {
   width: 100%;
   height: 100%;

@@ -69,7 +69,9 @@ test('las mesas cerradas sin cobro aparecen con lo que elegiste y cómo terminar
   // 🔴 Las mesas EN CURSO no se repiten acá: ya están en Inicio. Se cuentan
   // FILAS, no nombres: PA-2847 (en curso) también es La Parolaccia.
   await expect(seccion(page).locator('.tu-mesa')).toHaveCount(3);
-  await expect(seccion(page)).not.toContainText('Hanzo Sushi');
+  // D293 · la región es ahora la lista entera (mesas, pagos y viajes): el pago de Hanzo Sushi del historial está, y la
+  // mesa EN CURSO de Hanzo Sushi sigue sin repetirse entre las mesas.
+  await expect(seccion(page).locator('.tu-mesa').filter({ hasText: 'Hanzo Sushi' })).toHaveCount(0);
   await capturar(page, '01-tus-mesas');
 });
 

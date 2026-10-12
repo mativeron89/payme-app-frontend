@@ -548,6 +548,29 @@
         "409": { "error": "viaje_not_closed" }
       }
     },
+    "GET /api/viajes/visitas": {
+      "since": "2.184.0 (D293)",
+      "decision": "293 (los restaurantes de un viaje también en Mesas, con el nombre del viaje); plan OK del Bibliotecario 2026-10-12T13:51:33Z",
+      "regla": "Mis tickets de restaurante, bar o café de mis viajes, para que App Frontend los sume a la lista de Mesas (GET /api/mesas/mine, que no cambia), mezclando las dos listas por fecha. Entra lo mismo que en Estadísticas (`estadisticas.que_cuenta` y `que_no_cuenta`), con la misma definición (services/viajesVisitas.js): viajes abiertos, esperando pagos y cerrados; nunca los de un viaje del que salí, ni un ticket cuyo recibo abrió una mesa que ya cuenta para mí (esa visita ya está en Mesas, como mesa). Sólo lo mío.",
+      "request": { "limit": "1..50, 20 por defecto; exceder se rechaza", "cursor": "opaco: el `page.next_cursor` de la página anterior" },
+      "orden": "De la más reciente a la más vieja: `instante` DESC y, en un empate, `ticket_id` DESC. La página se llena saltando los tickets en los que no consumí (nunca viene vacía con cursor), y el cursor no repite ni saltea.",
+      "respuestas": {
+        "200": {
+          "claves": ["contract", "visitas", "page"],
+          "visita": ["instante", "lugar", "te_toca_cents", "ticket_id", "tipo_lugar", "viaje"],
+          "viaje": ["color", "has_photo", "id", "nombre"],
+          "page": ["limit", "next_cursor"],
+          "te_toca_cents": "lo que me toca de ese ticket: el `te_toca_cents` del detalle del ticket y el monto de la visita en Estadísticas (la parte del total impreso, D278-2)",
+          "instante": "el de Estadísticas (`estadisticas.instante`): la fecha y hora impresas en México; con fecha y sin hora, las 12:00; sin fecha, cuando se cargó",
+          "tipo_lugar": "restaurante | bar | cafe",
+          "lugar": "el lugar del ticket, o null",
+          "abrir": "GET /api/viajes/:id/tickets/:tid con `viaje.id` y `ticket_id` (con el viaje cerrado, viaje_version 7 o más)"
+        },
+        "400": { "error": "validation_error", "mensajes": ["limit_invalido", "cursor_invalido", "clave_desconocida"] },
+        "401": "sin sesión"
+      },
+      "declarado": "Leer no cierra un viaje vencido que nadie abrió (como Estadísticas). Un ticket de viaje no se puede ocultar de Mesas: el ocultamiento (D238) es de mesas, y guardarlo para un ticket sería una migración."
+    },
     "GET /api/viajes/:id/notas": {
       "since": "2.183.0 (D290)",
       "regla": "El pizarrón. Marca mi visita, también con el viaje cerrado.",
@@ -663,7 +686,8 @@
     "restaurante": "Un viaje no guarda el RFC: el ticket va con el restaurante de una mesa de la misma respuesta cuyo nombre mostrado coincide (sin acentos, mayúsculas ni espacios de más), si es uno solo. Si no, en su propio grupo: id `viaje:` más el sha256 corto del nombre, categoría `cafe` para un café u `other`; sin lugar, id `viaje-ticket:<id del ticket>` y «Restaurante sin identificar». Nunca el RFC ni el folio.",
     "recibo_en_mesa_y_viaje": "Cuenta una sola vez: si el mismo recibo abrió una mesa que cuenta para vos, gana la mesa; si no, cuenta el ticket del viaje.",
     "visita": "`code` = el id del ticket (nunca es un código de mesa); `division_mode` consumo o igual; `created_at` = el instante. Con `stats_version=2` (cadena exacta, sólo en /stats/restaurants) cada visita suma `viaje_id` (null en una mesa); sin el parámetro, la forma de siempre.",
-    "topes": "El tope del mes y el del rango cuentan también los tickets de viaje, incluido el conteo previo."
+    "topes": "El tope del mes y el del rango cuentan también los tickets de viaje, incluido el conteo previo.",
+    "en_mesas": "v2.184.0 · D293: la misma regla alimenta GET /api/viajes/visitas, mis tickets de viaje para la lista de Mesas, con lo que me toca (`te_toca_cents`) igual al monto de la visita acá."
   },
   "residual": [
     "Sin editar un ticket ya cargado ni cambiar su forma: va al Roadmap. Eliminarlo sí se puede (D256).",

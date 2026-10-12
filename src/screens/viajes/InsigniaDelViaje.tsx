@@ -15,7 +15,7 @@ export function inicialDelViaje(nombre: string): string {
   return primera ? primera.toLocaleUpperCase('es-MX') : '·';
 }
 
-export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = false, burbuja = false }: {
+export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = false, burbuja = false, marca = false }: {
   nombre: string;
   color?: ColorViaje | null;
   foto?: string | null;
@@ -25,8 +25,10 @@ export function InsigniaDelViaje({ nombre, color = null, foto = null, grande = f
    * para personas; así el viaje no se confunde con un amigo».
    */
   burbuja?: boolean;
+  /** D293 · la marca del viaje en un renglón de Mesas, junto a su nombre: 18×18, cuadrada redondeada como la burbuja. */
+  marca?: boolean;
 }) {
-  const tamano = burbuja ? ' vj-insignia--burbuja' : grande ? ' vj-insignia--grande' : '';
+  const tamano = burbuja ? ' vj-insignia--burbuja' : marca ? ' vj-insignia--marca' : grande ? ' vj-insignia--grande' : '';
   const clase = `vj-insignia${tamano}${color ? ' vj-insignia--color' : ''}`;
   return (
     <span className={clase} style={color ? { background: COLORES_VIAJE[color] } : undefined} aria-hidden="true">
