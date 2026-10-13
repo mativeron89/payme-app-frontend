@@ -190,6 +190,23 @@ for (const photo of [false, true]) {
       await expect(page.locator('.vjv-ver-balance .vjv-chev')).toHaveCSS('width', '18px');
       await expect(page.getByRole('button', { name: 'Carga manual', exact: true }).locator('svg')).toHaveCSS('width', size === 'Grandes' ? '22px' : '16px');
       await captura(page, info, `iconos-viaje-${size}-foto-${photo}`);
+      await irEnLaApp(page, '/');
+      const join = page.getByRole('button', { name: 'Unirme con código', exact: true });
+      await expect(join).toBeVisible();
+      expect((await join.boundingBox())!.height).toBe(64);
+      await expect(join.locator('.unirse-numeral')).toHaveCSS('width', (box - 8) + 'px');
+      // Campana con el badge de los avisos actuales del mock (sin cambiar su API).
+      const unread = page.locator('.hdr-badge');
+      await expect(unread).toBeVisible();
+      const notice = await page.locator('.hdr-bell').evaluate((bell) => {
+        const b = bell.getBoundingClientRect();
+        const badge = bell.querySelector('.hdr-badge')!.getBoundingClientRect();
+        return { width: b.width, height: b.height, right: badge.right, text: bell.getAttribute('aria-label') };
+      });
+      expect(notice.width).toBe(44); expect(notice.height).toBe(44);
+      expect(notice.right).toBeLessThanOrEqual(390);
+      expect(notice.text).toMatch(/sin leer/);
+      await captura(page, info, `iconos-inicio-${size}-foto-${photo}`);
     }
   });
 }

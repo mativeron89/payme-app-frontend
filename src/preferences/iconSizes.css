@@ -32,7 +32,13 @@
   width: var(--ic-titulo-caja); height: var(--ic-titulo-caja); border-radius: var(--ic-titulo-radio);
 }
 .vj-cuadro:not(.vj-cuadro--foto) { font-size: var(--ic-titulo); }
-.icon-list-box.icon-list-box { width: var(--ic-lista-caja); height: var(--ic-lista-caja); border-radius: var(--ic-lista-radio); }
+.icon-list-box.icon-list-box {
+  width: var(--ic-lista-caja); height: var(--ic-lista-caja); border-radius: var(--ic-lista-radio);
+  /* El cuadro dibujado cambia, su huella en flex sigue en 40×40. Las filas
+     mantienen padding, texto y hitbox; Grandes sobresale sólo 4 px por lado. */
+  margin-block: calc((40px - var(--ic-lista-caja)) / 2);
+  margin-inline: calc((40px - var(--ic-lista-caja)) / 2);
+}
 /* No se toca .appbar-fab (56), texto, chevrons, Volver, checks o .ico-inline. */
 
 .unirse-numeral.icon-list-box { font-size: var(--ic-lista); }
