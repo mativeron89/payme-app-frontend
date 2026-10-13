@@ -162,7 +162,7 @@ export function AppHeader({
              tabulación. Lleva nombre accesible porque, sin tarjeta de título,
              es lo único que dice de qué pantalla se trata. */
           <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
-            <Icon name="bell" size={22} />
+            <Icon name="bell" size={22} scale="bell" />
           </span>
         ) : identidad ? (
           <CampanaConAvisos unread={unread} onClick={openAvisos} />
@@ -190,7 +190,7 @@ function CampanaConAvisos({ unread, onClick }: { unread: number; onClick: () => 
       aria-label={unread > 0 ? t('Avisos, {0} sin leer', unread) : t('Avisos')}
     >
       <span className="hdr-bell-icono">
-        <Icon name="bell" size={22} />
+        <Icon name="bell" size={22} scale="bell" />
         {unread > 0 && <span className="hdr-badge" aria-hidden="true">{textoDeLaBurbuja(unread)}</span>}
       </span>
     </button>
@@ -230,7 +230,7 @@ export function AppHeaderBack({
         <HeaderIdentityConDiagnostico userName={identidad} />
         {bellHere ? (
           <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
-            <Icon name="bell" size={22} />
+            <Icon name="bell" size={22} scale="bell" />
           </span>
         ) : (
           <CampanaConAvisos unread={unread} onClick={openAvisos} />
@@ -326,7 +326,7 @@ export function AppHeaderFlow({
           }}
           aria-label={t('Avisos')}
         >
-          <Icon name="bell" size={22} />
+          <Icon name="bell" size={22} scale="bell" />
         </button>
       </div>
       <div className="hdr-row hdr-row-2">
@@ -434,7 +434,7 @@ export function Launcher({
   return (
     <button type="button" className="launch" onClick={onClick}>
       <span className="launch-ico" aria-hidden="true">
-        <Icon name={icon} size={22} />
+        <Icon name={icon} size={22} scale="row" />
       </span>
       <span className="launch-label">{label}</span>
     </button>

@@ -6,6 +6,7 @@ import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
+import { IconSettingsPanel } from '../preferences/IconSettingsPanel';
 import { Icon } from '../components/Icon';
 import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
 import { goBack, navigate } from '../router';
@@ -108,7 +109,7 @@ export function MasScreen() {
         <div className="card config-card" style={{ marginBottom: 12 }}>
           {user && (
             <div className="list-row" style={{ cursor: 'default' }}>
-              <span><Icon name="mail" size={16} /></span>
+              <span><Icon name="mail" size={16} scale="config" /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Email')}</div>
                 <div className="caption">{user.email}</div>
@@ -151,19 +152,20 @@ export function MasScreen() {
               El globo es parte del set SVG propio: no agrega dependencias ni
               cambia el control segmentado vigente. */}
           <div className="list-row" style={{ cursor: 'default' }}>
-            <span><Icon name="globe" size={16} /></span>
+            <span><Icon name="globe" size={16} scale="config" /></span>
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
               {t('Idioma')}
             </div>
             <SelectorIdioma />
           </div>
           <RegionSettingsPanel />
+          <IconSettingsPanel />
           <FilaAgregarAInicio />
           {/* AF2 · LEGAL-3.0.0 / decisiones 33-37 · Configuración › Notificaciones:
               qué avisos llegan también por correo. Mati pidió «una nueva ventana»:
               página propia (`#/notificaciones`), no una sección acá. */}
           <button className="list-row" onClick={() => navigate('notificaciones')}>
-            <span><Icon name="bell" size={16} /></span>
+            <span><Icon name="bell" size={16} scale="config" /></span>
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
               {t('Notificaciones')}
             </div>
@@ -171,7 +173,7 @@ export function MasScreen() {
           </button>
           {corteDeclarado && (
             <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
-              <span><Icon name="card" size={16} /></span>
+              <span><Icon name="card" size={16} scale="config" /></span>
               <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-b)' }}>
                 {t('Los pagos llegan pronto')}
               </div>
@@ -179,7 +181,7 @@ export function MasScreen() {
           )}
           {rail.showCards && corte.showCards && (
             <button className="list-row" onClick={() => navigate('tarjetas')}>
-              <span><Icon name="card" size={16} /></span>
+              <span><Icon name="card" size={16} scale="config" /></span>
               {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
                   algo que no existe en el build real. NO se oculta la fila: es el
                   ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
@@ -289,7 +291,7 @@ function FilaAgregarAInicio() {
           else void pedirInstalacion();
         }}
       >
-        <span aria-hidden="true"><Icon name="home" size={16} /></span>
+        <span aria-hidden="true"><Icon name="home" size={16} scale="config" /></span>
         <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
           {t('Agregar a inicio')}
         </div>

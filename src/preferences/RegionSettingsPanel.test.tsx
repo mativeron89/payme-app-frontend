@@ -67,7 +67,7 @@ describe('D169 · gestión local fuera del panel de selección', () => {
   });
   it('D189 · la fila «Zona horaria» lleva el reloj, no el pin', () => {
     const html = renderToStaticMarkup(<RegionSettingsPanel />);
-    expect(html).toContain(renderToStaticMarkup(<Icon name="clock" size={18} />));
+    expect(html).toContain(renderToStaticMarkup(<Icon name="clock" size={18} scale="config" />));
     expect(html).not.toContain(renderToStaticMarkup(<Icon name="pin" size={18} />));
   });
   it('la fila cerrada no monta ayuda, reset ni un reloj global', () => {

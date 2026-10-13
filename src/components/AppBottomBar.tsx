@@ -155,7 +155,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             y `aria-current` lo dice de verdad. */}
         {on && <span className="appbar-tick" aria-hidden="true" />}
         <span className="appbar-icono">
-          <Icon name={it.icon} size={24} />
+          <Icon name={it.icon} size={24} scale="footer" />
           {burbuja > 0 && <span className="appbar-burbuja" aria-hidden="true">{textoDeLaBurbuja(burbuja)}</span>}
         </span>
         <span className="appbar-label">{t(it.label)}</span>
@@ -179,7 +179,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
         >
           <span className="appbar-fab" aria-hidden="true">
             {/* 24px dentro del círculo de 56px medido por Diseño. */}
-            <Icon name={centro.icon} size={24} />
+            <Icon name={centro.icon} size={24} scale={centro.icon === 'camera' ? 'footer' : undefined} />
           </span>
           <span className="appbar-label">{t(centro.label)}</span>
         </button>

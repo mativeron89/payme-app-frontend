@@ -68,7 +68,7 @@ export function RegionSettingsPanel() {
         region.refreshDevice(); setConfirmation(0); setOpen(regionOpeningInput(event.detail));
       }}>
       {/* D189 · Mati eligió «Reloj (Recomendada)»: el pin hacía pensar en tu posición. */}
-      <Icon name="clock" size={18} />
+      <Icon name="clock" size={18} scale="config" />
       <span className="region-settings-trigger-label">{t('Zona horaria')}</span>
       <Icon name="arrow-right" size={16} />
     </button>

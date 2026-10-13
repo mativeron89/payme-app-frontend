@@ -43,7 +43,7 @@ export type IconoDeTarjeta = keyof typeof ICONOS_DE_TARJETA;
 export function CuadroDeTarjeta({ icono, cierre = false }: { icono: IconoDeTarjeta; cierre?: boolean }) {
   return (
     <span className={cierre ? 'title-card-cuadro title-card-cuadro--cierre' : 'title-card-cuadro'} data-icono={icono} aria-hidden="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={cierre ? 2.6 : 1.7}
+      <svg className={cierre || icono === 'check' ? undefined : 'icon-scalable icon-scalable--title'} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={cierre ? 2.6 : 1.7}
         strokeLinecap="round" strokeLinejoin="round" focusable="false">
         <path d={ICONOS_DE_TARJETA[icono]} />
       </svg>

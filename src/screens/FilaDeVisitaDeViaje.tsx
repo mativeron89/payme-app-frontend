@@ -34,7 +34,7 @@ export function FilaDeVisitaDeViaje({ visita, foto, zona }: {
         onClick={() => navigate('viaje-ticket', parametroDeTicket(visita.viaje.id, visita.ticket_id))}
       >
         <span aria-hidden="true">
-          <Icon name={iconoTipoLugar(visita.tipo_lugar)} size={22} />
+          <Icon name={iconoTipoLugar(visita.tipo_lugar)} size={22} scale="list" />
         </span>
         <div className="hist-main">
           <div className="hist-rest">{nombreDelLugar(visita.lugar, visita.tipo_lugar, t)}</div>

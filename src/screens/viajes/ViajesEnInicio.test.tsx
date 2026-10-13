@@ -285,7 +285,7 @@ describe('🔴 D271 · D275 · el restaurante pendiente, debajo de su viaje y se
 
   it('los cubiertos, en su cuadro, y el chevron; nada del dinero', () => {
     const html = vista([enLista({})], { pendientes });
-    expect(html).toContain('<span class="viaje-pendiente-ico" aria-hidden="true"><svg');
+    expect(html).toContain('<span class="viaje-pendiente-ico icon-list-box" aria-hidden="true"><svg');
     expect(html).toContain('<span class="viaje-pendiente-ir" aria-hidden="true"><svg');
     expect(pendientesEn(html).map((p) => p.texto).join(' ')).not.toMatch(/\$/);
   });

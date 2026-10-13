@@ -13,7 +13,7 @@ describe('D249 · «Nueva» con una cámara', () => {
   const fab = /<span class="appbar-fab" aria-hidden="true">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '';
 
   it('🔴 el ícono del círculo es la cámara de línea, no el «+»', () => {
-    expect(fab).toBe(renderToStaticMarkup(<Icon name="camera" size={24} />));
+    expect(fab).toBe(renderToStaticMarkup(<Icon name="camera" size={24} scale="footer" />));
     expect(fab).not.toBe(renderToStaticMarkup(<Icon name="plus" size={24} />));
   });
 

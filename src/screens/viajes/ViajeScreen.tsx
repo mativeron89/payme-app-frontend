@@ -581,7 +581,7 @@ function TarjetaDeTitulo({ viaje: v, foto, onConfiguracion }: {
       </FilaDeTitulo>
       <span className="vjv-titulo-divisor" aria-hidden="true" />
       <button type="button" className="vjv-titulo-engranaje" aria-label={t('Configuración del viaje')} onClick={onConfiguracion}>
-        <Icon name="settings" size={22} />
+        <Icon name="settings" size={22} scale="row" />
       </button>
     </div>
   );
@@ -607,7 +607,7 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
       {/* D250 · escanear es el círculo de la cámara de la barra; «Carga manual» queda sola, a todo el ancho. */}
       <div className="vjv-acciones vjv-acciones-una">
         <button type="button" className="btn btn-navy" onClick={onCargaManual}>
-          <Icon name="pencil" size={20} />
+          <Icon name="pencil" size={20} scale="button" />
           {t('Carga manual')}
         </button>
       </div>

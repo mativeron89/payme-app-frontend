@@ -519,7 +519,7 @@ export function MesasScreen() {
     const fila = (
       <>
         <span aria-hidden="true">
-          <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
+          <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} scale="list" />
         </span>
         <div className="hist-main">
           <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
@@ -606,7 +606,7 @@ export function MesasScreen() {
           onClick={() => abrirDetalle(m.mesa_code, m.payment_ids)}
         >
           <span aria-hidden="true">
-            <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} />
+            <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} scale="list" />
           </span>
           <div className="hist-main">
             <div className="hist-rest">{m.restaurant}</div>
