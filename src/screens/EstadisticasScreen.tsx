@@ -383,7 +383,7 @@ function BurbujaDelPeriodo({
 }
 
 /** E173-4 · el anillo de la especificación: 168 px, grosor 20, con su pista. */
-const FORMA_E173: FormaAnillo = { tamano: 168, caja: 168, radio: GEOMETRIA_E173.radio, grosor: GEOMETRIA_E173.grosor, pista: '#E4FBFC' };
+const FORMA_E173: FormaAnillo = { tamano: 168, caja: 168, radio: GEOMETRIA_E173.radio, grosor: GEOMETRIA_E173.grosor, pista: '#E4F7F8' };
 
 /**
  * E173-4 · «Tu consumo por tipo de cocina» (§3). El centro dice cuántas cocinas

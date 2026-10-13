@@ -77,7 +77,7 @@ for (const ancho of [375, 390] as const) {
         return { ancho: r.width, alto: r.height, fondo: getComputedStyle(b).backgroundColor, danger, derecha: r.right, vista: window.innerWidth };
       });
       // El rojo de Mesas (`--danger`), y un blanco de toque de al menos 44 × 44.
-      expect(m.danger).toBe('#b42318');
+      expect(m.danger).toBe('#b4462f');
       expect(m.fondo).toBe('rgb(180, 70, 47)');
       expect(m.ancho).toBe(96);
       expect(m.alto).toBeGreaterThanOrEqual(44);

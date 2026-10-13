@@ -11,7 +11,7 @@ const t = (s: string, ...a: unknown[]) => s.replace('{0}', String(a[0]));
 
 describe('E173-4 · el anillo de la especificación', () => {
   it('🔴 r = 74, grosor 20, corte 2 y cuatro colores en orden de monto', () => {
-    expect(GEOMETRIA_E173).toEqual({ radio: 74, grosor: 20, corte: 2, colores: ['#0FB5C9', '#101E3B', '#6FD3DE', '#64748B'] });
+    expect(GEOMETRIA_E173).toEqual({ radio: 74, grosor: 20, corte: 2, colores: ['#12A5B4', '#101E3B', '#6FD3DE', '#64748B'] });
   });
 
   it('🔴 con siete cocinas el anillo junta de la cuarta en adelante; las porciones miden su parte menos 2', () => {
@@ -19,7 +19,7 @@ describe('E173-4 · el anillo de la especificación', () => {
     const total = 1000;
     const p = porcionesDelAnillo(montos, GEOMETRIA_E173);
     const c = 2 * Math.PI * 74;
-    expect(p.map((x) => x.color)).toEqual(['#0FB5C9', '#101E3B', '#6FD3DE', '#64748B']);
+    expect(p.map((x) => x.color)).toEqual(['#12A5B4', '#101E3B', '#6FD3DE', '#64748B']);
     expect(p[0]!.trazo).toBeCloseTo((400 / total) * c - 2, 6);
     expect(p[3]!.trazo).toBeCloseTo((100 / total) * c - 2, 6);
     expect(p[3]!.desde).toBeCloseTo(-(900 / total) * c, 6);
@@ -28,7 +28,7 @@ describe('E173-4 · el anillo de la especificación', () => {
 
   it('una sola cocina es el anillo entero, sin corte', () => {
     const [unica] = porcionesDelAnillo([500], GEOMETRIA_E173);
-    expect(unica).toMatchObject({ color: '#0FB5C9', trazo: 2 * Math.PI * 74, hueco: 0, desde: 0 });
+    expect(unica).toMatchObject({ color: '#12A5B4', trazo: 2 * Math.PI * 74, hueco: 0, desde: 0 });
   });
 
   it('🔴 sin geometría, el anillo de 2c no cambia (las pantallas de detalle no se tocan)', () => {
@@ -37,7 +37,7 @@ describe('E173-4 · el anillo de la especificación', () => {
   });
 
   it('el color de una fila del detalle: de la cuarta en adelante, el cuarto', () => {
-    expect([0, 3, 4, 6].map((i) => colorEnPaleta(i, GEOMETRIA_E173.colores))).toEqual(['#0FB5C9', '#64748B', '#64748B', '#64748B']);
+    expect([0, 3, 4, 6].map((i) => colorEnPaleta(i, GEOMETRIA_E173.colores))).toEqual(['#12A5B4', '#64748B', '#64748B', '#64748B']);
     // `colorDeFila` sigue con un solo argumento: `.map(colorDeFila)` le pasa el índice del arreglo.
     expect([4, 5].map(colorDeFila)).toEqual([COLORES_ANILLO[4], COLORES_ANILLO[4]]);
   });

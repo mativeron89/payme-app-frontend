@@ -15,10 +15,10 @@ export const CORTE_ANILLO = 3;
 export const CIRCUNFERENCIA = 2 * Math.PI * RADIO_ANILLO;
 
 /**
- * Los cinco colores del sistema, en el orden del diseño. El quinto también es el
+ * Los cinco colores del sistema, en el orden del diseño (cian actualizado por D310). El quinto también es el
  * de la porción que agrupa de la sexta categoría en adelante.
  */
-export const COLORES_ANILLO = ['#0FB5C9', '#101E3B', '#0A7B80', '#6FD3DE', '#4A5B78'] as const;
+export const COLORES_ANILLO = ['#12A5B4', '#101E3B', '#0A7B80', '#6FD3DE', '#4A5B78'] as const;
 
 /**
  * Porcentajes ENTEROS que suman exactamente 100, por resto mayor: cada uno se
@@ -72,7 +72,7 @@ export const GEOMETRIA_E173: GeometriaAnillo = {
   radio: 74,
   grosor: 20,
   corte: 2,
-  colores: ['#0FB5C9', '#101E3B', '#6FD3DE', '#64748B'],
+  colores: ['#12A5B4', '#101E3B', '#6FD3DE', '#64748B'],
 };
 
 /** Índice de color de una categoría en la lista: de la quinta en adelante, el quinto. */

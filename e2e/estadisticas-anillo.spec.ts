@@ -113,7 +113,7 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     // La pista y cuatro porciones.
     await expect(tarjeta(page).locator('circle')).toHaveCount(5);
     const colores = await tarjeta(page).locator('g circle').evaluateAll((cs) => cs.map((c) => c.getAttribute('stroke')));
-    expect(colores).toEqual(['#0FB5C9', '#101E3B', '#6FD3DE', '#64748B']);
+    expect(colores).toEqual(['#12A5B4', '#101E3B', '#6FD3DE', '#64748B']);
     await detalle(page).click();
     await expect(filas(page)).toHaveCount(7);
   });

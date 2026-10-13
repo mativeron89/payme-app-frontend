@@ -16,6 +16,7 @@
 Paquete Claude Design D310, sobre 0.245.3. Se aplican los deltas compatibles con las decisiones y funciones recientes.
 
 - Cian `#12A5B4`, naranja `#F0703C`, burbuja `#E4F7F8`, borde `#E3E9F0` y rojo pastel `#FBE7E3` / `#B4462F` en los tokens APP; aliases y símbolo de cabecera siguen los mismos tokens. Las tintas de enlaces, estados y pestaña activa conservan contraste AA. Blanco/naranja: 2.96:1, riesgo previo que sigue declarado; rojo/pastel: 4.57:1.
+- Los anillos de estadísticas y los colores locales de Ubicación y de solicitar unirse siguen también la paleta, sin cambiar geometría, cálculos ni preferencias.
 - Sombras compartidas de tarjeta y burbuja; sombra naranja del círculo. Barra con íconos de 24 px, separación de 2 px y rótulos alineados a 9 px del borde sin inset. Conserva 64 px, círculo de 56 que sobresale 26 y compensación de safe-area/PWA D255.
 - «Volver» en 15/700 y «Ver el ticket» con área de toque mínima de 44 px. El scroll general reserva barra + saliente + 12 px y crece con la safe-area, para alcanzar el último dato.
 - Se conservan tarjetas blancas e íconos D285, negritas D283/D299, nombre real sin username de demo, campana con cantidad D240, cámara nativa, múltiples mesas y Viajes/Próximos. No se copian datos ni comportamientos ilustrativos de la maqueta.

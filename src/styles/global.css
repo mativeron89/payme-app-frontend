@@ -145,8 +145,8 @@
      declararlo conforme es la que permite volver a discutirlo más adelante.
      Si aparece en una auditoría de contraste, es la regla vigente y no un
      hallazgo nuevo. `designTokens.test.ts` lo registra con fecha, en
-     vez de dejar de medirlo: el número sigue fijado en 2.84 para que un
-     retoque del naranja no lo hunda todavía más sin que nadie se entere. */
+     vez de dejar de medirlo. D310 lo vuelve a medir y fija 2.96; el
+     mínimo AA y la excepción histórica siguen explícitos. */
   --brand-fg: #ffffff; /* D310 · sobre --brand · 2.96:1 · riesgo de contraste conservado */
   --brand-soft: #fff0eb;
   --brand-ink: #c2410c; /* naranja COMO TEXTO sobre claro · 5.18:1 */
@@ -3219,7 +3219,7 @@ html.app-de-inicio-ios .app {
 }
 
 /* D230 · la burbuja roja de «Amigos»: el rojo de error de la app (--danger)
-   con el número en blanco (D310: 5.48:1, AA), arriba a la derecha del ícono, con un
+   con el número en blanco (D310: 5.44:1, AA), arriba a la derecha del ícono, con un
    aro del color de la barra para despegarla del glifo. */
 .appbar-burbuja {
   position: absolute;
@@ -7122,7 +7122,7 @@ button.qc-circulo::after {
   margin-top: var(--sp-3);
   border: 0;
   border-radius: 999px;
-  background: #ff6b35;
+  background: var(--brand);
   color: var(--brand-fg);
   font: inherit;
   font-weight: 700;
