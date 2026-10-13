@@ -155,7 +155,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
       const c = getComputedStyle(b);
       return { fondo: c.backgroundColor, texto: c.color };
     });
-    expect(colores).toEqual({ fondo: 'rgb(255, 107, 53)', texto: 'rgb(255, 255, 255)' });
+    expect(colores).toEqual({ fondo: 'rgb(240, 112, 60)', texto: 'rgb(255, 255, 255)' });
     await solicitar(page).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
     await expect(page.getByRole('button', { name: 'Enviando…' })).toBeVisible();
     // D237 · el spinner y «Enviando…» van juntos y centrados en el botón (antes

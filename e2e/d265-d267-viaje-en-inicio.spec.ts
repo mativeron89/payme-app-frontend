@@ -44,7 +44,7 @@ test.describe('🔴 D265 · D267 · el viaje abierto en Inicio', () => {
     await expect(page.locator('.viaje-burbuja .viaje-burbuja-nombre')).toHaveText(['Cancún 2026', 'Monterrey fin de semana']);
     await expect(page.locator('.viaje-burbuja').filter({ hasText: 'Oaxaca puente' })).toHaveCount(0);
     await expect(burbuja(page, 'Cancún 2026')).toHaveText('CCancún 2026\u2212$542');
-    await expect(balance(page, 'Cancún 2026')).toHaveCSS('color', 'rgb(180, 35, 24)');
+    await expect(balance(page, 'Cancún 2026')).toHaveCSS('color', 'rgb(180, 70, 47)');
     // D275 · esperando pagos se ve igual que abierto, con su monto.
     await expect(balance(page, 'Monterrey fin de semana')).toHaveText('$1,050');
     await expect(balance(page, 'Monterrey fin de semana')).toHaveCSS('color', 'rgb(4, 120, 87)');

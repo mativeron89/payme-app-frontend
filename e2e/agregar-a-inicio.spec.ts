@@ -68,7 +68,7 @@ test.describe('en Safari de iPhone', () => {
     await expect(guia(page).getByRole('listitem')).toHaveText(['1Toca Compartir', '2Elige «Agregar a inicio»']);
     await expect(entendido(page)).toBeFocused();
     // El naranja, sólo en la acción (--orange #ff6b35).
-    await expect(entendido(page)).toHaveCSS('background-color', 'rgb(255, 107, 53)');
+    await expect(entendido(page)).toHaveCSS('background-color', 'rgb(240, 112, 60)');
     // En el iPhone, Compartir está en la barra de abajo de Safari.
     await expect(guia(page).locator('.guia-inicio-flecha.abajo')).toBeVisible();
     await expect(page.locator('.guia-inicio-flecha.arriba')).toHaveCount(0);

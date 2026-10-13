@@ -76,7 +76,7 @@ describe('E173-2 · la barra inferior nunca queda fuera de lo visible', () => {
     // D275 · el alto vive en UNA variable, que también usa el aviso que flota sobre la barra: la fórmula es la misma.
     expect(efectivo(barra, 'height')).toBe('var(--appbar-alto)');
     expect(efectivo(regla(':root'), '--appbar-alto')).toBe('calc(56px + var(--appbar-pie))');
-    expect(efectivo(barra, 'padding')).toBe('8px var(--sp-2) var(--appbar-pie)');
+    expect(efectivo(barra, 'padding')).toBe('0 6px var(--appbar-pie)');
   });
 
   /**

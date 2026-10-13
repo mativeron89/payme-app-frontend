@@ -113,6 +113,14 @@
      si cambiás un hex, el test lo vuelve a medir y falla si no llega.
      ══════════════════════════════════════════════════════════════════════ */
 
+  /* D310 · CAMBIOS-APP-PAYME §0 actualiza sólo APP: cian, naranja, burbuja,
+     borde y rojo pastel. El espejo histórico y la landing no cambian.
+     Se conservan --brand-ink, --link, --warning y --success como tintas AA:
+     los tonos decorativos del paquete no son intercambiables con texto.
+     Contrastes medidos en designTokens.test.ts: blanco/naranja 2.96,
+     navy/cian 5.56 y rojo/pastel 4.57. El primero sigue siendo riesgo aceptado,
+     no conformidad AA; mejora el 2.84 histórico sin ampliar su uso. */
+
   /* §1 · Color — marca.
      El naranja es UNA acción, no una paleta: botón circular "Nueva", ítem
      activo de la barra inferior, badge de no leídos, y el CTA de pantalla de
@@ -120,7 +128,7 @@
      D240 punto 5 · el badge de no leídos de la campana dejó de ser naranja: es
      la burbuja roja con número de «Amigos» (D230). El §1 de SISTEMA_DISENO.md
      (fuera de este repo) queda por actualizar. */
-  --brand: #ff6b35;
+  --brand: #f0703c;
   /* 🔴 ENMIENDA RATIFICADA 2026-08-08 · el glifo sobre --brand pasa a BLANCO.
      Antes: #0f1f3d, 5.77:1, con el comentario "NUNCA blanco (2.84:1)".
      Ahora: #ffffff, 2.84:1 — REPRUEBA AA (mínimo 4.5:1) Y reprueba el mínimo
@@ -139,7 +147,7 @@
      hallazgo nuevo. `designTokens.test.ts` lo registra con fecha, en
      vez de dejar de medirlo: el número sigue fijado en 2.84 para que un
      retoque del naranja no lo hunda todavía más sin que nadie se entere. */
-  --brand-fg: #ffffff; /* sobre --brand · 2.84:1 · excepción ratificada */
+  --brand-fg: #ffffff; /* D310 · sobre --brand · 2.96:1 · riesgo de contraste conservado */
   --brand-soft: #fff0eb;
   --brand-ink: #c2410c; /* naranja COMO TEXTO sobre claro · 5.18:1 */
 
@@ -150,15 +158,15 @@
      nuevos, no arrastrado. Medidos en esta máquina, no copiados del doc. */
   --action: #101e3b;
   --action-fg: #ffffff; /* 16.52:1 sobre --action */
-  --action-2: #0fb5c9;
-  --action-2-fg: #101e3b; /* 6.67:1 sobre --action-2 — antes 7.46 con el teal viejo */
-  --link: #0a7b80; /* el cyan #0fb5c9 como texto da 2.48:1: como texto va este */
+  --action-2: #12a5b4;
+  --action-2-fg: #101e3b; /* D310 · 5.56:1 sobre --action-2 */
+  --link: #0a7b80; /* D310 · el cian decorativo da 2.97:1 sobre blanco; el link mantiene 5.05:1. */
 
   /* §1 · Color — superficie y texto. */
   --bg: #f4f7fa;
   --surface: #ffffff;
   --surface-2: #f8fafc;
-  --border: #e2e8f0;
+  --border: #e3e9f0;
   --text: #101e3b; /* 15.37:1 sobre --bg — medido acá; el doc dice 15.38 (redondeo) */
   --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
   --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
@@ -172,8 +180,9 @@
   --success-tint: #ecfdf5; /* 5.21:1 */
   --warning: #92620a;
   --warning-tint: #fffbeb; /* 5.10:1 */
-  --danger: #b42318;
-  --danger-tint: #fef2f2; /* 6.01:1 */
+  --danger: #b4462f;
+  --danger-tint: #fbe7e3; /* D310 · 4.57:1 con --danger. */
+  --danger-l: #fbe7e3; /* D310 · nombre de la superficie pastel en el paquete. */
   --info: #0a6c85;
   --info-tint: #e6f6fa; /* 5.41:1 */
 
@@ -223,8 +232,11 @@
      borde, no lo reemplaza: toda tarjeta lleva 1px solid var(--border)
      además de su sombra. En monitor barato la sombra casi no se ve. */
   --sh-1: 0 1px 2px rgba(16, 30, 59, 0.06);
-  --sh-2: 0 2px 8px rgba(16, 30, 59, 0.08);
+  --sh-2: 0 2px 8px rgba(16, 30, 59, 0.06);
   --sh-3: 0 8px 24px rgba(16, 30, 59, 0.1);
+  /* D310 · elevaciones de las piezas compartidas, con el navy vigente. */
+  --sh-mounted: 0 4px 16px rgba(16, 30, 59, 0.1);
+  --sh-fab: 0 6px 16px rgba(240, 112, 60, 0.34);
 
   /* §3 · Área táctil mínima en la app, sin excepción. Se usa parada, con una
      mano, apurada. */
@@ -276,9 +288,9 @@
      el sistema de diseño. Se usan 40 y 22 veces — o sea que la migración de
      `--action` sola dejaba la mayor parte de la app en el navy viejo. */
   --navy: #101e3b;
-  --teal: #0fb5c9;
-  --teal-l: #e4fbfc;
-  --orange: #ff6b35;
+  --teal: #12a5b4;
+  --teal-l: #e4f7f8;
+  --orange: #f0703c;
   --orange-l: #fff0eb;
   --white: #ffffff;
   --gray-d: #475569;
@@ -317,7 +329,7 @@
   --fs-legacy-hero: 40px;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow-sm: 0 2px 8px rgba(16, 30, 59, 0.08);
+  --shadow-sm: 0 2px 8px rgba(16, 30, 59, 0.06);
   /* T-D1 (Mati eligió la opción C, 2026-07-22): Plus Jakarta Sans reemplaza a
      Syne en display; el cuerpo sigue en DM Sans. */
   --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
@@ -3144,7 +3156,7 @@ html.app-de-inicio-ios .app {
      en vez de sumarse: los íconos bajan 8 px y siguen fuera de la zona del
      indicador. En Safari, con inset 0, la barra no cambia: 64 px y 8 px. */
   height: var(--appbar-alto);
-  padding: 8px var(--sp-2) var(--appbar-pie);
+  padding: 0 6px var(--appbar-pie);
 }
 
 .appbar-item,
@@ -3158,10 +3170,12 @@ html.app-de-inicio-ios .app {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--sp-1);
-  /* Área táctil mínima de la app, sin excepción. */
+  gap: 2px;
+  /* D310 · columnas de 56px más el pie seguro: rótulos a 9px del borde
+     sin inset, y ningún toque se achica por alinear el dibujo. */
+  height: 56px;
   min-height: var(--tap-min);
-  padding: var(--sp-2) 0 var(--sp-1);
+  padding: 0 0 1px;
 }
 
 .appbar-center {
@@ -3191,7 +3205,7 @@ html.app-de-inicio-ios .app {
 }
 
 /* Ítem activo: ícono Y etiqueta en --brand-ink (5.18:1). No se usa --brand:
-   #ff6b35 sobre blanco da 2.6:1 y a 11px es ilegible. */
+   D310: #f0703c sobre blanco da 2.96:1 y sigue sin alcanzar AA. */
 .appbar-item.on {
   color: var(--brand-ink);
   font-weight: 700;
@@ -3205,7 +3219,7 @@ html.app-de-inicio-ios .app {
 }
 
 /* D230 · la burbuja roja de «Amigos»: el rojo de error de la app (--danger)
-   con el número en blanco (6.6:1, AA), arriba a la derecha del ícono, con un
+   con el número en blanco (D310: 5.48:1, AA), arriba a la derecha del ícono, con un
    aro del color de la barra para despegarla del glifo. */
 .appbar-burbuja {
   position: absolute;
@@ -3259,7 +3273,7 @@ html.app-de-inicio-ios .app {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--sh-2);
+  box-shadow: var(--sh-fab);
   transform: translateX(-50%);
   transition: transform var(--mo-fast, 120ms) ease-out;
 }
@@ -3290,23 +3304,18 @@ html.app-de-inicio-ios .app {
   outline: none;
 }
 
-/* Aire para que el contenido no quede debajo de la barra.
-   140px y no 108: el bloque mide 69px con la barra sola, pero 135px cuando
-   lleva su fila `above` (el motivo por el que Continuar está apagado, §1.3).
-   Con 108 la última fila quedaba tapada, y `scrollIntoView` —que mide contra
-   el padding del contenedor, no contra lo que la barra fija ocluye— creía
-   haberla dejado visible.
-
-   OJO al usarlo: un `style={{ padding: … }}` inline en el `.scroll` PISA este
-   padding-bottom, porque el shorthand inline le gana al longhand de la clase.
-   Por eso las pantallas del flujo llevan `.flow-scroll` y no padding inline. */
+/* D310 · el último dato debe poder quedar encima del círculo, incluso con
+   safe-area. Los 84px fijos de la maqueta no cubren barra + saliente (90px
+   sin inset, 104px en el iPhone de D255). Reserva 12px más de aire; las
+   pantallas con composición propia conservan sus reglas más específicas.
+   La barra sigue siendo hermana del scroll: nunca se recorta una lista. */
 .has-appbar .scroll {
-  padding-bottom: 84px;
+  padding-bottom: calc(var(--appbar-alto) + 26px + var(--sp-3));
 }
 
-/* 🔴 AF-34 (2026-09-19) · el comentario de arriba habla de 140px, pero la regla
-   quedó en 84px desde `90ae05c` («unificar chrome»), que achicó la barra: 84
-   alcanza para la barra SOLA. Con su fila `above` la barra mide 113px (medido
+/* 🔴 AF-34 (2026-09-19) · la regla histórica quedó en 84px desde `90ae05c`
+   («unificar chrome»), que achicó la barra. D310 amplía el caso general,
+   conservando esta composición propia. Con su fila `above` la barra mide 113px (medido
    en Mesa, 390×844), así que la última fila quedaba 30px debajo aunque se
    bajara todo: «Invitar amigos de PayMe» ya estaba tapado y «Cerrar mesa» lo
    heredaba. Este modificador lo corrige SÓLO en Mis ítems, que siempre lleva
@@ -3603,7 +3612,7 @@ html.app-de-inicio-ios .app {
   cursor: pointer;
   color: var(--on-dark);
   font-family: var(--font-display);
-  font-size: var(--fs-sm);
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -3714,7 +3723,7 @@ html.app-de-inicio-ios .app {
   margin: -24px var(--sp-4) 0;
   background: var(--surface);
   border-radius: var(--r-lg);
-  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
+  box-shadow: var(--sh-mounted);
 }
 
 /* Una pestaña extrema comparte su esquina con la tarjeta. Cuadrar sólo ese
@@ -4556,11 +4565,11 @@ html.app-de-inicio-ios .app {
 
 .aviso-row--guarantee {
   border-color: rgba(180, 70, 47, 0.24);
-  background: #fbe7e3;
+  background: var(--danger-l);
 }
 
 .aviso-row--guarantee .aviso-icono {
-  color: #b4462f;
+  color: var(--danger);
 }
 
 /* El punto de no leído va en `--action` navy, no en `--action-2` teal. ACOMPAÑA:
@@ -4615,7 +4624,7 @@ html.app-de-inicio-ios .app {
   min-height: 32px;
   border: 0;
   background: transparent;
-  color: #b4462f;
+  color: var(--danger);
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: 700;
@@ -4681,8 +4690,8 @@ html.app-de-inicio-ios .app {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #fbe7e3;
-  color: #b4462f;
+  background: var(--danger-l);
+  color: var(--danger);
   font-weight: 700;
 }
 
@@ -4811,7 +4820,7 @@ html.app-de-inicio-ios .app {
   border-radius: var(--r-lg); /* 22px — el token ya valía lo que §E pide */
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--sh-2);
+  box-shadow: var(--sh-mounted);
   text-align: left;
 }
 
@@ -5540,10 +5549,10 @@ button.qc-circulo::after {
   transform: translate(-50%, -50%);
 }
 
-/* Regla 6 · «Lo eligió otro»: rojo pastel, candado, sin nombre de quién. El
-   #FBE7E3 no tiene token en la app: va el del diseño, literal. */
+/* Regla 6 · «Lo eligió otro»: rojo pastel, candado, sin nombre de quién.
+   D310 · #FBE7E3 ya tiene token: --danger-l, compartido con los avisos. */
 .qc-otro {
-  background: #fbe7e3;
+  background: var(--danger-l);
 }
 
 .qc-candado {
@@ -9304,7 +9313,7 @@ h1.pay-title-lbl {
 .ticket-title-fold .tk-fold-head {
   width: auto;
   gap: 8px;
-  min-height: 38px;
+  min-height: var(--tap-min);
   padding: 0 12px;
 }
 

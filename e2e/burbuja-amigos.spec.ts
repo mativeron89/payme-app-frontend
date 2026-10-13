@@ -45,7 +45,7 @@ test.describe('D230 · la burbuja roja de «Amigos»', () => {
     await expect(burbuja(page)).toHaveText('1');
     await expect(pestana(page)).toHaveAccessibleName('Amigos, 1 solicitud pendiente');
     // El rojo de error de la app (--danger #b42318) con el número en blanco.
-    await expect(burbuja(page)).toHaveCSS('background-color', 'rgb(180, 35, 24)');
+    await expect(burbuja(page)).toHaveCSS('background-color', 'rgb(180, 70, 47)');
     await expect(burbuja(page)).toHaveCSS('color', 'rgb(255, 255, 255)');
     // Arriba a la derecha del ícono, dentro de la pestaña.
     const caja = await burbuja(page).boundingBox();

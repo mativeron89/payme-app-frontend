@@ -13,8 +13,8 @@ describe('D249 · «Nueva» con una cámara', () => {
   const fab = /<span class="appbar-fab" aria-hidden="true">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '';
 
   it('🔴 el ícono del círculo es la cámara de línea, no el «+»', () => {
-    expect(fab).toBe(renderToStaticMarkup(<Icon name="camera" size={22} />));
-    expect(fab).not.toBe(renderToStaticMarkup(<Icon name="plus" size={22} />));
+    expect(fab).toBe(renderToStaticMarkup(<Icon name="camera" size={24} />));
+    expect(fab).not.toBe(renderToStaticMarkup(<Icon name="plus" size={24} />));
   });
 
   it('el rótulo y el nombre accesible siguen siendo «Nueva»', () => {
@@ -35,6 +35,6 @@ describe('D249 · «Nueva» con una cámara', () => {
       <AppBottomBar center={{ label: 'Continuar', icon: 'arrow-right', onClick: () => undefined, disabled: false, busy: false }} />,
     );
     expect(/<span class="appbar-fab" aria-hidden="true">([\s\S]*?)<\/span>/.exec(propio)?.[1])
-      .toBe(renderToStaticMarkup(<Icon name="arrow-right" size={22} />));
+      .toBe(renderToStaticMarkup(<Icon name="arrow-right" size={24} />));
   });
 });

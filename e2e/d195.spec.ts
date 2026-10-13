@@ -14,7 +14,7 @@ import { ingresar } from './_app';
  */
 
 /** El teal de foco (`--action-2`, #0fb5c9). */
-const TEAL = 'rgb(15, 181, 201)';
+const TEAL = 'rgb(18, 165, 180)';
 
 /** Lo que dibuja un borde: outline, borde y sombra, del campo y de su burbuja. */
 async function bordes(campo: Locator): Promise<Record<string, string>> {

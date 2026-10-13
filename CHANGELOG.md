@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.246.0 — D310-E1 · paleta y piezas visuales compartidas (2026-10-13)
+
+Paquete Claude Design D310, sobre 0.245.3. Se aplican los deltas compatibles con las decisiones y funciones recientes.
+
+- Cian `#12A5B4`, naranja `#F0703C`, burbuja `#E4F7F8`, borde `#E3E9F0` y rojo pastel `#FBE7E3` / `#B4462F` en los tokens APP; aliases y símbolo de cabecera siguen los mismos tokens. Las tintas de enlaces, estados y pestaña activa conservan contraste AA. Blanco/naranja: 2.96:1, riesgo previo que sigue declarado; rojo/pastel: 4.57:1.
+- Sombras compartidas de tarjeta y burbuja; sombra naranja del círculo. Barra con íconos de 24 px, separación de 2 px y rótulos alineados a 9 px del borde sin inset. Conserva 64 px, círculo de 56 que sobresale 26 y compensación de safe-area/PWA D255.
+- «Volver» en 15/700 y «Ver el ticket» con área de toque mínima de 44 px. El scroll general reserva barra + saliente + 12 px y crece con la safe-area, para alcanzar el último dato.
+- Se conservan tarjetas blancas e íconos D285, negritas D283/D299, nombre real sin username de demo, campana con cantidad D240, cámara nativa, múltiples mesas y Viajes/Próximos. No se copian datos ni comportamientos ilustrativos de la maqueta.
+- Sin nuevos endpoints, dependencias, pagos/garantías/wallet, fotos o impagos individuales. Preferencias de íconos, apariencia y rubros quedan para entregas posteriores.
+- Guardas de paleta actualizadas con valores exactos y procedencia D310 exclusivamente para APP; `design-mirror` y la landing se conservan. CI del PR es la suite completa oficial (D168). Publicación y pruebas visibles se registran por separado; el cierre visible requiere a Mati (D63).
+
 ## 0.245.3 — La apertura sin negro: imágenes de arranque del iPhone, la carga desde el primer cuadro y el ícono entero (D300); los viajes que no empezaron, en «Próximos» (D302) (2026-10-12)
 
 Orden AF-PANTALLA-DE-CARGA-SIN-NEGRO-20261012 (7ccecfc0…), con la adenda de la fila (2026-10-13T00:35:00Z): las dos guardas

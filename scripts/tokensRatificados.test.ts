@@ -121,12 +121,33 @@ function tokensDeLaFuente(texto: string): { tokens: Map<string, string>; sinValo
   return { tokens, sinValor };
 }
 
+/**
+ * D310 · enmienda visual APP, 2026-10-13. El paquete entregado por Mati cambia
+ * estos seis valores; no autoriza modificar la landing ni el espejo histórico.
+ * Fuente: CAMBIOS-APP-PAYME.md §0/§1, sha256
+ * 0db3c2bbd126246b67a98e8194128ee8fe99155535ba140c461344a6ffe41d22.
+ * Sombras con el navy vigente (16,30,59), conservando la guarda de migración.
+ * Se exige el valor nuevo exacto, no se omite ningún token del barrido.
+ */
+const ENMIENDA_D310_APP: Readonly<Record<string, string>> = {
+  '--action-2': '#12A5B4',
+  '--border': '#E3E9F0',
+  '--brand': '#F0703C',
+  '--danger': '#B4462F',
+  '--sh-2': '0 2px 8px rgba(16,30,59,0.06)',
+  '--teal-l': '#E4F7F8',
+};
+
+function valorRatificado(artefacto: string, token: string, historico: string): string {
+  return artefacto === 'app' ? ENMIENDA_D310_APP[token] ?? historico : historico;
+}
+
 const ARTEFACTOS = [
   { nombre: 'app', css: 'src/styles/global.css' },
   { nombre: 'landing', css: 'landing/landing.css' },
 ] as const;
 
-describe('INTEGRIDAD · los dos artefactos coinciden con el espejo ratificado', () => {
+describe('INTEGRIDAD · espejo ratificado y enmienda D310 sólo para APP', () => {
   it('🔴 el espejo tiene población: si estuviera vacío, todo lo de abajo pasaría en vacío', () => {
     expect(Object.keys(espejo.tokens).length, 'el espejo quedó sin tokens').toBeGreaterThan(20);
   });
@@ -164,11 +185,25 @@ describe('INTEGRIDAD · los dos artefactos coinciden con el espejo ratificado', 
       ).toBeGreaterThan(10);
 
       const difieren = compartidos
-        .filter(([t, r]) => css.get(t.slice(2)) !== normalizar(r.valor))
-        .map(([t, r]) => `${t}: ratificado ${r.valor} · ${a.nombre} ${css.get(t.slice(2))}`);
+        .filter(([t, r]) => css.get(t.slice(2)) !== normalizar(valorRatificado(a.nombre, t, r.valor)))
+        .map(([t, r]) => `${t}: ratificado ${valorRatificado(a.nombre, t, r.valor)} · ${a.nombre} ${css.get(t.slice(2))}`);
       expect(difieren, `divergen del sistema de diseño:\n  ${difieren.join('\n  ')}`).toEqual([]);
     });
   }
+
+  it('D310 tiene seis deltas explícitos, todos presentes; la landing conserva su propia referencia', () => {
+    const app = tokensDeCss('src/styles/global.css');
+    expect(Object.keys(ENMIENDA_D310_APP)).toHaveLength(6);
+    for (const [token, valor] of Object.entries(ENMIENDA_D310_APP)) {
+      const historico = espejo.tokens[token];
+      expect(historico, token).toBeDefined();
+      expect(normalizar(valor), token).not.toBe(normalizar(historico!.valor));
+      expect(app.get(token.slice(2)), token).toBe(normalizar(valor));
+      expect(valorRatificado('landing', token, historico!.valor), token).toBe(historico!.valor);
+    }
+    // Un token fuera de la enmienda no obtiene una excepción por ser APP.
+    expect(valorRatificado('app', '--text', '#101E3B')).toBe('#101E3B');
+  });
 
   /**
    * 🔴 La landing declara MENOS tokens que la app, y eso está bien: copia sólo

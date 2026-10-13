@@ -227,7 +227,7 @@ test.describe('D240 punto 5 · la campana con el número', () => {
       await inicioConAvisos(page, n);
       const burbuja = campana(page).locator('.hdr-badge');
       await expect(burbuja).toHaveText(texto);
-      await expect(burbuja).toHaveCSS('background-color', 'rgb(180, 35, 24)');
+      await expect(burbuja).toHaveCSS('background-color', 'rgb(180, 70, 47)');
       await expect(burbuja).toHaveCSS('color', 'rgb(255, 255, 255)');
       // El número SE VE: el punto de antes tenía el texto con font-size 0.
       await expect(burbuja).toHaveCSS('font-size', '11px');
@@ -251,7 +251,7 @@ test.describe('D240 punto 5 · la campana con el número', () => {
     await irEnLaApp(page, '/mesas');
     await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
     await expect(campana(page).locator('.hdr-badge')).toHaveText('3');
-    await expect(campana(page).locator('.hdr-badge')).toHaveCSS('background-color', 'rgb(180, 35, 24)');
+    await expect(campana(page).locator('.hdr-badge')).toHaveCSS('background-color', 'rgb(180, 70, 47)');
     await expect(campana(page)).toHaveAccessibleName('Avisos, 3 sin leer');
     await capturar(page, '05-campana-mesas');
 
@@ -394,7 +394,7 @@ test.describe('D240 puntos 12 y 13 · Configuración', () => {
     await page.locator('.scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
     const salir = page.getByRole('button', { name: 'Cerrar sesión', exact: true });
     await expect(salir).toHaveCSS('background-color', 'rgb(254, 242, 242)');
-    await expect(salir).toHaveCSS('color', 'rgb(180, 35, 24)');
+    await expect(salir).toHaveCSS('color', 'rgb(180, 70, 47)');
     await expect(salir).toHaveCSS('border-top-style', 'solid');
     expect(parseFloat(await salir.evaluate((e) => getComputedStyle(e).borderTopWidth))).toBeGreaterThan(0);
     const demo = page.getByRole('button', { name: 'Reiniciar la demo', exact: true });

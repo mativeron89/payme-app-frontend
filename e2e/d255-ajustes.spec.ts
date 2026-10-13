@@ -71,7 +71,7 @@ test.describe('D255 · tramo 1', () => {
       expect([m.radioIzq, m.radioDer]).toEqual(i === 2 ? ['0px', m.radioTarjeta] : ['0px', '0px']);
       expect(m.bordeAncho).toBe('0px');
       expect(m.sombra).toContain('inset');
-      expect(m.fondo).toBe('rgb(228, 251, 252)');
+      expect(m.fondo).toBe('rgb(228, 247, 248)');
       expect(m.negrita).toEqual(['700', '700', '700']);
       // Elegir la otra la deselecciona: al volver a tocar se cierra.
       await page.locator('button.vj-lanzador').nth(i).click();
@@ -161,7 +161,7 @@ test.describe('D255 · tramo 1', () => {
     // Un poco por encima de la barra: 12 sobre el círculo.
     expect(Math.round(c.circulo.top - c.salir.bottom)).toBe(12);
     expect(c.fondoCerrar).toBe('rgb(254, 242, 242)');
-    expect(c.colorCerrar).toBe('rgb(180, 35, 24)');
+    expect(c.colorCerrar).toBe('rgb(180, 70, 47)');
   });
 
   test('🔴 8 · Configuración: agregar a un amigo lo invita en el acto; quien ya está va sin «Agregar»; «Volver» regresa al viaje', async ({ page }) => {

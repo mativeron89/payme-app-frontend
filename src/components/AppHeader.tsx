@@ -52,7 +52,7 @@ export function PayMeLogo({ size }: { size?: number }) {
   return (
     <span className="hdr-mark" style={size ? { fontSize: size } : undefined}>
       <svg className="hdr-symbol" viewBox="0 0 76 76" aria-hidden="true" focusable="false">
-        <rect width="76" height="76" rx="21" fill="#0FB5C9" />
+        <rect width="76" height="76" rx="21" fill="var(--action-2)" />
         <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B" />
         <path d="M39.5 21 L48.5 21 L57.5 38 L48.5 55 L39.5 55 L48.5 38 Z" fill="#FFFFFF" />
       </svg>

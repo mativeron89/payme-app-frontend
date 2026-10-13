@@ -106,13 +106,13 @@ describe('🔴 D285 · la clase completa, enumerada desde el código', () => {
     expect(malas).toEqual([]);
   });
 
-  it('el contenedor: blanco con borde, --sh-2, gap 12 y alineado a la izquierda; el cuadro de 48, radio 14, navy', () => {
+  it('el contenedor: blanco con borde, --sh-mounted, gap 12 y alineado a la izquierda; el cuadro de 48, radio 14, navy', () => {
     const global = CSS['/src/styles/global.css']!;
     const regla = (sel: string) => global.match(new RegExp(`\\n${sel.replace(/\./g, '\\.')} \\{([^}]*)\\}`))?.[1] ?? '';
     const tarjeta = regla('.title-card');
     for (const d of ['gap: 12px;', 'margin: -42px var(--sp-4) 0;', 'padding: 16px 18px;', 'min-height: 83px;',
       'border-radius: var(--r-lg);', 'background: var(--surface);', 'border: 1px solid var(--border);',
-      'box-shadow: var(--sh-2);', 'text-align: left;']) expect(tarjeta, d).toContain(d);
+      'box-shadow: var(--sh-mounted);', 'text-align: left;']) expect(tarjeta, d).toContain(d);
     const cuadro = regla('.title-card-cuadro');
     for (const d of ['width: 48px;', 'height: 48px;', 'border-radius: 14px;', 'background: var(--action);', 'color: var(--on-dark);']) {
       expect(cuadro, d).toContain(d);

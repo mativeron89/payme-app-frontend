@@ -58,7 +58,7 @@ const contrast = (fgToken: string, bgToken: string) =>
 describe('sistema de diseño · §1 color', () => {
   it('declara la paleta con los hex exactos del sistema', () => {
     // Marca. --brand y --brand-ink NO son intercambiables.
-    expect(token('brand')).toBe('#ff6b35')
+    expect(token('brand')).toBe('#f0703c')
     // 🔴 Enmienda del 2026-08-08: era `#0f1f3d`. Ver EXCEPCIONES_AA abajo.
     expect(token('brand-fg')).toBe('#ffffff')
     expect(token('brand-soft')).toBe('#fff0eb')
@@ -66,14 +66,14 @@ describe('sistema de diseño · §1 color', () => {
     // Acción.
     expect(token('action')).toBe('#101e3b')
     expect(token('action-fg')).toBe('#ffffff')
-    expect(token('action-2')).toBe('#0fb5c9')
+    expect(token('action-2')).toBe('#12a5b4')
     expect(token('action-2-fg')).toBe('#101e3b')
     expect(token('link')).toBe('#0a7b80')
     // Superficie y texto.
     expect(token('bg')).toBe('#f4f7fa')
     expect(token('surface')).toBe('#ffffff')
     expect(token('surface-2')).toBe('#f8fafc')
-    expect(token('border')).toBe('#e2e8f0')
+    expect(token('border')).toBe('#e3e9f0')
     expect(token('text')).toBe('#101e3b')
     expect(token('text-muted')).toBe('#5b6b82')
     expect(token('text-faint')).toBe('#7d8ca1')
@@ -84,19 +84,23 @@ describe('sistema de diseño · §1 color', () => {
     expect(token('success-tint')).toBe('#ecfdf5')
     expect(token('warning')).toBe('#92620a')
     expect(token('warning-tint')).toBe('#fffbeb')
-    expect(token('danger')).toBe('#b42318')
-    expect(token('danger-tint')).toBe('#fef2f2')
+    expect(token('danger')).toBe('#b4462f')
+    expect(token('danger-tint')).toBe('#fbe7e3')
+    expect(token('danger-l')).toBe('#fbe7e3')
+    expect(token('teal-l')).toBe('#e4f7f8')
+    expect(token('teal')).toBe(token('action-2'))
+    expect(token('orange')).toBe(token('brand'))
     expect(token('info')).toBe('#0a6c85')
     expect(token('info-tint')).toBe('#e6f6fa')
   })
 
   it('mide los ratios que el sistema declara verificados', () => {
-    // 🔴 2.84 y no 5.77 desde la enmienda del 2026-08-08. Se sigue MIDIENDO y
+    // D310: 2.96 (antes 2.84 desde la enmienda del 2026-08-08). Se sigue MIDIENDO y
     // se sigue FIJANDO: la excepción es al mínimo AA, no a la medición.
-    expect(contrast('brand-fg', 'brand')).toBeCloseTo(2.84, 1)
+    expect(contrast('brand-fg', 'brand')).toBeCloseTo(2.96, 1)
     expect(contrast('brand-ink', 'surface')).toBeCloseTo(5.18, 1)
     expect(contrast('action-fg', 'action')).toBeCloseTo(16.52, 1)
-    expect(contrast('action-2-fg', 'action-2')).toBeCloseTo(6.67, 1)
+    expect(contrast('action-2-fg', 'action-2')).toBeCloseTo(5.56, 1)
     expect(contrast('link', 'surface')).toBeCloseTo(5.05, 1)
     expect(contrast('on-dark', 'action')).toBeCloseTo(16.52, 1)
   })
@@ -135,7 +139,7 @@ describe('sistema de diseño · §1 color', () => {
   it('cada semántico pasa AA sobre su propio tinte', () => {
     expect(contrast('success', 'success-tint')).toBeCloseTo(5.21, 1)
     expect(contrast('warning', 'warning-tint')).toBeCloseTo(5.1, 1)
-    expect(contrast('danger', 'danger-tint')).toBeCloseTo(6.01, 1)
+    expect(contrast('danger', 'danger-tint')).toBeCloseTo(4.57, 1)
     expect(contrast('info', 'info-tint')).toBeCloseTo(5.41, 1)
     for (const s of ['success', 'warning', 'danger', 'info']) {
       expect(contrast(s, `${s}-tint`)).toBeGreaterThanOrEqual(4.5)
@@ -177,10 +181,11 @@ describe('sistema de diseño · §1 color', () => {
    * anterior describía un color que la app ya no usa.
    *
    * Cotejo del instrumento: el sistema publica 15.19:1 para navy y 5.04:1 para
-   * `--text-muted` sobre este celeste, y acá dan 15.19 y 5.04.
+   * `--text-muted` sobre el celeste histórico. D310 cambia el fondo a
+   * #E4F7F8: se vuelve a medir y se mantiene el mínimo AA abajo.
    */
   it('la advertencia del total pasa AA sobre el celeste de la tarjeta', () => {
-    expect(contrast('warning', 'teal-l')).toBeCloseTo(4.91, 1)
+    expect(contrast('warning', 'teal-l')).toBeCloseTo(4.78, 1)
     expect(contrast('warning', 'teal-l')).toBeGreaterThanOrEqual(4.5)
     // Y el texto normal de la misma tarjeta, que comparte fondo.
     expect(contrast('text-muted', 'teal-l')).toBeGreaterThanOrEqual(4.5)
@@ -217,7 +222,7 @@ describe('sistema de diseño · §1 color', () => {
     {
       fg: 'brand-fg',
       bg: 'brand',
-      ratio: 2.84,
+      ratio: 2.96, // D310 · #F0703C, mejora el 2.84 previo; mismo riesgo, no AA.
       minimo: 4.5,
       fecha: '2026-08-08',
       decide: 'Mati',
@@ -268,9 +273,9 @@ describe('sistema de diseño · §1 color', () => {
     })
 
     it('el cian --action-2 como TEXTO sobre blanco reprueba: por eso existe --link', () => {
-      // 2.48 con el cian nuevo `#0fb5c9`; era 2.19 con el teal viejo. **Sube y
+      // D310: 2.97 con el cian `#12a5b4`; antes daba 2.48. **Sube y
       // sigue reprobando** — la prohibición no depende de cuánto reprueba.
-      expect(contrast('action-2', 'surface')).toBeCloseTo(2.48, 1)
+      expect(contrast('action-2', 'surface')).toBeCloseTo(2.97, 1)
       expect(contrast('link', 'surface')).toBeGreaterThanOrEqual(4.5)
     })
 
@@ -330,10 +335,12 @@ describe('sistema de diseño · §3 espaciado, radios y elevación', () => {
     expect(token('r-full')).toBe('9999px')
   })
 
-  it('declara las tres elevaciones', () => {
+  it('declara las elevaciones generales y las del sistema compartido', () => {
     expect(token('sh-1')).toBe('0 1px 2px rgba(16, 30, 59, 0.06)')
-    expect(token('sh-2')).toBe('0 2px 8px rgba(16, 30, 59, 0.08)')
+    expect(token('sh-2')).toBe('0 2px 8px rgba(16, 30, 59, 0.06)')
     expect(token('sh-3')).toBe('0 8px 24px rgba(16, 30, 59, 0.1)')
+    expect(token('sh-mounted')).toBe('0 4px 16px rgba(16, 30, 59, 0.1)')
+    expect(token('sh-fab')).toBe('0 6px 16px rgba(240, 112, 60, 0.34)')
   })
 
   it('el área táctil mínima de la app es 44px, sin excepción', () => {

@@ -75,7 +75,7 @@ for (const ancho of [375, 390] as const) {
       expect([m.texto, m.svg]).toEqual(['', 1]);
       // La línea: 1 px en --border (#E2E8F0), a todo el alto, pegada al cuadrado.
       expect(m.divisor.width).toBe(1);
-      expect(m.divisor.color).toBe('rgb(226, 232, 240)');
+      expect(m.divisor.color).toBe('rgb(227, 233, 240)');
       expect(m.divisor.top).toBeCloseTo(m.boton.top, 0);
       expect(m.divisor.bottom).toBeCloseTo(m.boton.bottom, 0);
       expect(m.divisor.right).toBeCloseTo(m.boton.left, 0);

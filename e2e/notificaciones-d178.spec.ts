@@ -102,7 +102,7 @@ test.describe('D178 · Notificaciones rediseñadas', () => {
     await expect(acciones(page).locator('.avisos-resumen')).toHaveText('2 sin leer');
     await expect(page.getByRole('img', { name: 'Sin leer' })).toHaveCount(2);
     // Principal: píldora teal (--teal-l / --teal-txt). Secundaria: gris, sin fondo.
-    await expect(marcar(page)).toHaveCSS('background-color', 'rgb(228, 251, 252)');
+    await expect(marcar(page)).toHaveCSS('background-color', 'rgb(228, 247, 248)');
     await expect(marcar(page)).toHaveCSS('color', 'rgb(10, 123, 128)');
     await expect(borrarTodas(page)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await expect(borrarTodas(page)).toHaveCSS('color', 'rgb(91, 107, 130)');

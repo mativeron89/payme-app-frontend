@@ -86,7 +86,7 @@ for (const ancho of [375, 390]) {
       const cancun = burbuja(page, 'Cancún 2026');
       await expect(cancun).toHaveAttribute('aria-label', 'Cancún 2026, debes $542');
       await expect(cancun).toHaveText(`CCancún 2026${MENOS}$542`);
-      await expect(cancun.locator('.viaje-burbuja-monto')).toHaveCSS('color', 'rgb(180, 35, 24)');
+      await expect(cancun.locator('.viaje-burbuja-monto')).toHaveCSS('color', 'rgb(180, 70, 47)');
       const monterrey = burbuja(page, 'Monterrey fin de semana');
       await expect(monterrey).toHaveAttribute('aria-label', /^Monterrey fin de semana, te deben \$[\d,.]+$/);
       await expect(monterrey.locator('.viaje-burbuja-monto')).toHaveCSS('color', 'rgb(4, 120, 87)');

@@ -111,7 +111,7 @@ test.describe('D239 · el gesto', () => {
     await deslizar(page, tarjeta, -120);
     await expect(abierta(tarjeta)).toHaveCount(1);
     await expect(eliminar).toHaveText('Eliminar');
-    await expect(eliminar).toHaveCSS('background-color', 'rgb(180, 35, 24)');
+    await expect(eliminar).toHaveCSS('background-color', 'rgb(180, 70, 47)');
     await expect(eliminar).toHaveCSS('color', 'rgb(255, 255, 255)');
     await expect(eliminar).toHaveCSS('opacity', '1');
     await expect(eliminar).toBeInViewport({ ratio: 1 });

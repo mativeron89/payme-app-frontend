@@ -104,7 +104,7 @@ for (const ancho of [375, 390] as const) {
       // D293 · el radio de su vecina, «Ver balance del viaje»: 22. (D297: «Configuración» pasó al engranaje de la tarjeta.)
       const vecinas = await page.locator('.vjv-ver-balance').evaluateAll((xs) => xs.map((x) => getComputedStyle(x).borderRadius));
       expect(vecinas).toEqual(['22px']);
-      expect(m).toMatchObject({ alto: 56, radio: '22px', color: 'rgb(10, 123, 128)', punto: 'rgb(255, 107, 53)', anchoPunto: 8 });
+      expect(m).toMatchObject({ alto: 56, radio: '22px', color: 'rgb(10, 123, 128)', punto: 'rgb(240, 112, 60)', anchoPunto: 8 });
       expect(m.doc).toBeLessThanOrEqual(ancho);
       await fila(page).click();
       await expect(page).toHaveURL(new RegExp(`/viaje-notas/${CANCUN}$`));

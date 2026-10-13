@@ -40,7 +40,7 @@ async function ir(page: Page, ruta: string): Promise<void> {
 }
 
 const NAVY = 'rgb(16, 30, 59)';
-const NARANJA = 'rgb(255, 107, 53)';
+const NARANJA = 'rgb(240, 112, 60)';
 const TURQUESA = 'rgb(15, 118, 110)';
 
 interface Esperado {
@@ -86,14 +86,14 @@ async function medir(page: Page, fila: string, tarjeta: Locator, e: Esperado) {
       } : null,
     };
   });
-  // El contenedor (D285): blanco, borde, radio 22, -42 sobre la cabecera, padding 16 18, alto mínimo 83, sombra --sh-2.
+  // El contenedor (D285): blanco, borde, radio 22, -42 sobre la cabecera, padding 16 18, alto mínimo 83, sombra --sh-mounted (D310).
   expect(m.fondo, fila).toBe('rgb(255, 255, 255)');
-  expect(m.borde, fila).toBe('1px solid rgb(226, 232, 240)');
+  expect(m.borde, fila).toBe('1px solid rgb(227, 233, 240)');
   expect(m.radio, fila).toBe('22px');
   expect(m.margen, fila).toEqual(['-42px', '16px', '16px']);
   expect(m.padding, fila).toEqual(['16px', '18px', '16px', '18px']);
   expect(m.minAlto, fila).toBe('83px');
-  expect(m.sombra, fila).toBe('rgba(16, 30, 59, 0.08) 0px 2px 8px 0px');
+  expect(m.sombra, fila).toBe('rgba(16, 30, 59, 0.1) 0px 4px 16px 0px');
   // El cuadro: 48 × 48, radio 14, a la izquierda (pegado al padding), con su ícono.
   expect(m.cuadro, fila).not.toBeNull();
   expect([m.cuadro!.w, m.cuadro!.h, m.cuadro!.radio], fila).toEqual([48, 48, '14px']);
@@ -215,7 +215,7 @@ test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ 
   await medir(page, '06', tarjeta(page), ESPERADO['06']!);
   // La barra a todo el ancho de la tarjeta (menos el padding y el borde) y, debajo, el reloj en --brand-ink.
   const barra = (await pieza(tarjeta(page), '.mi-progress'))!;
-  expect([barra.izquierda, barra.alto, barra.fondo, barra.abajoDelCuadro]).toEqual([0, 8, 'rgb(226, 232, 240)', true]);
+  expect([barra.izquierda, barra.alto, barra.fondo, barra.abajoDelCuadro]).toEqual([0, 8, 'rgb(227, 233, 240)', true]);
   expect(barra.ancho).toBeCloseTo(barra.anchoTarjeta - 2 * 18 - 2, 0);
   const reloj = (await pieza(tarjeta(page), '.mi-count'))!;
   expect([reloj.color, reloj.peso]).toEqual(['rgb(194, 65, 12)', '700']);
@@ -295,7 +295,7 @@ test('viajes · esperando pagos y no disponible', async ({ page }) => {
   // El chip «Esperando pagos · faltan {n}»: celeste con el texto teal 14/700, debajo de la fila y a la izquierda.
   const chip = (await pieza(tarjeta(page), '.vjv-titulo-chip'))!;
   expect([chip.izquierda, chip.fondo, chip.color, chip.tamano, chip.peso, chip.radio, chip.abajoDelCuadro])
-    .toEqual([0, 'rgb(228, 251, 252)', 'rgb(10, 123, 128)', '14px', '700', '9999px', true]);
+    .toEqual([0, 'rgb(228, 247, 248)', 'rgb(10, 123, 128)', '14px', '700', '9999px', true]);
   await expect(tarjeta(page).locator('.vjv-titulo-chip')).toHaveText(/^Esperando pagos · faltan \d+$/);
   await ir(page, `/viaje/${NO_EXISTE}`);
   await expect(page.getByRole('heading', { name: 'Viajes', exact: true })).toBeVisible();
@@ -333,7 +333,7 @@ test('viajes · ticket del viaje y ticket no disponible', async ({ page }) => {
     const cs = getComputedStyle(n);
     return [r.width, r.height, cs.borderTopLeftRadius, cs.backgroundColor];
   }));
-  expect(siluetas).toEqual([[170, 16, '8px', 'rgb(226, 232, 240)'], [110, 12, '6px', 'rgb(226, 232, 240)']]);
+  expect(siluetas).toEqual([[170, 16, '8px', 'rgb(227, 233, 240)'], [110, 12, '6px', 'rgb(227, 233, 240)']]);
   await expect(tarjeta(page).locator('h1')).toHaveCount(0);
 });
 

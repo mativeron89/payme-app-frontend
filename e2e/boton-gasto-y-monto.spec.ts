@@ -129,7 +129,7 @@ for (const ancho of [375, 390]) {
       expect(Math.round(m.d!.height)).toBe(Math.round(m.t.height - 2));
       expect(Math.round(m.d!.left - m.b.right)).toBe(0);
       expect(Math.round(m.g!.left - m.d!.right)).toBe(0);
-      expect(m.divisorColor).toBe('rgb(226, 232, 240)');
+      expect(m.divisorColor).toBe('rgb(227, 233, 240)');
       expect(m.tocaB).toBe(true);
       expect(m.tocaG).toBe(true);
       // La tarjeta conserva lo de la burbuja: 16 a los costados, 96 de alto como mínimo, sin desborde.
@@ -204,7 +204,7 @@ for (const ancho of [375, 390]) {
       expect(debes.familia).toMatch(/Plus Jakarta Sans/);
       expect(debes.blanco).toBe('nowrap');
       expect(debes.lineas).toBe(1);
-      expect(debes.color).toBe('rgb(180, 35, 24)');
+      expect(debes.color).toBe('rgb(180, 70, 47)');
       const teDeben = await medirMonto(page, 'Monterrey fin de semana');
       expect(teDeben.fontSize).toBe(26);
       expect(teDeben.color).toBe('rgb(4, 120, 87)');
