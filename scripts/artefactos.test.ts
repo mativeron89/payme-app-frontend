@@ -96,6 +96,20 @@ const BINARIOS_AUTORIZADOS = [
   { patron: /^icon-192\.png$/, sha: '2bbda5a2b1c9b1785cff8fe96bbf8cc7c6e34be5648c1bb645fbdf70564f59d1' },
   { patron: /^icon-512\.png$/, sha: '6c128e4bb487ee0392378aaf65a79ae66e0fb81889151bb26f2acabac4d1df6e' },
   { patron: /^icon-maskable-512\.png$/, sha: '20b93e43d43659843653d5d25eca5c29cb4333786fb58edea3c06a8c2ac3d203' },
+  // D300 (adenda del Bibliotecario, 2026-10-13T00:35:00Z) · las imágenes de arranque del iPhone, una por tamaño. Las
+  // dibuja `scripts/imagenes-de-arranque.mjs` desde `index.html`, así que el repo es su upstream; el SHA-256 es el MEDIDO
+  // de lo que escribió el generador.
+  { patron: /^arranque-750x1334\.png$/, sha: 'f0816c087a1515c60f7c943e81531883f36af3eff0691985706f8c5af05021b4' },
+  { patron: /^arranque-828x1792\.png$/, sha: 'a1e72a128ba8afb4804d7143e4d46a4bcdfde1e6627fbb244ec617b44118ac6b' },
+  { patron: /^arranque-1125x2436\.png$/, sha: '96dff1becc231f9761071bef91cd0be83a726d1e3cdb26c5d97d2da4f2edf691' },
+  { patron: /^arranque-1242x2688\.png$/, sha: 'acdf613e3fc91b0ed1aa6d03304da3f0dbd1a16b0eb017d16d6daa2976d10d61' },
+  { patron: /^arranque-1170x2532\.png$/, sha: '05b8d36b00010ed9a2d8ce3a4d37029467676c3cff334cb9dfd830e94bc0ac6b' },
+  { patron: /^arranque-1284x2778\.png$/, sha: '860b1c7026ff8df05442d83a1ea66e641485cd154b97cf9a1342a5029450a3c1' },
+  { patron: /^arranque-1179x2556\.png$/, sha: '9b176f82b9d37118d8682639289f5414b1ff23302619cd28e4ff22024c1bdfa5' },
+  { patron: /^arranque-1290x2796\.png$/, sha: '705f7cc5836a42d40f4286478999e4dd7d30784380971b5c008ea7b26f415cfe' },
+  { patron: /^arranque-1206x2622\.png$/, sha: 'dd51802a6032e99f6f74dd34c43cf4fa9d75e642e94c41c1c9465616d5fa87f6' },
+  { patron: /^arranque-1320x2868\.png$/, sha: '77f9eb85ed156670ac543efcdaf83dceeca1cb294cb0cdf592d8e77f7df114c4' },
+  { patron: /^arranque-1260x2736\.png$/, sha: 'a10599a59877ac28743ebd6959693fe960edd6c91066ec3fc78b39d8006c7462' },
 ] as const;
 
 /**
@@ -436,7 +450,19 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     expect(art().texto, 'el manifest quedó fuera del barrido de egress').toContain('"scope"');
 
     const iconos = Object.keys(art().binarios).filter((r) => r.endsWith('.png')).sort();
-    expect(iconos, 'los cuatro iconos tienen que estar clasificados como binarios').toEqual([
+    expect(iconos, 'los cuatro iconos y las imágenes de arranque tienen que estar clasificados como binarios').toEqual([
+      // D300 · las imágenes de arranque del iPhone, una por tamaño.
+      'arranque/arranque-1125x2436.png',
+      'arranque/arranque-1170x2532.png',
+      'arranque/arranque-1179x2556.png',
+      'arranque/arranque-1206x2622.png',
+      'arranque/arranque-1242x2688.png',
+      'arranque/arranque-1260x2736.png',
+      'arranque/arranque-1284x2778.png',
+      'arranque/arranque-1290x2796.png',
+      'arranque/arranque-1320x2868.png',
+      'arranque/arranque-750x1334.png',
+      'arranque/arranque-828x1792.png',
       'pwa/icon-180.png',
       'pwa/icon-192.png',
       'pwa/icon-512.png',

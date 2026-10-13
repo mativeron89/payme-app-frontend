@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   MINIMO_DE_ESTE_BUILD_MS,
-  SPLASH_ENTRADA_ICONO_MS,
-  SPLASH_ENTRADA_ICONO_RETARDO_MS,
   SPLASH_MINIMO_MS,
   SPLASH_RENDICION_MS,
   demoraDeRetiro,
+  desdeElPrimerCuadro,
 } from './splash';
 
 const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx', '/src/styles/global.css'], {
@@ -25,7 +24,7 @@ const FUENTES = import.meta.glob(
 ) as Record<string, string>;
 
 describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 2026-10-12, adenda 2)', () => {
-  /** La decisión entera está en esta función: lo que falta para completar el mínimo desde que empezó a cargar. */
+  /** La decisión entera está en esta función: lo que falta para completar el mínimo desde el primer cuadro pintado. */
   it('la app monta antes del mínimo: espera lo que falta', () => {
     expect(SPLASH_MINIMO_MS).toBe(2_000);
     expect(demoraDeRetiro(0)).toBe(2_000);
@@ -43,6 +42,41 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
   it('con otro mínimo (el del servidor de la e2e: 0), se funde enseguida', () => {
     expect(demoraDeRetiro(0, 0)).toBe(0);
     expect(demoraDeRetiro(300, 0)).toBe(0);
+  });
+
+  /**
+   * 🔴 D300 · los 2 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación. Con una página que
+   * tardó 3 s en llegar y una app que monta enseguida, contarlos desde la navegación retiraba la pantalla al montar.
+   */
+  describe('🔴 D300 · desde el primer cuadro pintado', () => {
+    const fcp = (t: number) => ({ name: 'first-contentful-paint', startTime: t });
+
+    it('cuenta desde `first-contentful-paint`', () => {
+      expect(desdeElPrimerCuadro([fcp(3_100)], 3_300)).toBe(3_100);
+      // La navegación tardó 3 s y la app montó 200 ms después del primer cuadro: faltan 1,8 s, no 0.
+      expect(demoraDeRetiro(3_300 - desdeElPrimerCuadro([fcp(3_100)], 3_300))).toBe(1_800);
+      // Con la página rápida, lo mismo que antes: el primer cuadro casi al empezar.
+      expect(demoraDeRetiro(400 - desdeElPrimerCuadro([fcp(60)], 400))).toBe(1_660);
+    });
+
+    it('ignora otras entradas: `first-paint` no es el cuadro del ícono', () => {
+      expect(desdeElPrimerCuadro([{ name: 'first-paint', startTime: 50 }, fcp(90)], 400)).toBe(90);
+      expect(desdeElPrimerCuadro([{ name: 'first-paint', startTime: 50 }], 400)).toBe(400);
+    });
+
+    it('🔴 sin la entrada (aún no se pintó, o el navegador no la tiene): desde ahora, el mínimo entero', () => {
+      expect(desdeElPrimerCuadro([], 3_300)).toBe(3_300);
+      expect(demoraDeRetiro(3_300 - desdeElPrimerCuadro([], 3_300))).toBe(SPLASH_MINIMO_MS);
+    });
+
+    it('nunca desde después de ahora: la demora no pasa del mínimo', () => {
+      expect(desdeElPrimerCuadro([fcp(5_000)], 3_300)).toBe(3_300);
+      expect(demoraDeRetiro(3_300 - desdeElPrimerCuadro([fcp(5_000)], 3_300))).toBe(SPLASH_MINIMO_MS);
+    });
+
+    it('la app tardó más que el mínimo desde el primer cuadro: se funde enseguida', () => {
+      expect(demoraDeRetiro(6_000 - desdeElPrimerCuadro([fcp(3_100)], 6_000))).toBe(0);
+    });
   });
 
   it('🔴 en este build (sin la marca), el mínimo son los 2 s', () => {
@@ -88,14 +122,8 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
     expect(INDEX).not.toMatch(/splash-aparecer/);
   });
 
-  /** 🔴 EL DRIFT ENTRE LAS DOS COPIAS: los tiempos del CSS y los de `splash.ts` son EL MISMO número. */
-  it('🔴 la entrada del ícono y la rendición del CSS son las de splash.ts', () => {
-    const icono = INDEX.match(/animation: carga-entra (\d+)ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) (\d+)ms both;/);
-    expect(icono, 'index.html perdió la entrada del ícono').not.toBeNull();
-    expect(Number(icono![1])).toBe(SPLASH_ENTRADA_ICONO_MS);
-    expect(Number(icono![2])).toBe(SPLASH_ENTRADA_ICONO_RETARDO_MS);
-    expect(SPLASH_ENTRADA_ICONO_MS).toBe(240);
-    expect(SPLASH_ENTRADA_ICONO_RETARDO_MS).toBe(0);
+  /** 🔴 EL DRIFT ENTRE LAS DOS COPIAS: la rendición del CSS y la de `splash.ts` son EL MISMO número. */
+  it('🔴 la rendición del CSS es la de splash.ts', () => {
     const rendicion = INDEX.match(/splash-rendirse\s+\d+ms\s+ease\s+(\d+)s\s+forwards/);
     expect(rendicion).not.toBeNull();
     expect(Number(rendicion![1]) * 1000).toBe(SPLASH_RENDICION_MS);
@@ -170,14 +198,19 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
       expect(splash.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim()).toBe('');
     });
 
-    it('🔴 el ícono entra en 240 ms desde que aparece la pantalla (D292: sin retardo) y, con «reducir movimiento», sin animación', () => {
-      const conMovimiento = INDEX.match(/@media \(prefers-reduced-motion: no-preference\)\s*{\s*#splash \.carga__icono\s*{\s*animation: carga-entra (\d+)ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) (\d+)ms both;/);
-      expect(conMovimiento, 'falta la entrada del ícono dentro de prefers-reduced-motion: no-preference').not.toBeNull();
-      expect(Number(conMovimiento![1])).toBe(SPLASH_ENTRADA_ICONO_MS);
-      expect(Number(conMovimiento![2])).toBe(SPLASH_ENTRADA_ICONO_RETARDO_MS);
-      // Fuera del @media, el ícono no tiene animación: con «reducir movimiento» aparece quieto.
-      expect(regla('#splash .carga__icono')).not.toContain('animation');
-      expect(INDEX).toMatch(/@keyframes carga-entra\s*{\s*from\s*{\s*opacity: 0;\s*transform: translate\(-50%, -50%\) scale\(0\.92\);\s*}\s*}/);
+    /**
+     * 🔴 D300 · el ícono aparece entero de una vez: opacidad 1 y escala 1 desde el primer cuadro, con o sin «reducir
+     * movimiento». Salió la entrada de 240 ms (nacía en opacidad 0 y escala 0,92). Se barre el `<style>` entero, sin
+     * comentarios: ninguna animación, `@keyframes` ni `@media` de movimiento, salvo la rendición de 12 s.
+     */
+    it('🔴 D300 · el ícono, entero desde el primer cuadro: sin animación, con o sin «reducir movimiento»', () => {
+      const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(estilo.length).toBeGreaterThan(500);
+      expect(regla('#splash .carga__icono')).not.toMatch(/animation|opacity|scale/);
+      expect(estilo).not.toMatch(/carga-entra|prefers-reduced-motion/);
+      expect([...estilo.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1])).toEqual(['splash-rendirse']);
+      expect([...estilo.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]!.trim())).toEqual(['splash-rendirse 400ms ease 12s forwards']);
+      expect(estilo).not.toMatch(/@media/);
     });
   });
 

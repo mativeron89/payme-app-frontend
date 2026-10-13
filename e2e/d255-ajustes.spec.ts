@@ -31,24 +31,27 @@ async function ir(page: Page, ruta: string): Promise<void> {
 const caja = async (page: Page, selector: string) => (await page.locator(selector).first().boundingBox())!;
 
 test.describe('D255 · tramo 1', () => {
-  test('🔴 2 · Viajes: lo elegido es la mitad exacta de la tarjeta, sin espacio con la otra, y en negrita', async ({ page }) => {
+  test('🔴 2 · Viajes: lo elegido llena su parte de la tarjeta, sin espacio con las otras, y en negrita', async ({ page }) => {
     await conViajes(page);
     await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
-    // D266 · se elige sólo «Cerrados» (la segunda): «Crear viaje» abre el alta y no lleva `aria-pressed`.
+    // D266 · «Crear viaje» abre el alta y no lleva `aria-pressed`. D302 · se eligen «Próximos» (la del medio) y
+    // «Cerrados» (la última).
     await expect(page.locator('button.vj-lanzador').nth(0)).not.toHaveAttribute('aria-pressed', /.*/);
-    for (const i of [1]) {
+    for (const i of [1, 2]) {
       await page.locator('button.vj-lanzador').nth(i).click();
       await expect(page.locator('button.vj-lanzador').nth(i)).toHaveAttribute('aria-pressed', 'true');
       const m = await page.evaluate((elegido) => {
         const tarjeta = document.querySelector('.mounted-card')!.getBoundingClientRect();
-        const [a, b] = [...document.querySelectorAll('button.vj-lanzador')].map((x) => x.getBoundingClientRect());
+        const [a, b, c] = [...document.querySelectorAll('button.vj-lanzador')].map((x) => x.getBoundingClientRect());
         const e = document.querySelectorAll('button.vj-lanzador')[elegido]!;
         const cs = getComputedStyle(e);
         return {
           tarjeta: { izq: tarjeta.left, der: tarjeta.right, abajo: tarjeta.bottom, arriba: tarjeta.top },
           a: { izq: a!.left, der: a!.right, arriba: a!.top, abajo: a!.bottom },
           b: { izq: b!.left, der: b!.right, arriba: b!.top, abajo: b!.bottom },
-          radioAbajo: elegido === 0 ? cs.borderBottomLeftRadius : cs.borderBottomRightRadius,
+          c: { izq: c!.left, der: c!.right, arriba: c!.top, abajo: c!.bottom },
+          radioIzq: cs.borderBottomLeftRadius,
+          radioDer: cs.borderBottomRightRadius,
           radioTarjeta: getComputedStyle(document.querySelector('.mounted-card')!).borderBottomLeftRadius,
           bordeAncho: cs.borderTopWidth,
           sombra: cs.boxShadow,
@@ -56,18 +59,22 @@ test.describe('D255 · tramo 1', () => {
           negrita: [...document.querySelectorAll('.vj-lanzador .launch-label')].map((x) => getComputedStyle(x).fontWeight),
         };
       }, i);
-      // Sin espacio entre las dos, y cada una llega a los bordes de la tarjeta.
+      // Sin espacio entre las tres, y las de las puntas llegan a los bordes de la tarjeta.
       expect(m.a.der).toBe(m.b.izq);
+      expect(m.b.der).toBe(m.c.izq);
       expect(m.a.izq).toBe(m.tarjeta.izq);
-      expect(m.b.der).toBe(m.tarjeta.der);
+      expect(m.c.der).toBe(m.tarjeta.der);
       expect(m.a.abajo).toBe(m.tarjeta.abajo);
       expect(m.a.arriba).toBe(m.tarjeta.arriba);
-      // El recuadro sigue la esquina de la tarjeta, sin borde propio.
-      expect(m.radioAbajo).toBe(m.radioTarjeta);
+      // El recuadro sigue la esquina de la tarjeta (la última, la de abajo a la derecha; la del medio no tiene esquina),
+      // sin borde propio.
+      expect([m.radioIzq, m.radioDer]).toEqual(i === 2 ? ['0px', m.radioTarjeta] : ['0px', '0px']);
       expect(m.bordeAncho).toBe('0px');
       expect(m.sombra).toContain('inset');
       expect(m.fondo).toBe('rgb(228, 251, 252)');
-      expect(m.negrita).toEqual(['700', '700']);
+      expect(m.negrita).toEqual(['700', '700', '700']);
+      // Elegir la otra la deselecciona: al volver a tocar se cierra.
+      await page.locator('button.vj-lanzador').nth(i).click();
     }
   });
 

@@ -22,6 +22,11 @@ import './inicio.css';
  * burbuja lleva sólo su ícono y su palabra.
  * Los abiertos están en la pantalla principal (D265): la pestaña ya no los pide.
  * «Crear viaje» es uno solo: salieron la fila aparte y el vacío con su botón.
+ *
+ * D302 · un tercer lanzador, «Próximos», entre «Crear viaje» y «Cerrados», con
+ * el mismo formato: muestra u oculta debajo los viajes que todavía no empezaron,
+ * del más cercano al más lejano (`proximos.ts`). Son abiertos: salen de la
+ * misma lista que Inicio ya pide, sin otra llamada.
  */
 
 export type ConteoDeViajes =
@@ -71,6 +76,8 @@ export function useCerradosDeViajes(activa: boolean): {
   conteo: ConteoDeViajes;
   abierta: boolean;
   alternar: () => void;
+  /** D302 · la oculta (al abrir «Próximos»). */
+  cerrar: () => void;
   reintentar: () => void;
 } {
   const [conteo, setConteo] = useState<ConteoDeViajes>({ estado: 'cargando' });
@@ -89,7 +96,8 @@ export function useCerradosDeViajes(activa: boolean): {
     consulta.current!.pedir();
   }, []);
   const alternar = useCallback(() => setAbierta((a) => !a), []);
-  return { conteo, abierta, alternar, reintentar };
+  const cerrar = useCallback(() => setAbierta(false), []);
+  return { conteo, abierta, alternar, cerrar, reintentar };
 }
 
 function Lanzador({ icon, label, onClick, elegido }: {
@@ -112,9 +120,11 @@ function Lanzador({ icon, label, onClick, elegido }: {
   );
 }
 
-/** El contenido de la tarjeta montada bajo la pestaña: «Crear viaje» y «Cerrados». */
-export function PanelViajes({ conteo, cerradosAbierta, onCerrados, onReintentar }: {
+/** El contenido de la tarjeta montada bajo la pestaña: «Crear viaje», «Próximos» (D302) y «Cerrados». */
+export function PanelViajes({ conteo, proximosAbierta, onProximos, cerradosAbierta, onCerrados, onReintentar }: {
   conteo: ConteoDeViajes;
+  proximosAbierta: boolean;
+  onProximos: () => void;
   cerradosAbierta: boolean;
   onCerrados: () => void;
   onReintentar: () => void;
@@ -123,6 +133,7 @@ export function PanelViajes({ conteo, cerradosAbierta, onCerrados, onReintentar 
   if (conteo.estado === 'cargando') {
     return (
       <div className="launch-pair home-tab-panel" aria-busy="true" aria-label={t('Cargando…')}>
+        <div className="launch sk"><span className="sk-line w40" /></div>
         <div className="launch sk"><span className="sk-line w40" /></div>
         <div className="launch sk"><span className="sk-line w40" /></div>
       </div>
@@ -149,6 +160,7 @@ export function PanelViajes({ conteo, cerradosAbierta, onCerrados, onReintentar 
   return (
     <div className="launch-pair home-tab-panel vj-lanzadores">
       <Lanzador icon="plus" label={t('Crear viaje')} onClick={() => navigate('viaje-nuevo')} />
+      <Lanzador icon="clock" label={t('Próximos')} elegido={proximosAbierta} onClick={onProximos} />
       <Lanzador icon="archive" label={t('Cerrados')} elegido={cerradosAbierta} onClick={onCerrados} />
     </div>
   );
@@ -181,6 +193,41 @@ export function ListaDeCerradosVista({ conteo, fotoDe = () => null }: {
       {conteo.viajes.map((v) => (
         <li key={v.id}>
           <button type="button" className="vj-inicio-fila" onClick={() => navigate('viaje-cerrado', v.id)}>
+            <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} />
+            <span className="vj-inicio-nombre">{v.nombre}</span>
+            <Icon name="chevron-down" size={18} className="vj-inicio-chev" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * 🔴 D302 · los viajes que todavía no empezaron, en una burbuja debajo de la tarjeta, como los cerrados (D255-6: la
+ * inicial o la foto, y el nombre). Tocar uno entra al viaje: es un viaje abierto. `null`: la lista de abiertos todavía no
+ * llegó o falló (el error ya está en Inicio, con su «Reintentar»), y no se afirma «no tienes» sin haberla leído.
+ */
+export function ListaDeProximos({ viajes }: { viajes: readonly ViajeEnLista[] | null }) {
+  const { fotoDe } = useFotosDeViajes(viajes);
+  return <ListaDeProximosVista viajes={viajes} fotoDe={fotoDe} />;
+}
+
+/** La vista pura de los próximos. */
+export function ListaDeProximosVista({ viajes, fotoDe = () => null }: {
+  viajes: readonly ViajeEnLista[] | null;
+  fotoDe?: (viajeId: string) => string | null;
+}) {
+  const { t } = useIdioma();
+  if (viajes === null) return null;
+  if (viajes.length === 0) {
+    return <div className="vj-card vj-inicio-lista vj-inicio-lista-vacia">{t('No tienes viajes próximos')}</div>;
+  }
+  return (
+    <ul className="vj-card vj-inicio-lista" aria-label={t('Viajes próximos')}>
+      {viajes.map((v) => (
+        <li key={v.id}>
+          <button type="button" className="vj-inicio-fila" onClick={() => navigate('viaje', v.id)}>
             <InsigniaDelViaje nombre={v.nombre} color={v.color} foto={v.has_photo ? fotoDe(v.id) : null} />
             <span className="vj-inicio-nombre">{v.nombre}</span>
             <Icon name="chevron-down" size={18} className="vj-inicio-chev" />

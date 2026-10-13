@@ -146,7 +146,8 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
   ] as const) {
     test(`🔴 bordes con la fecha LOCAL: ${caso}`, async ({ page }) => {
       await entrar(page, instante);
-      await expect(burbuja(page, 'Cancún 2026')).toBeVisible();
+      // La lista de abiertos llegó. D302 · Monterrey (esperando pagos) está siempre en Inicio; Cancún, sólo desde el 5.
+      await expect(burbuja(page, 'Monterrey fin de semana')).toBeVisible();
       if (adentro) {
         await expect(alViaje(page)).toBeVisible();
       } else {
@@ -170,7 +171,9 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
   test('🔴 esperando pagos no cuenta, aunque sus fechas cubran hoy', async ({ page }) => {
     // Solo: «Monterrey fin de semana» (19 al 21 de septiembre) espera pagos. La cámara de siempre.
     await entrar(page, mx('2026-09-20T12:00:00'));
-    await expect(burbuja(page, 'Cancún 2026')).toBeVisible();
+    // D302 · el 20 de septiembre Cancún todavía no empezó: no está en Inicio. Monterrey sí.
+    await expect(burbuja(page, 'Monterrey fin de semana')).toBeVisible();
+    await expect(burbuja(page, 'Cancún 2026')).toHaveCount(0);
     await expect(circulo(page)).toHaveAccessibleName('Nueva');
     await circulo(page).click();
     await expect(page).toHaveURL(/\/scan$/);

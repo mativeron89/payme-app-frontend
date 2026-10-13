@@ -40,17 +40,38 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PayMe" />
+    <!-- D300 · las imágenes de arranque del iPhone: con la app instalada, iOS
+         muestra la que coincide con el tamaño del teléfono hasta que la página
+         pinta. Sin ellas, la apertura se veía en negro antes de la pantalla de
+         carga. Cada una ES la pantalla de carga de abajo (D286), dibujada por
+         `scripts/imagenes-de-arranque.mjs` desde este archivo, con la franja de
+         la barra de estado de ese iPhone: del arranque a la página no cambia
+         nada. Una por tamaño, en vertical. La guarda vive en
+         `src/arranque/imagenesDeArranque.test.ts`. -->
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/arranque/arranque-750x1334.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/arranque/arranque-828x1792.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1125x2436.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1242x2688.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1170x2532.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1284x2778.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1179x2556.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1290x2796.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1206x2622.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1320x2868.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/arranque/arranque-1260x2736.png" />
     <!-- Las tipografías se sirven desde este repo. Acá había tres etiquetas a
          Google (dos preconnect y una hoja de estilos): se retiraron en
          `D-FUENTES-1` y NO se vuelven a poner. El `@font-face` vive en
          `src/styles/global.css`, junto al resto del sistema. -->
     <style>
       /* Splash de carga · D292 (Mati, 2026-10-12, «Siempre al abrir
-         (Recomendada)», con la adenda «Hagamoslo de un segundo mejor»): aparece
-         en cada apertura o recarga, también por un link o un QR de mesa, desde
-         el primer cuadro, y queda al menos 1 s (lo cuenta `src/splash.ts` desde
-         que empezó a cargar la página). Reemplaza «B sólo cuando tarda»
-         (2026-08-19), que lo mostraba sólo si la app tardaba más de 300 ms.
+         (Recomendada)», con la adenda 2 «Aumenta a dos segundos el icono de
+         carga inicial»): aparece en cada apertura o recarga, también por un
+         link o un QR de mesa, desde el primer cuadro, y queda al menos 2 s.
+         D300: los 2 s se cuentan desde el primer cuadro pintado, no desde que
+         empezó la navegación (lo cuenta `src/splash.ts`). Reemplaza «B sólo
+         cuando tarda» (2026-08-19), que lo mostraba sólo si la app tardaba
+         más de 300 ms.
 
          Vive acá, inline, a propósito: es lo ÚNICO que pinta ANTES de que
          cargue el grafo de módulos — si viviera en global.css llegaría junto
@@ -59,8 +80,8 @@
          Los tiempos (espejados en `src/splash.ts`, y hay un test que impide que
          las dos copias se separen):
          · se ve desde el primer cuadro: sin retardo y sin fundido de entrada;
-         · el ícono entra en 240 ms desde que aparece (con «reducir
-           movimiento», quieto);
+         · D300: el ícono, entero desde el primer cuadro (sin la entrada de
+           240 ms que tenía), con o sin «reducir movimiento»;
          · 12 s de rendición — si el grafo de módulos muere (ya pasó:
            ERR_NETWORK_CHANGED, 2026-08-10), el splash se retira solo en vez
            de quedar eterno tapando una app muerta con cara de viva. Vuelve
@@ -121,8 +142,9 @@
         background: linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%);
       }
       /* El ícono: 128 × 128 fijo (igual de 375 a 430), centrado en el punto de
-         encuentro. Entra en 240 ms desde que aparece la pantalla (retardo 0:
-         D292); con «reducir movimiento», sin animación. */
+         encuentro. D300: aparece entero desde el primer cuadro, sin animación;
+         es el mismo cuadro que las imágenes de arranque del iPhone
+         (`public/arranque/`), así que del arranque a la página no cambia. */
       #splash .carga__icono {
         position: absolute;
         left: 50%;
@@ -130,14 +152,6 @@
         width: 128px;
         height: 128px;
         transform: translate(-50%, -50%);
-      }
-      @media (prefers-reduced-motion: no-preference) {
-        #splash .carga__icono {
-          animation: carga-entra 240ms cubic-bezier(0.2, 0.8, 0.2, 1) 0ms both;
-        }
-      }
-      @keyframes carga-entra {
-        from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
       }
       @keyframes splash-rendirse {
         to { opacity: 0; visibility: hidden; }

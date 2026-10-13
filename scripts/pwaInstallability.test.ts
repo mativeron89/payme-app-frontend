@@ -312,7 +312,7 @@ const htmlCrudo = (): string => readFileSync(join(RAIZ, 'index.html'), 'utf8');
 const htmlEfectivo = (): string => htmlCrudo().replace(/<!--[\s\S]*?-->/g, '');
 
 describe('index.html enlaza la instalación sin cambiar la superficie autenticada', () => {
-  it('🔴 censo de `<link>`: favicon, manifest y apple-touch-icon — exactamente', () => {
+  it('🔴 censo de `<link>`: favicon, manifest, apple-touch-icon y las imágenes de arranque — exactamente', () => {
     const links = [...htmlEfectivo().matchAll(/<link\b[^>]*>/g)].map((m) => m[0]);
     const atributo = (tag: string, nombre: string): string | undefined =>
       tag.match(new RegExp(`${nombre}="([^"]*)"`))?.[1];
@@ -320,6 +320,19 @@ describe('index.html enlaza la instalación sin cambiar la superficie autenticad
       ['icon', '/favicon.svg'],
       ['manifest', '/manifest.webmanifest'],
       ['apple-touch-icon', '/pwa/icon-180.png'],
+      // D300 (adenda del Bibliotecario, 2026-10-13T00:35:00Z) · una imagen de arranque del iPhone por tamaño. Su
+      // `media`, su tamaño y que sea la pantalla de carga los fija `src/arranque/imagenesDeArranque.test.ts`.
+      ['apple-touch-startup-image', '/arranque/arranque-750x1334.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-828x1792.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1125x2436.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1242x2688.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1170x2532.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1284x2778.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1179x2556.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1290x2796.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1206x2622.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1320x2868.png'],
+      ['apple-touch-startup-image', '/arranque/arranque-1260x2736.png'],
     ]);
   });
 

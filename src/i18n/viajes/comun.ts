@@ -24,6 +24,10 @@ export const EN_VIAJES_COMUN: Record<string, string> = {
   'No pudimos cargar tus viajes': "We couldn't load your trips",
   // D246 · la lista elegida en Inicio › Viajes.
   'No tienes viajes cerrados': "You don't have closed trips",
+  // D302 · los viajes que todavía no empezaron, en Inicio › Viajes.
+  'Próximos': 'Upcoming',
+  'Viajes próximos': 'Upcoming trips',
+  'No tienes viajes próximos': "You don't have upcoming trips",
   'Crea uno, suma a tus amigos y escaneen los tickets del viaje. PayMe va calculando quién le debe a quién.':
     'Create one, add your friends and scan the trip receipts. PayMe keeps track of who owes whom.',
   // D265 · D275 · cada viaje abierto en Inicio: foto, nombre y monto; lo que oye el lector de pantalla.

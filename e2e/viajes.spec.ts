@@ -61,7 +61,8 @@ test('1a · D266 · Inicio: «Viajes» reemplaza a «Asociadas»; «Crear viaje�
   // D274 · «Cerrados», sin la cantidad.
   const cerrados = page.getByRole('button', { name: 'Cerrados', exact: true });
   // Sin «Abiertos» ni un segundo «Crear viaje»: los abiertos están en la pantalla principal (D265).
-  await expect(page.locator('button.vj-lanzador')).toHaveText(['Crear viaje', 'Cerrados']);
+  // D302 · con «Próximos» entre los dos.
+  await expect(page.locator('button.vj-lanzador')).toHaveText(['Crear viaje', 'Próximos', 'Cerrados']);
   await expect(page.getByRole('button', { name: /Abiertos/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Crear viaje/ })).toHaveCount(1);
   // Al entrar, la lista de cerrados oculta; «Cerrados» la muestra.
@@ -515,8 +516,8 @@ test.describe('🔴 D274 · a 375: «Cerrados» sin la cantidad', () => {
     await conViajes(page);
     await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
     const lanzadores = page.locator('button.vj-lanzador');
-    await expect(lanzadores).toHaveText(['Crear viaje', 'Cerrados']);
-    await expect(lanzadores.nth(1).locator('.launch-sub')).toHaveCount(0);
+    await expect(lanzadores).toHaveText(['Crear viaje', 'Próximos', 'Cerrados']);
+    await expect(lanzadores.nth(2).locator('.launch-sub')).toHaveCount(0);
     await expect(page.locator('.vj-lanzadores')).not.toContainText(/\d+ viajes?/);
     const cerrados = page.getByRole('button', { name: 'Cerrados', exact: true });
     await cerrados.click();

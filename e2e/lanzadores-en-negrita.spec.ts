@@ -82,7 +82,8 @@ for (const ancho of [375, 390] as const) {
       await ingresar(page);
       await page.getByRole('tab', { name: 'Viajes', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Crear viaje', exact: true })).toBeVisible();
-      enNegrita(await lanzadores(page), ['Crear viaje', 'Cerrados'], ancho);
+      // D302 · con «Próximos» entre los dos.
+      enNegrita(await lanzadores(page), ['Crear viaje', 'Próximos', 'Cerrados'], ancho);
     });
 
     test('la misma tarjeta en Amigos: «Nuevo amigo» y, en Grupos, «Nuevo grupo»', async ({ page }) => {

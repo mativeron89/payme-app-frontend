@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
@@ -33,7 +33,8 @@ import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
 import { useViajesHabilitado, type ListaDeViajes } from '../api/viajes';
 import { inicioPideViajes, olvidarInicioEnViajes } from './viajes/inicioEnViajes';
-import { ListaDeCerrados, PanelViajes, useCerradosDeViajes } from './viajes/PestanaViajes';
+import { ListaDeCerrados, ListaDeProximos, PanelViajes, useCerradosDeViajes } from './viajes/PestanaViajes';
+import { useHoyEnMexico, viajesDeInicio, viajesProximos } from './viajes/proximos';
 import {
   hayRestaurantesPendientes, restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes,
 } from './viajes/ViajesEnInicio';
@@ -182,8 +183,22 @@ export function HomeScreen() {
     : tabElegida === 'viajes' && !conViajes ? 'asociadas' : tabElegida;
   const pestanas = conViajes ? TABS.filter((x) => x.id !== 'asociadas') : TABS;
   // D266 · la pestaña Viajes pide sólo los cerrados: los abiertos están en la pantalla principal (D265).
-  const { conteo: cerradosDeViajes, abierta: listaDeCerradosAbierta, alternar: alternarCerrados, reintentar: reintentarViajes } =
-    useCerradosDeViajes(tab === 'viajes');
+  const {
+    conteo: cerradosDeViajes, abierta: listaDeCerradosAbierta, alternar: alternarCerrados, cerrar: cerrarCerrados,
+    reintentar: reintentarViajes,
+  } = useCerradosDeViajes(tab === 'viajes');
+  // D302 · «Próximos» muestra u oculta su lista, como «Cerrados»; las dos no se abren a la vez. Al salir de la pestaña,
+  // vuelve a ocultarse.
+  const [listaDeProximosAbierta, setListaDeProximosAbierta] = useState(false);
+  useEffect(() => { if (tab !== 'viajes') setListaDeProximosAbierta(false); }, [tab]);
+  const alternarProximos = () => {
+    if (!listaDeProximosAbierta) cerrarCerrados();
+    setListaDeProximosAbierta(!listaDeProximosAbierta);
+  };
+  const alternarCerradosSolos = () => {
+    if (!listaDeCerradosAbierta) setListaDeProximosAbierta(false);
+    alternarCerrados();
+  };
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
   // D237 · lo último visto de esta cuenta, si hay: al volver a Inicio la mesa
@@ -201,6 +216,14 @@ export function HomeScreen() {
     () => ultimoVisto.leer<PendientesDeViajes>('inicio.pendientesDeViajes') ?? null,
   );
   const [viajesFallaron, setViajesFallaron] = useState(false);
+  /**
+   * 🔴 D302 · un viaje que todavía no empezó (abierto, con su «desde» después de hoy en México) no va en Inicio: ni su
+   * burbuja, ni su «+ Gasto», ni sus restaurantes pendientes, y el aviso de mesas se calcula sin él. Va en «Próximos», en
+   * la pestaña Viajes. Es la misma lista de abiertos: ninguna llamada nueva. `hoy` cambia solo a la medianoche de México.
+   */
+  const hoy = useHoyEnMexico();
+  const viajesEnInicio = useMemo(() => (viajesAbiertos ? viajesDeInicio(viajesAbiertos.viajes, hoy) : null), [viajesAbiertos, hoy]);
+  const proximos = useMemo(() => (viajesAbiertos ? viajesProximos(viajesAbiertos.viajes, hoy) : null), [viajesAbiertos, hoy]);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const unread = useSinLeer();
   // D237 · la primera carga muestra su esqueleto sólo si tarda más de 300 ms.
@@ -320,7 +343,7 @@ export function HomeScreen() {
    * o si fallaron no se ve: no se afirma «no tienes» sin haber leído (`hayRestaurantesPendientes`).
    */
   const sinPendientesDeViajes = !conViajes
-    || hayRestaurantesPendientes(viajesAbiertos?.viajes ?? null, pendientesDeViajes, viajesFallaron) === false;
+    || hayRestaurantesPendientes(viajesEnInicio, pendientesDeViajes, viajesFallaron) === false;
   const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'
     && sinPendientesDeViajes;
 
@@ -397,12 +420,14 @@ export function HomeScreen() {
            * *"una pantalla que ya existe es mucho más difícil de discutir que
            * una que todavía no"*.
            */}
-          {/* D266 · «Crear viaje» y «Cerrados». */}
+          {/* D266 · «Crear viaje» y «Cerrados». D302 · y «Próximos», entre los dos. */}
           {tab === 'viajes' && (
             <PanelViajes
               conteo={cerradosDeViajes}
+              proximosAbierta={listaDeProximosAbierta}
+              onProximos={alternarProximos}
               cerradosAbierta={listaDeCerradosAbierta}
-              onCerrados={alternarCerrados}
+              onCerrados={alternarCerradosSolos}
               onReintentar={reintentarViajes}
             />
           )}
@@ -420,6 +445,8 @@ export function HomeScreen() {
         </MountedCard>
         {/* D246 · D266 · la lista de cerrados, debajo de la tarjeta, al tocar «Cerrados». */}
         {tab === 'viajes' && listaDeCerradosAbierta && <ListaDeCerrados conteo={cerradosDeViajes} />}
+        {/* D302 · los próximos, debajo de la tarjeta, al tocar «Próximos». */}
+        {tab === 'viajes' && listaDeProximosAbierta && <ListaDeProximos viajes={proximos} />}
         {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}
@@ -517,10 +544,11 @@ export function HomeScreen() {
              «No tienes mesas abiertas» va al final del contenido (D277, `avisoSinMesas`). */}
         </section>
 
-        {/* D265 · D275 · cada viaje abierto: foto o inicial, nombre y monto; debajo, sus restaurantes pendientes (D271). */}
+        {/* D265 · D275 · cada viaje abierto: foto o inicial, nombre y monto; debajo, sus restaurantes pendientes (D271).
+            D302 · sin los que todavía no empezaron (van en «Próximos»). */}
         {conViajes && (
           <ViajesAbiertosEnInicio
-            viajes={viajesAbiertos?.viajes ?? null}
+            viajes={viajesEnInicio}
             pendientes={pendientesDeViajes}
             fallo={viajesFallaron}
             onReintentar={() => void cargarViajes()}

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ViajeEnLista } from '../../api/viajes';
-import { ListaDeCerradosVista, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
+import { ListaDeCerradosVista, ListaDeProximosVista, PanelViajes, inicialDelViaje, type ConteoDeViajes } from './PestanaViajes';
 
 /** AF-VIAJES · D242 · la pestaña «Viajes» de Inicio; D266 · «Crear viaje» y «Cerrados», con los cerrados debajo. */
 const nada = () => undefined;
@@ -18,25 +18,27 @@ function enLista(extra: Partial<ViajeEnLista>): ViajeEnLista {
 const listo = (abiertos: number, cerrados: number, viajes: ViajeEnLista[] = []): ConteoDeViajes =>
   ({ estado: 'listo', counts: { abiertos, cerrados }, viajes });
 
-const panel = (conteo: ConteoDeViajes, cerradosAbierta = false) =>
-  renderToStaticMarkup(<PanelViajes conteo={conteo} cerradosAbierta={cerradosAbierta} onCerrados={nada} onReintentar={nada} />);
+const panel = (conteo: ConteoDeViajes, cerradosAbierta = false, proximosAbierta = false) =>
+  renderToStaticMarkup(<PanelViajes conteo={conteo} proximosAbierta={proximosAbierta} onProximos={nada}
+    cerradosAbierta={cerradosAbierta} onCerrados={nada} onReintentar={nada} />);
 
 /** Lo que se lee de cada lanzador: su rótulo y, si tiene, su bajada. */
 const lanzadores = (html: string) => [...html.matchAll(/<button type="button" class="launch vj-lanzador[^"]*"[^>]*>([\s\S]*?)<\/button>/g)]
   .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
 
-describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () => {
-  it('las dos burbujas, lado a lado: «Crear viaje» y «Cerrados», cada una con su ícono y su palabra', () => {
+describe('🔴 D266 · D302 · la pestaña Viajes: «Crear viaje», «Próximos» y «Cerrados»', () => {
+  it('🔴 D302 · las tres burbujas, lado a lado, cada una con su ícono y su palabra: «Próximos» entre las otras dos', () => {
     const html = panel(listo(2, 1));
-    expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados']);
+    expect(lanzadores(html)).toEqual(['Crear viaje', 'Próximos', 'Cerrados']);
     expect(html).toContain('launch-pair');
+    expect(html.match(/<span class="launch-ico" aria-hidden="true"><svg/g)).toHaveLength(3);
   });
 
   it('🔴 D274 · «Cerrados» sin la cantidad: ni «N viajes» ni la línea de abajo, haya los que haya', () => {
     // Mati: «Quitar la cantidad de viajes cerrados, dejar únicamente Cerrados».
     for (const conteo of [listo(0, 0), listo(2, 1), listo(1, 3)]) {
       const html = panel(conteo);
-      expect(lanzadores(html)).toEqual(['Crear viaje', 'Cerrados']);
+      expect(lanzadores(html)).toEqual(['Crear viaje', 'Próximos', 'Cerrados']);
       expect(html).not.toMatch(/\d+ viajes?\b/);
       expect(html).not.toContain('launch-sub');
     }
@@ -50,7 +52,7 @@ describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () =
       expect(html).not.toContain('Todavía no tienes viajes');
       expect(html).not.toContain('btn btn-navy');
     }
-    expect(lanzadores(panel(listo(0, 0)))).toEqual(['Crear viaje', 'Cerrados']);
+    expect(lanzadores(panel(listo(0, 0)))).toEqual(['Crear viaje', 'Próximos', 'Cerrados']);
   });
 
   it('🔴 «Crear viaje» es un botón común; «Cerrados» se elige con `aria-pressed` y el borde (no sólo color)', () => {
@@ -60,7 +62,21 @@ describe('🔴 D266 · la pestaña Viajes: «Crear viaje» y «Cerrados»', () =
     expect(cerrada).not.toContain('aria-pressed="true"');
     const abierta = panel(listo(2, 1), true);
     expect(abierta).toMatch(/class="launch vj-lanzador vj-lanzador--elegido" aria-pressed="true"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Cerrados/);
-    expect(abierta.match(/aria-pressed/g)).toHaveLength(1);
+    expect(abierta.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it('🔴 D302 · «Próximos» se elige igual que «Cerrados»: `aria-pressed` y el borde', () => {
+    const cerrada = panel(listo(2, 1));
+    expect(cerrada).toMatch(/class="launch vj-lanzador " aria-pressed="false"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Próximos/);
+    const abierta = panel(listo(2, 1), false, true);
+    expect(abierta).toMatch(/class="launch vj-lanzador vj-lanzador--elegido" aria-pressed="true"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Próximos/);
+    expect(abierta).toMatch(/aria-pressed="false"><span class="launch-ico" aria-hidden="true">.*?<\/span><span class="launch-label">Cerrados/);
+    expect(abierta.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it('cargando: las tres burbujas en esqueleto', () => {
+    const html = panel({ estado: 'cargando' });
+    expect(html.match(/class="launch sk"/g)).toHaveLength(3);
   });
 
   it('un error de red no se muestra como vacío: dice que no pudo y ofrece reintentar', () => {
@@ -109,6 +125,35 @@ describe('D246 · D266 · los cerrados, debajo de la tarjeta', () => {
     expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={listo(2, 0)} />)).toContain('No tienes viajes cerrados');
     expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={{ estado: 'cargando' }} />)).toBe('');
     expect(renderToStaticMarkup(<ListaDeCerradosVista conteo={{ estado: 'error' }} />)).toBe('');
+  });
+});
+
+describe('🔴 D302 · los próximos, debajo de la tarjeta', () => {
+  const filas = (html: string) => [...html.matchAll(/<button type="button" class="vj-inicio-fila">([\s\S]*?)<\/button>/g)]
+    .map((m) => m[1]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+
+  it('cada fila, como los cerrados: la inicial (o la foto) y el nombre, en el orden recibido', () => {
+    const html = renderToStaticMarkup(<ListaDeProximosVista viajes={[
+      enLista({ id: 'v-7', nombre: 'Puebla', fecha_desde: '2026-10-20' }),
+      enLista({ id: 'v-8', nombre: 'mérida', fecha_desde: '2026-11-02', color: 'verde', has_photo: true }),
+    ]} fotoDe={(id) => (id === 'v-8' ? 'blob:foto-merida' : null)} />);
+    expect(filas(html)).toEqual(['P Puebla', 'mérida']);
+    expect(html).toContain('<img class="vj-insignia-foto" src="blob:foto-merida" alt=""/>');
+    expect(html).toContain('aria-label="Viajes próximos"');
+    // Ni montos ni personas: el detalle está adentro.
+    for (const fuera of ['$', 'personas', 'Debes', 'Te deben']) expect(html).not.toContain(fuera);
+  });
+
+  it('sin próximos: «No tienes viajes próximos»; sin la lista todavía (o con error), nada', () => {
+    expect(renderToStaticMarkup(<ListaDeProximosVista viajes={[]} />)).toContain('No tienes viajes próximos');
+    expect(renderToStaticMarkup(<ListaDeProximosVista viajes={null} />)).toBe('');
+  });
+
+  it('🔴 tocar uno entra al viaje (abierto), no a la vista de cerrado', () => {
+    const pestana = readFileSync(new URL('./PestanaViajes.tsx', import.meta.url), 'utf8');
+    const lista = pestana.slice(pestana.indexOf('export function ListaDeProximosVista'));
+    expect(lista).toContain("onClick={() => navigate('viaje', v.id)}");
+    expect(lista).not.toContain('viaje-cerrado');
   });
 });
 

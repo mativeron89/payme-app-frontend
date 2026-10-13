@@ -11,6 +11,103 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.245.3 — La apertura sin negro: imágenes de arranque del iPhone, la carga desde el primer cuadro y el ícono entero (D300); los viajes que no empezaron, en «Próximos» (D302) (2026-10-12)
+
+Orden AF-PANTALLA-DE-CARGA-SIN-NEGRO-20261012 (7ccecfc0…), con la adenda de la fila (2026-10-13T00:35:00Z): las dos guardas
+de `scripts/` y los viajes sin `fecha_desde`. PayMe no mueve dinero. Lo visible se cierra con la prueba de Mati en el
+iPhone (D63).
+
+1. **D300 · las imágenes de arranque del iPhone (hecho).**
+   - Una por tamaño, en vertical: 11 PNG RGB en `public/arranque/` (9.531.170 bytes en total; la mayor, 1.076.189).
+   - Cada `<link rel="apple-touch-startup-image">` lleva su `media` (ancho, alto, densidad y orientación).
+   - Cada imagen ES la pantalla de carga de D286. La dibuja `scripts/imagenes-de-arranque.mjs` (declarado, con sus tipos
+     en `.d.mts`) desde `index.html`:
+     - en Chromium, sin red, con el tamaño, la densidad y la franja de la barra de estado de ese iPhone;
+     - la reescribe con el mejor filtro por fila: 27 % menos, con los mismos píxeles, verificado al escribir.
+   - Reproducible: dos corridas dan los mismos bytes.
+   - Comparada con la pantalla servida (el build con la CSP real): 0 píxeles distintos en los 11 tamaños.
+   - El manifiesto ya tenía `background_color` `#101E3B`: no se tocó.
+2. **Los 2 s, desde el primer cuadro pintado (hecho).**
+   - `retirarSplash` cuenta desde la entrada `first-contentful-paint` de Paint Timing, no desde la navegación.
+   - Sin la entrada (todavía no se anotó, o el navegador no la tiene), cuenta desde ahora: nunca menos de 2 s.
+   - Si la app tarda más, sigue hasta que monte. La rendición de 12 s, el fundido y la marca de la e2e no cambian.
+3. **El ícono entero de una vez (hecho).**
+   - Salió la entrada de 240 ms (`carga-entra`, y sus constantes en `splash.ts`): opacidad 1 y escala 1 desde el primer
+     cuadro, con o sin «reducir movimiento».
+   - Se corrigió el comentario que decía «1 s».
+   - `HASH_STYLE_SPLASH_APP` se recalculó; `csp.test.ts` pasa sin tocarlo.
+4. **D302 · los viajes que no empezaron (hecho).**
+   - **En Inicio**, la burbuja de un viaje aparece desde el día de su «desde», en hora de México (UTC−6 fijo, como el
+     contrato).
+     - Un viaje futuro no se ve, ni sus restaurantes pendientes, ni su «+ Gasto».
+     - El aviso de mesas se calcula sin él.
+     - Con la app abierta, el día cambia solo a la medianoche de México.
+   - **Igual que hoy (la adenda):** los abiertos sin «desde» y los que esperan pagos.
+   - **En la pestaña Viajes**, un tercer lanzador «Próximos», entre «Crear viaje» y «Cerrados», con el mismo formato.
+     - Muestra los que no empezaron, del más cercano al más lejano, como la lista de cerrados.
+     - Tocar uno entra al viaje.
+   - **Los datos:** la misma lista de abiertos que Inicio ya pide. Ninguna llamada nueva y ningún cambio de contrato
+     (`GET /api/viajes` trae `fecha_desde` y `fecha_hasta`).
+5. **Las pruebas (hecho).** Ver «Pruebas».
+
+**Declarado:**
+- **El alto de cada barra de estado (`barra`) es el que conozco de cada modelo, no medido en un iPhone.** Si es otro, la
+  franja y el centro se corren unos píxeles respecto de la página; igual es la pantalla de carga, no negro.
+- **El 375×812** lo comparten el 12 mini y el 13 mini (barra de 50) con el 11 Pro, el X y el XS (44): un solo `media`,
+  con 50.
+- **Los iPhone posteriores a la tabla no tienen imagen** hasta sumarlos.
+- **Sin medir:** iOS toma las imágenes al agregar la app a la pantalla de inicio. Para verlas, Mati quizás tenga que
+  quitar PayMe de la pantalla de inicio y volver a agregarla.
+- **Elegido por mí:**
+  - el ícono de «Próximos» es `clock`, porque no hay uno de calendario;
+  - «Próximos» y «Cerrados» no se abren a la vez.
+- **Sin cambio:** la cámara de Nueva (D276) sigue decidiendo con la fecha del teléfono.
+- **Pruebas existentes cambiadas por D302:**
+  - de dos a tres lanzadores: `PestanaViajes.test.tsx`, `d255-ajustes`, `viajes.spec`, `lanzadores-en-negrita`;
+  - la guarda textual del aviso en `ViajesEnInicio.test.tsx`;
+  - en `d276`, Monterrey es la señal de que la lista llegó (antes del 5/10, Cancún ya no está en Inicio).
+- **Pruebas existentes cambiadas por D300:**
+  - en `splash.spec`, el mínimo se mide desde el primer cuadro;
+  - sale la prueba de la entrada del ícono.
+
+**Pruebas:**
+- **Unidad nueva:**
+  - `src/arranque/imagenesDeArranque.test.ts` (15): la tabla, los links, el censo, los tamaños y pesos, y que cada
+    imagen sea la pantalla de carga (la franja, el triángulo, el ícono);
+  - `src/screens/viajes/proximos.test.ts` (14): la medianoche de México, qué es próximo, el orden, dos medianoches
+    seguidas y el aviso;
+  - en `splash.test.ts`, el primer cuadro y el ícono sin animación;
+  - en `PestanaViajes.test.tsx`, los tres lanzadores y la lista.
+- **e2e nueva:**
+  - `e2e/viajes-proximos.spec.ts` (17, a 375 y 390):
+    - mañana no está en Inicio y sí en «Próximos»;
+    - el aviso;
+    - su día;
+    - el orden;
+    - esperando pagos;
+    - la exclusión entre las dos listas;
+    - las tres burbujas en una fila;
+    - la medianoche de México con el teléfono en Buenos Aires y en Los Ángeles;
+    - el cruce de medianoche con la app abierta.
+  - En `e2e/splash.spec.ts`, contra el build con la CSP real:
+    - la navegación demorada con la app rápida;
+    - sin Paint Timing;
+    - el ícono en el primer cuadro;
+    - los links y los PNG servidos;
+    - cada imagen contra la pantalla servida, en su tamaño (tolerancia declarada: canal ±2, hasta 0,1 % de píxeles).
+- **Rojo primero sobre `6852e8e`:**
+  - unidad: 30 de 129, más `proximos.test.ts`, que no carga (el módulo no existe);
+  - e2e de Viajes: 22 de 80, con 16 de 17 en `viajes-proximos` (la verde es el control positivo de Los Ángeles);
+  - e2e de la carga: 15 de 26, más el caso sin Paint Timing.
+- **Mutantes:** 24 de 24 cazados por la unidad o la e2e. La e2e sola caza 20; los otros 4, con su motivo, en el
+  registro de la orden.
+- **Gates** (los del CI, en local), todos en 0:
+  - el espejo con `--integridad` y `--aliases`;
+  - `npm test`: 298 archivos, 4850 pruebas y 1 omitida, con `--corrida`;
+  - typecheck;
+  - build real con el `VITE_API_URL` del CI, más `--artefacto dist`.
+- **e2e completa** (config real, cuatro proyectos): 1405 de 1405 en verde.
+
 ## 0.245.2 — «Ver pagos» y «Ver perfil» en negrita (D299) (2026-10-12)
 
 Orden AF-VER-PAGOS-Y-VER-PERFIL-EN-NEGRITA-20261012 (23bc92d8…). Autoridad: D299 (97ba05b3…). Mati, con una captura de
