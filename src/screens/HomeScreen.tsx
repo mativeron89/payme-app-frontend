@@ -387,8 +387,8 @@ export function HomeScreen() {
               {rail.showCards && corte.showCards && (
                 <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
               )}
-              <Launcher icon="receipt" label={t('Ver pagos')} onClick={() => navigate('mesas')} />
-              <Launcher icon="settings" label={t('Ver perfil')} onClick={() => navigate('mas')} />
+              <Launcher icon="receipt" iconScale="row" label={t('Ver pagos')} onClick={() => navigate('mesas')} />
+              <Launcher icon="settings" iconScale="row" label={t('Ver perfil')} onClick={() => navigate('mas')} />
             </div>
           )}
 

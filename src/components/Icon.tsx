@@ -189,7 +189,7 @@ export function Icon({
   size?: number;
   className?: string;
   /** D310: sólo glyphs opt-in; inline/navegación/checks conservan su medida. */
-  scale?: 'footer' | 'list' | 'row' | 'button' | 'config' | 'bell';
+  scale?: 'footer' | 'list' | 'row' | 'button' | 'config' | 'bell' | 'action';
 }) {
   const g: Glyph = GLYPHS[name];
   if (!g) return null;

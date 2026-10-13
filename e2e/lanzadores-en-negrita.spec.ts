@@ -32,10 +32,12 @@ function enNegrita(m: Awaited<ReturnType<typeof lanzadores>>, textos: string[], 
   expect(m.pestana).toBe('700');
   for (const e of m.etiquetas) {
     expect(e.peso, e.texto!).toBe('700');
-    // Lo que no cambia: el tamaño del texto (14), el alto del botón (al menos 84) y el ícono de 22.
+    // D310: sólo Ver pagos/perfil pasan a 20 (matriz expresa). Los demás
+    // conservan 22; texto, negrita, toque y acciones no cambian.
     expect(e.tamano, e.texto!).toBe('14px');
     expect(e.alto, e.texto!).toBeGreaterThanOrEqual(84);
-    expect(e.icono, e.texto!).toEqual([22, 22]);
+    const icono = e.texto === 'Ver pagos' || e.texto === 'Ver perfil' ? 20 : 22;
+    expect(e.icono, e.texto!).toEqual([icono, icono]);
   }
   expect(m.doc).toBeLessThanOrEqual(ancho);
 }

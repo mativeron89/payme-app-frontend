@@ -113,7 +113,7 @@ function Lanzador({ icon, label, onClick, elegido }: {
       onClick={onClick}
     >
       <span className="launch-ico" aria-hidden="true">
-        <Icon name={icon} size={22} scale="row" />
+        <Icon name={icon} size={22} scale="action" />
       </span>
       <span className="launch-label">{label}</span>
     </button>

@@ -426,15 +426,18 @@ export function Launcher({
   icon,
   label,
   onClick,
+  iconScale = 'action',
 }: {
   icon: IconName;
+  /** D310: Ver pagos/perfil tienen matriz expresa de 20; el resto conserva N de 22. */
+  iconScale?: 'row' | 'action';
   label: string;
   onClick: () => void;
 }) {
   return (
     <button type="button" className="launch" onClick={onClick}>
       <span className="launch-ico" aria-hidden="true">
-        <Icon name={icon} size={22} scale="row" />
+        <Icon name={icon} size={22} scale={iconScale} />
       </span>
       <span className="launch-label">{label}</span>
     </button>
