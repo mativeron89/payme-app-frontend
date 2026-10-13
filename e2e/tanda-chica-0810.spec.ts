@@ -393,7 +393,7 @@ test.describe('D240 puntos 12 y 13 · Configuración', () => {
     await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
     await page.locator('.scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
     const salir = page.getByRole('button', { name: 'Cerrar sesión', exact: true });
-    await expect(salir).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+    await expect(salir).toHaveCSS('background-color', 'rgb(251, 231, 227)');
     await expect(salir).toHaveCSS('color', 'rgb(180, 70, 47)');
     await expect(salir).toHaveCSS('border-top-style', 'solid');
     expect(parseFloat(await salir.evaluate((e) => getComputedStyle(e).borderTopWidth))).toBeGreaterThan(0);

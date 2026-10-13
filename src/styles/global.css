@@ -614,8 +614,8 @@ html.app-de-inicio-ios .app {
 }
 /* D240 punto 12 · Mati: «Configuracion: Boton de cerrar sesión en rojo
    clarito». El tinte de error del sistema con su texto: --danger sobre
-   --danger-tint da 6.01:1 (AA, lo fija designTokens.test.ts). El tinte sobre el
-   fondo de la app da 1.00:1, así que el borde es lo que lo dibuja como botón.
+   --danger-tint da 4.57:1 en D310 (AA, lo fija designTokens.test.ts).
+   El borde mantiene el contorno del botón sobre el fondo de la app.
    Va después de `.btn` (misma especificidad: gana la última declaración). */
 .btn-cerrar-sesion {
   background: var(--danger-tint);
@@ -1225,7 +1225,7 @@ html.app-de-inicio-ios .app {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-2);
+  box-shadow: var(--sh-mounted);
 }
 .ingreso-burbuja-titulo {
   font: 800 22px/1.2 var(--font-display);
