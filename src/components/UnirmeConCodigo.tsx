@@ -267,7 +267,7 @@ export function UnirmeConCodigo() {
         aria-controls={regionId}
         onClick={() => setAbierto((a) => !a)}
       >
-        <span className="unirse-numeral" aria-hidden="true">#</span>
+        <span className="unirse-numeral icon-list-box" aria-hidden="true">#</span>
         <span className="unirse-titulo">{t('Unirme con código')}</span>
         <Icon name="chevron-down" size={20} className={`unirse-flecha${abierto ? ' open' : ''}`} />
       </button>

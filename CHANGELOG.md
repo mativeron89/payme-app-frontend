@@ -1,5 +1,11 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.247.0 · 2026-10-13
+
+- D310-E2 / n342: Configuración › Íconos debajo de Zona horaria, con Grandes/Medianos/Chicos, vista previa independiente y Aplicar. Medianos por defecto y guardado sólo en este navegador; dato inválido o almacenamiento bloqueado conservan una vista utilizable y aviso honesto.
+- Matriz de títulos, listas, botones, campana, + Gasto y barra con roles explícitos. Texto y áreas de toque conservados; círculo de Nueva fijo en 56, fotos/logos/avatares/Volver/chevrons/checks e íconos dentro de frases excluidos.
+- Pruebas de aplicación, cancelación, recarga, almacenamiento, medidas móviles y exclusiones. Sin cambios de contrato, dependencias, funciones monetarias o infraestructura.
+
 > 🔴 **ESTADO DE PUBLICACIÓN — leer antes que cualquier entrada.** El repo está
 > publicado **desde `0.79.3` (2026-08-13)** hacia atrás: ese push subió también
 > `0.78.0`, `0.79.0`, `0.79.1` y `0.79.2`, que hasta entonces eran locales. La

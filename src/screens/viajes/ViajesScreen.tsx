@@ -87,7 +87,7 @@ export function VistaDeViajes({ estado, carga, t, idioma, onAbrir, onCrear, onRe
           <div className="vjl-lista" aria-busy="true" aria-label={t('Cargando…')}>
             {[0, 1].map((i) => (
               <div key={i} className="vj-card vjl-fila sk">
-                <span className="vjl-ico" aria-hidden="true" />
+                <span className="vjl-ico icon-list-box" aria-hidden="true" />
                 <span className="vjl-cuerpo">
                   <span className="sk-line w55" />
                   <span className="sk-line w40" />
@@ -132,7 +132,7 @@ function ListaDeAbiertos({ viajes, t, idioma, onAbrir, onCrear }: {
   if (viajes.length === 0) {
     return (
       <div className="vj-card vjl-vacio">
-        <span className="vjl-ico" aria-hidden="true">
+        <span className="vjl-ico icon-list-box" aria-hidden="true">
           <Icon name="briefcase" size={22} />
         </span>
         <div className="vjl-vacio-titulo">{t('Todavía no tienes viajes')}</div>
@@ -154,8 +154,8 @@ function ListaDeAbiertos({ viajes, t, idioma, onAbrir, onCrear }: {
           return (
             <li key={v.id}>
               <button type="button" className="vj-card vjl-fila" onClick={() => onAbrir(v.id)}>
-                <span className="vjl-ico" aria-hidden="true">
-                  <Icon name="briefcase" size={20} />
+                <span className="vjl-ico icon-list-box" aria-hidden="true">
+                  <Icon name="briefcase" size={20} scale="list" />
                 </span>
                 <span className="vjl-cuerpo">
                   <span className="vjl-nombre">{v.nombre}</span>
@@ -201,8 +201,8 @@ function ListaDeCerrados({ viajes, t, idioma, onAbrir }: {
             {g.viajes.map((v) => (
               <li key={v.id}>
                 <button type="button" className="vj-card vjl-fila" onClick={() => onAbrir(v.id)}>
-                  <span className="vjl-ico" aria-hidden="true">
-                    <Icon name="briefcase" size={20} />
+                  <span className="vjl-ico icon-list-box" aria-hidden="true">
+                    <Icon name="briefcase" size={20} scale="list" />
                   </span>
                   <span className="vjl-cuerpo">
                     <span className="vjl-nombre">{v.nombre}</span>

@@ -1284,4 +1284,20 @@ export const EN: Record<string, string> = {
   ...EN_VIAJES_CERRADO,
   // D290 · el pizarrón de notas del viaje.
   ...EN_VIAJES_NOTAS,
+  // D310-E2 · preferencia local de tamaño de íconos.
+  "Íconos": "Icons",
+  "Grandes": "Large",
+  "Medianos": "Medium",
+  "Chicos": "Small",
+  "Más fáciles de ver": "Easier to see",
+  "Como hoy": "Current size",
+  "Más lugar para el contenido": "More room for content",
+  "El texto y las áreas de toque quedan iguales.": "Text and touch areas stay the same.",
+  "Cerrar íconos": "Close icons",
+  "Vista previa de íconos": "Icon preview",
+  "Tamaño de íconos": "Icon size",
+  "El tamaño guardado no es válido. Usamos Medianos sin borrar la preferencia anterior.": "The saved size is invalid. We use Medium without deleting the previous preference.",
+  "El tamaño se aplica temporalmente. No pudimos guardarlo; al recargar puede volver el anterior.": "The size is temporary. We could not save it; reloading may restore the previous size.",
+  "No pudimos leer la preferencia local. Puedes elegir un tamaño temporal.": "We could not read the local preference. You can choose a temporary size.",
+  "La elección se guarda sólo en este navegador al tocar Aplicar.": "The choice is saved only in this browser when you tap Apply.",
 };

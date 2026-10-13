@@ -1,0 +1,45 @@
+/* D310-E2 · matriz del paquete. El preview redefine los mismos tokens dentro
+   de su caja; no cambia html ni el valor aplicado. Sólo roles explícitos. */
+:root, [data-iconos="medianos"] {
+  --ic-pie: 24px; --ic-trazo: 1.7;
+  --ic-titulo-caja: 48px; --ic-titulo-radio: 14px; --ic-titulo: 22px; --titulo-alto-min: 83px;
+  --ic-lista-caja: 40px; --ic-lista-radio: 12px; --ic-lista: 20px;
+  --ic-fila: 20px; --ic-boton: 18px; --ic-config: 18px; --ic-campana: 22px; --ic-action: 22px;
+}
+[data-iconos="grandes"] {
+  --ic-pie: 28px; --ic-trazo: 1.5;
+  --ic-titulo-caja: 56px; --ic-titulo-radio: 16px; --ic-titulo: 26px; --titulo-alto-min: 88px;
+  --ic-lista-caja: 48px; --ic-lista-radio: 14px; --ic-lista: 24px;
+  --ic-fila: 24px; --ic-boton: 22px; --ic-config: 22px; --ic-campana: 26px; --ic-action: 26px;
+}
+[data-iconos="chicos"] {
+  --ic-pie: 20px; --ic-trazo: 2;
+  --ic-titulo-caja: 40px; --ic-titulo-radio: 12px; --ic-titulo: 18px; --titulo-alto-min: 83px;
+  --ic-lista-caja: 32px; --ic-lista-radio: 10px; --ic-lista: 16px;
+  --ic-fila: 16px; --ic-boton: 16px; --ic-config: 16px; --ic-campana: 18px; --ic-action: 18px;
+}
+.icon-scalable { width: var(--icon-size); height: var(--icon-size); }
+.icon-scalable > path[stroke] { stroke-width: var(--ic-trazo); }
+.icon-scalable--footer { --icon-size: var(--ic-pie); }
+.icon-scalable--list { --icon-size: var(--ic-lista); }
+.icon-scalable--row { --icon-size: var(--ic-fila); }
+.icon-scalable--button { --icon-size: var(--ic-boton); }
+.icon-scalable--config { --icon-size: var(--ic-config); }
+.icon-scalable--bell { --icon-size: var(--ic-campana); }
+.icon-scalable--action { --icon-size: var(--ic-action); }
+.icon-scalable--title { --icon-size: var(--ic-titulo); stroke-width: var(--ic-trazo); }
+.title-card { min-height: var(--titulo-alto-min); }
+.title-card-cuadro:not(.title-card-cuadro--cierre):not(.vj-cuadro--foto) {
+  width: var(--ic-titulo-caja); height: var(--ic-titulo-caja); border-radius: var(--ic-titulo-radio);
+}
+.vj-cuadro:not(.vj-cuadro--foto) { font-size: var(--ic-titulo); }
+.icon-list-box.icon-list-box {
+  width: var(--ic-lista-caja); height: var(--ic-lista-caja); border-radius: var(--ic-lista-radio);
+  /* El cuadro dibujado cambia, su huella en flex sigue en 40×40. Las filas
+     mantienen padding, texto y hitbox; Grandes sobresale sólo 4 px por lado. */
+  margin-block: calc((40px - var(--ic-lista-caja)) / 2);
+  margin-inline: calc((40px - var(--ic-lista-caja)) / 2);
+}
+/* No se toca .appbar-fab (56), texto, chevrons, Volver, checks o .ico-inline. */
+
+.unirse-numeral.icon-list-box { font-size: var(--ic-lista); }

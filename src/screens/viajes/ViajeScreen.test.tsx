@@ -110,7 +110,7 @@ describe('D245 · el viaje abierto, más simple', () => {
     const conFoto = renderToStaticMarkup(
       <ViajeVista carga={listo(viaje({ color: 'azul', has_photo: true }))} marcando={null} {...ACCIONES} fotoDelViaje="blob:foto-viaje" />,
     );
-    expect(conFoto).toContain('<span class="title-card-cuadro vj-cuadro" style="background:#1D4ED8" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-viaje" alt=""/></span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026</h1></div>');
+    expect(conFoto).toContain('<span class="title-card-cuadro vj-cuadro vj-cuadro--foto" style="background:#1D4ED8" aria-hidden="true"><img class="vj-insignia-foto" src="blob:foto-viaje" alt=""/></span><div class="title-card-textos"><h1 class="title-card-title">Cancún 2026</h1></div>');
     // Esperando pagos, también: blanca, con el color en el cuadro.
     const esperando = renderToStaticMarkup(
       <ViajeVista carga={listo(viaje({ color: 'naranja', estado: 'esperando_pagos', transferencias_pendientes: 1 }))} marcando={null} {...ACCIONES} />,

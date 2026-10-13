@@ -16,7 +16,7 @@ export function FilaDeNotas({ resumen, onAbrir }: { resumen: ResumenDeNotas | nu
   const { t } = useIdioma();
   return (
     <button type="button" className="nts-fila" onClick={onAbrir}>
-      <Icon name="notas" size={20} className="nts-fila-icono" />
+      <Icon name="notas" size={20} className="nts-fila-icono" scale="row" />
       <span className="nts-fila-texto">{t('Notas')}</span>
       {resumen?.nuevo && <span className="nts-punto" role="img" aria-label={t('Hay notas nuevas')} />}
       <span className="nts-fila-espacio" />

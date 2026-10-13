@@ -183,10 +183,13 @@ export function Icon({
   name,
   size = 20,
   className,
+  scale,
 }: {
   name: IconName;
   size?: number;
   className?: string;
+  /** D310: sólo glyphs opt-in; inline/navegación/checks conservan su medida. */
+  scale?: 'footer' | 'list' | 'row' | 'button' | 'config' | 'bell' | 'action';
 }) {
   const g: Glyph = GLYPHS[name];
   if (!g) return null;
@@ -196,7 +199,7 @@ export function Icon({
       height={size}
       viewBox="0 0 24 24"
       fill="none"
-      className={className}
+      className={scale ? `icon-scalable icon-scalable--${scale}${className ? ` ${className}` : ''}` : className}
       aria-hidden="true"
       style={{ flexShrink: 0, display: 'block' }}
     >

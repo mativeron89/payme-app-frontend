@@ -33,6 +33,7 @@ import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 import { CartelVersionNueva } from './components/CartelVersionNueva';
+import { IconSizeProvider } from './preferences/IconSizeProvider';
 import { RegionProvider } from './preferences/RegionProvider';
 import { useCapacidadViajes } from './api/viajes';
 import { enforceViajesRouteGuard, esPaginaDeViajes } from './screens/viajes/viajesRouteGuard';
@@ -446,19 +447,21 @@ function Shell() {
 
 export default function App() {
   return (
-    <RegionProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <div className="app">
-            {/* AF-CARTEL-VERSION-NUEVA · decisión 125 · con sesión, arriba y en el
-                flujo: empuja la pantalla, no la tapa. */}
-            <CartelVersionNueva />
-            <Shell />
-            {/* D276-1 · «¿Para qué viaje?»: la abre la cámara de Nueva con dos viajes que cubren hoy. */}
-            <HojaParaQueViajeEnLaApp />
-          </div>
-        </ToastProvider>
-      </AuthProvider>
-    </RegionProvider>
+    <IconSizeProvider>
+      <RegionProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <div className="app">
+              {/* AF-CARTEL-VERSION-NUEVA · decisión 125 · con sesión, arriba y en el
+                  flujo: empuja la pantalla, no la tapa. */}
+              <CartelVersionNueva />
+              <Shell />
+              {/* D276-1 · «¿Para qué viaje?»: la abre la cámara de Nueva con dos viajes que cubren hoy. */}
+              <HojaParaQueViajeEnLaApp />
+            </div>
+          </ToastProvider>
+        </AuthProvider>
+      </RegionProvider>
+    </IconSizeProvider>
   );
 }

@@ -48,7 +48,7 @@ export function CuadroDelViaje({ nombre, color = null, foto = null }: {
   foto?: string | null;
 }) {
   return (
-    <span className="title-card-cuadro vj-cuadro" style={{ background: COLORES_VIAJE[color ?? 'turquesa'] }} aria-hidden="true">
+    <span className={`title-card-cuadro vj-cuadro${foto ? ' vj-cuadro--foto' : ''}`} style={{ background: COLORES_VIAJE[color ?? 'turquesa'] }} aria-hidden="true">
       {foto ? <img className="vj-insignia-foto" src={foto} alt="" /> : inicialDelViaje(nombre)}
     </span>
   );

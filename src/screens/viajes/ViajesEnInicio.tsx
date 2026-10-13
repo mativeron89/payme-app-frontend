@@ -230,7 +230,7 @@ export function ViajesAbiertosVista({ viajes, pendientes = null, fallo, onReinte
                     aria-label={t('Cargar un gasto a mano en {0}', v.nombre)}
                     onClick={() => navigate('viaje-gasto', v.id)}
                   >
-                    <Icon name="plus" size={22} />
+                    <Icon name="plus" size={22} scale="bell" />
                     <span>{t('Gasto')}</span>
                   </button>
                 </>
@@ -246,8 +246,8 @@ export function ViajesAbiertosVista({ viajes, pendientes = null, fallo, onReinte
                   aria-label={etiquetaDelPendiente(lugar, p.faltan, t)}
                   onClick={() => navigate('viaje-ticket', parametroDeTicket(v.id, p.ticket_id))}
                 >
-                  <span className="viaje-pendiente-ico" aria-hidden="true">
-                    <Icon name="cubiertos" size={20} />
+                  <span className="viaje-pendiente-ico icon-list-box" aria-hidden="true">
+                    <Icon name="cubiertos" size={20} scale="list" />
                   </span>
                   <span className="viaje-pendiente-texto">
                     <span className="viaje-pendiente-nombre">{lugar}</span>

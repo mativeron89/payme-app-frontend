@@ -43,7 +43,7 @@ describe('🔴 D285 · los íconos y el cuadro', () => {
   it('el cuadro: navy, un solo <path> de trazo 1.7 en blanco (currentColor), 22 px, decorativo', () => {
     const html = renderToStaticMarkup(<CuadroDeTarjeta icono="mesa" />);
     expect(html).toBe(
-      '<span class="title-card-cuadro" data-icono="mesa" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"'
+      '<span class="title-card-cuadro" data-icono="mesa" aria-hidden="true"><svg class="icon-scalable icon-scalable--title" width="22" height="22" viewBox="0 0 24 24"'
       + ' fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
       + `<path d="${DE_LA_ESPECIFICACION.mesa}"></path></svg></span>`,
     );

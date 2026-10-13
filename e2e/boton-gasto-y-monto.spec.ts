@@ -137,11 +137,11 @@ for (const ancho of [375, 390]) {
       expect(Math.round(ancho - m.t.right)).toBe(16);
       expect(m.t.height).toBeGreaterThanOrEqual(96);
       expect(m.doc).toBeLessThanOrEqual(ancho);
-      // El cuadrado por dentro: el «+» de 22 con trazo 2.2 y «Gasto» en Plus Jakarta Sans 14/700.
+      // D310: «+» de 22 con trazo Mediano de 1.7; «Gasto» sigue Plus Jakarta Sans 14/700.
       const gasto = tarjeta(page, 'Cancún 2026').getByRole('button', { name: 'Cargar un gasto a mano en Cancún 2026', exact: true });
       await expect(gasto).toHaveText('Gasto');
       await expect(gasto.locator('svg')).toHaveAttribute('width', '22');
-      await expect(gasto.locator('svg path').first()).toHaveCSS('stroke-width', '2.2px');
+      await expect(gasto.locator('svg path').first()).toHaveCSS('stroke-width', '1.7px');
       await expect(gasto.locator('span')).toHaveCSS('font-size', '14px');
       await expect(gasto.locator('span')).toHaveCSS('font-weight', '700');
       await expect(gasto).toHaveCSS('font-family', /Plus Jakarta Sans/);
