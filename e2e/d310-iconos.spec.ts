@@ -191,10 +191,12 @@ for (const photo of [false, true]) {
       await expect(page.getByRole('button', { name: 'Carga manual', exact: true }).locator('svg')).toHaveCSS('width', size === 'Grandes' ? '22px' : '16px');
       await captura(page, info, `iconos-viaje-${size}-foto-${photo}`);
       await irEnLaApp(page, '/');
-      const join = page.getByRole('button', { name: 'Unirme con código', exact: true });
-      await expect(join).toBeVisible();
-      expect((await join.boundingBox())!.height).toBe(64);
-      await expect(join.locator('.unirse-numeral')).toHaveCSS('width', (box - 8) + 'px');
+      // El fixture actual muestra el restaurante pendiente dentro del viaje;
+      // «Unirme con código» no está en Inicio. Se mide el control que existe.
+      const pending = page.getByRole('button', { name: 'Mariscos El Faro, falta 1 por elegir', exact: true });
+      await expect(pending).toBeVisible();
+      expect((await pending.boundingBox())!.height).toBe(60);
+      await expect(pending.locator('.viaje-pendiente-ico')).toHaveCSS('width', (box - 8) + 'px');
       // Campana con el badge de los avisos actuales del mock (sin cambiar su API).
       const unread = page.locator('.hdr-badge');
       await expect(unread).toBeVisible();
