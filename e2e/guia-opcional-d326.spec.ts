@@ -277,11 +277,26 @@ test('D327 · restaurante: ticket, modal prioritario y reparto sin acciones auto
   await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'personas');
   expect(await page.getByRole('radio', { checked: true }).getAttribute('aria-checked')).toBe(marcada);
   await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('—');
-  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
+  // Contrato vigente: falta de personas explica al tocar, no deshabilita el CTA.
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeEnabled();
   const ruta = page.url();
   await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
-  await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeFocused();
   expect(page.url()).toBe(ruta);
+});
+
+test('D328 · cierre con acción principal realmente deshabilitada conserva borrador y enfoca Volver', async ({ page }) => {
+  await entrar(page);
+  await irEnLaApp(page, `/viaje/${VIAJE}`);
+  await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
+  await page.getByLabel('Descripción', { exact: true }).fill('Borrador sin monto');
+  await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+  const ruta = page.url(), antes = await datos(page);
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+  await expect(page.getByLabel('Descripción', { exact: true })).toHaveValue('Borrador sin monto');
+  await expect(page.getByLabel('Monto', { exact: true })).toHaveValue('');
+  expect(page.url()).toBe(ruta); expect(await datos(page)).toBe(antes);
 });
 
 test('D327 · cuenta/familia/logout, almacenamiento fallido y enlace prioritario', async ({ page }) => {
