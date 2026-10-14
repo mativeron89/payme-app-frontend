@@ -1,6 +1,6 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
-import { camarasAbiertas, sacarFoto } from './_camara';
+import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
 
 // D327 reemplaza explícitamente la guía plana D326; conserva sus invariantes de aislamiento.
 const VIAJE = 'd1000000-0000-4000-8000-000000000001';
@@ -8,7 +8,7 @@ const guia = (page: Page) => page.getByRole('region', { name: 'Guía interactiva
 async function captura(page: Page, nombre: string, info: TestInfo) {
   if (process.env.D327_CAPTURES === '1') await page.screenshot({ path: info.outputPath(`${nombre}.png`), fullPage: true });
 }
-async function entrar(page: Page) {
+async function entrar(page: Page, antesDelLogin?: () => Promise<void>) {
   await page.route('**/*', (r) => {
     const url = new URL(r.request().url());
     return ['127.0.0.1', 'localhost'].includes(url.hostname) || url.protocol === 'data:' ? r.continue() : r.abort();
@@ -18,7 +18,14 @@ async function entrar(page: Page) {
     localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
     localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
   });
-  await ingresar(page);
+  if (antesDelLogin) {
+    await camaraSimulada(page);
+    await page.goto('/');
+    await antesDelLogin();
+    await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+    await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  } else await ingresar(page);
   await expect(page.getByRole('button', { name: 'Ver guía', exact: true })).toBeVisible();
 }
 async function datos(page: Page) {
@@ -74,25 +81,54 @@ test('D327 · voluntaria y lazy: primer gesto de cámara intacto', async ({ page
   await expect.poll(() => camarasAbiertas(page)).toBe(1);
   await expect(page).toHaveURL(/\/scan$/);
   await expect(guia(page)).toHaveCount(0); expect(modulos).toEqual([]);
+  await irEnLaApp(page, '/home');
+  await page.getByRole('button', { name: 'Ocultar guía por ahora', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeFocused();
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.v1.mock.') && localStorage.getItem(k) === '1'))).toBe(true);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  expect(await page.evaluate(async () => {
+    const preferencia = '/src/ayuda/preferenciaGuia.ts', storage = '/src/api/storage.ts';
+    const { preferenciaGuia, almacenDeGuia } = await import(/* @vite-ignore */ preferencia);
+    const { loadSession } = await import(/* @vite-ignore */ storage);
+    return preferenciaGuia.vista(loadSession().principal_id, almacenDeGuia());
+  })).toBe(true);
+  await expect(page.getByRole('button', { name: 'Ver guía', exact: true })).toHaveCount(0);
+  await expect(guia(page)).toHaveCount(0); expect(modulos).toEqual([]);
 });
 
 test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', async ({ page }, info) => {
-  await entrar(page);
-  // La configuración mock habilita Viajes después del primer render; esperar su precarga real antes de contar.
+  // Medir desde antes del login permite esperar el arranque real, sin ignorar APIs ni usar una pausa fija.
+  await entrar(page, () => page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta);
+    const arranque = { llamadas: [] as string[], pendientes: 0, usernameListo: false };
+    for (const [nombre, fn] of Object.entries(api)) {
+      if (typeof fn !== 'function') continue;
+      Reflect.set(api, nombre, (...args: unknown[]) => {
+        arranque.llamadas.push(nombre);
+        const retorno = fn.apply(api, args);
+        if (!retorno || typeof retorno.then !== 'function') return retorno;
+        arranque.pendientes++;
+        return Promise.resolve(retorno).then((valor) => {
+          if (nombre === 'getUsername') arranque.usernameListo = true;
+          return valor;
+        }).finally(() => { arranque.pendientes--; });
+      });
+    }
+    Reflect.set(window, '__d327Arranque', arranque);
+  }));
   await expect.poll(() => page.evaluate(async () => {
     const ruta = '/src/api/viajesDeHoy.ts';
     const { viajesAbiertosRecordados } = await import(/* @vite-ignore */ ruta);
-    return viajesAbiertosRecordados() !== null;
+    const a = Reflect.get(window, '__d327Arranque') as { pendientes: number; usernameListo: boolean };
+    return a.usernameListo && a.pendientes === 0 && viajesAbiertosRecordados() !== null;
   })).toBe(true);
   const ruta = page.url(), antes = await datos(page);
-  await page.evaluate(async () => {
+  await page.evaluate(() => {
     const observadores = new Set<object>();
-    const llamadas: string[] = [];
-    const rutaApi = '/src/api/index.ts';
-    const { api } = await import(/* @vite-ignore */ rutaApi);
-    for (const [nombre, fn] of Object.entries(api)) {
-      if (typeof fn === 'function') Reflect.set(api, nombre, (...args: unknown[]) => { llamadas.push(nombre); return fn.apply(api, args); });
-    }
+    const { llamadas } = Reflect.get(window, '__d327Arranque') as { llamadas: string[] };
+    llamadas.length = 0;
     for (const nombre of ['MutationObserver', 'ResizeObserver'] as const) {
       const Base = window[nombre];
       Reflect.set(window, nombre, class extends Base {
@@ -192,6 +228,11 @@ test('D327 · restaurante: ticket, modal prioritario y reparto sin acciones auto
   await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'personas');
   expect(await page.getByRole('radio', { checked: true }).getAttribute('aria-checked')).toBe(marcada);
   await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('—');
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
+  const ruta = page.url();
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+  expect(page.url()).toBe(ruta);
 });
 
 test('D327 · cuenta/familia/logout, almacenamiento fallido y enlace prioritario', async ({ page }) => {

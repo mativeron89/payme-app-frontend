@@ -26,7 +26,10 @@ export function GuiaProvider({ children, pagina }: { children: ReactNode; pagina
   const cerrar = useCallback(() => {
     setAbierta(false);
     // No click ni navegación: sólo devuelve el foco a un control que aún exista.
-    const destino = origen.current?.isConnected ? origen.current : document.querySelector<HTMLElement>('.appbar-center');
+    const destino = origen.current?.isConnected && !origen.current.matches(':disabled') ? origen.current
+      : document.querySelector<HTMLElement>('.appbar-center:not(:disabled)')
+        ?? document.querySelector<HTMLElement>('.hdr-back:not(:disabled)')
+        ?? document.querySelector<HTMLElement>('.appbar-item:not(:disabled)');
     destino?.focus({ preventScroll: true });
   }, []);
   const contexto = useMemo(() => ({ abrir, abierta }), [abrir, abierta]);
