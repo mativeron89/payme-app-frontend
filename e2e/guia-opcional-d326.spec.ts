@@ -6,7 +6,7 @@ const VIAJE = 'd1000000-0000-4000-8000-000000000001';
 const guia = (page: Page) => page.getByRole('region', { name: 'Cómo usar PayMe', exact: true });
 
 async function captura(page: Page, nombre: string, info: TestInfo) {
-  if (process.env.D326_CAPTURES === '1') await page.screenshot({ path: info.outputPath(`${nombre}.png`), fullPage: true });
+  if (process.env.D326_CAPTURES === '1' && (!process.env.D326_CAPTURE_ONLY || process.env.D326_CAPTURE_ONLY === nombre)) await page.screenshot({ path: info.outputPath(`${nombre}.png`), fullPage: true });
 }
 
 async function entrar(page: Page) {
@@ -176,3 +176,49 @@ test('D326 · ayuda de porciones conserva la selección y los cálculos del tick
   await expect(page).toHaveURL(new RegExp(`/viaje/${VIAJE}$`));
   await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$827/);
 });
+
+for (const lugar of ['Inicio', 'Más'] as const) {
+  for (const movimiento of ['no-preference', 'reduce'] as const) {
+    test(`D326 · apertura visible en ${lugar}, movimiento ${movimiento}`, async ({ page }, info) => {
+      if (lugar === 'Inicio' && movimiento === 'reduce') await page.setViewportSize({ width: 844, height: 390 });
+      await page.emulateMedia({ reducedMotion: movimiento });
+      await entrar(page);
+      await expect(page.getByRole('region', { name: 'Te invitaron', exact: true })).toBeVisible();
+      await expect(page.locator('.friend-avatar-notice')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Cancún 2026/ }).first()).toBeVisible();
+      // Ofrecer ayuda por primera vez no desplaza el contenido de Inicio.
+      expect(await page.locator('.scroll').first().evaluate((e) => e.scrollTop)).toBe(0);
+      if (lugar === 'Más') await page.getByRole('button', { name: 'Más', exact: true }).click();
+      const ruta = page.url();
+      const antes = await datos(page);
+      await page.getByRole('button', { name: lugar === 'Inicio' ? 'Ver guía' : 'Cómo usar PayMe', exact: true }).click();
+      await expect(guia(page).getByRole('listitem')).toHaveCount(4);
+      // Ningún focus/scrollIntoView/click sobre la guía después de abrirla: se mide el primer cuadro útil.
+      const medida = await guia(page).evaluate((panel) => {
+        const screen = panel.closest('.screen')!;
+        const scroll = panel.closest('.scroll')!;
+        const techo = Math.max(0, scroll.getBoundingClientRect().top, screen.querySelector('.hdr')!.getBoundingClientRect().bottom);
+        const piso = Math.min(window.innerHeight, screen.querySelector('.appbar-block')!.getBoundingClientRect().top, screen.querySelector('.appbar-fab')!.getBoundingClientRect().top);
+        const controles = Array.from(panel.querySelectorAll('h2, .guia-cerrar, .guia-recorridos button')).map((e) => {
+          const r = e.getBoundingClientRect();
+          // Bordes medios y centro: las esquinas redondas no pertenecen al blanco de toque.
+          const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+          const puntos = [[cx, r.top + 3], [cx, r.bottom - 3], [r.left + 3, cy], [r.right - 3, cy], [cx, cy]];
+          return { nombre: e.textContent || e.getAttribute('aria-label'), top: r.top, bottom: r.bottom, libre: puntos.every(([x, y]) => { const encima = document.elementFromPoint(x!, y!); return encima !== null && (encima === e || e.contains(encima)); }) };
+        });
+        return { techo, piso, controles };
+      });
+      await info.attach('apertura-geometria', { body: JSON.stringify(medida, null, 2), contentType: 'application/json' });
+      expect(medida.controles).toHaveLength(5);
+      for (const c of medida.controles) {
+        expect(c.top, `${c.nombre}: encima de cabecera`).toBeGreaterThanOrEqual(medida.techo);
+        expect(c.bottom, `${c.nombre}: encima de barra/círculo`).toBeLessThanOrEqual(medida.piso);
+        expect(c.libre, `${c.nombre}: sin oclusión`).toBe(true);
+      }
+      expect(page.url()).toBe(ruta);
+      expect(await datos(page)).toBe(antes);
+      await expect(guia(page).getByRole('heading', { name: 'Cómo usar PayMe', exact: true })).toBeFocused();
+      await captura(page, `apertura-${lugar}-${movimiento}`, info);
+    });
+  }
+}

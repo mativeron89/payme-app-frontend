@@ -16,6 +16,7 @@
 - El círculo de cámara dice «Escanear» y conserva la apertura nativa en el mismo toque y el destino del viaje correspondiente. «Carga manual» pasa a «Agregar gasto», como acción secundaria; escaneo sigue siendo la acción principal.
 - Textos breves orientan el reparto, la carga de gastos y las pestañas del balance. Las ayudas de porciones y balance se abren sólo al tocarlas, sin cambiar cálculos, montos, permisos ni confirmaciones.
 - Inicio ofrece una guía voluntaria después del contenido actual. Se puede descartar y reabrir en Más → Ayuda. Tres recorridos de cuatro pasos, con ejemplos que no crean mesas, gastos ni pagos. No hay tour, modal o navegación automáticos; no intercepta cámara ni invitaciones.
+- Al abrir voluntariamente la guía, el título y los recorridos quedan por encima del pie y debajo de la cabecera, también en horizontal y con movimiento reducido. La oferta inicial no desplaza la pantalla.
 - La guía se carga al abrirla. Preferencia local mínima y opaca por cuenta/dispositivo, separada entre mock y real, con respaldo en memoria si falla el almacenamiento. Sin API, seguimiento servidor o nuevos datos de perfil. Español e inglés.
 - Pruebas focales de aislamiento, persistencia/fallback, cámara, enlaces, no mutación, foco, pantallas y traducción; CI completo del PR como suite oficial D168. Sin nuevos perks ni cambios de íconos, modo oscuro, backend, infraestructura o dinero. La versión 0.247.0 queda reservada al candidato de íconos pausado.
 - Publicación técnica y prueba visible de Mati se registran por separado (D63).

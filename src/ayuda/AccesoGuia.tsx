@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
@@ -21,13 +21,37 @@ function AccesoDeCuenta({ principal, lugar }: { principal: string; lugar: 'inici
   const [fallo, setFallo] = useState(false);
   const boton = useRef<HTMLButtonElement>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
+  const panel = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let vigente = true;
     void preferenciaGuia.vista(principal, almacenDeGuia()).then((v) => { if (vigente) setVista(v); });
     return () => { vigente = false; };
   }, [principal]);
-  useEffect(() => { if (abierta) titulo.current?.focus(); }, [abierta]);
+  useLayoutEffect(() => {
+    if (!abierta || !panel.current) return;
+    // Sólo tras la apertura voluntaria. El foco por sí solo deja el título junto al pie,
+    // y el contenido diferido aumenta el panel después: se coloca de nuevo al llegar.
+    titulo.current?.focus({ preventScroll: true });
+    const zona = panel.current.closest<HTMLElement>('.scroll');
+    const cabecera = panel.current.querySelector<HTMLElement>('.guia-cabecera');
+    if (!zona || !cabecera) return;
+    const pantalla = panel.current.closest('.screen');
+    const encabezado = pantalla?.querySelector('.hdr');
+    const bordeVisible = Math.max(zona.getBoundingClientRect().top, encabezado?.getBoundingClientRect().bottom ?? 0);
+    const pie = Math.min(window.innerHeight,
+      pantalla?.querySelector('.appbar-block')?.getBoundingClientRect().top ?? window.innerHeight,
+      pantalla?.querySelector('.appbar-fab')?.getBoundingClientRect().top ?? window.innerHeight);
+    const cabeceraRect = cabecera.getBoundingClientRect();
+    const opciones = panel.current.querySelector('.guia-recorridos')?.getBoundingClientRect();
+    // En horizontal el espacio entre cabecera y cámara puede ser corto: el margen
+    // se reduce sólo lo necesario para que el título y los tres recorridos entren.
+    const altoInicial = (opciones?.bottom ?? cabeceraRect.bottom) - cabeceraRect.top;
+    // Un píxel de reserva evita que el redondeo de scrollTop deje el borde bajo el pie.
+    const aire = Math.max(0, Math.min(8, pie - bordeVisible - altoInicial - 1));
+    // El contenedor usa scroll auto, sin animación; también con reduced-motion.
+    zona.scrollTop += cabeceraRect.top - bordeVisible - aire;
+  }, [abierta, Contenido]);
 
   function recordar() {
     setVista(true);
@@ -66,7 +90,7 @@ function AccesoDeCuenta({ principal, lugar }: { principal: string; lugar: 'inici
         </button>
       ))}
       {abierta && (
-        <section className="guia-panel" aria-labelledby="guia-titulo" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }}>
+        <section ref={panel} className="guia-panel" aria-labelledby="guia-titulo" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }}>
           <div className="guia-cabecera">
             <h2 ref={titulo} tabIndex={-1} id="guia-titulo">{t('Cómo usar PayMe')}</h2>
             <button type="button" className="guia-cerrar" aria-label={t('Cerrar guía')} onClick={cerrar}><Icon name="x" size={20} /></button>
