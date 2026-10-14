@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
+import { irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
 
 // D327 reemplaza explícitamente la guía plana D326; conserva sus invariantes de aislamiento.
@@ -8,7 +8,12 @@ const guia = (page: Page) => page.getByRole('region', { name: 'Guía interactiva
 async function captura(page: Page, nombre: string, info: TestInfo) {
   if (process.env.D327_CAPTURES === '1') await page.screenshot({ path: info.outputPath(`${nombre}.png`), fullPage: true });
 }
-async function entrar(page: Page, antesDelLogin?: () => Promise<void>) {
+async function posponerAviso(page: Page) {
+  const aviso = page.getByRole('complementary', { name: 'Actualización del Aviso de Privacidad', exact: true });
+  await expect(aviso).toBeVisible();
+  await aviso.getByRole('button', { name: 'Ahora no', exact: true }).click();
+}
+async function entrar(page: Page, antesDelLogin?: () => Promise<void>, conservarPrioridades = false) {
   await page.route('**/*', (r) => {
     const url = new URL(r.request().url());
     return ['127.0.0.1', 'localhost'].includes(url.hostname) || url.protocol === 'data:' ? r.continue() : r.abort();
@@ -18,15 +23,18 @@ async function entrar(page: Page, antesDelLogin?: () => Promise<void>) {
     localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
     localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
   });
-  if (antesDelLogin) {
-    await camaraSimulada(page);
-    await page.goto('/');
-    await antesDelLogin();
-    await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
-    await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
-    await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  } else await ingresar(page);
-  await expect(page.getByRole('button', { name: 'Ver guía', exact: true })).toBeVisible();
+  await camaraSimulada(page); await page.goto('/');
+  if (!conservarPrioridades) await page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts';
+    const { state, persist } = await import(/* @vite-ignore */ ruta);
+    state.pendingInvitations = []; persist();
+  });
+  await antesDelLogin?.();
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  if (!conservarPrioridades) { await posponerAviso(page); await expect(guia(page)).toBeVisible(); }
 }
 async function datos(page: Page) {
   return page.evaluate(async () => {
@@ -36,7 +44,7 @@ async function datos(page: Page) {
   });
 }
 async function abrir(page: Page) {
-  await page.getByRole('button', { name: 'Ver guía', exact: true }).click();
+  if (!await guia(page).isVisible()) await page.getByRole('button', { name: 'Ver guía', exact: true }).click();
   await expect(guia(page)).toBeVisible();
   await expect(page.locator('.guia-foco')).toBeVisible();
 }
@@ -61,6 +69,7 @@ async function geometria(page: Page) {
   });
   expect(medida.noSolapa).toBe(true); expect(medida.visible).toBe(true); expect(medida.objetivoLibre).toBe(true);
   for (const b of medida.botones) { expect(b.alto).toBeGreaterThanOrEqual(44); expect(b.libre).toBe(true); }
+  expect(await guia(page).locator('label').evaluate((e) => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   }).toPass({ timeout: 10000 });
 }
 
@@ -71,30 +80,68 @@ test.afterEach(async ({ page }, info) => {
   await info.attach('geometria-fallo', { body: JSON.stringify(medidas, null, 2), contentType: 'application/json' });
 });
 
-test('D327 · voluntaria y lazy: primer gesto de cámara intacto', async ({ page }) => {
-  const modulos: string[] = [];
-  page.on('request', (r) => { if (r.url().includes('/GuiaContenido')) modulos.push(r.url()); });
-  await entrar(page);
-  await expect(guia(page)).toHaveCount(0); expect(modulos).toEqual([]);
-  expect(await page.locator('.scroll').first().evaluate((e) => e.scrollTop)).toBe(0);
+test('D328 · inicio sin consentimiento heredado, cierre temporal y cámara nativa', async ({ page }) => {
+  await entrar(page, () => page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts'; const { state } = await import(/* @vite-ignore */ ruta);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`auth:${state.user.id}`));
+    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(`payme.app.guia.v1.mock.${hash}`, '1');
+  }));
+  await expect(guia(page).getByRole('checkbox', { name: 'No volver a mostrar', exact: true })).not.toBeChecked();
+  expect(await camarasAbiertas(page)).toBe(0);
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect.poll(() => camarasAbiertas(page)).toBe(1);
-  await expect(page).toHaveURL(/\/scan$/);
-  await expect(guia(page)).toHaveCount(0); expect(modulos).toEqual([]);
-  await irEnLaApp(page, '/home');
+  await expect(page).toHaveURL(/\/scan$/); await expect(guia(page)).toHaveCount(0);
+  await irEnLaApp(page, '/home'); await expect(guia(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Ocultar guía por ahora', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeFocused();
-  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.v1.mock.') && localStorage.getItem(k) === '1'))).toBe(true);
-  await page.reload();
+  expect(await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.optout.')))).toBe(false);
+  await page.reload(); await posponerAviso(page); await expect(guia(page)).toBeVisible();
+  await guia(page).getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await guia(page).getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await guia(page).getByRole('button', { name: 'Terminar guía', exact: true }).click();
+  await expect(guia(page)).toHaveCount(0);
+  await page.reload(); await posponerAviso(page); await expect(guia(page)).toBeVisible();
+});
+
+test('D328 · opt-out explícito reversible, reapertura y engine ausente al próximo inicio', async ({ page }) => {
+  await entrar(page);
+  const casilla = guia(page).getByRole('checkbox', { name: 'No volver a mostrar', exact: true });
+  await casilla.check(); await casilla.uncheck(); await casilla.check();
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.optout.v2.mock.') && localStorage.getItem(k) === '1'))).toBe(true);
+  const modulos: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/GuiaContenido')) modulos.push(r.url()); });
+  await page.reload(); await posponerAviso(page);
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
-  expect(await page.evaluate(async () => {
-    const preferencia = '/src/ayuda/preferenciaGuia.ts', storage = '/src/api/storage.ts';
-    const { preferenciaGuia, almacenDeGuia } = await import(/* @vite-ignore */ preferencia);
-    const { loadSession } = await import(/* @vite-ignore */ storage);
-    return preferenciaGuia.vista(loadSession().principal_id, almacenDeGuia());
-  })).toBe(true);
-  await expect(page.getByRole('button', { name: 'Ver guía', exact: true })).toHaveCount(0);
   await expect(guia(page)).toHaveCount(0); expect(modulos).toEqual([]);
+  await page.getByRole('button', { name: 'Más', exact: true }).click();
+  await page.getByRole('button', { name: 'Cómo usar PayMe', exact: true }).click();
+  await expect(casilla).toBeChecked(); await casilla.uncheck();
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await expect(guia(page)).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.optout.')))).toBe(false);
+  await page.reload(); await posponerAviso(page); await expect(guia(page)).toBeVisible();
+  await expect(casilla).not.toBeChecked();
+});
+
+test('D328 · aviso e invitación conservan prioridad y omitir no persiste exclusión', async ({ page }) => {
+  await entrar(page, undefined, true);
+  await expect(page.getByRole('button', { name: 'Sumarme', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ocultar guía por ahora', exact: true })).toBeVisible();
+  await expect(guia(page)).toHaveCount(0);
+  await posponerAviso(page); await expect(guia(page)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ocultar guía por ahora', exact: true }).click();
+  await page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts'; const { state, persist } = await import(/* @vite-ignore */ ruta);
+    state.pendingInvitations = []; persist();
+  });
+  await page.getByRole('button', { name: 'Más', exact: true }).click();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sumarme', exact: true })).toHaveCount(0);
+  await expect(guia(page)).toHaveCount(0);
+  await page.reload(); await posponerAviso(page); await expect(guia(page)).toBeVisible();
 });
 
 test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', async ({ page }, info) => {
@@ -124,6 +171,8 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
     const a = Reflect.get(window, '__d327Arranque') as { pendientes: number; usernameListo: boolean };
     return a.usernameListo && a.pendientes === 0 && viajesAbiertosRecordados() !== null;
   })).toBe(true);
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await expect(guia(page)).toHaveCount(0);
   const ruta = page.url(), antes = await datos(page);
   await page.evaluate(() => {
     const observadores = new Set<object>();
@@ -242,6 +291,7 @@ test('D327 · cuenta/familia/logout, almacenamiento fallido y enlace prioritario
     Storage.prototype.setItem = function (k, v) { if (k.startsWith('payme.app.guia.')) throw Error('storage sintético denegado'); return original.call(this, k, v); };
   });
   await abrir(page);
+  await guia(page).getByRole('checkbox', { name: 'No volver a mostrar', exact: true }).check();
   await irEnLaApp(page, '/#/mesa/PA-9999?t=tok-sintetico-inexistente-d327');
   await expect(page.getByText('Este link ya no funciona')).toBeVisible();
   await expect(guia(page)).toHaveCount(0);
@@ -281,8 +331,8 @@ test('D327 · 375/430/horizontal/reduced-motion/zoom y traducción', async ({ pa
   await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
   await page.evaluate(() => { document.documentElement.style.zoom = ''; localStorage.setItem('payme.app.idioma.v1', 'en'); });
   await page.goto('/mas');
-  await page.getByRole('button', { name: 'How to use PayMe', exact: true }).click();
   const en = page.getByRole('region', { name: 'Interactive guide', exact: true });
   await expect(en.getByRole('heading', { name: 'Start at Home' })).toBeVisible();
+  await expect(en.getByRole('checkbox', { name: 'Don’t show again', exact: true })).not.toBeChecked();
   await captura(page, 'guide-english', info);
 });

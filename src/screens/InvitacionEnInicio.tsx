@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { olvidarLoDeMesas, ultimoVisto } from '../api/ultimoVisto';
 import { api } from '../api';
+import { usePrioridadGuia } from '../ayuda/GuiaProvider';
 import { extractApiError } from '../api/errors';
 import { useToast } from '../components/ui';
 import { FotoDeQuienInvita } from '../components/FotoDeQuienInvita';
@@ -187,7 +188,9 @@ export function InvitacionEnInicio() {
   const [lista, setLista] = useState<InvitacionMostrable[]>(
     () => ultimoVisto.leer<InvitacionMostrable[]>('inicio.invitaciones') ?? [],
   );
+  const [consultaLista, setConsultaLista] = useState(false);
   const cargar = useCallback(() => {
+    setConsultaLista(false);
     // T-01 · la cuenta se toma AL PEDIR.
     const turno = ultimoVisto.turno();
     api
@@ -200,17 +203,20 @@ export function InvitacionEnInicio() {
         if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
         const g = ultimoVisto.guardar(turno, 'inicio.invitaciones', mostrables);
         if (g) setLista(g.valor);
+        setConsultaLista(true);
       })
       .catch(() => {
         if (!ultimoVisto.esDeAhora(turno)) return;
         // Sin poder confirmarla, no se sigue mostrando la guardada.
         ultimoVisto.olvidar('inicio.invitaciones');
         setLista([]);
+        setConsultaLista(true);
       });
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
   const { ocupada, aceptar } = useAceptarInvitacion(cargar);
   const elegida = invitacionParaInicio(lista);
+  usePrioridadGuia('invitaciones', !consultaLista || elegida !== null);
   if (!elegida) return null;
   return (
     <section className="home-mesa" aria-label={t('Te invitaron')}>

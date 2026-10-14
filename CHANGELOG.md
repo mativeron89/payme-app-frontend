@@ -1,6 +1,7 @@
 # 0.249.0 · 2026-10-14
 
-- D327: guía voluntaria con burbujas y resaltado de controles reales en restaurantes y viajes; pasos contextuales, Atrás/Siguiente/Cerrar, pausa ante modales, sin acciones automáticas de negocio.
+- D328: primera burbuja al iniciar hasta marcar «No volver a mostrar»; cierre temporal, preferencia explícita reversible por cuenta y prioridad de avisos/invitaciones.
+- D327: guía interactiva cerrable con burbujas y resaltado de controles reales en restaurantes y viajes; pasos contextuales, Atrás/Siguiente/Cerrar, pausa ante modales, sin acciones automáticas de negocio.
 - Conserva simplificación D326, preferencia local por cuenta, rutas, borradores y gesto original de cámara. Motor y estilos interactivos diferidos hasta apertura.
 
 # CHANGELOG — payme-app-frontend

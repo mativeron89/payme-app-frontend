@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { MOCK_USER } from '../src/api/mock/seedData';
 import { expect, type Page } from '@playwright/test';
 import { corteDePagosView } from '../src/api/releaseGates';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
@@ -34,7 +36,14 @@ import { camaraSimulada, sacarFoto } from './_camara';
  * la cámara en vivo, y el Chromium de la suite no tiene cámara. Un test que
  * quiere otro modo (negada, sin cámara, sin soporte) lo pide antes de esto.
  */
-export async function ingresar(page: Page): Promise<void> {
+export async function ingresar(page: Page, opciones: { tutorial?: 'inicio' | 'omitido' } = {}): Promise<void> {
+  // D328: los recorridos de otros flujos usan una cuenta que ya eligió no repetir
+  // la guía. Es estado explícito de la fixture, no un bypass del producto. La
+  // spec de guía entra sin esta exclusión y prueba casilla/inicio/legacy/retorno.
+  if (opciones.tutorial !== 'inicio') {
+    const hash = createHash('sha256').update(`auth:${MOCK_USER.id}`).digest('hex');
+    await page.addInitScript((clave) => localStorage.setItem(clave, '1'), `payme.app.guia.optout.v2.mock.${hash}`);
+  }
   await camaraSimulada(page);
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
