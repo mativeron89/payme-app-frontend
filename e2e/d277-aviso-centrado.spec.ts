@@ -18,9 +18,8 @@ async function entrar(page: Page, { viajes }: { viajes: boolean }): Promise<void
     await relojFueraDeLasFechasDeLosViajes(page);
   }
   await ingresar(page);
-  // D326 · este contrato de centrado es el de la cuenta que ya descartó la guía.
-  // La oferta visible y su cierre se recorren en guia-opcional-d326.spec.ts.
-  await page.getByRole('button', { name: 'Ocultar guía por ahora' }).click();
+  // D328 · ingresar declara la exclusión explícita de esta cuenta sintética.
+  // La oferta y el cierre temporal se recorren en guia-opcional-d326.spec.ts.
 }
 
 

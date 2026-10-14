@@ -64,11 +64,13 @@ async function geometria(page: Page) {
     };
     const barra = Math.min(window.innerHeight, ...Array.from(document.querySelectorAll('.appbar-block, .appbar-fab, .vj-pie')).map((e) => e.getBoundingClientRect().top));
     return { noSolapa: b.bottom <= r.top || b.top >= r.bottom || b.right <= r.left || b.left >= r.right,
+      viewport: { width: window.innerWidth, height: window.innerHeight }, panel: b.toJSON(), target: r.toJSON(),
       visible: b.left >= 0 && b.right <= window.innerWidth && b.top >= 0 && b.bottom <= barra,
-      objetivoLibre: puntos(target), botones: Array.from(panel.querySelectorAll('button')).map((e) => ({ alto: e.getBoundingClientRect().height, libre: puntos(e) })) };
+      objetivoLibre: puntos(target), botones: Array.from(panel.querySelectorAll('button')).map((e) => ({ nombre: e.getAttribute('aria-label') ?? e.textContent, rect: e.getBoundingClientRect().toJSON(), alto: e.getBoundingClientRect().height, libre: puntos(e) })) };
   });
-  expect(medida.noSolapa).toBe(true); expect(medida.visible).toBe(true); expect(medida.objetivoLibre).toBe(true);
-  for (const b of medida.botones) { expect(b.alto).toBeGreaterThanOrEqual(44); expect(b.libre).toBe(true); }
+  const detalle = JSON.stringify(medida);
+  expect(medida.noSolapa, detalle).toBe(true); expect(medida.visible, detalle).toBe(true); expect(medida.objetivoLibre, detalle).toBe(true);
+  for (const b of medida.botones) { expect(b.alto, detalle).toBeGreaterThanOrEqual(44); expect(b.libre, detalle).toBe(true); }
   expect(await guia(page).locator('label').evaluate((e) => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   }).toPass({ timeout: 10000 });
 }
@@ -77,6 +79,7 @@ async function geometria(page: Page) {
 test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
   const medidas = await page.evaluate(() => Array.from(document.querySelectorAll('[data-guia], .guia-burbuja, .guia-nota, .hdr, .appbar-block, .appbar-fab')).map((e) => ({ target: e.getAttribute('data-guia'), clase: e.className, rect: e.getBoundingClientRect().toJSON() }))).catch(() => []);
+  console.error('D328_GEOMETRIA_FALLO', JSON.stringify(medidas));
   await info.attach('geometria-fallo', { body: JSON.stringify(medidas, null, 2), contentType: 'application/json' });
 });
 
@@ -175,17 +178,25 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
   await expect(guia(page)).toHaveCount(0);
   const ruta = page.url(), antes = await datos(page);
   await page.evaluate(() => {
-    const observadores = new Set<object>();
+    const observadores = new Map<object, string>();
+    const ajenos = new Map<object, string>();
     const { llamadas } = Reflect.get(window, '__d327Arranque') as { llamadas: string[] };
     llamadas.length = 0;
     for (const nombre of ['MutationObserver', 'ResizeObserver'] as const) {
       const Base = window[nombre];
       Reflect.set(window, nombre, class extends Base {
-        observe(...args: Parameters<MutationObserver['observe']> & Parameters<ResizeObserver['observe']>) { observadores.add(this); super.observe(...args); }
-        disconnect() { observadores.delete(this); super.disconnect(); }
+        observe(...args: Parameters<MutationObserver['observe']> & Parameters<ResizeObserver['observe']>) {
+          const target = args[0] as Element;
+          // Los montos de Viajes también observan su tamaño. Contar sus observers
+          // como guía produciría un falso leak al actualizar el saldo inicial.
+          if (nombre === 'MutationObserver' || target.matches('.guia-burbuja, [data-guia]')) observadores.set(this, `${nombre}:${target.className || target.tagName}`);
+          else ajenos.set(this, target.className);
+          super.observe(...args);
+        }
+        disconnect() { observadores.delete(this); ajenos.delete(this); super.disconnect(); }
       });
     }
-    Reflect.set(window, '__d327Efectos', { llamadas, observadores });
+    Reflect.set(window, '__d327Efectos', { llamadas, observadores, ajenos });
   });
   await abrir(page);
   await expect(guia(page).getByRole('heading', { name: 'Escanear', exact: true })).toBeFocused();
@@ -201,9 +212,13 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeFocused();
   await expect(page.locator('[aria-describedby~="guia-explicacion"]')).toHaveCount(0);
   const efectos = await page.evaluate(() => {
-    const e = Reflect.get(window, '__d327Efectos') as { llamadas: string[]; observadores: Set<object> };
+    const e = Reflect.get(window, '__d327Efectos') as { llamadas: string[]; observadores: Map<object, string>; ajenos: Map<object, string> };
     return { llamadas: e.llamadas, observadores: e.observadores.size };
   });
+  console.info('D328_OBSERVADORES_AL_CERRAR', await page.evaluate(() => {
+    const e = Reflect.get(window, '__d327Efectos') as { observadores: Map<object, string>; ajenos: Map<object, string> };
+    return { guia: [...e.observadores.values()], ajenos: [...e.ajenos.values()] };
+  }));
   expect(efectos).toEqual({ llamadas: [], observadores: 0 });
   await page.getByRole('button', { name: 'Más', exact: true }).click();
   await page.getByRole('button', { name: 'Cómo usar PayMe', exact: true }).click();

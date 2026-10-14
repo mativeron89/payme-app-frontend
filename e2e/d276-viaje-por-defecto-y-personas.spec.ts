@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { omitirGuiaEnFixture } from './_app';
 import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
 
 /**
@@ -29,6 +30,7 @@ const DENTRO = mx('2026-10-10T14:00:00');
  * accesible, y dentro de las fechas el círculo se llama «Escanear ticket para Cancún 2026».
  */
 async function entrar(page: Page, instante: Date, extra: Record<string, string> = {}): Promise<void> {
+  await omitirGuiaEnFixture(page);
   await page.addInitScript((seams) => {
     localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
     for (const [k, v] of Object.entries(seams)) localStorage.setItem(k, v);

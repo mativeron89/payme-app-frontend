@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { abrirMesaConLink, ingresar, irEnLaApp, tokenDeLaUrl } from './_app';
+import { abrirMesaConLink, ingresar, irEnLaApp, omitirGuiaEnFixture, tokenDeLaUrl } from './_app';
 
 /**
  * AF-USUARIO-ARROBA · decisión 93 de Mati · el @usuario, lado de la app, con el
@@ -44,6 +44,7 @@ async function apagar(page: Page): Promise<void> {
 
 /** Entra con la cuenta demo SIN esperar Inicio: encendido, primero va la puerta. */
 async function entrar(page: Page): Promise<void> {
+  await omitirGuiaEnFixture(page);
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');

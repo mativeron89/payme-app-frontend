@@ -29,6 +29,15 @@ import { camaraSimulada, sacarFoto } from './_camara';
  * nombre accesible con destino. No cambian rutas, permisos ni captura nativa.
  */
 
+/** Cuenta sintética que eligió no repetir la guía; no cambia auth ni preferencias de producto. */
+export async function omitirGuiaEnFixture(page: Page): Promise<void> {
+  const hash = createHash('sha256').update(`auth:${MOCK_USER.id}`).digest('hex');
+  await page.addInitScript((clave) => {
+    // addInitScript también corre en about:blank, que no dispone de storage.
+    if (location.protocol === 'http:' || location.protocol === 'https:') localStorage.setItem(clave, '1');
+  }, `payme.app.guia.optout.v2.mock.${hash}`);
+}
+
 /**
  * Cualquier email entra en el mock; la contraseña no se valida.
  *
@@ -40,10 +49,7 @@ export async function ingresar(page: Page, opciones: { tutorial?: 'inicio' | 'om
   // D328: los recorridos de otros flujos usan una cuenta que ya eligió no repetir
   // la guía. Es estado explícito de la fixture, no un bypass del producto. La
   // spec de guía entra sin esta exclusión y prueba casilla/inicio/legacy/retorno.
-  if (opciones.tutorial !== 'inicio') {
-    const hash = createHash('sha256').update(`auth:${MOCK_USER.id}`).digest('hex');
-    await page.addInitScript((clave) => localStorage.setItem(clave, '1'), `payme.app.guia.optout.v2.mock.${hash}`);
-  }
+  if (opciones.tutorial !== 'inicio') await omitirGuiaEnFixture(page);
   await camaraSimulada(page);
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');

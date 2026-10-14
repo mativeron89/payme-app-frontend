@@ -17,9 +17,9 @@
 .guia-burbuja :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .guia-burbuja h2:focus { outline: none; }
 @media (max-height: 480px) and (min-width: 600px) {
-  .guia-burbuja { padding: 4px 12px 8px; display: grid; grid-template-columns: minmax(0, 1fr) 170px; column-gap: 12px; }
-  .guia-cabeza { grid-column: 1 / -1; grid-row: 1; }
-  .guia-burbuja > [aria-live] { grid-column: 1; grid-row: 2; }
+  .guia-burbuja { padding: 4px 12px 8px; display: grid; grid-template-columns: minmax(0, 1fr) 260px; column-gap: 12px; }
+  .guia-cabeza { grid-column: 2; grid-row: 1; }
+  .guia-burbuja > [aria-live] { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
   .guia-burbuja > [aria-live] h2 { min-height: 0; }
   .guia-acciones { grid-column: 2; grid-row: 2; align-self: end; flex-wrap: nowrap; }
   .guia-nota { grid-column: 1 / -1; }

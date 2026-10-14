@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { CORTE } from './_app';
+import { CORTE, omitirGuiaEnFixture } from './_app';
 import { camaraSimulada, sacarFoto } from './_camara';
 import { abrirTusConsumos } from './_mesa';
 
@@ -46,6 +46,7 @@ const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
  */
 test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace desmarcado', async ({ page }) => {
   // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await omitirGuiaEnFixture(page);
   await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GARANTIA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
@@ -64,7 +65,7 @@ test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
   await expect(page.getByText('Garantiza la mesa')).toBeVisible();
-  const checkGarantia = page.getByRole('checkbox');
+  const checkGarantia = page.getByRole('checkbox', { name: 'Guardar esta tarjeta para la próxima', exact: true });
   await expect(checkGarantia).toBeVisible();
   await expect(checkGarantia).not.toBeChecked();
 });
@@ -73,6 +74,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   test.skip(CORTE.pagosCortados, MOTIVO);
   // Cuenta nueva invitada: nace sin tarjetas (el camino primerizo F&F real).
   // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await omitirGuiaEnFixture(page);
   await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GUARDADA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
@@ -94,7 +96,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 
   // SUPERFICIE 1 · garantía: el checkbox existe y NACE DESMARCADO.
   await expect(page.getByText('Garantiza la mesa')).toBeVisible();
-  const checkGarantia = page.getByRole('checkbox');
+  const checkGarantia = page.getByRole('checkbox', { name: 'Guardar esta tarjeta para la próxima', exact: true });
   await expect(checkGarantia).toBeVisible();
   await expect(checkGarantia).not.toBeChecked();
 
@@ -109,7 +111,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
   // SUPERFICIE 2 · pago: también nace desmarcado.
-  const checkPago = page.getByRole('checkbox');
+  const checkPago = page.getByRole('checkbox', { name: 'Guardar esta tarjeta para la próxima', exact: true });
   await expect(checkPago).toBeVisible();
   await expect(checkPago).not.toBeChecked();
 
@@ -130,6 +132,7 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   test.skip(CORTE.pagosCortados, MOTIVO);
   // Mismo recorrido primerizo invitado, checkbox intacto en las dos superficies.
   // D177 · «Nueva» abre la cámara: este spec entra por su propio alta, sin `ingresar()`.
+  await omitirGuiaEnFixture(page);
   await camaraSimulada(page);
   await page.goto(`/#/home?signup_invitation=${SIGNUP_SIN_GUARDAR}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
