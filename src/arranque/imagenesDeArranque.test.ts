@@ -78,7 +78,7 @@ describe('🔴 D300 · las imágenes de arranque del iPhone', () => {
 
   /**
    * 🔴 Cada imagen es la pantalla de carga de ESE tamaño (D286): la franja navy mide exactamente la barra de estado (y
-   * debajo empieza el triángulo de arriba, claro), y el ícono está en el centro de la zona: entre las flechas, navy; la
+   * debajo empieza el triángulo de arriba, oscuro por D330), y el ícono está en el centro de la zona: entre las flechas, navy; la
    * flecha izquierda, cian; la derecha, blanca. Se mide en los píxeles, no en el nombre del archivo.
    */
   for (const d of DISPOSITIVOS) {
@@ -100,9 +100,9 @@ describe('🔴 D300 · las imágenes de arranque del iPhone', () => {
           }
         }
       }
-      // Justo debajo, el triángulo de arriba: claro, no navy.
+      // Justo debajo, el triángulo de arriba: el degradado navy de D330.
       const debajo = pixel(d.ancho / 2, d.barra + 1 / d.dpr);
-      expect(Math.min(...debajo), `${archivoDe(d)}: debajo de la franja no empieza el triángulo claro`).toBeGreaterThan(150);
+      expect(Math.max(...debajo), `${archivoDe(d)}: debajo de la franja no empieza el triángulo oscuro`).toBeLessThan(110);
       // El ícono, centrado en la zona: entre las flechas, navy; la izquierda (x 46–61 del ícono), cian; la derecha, blanca.
       expect(pixel(d.ancho / 2, centroY), `${archivoDe(d)}: el centro del ícono`).toEqual([...NAVY]);
       expect(pixel(d.ancho / 2 - 10, centroY), `${archivoDe(d)}: la flecha cian`).toEqual([0x0f, 0xb5, 0xc9]);

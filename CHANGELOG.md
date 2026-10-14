@@ -1,3 +1,9 @@
+# 0.250.0 · 2026-10-14
+
+- D330: pantalla de carga con el degradado azul oscuro arriba y el claro abajo; intercambia los dos degradados existentes completos, conservando logo, laterales turquesa, geometría, animación y tiempos.
+- Las once imágenes de arranque de iPhone se derivan de la misma fuente con el generador existente para conservar la continuidad visual.
+- Entrega consolidada con la guía D327 y «No volver a mostrar» D328 de 0.249.0; su runtime permanece sin cambios.
+
 # 0.249.0 · 2026-10-14
 
 - D328: primera burbuja al iniciar hasta marcar «No volver a mostrar»; cierre temporal, preferencia explícita reversible por cuenta y prioridad de avisos/invitaciones.
