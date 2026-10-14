@@ -146,7 +146,7 @@ describe('D245 · el viaje abierto, más simple', () => {
   it('🔴 D250 · D255-7 · D279 · D290 · D297 · el orden: monto, Miembros, «Agregar gasto» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas» y el aviso', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto. D297: la fila «Configuración» pasó al
     // engranaje de la tarjeta de título.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 ¿Qué significa mi balance\? Es lo que pagaste menos lo que te corresponde consumir\. A favor: pusiste de más\. En negativo: te falta cubrir esa parte\. Puede cambiar mientras cargan gastos o eligen consumos\. Al cerrar el viaje se proponen transferencias entre personas\. PayMe no mueve ese dinero: el pago y su confirmación se hacen por separado\. Miembros 4 Agregar gasto Ver balance del viaje Notas 0 de 4 escribieron Toca el para cargar un ticket$/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Agregar gasto ¿Qué significa mi balance\? Es lo que pagaste menos lo que te corresponde consumir\. A favor: pusiste de más\. En negativo: te falta cubrir esa parte\. Puede cambiar mientras cargan gastos o eligen consumos\. Al cerrar el viaje se proponen transferencias entre personas\. PayMe no mueve ese dinero: el pago y su confirmación se hacen por separado\. Ver balance del viaje Notas 0 de 4 escribieron Toca el para cargar un ticket$/);
     expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Agregar gasto<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
   });
