@@ -14,7 +14,7 @@
 ## 0.248.0 — D326 · acciones claras y guía opcional para restaurantes y viajes (2026-10-13)
 
 - El círculo de cámara dice «Escanear» y conserva la apertura nativa en el mismo toque y el destino del viaje correspondiente. «Carga manual» pasa a «Agregar gasto», como acción secundaria; escaneo sigue siendo la acción principal.
-- Textos breves orientan el reparto, la carga de gastos y las pestañas del balance. Las ayudas de porciones y balance se abren sólo al tocarlas, sin cambiar cálculos, montos, permisos ni confirmaciones.
+- Textos breves orientan el reparto, la carga de gastos y las pestañas del balance. Las ayudas de porciones y balance se abren sólo al tocarlas, sin cambiar cálculos, montos, permisos ni confirmaciones. La ayuda de porciones queda fuera de los renglones para conservar su alto al elegir; la de balance acompaña su acceso sin alterar el centrado del monto.
 - Inicio ofrece una guía voluntaria después del contenido actual. Se puede descartar y reabrir en Más → Ayuda. Tres recorridos de cuatro pasos, con ejemplos que no crean mesas, gastos ni pagos. No hay tour, modal o navegación automáticos; no intercepta cámara ni invitaciones.
 - Al abrir voluntariamente la guía, el título y los recorridos quedan por encima del pie y debajo de la cabecera, también en horizontal y con movimiento reducido. La oferta inicial no desplaza la pantalla.
 - La guía se carga al abrirla. Preferencia local mínima y opaca por cuenta/dispositivo, separada entre mock y real, con respaldo en memoria si falla el almacenamiento. Sin API, seguimiento servidor o nuevos datos de perfil. Español e inglés.

@@ -110,7 +110,7 @@ test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adent
     const raw = localStorage.getItem('payme_app_session__mock');
     return raw ? (JSON.parse(raw) as { user?: { first_name?: string; last_name?: string } }).user ?? null : null;
   });
-  expect(usuario).toMatchObject({ first_name: 'Nora', last_name: 'Escanear' });
+  expect(usuario).toMatchObject({ first_name: 'Nora', last_name: 'Nueva' });
 
   // 🔴 El id_token no quedó guardado en ningún lado. Control positivo: la
   // búsqueda mira valores reales (la sesión sí está).

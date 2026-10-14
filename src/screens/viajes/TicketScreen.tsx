@@ -624,6 +624,7 @@ function ConsumoVista(props: TicketVistaProps) {
           <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
             <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
             <ListaParaElegir {...props} />
+            <AyudaDePorciones />
           </section>
         )}
         <QuienesPagaron ticket={ticket} miembros={miembros} />
@@ -705,7 +706,6 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
                   <button type="button" className="qc-soltar" onClick={() => onSoltar(i.id)}>
                     {t('Soltar')}
                   </button>
-                  <AyudaDePorciones />
                 </div>
               </div>
             );

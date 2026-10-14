@@ -43,7 +43,7 @@ const NEW_RESPONSE: ProfileIdentityResponse = {
   user: {
     ...OLD_RESPONSE.user,
     first_name: 'Renata',
-    last_name: 'Escanear',
+    last_name: 'Nueva',
     avatar: NEW_AVATAR,
   },
 };

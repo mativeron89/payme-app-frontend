@@ -820,7 +820,6 @@ export function MesaDetailView({
                   >
                     {t('Soltar')}
                   </button>
-                  <AyudaDePorciones />
                 </div>
               );
             }
@@ -918,6 +917,7 @@ export function MesaDetailView({
           );
         })()}</div>)}
       </div>
+      {esConsumo && <AyudaDePorciones />}
       {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
           comensal ver que su parte YA está tomada. Sin esto volvía, veía
           casilleros libres y pagaba de nuevo — llevándose el de otro.

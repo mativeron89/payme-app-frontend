@@ -604,7 +604,6 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
   return (
     <>
       <MontoDeBalance cents={v.mi_balance_cents} />
-      <AyudaDeBalance />
       <DesplegableMiembros miembros={v.miembros} fotoDe={fotoDe} />
       {/* D250 · escanear es el círculo de la cámara de la barra; «Carga manual» queda sola, a todo el ancho. */}
       <div className="vjv-acciones vjv-acciones-una">
@@ -613,6 +612,7 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
           {t('Agregar gasto')}
         </button>
       </div>
+      <AyudaDeBalance />
       <button type="button" className="vj-card vjv-ver-balance" onClick={onVerBalance}>
         <span>{t('Ver balance del viaje')}</span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />

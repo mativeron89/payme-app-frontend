@@ -29,7 +29,5 @@
 .ayuda-contextual { color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 4px 0 12px; }
 .ayuda-contextual summary { min-height: 44px; padding: 10px 0; box-sizing: border-box; color: var(--action); cursor: pointer; font-weight: 600; }
 .ayuda-contextual p { margin: 0 0 8px; }
-.qc-fila .ayuda-contextual { flex-basis: 100%; margin: 0; }
-.qc-mia--abierta:has(.ayuda-contextual) { flex-wrap: wrap; }
 .ux-siguiente { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .guia-panel :focus-visible, .ayuda-acceso :focus-visible, .ayuda-contextual summary:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }

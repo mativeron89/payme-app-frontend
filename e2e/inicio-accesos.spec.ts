@@ -123,7 +123,9 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
     await ingresar(page);
     await page.getByRole('tab', { name: 'Asociadas', exact: true }).click();
 
-    await expect(page.getByText('Todavía no está disponible', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Ver / })).toHaveCount(0);
+    const asociadas = page.locator('.home-tab-panel-empty');
+    await expect(asociadas.getByText('Todavía no está disponible', { exact: true })).toBeVisible();
+    // D326: la guía vive fuera del panel; Asociadas sigue sin accesos propios.
+    await expect(asociadas.getByRole('button')).toHaveCount(0);
   });
 });
