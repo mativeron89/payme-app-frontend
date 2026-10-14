@@ -87,7 +87,6 @@ export const EN: Record<string, string> = {
   "Toca un plato disponible para elegirlo. Si lo compartieron, después podrás indicar tu porción.": "Tap an available dish to select it. If you shared, you can then choose your portion.",
   "Aquí están los consumos del viaje. Abre uno para revisar su ticket y reparto.": "Here are the trip expenses. Open one to review its receipt and split.",
   "Esta pestaña muestra cuánto pagó cada persona, no cuánto le corresponde consumir.": "This tab shows how much each person paid, not their share of consumption.",
-  "{0} de {1}": "{0} of {1}",
   "No volver a mostrar": "Don’t show again",
   "Guía en pausa": "Guide paused",
   "Continúa cuando quieras": "Continue when ready",

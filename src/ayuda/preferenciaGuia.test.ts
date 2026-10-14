@@ -54,7 +54,7 @@ describe('D328 · exclusión explícita por cuenta y dispositivo', () => {
     resolver[0]!('hash'); expect(await lectura).toBe(true);
     resolver[1]!('hash'); await eleccion;
   });
-  it('marcar/desmarcar rápidamente conserva la última elección aunque crypto resuelva al revés', async () => {
+  it('marcar/desmarcar rápidamente conserva la última elección aunque crypto resuelva en orden inverso', async () => {
     const resolver: ((s: string) => void)[] = [];
     const p = new PreferenciaGuia(() => new Promise<string>((r) => { resolver.push(r); })), a = memoria();
     const primera = p.elegir('A', true, a), ultima = p.elegir('A', false, a);
