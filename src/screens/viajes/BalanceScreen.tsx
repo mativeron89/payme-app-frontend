@@ -1,3 +1,4 @@
+import '../../ayuda/ayuda.css';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { errorAlEliminar, type DetalleViaje, type TicketEnViaje } from '../../api/viajes';
@@ -149,9 +150,13 @@ export function BalanceVista({
   fotoDe?: (miembroId: string) => string | null;
   deslizar?: DeslizarConsumo;
 }) {
+  const { t } = useIdioma();
   return (
     <div className="scroll">
       <MountedCard seam={opcion === 'consumos' ? 'left' : 'right'} className="vjb-tarjeta">
+        {carga.tipo === 'listo' && <p className="ux-siguiente">{opcion === 'consumos'
+          ? t('Abre un consumo para revisar su ticket y el reparto.')
+          : t('Aquí ves cuánto pagó cada persona, no cuánto le corresponde consumir.')}</p>}
         {carga.tipo === 'listo' ? (
           opcion === 'consumos'
             ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} deslizar={deslizar} />

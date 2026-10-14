@@ -59,7 +59,7 @@ function familiasDinamicas(): Record<string, string[]> {
     // AppBottomBar.tsx:68 `t(it.label)` y HomeScreen.tsx:112 `t(x.label)`.
     'las etiquetas de la barra': ['Inicio', 'Mesas', 'Amigos', 'Más'],
     // AppBottomBar.tsx:84,88 · el centro por defecto cuando nadie pasa `center`.
-    'el centro por defecto': ['Nueva'],
+    'el centro por defecto': ['Escanear'],
     // AppHeader.tsx:132 y ui.tsx:32 · `t(backLabel)` con su valor por defecto.
     'backLabel por defecto': ['Volver'],
     // §1.3-bis · CreateMesaFlow: las tres formas de dividir viven en una

@@ -81,7 +81,7 @@ test('con el alta ABIERTA se puede crear cuenta sin invitación, y el formulario
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
 
   // Sesión creada: se ve la app, no un error de invitación.
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 });
 
 test('el toggle vuelve al ingreso y el alta pública no rompe el camino de siempre', async ({ page }) => {
@@ -97,5 +97,5 @@ test('el toggle vuelve al ingreso y el alta pública no rompe el camino de siemp
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 });

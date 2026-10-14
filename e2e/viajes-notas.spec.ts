@@ -69,7 +69,7 @@ async function editarEstado(page: Page, fn: string, arg: unknown = null): Promis
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO, fn, arg });
   await page.goto('/home');
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 async function seam(page: Page, valor: string): Promise<void> {

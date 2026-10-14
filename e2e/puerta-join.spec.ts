@@ -108,7 +108,7 @@ test.describe('la puerta legal antes de unirse por link', () => {
     await page.goto('about:blank');
     await page.goto('/');
     await aceptarPuerta(page);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
     await abrirLinkEnFrio(page, mesa.code, mesa.token);
     await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();

@@ -27,7 +27,7 @@ async function conSolicitudes(page: Page, valor: number | 'falla'): Promise<void
 }
 
 async function inicioListo(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 async function captura(page: Page, nombre: string): Promise<void> {
@@ -173,7 +173,7 @@ test.describe('D230 · la burbuja roja de «Amigos»', () => {
     await expect(barra(page).getByRole('button', { name: 'Inicio', exact: true })).toBeVisible();
     await expect(barra(page).getByRole('button', { name: 'Mesas', exact: true })).toBeVisible();
     await expect(barra(page).getByRole('button', { name: 'Más', exact: true })).toBeVisible();
-    await expect(barra(page).getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(barra(page).getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     // La etiqueta visible sigue siendo «Amigos».
     await expect(pestana(page).locator('.appbar-label')).toHaveText('Amigos');
   });

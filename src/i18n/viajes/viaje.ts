@@ -65,7 +65,7 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   '{0} quedó cerrado. Todos pagaron y ya está en Cerrados.': '{0} is closed. Everyone paid and it is now in Closed.',
   // 1l · el balance en vivo.
   // D245 · la pantalla del viaje y Balance, más simples; D244 · la carga manual.
-  'Carga manual': 'Add manually',
+  'Agregar gasto': 'Add expense',
   'A favor: {0}': 'In your favor: {0}',
   'Consumos': 'Expenses',
   'Todavía no hay consumos.': 'No expenses yet.',

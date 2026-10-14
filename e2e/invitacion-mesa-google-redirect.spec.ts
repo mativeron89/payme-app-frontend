@@ -67,7 +67,7 @@ const almacenado = (page: Page) => page.evaluate(([c, m]) => ({
 }), [CUSTODIA, MARCA] as const);
 
 const enInicio = async (page: Page) => {
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/:\d+\/(home)?$/);
 };
 
@@ -138,7 +138,7 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · negativos: sin la marca de esa mesa,
     await ingresar(page);
     const mesaA = await abrirMesaConLink(page);
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     const mesaB = await abrirMesaConLink(page);
     await costuras(page, {});
     await page.evaluate((k) => localStorage.removeItem(k), SESION_MOCK);

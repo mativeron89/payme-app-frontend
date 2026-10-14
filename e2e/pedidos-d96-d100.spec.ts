@@ -19,7 +19,7 @@ const LEYENDA_NOMBRE = 'Sólo identifica esta mesa; no crea ni modifica un comer
 async function hastaComoDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
@@ -57,7 +57,7 @@ test.describe('D96 → pedido 127 · el nombre del restaurante se edita en el ti
   test('con el comercio leído por el OCR, ni campo ni lápiz', async ({ page }) => {
     await configurarTicketSinQr(page);
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);

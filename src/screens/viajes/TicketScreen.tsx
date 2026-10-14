@@ -1,3 +1,4 @@
+import { AyudaDePorciones } from '../../ayuda/AyudaContextual';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import { denominatorBps } from '../../api/mesaPresentation';
@@ -704,6 +705,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
                   <button type="button" className="qc-soltar" onClick={() => onSoltar(i.id)}>
                     {t('Soltar')}
                   </button>
+                  <AyudaDePorciones />
                 </div>
               </div>
             );

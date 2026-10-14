@@ -35,7 +35,7 @@ async function sinMesas(page: Page): Promise<void> {
     localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
   });
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 type Persona = { user_id: string; listo_en: string | null };
@@ -58,7 +58,7 @@ async function editarViajes(page: Page, cambio: string): Promise<void> {
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO_VIAJES, cambio });
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 const burbuja = (page: Page, nombre: string) => page.locator('button.viaje-burbuja').filter({ hasText: nombre });

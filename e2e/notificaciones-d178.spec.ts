@@ -180,7 +180,7 @@ test.describe('D178 · Notificaciones rediseñadas', () => {
     await expect.poll(() => page.locator('.avisos-scroll').evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
     const [ultima, mas] = await Promise.all([
       filas(page).last().boundingBox(),
-      page.getByRole('button', { name: 'Nueva', exact: true }).boundingBox(),
+      page.getByRole('button', { name: 'Escanear', exact: true }).boundingBox(),
     ]);
     expect(ultima!.y + ultima!.height).toBeLessThanOrEqual(mas!.y);
   });

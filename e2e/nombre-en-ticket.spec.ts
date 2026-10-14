@@ -30,7 +30,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 async function hastaComoDividen(page: Page, opciones: Parameters<typeof configurarTicketSinQr>[1] = { ocr: 'no_merchant' }): Promise<void> {
   await configurarTicketSinQr(page, opciones);
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   // Testigo: el comercio privado ya se resolvió (de ahí sale la elegibilidad).
@@ -205,7 +205,7 @@ test.describe('AF-NOMBRE-EN-TICKET · el lápiz en la hoja del ticket', () => {
   test('control · con el comercio leído por el OCR no hay lápiz', async ({ page }) => {
     await configurarTicketSinQr(page);
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await abrirHoja(page);

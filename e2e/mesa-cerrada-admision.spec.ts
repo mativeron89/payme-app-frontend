@@ -76,7 +76,7 @@ test('pantalla D: el link a una mesa muerta lo dice, cierra el círculo y no ofr
 
   // La salida es el círculo, y funciona.
   await page.getByRole('button', { name: 'Ir a PayMe' }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 });
 
 test('Avisos: la invitación a mesa muerta viene apagada de nacimiento, sin Sumarme', async ({ page }) => {

@@ -19,7 +19,7 @@ test.describe('hash desconocido · normalización real del hook', () => {
 
     await expect(page).toHaveURL(/:\d+\/home$/);
     expect(page.url()).not.toContain('secret');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/:\d+\/pagos$/);
@@ -36,7 +36,7 @@ test.describe('hash desconocido · normalización real del hook', () => {
 
     await expect(page).toHaveURL(/:\d+\/home$/);
     expect(page.url()).not.toContain('secret');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/:\d+\/pagos$/);

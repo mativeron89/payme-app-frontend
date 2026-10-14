@@ -57,7 +57,7 @@ async function editarEstado(page: Page, fn: string): Promise<void> {
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO, f: fn });
   await page.goto('/home');
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 const lista = (page: Page) => page.getByRole('region', { name: 'Tus mesas', exact: true });
@@ -290,7 +290,7 @@ test.describe('🔴 D293 · una fuente que falla (a 390)', () => {
       localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
     });
     await page.goto('/home');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await aMesas(page);
     await expect(page.getByRole('alert').filter({ hasText: 'No pudimos cargar los restaurantes de tus viajes' })).toBeVisible();
     await expect(page.locator('.hist-item')).toHaveCount(0);

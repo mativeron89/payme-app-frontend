@@ -218,7 +218,7 @@ async function cancunEnCerrados(page: Page): Promise<void> {
     localStorage.setItem(k, JSON.stringify(e));
   }, ESTADO_VIAJES);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 test.describe('🔴 5 · V-02 · «Ver ticket completo» con el viaje en Cerrados', () => {
@@ -320,7 +320,7 @@ for (const ancho of [375, 390]) {
       await capturar(page, 'd280-gasto');
       await gasto.click();
       await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
-      await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agregar gasto', level: 1 })).toBeVisible();
     });
   });
 }

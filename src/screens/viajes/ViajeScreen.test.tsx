@@ -143,11 +143,11 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido).not.toContain('Sofía Ramírez');
   });
 
-  it('🔴 D250 · D255-7 · D279 · D290 · D297 · el orden: monto, Miembros, «Carga manual» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas» y el aviso', () => {
+  it('🔴 D250 · D255-7 · D279 · D290 · D297 · el orden: monto, Miembros, «Agregar gasto» a todo el ancho (sin «Escanear ticket»), «Ver balance», «Notas» y el aviso', () => {
     // «Debes $542» es el texto oculto para el lector de pantalla, junto al monto. D297: la fila «Configuración» pasó al
     // engranaje de la tarjeta de título.
-    expect(leido).toMatch(/\u2212\$542 Debes \$542 Miembros 4 Carga manual Ver balance del viaje Notas 0 de 4 escribieron Toca el para cargar un ticket$/);
-    expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Carga manual<\/button><\/div>/);
+    expect(leido).toMatch(/\u2212\$542 Debes \$542 ¿Qué significa mi balance\? Es lo que pagaste menos lo que te corresponde consumir\. A favor: pusiste de más\. En negativo: te falta cubrir esa parte\. Puede cambiar mientras cargan gastos o eligen consumos\. Al cerrar el viaje se proponen transferencias entre personas\. PayMe no mueve ese dinero: el pago y su confirmación se hacen por separado\. Miembros 4 Agregar gasto Ver balance del viaje Notas 0 de 4 escribieron Toca el para cargar un ticket$/);
+    expect(html).toMatch(/<div class="vjv-acciones vjv-acciones-una"><button[^>]*>.*?Agregar gasto<\/button><\/div>/);
     expect(leido).not.toContain('Escanear ticket');
   });
 
@@ -158,7 +158,8 @@ describe('D245 · el viaje abierto, más simple', () => {
     // Es lo último del viaje: va en el medio del espacio libre de ahí hasta el círculo de Nueva.
     expect(html).toMatch(/para cargar un ticket<\/span><\/div><\/div><\/div>$/);
     expect(html).toContain('class="scroll vj-scroll vjv-scroll-abierto"');
-    expect(html).not.toContain('btn btn-ghost');
+    // D326: Agregar gasto es secundario; los controles de salida siguen ausentes.
+    expect(html).toMatch(/class="btn btn-ghost"[^>]*>.*?Agregar gasto<\/button>/);
   });
 
   it('🔴 D279 · el aviso toma el resto del alto y centra la línea; nunca fijo; nada se encoge', () => {

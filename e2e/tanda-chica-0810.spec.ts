@@ -217,7 +217,7 @@ async function inicioConAvisos(page: Page, n: number): Promise<void> {
   await irEnLaApp(page, '/mesas');
   await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
   await irEnLaApp(page, '/');
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 test.describe('D240 punto 5 · la campana con el número', () => {
@@ -257,7 +257,7 @@ test.describe('D240 punto 5 · la campana con el número', () => {
 
     await sembrarAvisos(page, 0);
     await irEnLaApp(page, '/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
     await expect(campana(page).locator('.hdr-badge')).toHaveCount(0);
   });
@@ -267,7 +267,7 @@ test.describe('D240 punto 5 · la campana con el número', () => {
     await ingresar(page);
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
     await page.reload();
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Scan', exact: true })).toBeVisible();
     await inicioConAvisosEn(page, 3);
     await expect(campana(page)).toHaveAccessibleName('Alerts, 3 unread');
   });
@@ -286,7 +286,7 @@ async function inicioConAvisosEn(page: Page, n: number): Promise<void> {
   await irEnLaApp(page, '/mesas');
   await expect(page.getByRole('heading', { name: 'Tables', exact: true })).toBeVisible();
   await irEnLaApp(page, '/');
-  await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Scan', exact: true })).toBeVisible();
 }
 
 test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
@@ -317,7 +317,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await renglon(page, 'Agua mineral').locator('button.qc-libre').click();
     await renglon(page, 'Agua mineral').getByRole('radio', { name: '½' }).click();
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await tocarCerrarMesa(page);
@@ -380,7 +380,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await contarLlamadas(page, 'lockItems');
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     expect(await llamadas(page, 'lockItems')).toBe(1);
     expect(await hojasVistas(page)).toEqual([]);
   });
@@ -492,7 +492,7 @@ test.describe('D240 punto 16 · los ítems iguales juntos en el detalle de Mesas
     await elegirEntero(renglon(page, 'Tiramisú', 1));
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await tocarCerrarMesa(page);

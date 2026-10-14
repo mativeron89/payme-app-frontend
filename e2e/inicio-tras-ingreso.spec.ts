@@ -43,7 +43,7 @@ async function entrarCon(page: Page, email: string): Promise<void> {
  */
 async function enInicio(page: Page): Promise<void> {
   await expect(page).toHaveURL(/:\d+\/(home)?$/);
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Inicio', exact: true })).toHaveAttribute('aria-current', 'page');
 }
 

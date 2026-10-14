@@ -40,7 +40,7 @@ const fila = (page: Page) => page.getByRole('button', { name: 'Agregar a inicio'
 const idioma = (page: Page) => page.getByText('Idioma', { exact: true });
 
 async function inicioListo(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 async function configuracion(page: Page): Promise<void> {

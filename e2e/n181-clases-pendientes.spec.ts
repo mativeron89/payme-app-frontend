@@ -58,7 +58,7 @@ async function snapshot(page: Page): Promise<RuntimeSnapshot> {
 
 async function abrirTicket(page: Page): Promise<void> {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
   await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();

@@ -91,7 +91,7 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
        * regreso que es correcto.
        */
       await page.getByRole('button', { name: 'Volver', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'Cuenta', exact: true })).toBeVisible();
     });
   }

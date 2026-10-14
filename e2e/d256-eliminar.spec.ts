@@ -91,7 +91,7 @@ test('🔴 D256 · lo que no cargué ni pagué no se desliza: no hay «Eliminar�
 test('🔴 D256 · un gasto a mano que cargué: «Gasto eliminado»', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+  await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
   await page.getByLabel('Descripción', { exact: true }).fill('Taxi al aeropuerto');
   await page.getByLabel('Monto', { exact: true }).fill('300');
   await page.getByRole('button', { name: 'Listo', exact: true }).click();

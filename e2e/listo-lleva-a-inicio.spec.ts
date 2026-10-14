@@ -24,7 +24,7 @@ async function conRielApagado(page: Page): Promise<void> {
 
 async function enInicio(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 async function sigueEnLaMesa(page: Page, code: string): Promise<void> {

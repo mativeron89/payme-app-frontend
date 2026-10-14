@@ -25,7 +25,7 @@ test.use({ viewport: { width: 390, height: 664 } });
 
 async function abrirEscaneo(page: Page): Promise<void> {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page).toHaveURL(/:\d+\/scan$/);
   await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
 }

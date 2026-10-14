@@ -128,13 +128,13 @@ async function abrirCamara(page: Page, responder: boolean, sinRiel = false): Pro
   await retenerJpeg(page);
   await ingresar(page);
   await espiar(page, responder);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(sacarFotoBoton(page)).toBeEnabled();
 }
 
 async function salir(page: Page): Promise<void> {
   await page.locator('.camara-arriba').getByRole('button', { name: 'Volver', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 test.describe('D202 · H-03 · una sola lectura por intento (D212: la foto preparada)', () => {
@@ -199,6 +199,6 @@ test.describe('D202 · H-03 · una sola lectura por intento (D212: la foto prepa
     await page.waitForTimeout(600);
     expect(await resoluciones(page)).toBe(antes);
     await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 });

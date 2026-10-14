@@ -44,7 +44,7 @@ async function mesasDelMock(page: Page): Promise<{ total: number; ultimoCodigo: 
 test('garantía con guardada NO-default: tras el reload la UI no se la atribuye a la default', async ({ page }) => {
   await ingresar(page);
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();

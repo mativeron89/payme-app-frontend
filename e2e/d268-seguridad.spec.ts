@@ -66,7 +66,7 @@ async function preparar(page: Page, s: Seams = {}): Promise<void> {
 }
 
 const google = (page: Page) => page.getByRole('button', { name: 'Continuar con Google', exact: true });
-const adentro = (page: Page) => page.getByRole('button', { name: 'Nueva', exact: true });
+const adentro = (page: Page) => page.getByRole('button', { name: 'Escanear', exact: true });
 const ingreso = (page: Page) => page.getByText('Log in', { exact: true });
 
 async function capturar(page: Page, nombre: string): Promise<void> {

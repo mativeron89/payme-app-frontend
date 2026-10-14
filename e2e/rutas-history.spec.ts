@@ -77,7 +77,7 @@ test.describe('n130 · rutas normales', () => {
     await expect(page).toHaveURL(/:\d+\/mesas$/);
     await page.goBack();
     await expect(page).toHaveURL(/:\d+\/(home)?$/);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 });
 
@@ -108,7 +108,7 @@ test.describe('n130 · enlaces viejos con # y sin secreto → su ruta', () => {
   test('los avisos por correo enlazan a la raíz: abre la app', async ({ page }) => {
     await ingresar(page);
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 });
 

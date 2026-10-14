@@ -44,7 +44,7 @@ async function registrarUrls(page: Page): Promise<void> {
 const urls = (page: Page) => page.evaluate(() => (window as unknown as { __urls: string[] }).__urls);
 const google = (page: Page) => page.getByRole('button', { name: 'Continuar con Google', exact: true });
 const ingreso = (page: Page) => page.getByText('Log in', { exact: true });
-const inicio = (page: Page) => page.getByRole('button', { name: 'Nueva', exact: true });
+const inicio = (page: Page) => page.getByRole('button', { name: 'Escanear', exact: true });
 
 /** Una vuelta en frío, como la del 303: un documento nuevo. */
 async function volverCon(page: Page, fragmento: string): Promise<void> {

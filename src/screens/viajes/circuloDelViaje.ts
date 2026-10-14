@@ -26,7 +26,7 @@ export function circuloDelViaje(
   if (!viaje || viaje.estado !== 'abierto') return undefined;
   const id = viaje.id;
   return {
-    label: t('Nueva'),
+    label: t('Escanear'),
     icon: 'camera',
     ariaLabel: t('Escanear ticket para {0}', viaje.nombre),
     onClick: () => {
@@ -50,7 +50,7 @@ export function centroPorFechas(
   if (center || deHoy.length === 0) return undefined;
   if (deHoy.length === 1) return circuloDelViaje(deHoy[0]!, t);
   return {
-    label: t('Nueva'),
+    label: t('Escanear'),
     icon: 'camera',
     ariaLabel: t('Escanear ticket para un viaje'),
     onClick: abrirHojaParaQueViaje,

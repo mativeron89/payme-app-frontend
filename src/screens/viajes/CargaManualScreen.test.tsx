@@ -49,9 +49,9 @@ describe('D244 · la pantalla de la carga manual', () => {
   const html = renderToStaticMarkup(<CargaManualVista viaje={VIAJE} />);
   const leido = texto(html);
 
-  it('la burbuja dice sólo «Carga manual» (respuesta D)', () => {
+  it('la burbuja dice sólo «Agregar gasto» (respuesta D)', () => {
     // D285 · la tarjeta blanca: el cuadro con el lápiz y el título solo.
-    expect(html).toMatch(/<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro" data-icono="lapiz" aria-hidden="true"><svg[^]*?<\/svg><\/span><div class="title-card-textos"><h1 class="title-card-title">Carga manual<\/h1><\/div><\/div><\/div>/);
+    expect(html).toMatch(/<div class="title-card"><div class="title-card-fila"><span class="title-card-cuadro" data-icono="lapiz" aria-hidden="true"><svg[^]*?<\/svg><\/span><div class="title-card-textos"><h1 class="title-card-title">Agregar gasto<\/h1><\/div><\/div><\/div>/);
     expect(leido).not.toContain('Cancún 2026');
   });
 

@@ -121,7 +121,7 @@ for (const ancho of [375, 390] as const) {
         localStorage.setItem(k, JSON.stringify(e));
       }, { k: ESTADO, id: CANCUN });
       await page.goto('/home');
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
       await alViaje(page, CANCUN, 'Fin de año en la playa con toda la familia');
       const m = await medir(page);
       expect(m.titulo.right).toBeLessThanOrEqual(m.divisor.left);

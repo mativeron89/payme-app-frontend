@@ -166,7 +166,7 @@ for (const [medida, viewport] of [['movil', MOVIL], ['escritorio', ESCRITORIO]] 
     test('quien entró con Google ya aparece vinculado, sin que se le ofrezca vincular', async ({ page }) => {
       await page.goto('/');
       await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
       await abrirConfiguracion(page);
 
       await expect(seccion(page).getByText('Vinculada', { exact: true })).toBeVisible();

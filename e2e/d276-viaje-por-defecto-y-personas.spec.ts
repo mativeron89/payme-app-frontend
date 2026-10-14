@@ -104,7 +104,7 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
     await entrar(page, DENTRO);
     await expect(alViaje(page)).toBeVisible();
     // A la vista sigue diciendo «Nueva»; el lector de pantalla oye a dónde va.
-    await expect(circulo(page)).toHaveText('Nueva');
+    await expect(circulo(page)).toHaveText('Escanear');
     const antes = camarasAbiertas(page);
     await alViaje(page).click();
     await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
@@ -116,7 +116,7 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
     await entrar(page, DENTRO);
     // «Carga manual» no tiene barra: la única que puede pedir la lista ahí es la precarga de la sesión (`App`).
     await page.goto(`/viaje-gasto/${CANCUN}`);
-    await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Agregar gasto', level: 1 })).toBeVisible();
     await expect(circulo(page)).toHaveCount(0);
     // La memoria de la cuenta tiene la lista (el mismo módulo que lee la barra, servido por Vite).
     // (La ruta en una variable: con una literal, `tsc` del e2e busca ese módulo y no lo encuentra.)
@@ -151,7 +151,7 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
       if (adentro) {
         await expect(alViaje(page)).toBeVisible();
       } else {
-        await expect(circulo(page)).toHaveAccessibleName('Nueva');
+        await expect(circulo(page)).toHaveAccessibleName('Escanear');
         await circulo(page).click();
         await expect(page).toHaveURL(/\/scan$/);
         await expect(page.getByRole('heading', { name: 'Escanea el ticket', level: 1 })).toBeVisible();
@@ -163,7 +163,7 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
     await entrar(page, DENTRO);
     await editarViajes(page, 'sin-fecha-hasta');
     await expect(burbuja(page, 'Cancún 2026')).toBeVisible();
-    await expect(circulo(page)).toHaveAccessibleName('Nueva');
+    await expect(circulo(page)).toHaveAccessibleName('Escanear');
     await circulo(page).click();
     await expect(page).toHaveURL(/\/scan$/);
   });
@@ -174,7 +174,7 @@ test.describe('🔴 D276-1 · la cámara de Nueva por las fechas del viaje', () 
     // D302 · el 20 de septiembre Cancún todavía no empezó: no está en Inicio. Monterrey sí.
     await expect(burbuja(page, 'Monterrey fin de semana')).toBeVisible();
     await expect(burbuja(page, 'Cancún 2026')).toHaveCount(0);
-    await expect(circulo(page)).toHaveAccessibleName('Nueva');
+    await expect(circulo(page)).toHaveAccessibleName('Escanear');
     await circulo(page).click();
     await expect(page).toHaveURL(/\/scan$/);
   });

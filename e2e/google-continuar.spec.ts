@@ -63,7 +63,7 @@ function usuarioDeSesion(page: Page) {
 
 const google = (page: Page) => page.getByRole('button', { name: 'Continuar con Google', exact: true });
 const aviso = (page: Page) => page.locator('.ingreso-aviso-google');
-const adentro = (page: Page) => page.getByRole('button', { name: 'Nueva', exact: true });
+const adentro = (page: Page) => page.getByRole('button', { name: 'Escanear', exact: true });
 
 /** El modo un-toque está listo: la frase del aviso, con su enlace, bajo el botón. */
 async function unToqueListo(page: Page): Promise<void> {

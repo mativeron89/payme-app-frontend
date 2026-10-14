@@ -65,7 +65,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 const google = (page: Page) => page.getByRole('button', { name: 'Continuar con Google', exact: true });
-const adentro = (page: Page) => page.getByRole('button', { name: 'Nueva', exact: true });
+const adentro = (page: Page) => page.getByRole('button', { name: 'Escanear', exact: true });
 const paso = (page: Page) => page.getByText('Crea tu cuenta con Google', { exact: true });
 const contexto = (page: Page) => page.evaluate((k) => sessionStorage.getItem(k), CONTEXTO);
 

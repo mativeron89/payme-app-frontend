@@ -68,7 +68,7 @@ test.describe('alta con correo', () => {
     await terminos.check();
     await expect(registrarme).toBeEnabled();
     await registrarme.click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     const cuerpo = await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.legal.register') ?? 'null')) as Record<string, unknown>;
     expect(cuerpo.legal_acceptance).toEqual({
       aviso_version: '2.5.5', aviso_hash: HASH_MOCK_AVISO,
@@ -149,7 +149,7 @@ test.describe('puerta para quien ya tiene cuenta', () => {
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
     const puerta = page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' });
     await expect(puerta).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toHaveCount(0);
     const continuar = puerta.getByRole('button', { name: 'Continuar', exact: true });
     await expect(continuar).toBeDisabled();
     await puerta.getByRole('checkbox', { name: 'Declaro que tengo 18 años o más.' }).check();
@@ -158,11 +158,11 @@ test.describe('puerta para quien ya tiene cuenta', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
     await expect(puerta).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     // Decisión 45: aceptar el paquete registró también el «Entendido» de fotos.
     await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page.getByText('Actualizamos nuestros documentos')).toHaveCount(0);
   });
 

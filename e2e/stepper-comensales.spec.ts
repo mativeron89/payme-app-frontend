@@ -64,7 +64,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await declararRielVivo(page);
     await ingresar(page);
     await esperarRielVivo(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
@@ -153,7 +153,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await declararRielVivo(page);
     await ingresar(page);
     await esperarRielVivo(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 
@@ -185,7 +185,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
 
   test('pasar a partes iguales con N=1 elegido vuelve a preguntar: el piso es 2, del contrato', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 

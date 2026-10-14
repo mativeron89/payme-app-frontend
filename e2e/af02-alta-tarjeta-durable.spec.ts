@@ -42,7 +42,7 @@ async function loginDelSeed(page: Page): Promise<void> {
   // AF-INICIO-TRAS-INGRESO · se espera a que el ingreso termine (Inicio) antes
   // de navegar: una ruta a la que se va con el ingreso todavía en vuelo es una
   // ruta que quedó de antes, y la app la cambia por Inicio al entrar.
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await page.goto('/#/tarjetas');
   await expect(page.getByText(/···· 4532/)).toBeVisible();
 }

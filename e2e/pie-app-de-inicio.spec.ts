@@ -161,7 +161,7 @@ const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => 
     largo: true,
     abrir: async (page) => {
       await ir(page, `/viaje/${CANCUN}`);
-      await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+      await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
       await expect(presentes(page).getByRole('checkbox', { name: /Persona 17/ })).toBeAttached();
     },
   },
@@ -238,7 +238,7 @@ test.describe('🔴 D256 · los casos de los paneles de Mati: 393 × 852, insets
     await comoAppDeInicio(page, 59);
     await sembrar(page, { soloYo: true });
     await ir(page, `/viaje/${CANCUN}`);
-    await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+    await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
     await expect(presentes(page).getByRole('checkbox')).toHaveCount(1);
     seAlcanza(await alFinal(page));
   });

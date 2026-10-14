@@ -121,7 +121,7 @@ test.describe('E174-3 · la foto de quien invita', () => {
     const src = await foto(page, 'Sofía Fernández').getAttribute('src');
 
     await irEnLaApp(page, '/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await colgar(page, true);
     await abrirAvisos(page, 1);
     await expect(foto(page, 'Sofía Fernández')).toHaveAttribute('src', src!);

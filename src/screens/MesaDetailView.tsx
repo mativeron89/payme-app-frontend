@@ -1,3 +1,4 @@
+import { AyudaDePorciones } from '../ayuda/AyudaContextual';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
@@ -819,6 +820,7 @@ export function MesaDetailView({
                   >
                     {t('Soltar')}
                   </button>
+                  <AyudaDePorciones />
                 </div>
               );
             }

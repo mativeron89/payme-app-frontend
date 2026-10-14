@@ -128,7 +128,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     // El detalle no tiene recarga manual: salir y volver lo vuelve a pedir, sin
     // recargar la página (que pisaría el cambio hecho en memoria).
     await irEnLaApp(page, '/home');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
@@ -140,7 +140,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     const code = await mesaConUnoElegido(page);
     await cambiarMesaEnMemoria(page, code, 'pago_ajeno');
     await irEnLaApp(page, '/home');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
     await enTuMesaConLaLista(page);
     // Testigo: el pago ajeno se ve en la mesa.
@@ -155,7 +155,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     const code = await mesaConUnoElegido(page);
     await cambiarMesaEnMemoria(page, code, 'mitad_pagada');
     await irEnLaApp(page, '/home');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await expect(fila(page, 'Tagliatelle Bolognese')).toContainText('Pagaste ½ · elegiste ½ más');

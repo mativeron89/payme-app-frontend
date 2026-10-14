@@ -79,7 +79,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
     await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
     await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   }
 
   test('pin tolerante · con el par 3.0.0 el cartel se muestra y «Entendido» acusa ese par exacto', async ({ page }) => {

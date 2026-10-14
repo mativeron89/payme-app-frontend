@@ -219,7 +219,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '02-notificaciones');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
   // D177 · el paso 1 es la cámara a pantalla completa, sin el chrome compartido
   // que mide `acreditar`: se mide lo suyo.

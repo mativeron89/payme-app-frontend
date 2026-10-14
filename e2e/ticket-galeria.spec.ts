@@ -22,7 +22,7 @@ import { FOTO_DE_CAMARA, fotoChica, usarFoto } from './_camara';
 test.describe('AF-GALERIA · la foto del ticket, de la cámara o del carrete', () => {
   test('el input de la foto no fuerza la cámara y conserva su accept', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await expect(page).toHaveURL(/:\d+\/scan$/);
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveCount(1);
@@ -33,7 +33,7 @@ test.describe('AF-GALERIA · la foto del ticket, de la cámara o del carrete', (
 
   test('una foto elegida del carrete sigue el flujo hasta el ticket, sin cartel de ejemplo', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     // Por encima del piso que publica el dueño (mock: 10240 bytes, n81).
@@ -49,7 +49,7 @@ test.describe('AF-GALERIA · la foto del ticket, de la cámara o del carrete', (
 
   test('los rechazos locales siguen como estaban: una foto más chica que el piso no se sube', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     await input.setInputFiles(await fotoChica(page, 'IMG_0422.jpg'));

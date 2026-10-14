@@ -36,7 +36,7 @@ async function hastaConsumoDos(
       persist();
     });
   }
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();

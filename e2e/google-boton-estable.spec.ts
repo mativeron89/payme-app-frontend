@@ -53,7 +53,7 @@ test('🔴 un re-render entre mousedown y mouseup no se traga el toque en Google
   await page.mouse.down();
   await reRenderSinCambios(page);
   await page.mouse.up();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 });
 
 test('🔴 escribir en un campo que la autoridad no usa no remonta el botón de Google', async ({ page }) => {

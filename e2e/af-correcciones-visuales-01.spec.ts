@@ -120,7 +120,7 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
  */
 test('Escaneo (cámara): la cabecera, la foto y los controles no se pisan', async ({ page }) => {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Sacar foto', exact: true })).toBeEnabled();
   const [arriba, foto, controles] = await Promise.all([
     page.locator('.camara-arriba').boundingBox(),
@@ -139,7 +139,7 @@ test('Escaneo (cámara): la cabecera, la foto y los controles no se pisan', asyn
  */
 test('División muestra un acceso al ticket compacto, a la izquierda y sin subtítulo', async ({ page }) => {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
 
   const card = page.locator('.ticket-title-card');
@@ -179,7 +179,7 @@ test('Notificaciones conserva la invitación sólo en su tarjeta accionable', as
 
 async function hastaGarantia(page: Page) {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });

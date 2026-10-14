@@ -8,7 +8,7 @@ import { Icon } from './Icon';
  * símbolo de + por una cámara». El círculo naranja de la barra lleva la cámara
  * de línea del set propio; el rótulo, lo que hace y el nombre accesible quedan.
  */
-describe('D249 · «Nueva» con una cámara', () => {
+describe('D249 · «Escanear» con una cámara', () => {
   const html = renderToStaticMarkup(<AppBottomBar active="home" />);
   const fab = /<span class="appbar-fab" aria-hidden="true">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '';
 
@@ -17,17 +17,17 @@ describe('D249 · «Nueva» con una cámara', () => {
     expect(fab).not.toBe(renderToStaticMarkup(<Icon name="plus" size={24} />));
   });
 
-  it('el rótulo y el nombre accesible siguen siendo «Nueva»', () => {
-    expect(html).toMatch(/<button type="button" class="appbar-center" aria-label="Nueva">/);
-    expect(html).toContain('<span class="appbar-label">Nueva</span>');
+  it('el rótulo y el nombre accesible siguen siendo «Escanear»', () => {
+    expect(html).toMatch(/<button type="button" class="appbar-center" aria-label="Escanear">/);
+    expect(html).toContain('<span class="appbar-label">Escanear</span>');
   });
 
   it('D250 · un círculo puede decir otra cosa al lector de pantalla, con el rótulo de siempre', () => {
     const propio = renderToStaticMarkup(<AppBottomBar center={{
-      label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026', onClick: () => undefined,
+      label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026', onClick: () => undefined,
     }} />);
     expect(propio).toMatch(/<button type="button" class="appbar-center" aria-label="Escanear ticket para Cancún 2026">/);
-    expect(propio).toContain('<span class="appbar-label">Nueva</span>');
+    expect(propio).toContain('<span class="appbar-label">Escanear</span>');
   });
 
   it('una pantalla que trae su propio círculo conserva su ícono', () => {

@@ -118,7 +118,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     }, mesa.code);
 
     await page.goto('/#/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.goto(`/#/mesa/${mesa.code}`);
     await abrirTusConsumos(page);
 

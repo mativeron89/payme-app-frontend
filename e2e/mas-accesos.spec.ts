@@ -132,7 +132,7 @@ test.describe('los accesos de Más', () => {
     const barra = page.getByRole('navigation', { name: 'Navegación principal' });
     await expect(barra).toHaveCount(1);
 
-    await expect(barra.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(barra.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(barra.getByRole('button', { name: 'Más', exact: true })).toBeVisible();
 
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();

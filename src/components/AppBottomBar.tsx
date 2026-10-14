@@ -122,7 +122,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
   // número confirmado (sin sesión, otra cuenta o la consulta falló).
   const pendientes = useSolicitudesPendientes();
   const centro = center ?? porFechas ?? {
-    label: t('Nueva'),
+    label: t('Escanear'),
     // D249 · Mati: «cambiá el símbolo de + por una cámara». Lleva al escaneo: la cámara lo dice.
     icon: 'camera' as IconName,
     // D212 · «Nueva» abre la cámara nativa EN ESTE TOQUE (iOS sólo la abre

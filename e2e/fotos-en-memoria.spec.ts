@@ -98,7 +98,7 @@ async function irAAmigos(page: Page): Promise<void> {
 
 async function irAInicio(page: Page): Promise<void> {
   await irEnLaApp(page, '/');
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 /** ¿La URL `blob:` sigue viva? Una revocada ya no se puede leer. */
@@ -223,7 +223,7 @@ test.describe('E173-3 · fotos de Amigos en memoria (decisión 175)', () => {
     await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
     await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await irAAmigos(page);
     await expect(fotoDe(page, 'Sofía Fernández')).toBeVisible();
     await expect(fotoDe(page, 'Sofía Fernández')).not.toHaveAttribute('src', src!);

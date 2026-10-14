@@ -177,7 +177,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 async function conLaFoto(page: Page, foto: ArchivoDeFoto): Promise<void> {
   await ingresar(page);
   await espiarOcr(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   // El piso del dueño publicado antes de la foto (ver `camara-nativa.spec`).
   await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
   await sacarFoto(page, foto, { usar: false });
@@ -427,7 +427,7 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
   test('🔴 de la galería: «Elegir otra» abre el selector SIN `capture`, y tampoco sube nada', async ({ page }) => {
     await ingresar(page);
     await espiarOcr(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     const input = page.locator('.camara-controles input[type="file"]');
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     await input.setInputFiles(await ticketEnLaMesa(page, 'IMG_0703.jpg'));

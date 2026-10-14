@@ -11,6 +11,15 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.248.0 — D326 · acciones claras y guía opcional para restaurantes y viajes (2026-10-13)
+
+- El círculo de cámara dice «Escanear» y conserva la apertura nativa en el mismo toque y el destino del viaje correspondiente. «Carga manual» pasa a «Agregar gasto», como acción secundaria; escaneo sigue siendo la acción principal.
+- Textos breves orientan el reparto, la carga de gastos y las pestañas del balance. Las ayudas de porciones y balance se abren sólo al tocarlas, sin cambiar cálculos, montos, permisos ni confirmaciones.
+- Inicio ofrece una guía voluntaria después del contenido actual. Se puede descartar y reabrir en Más → Ayuda. Tres recorridos de cuatro pasos, con ejemplos que no crean mesas, gastos ni pagos. No hay tour, modal o navegación automáticos; no intercepta cámara ni invitaciones.
+- La guía se carga al abrirla. Preferencia local mínima y opaca por cuenta/dispositivo, separada entre mock y real, con respaldo en memoria si falla el almacenamiento. Sin API, seguimiento servidor o nuevos datos de perfil. Español e inglés.
+- Pruebas focales de aislamiento, persistencia/fallback, cámara, enlaces, no mutación, foco, pantallas y traducción; CI completo del PR como suite oficial D168. Sin nuevos perks ni cambios de íconos, modo oscuro, backend, infraestructura o dinero. La versión 0.247.0 queda reservada al candidato de íconos pausado.
+- Publicación técnica y prueba visible de Mati se registran por separado (D63).
+
 ## 0.246.0 — D310-E1 · paleta y piezas visuales compartidas (2026-10-13)
 
 Paquete Claude Design D310, sobre 0.245.3. Se aplican los deltas compatibles con las decisiones y funciones recientes.

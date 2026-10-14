@@ -164,7 +164,7 @@ for (const ancho of [375, 390]) {
       await conViajes(page);
       await tarjeta(page, 'Cancún 2026').getByRole('button', { name: 'Cargar un gasto a mano en Cancún 2026', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
-      await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agregar gasto', level: 1 })).toBeVisible();
       await irEnLaApp(page, '/');
       await tarjeta(page, 'Cancún 2026').locator('button.viaje-burbuja').click();
       await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));

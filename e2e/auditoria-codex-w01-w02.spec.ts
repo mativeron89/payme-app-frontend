@@ -62,7 +62,7 @@ async function editarCancun(page: Page, cambio: 'mariscos-el-5' | 'mariscos-el-5
     }
     localStorage.setItem(k, JSON.stringify(e));
   }, { k: ESTADO_VIAJES, cambio, cancun: CANCUN, mariscos: MARISCOS }));
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 /** Sin mesas abiertas: el estado del mock, editado y releído. */
@@ -73,7 +73,7 @@ async function sinMesas(page: Page): Promise<void> {
     st.joinedMesaCodes = [];
     localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
   }));
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 async function capturar(page: Page, nombre: string): Promise<void> {
@@ -205,11 +205,11 @@ test.describe('🔴 W-02 · la precarga de la cámara no queda trabada al cambia
     await expect(page).toHaveURL(/\/mas$/);
     // B pide la suya aunque la de A siga pendiente.
     await expect.poll(() => quienes(page)).toEqual([a, B]);
-    await expect(camara(page)).toHaveAccessibleName('Nueva');
+    await expect(camara(page)).toHaveAccessibleName('Escanear');
     // Llega tarde la de A, con un viaje de hoy: no se guarda bajo B ni la cámara lo nombra.
     await soltar(page, 0, 'Viaje de A');
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    await expect(camara(page)).toHaveAccessibleName('Nueva');
+    await expect(camara(page)).toHaveAccessibleName('Escanear');
     // Llega la de B: la cámara va a su viaje. Y nadie volvió a pedir (la de B seguía en vuelo).
     await soltar(page, 1, 'Viaje sintético B');
     await expect(camara(page)).toHaveAccessibleName('Escanear ticket para Viaje sintético B');
@@ -229,7 +229,7 @@ test.describe('🔴 W-02 · la precarga de la cámara no queda trabada al cambia
     await soltar(page, 1, 'Viaje de B');
     await soltar(page, 0, 'Viaje viejo de A');
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    await expect(camara(page)).toHaveAccessibleName('Nueva');
+    await expect(camara(page)).toHaveAccessibleName('Escanear');
     await soltar(page, 2, 'Viaje de A');
     await expect(camara(page)).toHaveAccessibleName('Escanear ticket para Viaje de A');
     expect(await quienes(page)).toEqual([a, B, a]);

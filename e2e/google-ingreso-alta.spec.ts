@@ -103,14 +103,14 @@ test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adent
 
   // El token del ingreso fallido ya está consumido en el dueño: un toque más.
   await google(page).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await capturar(page, '04-adentro');
 
   const usuario = await page.evaluate(() => {
     const raw = localStorage.getItem('payme_app_session__mock');
     return raw ? (JSON.parse(raw) as { user?: { first_name?: string; last_name?: string } }).user ?? null : null;
   });
-  expect(usuario).toMatchObject({ first_name: 'Nora', last_name: 'Nueva' });
+  expect(usuario).toMatchObject({ first_name: 'Nora', last_name: 'Escanear' });
 
   // 🔴 El id_token no quedó guardado en ningún lado. Control positivo: la
   // búsqueda mira valores reales (la sesión sí está).
@@ -168,7 +168,7 @@ test('«Crea tu cuenta» empieza por Google: un toque, datos confirmados y adent
   await capturar(page, '07-confirmar-datos');
   await crear.click();
 
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   const usuario = await page.evaluate(() => {
     const raw = localStorage.getItem('payme_app_session__mock');
     return raw ? (JSON.parse(raw) as { user?: { first_name?: string; last_name?: string } }).user ?? null : null;
@@ -183,7 +183,7 @@ test('persona EXISTENTE: toca Google en el ingreso y entra directo, sin pasar po
   await preparar(page, { altaPublica: true, sinCuenta: false });
   await page.goto('/');
   await google(page).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect(tituloAlta(page)).toHaveCount(0);
 });
 

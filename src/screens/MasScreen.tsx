@@ -19,6 +19,7 @@ import { CuentasConectadas } from './CuentasConectadas';
 import { RegionSettingsPanel } from '../preferences/RegionSettingsPanel';
 import { GuiaAgregarAInicio, usePlataformaDeInstalacion } from '../instalar/GuiaAgregarAInicio';
 import { pedirInstalacion, tieneGuia, type PlataformaConGuia } from '../instalar/agregarAInicio';
+import { AccesoGuia } from '../ayuda/AccesoGuia';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
 /**
@@ -214,6 +215,7 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
+        <AccesoGuia lugar="ayuda" />
         {IS_MOCK && (
           <button
             className="btn btn-ghost config-reset"

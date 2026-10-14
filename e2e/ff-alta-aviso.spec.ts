@@ -33,7 +33,7 @@ test('D-FF-1 · fragmento→custodia→aviso→alta y limpieza', async ({ page }
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
 
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() =>
     sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1'))).toBeNull();
 });
@@ -67,7 +67,7 @@ test('una sesión activa también retira el raw antes de mostrar la ruta', async
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
   await page.goto(`/#/home?signup_invitation=${SIGNUP}`);
   await expect(page).toHaveURL(/:\d+\/home$/);

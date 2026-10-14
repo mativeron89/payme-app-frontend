@@ -27,7 +27,7 @@ test('password sigue disponible y Google mock entra sin cargar terceros', async 
   await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
   expect(external).toEqual([]);
 });
@@ -46,7 +46,7 @@ test('alta Google hereda invitación/nombres y la limpia sólo al persistir', as
     sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1')
   ))).not.toBeNull();
   await page.getByRole('button', { name: 'Crear mi cuenta', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (
     sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1')
   ))).toBeNull();
@@ -64,7 +64,7 @@ test('Facebook mock completa login sin URL/storage raw ni Meta', async ({ page }
   const external = externalRequests(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Continuar con Facebook', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect(page).not.toHaveURL(/[?&](code|state)=/);
   expect(await page.evaluate(() => (
     sessionStorage.getItem('payme.app.mock.facebook_flow.v1')
@@ -76,7 +76,7 @@ test('alta Facebook hereda datos y limpia su custodia sin abrir Meta', async ({ 
   const external = externalRequests(page);
   await openRegistration(page);
   await page.getByRole('button', { name: 'Continuar con Facebook', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (
     sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1')
   ))).toBeNull();
@@ -117,7 +117,7 @@ test('recovery invalida una sesión previa antes de volver al ingreso', async ({
   )).toBeVisible();
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
   await page.evaluate((token) => { window.location.hash = `#/recovery?token=${token}`; }, RECOVERY_TOKEN);
   await page.getByLabel('Contraseña', { exact: true }).fill('otra-clave-segura');

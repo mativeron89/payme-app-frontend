@@ -49,7 +49,7 @@ async function expectCampanaBloqueada(page: Page): Promise<void> {
 test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no desbloquear', async ({ page }) => {
   await ingresar(page);
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();

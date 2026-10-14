@@ -144,7 +144,7 @@ const atributo = (selector: FileChooser, nombre: string) => selector.element().g
 async function tocarNueva(page: Page): Promise<FileChooser> {
   const [selector] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Nueva', exact: true }).click(),
+    page.getByRole('button', { name: 'Escanear', exact: true }).click(),
   ]);
   await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
   return selector;

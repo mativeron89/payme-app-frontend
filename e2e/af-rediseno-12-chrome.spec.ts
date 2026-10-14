@@ -16,7 +16,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
    */
   test('el shell exterior no scrollea y el flujo conserva geometría y campana navegable', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
 
     const disparador = page.getByRole('button', { name: 'Sacar foto', exact: true });
     await expect(disparador).toBeEnabled();
@@ -88,7 +88,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
 
   test('Garantía deja la nota fija separada del círculo a 375 × 667', async ({ page }) => {
     await ingresar(page);
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
     const sumar = page.getByRole('button', { name: 'Un comensal más' });

@@ -14,7 +14,7 @@ import { avisosVistos, espiarAvisos } from './_senales';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }

@@ -1,3 +1,4 @@
+import { AyudaDeBalance } from '../../ayuda/AyudaContextual';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api';
@@ -603,12 +604,13 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
   return (
     <>
       <MontoDeBalance cents={v.mi_balance_cents} />
+      <AyudaDeBalance />
       <DesplegableMiembros miembros={v.miembros} fotoDe={fotoDe} />
       {/* D250 · escanear es el círculo de la cámara de la barra; «Carga manual» queda sola, a todo el ancho. */}
       <div className="vjv-acciones vjv-acciones-una">
-        <button type="button" className="btn btn-navy" onClick={onCargaManual}>
+        <button type="button" className="btn btn-ghost" onClick={onCargaManual}>
           <Icon name="pencil" size={20} />
-          {t('Carga manual')}
+          {t('Agregar gasto')}
         </button>
       </div>
       <button type="button" className="vj-card vjv-ver-balance" onClick={onVerBalance}>

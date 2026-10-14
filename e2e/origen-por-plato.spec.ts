@@ -54,7 +54,7 @@ const registro = (page: Page) => page.evaluate(
 
 async function hastaLaCamara(page: Page): Promise<void> {
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page).toHaveURL(/:\d+\/scan$/);
   await espiar(page);
 }

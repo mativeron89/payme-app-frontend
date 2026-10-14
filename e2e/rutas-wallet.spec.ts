@@ -56,7 +56,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
 
       // ⭐ La redirección, ocurriendo de verdad adentro de la app montada.
       await expect(page).toHaveURL(/:\d+\/home$/);
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
       // Y no se montó nada del riel en el camino.
       const cuerpo = await page.locator('body').innerText();
@@ -200,7 +200,7 @@ test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', (
       await page.goto(`/#/${ruta}`);
 
       await expect(page).toHaveURL(/:\d+\/home$/);
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
       const cuerpo = await page.locator('body').innerText();
       for (const palabra of VOCABULARIO_TARJETAS) {

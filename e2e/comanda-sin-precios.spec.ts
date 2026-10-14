@@ -16,7 +16,7 @@ const TEXTO = 'Para dividir la cuenta necesitamos el ticket con los importes. SÃ
 async function escanearCon(page: Page, ocr: 'no_prices' | 'no_items'): Promise<void> {
   await configurarTicketSinQr(page, { ocr });
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
 }
 

@@ -23,7 +23,7 @@ test('perfil Pixel 7 (no es un Android real): «Nueva» pide la cámara trasera 
   expect(await page.evaluate(() => navigator.userAgent)).toContain('Android');
   const [camara] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Nueva', exact: true }).click(),
+    page.getByRole('button', { name: 'Escanear', exact: true }).click(),
   ]);
   expect(await camara.element().getAttribute('capture')).toBe('environment');
   expect(await camara.element().getAttribute('accept')).toBe('image/*');

@@ -23,7 +23,7 @@ import { sacarFoto } from './_camara';
 async function abrirDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page);
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
   await completarDivision(page);
@@ -69,7 +69,7 @@ test.describe('n181 · «¿Cómo dividen?» dice por qué no abre la mesa', () =
     // El restaurante del ticket se resuelve al llegar a este paso o al tocar
     // «Continuar»: el reemplazo va antes de escanear, así ninguna resolución gana.
     await fallar(page, 'resolveRestaurant', 404, 'restaurant_not_found');
-    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
     await completarDivision(page);

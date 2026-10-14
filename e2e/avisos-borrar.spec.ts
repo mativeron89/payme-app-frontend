@@ -138,7 +138,7 @@ test.describe('E174-2 · borrar notificaciones', () => {
     expect((await llamadas(page)).todas).toBe(1);
 
     await irEnLaApp(page, '/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page.locator('.hdr-badge')).toHaveCount(0);
   });
 

@@ -77,7 +77,7 @@ async function abrirTicket(page: Page, conTotalDetectado = false): Promise<void>
       });
     });
   }
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
 }

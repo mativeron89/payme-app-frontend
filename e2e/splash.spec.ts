@@ -229,7 +229,7 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     await page.reload();
     const c = await laCarga(page);
     esperarElMinimoEntero(c);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 
   test('con «reducir movimiento»: el ícono quieto, y el mismo mínimo entero', async ({ page }) => {

@@ -110,7 +110,7 @@ test.describe('AF-CARTEL-VERSION-NUEVA · con la sesión iniciada', () => {
     pub.version = NUEVA;
     // Abrir de nuevo la pestaña con la sesión ya iniciada (el ingreso no aparece).
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(cartel(page)).toBeVisible();
     await expect(actualizar(page)).toBeVisible();
     await page.waitForTimeout(1_000);

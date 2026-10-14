@@ -205,7 +205,7 @@ test.describe('AF-01 · el alta por correo', () => {
       await expect(registrarme).toBeEnabled();
       await registrarme.click();
       // El segundo envío es el mock real: crea la cuenta con el mismo par.
-      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
       const { llamadas, releyo } = await espia(page);
       expect(releyo).toBe(false);
       expect(llamadas).toHaveLength(2);

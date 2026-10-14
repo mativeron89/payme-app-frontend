@@ -38,6 +38,7 @@ import { useHoyEnMexico, viajesDeInicio, viajesProximos } from './viajes/proximo
 import {
   hayRestaurantesPendientes, restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes,
 } from './viajes/ViajesEnInicio';
+import { AccesoGuia } from '../ayuda/AccesoGuia';
 import { AvisoSinMesas } from './AvisoSinMesas';
 
 /**
@@ -647,6 +648,8 @@ export function HomeScreen() {
             </div>
           </>
         )}
+
+        <AccesoGuia lugar="inicio" />
 
         {/* D277 · lo último del contenido: centrado en el espacio libre entre lo de arriba y el círculo de Nueva. */}
         {avisoSinMesas && <AvisoSinMesas />}

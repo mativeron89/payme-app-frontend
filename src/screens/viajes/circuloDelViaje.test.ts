@@ -12,9 +12,9 @@ const es = (s: string, ...a: unknown[]) => traducir(s, 'es', ...a);
 const VIAJE = { id: 'd1000000-0000-4000-8000-000000000001', nombre: 'Cancún 2026' };
 
 describe('D250 · el círculo de la cámara dentro de un viaje', () => {
-  it('🔴 abierto: escanea para ese viaje, con la cámara, «Nueva» a la vista y su nombre accesible', () => {
+  it('🔴 abierto: escanea para ese viaje, con la cámara, «Escanear» a la vista y su nombre accesible', () => {
     const c = circuloDelViaje({ ...VIAJE, estado: 'abierto' }, es);
-    expect(c).toMatchObject({ label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
+    expect(c).toMatchObject({ label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
   });
 
   it('🔴 esperando pagos, cerrado o sin viaje todavía: el círculo de siempre', () => {
@@ -25,7 +25,7 @@ describe('D250 · el círculo de la cámara dentro de un viaje', () => {
 
   it('con el idioma en «en»', () => {
     const en = (s: string, ...a: unknown[]) => traducir(s, 'en', ...a);
-    expect(circuloDelViaje({ ...VIAJE, estado: 'abierto' }, en)).toMatchObject({ label: 'New', ariaLabel: 'Scan a ticket for Cancún 2026' });
+    expect(circuloDelViaje({ ...VIAJE, estado: 'abierto' }, en)).toMatchObject({ label: 'Scan', ariaLabel: 'Scan a ticket for Cancún 2026' });
   });
 });
 
@@ -59,7 +59,7 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
   it('🔴 un viaje que cubre hoy: el círculo de ESE viaje (D250), con su nombre para el lector de pantalla', async () => {
     const { centroPorFechas } = await import('./circuloDelViaje');
     expect(centroPorFechas([CANCUN], undefined, es))
-      .toMatchObject({ label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
+      .toMatchObject({ label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
   });
 
   it('🔴 un viaje: el toque abre la cámara EN EL MISMO gesto y el escaneo de ese viaje', async () => {
@@ -81,7 +81,7 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
     }
   });
 
-  it('🔴 dos viajes: «Nueva» abre la hoja «¿Para qué viaje?» y NO la cámara (se abre en el toque que elige)', async () => {
+  it('🔴 dos viajes: «Escanear» abre la hoja «¿Para qué viaje?» y NO la cámara (se abre en el toque que elige)', async () => {
     vi.resetModules();
     const camara = vi.fn();
     vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara }));
@@ -89,7 +89,7 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
       const { centroPorFechas } = await import('./circuloDelViaje');
       const { abrirHojaParaQueViaje, hojaParaQueViajeAbierta, cerrarHojaParaQueViaje } = await import('./hojaParaQueViajeEstado');
       const c = centroPorFechas([CANCUN, OAXACA], undefined, es)!;
-      expect(c).toMatchObject({ label: 'Nueva', icon: 'camera', ariaLabel: 'Escanear ticket para un viaje' });
+      expect(c).toMatchObject({ label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para un viaje' });
       expect(c.onClick).toBe(abrirHojaParaQueViaje);
       expect(hojaParaQueViajeAbierta()).toBe(false);
       c.onClick();
@@ -113,6 +113,6 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
   it('con el idioma en «en»', async () => {
     const { centroPorFechas } = await import('./circuloDelViaje');
     const en = (s: string, ...a: unknown[]) => traducir(s, 'en', ...a);
-    expect(centroPorFechas([CANCUN, OAXACA], undefined, en)).toMatchObject({ label: 'New', ariaLabel: 'Scan a ticket for a trip' });
+    expect(centroPorFechas([CANCUN, OAXACA], undefined, en)).toMatchObject({ label: 'Scan', ariaLabel: 'Scan a ticket for a trip' });
   });
 });

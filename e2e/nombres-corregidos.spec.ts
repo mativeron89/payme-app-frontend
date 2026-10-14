@@ -54,7 +54,7 @@ async function escanearYEditar(page: Page, corregidos: boolean): Promise<void> {
   }
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page).toHaveURL(/:\d+\/scan$/);
   await espiar(page);
   await sacarFoto(page);

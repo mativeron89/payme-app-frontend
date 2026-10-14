@@ -71,7 +71,7 @@ async function abrirConSesion(page: Page): Promise<void> {
   await ingresar(page);
   // Abrir desde el ícono con la sesión iniciada.
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 test.describe('en la app de inicio de iOS (simulada con los números de Mati)', () => {

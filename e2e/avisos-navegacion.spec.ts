@@ -34,7 +34,7 @@ test.describe('Avisos conserva salida explícita', () => {
     await expect(page.getByRole('img', { name: 'Estás en Avisos' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page).not.toHaveURL(/:\d+\/avisos$/);
   });
 
@@ -47,7 +47,7 @@ test.describe('Avisos conserva salida explícita', () => {
 
     // Por lo que se VE y no sólo por el hash: lo que importa es que Inicio esté
     // montado de verdad, no que la URL diga otra cosa.
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Cuenta', exact: true })).toBeVisible();
   });
 

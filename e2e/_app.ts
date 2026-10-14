@@ -22,31 +22,15 @@ import { camaraSimulada, sacarFoto } from './_camara';
  *   mesa; el mock guarda en `localStorage`, así que contextos distintos son
  *   mundos distintos. Ningún test depende del orden.
  *
- * ## El botón de abrir mesa se llama "Nueva", no "Nueva Mesa"
- *
- * Con el rediseño de §1.1 el flotante `+ Nueva Mesa` de `HomeScreen` desapareció
- * y su lugar lo ocupa el círculo central de la barra de cinco posiciones, cuyo
- * `aria-label` es `Nueva` (`AppBottomBar`, `SISTEMA_DISENO.md` §5 bis · C).
- *
- * **Se cambió a propósito y en el mismo commit que la pantalla**, porque este
- * helper lo usan LOS CUATRO specs: con el nombre viejo caían los 24 recorridos
- * de una, incluidos los que no tocan Inicio, y quien lo viera sin este párrafo
- * pensaría que el rediseño rompió toda la app. Era el renombre esperado.
- *
- * **No alcanzaba con arreglarlo acá.** El aviso que llegó decía "`_app.ts`", y
- * al corregir sólo este archivo quedaron 3 recorridos rojos: `rutas-wallet` y
- * `invitacion-back` afirman por su cuenta *"terminé en Inicio"* usando el mismo
- * botón como prueba de que la pantalla es Inicio, sin pasar por el helper. Se
- * corrigieron los tres puntos; el `grep` es el que manda, no la memoria.
- *
- * Va con `exact: true`: sin él, `name: 'Nueva'` matchea por subcadena y
- * cualquier "Nueva tarjeta" futura entraría en el mismo selector.
+ * D326 · el círculo central se llama «Escanear» y conserva el gesto de cámara
+ * de D212. Los selectores usan el nombre exacto; los viajes mantienen su
+ * nombre accesible con destino. No cambian rutas, permisos ni captura nativa.
  */
 
 /**
  * Cualquier email entra en el mock; la contraseña no se valida.
  *
- * D177 · instala la cámara simulada CONCEDIDA (`e2e/_camara.ts`): «Nueva» abre
+ * D177 · instala la cámara simulada CONCEDIDA (`e2e/_camara.ts`): «Escanear» abre
  * la cámara en vivo, y el Chromium de la suite no tiene cámara. Un test que
  * quiere otro modo (negada, sin cámara, sin soporte) lo pide antes de esto.
  */
@@ -56,14 +40,14 @@ export async function ingresar(page: Page): Promise<void> {
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 /**
- * D276-1 · con Viajes encendido, la cámara de «Nueva» va al viaje abierto cuyas fechas cubren HOY, y su nombre
+ * D276-1 · con Viajes encendido, la cámara de «Escanear» va al viaje abierto cuyas fechas cubren HOY, y su nombre
  * accesible pasa a «Escanear ticket para {viaje}». «Cancún 2026», el viaje abierto del mock, va del 5 al 11 de
  * octubre de 2026. Sin un reloj fijo, una spec de Viajes depende del día de la corrida, y además corre una carrera:
- * «Nueva» se ve hasta que llega la lista de viajes. Las que no prueban eso fijan el reloj FUERA de esas fechas.
+ * «Escanear» se ve hasta que llega la lista de viajes. Las que no prueban eso fijan el reloj FUERA de esas fechas.
  */
 export const FUERA_DE_LAS_FECHAS_DE_LOS_VIAJES = new Date('2026-10-13T18:00:00Z');
 
@@ -97,7 +81,7 @@ export async function abrirMesaConLink(
   page: Page,
   opciones: { readonly sinGarantia?: boolean; readonly modo?: 'igual' | 'consumo' } = {},
 ): Promise<MesaAbierta> {
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   // §1.6 renombró el título al aplicar el rediseño: la cabecera navy de dos
   // filas no lleva título, y el <h1> pasó a la tarjeta de título `--teal-l`.
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();

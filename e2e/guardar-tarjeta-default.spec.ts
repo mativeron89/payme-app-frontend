@@ -54,9 +54,9 @@ test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace
   await page.getByLabel('Email', { exact: true }).fill('primeriza-garantia@demo.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
@@ -81,11 +81,11 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByLabel('Email', { exact: true }).fill('primeriza-e2e@demo.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
   // Abrir mesa hasta la garantía. El stepper de §1.4 nace sin elegir: se
   // eligen 2 comensales a mano (ya no existe el 4 por defecto).
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
@@ -138,9 +138,9 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   await page.getByLabel('Email', { exact: true }).fill('primeriza-negativa@demo.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();

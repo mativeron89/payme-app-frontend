@@ -65,7 +65,7 @@ async function aMesas(page: Page, costuras: Record<string, string> = {}): Promis
   await ingresar(page);
   const code = await sembrar(page);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await irEnLaApp(page, '/mesas');
   await expect(tusMesas(page).locator('.tu-mesa').first()).toBeVisible();
   await expect(tarjetaDelPago(page)).toBeVisible();
@@ -277,7 +277,7 @@ test.describe('la caché de lo último visto (0.225.0)', () => {
       }).observe(document.body, { subtree: true, childList: true, characterData: true });
     });
     await irEnLaApp(page, '/');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await irEnLaApp(page, '/mesas');
     await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
     await page.waitForTimeout(2200);

@@ -160,8 +160,8 @@ const ESPERADO: Record<string, Esperado> = {
   '20': { icono: 'recibo', titulo: 'Mariscos El Faro' },
   '20b': { icono: 'recibo', titulo: /./ },
   '21': { icono: 'recibo', titulo: null },
-  '22': { icono: 'lapiz', titulo: 'Carga manual' },
-  '23': { icono: 'lapiz', titulo: 'Carga manual' },
+  '22': { icono: 'lapiz', titulo: 'Agregar gasto' },
+  '23': { icono: 'lapiz', titulo: 'Agregar gasto' },
   '24': { icono: 'viaje', titulo: 'Oaxaca puente' },
   '25': { icono: 'archivo', titulo: 'Viajes cerrados' },
   '26': { icono: 'barras', titulo: null },
@@ -189,7 +189,7 @@ const tarjeta = (page: Page) => page.locator('.title-card').first();
 
 test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ page }) => {
   await entrar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await medir(page, '01', tarjeta(page), ESPERADO['01']!);
@@ -471,7 +471,7 @@ test('otros · ingreso: Log in y Crea tu cuenta', async ({ page }) => {
 
 test('mesa · ¿Cómo dividen? con la nota del IVA agregado', async ({ page }) => {
   await entrar(page, { 'payme.app.mock.n179.ocr.v1': 'iva_agregado' });
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.locator('.ticket-title-iva')).toBeVisible();
   await medir(page, '02', tarjeta(page), ESPERADO['02']!);

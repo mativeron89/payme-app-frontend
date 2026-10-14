@@ -423,7 +423,7 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await page.getByLabel('Email', { exact: true }).fill('synthetic-second@example.invalid');
     await page.getByLabel('Contraseña', { exact: true }).fill('synthetic-password');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.goto('/#/mas'); await abrir(page); await expect(countryRow(page)).toContainText('Colombia');
     await page.keyboard.press('Escape'); await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
     await page.reload(); await page.getByRole('button', { name: 'Time zone', exact: true }).click();

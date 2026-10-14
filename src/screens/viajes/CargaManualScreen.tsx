@@ -1,3 +1,4 @@
+import '../../ayuda/ayuda.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, newIdempotencyKey } from '../../api';
 import { errorDeViaje, MAX_DESCRIPCION_GASTO, MAX_GASTO_MANUAL_CENTS, type DetalleViaje, type GastoManualPedido } from '../../api/viajes';
@@ -92,7 +93,7 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
         <>
           <div className="title-card">
             <FilaDeTitulo icono="lapiz">
-              <h1 className="title-card-title">{t('Carga manual')}</h1>
+              <h1 className="title-card-title">{t('Agregar gasto')}</h1>
             </FilaDeTitulo>
           </div>
           <div className="scroll vj-scroll">
@@ -137,10 +138,11 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
       <div className="title-card">
         {/* Respuesta D del plan: un solo título, como el viaje y Balance. */}
         <FilaDeTitulo icono="lapiz">
-          <h1 className="title-card-title">{t('Carga manual')}</h1>
+          <h1 className="title-card-title">{t('Agregar gasto')}</h1>
         </FilaDeTitulo>
       </div>
       <div className="scroll vj-scroll">
+        <p className="ux-siguiente">{t('Escribe el gasto, indica quién pagó y revisa entre quiénes se divide.')}</p>
         <section className="vj-card vjm-campos">
           <label className="vjm-campo">
             <span className="vjm-rotulo">{t('Descripción')}</span>

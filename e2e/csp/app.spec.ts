@@ -35,7 +35,7 @@ test('control: la política está aplicada como OBLIGATORIA y bloquea un script 
 test('ingreso con Google (mock) sin ninguna violación', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   expect(await violaciones(page)).toEqual([]);
 });
 

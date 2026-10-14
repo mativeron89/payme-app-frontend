@@ -115,7 +115,7 @@ test.describe('AF-USUARIO-ARROBA · apagado (tolerancia si el dueño lo apaga)',
     await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
     await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
     await expect(page.getByRole('heading', { name: 'Elige tu @usuario' })).toHaveCount(0);
     await irEnLaApp(page, '/mas');
@@ -146,7 +146,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · la puerta «Elige tu @usuario»
     const titulo = page.getByRole('heading', { name: 'Elige tu @usuario' });
     await expect(titulo).toBeVisible();
     // No se entra a la app sin @.
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toHaveCount(0);
 
     const campo = page.getByLabel('Tu @usuario', { exact: true });
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
@@ -187,9 +187,9 @@ test.describe('AF-USUARIO-ARROBA · encendido · la puerta «Elige tu @usuario»
 
     await campo.fill('@Mati.Veron');
     await continuar.click();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Elige tu @usuario' })).toHaveCount(0);
     await irEnLaApp(page, '/mas');
     await expect(page.locator('.profile-arroba')).toHaveText('@mati.veron');
@@ -294,7 +294,7 @@ async function ingresarConArroba(page: Page, username: string, diasAtras: number
   await expect(page.getByRole('heading', { name: 'Elige tu @usuario' })).toBeVisible();
   await conArroba(page, username, diasAtras);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
 test.describe('AF-USUARIO-ARROBA · encendido · buscar por @ en Amigos', () => {

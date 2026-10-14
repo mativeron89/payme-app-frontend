@@ -58,7 +58,7 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
     // Y es la de cinco: su círculo central y su posición propia. Todo scopeado
     // a la barra — "Amigos" también es una pestaña, y sin scope el selector
     // matchea dos elementos y el test se cae por ambigüedad.
-    await expect(barra.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(barra.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await expect(barra.getByRole('button', { name: /^Amigos/ })).toBeVisible();
     /**
      * La posición "Cuenta" existe en la barra VIEJA y no en la de cinco (Cuenta

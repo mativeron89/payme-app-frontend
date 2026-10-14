@@ -43,7 +43,7 @@ type Forma = 'En partes iguales' | 'Pagar el total';
 async function abrirInformativa(page: Page, forma: Forma, participantes: number): Promise<string> {
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   const opcion = page.getByRole('radio', { name: new RegExp(forma) });
   await expect(opcion).toBeVisible();

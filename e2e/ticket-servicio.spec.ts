@@ -33,7 +33,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 async function hastaElTicket(page: Page, ocr: Lectura): Promise<void> {
   await configurarTicketSinQr(page, { ocr });
   await ingresar(page);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }

@@ -209,7 +209,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     expect(src).toMatch(/^blob:/);
     // Sale de la mesa (se desmonta la pantalla, sin recargar la página).
     await irEnLaApp(page, '/home');
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     expect(await revocadas(page)).not.toContain(src);
     expect(await blobVivo(page, src!)).toBe(true);
     expect(await fotosEnMemoria(page)).toBeGreaterThan(0);

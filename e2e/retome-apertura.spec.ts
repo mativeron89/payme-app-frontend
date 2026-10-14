@@ -23,7 +23,7 @@ test('🔴 abandonar el 3DS y volver a Inicio: la app ofrece retomar', async ({ 
   // mitad, el test pasaría igual con un aviso pegado siempre.
   await expect(page.getByText(/Dejaste una autorización sin confirmar/)).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /En partes iguales/ })).toBeVisible();
   await page.getByRole('radio', { name: /En partes iguales/ }).click();

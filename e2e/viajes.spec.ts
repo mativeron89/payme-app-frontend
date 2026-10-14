@@ -103,9 +103,9 @@ test('D245 · la pantalla del viaje: el monto en rojo con «−», «Miembros» 
   await expect(page.getByText('Sofía Ramírez', { exact: true })).toBeVisible();
   // D245 · con su foto quien la tiene (Luis y Sofía en el mock).
   await expect(page.locator('.vjv-miembros-lista .vj-avatar-foto')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+  await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
-  await expect(page.getByRole('heading', { name: 'Carga manual', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agregar gasto', level: 1 })).toBeVisible();
   await expect(page.getByText('¿Entre quiénes?', { exact: true })).toBeVisible();
 });
 
@@ -189,10 +189,10 @@ test('1g/1h · escanear dentro del viaje, en partes iguales y sin Diego', async 
 test('🔴 D250 · en el viaje no está «Escanear ticket»: el círculo escanea para el viaje y el escaneo lo dice', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
-  await expect(page.getByRole('button', { name: 'Carga manual', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Agregar gasto', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Escanear ticket', exact: true })).toHaveCount(0);
   const circulo = circuloDelViaje(page);
-  await expect(circulo).toHaveText('Nueva');
+  await expect(circulo).toHaveText('Escanear');
   // El título no espera la red: con el dueño lento, el nombre que dejó el viaje ya está.
   await page.evaluate(() => localStorage.setItem('payme.app.mock.latencia.v1', '5000'));
   await circulo.click();
@@ -219,14 +219,14 @@ test('D250 · desde Balance, el círculo también escanea para el viaje', async 
 
 test('D250 · desde Inicio y con el viaje esperando pagos, el círculo de siempre', async ({ page }) => {
   await conViajes(page);
-  const nueva = page.getByRole('button', { name: 'Nueva', exact: true });
+  const nueva = page.getByRole('button', { name: 'Escanear', exact: true });
   await nueva.click();
   await expect(page).toHaveURL(/\/scan$/);
   await expect(page.getByRole('heading', { name: 'Escanea el ticket', level: 1 })).toBeVisible();
   await ir(page, `/viaje/${MONTERREY}`);
   await expect(page.getByText('Monterrey fin de semana', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Escanear ticket para/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await expect(page).toHaveURL(/\/scan$/);
 });
 
@@ -296,7 +296,7 @@ test('D244 · carga manual: «Listo» pide una descripción y un monto mayor que
 test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y el gasto aparece primero', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje/${CANCUN}`);
-  await page.getByRole('button', { name: 'Carga manual', exact: true }).click();
+  await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
   // Diego no va: entre tres, $300 cada uno.
