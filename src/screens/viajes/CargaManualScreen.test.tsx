@@ -80,7 +80,7 @@ describe('D244 · la pantalla de la carga manual', () => {
   });
 
   it('«Listo» apagado hasta tener descripción y monto', () => {
-    expect(html).toMatch(/<button type="button" class="btn btn-navy" disabled="">Listo<\/button>/);
+    expect(html).toMatch(/<button type="button" data-guia="guardar-gasto" class="btn btn-navy" disabled="">Listo<\/button>/);
   });
 });
 

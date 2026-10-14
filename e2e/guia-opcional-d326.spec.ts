@@ -215,9 +215,7 @@ test('D327 · cuenta/familia/logout, almacenamiento fallido y enlace prioritario
     saveSession({ ...s, principal_id: otro, family_id: 'familia-d327', user: { ...s.user, id: otro } });
   });
   await expect(guia(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Ver guía', exact: true })).toBeVisible();
-  await abrir(page);
-  // El principal sintético nuevo carece de @usuario: esa puerta real debe tomar prioridad.
+  // No depender de la oferta transitoria: el principal nuevo carece de @usuario y su puerta debe tomar prioridad.
   await expect(page.getByRole('dialog', { name: 'Elige tu @usuario' })).toBeVisible();
   await expect(guia(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();

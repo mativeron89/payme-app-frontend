@@ -18,7 +18,7 @@ describe('D249 · «Escanear» con una cámara', () => {
   });
 
   it('el rótulo y el nombre accesible siguen siendo «Escanear»', () => {
-    expect(html).toMatch(/<button type="button" class="appbar-center" aria-label="Escanear">/);
+    expect(html).toMatch(/<button type="button" class="appbar-center" data-guia="camara" aria-label="Escanear">/);
     expect(html).toContain('<span class="appbar-label">Escanear</span>');
   });
 
@@ -26,7 +26,7 @@ describe('D249 · «Escanear» con una cámara', () => {
     const propio = renderToStaticMarkup(<AppBottomBar center={{
       label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026', onClick: () => undefined,
     }} />);
-    expect(propio).toMatch(/<button type="button" class="appbar-center" aria-label="Escanear ticket para Cancún 2026">/);
+    expect(propio).toMatch(/<button type="button" class="appbar-center" data-guia="camara" aria-label="Escanear ticket para Cancún 2026">/);
     expect(propio).toContain('<span class="appbar-label">Escanear</span>');
   });
 

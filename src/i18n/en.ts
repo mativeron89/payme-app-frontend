@@ -67,7 +67,7 @@ export const EN: Record<string, string> = {
   "Aquí encuentras tus viajes. Toca la pestaña y abre uno para conocer sus controles.": "Find your trips here. Tap the tab and open a trip to learn about its controls.",
   "Abre una mesa en la que participas. La guía se adapta a los controles disponibles para tu rol.": "Open a table you are part of. The guide adapts to the controls available for your role.",
   "Empieza en Inicio": "Start at Home",
-  "Toca Inicio para recorrer restaurantes o viajes. La guía seguirá abierta y podrás cerrarla cuando quieras.": "Tap Home to explore restaurants or trips. The guide will stay open and you can close it at any time.",
+  "Toca Inicio para recorrer restaurantes o viajes. La guía permanece abierta y puedes cerrarla cuando quieras.": "Tap Home to explore restaurants or trips. The guide will stay open and you can close it at any time.",
   "Toca este botón para abrir la cámara. Puedes usar también la galería de esta pantalla.": "Tap this button to open the camera. You can also use the gallery on this screen.",
   "Abre el ticket para revisar platos, cantidades y total antes de continuar.": "Open the receipt to review items, quantities and the total before continuing.",
   "Cuántas personas": "How many people",

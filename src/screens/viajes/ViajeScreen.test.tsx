@@ -120,15 +120,15 @@ describe('D245 · el viaje abierto, más simple', () => {
   });
 
   it('🔴 enseguida el balance como monto: la deuda en rojo con «−», sin «Debes» a la vista', () => {
-    expect(html).toContain('<p class="vjv-monto vjv-monto-deuda"><span aria-hidden="true">\u2212$542</span><span class="vj-oculto">Debes $542</span></p>');
+    expect(html).toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-deuda"><span aria-hidden="true">\u2212$542</span><span class="vj-oculto">Debes $542</span></p>');
     expect(leido.indexOf('\u2212$542')).toBeLessThan(leido.indexOf('Miembros'));
   });
 
   it('🔴 a favor en verde y cero en negro; el lector de pantalla oye «a favor»', () => {
     expect(vista(listo(viaje({ mi_balance_cents: 120000 }))))
-      .toContain('<p class="vjv-monto vjv-monto-a-favor"><span aria-hidden="true">$1,200</span><span class="vj-oculto">A favor: $1,200</span></p>');
+      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-a-favor"><span aria-hidden="true">$1,200</span><span class="vj-oculto">A favor: $1,200</span></p>');
     expect(vista(listo(viaje({ mi_balance_cents: 0 }))))
-      .toContain('<p class="vjv-monto vjv-monto-cero"><span aria-hidden="true">$0</span><span class="vj-oculto">$0</span></p>');
+      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-cero"><span aria-hidden="true">$0</span><span class="vj-oculto">$0</span></p>');
   });
 
   it('se van «Tu balance», «Gasto del grupo», «Tickets · N» y la lista de tickets', () => {
@@ -368,7 +368,7 @@ describe('D245 · Balance: «Consumos» y «Miembros»', () => {
     const html = renderToStaticMarkup(<PestanasDeBalance opcion="consumos" onOpcion={nada} />);
     expect(html).toMatch(/^<div class="btabs btabs-2" role="tablist">/);
     expect(texto(html)).toBe('Consumos Miembros');
-    expect(html).toMatch(/<button type="button" role="tab" aria-selected="true" class="btab on">Consumos<\/button>/);
+    expect(html).toMatch(/<button data-guia="tab-consumos" type="button" role="tab" aria-selected="true" class="btab on">Consumos<\/button>/);
   });
 
   it('🔴 D255-3 · la pantalla lleva las pestañas en la cabecera con «Volver», no en el contenido', () => {

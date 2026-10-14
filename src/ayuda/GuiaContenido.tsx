@@ -19,7 +19,7 @@ function catalogo(pagina: PageId, t: T): Paso[] {
   if (pagina === 'home') return [camara,
     p('tab-viajes', t('Viajes'), t('Aquí encuentras tus viajes. Toca la pestaña y abre uno para conocer sus controles.')),
     p('nav-mesas', t('Mesas'), t('Abre una mesa en la que participas. La guía se adapta a los controles disponibles para tu rol.'))];
-  if (pagina === 'mas') return [p('nav-home', t('Empieza en Inicio'), t('Toca Inicio para recorrer restaurantes o viajes. La guía seguirá abierta y podrás cerrarla cuando quieras.'))];
+  if (pagina === 'mas') return [p('nav-home', t('Empieza en Inicio'), t('Toca Inicio para recorrer restaurantes o viajes. La guía permanece abierta y puedes cerrarla cuando quieras.'))];
   if (pagina === 'scan') return [
     p('foto', t('Sacar foto'), t('Toca este botón para abrir la cámara. Puedes usar también la galería de esta pantalla.')),
     p('revisar-ticket', t('Escanea y revisa'), t('Abre el ticket para revisar platos, cantidades y total antes de continuar.')),
