@@ -179,6 +179,7 @@ export function SelectorDeQuienPago({ opciones, elegido, total, onCambio, deshab
             <button
               key={o.id}
               type="button"
+              data-guia="quien-pago"
               role="checkbox"
               aria-checked={marcado}
               aria-disabled={ultimo || undefined}

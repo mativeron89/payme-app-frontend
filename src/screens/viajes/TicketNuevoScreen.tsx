@@ -493,7 +493,7 @@ export function TicketNuevoVista({
 
         <section className="vj-card" aria-labelledby="vjt-como">
           <h2 id="vjt-como" className="vjt-card-titulo">{t('¿Cómo lo dividen?')}</h2>
-          <div className="vjt-opciones" role="radiogroup" aria-labelledby="vjt-como">
+          <div data-guia="reparto" className="vjt-opciones" role="radiogroup" aria-labelledby="vjt-como">
             {FORMAS.map((f) => (
               <button
                 key={f}

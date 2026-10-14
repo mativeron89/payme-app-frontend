@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { GuiaProvider } from './ayuda/GuiaProvider';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { useIdioma } from './i18n/idioma';
 import { ToastProvider } from './components/ui';
@@ -441,7 +442,7 @@ function Shell() {
    * decisión de la pantalla**, que es donde el spec la pone: la posición del
    * círculo central cambia según dónde estás, y eso `App` no lo sabe.
    */
-  return screen;
+  return <GuiaProvider key={`${session.principal_id}:${session.family_id}`} pagina={route.page}>{screen}</GuiaProvider>;
 }
 
 export default function App() {

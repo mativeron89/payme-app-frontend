@@ -384,6 +384,7 @@ export function BubbleTabs({
         return (
           <button
             key={tab.id}
+            data-guia={`tab-${tab.id}`}
             type="button"
             role="tab"
             aria-selected={on}

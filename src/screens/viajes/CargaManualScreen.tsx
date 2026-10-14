@@ -147,6 +147,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
           <label className="vjm-campo">
             <span className="vjm-rotulo">{t('Descripción')}</span>
             <input
+              data-guia="descripcion-gasto"
               className="vjm-input"
               value={descripcion}
               maxLength={MAX_DESCRIPCION_GASTO}
@@ -157,6 +158,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
           <label className="vjm-campo">
             <span className="vjm-rotulo">{t('Monto')}</span>
             <input
+              data-guia="monto-gasto"
               className="vjm-input vjm-monto"
               inputMode="decimal"
               value={monto}
@@ -189,6 +191,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
         )}
         <button
           type="button"
+          data-guia="guardar-gasto"
           className="btn btn-navy"
           disabled={!listo || enviando}
           onClick={() => {

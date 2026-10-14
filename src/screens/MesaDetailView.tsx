@@ -616,7 +616,7 @@ export function MesaDetailView({
   const faltaElegir = esConsumo && selected.size === 0;
 
   const miParte = faltaElegir ? null : (
-    <div className="mi-parte">
+    <div data-guia="mi-parte" className="mi-parte">
       {nothingLeft ? (
         <span>{t('No queda nada por pagar')}</span>
       ) : !esConsumo && availableSlots === 0 ? (
@@ -796,7 +796,7 @@ export function MesaDetailView({
             if (sel && abierto === i.id && !editBloqueado) {
               return (
                 <div key={i.id} className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
-                  <div className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
+                  <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
                     {opciones.map((d) => {
                       const elegida = bps === denominatorBps(d);
                       return (
@@ -1165,6 +1165,7 @@ export function MesaDetailView({
                     <button
                       className="btn btn-turquesa btn-sm"
                       onClick={onOpenInvite}
+                      data-guia="invitar"
                       aria-label={t('Invitar amigos de PayMe')}
                     >
                       <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}

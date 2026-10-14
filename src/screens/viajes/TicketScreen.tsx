@@ -634,7 +634,7 @@ function ConsumoVista(props: TicketVistaProps) {
       </div>
       {ticket.puedo_elegir && (
         <div className="vj-pie">
-          <div className="vjt-pie-fila">
+          <div data-guia="mi-parte" className="vjt-pie-fila">
             <span className="vjt-crece">
               <span className="vjt-pie-rotulo">{t('Te toca')}</span>
               {/* D278-2 · el total impreso. */}
@@ -647,6 +647,7 @@ function ConsumoVista(props: TicketVistaProps) {
             className="btn btn-navy"
             disabled={guardando}
             aria-busy={guardando || undefined}
+            data-guia="listo-consumos"
             onClick={onListo}
           >
             {t('Listo')}
@@ -686,7 +687,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
             return (
               <div key={i.id} className="qc-renglon">
                 <div className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
-                  <div className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
+                  <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
                     {opciones.map((d) => {
                       const elegida = bps === denominatorBps(d);
                       return (
@@ -779,6 +780,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
             {editable ? (
               <button
                 type="button"
+                data-guia="elegir-consumo"
                 className="qc-fila qc-libre"
                 data-estado={queda ? 'queda' : 'libre'}
                 aria-pressed={false}

@@ -142,6 +142,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
     return (
       <button
         key={it.slot}
+        data-guia={`nav-${it.slot}`}
         type="button"
         className={`appbar-item ${on ? 'on' : ''}`}
         onClick={() => navigate(it.page)}
@@ -171,6 +172,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
         <button
           type="button"
           className="appbar-center"
+          data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
           onClick={centro.onClick}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}

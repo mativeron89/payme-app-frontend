@@ -31,6 +31,7 @@ export function Desplegable({
       <button
         type="button"
         className="desplegable-cabecera"
+        data-guia={className === 'tus-consumos' ? 'consumos' : undefined}
         aria-expanded={abierto}
         aria-controls={cuerpoId}
         onClick={onToggle}

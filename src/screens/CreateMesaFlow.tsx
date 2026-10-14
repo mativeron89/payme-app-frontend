@@ -2079,6 +2079,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           <button
             type="button"
             className="camara-disparador"
+            data-guia="foto"
             onClick={doScan}
             disabled={scanning || capturando}
             aria-label={t('Sacar foto')}
@@ -2168,6 +2169,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           >
             <button
               ref={ticketTriggerRef}
+              data-guia="revisar-ticket"
               className="tk-fold-head"
               onClick={() => setTicketAbierto((o) => !o)}
               aria-expanded={ticketVisible}
@@ -2234,7 +2236,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               decir cuál estaba elegido ni que fueran alternativas de una misma
               pregunta. `radiogroup` + `aria-checked` lo dicen. */}
           <p className="ux-siguiente">{t('Revisa el ticket, elige el reparto y confirma cuántas personas son.')}</p>
-          <div className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
+          <div data-guia="reparto" className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
           {([
             { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },
             { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos' },
@@ -2286,7 +2288,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 N=1, que es el total, escrito con ceros), y el rótulo está en los
                 dos estados: el ancho no cambia al elegir ni al cambiar N. */}
             <div className="division-stepper-fila">
-              <div className="stepper" role="group" aria-label={preguntaStepper}>
+              <div data-guia="personas" className="stepper" role="group" aria-label={preguntaStepper}>
                 <button
                   onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
                   aria-label={t('Un comensal menos')}

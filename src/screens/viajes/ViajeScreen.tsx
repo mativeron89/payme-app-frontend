@@ -607,13 +607,13 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
       <DesplegableMiembros miembros={v.miembros} fotoDe={fotoDe} />
       {/* D250 · escanear es el círculo de la cámara de la barra; «Carga manual» queda sola, a todo el ancho. */}
       <div className="vjv-acciones vjv-acciones-una">
-        <button type="button" className="btn btn-ghost" onClick={onCargaManual}>
+        <button type="button" data-guia="agregar-gasto" className="btn btn-ghost" onClick={onCargaManual}>
           <Icon name="pencil" size={20} />
           {t('Agregar gasto')}
         </button>
       </div>
       <AyudaDeBalance />
-      <button type="button" className="vj-card vjv-ver-balance" onClick={onVerBalance}>
+      <button type="button" data-guia="balance" className="vj-card vjv-ver-balance" onClick={onVerBalance}>
         <span>{t('Ver balance del viaje')}</span>
         <Icon name="chevron-down" size={18} className="vjv-chev" />
       </button>
@@ -647,7 +647,7 @@ export function MontoDeBalance({ cents }: { cents: number }) {
   const visible = cents < 0 ? `\u2212${formatMXN(-cents)}` : formatMXN(cents);
   const dicho = cents > 0 ? t('A favor: {0}', formatMXN(cents)) : cents < 0 ? t('Debes {0}', formatMXN(-cents)) : formatMXN(0);
   return (
-    <p className={`vjv-monto vjv-monto-${tono}`}>
+    <p data-guia="mi-balance" className={`vjv-monto vjv-monto-${tono}`}>
       <span aria-hidden="true">{visible}</span>
       <span className="vj-oculto">{dicho}</span>
     </p>
