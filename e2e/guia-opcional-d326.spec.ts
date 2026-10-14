@@ -81,6 +81,17 @@ test.afterEach(async ({ page }, info) => {
   const medidas = await page.evaluate(() => Array.from(document.querySelectorAll('[data-guia], .guia-burbuja, .guia-nota, .hdr, .appbar-block, .appbar-fab')).map((e) => ({ target: e.getAttribute('data-guia'), clase: e.className, rect: e.getBoundingClientRect().toJSON() }))).catch(() => []);
   console.error('D328_GEOMETRIA_FALLO', JSON.stringify(medidas));
   await info.attach('geometria-fallo', { body: JSON.stringify(medidas, null, 2), contentType: 'application/json' });
+  // Sólo estado UI de la guía; sin sesión, perfil, storage ni capturas adicionales.
+  console.error('D328_ESTADO_GUIA_FALLO', await page.evaluate(() => ({
+    idioma: document.documentElement.lang,
+    guia: Array.from(document.querySelectorAll('.guia-burbuja')).map((e) => ({
+      nombre: e.getAttribute('aria-label'), titulo: e.querySelector('h2')?.textContent,
+      lado: e.getAttribute('data-lado'), oculta: !!e.closest('[hidden], [inert]'),
+      botones: Array.from(e.querySelectorAll('button')).map((b) => b.getAttribute('aria-label') ?? b.textContent),
+    })),
+    modalesVisibles: Array.from(document.querySelectorAll('[aria-modal="true"], dialog[open]'))
+      .filter((e) => e.getClientRects().length > 0 && !e.closest('[hidden], [inert]') && getComputedStyle(e).visibility !== 'hidden').length,
+  })).catch(() => ({ documentoNoDisponible: true })));
 });
 
 test('D328 · inicio sin consentimiento heredado, cierre temporal y cámara nativa', async ({ page }) => {
@@ -180,23 +191,32 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
   await page.evaluate(() => {
     const observadores = new Map<object, string>();
     const ajenos = new Map<object, string>();
+    const instrumentales = new Map<object, string>();
     const { llamadas } = Reflect.get(window, '__d327Arranque') as { llamadas: string[] };
     llamadas.length = 0;
     for (const nombre of ['MutationObserver', 'ResizeObserver'] as const) {
       const Base = window[nombre];
       Reflect.set(window, nombre, class extends Base {
         observe(...args: Parameters<MutationObserver['observe']> & Parameters<ResizeObserver['observe']>) {
-          const target = args[0] as Element;
-          // Los montos de Viajes también observan su tamaño. Contar sus observers
-          // como guía produciría un falso leak al actualizar el saldo inicial.
-          if (nombre === 'MutationObserver' || target.matches('.guia-burbuja, [data-guia]')) observadores.set(this, `${nombre}:${target.className || target.tagName}`);
-          else ajenos.set(this, target.className);
+          const target = args[0] as Node;
+          const elemento = target instanceof Element ? target : null;
+          const traza = new Error().stack ?? '';
+          const detalle = `${nombre}:${target.nodeName}\n${traza}`;
+          // Playwright 1.62.1 instala su snapshotter sobre Document durante la traza.
+          // Excluir sólo esa procedencia acreditada, no cualquier observer de Document.
+          // Una traza desconocida sigue contando y falla; BODY siempre cuenta como guía.
+          const snapshotter = nombre === 'MutationObserver' && target === document
+            && /\bat Streamer\._(?:ensureObservingCurrentDocument|refreshListenersWhenNeeded)\b/.test(traza);
+          if (snapshotter && !observadores.has(this)) instrumentales.set(this, detalle);
+          else if (nombre === 'MutationObserver' || elemento?.matches('.guia-burbuja, [data-guia]')) {
+            instrumentales.delete(this); observadores.set(this, detalle);
+          } else ajenos.set(this, `${nombre}:${elemento?.className ?? target.nodeName}`);
           super.observe(...args);
         }
-        disconnect() { observadores.delete(this); ajenos.delete(this); super.disconnect(); }
+        disconnect() { observadores.delete(this); ajenos.delete(this); instrumentales.delete(this); super.disconnect(); }
       });
     }
-    Reflect.set(window, '__d327Efectos', { llamadas, observadores, ajenos });
+    Reflect.set(window, '__d327Efectos', { llamadas, observadores, ajenos, instrumentales });
   });
   await abrir(page);
   await expect(guia(page).getByRole('heading', { name: 'Escanear', exact: true })).toBeFocused();
@@ -216,8 +236,8 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
     return { llamadas: e.llamadas, observadores: e.observadores.size };
   });
   console.info('D328_OBSERVADORES_AL_CERRAR', await page.evaluate(() => {
-    const e = Reflect.get(window, '__d327Efectos') as { observadores: Map<object, string>; ajenos: Map<object, string> };
-    return { guia: [...e.observadores.values()], ajenos: [...e.ajenos.values()] };
+    const e = Reflect.get(window, '__d327Efectos') as { observadores: Map<object, string>; ajenos: Map<object, string>; instrumentales: Map<object, string> };
+    return { guia: [...e.observadores.values()], ajenos: [...e.ajenos.values()], instrumentales: [...e.instrumentales.values()] };
   }));
   expect(efectos).toEqual({ llamadas: [], observadores: 0 });
   await page.getByRole('button', { name: 'Más', exact: true }).click();
@@ -362,7 +382,19 @@ test('D327 · 375/430/horizontal/reduced-motion/zoom y traducción', async ({ pa
   await page.evaluate(() => { document.documentElement.style.zoom = ''; localStorage.setItem('payme.app.idioma.v1', 'en'); });
   await page.goto('/mas');
   const en = page.getByRole('region', { name: 'Interactive guide', exact: true });
+  // Se conserva la autoentrada a /mas: no abrir la guía mediante Ayuda ni modificar gates.
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(en).toBeVisible();
+  // Más refresca el perfil y puede revalidar las puertas de la misma sesión.
+  // La pausa permitida exige un gesto real para retomar; no equivale al título del paso.
+  const tituloEn = en.getByRole('heading');
+  await expect(tituloEn).toHaveText(/^(Start at Home|Continue when ready)$/);
+  if (await tituloEn.textContent() === 'Continue when ready') {
+    await expect(en.getByText('The guide paused to let you use the screen. Resume it when you are ready.', { exact: true })).toBeVisible();
+    await en.getByRole('button', { name: 'Resume guide', exact: true }).click();
+  }
   await expect(en.getByRole('heading', { name: 'Start at Home' })).toBeVisible();
+  await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'nav-home');
   await expect(en.getByRole('checkbox', { name: 'Don’t show again', exact: true })).not.toBeChecked();
   await captura(page, 'guide-english', info);
 });
