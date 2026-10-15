@@ -201,13 +201,29 @@ test('D327 · burbujas reales, Siguiente/Atrás sin negocio y cierre con foco', 
           const target = args[0] as Node;
           const elemento = target instanceof Element ? target : null;
           const traza = new Error().stack ?? '';
-          const detalle = `${nombre}:${target.nodeName}\n${traza}`;
-          // Playwright 1.62.1 instala su snapshotter sobre Document durante la traza.
-          // Excluir sólo esa procedencia acreditada, no cualquier observer de Document.
-          // Una traza desconocida sigue contando y falla; BODY siempre cuenta como guía.
-          const snapshotter = nombre === 'MutationObserver' && target === document
-            && /\bat Streamer\._(?:ensureObservingCurrentDocument|refreshListenersWhenNeeded)\b/.test(traza);
-          if (snapshotter && !observadores.has(this)) instrumentales.set(this, detalle);
+          const opciones = args[1] as MutationObserverInit | undefined;
+          const detalle = `${nombre}:${target.nodeName}:${JSON.stringify(opciones)}\n${traza}`;
+          const frames = traza.split('\n').map((linea) => linea.trim());
+          const llamador = frames[2] ?? '', padre = frames[3] ?? '';
+          const claves = Object.keys(opciones ?? {}).sort().join(',');
+          const soloHijos = claves === 'childList' && opciones?.childList === true;
+          const soloAtributos = claves === 'attributes,subtree'
+            && opciones?.attributes === true && opciones.subtree === true;
+          // Playwright 1.62.1: invocadores DIRECTOS y opciones de sus tres observe(Document).
+          // InjectedScript vigila la pérdida de listeners; Streamer vigila listeners/atributos.
+          // No basta un nombre en cualquier nivel de la traza. BODY y Document desconocidos cuentan.
+          const listenersInyectados = soloHijos
+            && /^at InjectedScript\._setupGlobalListenersRemovalDetection \(<anonymous>:\d+:\d+\)$/.test(llamador)
+            && /^at new InjectedScript \(<anonymous>:\d+:\d+\)$/.test(padre);
+          const listenersSnapshot = soloHijos
+            && /^at Streamer\._refreshListenersWhenNeeded \(/.test(llamador)
+            && /^at Streamer\._ensureObservingCurrentDocument \(/.test(padre);
+          const atributosSnapshot = soloAtributos
+            && /^at Streamer\._ensureObservingCurrentDocument \(/.test(llamador)
+            && /^at (?:new Streamer|Streamer\.captureSnapshot) \(/.test(padre);
+          const instrumental = nombre === 'MutationObserver' && target === document
+            && (listenersInyectados || listenersSnapshot || atributosSnapshot);
+          if (instrumental && !observadores.has(this)) instrumentales.set(this, detalle);
           else if (nombre === 'MutationObserver' || elemento?.matches('.guia-burbuja, [data-guia]')) {
             instrumentales.delete(this); observadores.set(this, detalle);
           } else ajenos.set(this, `${nombre}:${elemento?.className ?? target.nodeName}`);
