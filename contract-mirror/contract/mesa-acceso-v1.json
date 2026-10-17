@@ -36,12 +36,13 @@
     "POST /api/mesas/:code/items/release": { "desde": "v2.173.1 (n333)" },
     "POST /api/mesas/:code/close": { "desde": "v2.173.1 (n333)" },
     "POST /api/mesas/:code/pay": { "desde": "v2.173.1 (n333)" },
-    "POST /api/mesas/:code/invitations": { "desde": "v2.173.2 (T-02 de la auditoría Codex total)" }
+    "POST /api/mesas/:code/invitations": { "desde": "v2.173.2 (T-02 de la auditoría Codex total)" },
+    "PUT /api/mesas/:code/tip": { "desde": "v2.186.0 (D344, contract/mesa-mi-parte-v1.json)" }
   },
   "no_cambia": {
     "sin_sesion": "401, antes de mirar la mesa.",
     "cuenta_suspendida": "403 {\"error\":\"user_suspended\"}, antes de mirar la mesa.",
-    "no_titular": "403 {\"error\":\"not_mesa_organizer\"} a quien SÍ participa sin ser titular, en participants, join-requests (listar, accept, reject) y close; en invitations, 403 {\"error\":\"only_opener_can_invite\"}. No revela nada: esa persona ya ve la mesa.",
+    "no_titular": "403 {\"error\":\"not_mesa_organizer\"} a quien SÍ participa sin ser titular, en participants, join-requests (listar, accept, reject), close y tip; en invitations, 403 {\"error\":\"only_opener_can_invite\"}. No revela nada: esa persona ya ve la mesa.",
     "mesa_privada": "Las dos de informative-selection pasan antes por la visibilidad de los restaurantes privados, que ya respondía este mismo 404."
   },
   "antes": "Hasta v2.173.0, las diez rutas de n333 (accept y reject cuentan aparte) respondían 403 {\"error\":\"not_a_mesa_participant\"} a quien no participaba y 404 {\"error\":\"mesa_not_found\"} a un código inexistente.",

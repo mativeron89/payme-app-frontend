@@ -24,7 +24,31 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D293 · los restaurantes de mis viajes en Mesas · App Backend v2.184.0 · 2026-10-12
+### D344 · «Mi parte» y la propina de la mesa · App Backend v2.186.0 · 2026-10-17
+
+Orden `AF-D344-MI-PARTE-FRONT-20261017` (sha256 `b8b0a0fdcf5c08ffd6585100fa6227f2d41a46fa9746f71dab5885c805f552d4`).
+Según la orden, el dueño 2.186.0 está servido (`79124eb`, medido por el Bibliotecario V).
+
+- Contenido: owner **`6fa84b3570d701b0cb30c91fc56ed6a01127b326`** (v2.186.0, commit D: `PUT /api/mesas/:code/tip` y
+  `share_version=1`).
+- Inventario: el del owner en **`79124eb69a6d6851ae922d8d682d7dca21373425`** (v2.186.0, commit E;
+  `contract/mirror-inventory.json`, sha256 `330e7c28ef498ba8c28ec84fb201ddf9a2140d7630b2034f5645d66a0408fb22`),
+  adoptado con `--adoptar-inventario` sin editarlo. Declara `6fa84b3`, 143 entradas (dos nuevas). Que diga `6fa84b3` y no
+  `79124eb` no es un desfase: `79124eb` sólo regenera el inventario.
+- **14 archivos espejados** (uno nuevo):
+  - entra `contract/mesa-mi-parte-v1.json` (sha256 `cc0f617e72e72acfb660ad1f040d4f992eab8f065d84987ecae00c471047a3ab`):
+    la escritura de la propina de la mesa, la negociación `share_version=1` y sus tres claves (`tip_setting`,
+    `share_totals`, `my_share`), cuándo salen en null, el cálculo y lo que debe mostrar el cliente;
+  - cambia `contract/mesa-acceso-v1.json` (sha256 `b0900bcac1e8975bfd4d574a9d2379a8049ce792db2f8bf7f635dac7e9f28ed2`):
+    la ruta nueva `PUT /api/mesas/:code/tip` pasa por la misma puerta, y quien participa sin ser titular recibe 403;
+  - cambia `contract/ocr-merchant-v2.json` (sha256 `4fd7741b12b1588d1b0e4aa52b6d81cf2ef448734c8f18590f3ddc76a1ec58a9`):
+    el `client` de los ajustes v1 y v2 aclara que, desde 2.186.0, sólo se reparten dentro de «Mi parte».
+- Sólo por hash, desde `cb46389`: cambian `routes/mesas.js`, `schemas/index.js` y `services/viajes.js`; entra
+  `services/parteDeMesa.js`. Los hechos del dueño se regeneraron: cambian el commit y el sha de `routes/mesas.js` y
+  `schemas/index.js`, ningún hecho.
+- `--integridad`: 14 copiados y 129 sólo por hash. `--paridad`: espejo = inventario = fuente en `6fa84b3`, 143/143.
+
+### Refresh anterior · D293 · los restaurantes de mis viajes en Mesas · App Backend v2.184.0 · 2026-10-12
 
 Orden `AF-RESTAURANTES-DE-VIAJE-EN-MESAS-20261012` (D293). Según la orden, el dueño 2.184.0 está servido.
 

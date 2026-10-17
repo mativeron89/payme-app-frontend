@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "payme.app.mesa_mi_parte/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de «Mi parte» y la propina de la mesa, v2.186.0 · D344.",
+    "Mati aprobó «Platos + propina − descuento»: P1 sólo el organizador fija la propina; P2 sobre los platos DESPUÉS del descuento; P3 en proporción a lo consumido; P4 con el IVA aparte y el servicio del ticket; R1–R5 y R7 como se recomendaron; R6 con migración.",
+    "Fuente: ops/bibliotecario-claude-20260917/DECISIONES_MATI_D344_MI_PARTE_APROBACION_20261017.md, la propuesta (d341-noche/PROPUESTA_BACKEND_MI_PARTE_D344.md, v2 y v3) y las concreciones derivadas de P2 b) que registró el Bibliotecario V (CONCRECIONES_V_D344_P2B_20261017.md), que no son elecciones de Mati.",
+    "Es informativo: sólo existe en mesas sin garantía, que el servidor nunca cobra (POST /api/mesas/:code/pay responde 409 guarantee_required). No ata a /pay."
+  ],
+  "escritura": {
+    "ruta": "PUT /api/mesas/:code/tip",
+    "quien": "Sólo el organizador. Puerta: requireMesaParticipant (contract/mesa-acceso-v1.json); quien participa sin ser titular recibe 403 {\"error\":\"not_mesa_organizer\"}.",
+    "cuerpo": "Exactamente {\"tip_setting\": X}, con X = {\"tip_bps\": 0..10000} (los presets 0/5/10/15/20 % son 0/500/1000/1500/2000), {\"tip_cents\": entero seguro >= 0} («Otro», sin tope de producto) o null (vuelve a «sin fijar»). Cualquier otra forma: 400 validation_error.",
+    "cuando": "Mesa sin garantía, abierta y con el dinero apagado. Si no es sin garantía o el dinero está encendido: 409 {\"error\":\"tip_setting_not_applicable\"}. Si no está abierta: 409 {\"error\":\"mesa_not_active\", \"mesa_status\", \"closure_reason\"}.",
+    "respuesta": "200 {\"tip_setting\": X}, con el valor que quedó. Repetir el mismo valor da lo mismo. No escribe en el outbox ni avisa a nadie.",
+    "cliente": "La manda apenas crea la mesa desde el ticket escaneado, y no deja elegir platos hasta que responde (si falla, reintenta: es idempotente). Si la mesa se cierra antes, queda sin fijar."
+  },
+  "lectura": {
+    "negociacion": "GET /api/mesas/:code?…&share_version=1 (string exacto). Sin esa negociación, o con otro valor o repetido, la respuesta queda byte por byte como antes.",
+    "claves": {
+      "tip_setting": "{\"tip_bps\": n} | {\"tip_cents\": n} | null · la ven todos los participantes.",
+      "share_totals": "{items_cents, discounts_cents, service_cents, tax_added_cents, adjustments_cents, tip_basis_cents, tip_cents, total_cents, adjustments_omitted, adjustments_omitted_reason} | null · la mesa entera, sin datos de nadie; la ven todos. adjustments_cents = service_cents + tax_added_cents − discounts_cents; total_cents = items_cents + adjustments_cents + tip_cents. tip_basis_cents es B, la base de la propina por % (no es mesa.tip_base_cents, que sigue siendo «total ÷ N» para /pay). Con adjustments_omitted = true, discounts_cents, service_cents y tax_added_cents valen 0, y adjustments_omitted_reason dice por qué: \"mesa_corregida\" o \"neto_no_positivo\" (ver calculo.neto). Sin la marca, adjustments_omitted_reason es null.",
+      "my_share": "{items_cents, adjustments_cents, tip_cents, total_cents} | null · sólo la de quien mira; nunca la de otro."
+    },
+    "null": "Las tres claves salen en null en una mesa con garantía y si no se puede leer la mesa. Si el cálculo no se puede hacer (un dato viejo, o un «Otro» tan grande que el total no es un entero seguro), share_totals y my_share salen en null y tip_setting sale igual, con lo que fijó el organizador. El resto del detalle sale igual siempre. my_share sale en null en partes iguales para quien no tiene parte (se sumaron más personas que las partes declaradas). Por consumo, quien no eligió nada recibe ceros, igual que quien mira sin estar en la mesa todavía (una invitación pendiente): nunca recibe la parte de lo que nadie eligió.",
+    "decodificador": "El detalle no pasa por un decodificador estricto en App Frontend 0.250.0 (se castea); conviene leer las tres claves con validación propia, como my_paid_bps. ticket_adjustments y ticket_totals no cambian."
+  },
+  "calculo": {
+    "unidades": "Centavos enteros; los repartos con BigInt y suma exacta. Regla en services/parteDeMesa.js (espejado).",
+    "ajustes": "D descuentos, S servicio impreso, V IVA que el ticket suma aparte, leídos con las reglas de publicación más nuevas. V con la regla de Viajes (el subtotal es la suma de los platos, o esa suma menos los descuentos si no son iguales al IVA); IVA incluido, ambiguo o no guardado (ticket con descuento y sin servicio): 0.",
+    "neto": "N = P + S + V − D (P, los platos de la mesa). No se aplican ajustes (N = P y adjustments_omitted = true) en dos casos: la mesa se corrigió antes de crearla y el ticket traía algo que ya no se aplica (R4; adjustments_omitted_reason = \"mesa_corregida\"), o N <= 0 (resguardo; \"neto_no_positivo\"). Una mesa corregida cuyo ticket no traía nada que aplicar (sin descuento ni servicio y con el IVA incluido) no lleva la marca.",
+    "propina": "T = round_half_away(B × tip_bps / 10000), con B = máx(0, P − D leído): los platos después del descuento, sin servicio ni IVA. B usa el descuento leído aunque N <= 0 anule los ajustes (entonces la propina por % da 0); en la mesa corregida (R4) el descuento no se lee y B = P. Con «Otro», el monto fijo; sin fijar, 0.",
+    "por_consumo": "Los platos de cada persona (lo elegido y guardado, con el precio de fracción de siempre) son el peso; lo que nadie eligió es el último peso. N y T se reparten una vez cada uno por mayor resto; en empate, el centavo al que se sumó antes (quien eligió y ya no está activo va después de los activos, en el orden de su primer plato elegido en la mesa). my_share = {platos, parte del neto − platos, parte de la propina, parte del neto + parte de la propina}.",
+    "partes_iguales": "Las n partes declaradas al abrir; la parte k es de la k-ésima persona activa en el orden en que se sumaron (el organizador es la 0). splitEqual de P, N y T, con el centavo de más a las primeras partes.",
+    "se_mueve": "Mientras la mesa está abierta, si otro elige o suelta un plato, my_share.total_cents puede moverse hasta 2 centavos (1 del neto y 1 de la propina), y 1 más si se comparte un plato. Al cerrar la mesa queda fijo."
+  },
+  "cliente": [
+    "Mostrar «Mi parte» con el desglose: platos, ajustes (rotulado «Descuento» si share_totals sólo tiene descuento; si trae servicio o IVA, «Descuento y cargos del ticket») y propina.",
+    "Vista previa antes de «Listo»: lo elegido × (share_totals.items_cents + share_totals.adjustments_cents + share_totals.tip_cents) / share_totals.items_cents; puede diferir en un centavo del valor del servidor, que manda al guardar.", "Vista previa del selector del organizador: el % sobre share_totals.tip_basis_cents (B), nunca sobre mesa.tip_base_cents, que sigue siendo la base de /pay.",
+    "Con share_totals.service_cents > 0, avisar al organizador antes de que ponga otra propina, sin bloquear.",
+    "Con adjustments_omitted = true, avisar según adjustments_omitted_reason: con \"mesa_corregida\", «como la mesa se corrigió, los ajustes del ticket no se aplicaron y la propina va sobre los platos»; con \"neto_no_positivo\", «el descuento del ticket cubre toda la cuenta: no se aplicó y la propina por % queda en 0».",
+    "«Otro» por encima de 3 veces los platos de la mesa (3 × share_totals.items_cents, como aprobó R1): pedir confirmación al organizador (§1.5 bis), sin tope duro.",
+    "Nunca mostrar un % que nadie eligió: con tip_setting null, la propina es 0."
+  ],
+  "no_cambia": "POST /api/mesas (alta, idempotencia, B-06), POST /api/mesas/:code/pay (su tip_bps/tip_cents por pagador), tip_base_cents, la garantía, la liquidación, el outbox y sus eventos, el dashboard, ticket_adjustments, ticket_totals, los casilleros de partes iguales, /mesas/mine y las Estadísticas, y Viajes."
+}

@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "cb463893358176b730b98fdf508863ed26c8ed53",
-  "total": 141,
+  "commit": "6fa84b3570d701b0cb30c91fc56ed6a01127b326",
+  "total": 143,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -25,14 +25,20 @@
     {
       "origen": "contract/mesa-acceso-v1.json",
       "destino": "contract/mesa-acceso-v1.json",
-      "sha256": "25c72808298d96cdf7babee711a8bdce1d0045d4f59b9236fe3f7cec4d966753",
-      "bytes": 4437
+      "sha256": "b0900bcac1e8975bfd4d574a9d2379a8049ce792db2f8bf7f635dac7e9f28ed2",
+      "bytes": 4538
     },
     {
       "origen": "contract/mesa-join-requests-v1.json",
       "destino": "contract/mesa-join-requests-v1.json",
       "sha256": "1d8579f0a4f352c37d45ffa193ec23f4854aeba3c8e46f135a5b8e0f3c60a6a2",
       "bytes": 6417
+    },
+    {
+      "origen": "contract/mesa-mi-parte-v1.json",
+      "destino": "contract/mesa-mi-parte-v1.json",
+      "sha256": "cc0f617e72e72acfb660ad1f040d4f992eab8f065d84987ecae00c471047a3ab",
+      "bytes": 7998
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
@@ -55,8 +61,8 @@
     {
       "origen": "contract/ocr-merchant-v2.json",
       "destino": "contract/ocr-merchant-v2.json",
-      "sha256": "6b4297a73e19987c6c022d369d2d46ca056cce26966178623c2613ec24754330",
-      "bytes": 20422
+      "sha256": "4fd7741b12b1588d1b0e4aa52b6d81cf2ef448734c8f18590f3ddc76a1ec58a9",
+      "bytes": 20774
     },
     {
       "origen": "contract/ocultamientos-v1.json",
@@ -481,8 +487,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "cef19694f628e25cb6ff571501a1a8e3e6747020af99967c65e1a8f41dabc9be",
-      "bytes": 202597
+      "sha256": "8238526701437d50ca05f7893476b12cc66c50116355c00436af0d964202a1f4",
+      "bytes": 209128
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -565,8 +571,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "ac496434b9418649e5397a3c263daab9c197c2f498d90c3b3aa50a293197be05",
-      "bytes": 33139
+      "sha256": "ca6dd1b38fb57ed48dcd9c3f4982bc37f79163fa71f6227e737cb7f6926f7cba",
+      "bytes": 33818
     },
     {
       "origen": "services/authRecovery.js",
@@ -713,6 +719,12 @@
       "bytes": 10363
     },
     {
+      "origen": "services/parteDeMesa.js",
+      "destino": "services/parteDeMesa.js",
+      "sha256": "8ccd178853ac6890e884e4672e0580b6fff41285386d63529b11d41cb09a4796",
+      "bytes": 7385
+    },
+    {
       "origen": "services/paymentAttemptReconciler.js",
       "destino": "services/paymentAttemptReconciler.js",
       "sha256": "79d3fa336cfb3f4cea4d4ba200fb8bb49793716042cca2e6be19d9b47f38c74c",
@@ -793,8 +805,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "5c1af1dc87aa3a5ac12e0bf9fe4e8f29ef99e97d69e7b6dc509008924794541a",
-      "bytes": 148400
+      "sha256": "ac68531c3a5576a4a08297094e45456a2fcd5220cdde42283cc69bfcc63b3536",
+      "bytes": 152528
     },
     {
       "origen": "services/viajesCalculo.js",
