@@ -99,6 +99,8 @@ export interface AppBottomBarProps {
     busy?: boolean;
     /** D250 · lo que oye el lector de pantalla si dice más que el rótulo («Escanear ticket para Cancún»). */
     ariaLabel?: string;
+    /** D341 · el ancla de la guía cuando la pantalla necesita una propia. Sólo un atributo: no cambia la conducta. */
+    guia?: string;
   };
   /**
    * Fila propia ARRIBA de la barra, dentro del mismo bloque. Es donde vive lo
@@ -172,12 +174,15 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
         <button
           type="button"
           className="appbar-center"
-          data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
+          data-guia={('guia' in centro && centro.guia) || (centro.icon === 'camera' ? 'camara' : 'continuar')}
           onClick={centro.onClick}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}
           // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.
           aria-label={t(('ariaLabel' in centro && centro.ariaLabel) || centro.label)}
+          // D341 · a dónde lleva la cámara por las fechas de un viaje (D276), para que la guía lo diga. Sólo describe.
+          data-guia-destino={!center && porFechas ? (deHoy.length === 1 ? 'viaje' : 'elegir-viaje') : undefined}
+          data-guia-viaje={!center && porFechas && deHoy.length === 1 ? deHoy[0]!.nombre : undefined}
         >
           <span className="appbar-fab" aria-hidden="true">
             {/* 24px dentro del círculo de 56px medido por Diseño. */}

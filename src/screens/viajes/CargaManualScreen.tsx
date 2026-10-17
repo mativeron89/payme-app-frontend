@@ -25,6 +25,7 @@ import { EstadoSinViaje, useDetalleViaje } from './ViajeScreen';
 import './viajes.css';
 import './viaje.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { avisarALaGuia } from '../../ayuda/senalesGuia';
 
 /**
  * D244 · D245 · la carga manual de un gasto del viaje (`/viaje-gasto/<id>`).
@@ -58,6 +59,8 @@ export function CargaManualScreen({ viajeId }: { viajeId: string }) {
     setEnviando(true);
     try {
       const ticket = await api.cargarGastoDeViaje(viajeId, { ...pedido, idempotency_key: llave.current.key });
+      // D341 · el gasto quedó guardado: la guía puede mostrar su final. Sólo el id del viaje.
+      try { avisarALaGuia({ tipo: 'viaje-guardado', viaje: viajeId }); } catch { /* sin efecto */ }
       goBack('viaje', viajeId);
       // D276-3 · si quedé sólo yo y pagué yo, es un gasto personal.
       toast(ticket.personal ? t('Guardaste el gasto personal.') : t('Cargaste el gasto.'), { sobreLaBarra: true });
@@ -173,7 +176,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
           )}
           <SelectorDeQuienPago opciones={opciones} elegido={quienPago} total={cents} onCambio={setQuienPago} deshabilitado={enviando} />
         </section>
-        <section className="vj-card">
+        <section className="vj-card" data-guia="entre-quienes">
           <h2 className="vjm-titulo">{t('¿Entre quiénes?')}</h2>
           <p className="vjm-ayuda">{t('Se divide entre los marcados. Desmarca a quien no va.')}</p>
           <ListaDePresentes

@@ -1,3 +1,24 @@
+# 0.251.0 · 2026-10-17
+
+- D341-M2: guía «Tu turno». Un solo recorrido por capítulos en lugar del catálogo por pantalla. Bienvenida con la historia en una frase y el mapa Foto → Dividir → Invitar → Elegir (→ Pagar sólo con pagos encendidos), con la etapa actual marcada.
+- Cada burbuja dice «Ahora / Después». La última de cada parte es «Tu turno»: «Entendido» la achica a una línea y la guía espera el paso de la persona; sigue sola en la pantalla siguiente o cuando aparece lo que viene (la lista de consumos, el selector de porción). Nunca toca un control.
+- Restaurante: foto, recorte, dividir, garantía y banco (sólo con pagos), invitar, «Tu mesa» del organizador y del invitado (solicitudes, invitar, consumos, platos con candado, porción, Mi parte, Cerrar mesa, Listo), pago y comprobante (sólo con pagos). Viajes: Inicio, crear viaje, el viaje con su cierre (Ya pagué / Recibí), ticket nuevo, consumos, gasto a mano y balance.
+- Los finales («Así queda tu mesa», «La mesa se cerró», «Así va tu viaje») aparecen sólo después de un guardado real que la pantalla avisa (`senalesGuia`, sólo ids, sin red ni persistencia).
+- Control fuera de la vista: «Está más abajo/arriba» y «Mostrar», que desplaza sólo si se pide. Fuera del recorrido: «La guía te espera», apuntando a Inicio. Con una ventana encima la guía se oculta y vuelve sola, sin «Retomar guía».
+- Anclas: atributos `data-guia*` y `center.guia` en pantallas existentes, sin cambiar roles, textos ni conducta; donde un test fija el HTML exacto, la guía usa la clase existente. La vista de pago (P36) no se toca.
+- Se conservan D326/D327/D328: aparición al entrar hasta «No volver a mostrar» (misma clave `optout.v2`), prioridad de ingreso, aviso, invitaciones y links, reapertura en Más → Ayuda, foco, posición y movimiento reducido.
+- Presentación provisoria aislada en `BurbujaGuia.tsx` y `guiaInteractiva.css` con variables propias, a la espera del diseño de Claude Design. Inglés pendiente de aprobación de Diseño.
+- Revisión adversarial antes de la prueba de Mati, con estas correcciones:
+  - una ventana encima (que deja la app inerte) ya no le borra el lugar a la guía;
+  - mientras se lee la foto, la guía se oculta;
+  - esperando pagos, el viaje termina en «Ya pagué» / «Recibí»;
+  - el final de un viaje vale sólo para ese viaje y la pantalla que sigue al guardado;
+  - una mesa ya cerrada (por «Cerrar mesa», por tiempo o en partes iguales de sólo lectura) muestra «La mesa se cerró» sobre su Inicio;
+  - el balance del viaje queda fuera del recorrido, como en la propuesta;
+  - «Terminar guía» aparece sólo en los finales;
+  - Atrás ya no rebota desde la porción.
+- Guarda estática de que cada aviso de guardado va después del `await` exitoso y nunca en un `catch`.
+
 # 0.250.0 · 2026-10-14
 
 - D330: pantalla de carga con el degradado azul oscuro arriba y el claro abajo; intercambia los dos degradados existentes completos, conservando logo, laterales turquesa, geometría, animación y tiempos.

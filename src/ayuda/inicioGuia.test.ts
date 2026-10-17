@@ -37,4 +37,8 @@ describe('D328 · una aparición por entrada autenticada', () => {
     expect(objetivoDeInicio('home')).toBe('[data-guia="camara"]');
     expect(objetivoDeInicio('viaje-gasto')).toBe('[data-guia="descripcion-gasto"]');
   });
+  it('D341 · quien entra por el link de una mesa arranca en sus platos o en el aviso de aceptar', () => {
+    const mesa = objetivoDeInicio('mesa') ?? '';
+    for (const id of ['plato', 'consumos', 'ver-avisos']) expect(mesa).toContain(`[data-guia="${id}"]`);
+  });
 });

@@ -53,6 +53,7 @@ import { circuloDelViaje } from './circuloDelViaje';
 import './viajes.css';
 import './ticket.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { avisarALaGuia } from '../../ayuda/senalesGuia';
 
 /**
  * AF-VIAJES · D242 · un ticket del viaje: elegir lo que consumí (1i), «Pagar
@@ -143,6 +144,8 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
     setGuardando(true);
     try {
       await api.elegirEnTicketDeViaje(viajeId, ticketId, { items: pedidoDeSeleccion(ticket.items, seleccion), listo: true });
+      // D341 · lo elegido quedó guardado: la guía puede mostrar su final. Sólo el id del viaje.
+      try { avisarALaGuia({ tipo: 'viaje-guardado', viaje: viajeId }); } catch { /* sin efecto */ }
       toast(t('Guardamos lo que consumiste.'), { sobreLaBarra: true });
       goBack('viaje', viajeId);
     } catch (err) {

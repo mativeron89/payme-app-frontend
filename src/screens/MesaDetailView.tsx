@@ -887,7 +887,7 @@ export function MesaDetailView({
 
           if (bloqueado) {
             return (
-              <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
+              <div key={i.id} className="qc-fila qc-otro" data-guia="plato-tomado" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
                 <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
                 <span className="qc-cuerpo">
                   {titulo('qc-nombre qc-nombre--otro')}
@@ -903,6 +903,7 @@ export function MesaDetailView({
               key={i.id}
               type="button"
               className="qc-fila qc-libre"
+              data-guia="plato"
               data-estado={queda ? 'queda' : 'libre'}
               disabled={editBloqueado}
               aria-pressed={false}
@@ -933,7 +934,7 @@ export function MesaDetailView({
   );
 
   return (
-    <div ref={pantallaRef} className="screen has-appbar">
+    <div ref={pantallaRef} className="screen has-appbar" data-guia-etapa={!esConsumo && informativeReadOnly ? 'mesa-cerrada' : 'mesa'} data-guia-rol={esTitular ? 'organizador' : 'invitado'} data-guia-modo={mesa.division_mode}>
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         <FilaDeTitulo icono={esTitular ? 'tienda' : 'cubiertos'}>
@@ -988,7 +989,7 @@ export function MesaDetailView({
           <div className="note note-orange" role="alert" style={{ marginBottom: 12 }}>
             {t('Primero acepta la invitación a esta mesa.')}
             {onVerAvisos && (
-              <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onVerAvisos}>
+              <button type="button" className="btn btn-ghost btn-sm btn-fit" data-guia="ver-avisos" onClick={onVerAvisos}>
                 {t('Ver avisos')}
               </button>
             )}
@@ -1196,6 +1197,7 @@ export function MesaDetailView({
                   ref={botonCerrarMesa}
                   type="button"
                   className="btn btn-cerrar-mesa btn-sm btn-fit"
+                  data-guia="cerrar-mesa"
                   onClick={() => setHojaCierre('cerrar')}
                   disabled={cerrando}
                 >
@@ -1262,6 +1264,7 @@ export function MesaDetailView({
           label: !esConsumo && informativeSaved ? t('Guardado') : t('Listo'),
           // Diseño de Claude Design: el círculo central lleva la flecha.
           icon: 'arrow-right',
+          guia: 'listo-mesa',
           /**
            * D-R8 · con el corte el círculo **registra la selección** y termina
            * el recorrido; antes salía sin registrar nada, y el aviso que la
@@ -1284,6 +1287,7 @@ export function MesaDetailView({
           // cuando sigue al pago.
           label: t('Listo'),
           icon: 'arrow-right',
+          guia: 'listo-mesa',
           onClick: () => {
             if (faltaElegirConsumos) { frenarSinEleccion(); return; }
             onGoToPay();

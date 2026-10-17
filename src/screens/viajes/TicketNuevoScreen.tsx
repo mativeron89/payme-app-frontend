@@ -51,6 +51,7 @@ import { etiquetaTipoLugar, iconoTipoLugar, nombreCompleto, nombreDelLugar, para
 import './viajes.css';
 import './ticket.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { avisarALaGuia } from '../../ayuda/senalesGuia';
 
 /**
  * AF-VIAJES · D242 · «Ticket nuevo» (diseño 1h) con «¿Quiénes estuvieron?»
@@ -159,6 +160,8 @@ export function TicketNuevoScreen({ viajeId }: { viajeId: string }) {
         return;
       }
       olvidarTicketEscaneado();
+      // D341 · el ticket quedó guardado: la guía puede mostrar su final. Sólo el id del viaje.
+      try { avisarALaGuia({ tipo: 'viaje-guardado', viaje: viajeId }); } catch { /* sin efecto */ }
       if (r.ticket.personal) {
         // D276-3 · es todo mío: no hay nada que elegir.
         replaceRoute('viaje', viajeId);

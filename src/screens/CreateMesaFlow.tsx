@@ -1769,7 +1769,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
       : null;
     return (
-      <div className="screen camara">
+      <div className="screen camara" data-guia-etapa={`${enViaje ? 'viaje-' : ''}${recortando ? 'recorte' : scanning || capturando ? 'leyendo' : 'foto'}`}>
         <div className="camara-arriba">
           <button type="button" className="camara-volver" onClick={back}>
             <Icon name="arrow-left" size={20} />
@@ -2023,7 +2023,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </div>
             )}
         </div>
-        <div className="camara-controles">
+        <div className="camara-controles" data-guia="camara-controles">
           {/* D222 · con la foto en el marco: «Sacar otra» (o «Elegir otra», si
               vino de la galería) arriba y «Usar foto» abajo, donde cae el
               pulgar. «Sacar otra» abre la cámara en este mismo toque, como el
@@ -2049,6 +2049,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               <button
                 type="button"
                 className="camara-usar"
+                data-guia="usar-foto"
                 onClick={() => { void usarFoto(); }}
                 disabled={capturando}
               >
@@ -2133,7 +2134,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
-      <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
+      <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`} data-guia-etapa="ticket" data-guia-modo={division}>
         <AppHeaderFlow
           userName={fullName(session) ?? undefined}
           onBack={back}
@@ -2668,7 +2669,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   // ─── Paso 4: GARANTÍA (A-1, pantalla nueva) ──────────────
   if (step === 'garantia') {
     return (
-      <div className="screen has-appbar af-diseno-flow">
+      <div className="screen has-appbar af-diseno-flow" data-guia-etapa="garantia">
         {/* 🔴 FIDELIDAD VISUAL (2026-08-20, `diseno/referencias/
             FIDELIDAD_VISUAL_APP_2026-08-20.md` @ f4fefc0 · defecto 1). Acá
             había un `TopBar` blanco de una fila, que dejaba a Garantía como la
@@ -2710,6 +2711,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           )}
           <div
             ref={cardChoicesRef}
+            data-guia="garantia-tarjeta"
             role="radiogroup"
             aria-label={t('Tarjeta para garantizar')}
             className={`gar-cards-group${cardChoicePulse ? ' tip-block--pulse' : ''}`}
@@ -2848,6 +2850,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   ? t('Reintentar esta apertura')
                   : t('Garantizar'),
             icon: 'arrow-right',
+            guia: 'garantizar',
             onClick: createMesa,
             disabled:
               busy ||
@@ -2869,7 +2872,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   // ─── Paso 4b: 3DS (requires_action) ──────────────────────
   if (step === 'threeds') {
     return (
-      <div className="screen has-appbar af-diseno-flow">
+      <div className="screen has-appbar af-diseno-flow" data-guia-etapa="banco">
         {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 8183295, completada por
             AF-DISENO-02). Los cambios 3 y 6 quedan habilitados sólo en su
             composición visual; la máquina 3DS y sus gates no se alteran.
@@ -2968,6 +2971,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           center={{
             label: busy ? t('Confirmando…') : t('Confirmar'),
             icon: 'check',
+            guia: 'confirmar-banco',
             onClick: confirm3ds,
             disabled: busy,
           }}
@@ -3060,7 +3064,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       );
     };
     return (
-      <div className="screen has-appbar af-diseno-flow">
+      <div className="screen has-appbar af-diseno-flow" data-guia-etapa="compartir">
         <AppHeaderFlow
           userName={fullName(session) ?? undefined}
           onBack={() => navigate('home')}
@@ -3076,7 +3080,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           </FilaDeTitulo>
         </div>
         <div className="scroll flow-scroll share-flow-scroll">
-          <div className="share-card">
+          <div className="share-card" data-guia="compartir">
             {/* La maqueta final separa la credencial de las acciones visuales,
                 pero el refinamiento es aditivo: tocar el código y el botón
                 «Copiar link» copian la misma credencial completa con `?t=`. */}
@@ -3173,7 +3177,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             MIRA, y el `aria-label` a quien no. */}
         <AppBottomBar
           active={null}
-          center={{ label: t('Continuar'), icon: 'arrow-right', onClick: () => navigate('mesa', code) }}
+          center={{ label: t('Continuar'), icon: 'arrow-right', guia: 'continuar-compartir', onClick: () => navigate('mesa', code) }}
         />
       </div>
     );
