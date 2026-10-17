@@ -2154,7 +2154,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // lleva al cierre completo, que se relee en segundo plano.
   if (cierrePropio) {
     return (
-      <div className="screen">
+      <div className="screen" data-guia-etapa="mesa-cerrada">
         <TopBar title={t('Cierre completado')} onBack={isGuest ? undefined : () => navigate('home')} />
         {guestHeader}
         <div className="scroll" style={{ padding: '20px 16px' }}>
@@ -2200,7 +2200,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // avances reales, pero no prueban qué recibió el restaurante.
     if (!closure.completed) {
       return (
-        <div className="screen">
+        <div className="screen" data-guia-etapa="mesa-cerrada">
           <TopBar title={closure.title} onBack={isGuest ? undefined : () => navigate('mesas')} />
           {guestHeader}
           <div className="empty">{closure.detail}</div>
@@ -2224,7 +2224,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       : null;
     const repartoCierreConocido = repartoCierre?.status === 'known' ? repartoCierre : null;
     return (
-      <div className="screen">
+      <div className="screen" data-guia-etapa="mesa-cerrada">
         <TopBar
           title={t('Cierre completado')}
           onBack={isGuest ? undefined : () => navigate('mesas')}

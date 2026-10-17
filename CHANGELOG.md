@@ -13,7 +13,7 @@
   - mientras se lee la foto, la guía se oculta;
   - esperando pagos, el viaje termina en «Ya pagué» / «Recibí»;
   - el final de un viaje vale sólo para ese viaje y la pantalla que sigue al guardado;
-  - una mesa en partes iguales ya cerrada muestra «La mesa se cerró»;
+  - una mesa ya cerrada (por «Cerrar mesa», por tiempo o en partes iguales de sólo lectura) muestra «La mesa se cerró» sobre su Inicio;
   - el balance del viaje queda fuera del recorrido, como en la propuesta;
   - «Terminar guía» aparece sólo en los finales;
   - Atrás ya no rebota desde la porción.

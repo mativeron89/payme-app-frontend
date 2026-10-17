@@ -66,6 +66,7 @@ export const CREAR_VIAJE = '.vj-lanzadores > .vj-lanzador:first-child';
 const escapar = (v: string) => v.replace(/["\\]/g, '\\$&');
 export const VIAJE_ABIERTO = '.viaje-tarjeta:has(> .viaje-gasto) > .viaje-burbuja';
 const INICIO_EN_LA_BARRA = g('nav-home');
+const INICIO_DEL_CIERRE = '.action-bar .btn-navy:has(> svg)';
 
 interface Opciones { readonly chip?: string; readonly nota?: string; readonly si?: boolean; readonly avanzaCon?: string }
 
@@ -345,7 +346,8 @@ function gasto(c: ContextoDeGuia, t: T): Capitulo {
 /** «La mesa se cerró» (§3.8): tras un guardado que la cerró, o en una mesa que ya no se puede modificar. */
 function mesaCerrada(c: ContextoDeGuia, t: T): Capitulo {
   const p = armar(c);
-  const inicio = c.hay(INICIO_EN_LA_BARRA) ? INICIO_EN_LA_BARRA : c.hay('.action-bar .btn-navy') ? '.action-bar .btn-navy' : null;
+  // Sin la barra (las vistas de cierre), su botón «Inicio», el único con ícono; el «Actualizar» del invitado no.
+  const inicio = c.hay(INICIO_EN_LA_BARRA) ? INICIO_EN_LA_BARRA : c.hay(INICIO_DEL_CIERRE) ? INICIO_DEL_CIERRE : null;
   return { id: 'mesa-cerrada', etapa: 'elegir', pasos: [
     p('cerrada', inicio, 'final', t('La mesa se cerró'),
       t('Ya no se puede modificar. Puedes verla en Mesas.'), { nota: recordatorio(t) }),

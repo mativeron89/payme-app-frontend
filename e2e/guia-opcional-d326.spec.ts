@@ -412,6 +412,15 @@ test('D341 · restaurante de punta a punta: la guía espera cada paso y el final
   await expect(guia(page).locator('.guia-nota')).toHaveText('¿No quieres ver la guía al entrar? Marca «No volver a mostrar».');
   await captura(page, 'restaurante-final', info);
   expect(await camarasAbiertas(page)).toBe(1);
+  // «Cerrar mesa» (D341 rec. 5): ya cerrada, el final es «La mesa se cerró», sobre el botón Inicio de la vista de cierre.
+  await page.locator(`[data-guia="mesa-abierta"][data-guia-mesa="${codigo}"]`).click();
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  await expect(page.locator('.guia-burbuja')).not.toHaveAttribute('data-paso', 'tarjeta');
+  await page.getByRole('button', { name: 'Cerrar mesa' }).click();
+  await page.getByRole('button', { name: 'Sí, cerrar la mesa', exact: true }).click();
+  await expect(guia(page).getByRole('heading', { name: 'La mesa se cerró', exact: true })).toBeVisible();
+  await expect(foco(page)).toHaveAttribute('data-ancla', '.action-bar .btn-navy:has(> svg)');
+  await expect(guia(page).locator('.guia-nota')).toHaveText('¿No quieres ver la guía al entrar? Marca «No volver a mostrar».');
   await boton(page, 'Terminar guía').click();
   await expect(guia(page)).toHaveCount(0);
   expect(await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('payme.app.guia.optout.')))).toBe(false);

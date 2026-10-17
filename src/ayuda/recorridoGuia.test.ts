@@ -187,8 +187,10 @@ describe('D341-M2 · los finales sólo después de un guardado avisado', () => {
   it('una mesa que ya no se puede modificar muestra el final de mesa cerrada, no los platos ni Listo', () => {
     const cap = capitulo(ctx('mesa', [g('plato'), centro('listo-mesa'), g('nav-home')], { etapa: 'mesa-cerrada', rol: 'invitado', modo: 'igual' }), t);
     expect([cap.id, ids(cap), paso(cap, 'cerrada').ancla]).toEqual(['mesa-cerrada', ['cerrada'], g('nav-home')]);
-    // Sin la barra (la vista de cierre), apunta a su botón Inicio.
-    expect(paso(capitulo(ctx('mesa', ['.action-bar .btn-navy'], { final: mesaGuardada(true) }), t), 'cerrada').ancla).toBe('.action-bar .btn-navy');
+    // Sin la barra (la vista de cierre), apunta a su botón Inicio; si no lo hay (invitado), va sin control.
+    expect(paso(capitulo(ctx('mesa', ['.action-bar .btn-navy:has(> svg)'], { etapa: 'mesa-cerrada' }), t), 'cerrada').ancla).toBe('.action-bar .btn-navy:has(> svg)');
+    expect(paso(capitulo(ctx('mesa', [], { etapa: 'mesa-cerrada' }), t), 'cerrada').ancla).toBeNull();
+    expect(paso(capitulo(ctx('mesa', ['.action-bar .btn-navy:has(> svg)'], { final: mesaGuardada(true) }), t), 'cerrada').ancla).toBe('.action-bar .btn-navy:has(> svg)');
   });
 
   it('en un viaje, el final va sobre el balance', () => {
