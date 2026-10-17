@@ -103,7 +103,9 @@
       }
       /* La franja de la barra de estado: con la app instalada, la hora y la
          batería van en blanco encima (`black-translucent` y `viewport-fit=cover`
-         ya están arriba). En el navegador mide 0. */
+         ya están arriba). En el navegador mide 0. D345 (Mati, «hay que modificar
+         el color para que se una»): ya no se ve; el triángulo oscuro de arriba
+         sube por detrás de la barra y la tapa, así el degradé llega al borde. */
       #splash .carga__franja {
         position: absolute;
         top: 0;
@@ -125,8 +127,12 @@
         position: absolute;
         inset: 0;
       }
+      /* D345 · sube el alto de la barra de estado (en el navegador, 0): el
+         rectángulo de la franja más el triángulo de siempre, con el vértice en el
+         mismo centro de la zona (50% de la caja alta + la mitad de la barra). */
       #splash .t-arriba {
-        clip-path: polygon(0 0, 100% 0, 50% 50%);
+        top: calc(-1 * env(safe-area-inset-top));
+        clip-path: polygon(0 0, 100% 0, 100% env(safe-area-inset-top), 50% calc(50% + env(safe-area-inset-top) / 2), 0 env(safe-area-inset-top));
         background: linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%);
       }
       #splash .t-izq {

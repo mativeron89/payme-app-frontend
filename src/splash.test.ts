@@ -161,7 +161,8 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
 
     it('cuatro triángulos, con los degradados superior e inferior intercambiados por D330', () => {
       const triangulos = [
-        ['t-arriba', 'polygon(0 0, 100% 0, 50% 50%)', 'linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%)'],
+        // D345 · el de arriba sube por detrás de la barra de estado: la franja más el triángulo, con el vértice en el centro.
+        ['t-arriba', 'polygon(0 0, 100% 0, 100% env(safe-area-inset-top), 50% calc(50% + env(safe-area-inset-top) / 2), 0 env(safe-area-inset-top))', 'linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%)'],
         ['t-izq', 'polygon(0 0, 50% 50%, 0 100%)', 'linear-gradient(170deg, #a1dbe4 0%, #1493b1 30%, #82d0dc 52%, #0fb5c9 66%, #1b6b8f 100%)'],
         ['t-der', 'polygon(100% 0, 100% 100%, 50% 50%)', 'linear-gradient(190deg, #016274 0%, #66a2a5 30%, #04596e 55%, #428e92 72%, #0d415d 100%)'],
         ['t-abajo', 'polygon(0 100%, 50% 50%, 100% 100%)', 'linear-gradient(100deg, #abc7ce 0%, #ffffff 24%, #cfe8eb 42%, #f4fdfe 60%, #97b4be 100%)'],
@@ -176,10 +177,13 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
       expect(regla('#splash .t')).toMatch(/position: absolute;\s*inset: 0;/);
     });
 
-    it('la franja y la zona arrancan debajo de la barra de estado', () => {
+    it('la franja y la zona arrancan debajo de la barra de estado; D345 · el triángulo de arriba sube y tapa la franja', () => {
       expect(splash).toContain('<div class="carga__franja"></div>');
       expect(regla('#splash .carga__franja')).toContain('height: env(safe-area-inset-top);');
       expect(regla('#splash .carga__zona')).toContain('top: env(safe-area-inset-top);');
+      // Sube exactamente el alto de la barra, y va después de la franja en el DOM: la pinta encima.
+      expect(regla('#splash .t-arriba')).toContain('top: calc(-1 * env(safe-area-inset-top));');
+      expect(splash.indexOf('class="carga__franja"')).toBeLessThan(splash.indexOf('class="t t-arriba"'));
       expect(INDEX).toContain('viewport-fit=cover');
       expect(INDEX).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />');
     });

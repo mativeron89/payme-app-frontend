@@ -77,9 +77,10 @@ describe('🔴 D300 · las imágenes de arranque del iPhone', () => {
   });
 
   /**
-   * 🔴 Cada imagen es la pantalla de carga de ESE tamaño (D286): la franja navy mide exactamente la barra de estado (y
-   * debajo empieza el triángulo de arriba, oscuro por D330), y el ícono está en el centro de la zona: entre las flechas, navy; la
-   * flecha izquierda, cian; la derecha, blanca. Se mide en los píxeles, no en el nombre del archivo.
+   * 🔴 Cada imagen es la pantalla de carga de ESE tamaño (D286): el ícono está en el centro de la zona, debajo de la barra
+   * de estado (entre las flechas, navy; la flecha izquierda, cian; la derecha, blanca). D345 (Mati: «hay que modificar el
+   * color para que se una»): la barra ya no es una franja navy lisa; el degradado oscuro del triángulo de arriba (D330) sube
+   * hasta el borde y sigue sin corte en la línea de la barra. Se mide en los píxeles, no en el nombre del archivo.
    */
   for (const d of DISPOSITIVOS) {
     it(`${archivoDe(d)} (${d.ancho}×${d.alto}@${d.dpr}, barra ${d.barra}) es la pantalla de carga`, () => {
@@ -90,16 +91,25 @@ describe('🔴 D300 · las imágenes de arranque del iPhone', () => {
         const i = (Math.round(y * d.dpr) * png.ancho + Math.round(x * d.dpr)) * 3;
         return [png.pixeles[i]!, png.pixeles[i + 1]!, png.pixeles[i + 2]!];
       };
-      // La franja: cada píxel de sus filas, navy.
+      // La barra: cada píxel de sus filas, el degradado oscuro (ningún canal pasa de 110), no un navy liso.
       const franja = d.barra * d.dpr;
+      const canal = (x: number, y: number, k: number) => png.pixeles[(y * png.ancho + x) * 3 + k]!;
       for (let y = 0; y < franja; y += 1) {
         for (let x = 0; x < png.ancho; x += 1) {
-          const i = (y * png.ancho + x) * 3;
-          if (png.pixeles[i] !== NAVY[0] || png.pixeles[i + 1] !== NAVY[1] || png.pixeles[i + 2] !== NAVY[2]) {
-            throw new Error(`${archivoDe(d)}: la franja no es navy en (${x}, ${y})`);
+          if (Math.max(canal(x, y, 0), canal(x, y, 1), canal(x, y, 2)) >= 110) {
+            throw new Error(`${archivoDe(d)}: la barra no es el degradado oscuro en (${x}, ${y})`);
           }
         }
       }
+      const filaDeArriba = Array.from({ length: png.ancho }, (_, x) => canal(x, 1, 2));
+      expect(Math.max(...filaDeArriba) - Math.min(...filaDeArriba), `${archivoDe(d)}: la barra es lisa, sin el degradado`).toBeGreaterThan(20);
+      // Sin corte en la línea de la barra: lejos de las esquinas (donde nacen las diagonales), la última fila de la barra y
+      // la primera de la zona casi no difieren. Con la franja lisa de antes, el salto llegaba a 69.
+      let salto = 0;
+      for (let x = Math.round(png.ancho * 0.2); x < Math.round(png.ancho * 0.8); x += 1) {
+        for (let k = 0; k < 3; k += 1) salto = Math.max(salto, Math.abs(canal(x, franja - 1, k) - canal(x, franja, k)));
+      }
+      expect(salto, `${archivoDe(d)}: el degradado se corta en la línea de la barra`).toBeLessThanOrEqual(6);
       // Justo debajo, el triángulo de arriba: el degradado navy de D330.
       const debajo = pixel(d.ancho / 2, d.barra + 1 / d.dpr);
       expect(Math.max(...debajo), `${archivoDe(d)}: debajo de la franja no empieza el triángulo oscuro`).toBeLessThan(110);

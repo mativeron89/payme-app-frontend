@@ -1,3 +1,10 @@
+# 0.250.1 · 2026-10-17
+
+- D345: en la pantalla de carga, el triángulo oscuro de arriba sube por detrás de la barra de estado (la hora y la batería), así el degradé llega al borde y ya no lo corta una franja navy lisa. Lo pidió Mati: «hay que modificar el color para que se una».
+- Se mantienen el ícono, el punto de encuentro de los triángulos, la animación, los tiempos y `splash.ts`. La franja sigue con el alto de la barra, tapada por el triángulo.
+- Las once imágenes de arranque de iPhone se regeneraron con el generador existente, sin cambios, y el Chromium de Playwright del CI. Antes se comprobó que ese navegador reproduce una imagen anterior con 0 píxeles distintos.
+- Se actualizaron sus expectativas, sus sha y el hash CSP del `<style>` del splash.
+
 # 0.250.0 · 2026-10-14
 
 - D330: pantalla de carga con el degradado azul oscuro arriba y el claro abajo; intercambia los dos degradados existentes completos, conservando logo, laterales turquesa, geometría, animación y tiempos.
