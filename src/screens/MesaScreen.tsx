@@ -92,6 +92,7 @@ import {
   type InformativeSelectionState,
 } from './informativeSelectionView';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { avisarALaGuia } from '../ayuda/senalesGuia';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -1122,6 +1123,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         });
         const r = await api.lockItems(code, requests, guestToken);
         setLockTokens([r.lock_token]);
+        // D341 · la guía muestra su final sólo tras un guardado real. Sólo el código; nunca altera el guardado.
+        try { avisarALaGuia({ tipo: 'mesa-guardada', mesa: code, cerrada: cerroPorSeleccion(r) }); } catch { /* sin efecto */ }
         // F-2 (decisión 80) · la última selección cerró la mesa: el dueño lo dice
         // en esta misma respuesta (`mesa_status`), y se muestra en vez de volver
         // mudo al Inicio.
@@ -1226,6 +1229,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           setSelected(selectionMap(saved));
           setInformativasGuardadas(selectionMap(saved));
           setSelectedDenominators(new Map());
+          // D341 · igual que con el lock: el aviso a la guía va después del guardado y no lo afecta.
+          try {
+            avisarALaGuia({ tipo: 'mesa-guardada', mesa: code, cerrada: cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason }) });
+          } catch { /* sin efecto */ }
           // F-2 (decisión 80) · esta declaración completó la mesa y el dueño la
           // cerró en la misma escritura: se dice, no se vuelve mudo al Inicio.
           if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
@@ -2461,7 +2468,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
              lugar del paquete donde ese glifo significa terminar. */
           <AppBottomBar
             active={null}
-            center={{ label: t('Ir a Inicio'), icon: 'home', onClick: () => navigate('home') }}
+            center={{ label: t('Ir a Inicio'), icon: 'home', guia: 'ir-inicio', onClick: () => navigate('home') }}
           />
         )}
       </div>

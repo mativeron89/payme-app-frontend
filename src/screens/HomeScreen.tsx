@@ -494,7 +494,7 @@ export function HomeScreen() {
               {porUrgencia.map((mesa) => {
                 const cuenta = countdownLong(mesa.expires_at);
                 return (
-                  <button key={mesa.code} type="button" className="mesa-card" onClick={() => navigate('mesa', mesa.code)}>
+                  <button key={mesa.code} type="button" className="mesa-card" data-guia="mesa-abierta" data-guia-mesa={mesa.code} onClick={() => navigate('mesa', mesa.code)}>
                     <div className="mesa-top">
                       <span className="mesa-kicker">{t('Tu mesa abierta')}</span>
                       {/* Teal siempre: el naranja tiene una lista cerrada de cuatro

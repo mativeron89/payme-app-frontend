@@ -10,7 +10,7 @@ export function AccesoGuia({ lugar }: { lugar: 'inicio' | 'ayuda' }) {
   return <section className={`ayuda-acceso ayuda-acceso--${lugar}`} aria-label={t('Ayuda')}>
     {lugar === 'ayuda' && <h2 className="ayuda-seccion">{t('Ayuda')}</h2>}
     {lugar === 'inicio' ? <div className="guia-oferta">
-      <p>{t('¿Primera vez? Descubre qué hace cada control.')}</p>
+      <p>{t('¿Primera vez? La guía te acompaña en tu primera cuenta.')}</p>
       <div className="guia-oferta-acciones">
         <button type="button" className="ayuda-enlace" onClick={(e) => guia.abrir(e.currentTarget)}>{t('Ver guía')}</button>
         <button type="button" className="ayuda-enlace ayuda-enlace--muted" aria-label={t('Ocultar guía por ahora')} onClick={guia.omitir}>{t('Ahora no')}</button>
