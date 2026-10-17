@@ -8,6 +8,16 @@
 - Anclas: atributos `data-guia*` y `center.guia` en pantallas existentes, sin cambiar roles, textos ni conducta; donde un test fija el HTML exacto, la guía usa la clase existente. La vista de pago (P36) no se toca.
 - Se conservan D326/D327/D328: aparición al entrar hasta «No volver a mostrar» (misma clave `optout.v2`), prioridad de ingreso, aviso, invitaciones y links, reapertura en Más → Ayuda, foco, posición y movimiento reducido.
 - Presentación provisoria aislada en `BurbujaGuia.tsx` y `guiaInteractiva.css` con variables propias, a la espera del diseño de Claude Design. Inglés pendiente de aprobación de Diseño.
+- Revisión adversarial antes de la prueba de Mati, con estas correcciones:
+  - una ventana encima (que deja la app inerte) ya no le borra el lugar a la guía;
+  - mientras se lee la foto, la guía se oculta;
+  - esperando pagos, el viaje termina en «Ya pagué» / «Recibí»;
+  - el final de un viaje vale sólo para ese viaje y la pantalla que sigue al guardado;
+  - una mesa en partes iguales ya cerrada muestra «La mesa se cerró»;
+  - el balance del viaje queda fuera del recorrido, como en la propuesta;
+  - «Terminar guía» aparece sólo en los finales;
+  - Atrás ya no rebota desde la porción.
+- Guarda estática de que cada aviso de guardado va después del `await` exitoso y nunca en un `catch`.
 
 # 0.250.0 · 2026-10-14
 

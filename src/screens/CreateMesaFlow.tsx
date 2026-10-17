@@ -1769,7 +1769,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
       : null;
     return (
-      <div className="screen camara" data-guia-etapa={`${enViaje ? 'viaje-' : ''}${recortando ? 'recorte' : 'foto'}`}>
+      <div className="screen camara" data-guia-etapa={`${enViaje ? 'viaje-' : ''}${recortando ? 'recorte' : scanning || capturando ? 'leyendo' : 'foto'}`}>
         <div className="camara-arriba">
           <button type="button" className="camara-volver" onClick={back}>
             <Icon name="arrow-left" size={20} />

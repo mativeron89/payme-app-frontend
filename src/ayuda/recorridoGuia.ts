@@ -50,6 +50,8 @@ export interface ContextoDeGuia {
   readonly destino: string | null;
   readonly viajeDeHoy: string | null;
   readonly pagos: Pagos;
+  /** El parámetro de la ruta (el id del viaje en su pantalla), para atar el final a ESE viaje. */
+  readonly parametro: string | null;
   /** El último guardado que avisó una pantalla, si todavía no se mostró su final. */
   readonly final: SenalDeGuia | null;
   /** ¿Hay un elemento visible que cumpla este selector? */
@@ -62,6 +64,8 @@ const CAMARA = centro('camara');
 /** «Crear viaje» es el primer lanzador de la pestaña Viajes (D266/D302); su test fija el HTML, así que va por posición. */
 export const CREAR_VIAJE = '.vj-lanzadores > .vj-lanzador:first-child';
 const escapar = (v: string) => v.replace(/["\\]/g, '\\$&');
+export const VIAJE_ABIERTO = '.viaje-tarjeta:has(> .viaje-gasto) > .viaje-burbuja';
+const INICIO_EN_LA_BARRA = g('nav-home');
 
 interface Opciones { readonly chip?: string; readonly nota?: string; readonly si?: boolean; readonly avanzaCon?: string }
 
@@ -123,7 +127,8 @@ function finalDeMesa(c: ContextoDeGuia, t: T, mesa: string): Capitulo {
 function viajesEnInicio(c: ContextoDeGuia, t: T): Capitulo {
   const p = armar(c);
   return { id: 'viajes-inicio', etapa: null, pasos: [
-    p('viaje', '.viaje-burbuja', 'mira', t('Tu viaje abierto'),
+    // Sólo un viaje abierto (el que tiene «+ Gasto»): uno esperando pagos no admite cargar tickets.
+    p('viaje', VIAJE_ABIERTO, 'mira', t('Tu viaje abierto'),
       t('Tócalo para cargar tickets y ver tu balance. Con + Gasto cargas un gasto a mano.')),
     p('pendiente', '.viaje-pendiente', 'mira', t('Aquí falta elegir'),
       t('Todavía faltan personas por elegir lo suyo. Tócalo para elegir lo tuyo.')),
@@ -227,9 +232,11 @@ function mesa(c: ContextoDeGuia, t: T): Capitulo {
       : t('Es tu parte igual de la cuenta.')),
     p('cerrar', g('cerrar-mesa'), 'mira', t('Cuando terminen'),
       t('Cuando todos hayan elegido, puedes cerrar la mesa aquí. Después de cerrarla ya no se puede modificar.'), { si: org }),
+    // En consumo, sin plato libre ni parte propia no hay nada que guardar: Listo sólo frenaría.
     p('listo', centro('listo-mesa'), 'tu-turno', c.pagos === 'si' ? t('Confirma y paga') : t('Confirma lo tuyo'), c.pagos === 'si'
       ? t('Ahora: toca Listo. Después: eliges la propina y pagas tu parte.')
-      : t('Ahora: toca Listo para guardar lo que elegiste. Después: vuelves a Inicio.'), { chip: t('Tu turno: toca Listo') }),
+      : t('Ahora: toca Listo para guardar lo que elegiste. Después: vuelves a Inicio.'),
+    { chip: t('Tu turno: toca Listo'), si: !consumo || c.hay(g('plato')) || c.hay(g('mi-parte')) }),
   ] };
 }
 
@@ -251,6 +258,8 @@ function pagar(c: ContextoDeGuia, t: T): Capitulo {
 
 function viaje(c: ContextoDeGuia, t: T): Capitulo {
   const p = armar(c);
+  // «Agregar gasto» sólo existe con el viaje abierto; esperando pagos la barra trae la cámara de siempre, que no es del viaje.
+  const abierto = c.hay(g('agregar-gasto'));
   return { id: 'viaje', etapa: null, pasos: [
     p('balance-propio', g('mi-balance'), 'mira', t('Tu balance'),
       t('Es lo que pagaste menos lo que te corresponde consumir. A favor: pusiste de más. En negativo: te falta cubrir esa parte.')),
@@ -261,11 +270,11 @@ function viaje(c: ContextoDeGuia, t: T): Capitulo {
     p('configuracion', '.vjv-titulo-engranaje', 'mira', t('Al terminar el viaje'),
       t('Quien creó el viaje lo cierra desde aquí. Entonces PayMe propone quién le transfiere a quién; el dinero lo mueven ustedes.')),
     p('escanear', CAMARA, 'tu-turno', t('Carga un ticket'),
-      t('Ahora: toca Escanear y saca la foto. Después: eliges quién pagó y cómo lo dividen.'), { chip: t('Tu turno: toca Escanear') }),
-    // Esperando pagos (D242): sus botones fijan el HTML en sus tests, así que van por clase.
-    p('ya-pague', '.vjv-tr-destacada > .btn-navy', 'mira', t('Transfiere y avisa'),
+      t('Ahora: toca Escanear y saca la foto. Después: eliges quién pagó y cómo lo dividen.'), { chip: t('Tu turno: toca Escanear'), si: abierto }),
+    // Esperando pagos (D242), el cierre del viaje: sus botones fijan el HTML en sus tests, así que van por clase.
+    p('ya-pague', '.vjv-tr-destacada > .btn-navy', 'final', t('Transfiere y avisa'),
       t('PayMe no mueve el dinero: haz la transferencia por tu cuenta y toca Ya pagué.')),
-    p('recibi', '.vjv-tr-botones > .btn-navy, .vjv-tr-pie > .btn', 'mira', t('¿Te llegó?'),
+    p('recibi', '.vjv-tr-botones > .btn-navy, .vjv-tr-pie > .btn', 'final', t('¿Te llegó?'),
       t('Cuando veas la transferencia, toca Recibí.')),
   ] };
 }
@@ -333,21 +342,28 @@ function gasto(c: ContextoDeGuia, t: T): Capitulo {
   ] };
 }
 
-function balanceDelViaje(c: ContextoDeGuia, t: T): Capitulo {
+/** «La mesa se cerró» (§3.8): tras un guardado que la cerró, o en una mesa que ya no se puede modificar. */
+function mesaCerrada(c: ContextoDeGuia, t: T): Capitulo {
   const p = armar(c);
-  return { id: 'balance', etapa: null, pasos: [
-    p('consumos', g('tab-consumos'), 'mira', t('Consumos'), t('Aquí están los consumos del viaje. Abre uno para revisar su ticket y reparto.')),
-    p('miembros', g('tab-miembros'), 'mira', t('Miembros'), t('Esta pestaña muestra cuánto pagó cada persona, no cuánto le corresponde consumir.')),
+  const inicio = c.hay(INICIO_EN_LA_BARRA) ? INICIO_EN_LA_BARRA : c.hay('.action-bar .btn-navy') ? '.action-bar .btn-navy' : null;
+  return { id: 'mesa-cerrada', etapa: 'elegir', pasos: [
+    p('cerrada', inicio, 'final', t('La mesa se cerró'),
+      t('Ya no se puede modificar. Puedes verla en Mesas.'), { nota: recordatorio(t) }),
   ] };
 }
 
-function resolver(c: ContextoDeGuia, t: T): Capitulo {
+/** Estados de paso que no muestran nada (la foto se está leyendo): la guía se oculta y conserva su lugar. */
+const TRANSITORIAS = new Set(['leyendo', 'viaje-leyendo']);
+
+function resolver(c: ContextoDeGuia, t: T): Capitulo | null {
   const f = c.final;
   switch (c.pagina) {
     case 'home':
-      if (f?.tipo === 'mesa-guardada' && !f.cerrada) return finalDeMesa(c, t, f.mesa);
+      // Con pagos, el final es el comprobante («¡Pagaste tu parte!»), no la tarjeta.
+      if (f?.tipo === 'mesa-guardada' && !f.cerrada && c.pagos !== 'si') return finalDeMesa(c, t, f.mesa);
       return c.hay(CREAR_VIAJE) ? viajesEnInicio(c, t) : bienvenida(c, t);
     case 'scan':
+      if (c.etapa && TRANSITORIAS.has(c.etapa)) return null;
       if (c.etapa === 'ticket') return dividir(c, t);
       if (c.etapa === 'garantia' || c.etapa === 'banco') return garantia(c, t);
       if (c.etapa === 'compartir') return invitar(c, t);
@@ -360,31 +376,28 @@ function resolver(c: ContextoDeGuia, t: T): Capitulo {
             t('Puedes enviar o descargar el comprobante.'), { nota: recordatorio(t) }),
         ] };
       }
-      if (f?.tipo === 'mesa-guardada' && f.cerrada) {
-        const p = armar(c);
-        const casa = g('nav-home');
-        return { id: 'mesa-cerrada', etapa: 'elegir', pasos: [
-          p('cerrada', c.hay(casa) ? casa : null, 'final', t('La mesa se cerró'),
-            t('Ya no se puede modificar. Puedes verla en Mesas.'), { nota: recordatorio(t) }),
-        ] };
-      }
+      if ((f?.tipo === 'mesa-guardada' && f.cerrada) || c.etapa === 'mesa-cerrada') return mesaCerrada(c, t);
       if (c.hay('.tip-block')) return pagar(c, t);
       return c.etapa === 'mesa' ? mesa(c, t) : capituloEspera(c, t);
     }
     case 'viaje':
-      return f?.tipo === 'viaje-guardado' ? finalDeViaje(c, t) : viaje(c, t);
+      return f?.tipo === 'viaje-guardado' && f.viaje === c.parametro ? finalDeViaje(c, t) : viaje(c, t);
     case 'viaje-nuevo': return viajeNuevo(c, t);
     case 'viaje-ticket-nuevo': return ticketNuevo(c, t);
     case 'viaje-ticket': return consumosDelTicket(c, t);
     case 'viaje-gasto': return gasto(c, t);
-    case 'viaje-balance': return balanceDelViaje(c, t);
+    // El balance del viaje no es parte del recorrido aprobado (§5.3): la guía espera.
     default: return capituloEspera(c, t);
   }
 }
 
-/** El capítulo que corresponde a lo que se ve. Si ningún paso aplica todavía, la guía espera en vez de desaparecer. */
-export function capituloDe(c: ContextoDeGuia, t: T): Capitulo {
+/**
+ * El capítulo que corresponde a lo que se ve. Si ningún paso aplica todavía, la guía espera en vez de desaparecer.
+ * `null`: un momento de paso (la foto se está leyendo) en el que la guía se oculta y conserva su lugar.
+ */
+export function capituloDe(c: ContextoDeGuia, t: T): Capitulo | null {
   const cap = resolver(c, t);
+  if (!cap) return null;
   return cap.pasos.some((p) => p.presente) ? cap : capituloEspera(c, t);
 }
 
@@ -426,9 +439,25 @@ export function pasosPresentes(cap: Capitulo): readonly Paso[] {
   return cap.pasos.filter((p) => p.presente);
 }
 
-/** El vecino que aplica, hacia adelante (+1) o hacia atrás (−1). */
+/**
+ * El vecino que aplica, hacia adelante (+1) o hacia atrás (−1). Salta los pasos ya cumplidos: volver a
+ * «Toca lo que comiste» con el selector de porción abierto rebotaría a «¿Cuánto comiste?».
+ */
 export function vecino(cap: Capitulo, paso: string | null, sentido: 1 | -1): Paso | null {
   const lista = pasosPresentes(cap);
   const i = lista.findIndex((p) => p.id === paso);
-  return i < 0 ? null : lista[i + sentido] ?? null;
+  if (i < 0) return null;
+  for (let j = i + sentido; j >= 0 && j < lista.length; j += sentido) if (!lista[j]!.cumplido) return lista[j]!;
+  return null;
+}
+
+/**
+ * El botón principal de la burbuja. «Terminar guía» sólo en los finales (§3.8): un paso informativo al final
+ * de un capítulo no cierra la guía a mitad del recorrido, la deja esperando.
+ */
+export function primarioDe(paso: Paso, haySiguiente: boolean): 'siguiente' | 'entendido' | 'terminar' | null {
+  if (paso.tipo === 'espera') return null;
+  if (paso.tipo === 'tu-turno') return 'entendido';
+  if (haySiguiente) return 'siguiente';
+  return paso.tipo === 'final' ? 'terminar' : null;
 }

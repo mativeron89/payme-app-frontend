@@ -934,7 +934,7 @@ export function MesaDetailView({
   );
 
   return (
-    <div ref={pantallaRef} className="screen has-appbar" data-guia-etapa="mesa" data-guia-rol={esTitular ? 'organizador' : 'invitado'} data-guia-modo={mesa.division_mode}>
+    <div ref={pantallaRef} className="screen has-appbar" data-guia-etapa={!esConsumo && informativeReadOnly ? 'mesa-cerrada' : 'mesa'} data-guia-rol={esTitular ? 'organizador' : 'invitado'} data-guia-modo={mesa.division_mode}>
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         <FilaDeTitulo icono={esTitular ? 'tienda' : 'cubiertos'}>

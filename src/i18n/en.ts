@@ -195,8 +195,6 @@ export const EN: Record<string, string> = {
   // D327 · guía contextual voluntaria
   "Guía interactiva": "Interactive guide",
   "Tu balance": "Your balance",
-  "Aquí están los consumos del viaje. Abre uno para revisar su ticket y reparto.": "Here are the trip expenses. Open one to review its receipt and split.",
-  "Esta pestaña muestra cuánto pagó cada persona, no cuánto le corresponde consumir.": "This tab shows how much each person paid, not their share of consumption.",
   "No volver a mostrar": "Don’t show again",
   "Terminar guía": "Finish guide",
 

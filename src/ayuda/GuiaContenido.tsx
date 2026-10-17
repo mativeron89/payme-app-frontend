@@ -2,11 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { useMoneyRail } from '../api/moneyRail';
 import { useIdioma } from '../i18n/idioma';
-import type { PageId } from '../router';
+import { parseLocation, type PageId } from '../router';
 import { BurbujaGuia, FocoGuia, type Primario, type VistaDeGuia } from './BurbujaGuia';
 import { posicionGuia, type Caja } from './posicionGuia';
 import {
-  capituloDe, ESTADO_INICIAL, pasosPresentes, siguienteEstado, vecino,
+  capituloDe, ESTADO_INICIAL, pasosPresentes, primarioDe, siguienteEstado, vecino,
   type Capitulo, type ContextoDeGuia, type EstadoDeGuia, type Pagos,
 } from './recorridoGuia';
 import { escucharSenalesDeGuia, type SenalDeGuia } from './senalesGuia';
@@ -32,6 +32,8 @@ function leerContexto(pagina: PageId, pagos: Pagos, final: SenalDeGuia | null): 
   const centro = buscar('.appbar-center[data-guia-destino]');
   return {
     pagina, pagos, final,
+    // Sólo lectura de la URL: ata el final de un viaje al viaje en pantalla.
+    parametro: parseLocation(window.location.pathname, window.location.search).param,
     etapa: atributo('data-guia-etapa'), rol: atributo('data-guia-rol'), modo: atributo('data-guia-modo'),
     destino: centro?.getAttribute('data-guia-destino') ?? null,
     viajeDeHoy: centro?.getAttribute('data-guia-viaje') ?? null,
@@ -79,11 +81,16 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
   }, []);
 
   useEffect(() => escucharSenalesDeGuia((senal) => setFinal({ senal, vista: false })), []);
-  // Un final ya mostrado no vuelve: al salir de su pantalla, el recorrido sigue.
+  // Un final vale para la pantalla que sigue al guardado y para nada más: ya mostrado, o si se llegó a otra
+  // pantalla (por ejemplo, el gasto guardado desde Inicio vuelve a Inicio), se descarta.
   useEffect(() => {
     if (paginaVista.current === pagina) return;
     paginaVista.current = pagina;
-    setFinal((f) => (f?.vista ? null : f));
+    setFinal((f) => {
+      if (!f || f.vista) return null;
+      const destino: PageId = f.senal.tipo === 'viaje-guardado' ? 'viaje' : f.senal.cerrada ? 'mesa' : 'home';
+      return pagina === destino ? f : null;
+    });
   }, [pagina]);
   useEffect(() => {
     if (FINALES.has(estado.capitulo)) setFinal((f) => (f && !f.vista ? { ...f, vista: true } : f));
@@ -94,8 +101,14 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
     let raf = 0;
     const medir = () => {
       raf = 0;
-      const oculta = prioridad || hayModal();
-      const capitulo = capituloDe(leerContexto(pagina, pagos, senal), t);
+      // Con una ventana encima (que además deja la app inerte) o mientras la foto se lee, la guía se oculta y
+      // conserva capítulo y paso: al cerrarse vuelve donde estaba, también achicada en «Tu turno».
+      const capitulo = prioridad || hayModal() ? null : capituloDe(leerContexto(pagina, pagos, senal), t);
+      if (!capitulo) {
+        setMedida((prev) => prev.oculta ? prev : { ...prev, oculta: true });
+        return;
+      }
+      const oculta = false;
       const e = siguienteEstado(capitulo, estadoRef.current);
       if (e !== estadoRef.current) cambiar(e);
       const paso = capitulo.pasos.find((p) => p.id === e.paso) ?? null;
@@ -120,14 +133,19 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
       const rect = caja && !fuera ? { left: caja.left, top: caja.top, right: caja.right, bottom: caja.bottom } : null;
       const burbuja = panel.current?.getBoundingClientRect();
       const w = burbuja?.width ?? 0, h = burbuja?.height ?? 0;
-      const pos = rect && burbuja ? posicionGuia(rect, espacio, w, h) : null;
+      // Recién vuelta a mostrar, la burbuja todavía mide 0: se conserva la posición anterior y el
+      // ResizeObserver vuelve a medir con el tamaño real.
+      const sinTamano = w === 0 || h === 0;
+      const pos = rect && !sinTamano ? posicionGuia(rect, espacio, w, h) : null;
       // Sin lugar junto al control, o sin control a la vista: arriba o abajo del espacio libre.
       const abajo = fuera === 'abajo' || (!fuera && (!rect || (rect.top + rect.bottom) / 2 < (espacio.top + espacio.bottom) / 2));
-      const left = pos?.left ?? espacio.left;
-      const top = pos?.top ?? (abajo ? Math.max(espacio.top, espacio.bottom - h) : espacio.top);
-      const lado = pos?.lado ?? (fuera ? `fuera-${fuera}` : rect ? 'sin-lugar' : 'sin-control');
-      const next: Medida = { capitulo, objetivo: rect, fuera, left, top, lado, espacio, zoom, oculta };
-      setMedida((prev) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+      setMedida((prev) => {
+        const left = sinTamano ? prev.left : pos?.left ?? espacio.left;
+        const top = sinTamano ? prev.top : pos?.top ?? (abajo ? Math.max(espacio.top, espacio.bottom - h) : espacio.top);
+        const lado = sinTamano ? prev.lado : pos?.lado ?? (fuera ? `fuera-${fuera}` : rect ? 'sin-lugar' : 'sin-control');
+        const next: Medida = { capitulo, objetivo: rect, fuera, left, top, lado, espacio, zoom, oculta };
+        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      });
     };
     const pedir = () => { if (!raf) raf = requestAnimationFrame(medir); };
     const mutation = new MutationObserver((records) => {
@@ -155,7 +173,6 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
   const paso = capitulo?.pasos.find((p) => p.id === estado.paso && p.presente) ?? null;
   const presentes = capitulo ? pasosPresentes(capitulo) : [];
   const numero = paso ? presentes.indexOf(paso) + 1 : 0;
-  const ultimo = numero === presentes.length;
   const plegado = estado.plegado && paso?.tipo === 'tu-turno';
   const visibleAhora = !medida.oculta && !!paso;
 
@@ -188,9 +205,7 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
     const otro = vecino(capitulo, estado.paso, sentido);
     if (otro) cambiar({ capitulo: capitulo.id, paso: otro.id, plegado: false, tocado: true }, 'titulo');
   };
-  const primario: Primario | null = !paso || paso.tipo === 'espera' ? null
-    : paso.tipo === 'tu-turno' ? 'entendido'
-      : paso.tipo === 'final' || ultimo ? 'terminar' : 'siguiente';
+  const primario: Primario | null = paso && capitulo ? primarioDe(paso, vecino(capitulo, paso.id, 1) !== null) : null;
   const alPrimario = () => {
     if (primario === 'siguiente') ir(1);
     else if (primario === 'entendido') cambiar({ ...estado, plegado: true, tocado: true }, 'chip');
@@ -208,7 +223,7 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
   const ancho = Math.min(window.innerWidth <= 600 ? 328 : window.innerHeight <= 480 ? 760 : 560, maxWidth);
   const vista: VistaDeGuia | null = paso && capitulo ? {
     forma: plegado ? 'achicada' : 'completa', paso, etapa: capitulo.etapa, conPagar: pagos === 'si',
-    numero, total: presentes.length, fuera: medida.fuera, primario, atras: numero > 1,
+    numero, total: presentes.length, fuera: medida.fuera, primario, atras: vecino(capitulo, paso.id, -1) !== null,
   } : null;
   const target = visibleAhora ? medida.objetivo : null;
   return createPortal(<div ref={raiz} className="guia-capa" hidden={!visibleAhora}>

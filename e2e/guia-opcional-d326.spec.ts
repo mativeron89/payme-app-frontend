@@ -51,12 +51,19 @@ async function abrir(page: Page) {
 }
 /** El paso que muestra la burbuja; a diferencia del resaltado, existe aunque el control esté fuera de la vista. */
 const pasoActual = (page: Page) => page.locator('.guia-burbuja').getAttribute('data-paso', { timeout: 5_000 }).catch(() => null);
-/** Avanza con Siguiente hasta el paso pedido, sin tocar la app. */
+/**
+ * Avanza con Siguiente hasta el paso pedido, sin tocar la app. Después de cada toque espera a que el paso
+ * cambie: un avance automático (la guía sigue sola en el cuadro siguiente) no debe sumar un toque de más.
+ */
 async function avanzarHasta(page: Page, objetivo: string, maximo = 8) {
-  for (let i = 0; i < maximo && await pasoActual(page) !== objetivo; i++) {
+  const burbuja = page.locator('.guia-burbuja');
+  for (let i = 0; i < maximo; i++) {
+    const actual = await pasoActual(page);
+    if (actual === objetivo) break;
     await boton(page, 'Siguiente').click({ timeout: 5_000 });
+    if (actual) await expect(burbuja).not.toHaveAttribute('data-paso', actual);
   }
-  await expect(page.locator('.guia-burbuja')).toHaveAttribute('data-paso', objetivo);
+  await expect(burbuja).toHaveAttribute('data-paso', objetivo);
 }
 async function geometria(page: Page) {
   await expect(foco(page)).toBeVisible();
@@ -324,10 +331,10 @@ test('D341 · restaurante de punta a punta: la guía espera cada paso y el final
   await expect(guia(page).getByRole('button', { name: 'Retomar guía' })).toHaveCount(0);
   await boton(page, 'Siguiente').click();
   await expect(foco(page)).toHaveAttribute('data-objetivo', 'reparto');
-  const marcada = await page.getByRole('radio', { checked: true }).getAttribute('aria-checked');
+  const marcada = await page.locator('[data-guia="reparto"] [role="radio"][aria-checked="true"]').textContent();
   await boton(page, 'Siguiente').click();
   await expect(foco(page)).toHaveAttribute('data-objetivo', 'personas');
-  expect(await page.getByRole('radio', { checked: true }).getAttribute('aria-checked')).toBe(marcada);
+  expect(await page.locator('[data-guia="reparto"] [role="radio"][aria-checked="true"]').textContent()).toBe(marcada);
   await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('—');
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await masUno.click();
@@ -335,6 +342,13 @@ test('D341 · restaurante de punta a punta: la guía espera cada paso y el final
   await expect(foco(page)).toHaveAttribute('data-objetivo', 'continuar');
   await boton(page, 'Entendido').click();
   await expect(guia(page).getByRole('button', { name: 'Tu turno: toca Continuar', exact: true })).toBeVisible();
+  // Una ventana encima no le borra el lugar: al cerrarse vuelve achicada en «Tu turno», no al primer paso.
+  await page.getByRole('button', { name: 'Ver el ticket', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible(); await expect(guia(page)).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(guia(page).getByRole('button', { name: 'Tu turno: toca Continuar', exact: true })).toBeVisible();
+  await expect(page.locator('.guia-burbuja')).toHaveAttribute('data-paso', 'continuar');
   await captura(page, 'restaurante-tu-turno-continuar', info);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   // Invitar: otro capítulo, desplegado otra vez.
@@ -363,15 +377,27 @@ test('D341 · restaurante de punta a punta: la guía espera cada paso y el final
   if (await porcion.count()) {
     await expect(foco(page)).toHaveAttribute('data-objetivo', 'porcion');
     await porcion.getByRole('radio').first().click();
+    // Al cerrarse el selector, la guía sigue sola: se espera ese avance antes de tocar Siguiente.
+    await expect(page.locator('.guia-burbuja')).not.toHaveAttribute('data-paso', 'porcion');
   }
-  // «Cerrar mesa» (mesa sin garantía): si queda debajo, la guía avisa y sólo desplaza cuando se pide.
-  await avanzarHasta(page, 'cerrar');
-  const fuera = guia(page).getByText('Está más abajo', { exact: true });
-  if (await fuera.count()) {
-    await boton(page, 'Mostrar').click();
-    await expect(fuera).toHaveCount(0);
-  }
+  // «Cerrar mesa» (mesa sin garantía) queda debajo del pie: la guía avisa y sólo desplaza cuando se pide.
+  await avanzarHasta(page, 'mi-parte');
+  const lista = page.locator('.mesa-selection-scroll');
+  await lista.evaluate((e) => { e.scrollTop = 0; });
+  const debajo = await page.locator('[data-guia="cerrar-mesa"]').evaluate((e) =>
+    e.getBoundingClientRect().top >= (document.querySelector('.appbar-block')?.getBoundingClientRect().top ?? innerHeight));
+  expect(debajo, 'precondición: «Cerrar mesa» debajo de la barra').toBe(true);
+  const scrollMesa = await lista.evaluate((e) => e.scrollTop);
+  await boton(page, 'Siguiente').click();
+  await expect(page.locator('.guia-burbuja')).toHaveAttribute('data-paso', 'cerrar');
+  const fueraMesa = guia(page).getByText('Está más abajo', { exact: true });
+  await expect(fueraMesa).toBeVisible();
+  await expect(foco(page)).toHaveCount(0);
+  expect(await lista.evaluate((e) => e.scrollTop), 'la guía no desplaza por su cuenta').toBe(scrollMesa);
+  await boton(page, 'Mostrar').click();
+  await expect(fueraMesa).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Cerrar mesa' })).toBeInViewport();
+  await expect(foco(page)).toHaveAttribute('data-objetivo', 'cerrar');
   await avanzarHasta(page, 'listo');
   await boton(page, 'Entendido').click();
   await expect(guia(page).getByRole('button', { name: 'Tu turno: toca Listo', exact: true })).toBeVisible();
@@ -383,7 +409,7 @@ test('D341 · restaurante de punta a punta: la guía espera cada paso y el final
   await expect(guia(page).getByRole('heading', { name: 'Así queda tu mesa', exact: true })).toBeVisible();
   await expect(foco(page)).toHaveAttribute('data-objetivo', 'tarjeta');
   await expect(foco(page)).toHaveAttribute('data-ancla', `[data-guia="mesa-abierta"][data-guia-mesa="${codigo}"]`);
-  await expect(guia(page)).toContainText('No volver a mostrar');
+  await expect(guia(page).locator('.guia-nota')).toHaveText('¿No quieres ver la guía al entrar? Marca «No volver a mostrar».');
   await captura(page, 'restaurante-final', info);
   expect(await camarasAbiertas(page)).toBe(1);
   await boton(page, 'Terminar guía').click();
@@ -407,17 +433,21 @@ test('D341 · viaje, gasto y borrador intactos; el control fuera de la vista se 
   await avanzarHasta(page, 'quien-pago');
   // Con poca altura, «¿Entre quiénes?» queda abajo: aviso y «Mostrar», nunca un scroll por cuenta propia.
   await page.setViewportSize({ width: 390, height: 560 });
-  const scrollAntes = await page.locator('.vj-scroll').evaluate((e) => e.scrollTop);
+  const scroll = page.locator('.vj-scroll');
+  await scroll.evaluate((e) => { e.scrollTop = 0; });
+  const debajo = await page.locator('[data-guia="entre-quienes"]').evaluate((e) =>
+    e.getBoundingClientRect().top >= (document.querySelector('.vj-pie')?.getBoundingClientRect().top ?? innerHeight));
+  expect(debajo, 'precondición: «¿Entre quiénes?» debajo del pie').toBe(true);
+  const scrollAntes = await scroll.evaluate((e) => e.scrollTop);
   await boton(page, 'Siguiente').click();
   await expect(guia(page).getByRole('heading', { name: '¿Entre quiénes?', exact: true })).toBeVisible();
   const fuera = guia(page).getByText('Está más abajo', { exact: true });
-  if (await fuera.count()) {
-    expect(await page.locator('.vj-scroll').evaluate((e) => e.scrollTop)).toBe(scrollAntes);
-    await expect(foco(page)).toHaveCount(0);
-    await boton(page, 'Mostrar').click();
-    await expect(fuera).toHaveCount(0);
-    await expect(foco(page)).toHaveAttribute('data-objetivo', 'entre');
-  }
+  await expect(fuera).toBeVisible();
+  await expect(foco(page)).toHaveCount(0);
+  expect(await scroll.evaluate((e) => e.scrollTop), 'la guía no desplaza por su cuenta').toBe(scrollAntes);
+  await boton(page, 'Mostrar').click();
+  await expect(fuera).toHaveCount(0);
+  await expect(foco(page)).toHaveAttribute('data-objetivo', 'entre');
   await boton(page, 'Cerrar guía').click();
   await expect(page.getByLabel('Descripción', { exact: true })).toHaveValue('Cena sin guardar');
   await expect(page.getByLabel('Monto', { exact: true })).toHaveValue('125.50');
@@ -450,6 +480,7 @@ test('D341 · el final del viaje aparece después de guardar lo elegido', async 
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${VIAJE}$`));
   await expect(guia(page).getByRole('heading', { name: 'Así va tu viaje', exact: true })).toBeVisible();
+  await expect(guia(page).locator('.guia-nota')).toHaveText('¿No quieres ver la guía al entrar? Marca «No volver a mostrar».');
   await expect(foco(page)).toHaveAttribute('data-objetivo', 'balance');
   await boton(page, 'Terminar guía').click();
   await expect(guia(page)).toHaveCount(0);
