@@ -8,6 +8,10 @@ import { Icon } from './Icon';
  * del titular comparten el mismo encabezado —título, resumen y flecha—. Es un
  * `<button aria-expanded>` que abre y cierra su cuerpo; la tarjeta es una
  * región con el título como nombre.
+ *
+ * D360-4a · sin `resumen` la cabecera es de un renglón: «Quiénes están en la
+ * mesa» ya no dice cuántas personas son. Con `resumen` (aunque sea vacío) siguen
+ * los dos renglones, para que el resumen que cambia no mueva lo de abajo.
  */
 export function Desplegable({
   titulo,
@@ -18,7 +22,7 @@ export function Desplegable({
   children,
 }: {
   titulo: string;
-  resumen: string;
+  resumen?: string;
   abierto: boolean;
   onToggle: () => void;
   className?: string;
@@ -30,16 +34,16 @@ export function Desplegable({
     <section className={`card desplegable${className ? ` ${className}` : ''}`} aria-labelledby={tituloId}>
       <button
         type="button"
-        className="desplegable-cabecera"
+        className={`desplegable-cabecera${resumen === undefined ? ' desplegable-cabecera--sola' : ''}`}
         data-guia={className === 'tus-consumos' ? 'consumos' : undefined}
         aria-expanded={abierto}
         aria-controls={cuerpoId}
         onClick={onToggle}
       >
         <span id={tituloId} className="desplegable-titulo">{titulo}</span>
-        {/* Siempre presente, aunque esté vacío: el encabezado mide lo mismo
-            mientras carga y cuando llega el número. */}
-        <span className="desplegable-resumen">{resumen || '\u00a0'}</span>
+        {/* Con resumen, siempre presente aunque esté vacío: el encabezado mide
+            lo mismo mientras carga y cuando llega el número. */}
+        {resumen !== undefined && <span className="desplegable-resumen">{resumen || '\u00a0'}</span>}
         <Icon name="chevron-down" size={18} className={`desplegable-flecha${abierto ? ' open' : ''}`} />
       </button>
       <div id={cuerpoId} className="desplegable-cuerpo" hidden={!abierto}>

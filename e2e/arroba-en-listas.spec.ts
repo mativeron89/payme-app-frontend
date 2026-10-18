@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
+import { abrirQuienes } from './_mesa';
 
 /**
  * AF-USERNAME-D104 · decisión 104 de Mati: «que el usuario esté abajo del
@@ -169,6 +170,7 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
   test('detalle de la mesa: «Quiénes se sumaron»', async ({ page }) => {
     await entrar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccionQuienes(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     await expect(lista.locator('.quien').filter({ hasText: 'Luis Cárdenas' }).locator('.quien-id'))
@@ -181,6 +183,7 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
     await participantesSinNombre(page);
     await entrar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccionQuienes(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     await expect(lista.locator('.quien-nombre').filter({ hasText: /^@solo\.arroba$/ })).toHaveCount(1);
@@ -241,6 +244,7 @@ for (const dueno of ['viejo', 'apagado'] as const) {
       await sinCodigo(page);
 
       await page.goto('/#/mesa/PA-2847');
+      await abrirQuienes(page);
       const lista = seccionQuienes(page);
       await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
       await expect(lista.getByText('Renata Ortiz', { exact: true })).toBeVisible();
@@ -254,6 +258,7 @@ for (const dueno of ['viejo', 'apagado'] as const) {
       await participantesSinNombre(page);
       await entrar(page);
       await page.goto('/#/mesa/PA-2847');
+      await abrirQuienes(page);
       const lista = seccionQuienes(page);
       await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
       await expect(lista.locator('.quien-nombre').filter({ hasText: /^Sin nombre$/ })).toHaveCount(2);

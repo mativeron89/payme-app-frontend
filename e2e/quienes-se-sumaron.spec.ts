@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
+import { abrirQuienes } from './_mesa';
 
 /**
  * AF-25 · n72 · «quiénes se sumaron», sólo para el organizador
@@ -44,8 +45,8 @@ async function pedidos(page: Page): Promise<number> {
 
 /**
  * D223 · en «Tu mesa» la sección se llama «Quiénes están en la mesa», es
- * desplegable (abierta al entrar sin solicitudes) y empieza por la fila del
- * titular, «Tú». Lo que se prueba acá —los demás, su nombre, @ y foto— es lo
+ * desplegable (cerrada al entrar desde D360-4a: cada prueba la abre) y empieza
+ * por la fila del titular, «Tú». Lo que se prueba acá —los demás, su nombre, @ y foto— es lo
  * de siempre.
  */
 const seccion = (page: Page) => page.getByRole('region', { name: 'Quiénes están en la mesa' });
@@ -54,6 +55,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
   test('el organizador ve nombre, apellido y @, y nada más', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @ (Luis eligió
@@ -79,6 +81,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'variedad');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     await expect(lista.getByText('Invitado', { exact: true })).toBeVisible();
@@ -112,6 +115,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'error');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.getByText('No pudimos cargar quiénes se sumaron.')).toBeVisible();
     await page.evaluate(() => localStorage.removeItem('payme.app.mock.participantes.v1'));
@@ -123,6 +127,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'vacio');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     await expect(seccion(page).getByText('Todavía no se sumó nadie.')).toBeVisible();
   });
 
@@ -130,6 +135,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'variedad');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.getByRole('img', { name: 'Foto de Luis Cárdenas' })).toBeVisible();
     await expect(lista.locator('.avatar').filter({ hasText: 'RO' })).toBeVisible();
@@ -152,6 +158,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'forma_vieja');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     await expect(lista.locator('img')).toHaveCount(0);
@@ -163,6 +170,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.fotos.v1', 'error'));
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const lista = seccion(page);
     await expect(lista.locator('.avatar').filter({ hasText: 'LC' })).toBeVisible();
     await expect.poll(() => pedidosDeFotos(page)).toBe(1);
@@ -203,6 +211,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await espiarRevocadas(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const foto = seccion(page).getByRole('img', { name: 'Foto de Luis Cárdenas' });
     await expect(foto).toBeVisible();
     const src = await foto.getAttribute('src');
@@ -228,6 +237,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await espiarRevocadas(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await abrirQuienes(page);
     const foto = seccion(page).getByRole('img', { name: 'Foto de Luis Cárdenas' });
     await expect(foto).toBeVisible();
     const src = await foto.getAttribute('src');

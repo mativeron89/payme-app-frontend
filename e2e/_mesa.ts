@@ -2,10 +2,11 @@ import { expect, type Page } from '@playwright/test';
 
 /**
  * D223 · «Tu mesa» (turno 2 · 2.9–2.11): la mesa del TITULAR se titula «Tu
- * mesa» y su lista de platos vive dentro de «Tus consumos», que arranca
- * CERRADO. Quien no es titular sigue viendo «¿Qué consumiste?» con la lista
- * abierta. Para las pruebas que eligen platos como titular cambió por dónde se
- * llega a la lista, no lo que hace: estos helpers llegan.
+ * mesa» y su lista de platos vive dentro de «Tus consumos». Desde D360-7 esa
+ * tarjeta arranca ABIERTA (antes, cerrada) y «Quiénes están en la mesa»
+ * arranca CERRADA (D360-4a). Quien no es titular sigue viendo «¿Qué
+ * consumiste?» con la lista abierta. Los helpers son idempotentes: abren sólo
+ * si está cerrado, así sirven con cualquiera de los dos estados.
  */
 
 /** El título de la mesa del titular. */
@@ -28,6 +29,17 @@ export async function abrirTusConsumos(page: Page): Promise<void> {
   if (!hayMesa) return;
   const cabecera = cabeceraTusConsumos(page);
   if ((await cabecera.count()) === 0) return;
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
+}
+
+/**
+ * D360-4a · abre «Quiénes están en la mesa», que arranca cerrado. Si ya está
+ * abierto no lo toca (un clic de más lo cerraría).
+ */
+export async function abrirQuienes(page: Page): Promise<void> {
+  const cabecera = page.getByRole('region', { name: 'Quiénes están en la mesa' }).locator('.desplegable-cabecera');
+  await expect(cabecera).toBeVisible();
   if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
   await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
 }

@@ -5719,7 +5719,7 @@ button.qc-circulo::after {
   margin-top: 0;
 }
 /* Título arriba y resumen abajo, siempre en dos renglones: el resumen cambia
-   («Toca para elegir» → «2 elegidos · toca para modificar») y en uno solo, a
+   (vacío → «2 elegidos · toca para modificar») y en uno solo, a
    375 px, el título bajaba a dos renglones y la lista de abajo saltaba 8 px
    (regla 1 de «¿Qué consumiste?»: elegir nunca mueve la lista). */
 .desplegable-cabecera {
@@ -5740,6 +5740,9 @@ button.qc-circulo::after {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.desplegable-cabecera--sola {
+  grid-template-areas: 'titulo flecha';
 }
 .desplegable-cabecera:focus-visible {
   outline: 2px solid var(--navy);

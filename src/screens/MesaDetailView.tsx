@@ -1,5 +1,4 @@
-import { AyudaDePorciones } from '../ayuda/AyudaContextual';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -545,25 +544,19 @@ export function MesaDetailView({
    * siempre, con «¿Qué consumiste?» y la lista abierta.
    */
   const esTitular = !isGuest && mesa.my_role === 'opener';
-  /** «Tus consumos» arranca cerrado (turno 2 · 2.9). */
-  const [consumosAbierto, setConsumosAbierto] = useState(false);
   /**
-   * Qué arranca abierto (turno 2 · 2.10 y 2.11): con solicitudes, ellas
-   * abiertas y quiénes cerrado; sin solicitudes, quiénes abierto. Se decide con
-   * la PRIMERA lista que llega; después manda lo que toque la persona (`null` =
-   * todavía no tocó). Una solicitud que llega más tarde no cambia nada.
+   * D360-7 · «Tus consumos» arranca ABIERTO (deja sin efecto el «cerrado» de
+   * D223, turno 2 · 2.9). Se puede cerrar igual.
    */
-  const [quienesAbierto, setQuienesAbierto] = useState<boolean | null>(null);
+  const [consumosAbierto, setConsumosAbierto] = useState(true);
+  /**
+   * D360-4a · «Quiénes están en la mesa» arranca CERRADO siempre, haya o no
+   * solicitudes (revisa la disposición de D223, turno 2 · 2.10–2.11). Las
+   * solicitudes siguen abiertas hasta que la persona las cierre (`null` =
+   * todavía no tocó).
+   */
+  const [quienesAbierto, setQuienesAbierto] = useState(false);
   const [solicitudesAbierto, setSolicitudesAbierto] = useState<boolean | null>(null);
-  const [habiaSolicitudesAlEntrar, setHabiaSolicitudesAlEntrar] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (habiaSolicitudesAlEntrar !== null) return;
-    // Sólo con una respuesta: `oculto` es también el estado ANTES de pedir, y
-    // decidir con él dejaba quiénes abierto aunque llegaran solicitudes.
-    if (solicitudes.estado === 'lista') setHabiaSolicitudesAlEntrar(solicitudes.lista.length > 0);
-    else if (solicitudes.estado === 'error') setHabiaSolicitudesAlEntrar(false);
-  }, [solicitudes, habiaSolicitudesAlEntrar]);
-  const quienesAbiertoEfectivo = quienesAbierto ?? habiaSolicitudesAlEntrar !== true;
   const solicitudesAbiertoEfectivo = solicitudesAbierto ?? true;
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
@@ -793,10 +786,12 @@ export function MesaDetailView({
   /**
    * D223 · D (aprobado) · el encabezado de «Tus consumos»: cuántos elegiste, no
    * cuánto (el monto vive en la burbuja y en la barra). En partes iguales lo
-   * elegido son partes.
+   * elegido son partes. D360-5a · sin nada elegido no dice nada: «Toca para
+   * elegir» salió. El renglón queda (vacío) para que elegir el primer plato no
+   * mueva la lista (regla 1).
    */
   const resumenDeConsumos = selected.size === 0
-    ? t('Toca para elegir')
+    ? ''
     : esConsumo
       ? (selected.size === 1 ? t('1 elegido · toca para modificar') : t('{0} elegidos · toca para modificar', selected.size))
       : (selected.size === 1 ? t('1 parte · toca para modificar') : t('{0} partes · toca para modificar', selected.size));
@@ -1008,7 +1003,6 @@ export function MesaDetailView({
           );
         })()}</div>)}
       </div>
-      {esConsumo && <AyudaDePorciones />}
       {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
           comensal ver que su parte YA está tomada. Sin esto volvía, veía
           casilleros libres y pagaba de nuevo — llevándose el de otro.
@@ -1131,20 +1125,15 @@ export function MesaDetailView({
         {esTitular ? (
           <>
             {/* D223 · «Tu mesa» (turno 2 · 2.9–2.11), en este orden: quiénes
-                están, solicitudes (sólo si hay), compartir, tus consumos
-                (cerrado por defecto) y cerrar mesa. Cambia la DISPOSICIÓN: cómo
+                están (cerrado y sin la cantidad, D360-4a), solicitudes (sólo si
+                hay), compartir, tus consumos (abierto, D360-7) y cerrar mesa. Cambia la DISPOSICIÓN: cómo
                 se elige, se suelta, se divide y se paga es lo de siempre. */}
             {quienesSeSumaron.estado !== 'oculto' && (
               <Desplegable
                 className="quienes"
                 titulo={t('Quiénes están en la mesa')}
-                resumen={quienesSeSumaron.estado === 'lista'
-                  ? (quienesSeSumaron.lista.length + 1 === 1
-                    ? t('1 persona')
-                    : t('{0} personas', quienesSeSumaron.lista.length + 1))
-                  : ''}
-                abierto={quienesAbiertoEfectivo}
-                onToggle={() => setQuienesAbierto(!quienesAbiertoEfectivo)}
+                abierto={quienesAbierto}
+                onToggle={() => setQuienesAbierto((a) => !a)}
               >
                 {/* La fila del titular sale de la sesión: el dueño no lo incluye
                     en la lista (`routes/mesas.js`, «p.user_id <> $2»). Después,

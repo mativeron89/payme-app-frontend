@@ -1,12 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
+import { abrirQuienes } from './_mesa';
 
 /**
  * AF-UNIRSE-CODIGO · D223 · «Tu mesa», la mesa del titular reorganizada
  * («Todo junto, como el diseño», turno 2 · 2.9–2.11): quiénes están,
- * solicitudes para unirse (sólo si hay), compartir, tus consumos (cerrado por
- * defecto) y cerrar mesa. Los casos T01–T19 y los negativos de privacidad de
- * las pruebas de aceptación de Codex (`PRUEBAS_ACEPTACION_UNIRME.md`).
+ * solicitudes para unirse (sólo si hay), compartir, tus consumos y cerrar mesa.
+ * D360-4a · «Quiénes» arranca cerrado y sin la cantidad de personas; D360-7 ·
+ * «Tus consumos» arranca abierto; D360-5a · sin «Toca para elegir». Los casos
+ * T01–T19 y los negativos de privacidad de las pruebas de aceptación de Codex
+ * (`PRUEBAS_ACEPTACION_UNIRME.md`).
  *
  * PA-2847 es del titular en el mock (La Parolaccia, cada uno lo suyo) y ya
  * tiene dos personas sumadas; PA-4520 es de otro organizador. Las solicitudes
@@ -60,10 +63,14 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
   });
 
-  test('🔴 T02 · quiénes: «Tú» primero (de la sesión) y la cantidad con el titular', async ({ page }) => {
+  test('🔴 T02 · quiénes: arranca cerrado y sin la cantidad (D360-4a); abierto, «Tú» primero (de la sesión)', async ({ page }) => {
     await tuMesa(page);
-    await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'true');
-    await expect(cabecera(quienes(page))).toContainText('3 personas');
+    await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
+    // La cabecera es sólo el título: ningún «N personas» ni renglón de resumen.
+    await expect(cabecera(quienes(page))).toHaveText('Quiénes están en la mesa');
+    await expect(cabecera(quienes(page)).locator('.desplegable-resumen')).toHaveCount(0);
+    await abrirQuienes(page);
+    await expect(cabecera(quienes(page))).toHaveText('Quiénes están en la mesa');
     const filas = quienes(page).locator('.quien');
     await expect(filas).toHaveCount(3);
     await expect(filas.first()).toContainText('Tú');
@@ -71,23 +78,24 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(filas.nth(2)).toContainText('Renata Ortiz');
   });
 
-  test('T02 · una mesa nueva: sólo el titular, en singular', async ({ page }) => {
+  test('T02 · una mesa nueva: sólo el titular, sin «1 persona»', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/mesa/${mesa.code}`);
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
-    await expect(cabecera(quienes(page))).toContainText('1 persona');
+    await expect(cabecera(quienes(page))).toHaveText('Quiénes están en la mesa');
+    await abrirQuienes(page);
     await expect(quienes(page).locator('.quien')).toHaveCount(1);
     await capturar(page, 'tu-mesa-sin-solicitudes-375');
   });
 
-  test('🔴 T03 · sin solicitudes no hay sección (ni «0 pendientes») y quiénes arranca abierto', async ({ page }) => {
+  test('🔴 T03 · sin solicitudes no hay sección (ni «0 pendientes») y quiénes arranca cerrado igual (D360-4a)', async ({ page }) => {
     await tuMesa(page);
     await page.waitForTimeout(400);
     await expect(solicitudes(page)).toHaveCount(0);
     await expect(page.getByText(/0 pendientes/)).toHaveCount(0);
-    await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'true');
+    await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('🔴 T04 · una: «1 pendiente», nombre y @, Rechazar a la izquierda y Aceptar a la derecha, de 44 px', async ({ page }) => {
@@ -95,7 +103,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await tuMesa(page);
     await expect(cabecera(solicitudes(page))).toContainText('1 pendiente');
     await expect(cabecera(solicitudes(page))).toHaveAttribute('aria-expanded', 'true');
-    // Con solicitudes, quiénes arranca cerrado (2.10).
+    // Quiénes arranca cerrado, con solicitudes o sin ellas (D360-4a).
     await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
     const fila = solicitudes(page).locator('.solicitud');
     await expect(fila).toHaveText(/^Ana López \(@ana\.lopez\) quiere unirseRechazarAceptar$/);
@@ -134,8 +142,8 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await filas.last().getByRole('button', { name: 'Aceptar' }).scrollIntoViewIfNeeded();
     await expect(filas.last().getByRole('button', { name: 'Aceptar' })).toBeInViewport();
     // Las personas no son las solicitudes.
-    await cabecera(quienes(page)).click();
-    await expect(cabecera(quienes(page))).toContainText('3 personas');
+    await abrirQuienes(page);
+    await expect(quienes(page).locator('.quien')).toHaveCount(3);
   });
 
   test('🔴 T07 · aceptar: la solicitud sale y la persona se suma UNA vez, después del 200', async ({ page }) => {
@@ -143,8 +151,8 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await tuMesa(page);
     await solicitudes(page).getByRole('button', { name: 'Aceptar' }).click();
     await expect(solicitudes(page)).toHaveCount(0);
-    await cabecera(quienes(page)).click();
-    await expect(cabecera(quienes(page))).toContainText('4 personas');
+    await abrirQuienes(page);
+    await expect(quienes(page).locator('.quien')).toHaveCount(4);
     await expect(quienes(page).locator('.quien').filter({ hasText: 'Ana López' })).toHaveCount(1);
   });
 
@@ -153,7 +161,8 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await tuMesa(page);
     await solicitudes(page).getByRole('button', { name: 'Rechazar' }).click();
     await expect(solicitudes(page)).toHaveCount(0);
-    await expect(cabecera(quienes(page))).toContainText('3 personas');
+    await abrirQuienes(page);
+    await expect(quienes(page).locator('.quien')).toHaveCount(3);
   });
 
   test('🔴 T09 · cada botón actúa sobre SU fila; al vaciarse la lista, la sección se va', async ({ page }) => {
@@ -165,7 +174,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(solicitudes(page).locator('.solicitud')).toContainText('Ana López');
     await solicitudes(page).getByRole('button', { name: 'Aceptar' }).click();
     await expect(solicitudes(page)).toHaveCount(0);
-    await cabecera(quienes(page)).click();
+    await abrirQuienes(page);
     await expect(quienes(page).locator('.quien').filter({ hasText: 'Ana López' })).toHaveCount(1);
     await expect(quienes(page).locator('.quien').filter({ hasText: 'Diego' })).toHaveCount(0);
   });
@@ -181,8 +190,8 @@ test.describe('D223 · «Tu mesa» del titular', () => {
       await tuMesa(page);
       await solicitudes(page).getByRole('button', { name: 'Aceptar' }).click();
       await expect(page.locator('.toast:not(.toast-hidden)')).toHaveText(texto);
-      await cabecera(quienes(page)).click();
-      await expect(cabecera(quienes(page))).toContainText('3 personas');
+      await abrirQuienes(page);
+      await expect(quienes(page).locator('.quien')).toHaveCount(3);
       await expect(quienes(page).locator('.quien').filter({ hasText: 'Ana López' })).toHaveCount(0);
     });
   }
@@ -212,14 +221,15 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.getByText(/quiere unirse/)).toHaveCount(0);
   });
 
-  test('🔴 T16 · tus consumos: cerrado por defecto; abrir, elegir, cerrar y no se pierde nada', async ({ page }) => {
+  test('🔴 T16 · tus consumos: abierto por defecto (D360-7) y sin «Toca para elegir» (D360-5a); elegir, cerrar y no se pierde nada', async ({ page }) => {
     await tuMesa(page);
     const tc = cabecera(consumos(page));
-    await expect(tc).toHaveAttribute('aria-expanded', 'false');
-    await expect(tc).toContainText('Toca para elegir');
-    await expect(page.locator('.qc-lista')).toBeHidden();
-    await tc.click();
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.qc-lista')).toBeVisible();
+    // Sin nada elegido el resumen no dice nada, pero su renglón está (regla 1:
+    // elegir el primer plato no mueve la lista).
+    await expect(tc.locator('.desplegable-resumen')).toHaveText('\u00a0');
+    await expect(tc).not.toContainText('Toca para elegir');
     await page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] .qc-fila').click();
     await expect(tc).toContainText('1 elegido · toca para modificar');
     await page.locator('.qc-renglon[data-plato="Risotto ai Funghi"] .qc-fila').click();
@@ -234,8 +244,11 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await capturar(page, 'tu-mesa-consumos-abierto-375');
   });
 
-  test('🔴 «Listo» sin nada elegido abre «Tus consumos» y lleva a la lista', async ({ page }) => {
+  test('🔴 «Listo» sin nada elegido abre «Tus consumos» (si se cerró) y lleva a la lista', async ({ page }) => {
     await tuMesa(page);
+    // Arranca abierto (D360-7): se cierra para probar que «Listo» lo vuelve a abrir.
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
+    await cabecera(consumos(page)).click();
     await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.locator('.toast:not(.toast-hidden)')).toHaveText('Elige lo que consumiste para continuar');
@@ -249,8 +262,9 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/mesa/${mesa.code}`);
     const tc = cabecera(consumos(page));
-    await expect(tc).toContainText('Toca para elegir');
-    await tc.click();
+    // Abierta desde el principio y sin «Toca para elegir» (D360-7 y D360-5a).
+    await expect(tc).toHaveAttribute('aria-expanded', 'true');
+    await expect(tc).not.toContainText('Toca para elegir');
     await page.locator('.qc-renglon .qc-fila').first().click();
     await expect(tc).toContainText('1 parte · toca para modificar');
   });
@@ -268,10 +282,11 @@ test.describe('D223 · «Tu mesa» del titular', () => {
   test('🔴 T19 · las tres tarjetas se abren y cierran con su estado accesible', async ({ page }) => {
     await costura(page, { solicitudes: 1 });
     await tuMesa(page);
-    // Las solicitudes YA cargadas: con ellas quiénes pasa a cerrado (2.10), y
-    // leer el estado antes era leer el de antes de saberlo (CI local de ffe0af5).
+    // Las solicitudes YA cargadas. Quiénes arranca cerrado y tus consumos abierto
+    // (D360-4a y D360-7).
     await expect(cabecera(solicitudes(page))).toContainText('1 pendiente');
     await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
     for (const region of [quienes(page), solicitudes(page), consumos(page)]) {
       const c = cabecera(region);
       const antes = await c.getAttribute('aria-expanded');
@@ -280,10 +295,10 @@ test.describe('D223 · «Tu mesa» del titular', () => {
       const caja = (await c.boundingBox())!;
       expect(caja.height).toBeGreaterThanOrEqual(44);
     }
-    // Con el teclado también.
+    // Con el teclado también: el bucle la dejó cerrada, Enter la abre.
     await cabecera(consumos(page)).focus();
     await page.keyboard.press('Enter');
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('🔴 quien no es titular ve la pantalla de siempre: «¿Qué consumiste?», la lista abierta y nada de esto', async ({ page }) => {

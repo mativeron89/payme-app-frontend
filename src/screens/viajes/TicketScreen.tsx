@@ -1,4 +1,3 @@
-import { AyudaDePorciones } from '../../ayuda/AyudaContextual';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import { denominatorBps } from '../../api/mesaPresentation';
@@ -624,7 +623,6 @@ function ConsumoVista(props: TicketVistaProps) {
           <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
             <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
             <ListaParaElegir {...props} />
-            <AyudaDePorciones />
           </section>
         )}
         <QuienesPagaron ticket={ticket} miembros={miembros} />
