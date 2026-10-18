@@ -56,7 +56,7 @@ async function filasDelDesglose(page: Page): Promise<string[]> {
 }
 
 test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
-  test('🔴 el organizador la fija en «Compartir la mesa», con el aviso de servicio y la vista previa sobre B; partes iguales', async ({ page }) => {
+  test('🔴 el organizador la fija en «Compartir la mesa», con el aviso de servicio y sin el monto para la mesa (D360-3); partes iguales', async ({ page }) => {
     await hastaCompartir(page, { ocr: 'servicio_descuento', modo: 'igual' });
     const selector = selectorDePropina(page);
     await expect(selector).toBeVisible();
@@ -68,10 +68,14 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
     await selector.getByRole('radio', { name: '10%', exact: true }).click();
     await expect(selector.getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
-    // B = $790, no los $840 de platos ni la base de /pay.
-    await expect(selector).toContainText('Son $79 para toda la mesa.');
+    // D360-3 · ya no se dice cuánto da para toda la mesa. Primero el testigo de que
+    // se guardó (el pedido salió y «Guardando…» se fue), después la ausencia.
+    await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selector.getByRole('status')).toHaveCount(0);
-    expect(await pedidosDePropina(page)).toBe(1);
+    await expect(selector).not.toContainText('para toda la mesa');
+    await expect(selector).not.toContainText('$79');
+    // El aviso del cargo por servicio sí queda (respuesta 11 de V).
+    await expect(selector).toContainText('El ticket ya trae un cargo por servicio de $85.');
     await capturar(page, 'd344-01-selector-compartir-servicio');
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -88,10 +92,13 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await capturar(page, 'd344-02-mi-parte-partes-iguales', desglose(page));
   });
 
-  test('🔴 por consumo: la vista previa antes de «Listo» y la parte del servidor después', async ({ page }) => {
+  test('🔴 por consumo: «Mi parte» antes de «Listo» y la parte del servidor después', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
     await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(selectorDePropina(page)).toContainText('Son $118.50 para toda la mesa.');
+    await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect.poll(() => pedidosDePropina(page)).toBe(1);
+    await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
+    await expect(selectorDePropina(page)).not.toContainText('para toda la mesa');
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     // Sin nada elegido, no hay desglose: la fila de abajo guía.
@@ -131,7 +138,9 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
   test('🔴 quien no organiza ve la propina de la mesa y su parte, sin poder cambiarla (R5)', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
     await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(selectorDePropina(page)).toContainText('Son $118.50 para toda la mesa.');
+    await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect.poll(() => pedidosDePropina(page)).toBe(1);
+    await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();

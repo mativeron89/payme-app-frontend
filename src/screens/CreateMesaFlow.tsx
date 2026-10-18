@@ -2289,7 +2289,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               vivía en la clase `sel`, así que un lector de pantalla no podía
               decir cuál estaba elegido ni que fueran alternativas de una misma
               pregunta. `radiogroup` + `aria-checked` lo dicen. */}
-          <p className="ux-siguiente">{t('Revisa el ticket, elige el reparto y confirma cuántas personas son.')}</p>
           <div data-guia="reparto" className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
           {([
             { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },

@@ -20,7 +20,6 @@ import {
   servicioImpreso,
   settingDeOtro,
   settingDePreset,
-  vistaPreviaDelPorcentaje,
 } from '../screens/propinaDeLaMesaView';
 
 /**
@@ -43,8 +42,9 @@ export function dependenciasDePropina(cuentaActual: () => string | null): Depend
 /**
  * D344 · el selector del organizador: 0/5/10/15/20 % y «Otro», sin nada
  * preseleccionado (P1, §1.5 bis). No obliga ni bloquea: sin elegir, la propina
- * queda «sin fijar» y se eligen platos igual. La vista previa del % es sobre B
- * (`share_totals.tip_basis_cents`); sin `share_totals` no hay vista previa.
+ * queda «sin fijar» y se eligen platos igual. D360-3: al elegir un % ya no se
+ * muestra cuánto da para toda la mesa («Son $X…» salió); quedan el aviso del
+ * cargo por servicio y la confirmación de «Otro».
  *
  * Lo que muestra marcado es lo que se está guardando, o si no, lo que guardó
  * el dueño. Nunca un % que nadie eligió.
@@ -81,9 +81,6 @@ export function PropinaDeLaMesa({
 
   const montoPorConfirmar = porConfirmar && 'tip_cents' in porConfirmar ? porConfirmar.tip_cents : null;
   const servicio = servicioImpreso(totales);
-  const vistaPrevia = mostrada !== null && 'tip_bps' in mostrada
-    ? vistaPreviaDelPorcentaje(mostrada.tip_bps, totales)
-    : null;
 
   const fijarOtro = (): void => {
     const setting = settingDeOtro(otroTexto);
@@ -171,9 +168,6 @@ export function PropinaDeLaMesa({
             </button>
           </div>
         </div>
-      )}
-      {vistaPrevia !== null && (
-        <p className="propina-mesa-previa">{t('Son {0} para toda la mesa.', formatMXN(vistaPrevia))}</p>
       )}
       {mostrada !== null && !guardando && (
         <button

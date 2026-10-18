@@ -1,6 +1,6 @@
 import type { ShareTotals, TipSetting } from '../api/miParte';
 import { formatMXN } from '../utils/format';
-import { stringToCents, tipFromBps } from '../utils/money';
+import { stringToCents } from '../utils/money';
 
 /**
  * D344 · la propina de la MESA, que fija sólo el organizador (P1). Lógica pura
@@ -74,17 +74,6 @@ export function textoDeLaPropinaDeLaMesa(
   if (setting === null) return t('Sin propina fijada');
   if ('tip_bps' in setting) return t('Propina de la mesa: {0} %', porcentajeVisible(setting.tip_bps));
   return t('Propina de la mesa: {0}', formatMXN(setting.tip_cents));
-}
-
-/**
- * La vista previa del % sobre B (`share_totals.tip_basis_cents`), con la misma
- * cuenta del dueño (`tipFromBps(B, 1, bps)`), nunca sobre `tip_base_cents`, que
- * sigue siendo la base de `/pay`. Sin `share_totals` no hay vista previa: B no
- * se calcula en el teléfono.
- */
-export function vistaPreviaDelPorcentaje(bps: number, totales: ShareTotals | null | undefined): number | null {
-  if (!totales) return null;
-  return tipFromBps(totales.tip_basis_cents, 1, bps);
 }
 
 /**

@@ -14,7 +14,6 @@ import {
   settingDeOtro,
   settingDePreset,
   textoDeLaPropinaDeLaMesa,
-  vistaPreviaDelPorcentaje,
 } from './propinaDeLaMesaView';
 
 /**
@@ -44,11 +43,6 @@ const MESA: ShareTotals = {
   adjustments_omitted: false,
   adjustments_omitted_reason: null,
 };
-
-/** La misma mesa con otra B; los demás campos no importan para la vista previa. */
-function conB(b: number): ShareTotals {
-  return { ...MESA, tip_basis_cents: b };
-}
 
 /** Un traductor falso que interpola `{0}` y anota cada clave que recibe. */
 function traductorQueAnota() {
@@ -253,51 +247,6 @@ describe('textoDeLaPropinaDeLaMesa', () => {
     const texto = textoDeLaPropinaDeLaMesa({ tip_cents: 1000 }, t);
     expect(texto).toBe('Propina de la mesa: $10');
     expect(texto).not.toContain('%');
-  });
-});
-
-describe('vistaPreviaDelPorcentaje cuenta sobre B, con redondeo half-up', () => {
-  it('B = 8824, 10 % → 882 (882.4 baja)', () => {
-    // 8824 × 1000 / 10000 = 882.4 → 882.
-    expect(vistaPreviaDelPorcentaje(1000, conB(8824))).toBe(882);
-  });
-
-  it('B = 8825, 10 % → 883 (882.5 sube)', () => {
-    // 8825 × 1000 / 10000 = 882.5 → 883.
-    expect(vistaPreviaDelPorcentaje(1000, conB(8825))).toBe(883);
-  });
-
-  it('B = 8825, 15 % → 1324 (1323.75 sube)', () => {
-    // 8825 × 1500 / 10000 = 1323.75 → 1324.
-    expect(vistaPreviaDelPorcentaje(1500, conB(8825))).toBe(1324);
-  });
-
-  it('el medio centavo exacto sube y uno menos baja', () => {
-    // 1 × 5000 / 10000 = 0.5 → 1; 1 × 4999 / 10000 = 0.4999 → 0.
-    expect(vistaPreviaDelPorcentaje(5000, conB(1))).toBe(1);
-    expect(vistaPreviaDelPorcentaje(4999, conB(1))).toBe(0);
-  });
-
-  it('B = 0 → 0 con cualquier %', () => {
-    expect(vistaPreviaDelPorcentaje(1000, conB(0))).toBe(0);
-    expect(vistaPreviaDelPorcentaje(10000, conB(0))).toBe(0);
-  });
-
-  it('🔴 usa tip_basis_cents y NUNCA items_cents: la mesa de referencia da 880, no 1000', () => {
-    // B = 8800: 8800 × 1000 / 10000 = 880. Sobre items_cents (10000) daría 1000;
-    // sobre total_cents (9680) daría 968.
-    expect(vistaPreviaDelPorcentaje(1000, MESA)).toBe(880);
-  });
-
-  it('0 % y 100 % sobre la mesa de referencia', () => {
-    // 8800 × 0 / 10000 = 0; 8800 × 10000 / 10000 = 8800.
-    expect(vistaPreviaDelPorcentaje(0, MESA)).toBe(0);
-    expect(vistaPreviaDelPorcentaje(10000, MESA)).toBe(8800);
-  });
-
-  it('sin share_totals no hay vista previa: null y undefined dan null', () => {
-    expect(vistaPreviaDelPorcentaje(1000, null)).toBeNull();
-    expect(vistaPreviaDelPorcentaje(1000, undefined)).toBeNull();
   });
 });
 

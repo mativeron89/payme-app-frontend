@@ -10479,14 +10479,10 @@ h1.pay-title-lbl {
   color: #991b1b;
 }
 .propina-mesa-error,
-.propina-mesa-previa,
 .propina-mesa-estado {
   margin: 10px 0 0;
   font-size: var(--fs-sm);
   line-height: 1.45;
-}
-.propina-mesa-previa {
-  color: var(--text-muted);
 }
 .propina-mesa-estado p {
   margin: 0 0 6px;

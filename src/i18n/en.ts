@@ -119,7 +119,6 @@ export const EN: Record<string, string> = {
   "Escribe el gasto, indica quién pagó y revisa entre quiénes se divide.": "Enter the expense, who paid and who will share it.",
   "Abre un consumo para revisar su ticket y el reparto.": "Open an expense to review its receipt and split.",
   "Aquí ves cuánto pagó cada persona, no cuánto le corresponde consumir.": "Here you see how much each person paid, not their share of expenses.",
-  "Revisa el ticket, elige el reparto y confirma cuántas personas son.": "Review the receipt, choose the split and confirm how many people are sharing.",
 
   // D165 · Ubicación real, Turno3/2a; sin datos/personas/clave demo.
   // D186 · «Ubicación» pasa a llamarse «Zona horaria»: no usa la posición, sólo la zona del teléfono.
@@ -1347,7 +1346,6 @@ export const EN: Record<string, string> = {
   "Sin propina fijada": "No tip set",
   "Propina ({0} % de la mesa)": "Tip ({0} % for the table)",
   "El ticket ya trae un cargo por servicio de {0}.": "The receipt already includes a service charge of {0}.",
-  "Son {0} para toda la mesa.": "That's {0} for the whole table.",
   "Monto de la propina de la mesa": "Table tip amount",
   "Fijar": "Set",
   "Escribe un monto, por ejemplo 150 o 150.50.": "Enter an amount, for example 150 or 150.50.",
