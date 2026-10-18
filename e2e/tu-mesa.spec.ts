@@ -274,9 +274,16 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(tc).not.toContainText('toca para modificar');
   });
 
-  test('🔴 T17 · compartir: el código como texto, «Copiar link» e «Invitar amigos» de siempre, sin «Copiar código»', async ({ page }) => {
+  test('🔴 T17 · compartir: «Copiar link» e «Invitar amigos» de siempre en la página, y el código como texto en el engranaje (D360-4b), sin «Copiar código»', async ({ page }) => {
     await tuMesa(page);
-    await expect(page.locator('.mesa-codigo-para-unirse')).toHaveText('Código para unirse: PA-2847');
+    // D360-4b · el código pasó a la hoja del engranaje.
+    await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    await expect(hoja.locator('.mesa-codigo-para-unirse')).toHaveText('Código para unirse: PA-2847');
+    await hoja.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(hoja).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Configuración de la mesa', exact: true })).toBeFocused();
     await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Invitar amigos de PayMe' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Copiar código/ })).toHaveCount(0);

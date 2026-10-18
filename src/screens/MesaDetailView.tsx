@@ -35,7 +35,8 @@ import {
   lineasElegidas,
   seleccionCierraLaMesa,
 } from './antesDeCerrar';
-import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { HojaDeLaMesa } from '../components/HojaDeLaMesa';
 import { leerParteDelDetalle, type MyShare, type ShareTotals, type TipSetting } from '../api/miParte';
 import {
   avisoDeAjustesOmitidos,
@@ -229,6 +230,11 @@ export interface MesaDetailViewProps {
    * `escritura.cliente`): las filas, «Soltar» y «Listo» quedan quietos.
    */
   propinaGuardando?: boolean;
+  /**
+   * D360-4b · el último `PUT /tip` no se pudo guardar (agotado o rechazado). Con
+   * la hoja del engranaje cerrada, la página lo dice y ofrece abrirla.
+   */
+  propinaConFalla?: boolean;
 }
 
 /**
@@ -526,6 +532,7 @@ export function MesaDetailView({
   onBack,
   propinaDeLaMesa = null,
   propinaGuardando = false,
+  propinaConFalla = false,
 }: MesaDetailViewProps) {
   const { t } = useIdioma();
   /** AF-USERNAME-D104 · «Quiénes se sumaron» muestra el @, nunca el `payme_id`. */
@@ -560,6 +567,23 @@ export function MesaDetailView({
   const [quienesAbierto, setQuienesAbierto] = useState(false);
   const [solicitudesAbierto, setSolicitudesAbierto] = useState<boolean | null>(null);
   const solicitudesAbiertoEfectivo = solicitudesAbierto ?? true;
+  /**
+   * D360-4b · la hoja del engranaje de «Tu mesa»: el código para unirse y la
+   * propina de la mesa. Sólo el organizador, y sólo si hay algo que mostrar.
+   */
+  const [hojaDeLaMesa, setHojaDeLaMesa] = useState(false);
+  const engranajeRef = useRef<HTMLButtonElement | null>(null);
+  const codigoParaUnirse = mesa.status === 'open' || mesa.status === 'partially_paid' ? code : null;
+  const hayConfiguracion = esTitular && (codigoParaUnirse !== null || !!propinaDeLaMesa);
+  // Si la hoja se queda sin nada (la mesa dejó de recibir gente y la propina ya
+  // no se puede cambiar), se cierra sola: nunca una hoja vacía.
+  useEffect(() => {
+    if (hojaDeLaMesa && !hayConfiguracion) setHojaDeLaMesa(false);
+  }, [hojaDeLaMesa, hayConfiguracion]);
+  const cerrarHojaDeLaMesa = (): void => {
+    setHojaDeLaMesa(false);
+    requestAnimationFrame(() => engranajeRef.current?.focus());
+  };
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
@@ -1039,7 +1063,27 @@ export function MesaDetailView({
     <div ref={pantallaRef} className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
-        <FilaDeTitulo icono={esTitular ? 'tienda' : 'cubiertos'}>
+        {/* D360-4b · para el organizador, el cuadro de arriba a la izquierda es
+            el engranaje (en lugar de la tienda, excepción a la fila 6 de D285):
+            abre la hoja con el código y la propina. Quien no organiza sigue con
+            los cubiertos. */}
+        <FilaDeTitulo
+          icono={esTitular ? 'tienda' : 'cubiertos'}
+          cuadro={hayConfiguracion ? (
+            <button
+              ref={engranajeRef}
+              type="button"
+              className="title-card-boton"
+              data-guia="configurar-mesa"
+              aria-label={t('Configuración de la mesa')}
+              aria-haspopup="dialog"
+              aria-expanded={hojaDeLaMesa}
+              onClick={() => setHojaDeLaMesa(true)}
+            >
+              <CuadroDeTarjeta icono="engranaje" />
+            </button>
+          ) : undefined}
+        >
           {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
           <h1 className="title-card-title">{esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}</h1>
           <div className="title-card-sub mesa-selection-context">
@@ -1249,9 +1293,7 @@ export function MesaDetailView({
                 amigos», que siguen igual). */}
             {(mesa.status === 'open' || mesa.status === 'partially_paid') && (
               <div className="mesa-secondary-actions">
-                <p className="mesa-codigo-para-unirse">
-                  {t('Código para unirse:')} <strong>{code}</strong>
-                </p>
+                {/* D360-4b · el código para unirse pasó a la hoja del engranaje. */}
                 {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
                     con borde turquesa.
                     D181 · «en la misma fila las burbujas de copiar link e invitar amigos
@@ -1280,8 +1322,21 @@ export function MesaDetailView({
                 {inviteOpen && <InviteFriends code={code} />}
               </div>
             )}
-            {/* D344 · la propina de la mesa: el selector, o lo que quedó si no se puede cambiar. */}
-            {propinaDeLaMesa ?? (propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>)}
+            {/* D344 · la propina de la mesa. D360-4b · el selector pasó a la hoja
+                del engranaje; en la página queda lo que se fijó (como lo ve quien
+                no organiza) y, si hace falta, que se está guardando o que falló. */}
+            {propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>}
+            {propinaGuardando && !hojaDeLaMesa && (
+              <p className="propina-mesa-estado propina-mesa-estado--pagina" role="status">{t('Guardando la propina…')}</p>
+            )}
+            {propinaConFalla && !propinaGuardando && !hojaDeLaMesa && hayConfiguracion && (
+              <div className="propina-mesa-estado propina-mesa-estado--pagina propina-mesa-estado--error" role="alert">
+                <p>{t('No pudimos guardar la propina.')}</p>
+                <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={() => setHojaDeLaMesa(true)}>
+                  {t('Revisar')}
+                </button>
+              </div>
+            )}
             {desgloseDeMiParte}
             {/* D369 · sin subtítulo: ni «Toca para elegir» ni «N elegidos · toca
                 para modificar». La barra de abajo ya dice cuántos platos elegiste,
@@ -1323,6 +1378,9 @@ export function MesaDetailView({
           </>
         )}
       </div>
+      {hojaDeLaMesa && hayConfiguracion && (
+        <HojaDeLaMesa codigo={codigoParaUnirse} propina={propinaDeLaMesa} onCerrar={cerrarHojaDeLaMesa} />
+      )}
       {hojaCierre === 'cerrar' && onCerrarMesa && (
         <HojaAntesDeCerrar
           titulo={t('¿Cerrar la mesa?')}

@@ -6,7 +6,7 @@ import {
   selectorDePropina,
   verComoParticipante,
 } from './fixtures/mi-parte-d344';
-import { abrirTusConsumos } from './_mesa';
+import { abrirConfiguracionDeLaMesa, abrirTusConsumos } from './_mesa';
 
 /**
  * D344 · AF-D344-MI-PARTE-FRONT-20261017 · el organizador fija la propina de la
@@ -80,8 +80,14 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
+    // D360-4b · en la página, lo que quedó fijado; el selector, en el engranaje.
+    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toBeVisible();
+    await expect(selectorDePropina(page)).toHaveCount(0);
+    await abrirConfiguracionDeLaMesa(page);
     // En «Tu mesa» el mismo selector, con lo que quedó guardado.
     await expect(selectorDePropina(page).getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
     expect(await filasDelDesglose(page)).toEqual([
       'Tus platos $210',
       'Descuento y cargos del ticket $8.75',
@@ -149,6 +155,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await verComoParticipante(page, code);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
     await expect(selectorDePropina(page)).toHaveCount(0);
+    // D360-4b · sin engranaje: quien no organiza no configura la mesa.
+    await expect(page.getByRole('button', { name: 'Configuración de la mesa', exact: true })).toHaveCount(0);
     await expect(page.getByText('Propina de la mesa: 15 %', { exact: true })).toBeVisible();
     // Con el organizador primero, el reparto da lo mismo: el centavo suelto sigue en «nadie».
     expect(await filasDelDesglose(page)).toEqual([
@@ -167,16 +175,28 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await abrirTusConsumos(page);
     await page.evaluate(() => { localStorage.setItem('payme.app.mock.propina_mesa.v1', 'error'); });
 
+    await abrirConfiguracionDeLaMesa(page);
     await selectorDePropina(page).getByRole('radio', { name: '5%', exact: true }).click();
     await expect(selectorDePropina(page).getByRole('status')).toHaveText('Guardando la propina…');
+    // D360-4b · con la hoja cerrada, la página dice que se está guardando y los
+    // platos esperan (la hoja abierta deja la pantalla de atrás inerte).
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
+    await expect(page.locator('.propina-mesa-estado--pagina[role="status"]')).toHaveText('Guardando la propina…');
     await expect(page.getByRole('button', { name: /Tagliatelle Bolognese/ })).toBeDisabled();
 
-    // 1 s y 2 s de espera entre los tres intentos.
+    // 1 s y 2 s de espera entre los tres intentos. Con la hoja cerrada, la
+    // página avisa y ofrece abrirla.
+    const aviso = page.locator('.propina-mesa-estado--pagina[role="alert"]');
+    await expect(aviso).toContainText('No pudimos guardar la propina.', { timeout: 15_000 });
+    expect(await pedidosDePropina(page)).toBe(3);
+    await expect(page.locator('.propina-mesa-estado--pagina[role="status"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Tagliatelle Bolognese/ })).toBeEnabled();
+    await aviso.getByRole('button', { name: 'Revisar', exact: true }).click();
     await expect(selectorDePropina(page).getByRole('alert')).toContainText(
       'No pudimos guardar la propina. Puedes elegir tus platos y volver a intentarlo desde la propina de la mesa.',
-      { timeout: 15_000 },
     );
-    expect(await pedidosDePropina(page)).toBe(3);
-    await expect(page.getByRole('button', { name: /Tagliatelle Bolognese/ })).toBeEnabled();
+    // Con la hoja abierta, el aviso de la página no se repite.
+    await expect(aviso).toHaveCount(0);
   });
 });

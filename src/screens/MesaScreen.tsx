@@ -3136,6 +3136,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
       propinaGuardando={propinaGuardando}
+      // D360-4b · con la hoja del engranaje cerrada, la página dice que falló.
+      propinaConFalla={ofrecePropina && (estadoPropina.fase === 'agotada' || estadoPropina.fase === 'rechazada')}
     />
   );
 }

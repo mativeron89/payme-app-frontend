@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
+import { hastaCompartir, pedidosDePropina, selectorDePropina } from './fixtures/mi-parte-d344';
 
 /**
  * D360 · los cambios que pidió Mati después de probar la app (0.253.0). Acá van
@@ -333,5 +334,66 @@ test.describe('D368 · el «Escanear» de la barra abre el menú del teléfono',
     expect(await camara.element().getAttribute('capture')).toBe('environment');
     expect(await camara.element().getAttribute('accept')).toBe('image/*');
     expect(await camara.element().getAttribute('data-camara')).toBe('nativa');
+  });
+});
+
+// ─── D360-4b · el engranaje de «Tu mesa» ────────────────────────────────────
+
+test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina', () => {
+  test('🔴 el organizador ve el engranaje arriba a la izquierda; abre la hoja con el código y la propina, y se cierra con Escape o la ✕', async ({ page }) => {
+    const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
+    await selectorDePropina(page).getByRole('radio', { name: '10%', exact: true }).click();
+    await expect.poll(() => pedidosDePropina(page)).toBe(1);
+    await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+
+    const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    // El engranaje es el cuadro de la tarjeta de título, a la izquierda del título.
+    await expect(page.locator('.title-card').getByRole('button', { name: 'Configuración de la mesa', exact: true })).toBeVisible();
+    await expect(engranaje).toHaveAttribute('aria-haspopup', 'dialog');
+    await expect(engranaje).toHaveAttribute('aria-expanded', 'false');
+    const [caja, titulo] = await Promise.all([
+      engranaje.boundingBox(),
+      page.getByRole('heading', { name: 'Tu mesa', exact: true }).boundingBox(),
+    ]);
+    expect(caja!.x + caja!.width, 'el engranaje va a la izquierda del título').toBeLessThanOrEqual(titulo!.x);
+    expect(Math.min(caja!.width, caja!.height), 'se toca con 44 px').toBeGreaterThanOrEqual(44);
+    // En la página: el código ya no está; «Copiar link», «Invitar amigos» y lo
+    // que se fijó de propina, sí. El selector no.
+    await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Copiar link/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Invitar amigos/ })).toBeVisible();
+    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toBeVisible();
+    await expect(selectorDePropina(page)).toHaveCount(0);
+    await expect(hoja).toHaveCount(0);
+    await capturar(page, 'd360-09-tu-mesa-engranaje');
+
+    // Abre la hoja: el código, como texto, y el mismo selector con lo guardado.
+    await engranaje.click();
+    await expect(hoja).toBeVisible();
+    await expect(engranaje).toHaveAttribute('aria-expanded', 'true');
+    await expect(hoja.locator('.mesa-codigo-para-unirse')).toHaveText(`Código para unirse: ${code}`);
+    await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })
+      .getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(hoja.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
+    await capturar(page, 'd360-10-hoja-de-la-mesa');
+
+    // Cambiarla desde la hoja la guarda; Escape cierra y el foco vuelve al engranaje.
+    await hoja.getByRole('radio', { name: '15%', exact: true }).click();
+    await expect.poll(() => pedidosDePropina(page)).toBe(2);
+    await expect(hoja.getByRole('status')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(hoja).toHaveCount(0);
+    await expect(engranaje).toBeFocused();
+    await expect(engranaje).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByText('Propina de la mesa: 15 %', { exact: true })).toBeVisible();
+
+    // La ✕ también la cierra, con el foco de vuelta en el engranaje.
+    await engranaje.click();
+    await hoja.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(hoja).toHaveCount(0);
+    await expect(engranaje).toBeFocused();
   });
 });

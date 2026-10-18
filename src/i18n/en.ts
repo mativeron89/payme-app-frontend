@@ -1246,6 +1246,8 @@ export const EN: Record<string, string> = {
   "1 pendiente": "1 pending",
   "No pudimos cargar las solicitudes.": "We couldn't load the requests.",
   "Código para unirse:": "Code to join:",
+  // D360-4b · el engranaje de «Tu mesa». Inglés de AF, a aprobar por Diseño.
+  "Configuración de la mesa": "Table settings",
   "Tus consumos": "Your items",
   "Ya no se puede sumar gente a esta mesa.": "No one else can join this table anymore.",
   "Esta solicitud ya no está disponible.": "This request is no longer available.",

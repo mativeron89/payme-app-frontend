@@ -44,6 +44,16 @@ export async function abrirQuienes(page: Page): Promise<void> {
   await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
 }
 
+/**
+ * D360-4b · en «Tu mesa» el código y el selector de la propina de la mesa viven
+ * en la hoja del engranaje: la abre (si ya está abierta, no hace nada).
+ */
+export async function abrirConfiguracionDeLaMesa(page: Page): Promise<void> {
+  const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+  if ((await hoja.count()) === 0) await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+  await expect(hoja).toBeVisible();
+}
+
 /** Espera «Tu mesa» y deja la lista de platos abierta. */
 export async function enTuMesaConLaLista(page: Page): Promise<void> {
   await expect(tituloTuMesa(page)).toBeVisible();

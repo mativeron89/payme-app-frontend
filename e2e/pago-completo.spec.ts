@@ -108,7 +108,11 @@ test.describe('el camino de pago completo', () => {
     // D344 · el selector de propina DEL PAGO sigue sin existir. El que hay es
     // otro: la propina de la mesa del organizador, que no cobra nada.
     await expect(page.getByRole('radiogroup', { name: /^(Elige tu propina|Propina)$/ })).toHaveCount(0);
+    // D360-4b · la de la mesa vive en la hoja del engranaje: se abre para verla.
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
     await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
 
     /**
      * 🔴 **D-R8 cambió a dónde lleva el círculo, y el motivo viejo caducó.**

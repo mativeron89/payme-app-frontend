@@ -10734,6 +10734,41 @@ h1.pay-title-lbl {
 .propina-mesa-quitar {
   margin-top: 8px;
 }
+
+/* D360-4b · fuera de la hoja del engranaje, en la página de «Tu mesa»: que la
+   propina se está guardando o que falló (con «Revisar», que abre la hoja). */
+.propina-mesa-estado--pagina {
+  margin: 0 0 var(--sp-3);
+}
+
+/* D360-4b · el engranaje de «Tu mesa»: el mismo cuadro de 48 de la tarjeta de
+   título (D285), hecho botón. Sin relleno ni borde propios: lo que se ve es el
+   cuadro; el toque es de 48 × 48. */
+.title-card-boton {
+  flex: none;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.title-card-boton:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La hoja del engranaje: el código arriba, después el selector de la propina. */
+.hoja-de-la-mesa .mesa-codigo-para-unirse {
+  margin: 0 0 var(--sp-3);
+}
+
+.hoja-de-la-mesa .propina-mesa {
+  margin: 0;
+  box-shadow: none;
+}
 .propina-mesa-confirmar {
   margin-top: 10px;
   padding: 10px 12px;
