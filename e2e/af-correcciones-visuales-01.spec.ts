@@ -133,29 +133,36 @@ test('Escaneo (cámara): la cabecera, la foto y los controles no se pisan', asyn
 });
 
 /**
- * D285 + D289 (0.242.0): la tarjeta del ticket va tal cual la especificación —la fila del título de 48, y debajo, a la
- * izquierda, el total y «Ver el ticket», con 12 px entre las partes—. Ya no se pide menos de 150 px (mide unos 179):
- * se mide que no tenga más que eso.
+ * D285 + D289 (0.242.0): la tarjeta del ticket iba tal cual la especificación —la fila del título de 48 y debajo el
+ * total y «Ver el ticket»—. D366 (canvas 2c del paquete de Claude Design): se parte en dos. La de título lleva sólo la
+ * fila (83 de alto mínimo); a 10, otra tarjeta lleva el total a la izquierda y «Ver el ticket» a la derecha, en una
+ * sola fila.
  */
-test('División muestra un acceso al ticket compacto, a la izquierda y sin subtítulo', async ({ page }) => {
+test('División muestra el acceso al ticket compacto, sin subtítulo, al lado del total en su propia tarjeta (D366)', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
 
   const card = page.locator('.ticket-title-card');
+  const totalCard = page.locator('.ticket-total-card');
   const trigger = page.getByRole('button', { name: 'Ver el ticket', exact: true });
   await expect(trigger.locator('.tk-fold-sub')).toHaveCount(0);
-  const [cardBox, triggerBox, filaBox, totalBox] = await Promise.all([
-    card.boundingBox(), trigger.boundingBox(), card.locator('.title-card-fila').boundingBox(),
-    card.locator('.ticket-title-amount').boundingBox(),
+  const [cardBox, filaBox, totalCardBox, triggerBox, totalBox] = await Promise.all([
+    card.boundingBox(), card.locator('.title-card-fila').boundingBox(),
+    totalCard.boundingBox(), trigger.boundingBox(), totalCard.locator('.ticket-title-amount').boundingBox(),
   ]);
   await expect(card).not.toContainText('La Parolaccia');
-  // El borde (1 + 1), el padding (16 + 16), la fila, el total y el botón, con 12 px entre cada uno: nada más.
-  expect(cardBox!.height).toBeCloseTo(2 + 32 + filaBox!.height + 12 + totalBox!.height + 12 + triggerBox!.height, 0);
+  await expect(card.locator('.ticket-title-amount, .ticket-title-fold')).toHaveCount(0);
+  // La de título: el borde (1 + 1), el padding (16 + 16) y la fila de 48 = 82, con el mínimo de 83.
   expect(filaBox!.height).toBe(48);
+  expect(cardBox!.height).toBeCloseTo(83, 0);
+  // La del total, a 10: el total y el botón en la misma fila (el botón, a la derecha del total).
+  expect(totalCardBox!.y - (cardBox!.y + cardBox!.height)).toBeCloseTo(10, 0);
+  expect(triggerBox!.x).toBeGreaterThan(totalBox!.x + totalBox!.width);
+  expect(Math.abs((triggerBox!.y + triggerBox!.height / 2) - (totalBox!.y + totalBox!.height / 2))).toBeLessThanOrEqual(2);
   expect(triggerBox?.width).toBeLessThan(180);
-  // A la izquierda: donde empieza el contenido (borde 1 + padding 18).
-  expect(triggerBox!.x - cardBox!.x).toBeCloseTo(19, 0);
+  // A la derecha: donde termina el contenido (padding 16 + borde 1).
+  expect((totalCardBox!.x + totalCardBox!.width) - (triggerBox!.x + triggerBox!.width)).toBeCloseTo(17, 0);
 });
 
 test('Configuración retira el cartel demo y conserva reinicio como fila compacta', async ({ page }) => {

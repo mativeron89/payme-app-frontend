@@ -185,6 +185,25 @@ const ESPERADO: Record<string, Esperado> = {
 
 const tarjeta = (page: Page) => page.locator('.title-card').first();
 
+/**
+ * D366 · en «¿Cómo dividen?» el total y «Ver el ticket» van en su propia tarjeta,
+ * debajo de la de título: una pieza de esa tarjeta, contra su borde.
+ */
+async function piezaDelTotal(page: Page, selector: string) {
+  return page.locator('.ticket-total-card').evaluate((el, sel) => {
+    const n = el.querySelector<HTMLElement>(sel);
+    if (!n) return null;
+    const r = n.getBoundingClientRect();
+    const t = el.getBoundingClientRect();
+    const titulo = document.querySelector('.ticket-title-card')!.getBoundingClientRect();
+    const cs = getComputedStyle(n);
+    return {
+      izquierda: r.left - t.left, derecha: t.right - r.right, alto: r.height,
+      debajoDelTitulo: t.top - titulo.bottom, tamano: cs.fontSize, peso: cs.fontWeight,
+    };
+  }, selector);
+}
+
 // ─── Mesa ───────────────────────────────────────────────────────────────
 
 test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ page }) => {
@@ -193,11 +212,16 @@ test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ 
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   await medir(page, '01', tarjeta(page), ESPERADO['01']!);
-  // El contenido extra, debajo de la fila y a la izquierda: el total (32/800) y «Ver el ticket».
-  const total = (await pieza(tarjeta(page), '.ticket-title-amount'))!;
-  expect([total.izquierda, total.tamano, total.peso, total.abajoDelCuadro]).toEqual([0, '32px', '800', true]);
-  const ver = (await pieza(tarjeta(page), '.ticket-title-fold'))!;
-  expect([ver.izquierda, ver.abajoDelCuadro]).toEqual([0, true]);
+  // D366 · la tarjeta de título lleva sólo el título; el total (32/800) y «Ver el
+  // ticket» van en otra tarjeta, a 10 de la de título: el total a la izquierda
+  // (borde 1 + padding 20) y «Ver el ticket» a la derecha (padding 16 + borde 1),
+  // de 48 de alto, como el canvas 2c.
+  expect(await pieza(tarjeta(page), '.ticket-title-amount')).toBeNull();
+  const total = (await piezaDelTotal(page, '.ticket-title-amount'))!;
+  expect([Math.round(total.izquierda), total.tamano, total.peso]).toEqual([21, '32px', '800']);
+  expect(Math.round(total.debajoDelTitulo)).toBe(10);
+  const ver = (await piezaDelTotal(page, '.ticket-title-fold .tk-fold-head'))!;
+  expect([Math.round(ver.derecha), Math.round(ver.alto)]).toEqual([17, 48]);
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await masUno.click();
@@ -475,10 +499,11 @@ test('mesa · ¿Cómo dividen? con la nota del IVA agregado', async ({ page }) =
   await sacarFoto(page);
   await expect(page.locator('.ticket-title-iva')).toBeVisible();
   await medir(page, '02', tarjeta(page), ESPERADO['02']!);
-  // La nota del IVA: el ícono ⓘ de 15 y DM Sans 13.5, a la izquierda, entre el total y «Ver el ticket».
-  const nota = (await pieza(tarjeta(page), '.ticket-title-iva'))!;
-  expect([nota.izquierda, nota.tamano, nota.abajoDelCuadro]).toEqual([0, '13.5px', true]);
-  expect(await tarjeta(page).locator('.ticket-title-iva svg').getAttribute('width')).toBe('15');
+  // La nota del IVA: el ícono ⓘ de 15 y DM Sans 13.5. D366 · va en la tarjeta del
+  // total, debajo del total y de «Ver el ticket», alineada con el total.
+  const nota = (await piezaDelTotal(page, '.ticket-title-iva'))!;
+  expect([Math.round(nota.izquierda), nota.tamano]).toEqual([21, '13.5px']);
+  expect(await page.locator('.ticket-total-card .ticket-title-iva svg').getAttribute('width')).toBe('15');
 });
 
 // ─── 0.241.0 · la fila 41: «Corregir ticket» y «Corregir gasto» ─────────────

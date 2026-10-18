@@ -10,7 +10,7 @@ import {
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
@@ -87,10 +87,12 @@ import { nombreDeViajeRecordado } from './viajes/circuloDelViaje';
 import { useCapacidadViajes } from '../api/viajes';
 import { formatMXN } from '../utils/format';
 import { reservaDelMonto } from './reservaDelMonto';
-import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
+import { centsToString, splitEqual, sumCents } from '../utils/money';
+import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { AyudaDeOpcion } from '../components/AyudaDeOpcion';
 import { leerParteDelDetalle, type ParteDelDetalle, type TipSetting } from '../api/miParte';
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
@@ -168,19 +170,17 @@ export function rechazoLocalDeImagen(
   return null;
 }
 
+/**
+ * D360 · P04 · D371 · el precio de la línea: vacío es incompleto y «0» es un
+ * plato válido de $0 (`lineaDelTicket.ts`). Sólo se llama al armar el alta, con
+ * el ticket ya válido (todas las líneas completas), así que el `?? 0` no se usa.
+ */
 function priceCentsOf(it: EditItem): number {
-  try {
-    return stringToCents(it.priceStr || '0');
-  } catch {
-    return 0;
-  }
+  return precioDeLinea(it.priceStr) ?? 0;
 }
 
 function lineTotalCents(it: EditItem): number | null {
-  const price = priceCentsOf(it);
-  if (price <= 0 || !Number.isSafeInteger(it.quantity) || it.quantity < 1) return null;
-  const total = BigInt(price) * BigInt(it.quantity);
-  return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : null;
+  return totalDeLinea(it.priceStr, it.quantity);
 }
 
 /**
@@ -300,6 +300,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   // TRES formas en la UI (§1.3-bis) y DOS en el contrato: la traducción vive
   // entera en `divisionModo.ts`, nunca acá.
   const [division, setDivision] = useState<ModoUI>('consumo');
+  /** D366 · el «?» abierto de «¿Cómo dividen?», uno a la vez (o ninguno). */
+  const [ayudaAbierta, setAyudaAbierta] = useState<ModoUI | null>(null);
+  const idDeLasAyudas = useId();
   // El ticket nace PLEGADO. `totalMismatch` lo fuerza a abrirse, así que este
   // booleano es la intención de la persona, no el estado visible.
   const [ticketAbierto, setTicketAbierto] = useState(false);
@@ -705,6 +708,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   // D5: el total SIEMPRE sale de lo que el usuario ve/editó — guardarraíl:
   // si el total está mal, la división está mal.
   const lineTotals = editItems.map(lineTotalCents);
+  const ticketCompleto = lineTotals.every((line) => line !== null);
   let total = 0;
   try {
     total = lineTotals.some((line) => line === null)
@@ -2197,13 +2201,50 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             ser la barra «Ver el ticket». §5 bis · F lo exige — *un dato, un
             lugar*: ningún monto se repite en dos bloques de la misma pantalla.
 
-            AF-DISENO-02 reúne ubicación, total y acceso al detalle en la pieza
-            única que fijan la maqueta y su HTML medido. */}
+            AF-DISENO-02 reunía ubicación, total y acceso al detalle en una sola
+            pieza; D366 la parte en dos (abajo). */}
+        {/* D366 · la tarjeta se parte, como el canvas 2c del paquete de Claude
+            Design: el título solo, y el total con «Ver el ticket» en otra
+            tarjeta debajo. Las dos quedan fijas, fuera del scroll: el total se
+            sigue viendo sin bajar (§1.3-bis). */}
         <div className="title-card ticket-title-card">
           <FilaDeTitulo icono="dividir">
             <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
           </FilaDeTitulo>
-          <div className="ticket-title-amount">{formatMXN(total)}</div>
+        </div>
+        <div className="card ticket-total-card">
+          <div className="ticket-total-fila">
+            {/* D360 · P04 · con alguna línea incompleta (un precio vacío) no hay
+                total todavía: se dice «—», nunca «$0», un total que nadie midió.
+                `total` sigue en 0 para la validación (D5). */}
+            <div className="ticket-title-amount">{ticketCompleto ? formatMXN(total) : '—'}</div>
+            <div
+              className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
+              onAnimationEnd={() => setTicketPulse(false)}
+            >
+              <button
+                ref={ticketTriggerRef}
+                data-guia="revisar-ticket"
+                className="tk-fold-head"
+                onClick={() => setTicketAbierto((o) => !o)}
+                aria-expanded={ticketVisible}
+                disabled={!!totalMismatch}
+              >
+                <span className="tk-fold-ico-box" aria-hidden="true">
+                  <Icon name="receipt" size={20} className="tk-fold-ico" />
+                </span>
+                <span className="tk-fold-txt">
+                  <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
+                </span>
+                <Icon
+                  name="chevron-down"
+                  size={18}
+                  className={`tk-fold-chev ${ticketVisible ? 'open' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          </div>
           {/* D215 · D218 · «Dejarlo para los pagos»: con IVA agregado o con un
               descuento, lo que se divide es la suma de los platos. Se dice, sin
               ámbar y sin frenar nada. Una sola nota aunque sean las dos cosas.
@@ -2217,32 +2258,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               <span>{notaDelAlta(desglose.aparte)}</span>
             </p>
           )}
-          <div
-            className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
-            onAnimationEnd={() => setTicketPulse(false)}
-          >
-            <button
-              ref={ticketTriggerRef}
-              data-guia="revisar-ticket"
-              className="tk-fold-head"
-              onClick={() => setTicketAbierto((o) => !o)}
-              aria-expanded={ticketVisible}
-              disabled={!!totalMismatch}
-            >
-              <span className="tk-fold-ico-box" aria-hidden="true">
-                <Icon name="receipt" size={20} className="tk-fold-ico" />
-              </span>
-              <span className="tk-fold-txt">
-                <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
-              </span>
-              <Icon
-                name="chevron-down"
-                size={18}
-                className={`tk-fold-chev ${ticketVisible ? 'open' : ''}`}
-                aria-hidden="true"
-              />
-            </button>
-          </div>
         </div>
         <div className="scroll flow-scroll ticket-flow-scroll">
           {ticketContinuing && (
@@ -2290,34 +2305,51 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               decir cuál estaba elegido ni que fueran alternativas de una misma
               pregunta. `radiogroup` + `aria-checked` lo dicen. */}
           <div data-guia="reparto" className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
+          {/* D366 · cada forma lleva un «?» que la explica, para todos. Es un
+              botón HERMANO del radio (nunca adentro); uno abierto a la vez.
+              Textos del paquete de Claude Design, salvo «Pagar el total»: ahí
+              elegir es opcional, así que dice que todos PUEDEN marcar lo que
+              comieron (texto de AF; Mati lo aprueba en la prueba). */}
           {([
-            { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },
-            { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos' },
+            { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos', ayuda: t('Cada uno selecciona sus ítems y paga por lo que consumió.') },
+            { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos', ayuda: t('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.') },
             // La referencia dibuja una billetera, pero el MVP prohíbe cualquier
             // affordance wallet: acá mandan P1.5 y el riel card-only ratificado.
-            { modo: 'total', ico: <Icon name="card" size={22} className="div-total-icon" />, title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta' },
-          ] as const).map((op) => (
-            <button
-              key={op.modo}
-              className={`div-card ${division === op.modo ? 'sel' : ''}`}
-              role="radio"
-              aria-checked={division === op.modo}
-              onClick={() => {
-                setDivision(op.modo);
-                // Un N que deja de ser válido se vuelve a preguntar, NO se
-                // corrige solo: un número que la app ajusta sin avisar es un
-                // número que nadie eligió.
-                setParticipants((n) => participantesTrasCambio(n, op.modo));
-              }}
-            >
-              <div className="div-radio" />
-              <div className="div-ico">{op.ico}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="div-title">{t(op.title)}</div>
-                <div className="div-sub">{t(op.sub)}</div>
-              </div>
-            </button>
-          ))}
+            { modo: 'total', ico: <Icon name="card" size={22} className="div-total-icon" />, title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta', ayuda: t('Sólo algunas personas van a pagar la cuenta, pero todos pueden marcar lo que comieron.') },
+          ] as const).map((op) => {
+            const titulo = t(op.title);
+            return (
+            <div key={op.modo} className="div-opcion">
+              <button
+                className={`div-card ${division === op.modo ? 'sel' : ''}`}
+                role="radio"
+                aria-checked={division === op.modo}
+                onClick={() => {
+                  setDivision(op.modo);
+                  // Un N que deja de ser válido se vuelve a preguntar, NO se
+                  // corrige solo: un número que la app ajusta sin avisar es un
+                  // número que nadie eligió.
+                  setParticipants((n) => participantesTrasCambio(n, op.modo));
+                }}
+              >
+                <div className="div-radio" />
+                <div className="div-ico">{op.ico}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="div-title">{titulo}</div>
+                  <div className="div-sub">{t(op.sub)}</div>
+                </div>
+              </button>
+              <AyudaDeOpcion
+                id={`${idDeLasAyudas}-${op.modo}`}
+                opcion={titulo}
+                texto={op.ayuda}
+                abierta={ayudaAbierta === op.modo}
+                onAbrir={() => setAyudaAbierta(op.modo)}
+                onCerrar={() => setAyudaAbierta(null)}
+              />
+            </div>
+            );
+          })}
           </div>
           {/* §1.4 sin cambios: nace SIN ELEGIR, Continuar nunca se apaga,
               toast + scroll + pulso si tocan sin elegir. */}
@@ -2358,41 +2390,42 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   +
                 </button>
               </div>
-              <div className="division-stepper-monto">
-                {/* Con ceros y no con el total: el total ya está arriba (§5 bis ·
-                    F, «un dato, un lugar») y una copia, aunque invisible, lo
-                    repetiría en el documento. Con números tabulares todos los
-                    dígitos miden lo mismo, así que el ancho es idéntico. */}
-                {/* D181 · el más ancho de los repartos posibles, no el total: un total
-                    entero se ve «$840» y un reparto puede llevar centavos («$93.34»).
-                    Ver `reservaDelMonto.ts`. */}
-                <div className="reserva-monto" aria-hidden="true">{reservaDelMonto(total, reparteElTotal(division))}</div>
-                {participants !== null && (
-                  <>
-                    <div className="split-amt" aria-live="polite">
-                      {reparteElTotal(division)
-                        ? formatMXN(perSlot)
-                        : formatMXN(Math.round(total / participants))}
-                    </div>
-                    <div className="split-amt-lbl">
-                      {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
-                    </div>
-                  </>
-                )}
-                {/* Sin número todavía, el lugar del monto no queda vacío: un
-                    marcador apagado («$—» y su rótulo) en la misma caja, así el
-                    grupo se lee centrado desde el primer momento y el monto real
-                    aparece en el mismo lugar. Es decorativo: la pregunta ya la
-                    dice el grupo del selector. */}
-                {participants === null && (
-                  <>
-                    <div className="marcador-monto" aria-hidden="true">$—</div>
-                    <div className="marcador-rotulo" aria-hidden="true">
-                      {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* D366 · en «Por lo que pidió cada uno» sale el monto con su
+                  rótulo «base de propina · c/u» (y el marcador «$—»): el grupo
+                  − N + queda solo y centrado. En «En partes iguales» y «Pagar
+                  el total» sigue «$X c/u», como antes (respuesta de V a D366).
+                  D360 · P04 · con el ticket incompleto el monto es «$—», nunca
+                  un «$0» calculado sobre un total que no hay. */}
+              {reparteElTotal(division) && (
+                <div className="division-stepper-monto">
+                  {/* Con ceros y no con el total: el total ya está arriba (§5 bis ·
+                      F, «un dato, un lugar») y una copia, aunque invisible, lo
+                      repetiría en el documento. Con números tabulares todos los
+                      dígitos miden lo mismo, así que el ancho es idéntico. */}
+                  {/* D181 · el más ancho de los repartos posibles, no el total: un total
+                      entero se ve «$840» y un reparto puede llevar centavos («$93.34»).
+                      Ver `reservaDelMonto.ts`. */}
+                  <div className="reserva-monto" aria-hidden="true">{reservaDelMonto(total, true)}</div>
+                  {participants !== null && (
+                    ticketCompleto && (
+                      <>
+                        <div className="split-amt" aria-live="polite">{formatMXN(perSlot)}</div>
+                        <div className="split-amt-lbl">{t('c/u')}</div>
+                      </>
+                    )
+                  )}
+                  {/* Sin número todavía (o sin total), el lugar del monto no
+                      queda vacío: un marcador apagado («$—» y su rótulo) en la
+                      misma caja, así el monto real aparece en el mismo lugar. Es
+                      decorativo: la pregunta ya la dice el grupo del selector. */}
+                  {(participants === null || !ticketCompleto) && (
+                    <>
+                      <div className="marcador-monto" aria-hidden="true">$—</div>
+                      <div className="marcador-rotulo" aria-hidden="true">{t('c/u')}</div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

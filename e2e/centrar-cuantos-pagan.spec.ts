@@ -25,6 +25,11 @@ import { sacarFoto } from './_camara';
  * grupo: el selector y la caja reservada para el monto más ancho posible
  * (`reservaDelMonto`). Un monto más corto que la reserva deja el grupo visible
  * corrido a la izquierda, a lo sumo la mitad de lo que le falta: se mide eso.
+ *
+ * D366 · en «Por lo que pidió cada uno» sale el monto con su rótulo «base de
+ * propina · c/u» (y el marcador «$—»): ahí el grupo es sólo `– N +` y queda
+ * centrado solo. En «En partes iguales» y «Pagar el total» sigue «$X c/u», y
+ * su centrado fino es P03 (espera las imágenes de Mati).
  */
 
 const FORMAS = [
@@ -78,15 +83,18 @@ async function medir(page: Page) {
     const boton = document.querySelector('.division-stepper .stepper button[aria-label="Un comensal más"]')!.getBoundingClientRect();
     const derecha = Math.max(stepper.right, monto?.right ?? 0, rotulo?.right ?? 0);
     const izquierdaMonto = monto ? Math.min(monto.left, rotulo?.left ?? Infinity) : null;
-    // El lugar del grupo: el selector y la caja del monto (que reserva el más ancho).
-    const caja = document.querySelector('.division-stepper-monto')!.getBoundingClientRect();
+    // El lugar del grupo: el selector y la caja del monto (que reserva el más
+    // ancho). D366 · sin monto («Por lo que pidió cada uno»), el selector solo.
+    const cajaEl = document.querySelector('.division-stepper-monto');
+    const cajaDerecha = cajaEl ? cajaEl.getBoundingClientRect().right : stepper.right;
     return {
       centro: card.left + card.width / 2,
       tituloCentro: (titulo.left + titulo.right) / 2,
-      grupoCentro: (stepper.left + caja.right) / 2,
+      grupoCentro: (stepper.left + cajaDerecha) / 2,
+      hayMonto: cajaEl !== null,
       // Lo que el grupo visible se corre: la mitad de lo que el monto no llena de la caja.
-      corrimientoVisible: (stepper.left + derecha) / 2 - (stepper.left + caja.right) / 2,
-      faltante: caja.right - derecha,
+      corrimientoVisible: (stepper.left + derecha) / 2 - (stepper.left + cajaDerecha) / 2,
+      faltante: cajaDerecha - derecha,
       hueco: izquierdaMonto === null ? null : izquierdaMonto - stepper.right,
       mas: boton.left,
     };
@@ -100,6 +108,23 @@ for (const [ancho, alto] of [[390, 664], [375, 667]] as const) {
         await page.setViewportSize({ width: ancho, height: alto });
         await hastaComoDividen(page);
         await page.getByRole('radio', { name: forma.radio }).click();
+
+        if (forma.nombre === 'Por lo que pidió cada uno') {
+          // D366 · sin monto ni marcador: el grupo es `– N +`, centrado con y sin número.
+          await expect(page.getByRole('radio', { name: forma.radio })).toHaveAttribute('aria-checked', 'true');
+          await expect(page.locator('.division-stepper .marcador-monto, .division-stepper .split-amt, .division-stepper-monto')).toHaveCount(0);
+          await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
+          for (const n of [null, 4] as const) {
+            if (n !== null) await ponerN(page, n);
+            const sinMonto = await medir(page);
+            const ds = JSON.stringify(sinMonto);
+            expect(sinMonto.hayMonto, ds).toBe(false);
+            expect(Math.abs(sinMonto.tituloCentro - sinMonto.centro), `título · ${ds}`).toBeLessThanOrEqual(2);
+            expect(Math.abs(sinMonto.grupoCentro - sinMonto.centro), `grupo · ${ds}`).toBeLessThanOrEqual(2);
+          }
+          await capturar(page, `cuantos-son-${ancho}x${alto}-por-consumo`);
+          return;
+        }
 
         // Sin número: el marcador apagado ocupa el lugar del monto y el grupo
         // ya se lee centrado.
@@ -128,18 +153,15 @@ for (const [ancho, alto] of [[390, 664], [375, 667]] as const) {
         expect(m.faltante, `el monto entra en la reserva · ${d}`).toBeGreaterThanOrEqual(-1);
         expect(m.hueco, `el monto va junto al selector · ${d}`).not.toBeNull();
         // Junto al selector: con «c/u» el monto define el ancho y el hueco es el
-        // del grupo (12). Por consumo lo define «base de propina · c/u», que a
-        // 375 se parte en dos líneas alineadas a la derecha y deja más aire: ahí
-        // se pide sólo el centrado.
-        if (forma.nombre !== 'Por lo que pidió cada uno') {
-          expect(m.hueco!, `el monto va junto al selector · ${d}`).toBeLessThanOrEqual(16);
-        }
+        // del grupo (12).
+        expect(m.hueco!, `el monto va junto al selector · ${d}`).toBeLessThanOrEqual(16);
         if (forma.nombre === 'Pagar el total') await capturar(page, `cuantos-pagan-${ancho}x${alto}-con-numero`);
       });
     }
 
     // «Pagar el total» (con «c/u», el monto define el ancho) y «Por lo que pidió
-    // cada uno» (lo define «base de propina · c/u»). Las dos arrancan en 1.
+    // cada uno» (desde D366 sin monto: el «+» queda fijo igual). Las dos
+    // arrancan en 1.
     for (const forma of [FORMAS[0], FORMAS[2]]) {
       test(`«${forma.nombre}»: el «+» no se mueve al cambiar N (1, 9 y 12), tampoco al primer toque`, async ({ page }) => {
         await page.setViewportSize({ width: ancho, height: alto });

@@ -81,14 +81,17 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('Elige cuántos son')).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
-    // Elegir 3: piso 1 + dos toques. La vista en vivo es la MISMA cuenta que
-    // §1.5 bis va a mostrar: 840 ÷ 3 = $280.
+    // Elegir 3: piso 1 + dos toques. D366 · en «Por lo que pidió cada uno» ya
+    // no se muestra la base de propina por persona (840 ÷ 3 = $280): el grupo
+    // − N + queda solo. Primero el testigo (el 3 elegido), después la ausencia.
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     await mas.click();
     await mas.click();
     await mas.click();
-    await expect(page.getByText('$280')).toBeVisible();
-    await expect(page.getByText('base de propina · c/u')).toBeVisible();
+    await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('3');
+    await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
+    await expect(page.locator('.division-stepper .split-amt, .division-stepper .marcador-monto')).toHaveCount(0);
+    await expect(page.locator('.division-stepper')).not.toContainText('$280');
 
     await continuar.click();
     await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();

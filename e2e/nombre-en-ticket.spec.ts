@@ -87,7 +87,7 @@ async function medirAlBajar(page: Page) {
  * Mati (347×592, proporción 0,586) da unos 390×664 en Safari de un iPhone de
  * 6,1" con sus barras. Se mide ahí y en el iPhone SE (375×667), en los tres
  * estados: sin número, con número en «En partes iguales» («c/u») y con número
- * en «Por lo que pidió cada uno» («base de propina · c/u», el rótulo más largo).
+ * en «Por lo que pidió cada uno» (desde D366, sin monto al lado del selector).
  * 390×844 y 430×932 quedan como control.
  *
  * 🔴 D289 (Mati, 2026-10-11, «El diseño tal cual»): con la tarjeta blanca de D285 la tarjeta del ticket mide unos
@@ -126,7 +126,10 @@ test.describe('AF-NOMBRE-EN-TICKET · «¿Cómo dividen?» en una sola vista (y 
       await capturar(page, `como-dividen-${ancho}x${alto}-con-numero`);
 
       await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
-      await expect(page.locator('.split-amt-lbl')).toHaveText('base de propina · c/u');
+      // D366 · en «Por lo que pidió cada uno» ya no hay monto ni «base de propina».
+      await expect(page.getByRole('radio', { name: /Por lo que pidió cada uno/ })).toHaveAttribute('aria-checked', 'true');
+      await expect(page.locator('.division-stepper .split-amt, .division-stepper .marcador-monto')).toHaveCount(0);
+      await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
       const consumo = await acreditar('consumo con número');
       console.log(`VISTA ${ancho}x${alto}`, JSON.stringify({ sinNumero, igual, consumo }));
     });
