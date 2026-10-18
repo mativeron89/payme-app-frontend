@@ -49,6 +49,7 @@ import {
   type RenglonDeMesas,
 } from './mesasEnLinea';
 import { nombreDePlato } from '../utils/nombreDePlato';
+import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -147,6 +148,14 @@ export function MesasScreen() {
   const unread = useSinLeer();
   const [abierta, setAbierta] = useState<string | null>(null);
   const [mesaPropiaAbierta, setMesaPropiaAbierta] = useState<string | null>(null);
+  /**
+   * D360 · P09 · «Ver ticket completo» de una mesa de «Tus mesas»: el ticket
+   * entero, con `GET /mesas/:code` (lectura, sin back nuevo), en el mismo visor
+   * de Tus restaurantes. El foco vuelve al botón que lo abrió.
+   */
+  const [ticketCode, setTicketCode] = useState<string | null>(null);
+  const ticketTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const cerrarTicket = useCallback(() => setTicketCode(null), []);
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
   /**
    * AF-24 · «Tus mesas», de `GET /api/mesas/mine`. Con los pagos apagados, el
@@ -515,8 +524,13 @@ export function MesasScreen() {
 
   const filaDeMesa = (m: TuMesa) => {
     const eleccion = textoEleccion(m, t);
-    const conDetalle = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0;
-    const detalleAbierto = conDetalle && mesaPropiaAbierta === m.code;
+    // D360 · P09 · «en Mesas no permite ver el detalle de los consumos» de una
+    // mesa que no es de viaje (Mati). Antes sólo se desplegaba la que tenía
+    // platos propios; ahora toda mesa terminada se despliega, también las de
+    // «En partes iguales» y las que no tienen nada elegido, con lo elegido (si
+    // hay) y «Ver ticket completo».
+    const lineas = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0 ? m.items : null;
+    const detalleAbierto = mesaPropiaAbierta === m.code;
     const fila = (
       <>
         <span aria-hidden="true">
@@ -530,11 +544,9 @@ export function MesasScreen() {
           </div>
           {eleccion && <div className="hist-meta">{eleccion}</div>}
         </div>
-        {conDetalle && (
-          <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
-            <Icon name="chevron-down" size={20} />
-          </span>
-        )}
+        <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
+          <Icon name="chevron-down" size={20} />
+        </span>
       </>
     );
     const claveGesto = tarjetaDeTusMesas(m.code);
@@ -548,36 +560,48 @@ export function MesasScreen() {
           nombre={m.restaurante ?? t('Mesa {0}', m.code)}
           onEliminar={() => setPreguntaMesa(m)}
         >
-        {conDetalle ? (
-          <button
-            type="button"
-            className="hist-row"
-            aria-expanded={detalleAbierto}
-            onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
-          >
-            {fila}
-          </button>
-        ) : (
-          <div className="hist-row">{fila}</div>
-        )}
+        <button
+          type="button"
+          className="hist-row"
+          aria-expanded={detalleAbierto}
+          onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
+        >
+          {fila}
+        </button>
         {/* Decisión 100 de Mati: plato, porción y monto en UNA línea, en
             columnas, con el criterio de Tus restaurantes (AF-STATS-BURBUJA):
-            la columna del «½» sólo ocupa lugar si alguna línea la tiene. */}
-        {detalleAbierto && m.items && (
+            la columna del «½» sólo ocupa lugar si alguna línea la tiene.
+            D360 · P09 · un solo recuadro por tarjeta, con lo elegido (o «No
+            elegiste ítems») y, adentro, «Ver ticket completo». */}
+        {detalleAbierto && (
           <div
-            className={m.items.some((item) => item.fractionBps < 10000)
+            className={lineas?.some((item) => item.fractionBps < 10000)
               ? 'hist-detail hist-detail--con-porcion'
               : 'hist-detail'}
             aria-label={t('Lo que elegiste')}
           >
             {/* D240 punto 16 · los iguales juntos, con la cantidad antes. */}
-            {agruparPropios(m.items).map((g) => (
+            {lineas && agruparPropios(lineas).map((g) => (
               <div key={g.key} className="hist-detail-row">
                 <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
                 <span className="hist-detail-name">{nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))}</span>
                 <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
               </div>
             ))}
+            {!lineas && m.itemsCount === 0 && (
+              <p className="hist-detail-vacio">{t('No elegiste ítems')}</p>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm hist-detail-ticket"
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                ticketTriggerRef.current = event.currentTarget;
+                setTicketCode(m.code);
+              }}
+            >
+              {t('Ver ticket completo')}
+            </button>
           </div>
         )}
         </ConGesto>
@@ -779,6 +803,9 @@ export function MesasScreen() {
           <span>{aviso.texto}</span>
           <button type="button" className="aviso-deshacer-boton" onClick={aviso.deshacer}>{t('Deshacer')}</button>
         </div>
+      )}
+      {ticketCode && (
+        <TicketDigitalDialog code={ticketCode} onClose={cerrarTicket} returnFocusRef={ticketTriggerRef} />
       )}
       <AppBottomBar active="mesas" />
     </div>

@@ -2395,9 +2395,50 @@ export async function mockOpenMesas(): Promise<OpenMesasResponse> {
   });
 }
 
+/**
+ * D360 · P09 · las mesas que el seam de «Tus mesas» (`sin_cobro`) agrega a
+ * `/mesas/mine` no viven en el estado del mock. `GET /mesas/:code` las resuelve
+ * acá, armadas en el momento y SIN guardarlas: sin esto, «Ver ticket completo»
+ * materializaba la mesa de ejemplo (La Parolaccia) y la agregaba al estado, y
+ * aparecía repetida en las listas. Los platos y lo propio coinciden con el
+ * fixture de `todasMisMesasMock`.
+ */
+function mesaDeLosFixturesDeMisMesas(code: string): MockMesa | null {
+  if (leerSeam(CLAVE_MIS_MESAS) !== 'sin_cobro') return null;
+  type Item = MockMesa['items'][number];
+  const plato = (id: string, name: string, price: number, quantity: number, mio: number | null): Item => ({
+    id, name, category: 'other', price_cents: price, quantity, status: 'available', lockedBy: null, lock_expires_at: null,
+    claims: mio === null ? [] : [{ who: 'user', fraction_bps: mio, amount_cents: Math.floor((price * quantity * mio) / 10000), status: 'locked' }],
+  });
+  const base = (id: string, nombre: string, division: 'consumo' | 'igual', items: Item[], cierre: MockMesa['closure_reason']): MockMesa => ({
+    id, code, restaurant: { id: `rest-${code}`, name: nombre, category: 'other', address: null },
+    total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0), paid_amount_cents: 0, tip_amount_cents: 0,
+    division_mode: division, expected_participants: 4, status: 'expired', expires_at: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString(),
+    items, slots: null, active_staff: [], openedByUser: true, captured_shortfall_cents: 0, guarantee_method: 'none',
+    guarantee_mode: false, closure_reason: cierre,
+  });
+  if (code === 'PA-7310') {
+    return base('aaaaaaaa-0000-4000-8000-000000000001', 'Tacos El Güero', 'consumo', [
+      plato('item-7310-1', 'Tacos al pastor', 10000, 2, 10000),
+      plato('item-7310-2', 'Agua de jamaica', 15000, 1, 10000),
+      plato('item-7310-3', 'Quesadilla', 20000, 1, 5000),
+    ], 'all_items_selected');
+  }
+  if (code === 'PA-6604') {
+    return base('aaaaaaaa-0000-4000-8000-000000000002', 'Café Tacuba', 'igual', [
+      plato('item-6604-1', 'Chilaquiles', 12000, 2, null),
+      plato('item-6604-2', 'Café de olla', 6000, 4, null),
+      plato('item-6604-3', 'Pan dulce', 6000, 4, null),
+    ], 'time');
+  }
+  return null;
+}
+
 export async function mockGetMesa(code: string, identity: MockIdentity): Promise<MesaDetailResponse> {
   // Si el link viene de otro dispositivo, la mesa no existe en ESTE navegador:
   // se materializa con el ticket de ejemplo para que la demo no se corte.
+  const fixture = findMesa(code) ? null : mesaDeLosFixturesDeMisMesas(code);
+  if (fixture) return delay({ mesa: toMesaDetail(fixture, identity) });
   const mesa = findMesa(code) ?? materializeDemoMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   settleIfExpired(mesa);

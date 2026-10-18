@@ -7251,6 +7251,20 @@ button.qc-circulo::after {
   line-height: var(--lh-sm);
 }
 
+/* D360 · P09 · el recuadro de una mesa de «Tus mesas» siempre se despliega:
+   lo elegido (o «No elegiste ítems») y, adentro, «Ver ticket completo». */
+.hist-detail-vacio {
+  margin: var(--sp-1) 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.hist-detail-ticket {
+  display: flex;
+  margin: var(--sp-2) auto var(--sp-1);
+}
+
 .hist-detail-name {
   display: flex;
   flex-direction: column;

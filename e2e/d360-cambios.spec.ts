@@ -249,3 +249,46 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     expect(guardados.sort()).toEqual(['100 HUGEL COPA', 'CERVEZA IPA', 'ZIFON NATURAL 900 ML']);
   });
 });
+
+// ─── D360 · P09 · en Mesas, toda mesa terminada se despliega ─────────────────
+
+test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () => {
+  test('🔴 la mesa «En partes iguales» y la que no tiene nada elegido se despliegan, con «Ver ticket completo»', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
+    await ingresar(page);
+    await page.goto('/#/mesas');
+    const tusMesas = page.getByRole('region', { name: 'Tus mesas' });
+    const tacuba = tusMesas.locator('.tu-mesa').filter({ hasText: 'Café Tacuba' });
+    await expect(tacuba).toContainText('Elegiste 1 parte · $180');
+    const filas = await tusMesas.locator('.tu-mesa').count();
+
+    // «En partes iguales»: antes no se desplegaba (D360 lo declara).
+    const fila = tacuba.locator('button.hist-row');
+    await expect(fila).toHaveAttribute('aria-expanded', 'false');
+    await fila.click();
+    await expect(fila).toHaveAttribute('aria-expanded', 'true');
+    const detalle = tacuba.locator('.hist-detail');
+    await expect(detalle).toHaveCount(1);
+    const ver = detalle.getByRole('button', { name: 'Ver ticket completo', exact: true });
+    await expect(ver).toBeVisible();
+    await capturar(page, 'd360-07-mesas-detalle-igual', tacuba);
+
+    // El ticket completo, con lo que el dueño publica de esa mesa.
+    await ver.click();
+    const ticket = page.getByRole('dialog');
+    await expect(ticket).toContainText('Chilaquiles');
+    await expect(ticket).toContainText('Café de olla');
+    await capturar(page, 'd360-08-ticket-completo');
+    await ticket.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(ticket).toHaveCount(0);
+    await expect(ver).toBeFocused();
+    // Abrirlo no agregó ni repitió mesas en la lista.
+    await expect(tusMesas.locator('.tu-mesa')).toHaveCount(filas);
+
+    // La mesa ya pagada del seed, sin nada elegido: «No elegiste ítems» y el botón.
+    const pagada = tusMesas.locator('.tu-mesa').filter({ hasText: 'Pagada' });
+    await pagada.locator('button.hist-row').click();
+    await expect(pagada.locator('.hist-detail')).toContainText('No elegiste ítems');
+    await expect(pagada.locator('.hist-detail').getByRole('button', { name: 'Ver ticket completo', exact: true })).toBeVisible();
+  });
+});
