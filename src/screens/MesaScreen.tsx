@@ -50,7 +50,7 @@ import type {
   PaymentMethod,
   PaymentType,
 } from '../api/types';
-import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
+import { denominatorBps, originalParticipants, topePorcion } from '../api/mesaPresentation';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -1035,7 +1035,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const item = mesa?.items.find((candidate) => candidate.id === id);
     // En «igual» la declaración no compite por lo restante: sólo N la acota.
     if (original === null || !item || !Number.isSafeInteger(denominator)
-        || denominator < 1 || denominator > original
+        || denominator < 1 || denominator > topePorcion(original)
         || (mesa?.division_mode === 'consumo' && denominatorBps(denominator) > item.remaining_bps)) return;
     // Decisión 79 · en «igual», tampoco por encima de lo que queda del plato.
     const limiteIgual = mesa?.division_mode === 'igual' ? limiteInformativo(item, informativasGuardadas) : null;

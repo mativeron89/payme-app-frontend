@@ -3,15 +3,37 @@ import {
   availableDefaultDenominators,
   canLabelPrivateUnknownRestaurant,
   denominatorBps,
+  denominatorFromBps,
   initialDenominator,
+  MAX_PERSONAS,
   originalParticipants,
+  TOPE_PORCION,
+  topePorcion,
   validateRestaurantLabel,
 } from './mesaPresentation';
 
 describe('mesa-presentation-v1 · N original', () => {
-  it('acepta sólo enteros 1..20 y nunca rellena históricos', () => {
-    expect([1, 2, 20].map(originalParticipants)).toEqual([1, 2, 20]);
-    for (const value of [null, undefined, 0, 21, 2.5, '4']) expect(originalParticipants(value)).toBeNull();
+  it('🔴 D375 · acepta sólo enteros 1..50 (antes 1..20) y nunca rellena históricos', () => {
+    // Valores escritos a mano: el contrato espejado dice «Integer1..50 (1..20 until v2.187.0, D375) or null».
+    expect(MAX_PERSONAS).toBe(50);
+    expect([1, 2, 20, 21, 49, 50].map(originalParticipants)).toEqual([1, 2, 20, 21, 49, 50]);
+    for (const value of [null, undefined, 0, 51, 2.5, '4', -1]) expect(originalParticipants(value)).toBeNull();
+  });
+
+  it('🔴 D375 · la porción sigue en 20: con N = 50, un plato se parte en a lo sumo 20 y nada lanza', () => {
+    expect(TOPE_PORCION).toBe(20);
+    expect([1, 4, 20, 21, 50].map(topePorcion)).toEqual([1, 4, 20, 20, 20]);
+    expect(denominatorBps(20)).toBe(500);
+    expect(() => denominatorBps(21)).toThrow('fraction_denominator_invalid');
+    // Sin el tope, el recorrido de 1..50 llegaba a 21 y `denominatorBps` lanzaba.
+    expect(initialDenominator(50, 10000)).toBe(1);
+    expect(initialDenominator(50, 500)).toBe(20);
+    expect(initialDenominator(50, 499)).toBeNull();
+    expect(initialDenominator(50, 0)).toBeNull();
+    expect(denominatorFromBps(500, 50)).toBe(20);
+    expect(denominatorFromBps(3333, 50)).toBe(3);
+    for (const bps of [476, 6667, 7500, 0]) expect(denominatorFromBps(bps, 50), String(bps)).toBeNull();
+    expect(availableDefaultDenominators(50, 10000)).toEqual([1, 2, 3, 4]);
   });
 
   it('filtra defaults por N y por disponibilidad', () => {

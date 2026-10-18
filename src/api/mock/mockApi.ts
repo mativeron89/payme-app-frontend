@@ -78,7 +78,7 @@ import type {
   RecoveryRequestResponse,
   RegisterRequest,
 } from '../types';
-import { denominatorBps, originalParticipants, validateRestaurantLabel } from '../mesaPresentation';
+import { MAX_PERSONAS, denominatorBps, originalParticipants, topePorcion, validateRestaurantLabel } from '../mesaPresentation';
 import type { PrivateAvatarBlob } from '../profileIdentity';
 import { profileNameInput, validateAvatarInput } from '../profileIdentity';
 import {
@@ -2560,13 +2560,14 @@ export async function mockReplaceInformativeSelection(
   if (mesa.status !== 'open' && !exactReplay) return fail(409, 'informative_selection_read_only');
   // …y por N, después de cerrada/dinero (esos errores ganan), como
   // `validateInformativeFractions` del dueño: con N conocido sólo 1/k con
-  // k ≤ N (400); sin N sólo las seis legacy (409) y nunca se inventa N. Lo ya
+  // k ≤ min(N, 20) (400; D375: la porción no sube con las personas); sin N
+  // sólo las seis legacy (409) y nunca se inventa N. Lo ya
   // guardado para ese ítem no se invalida al reenviarlo igual.
   const original = originalParticipants(mesa.original_participants);
   const guardadas = new Map(current.items.map((item) => [item.item_id, item.declared_fraction_bps]));
   const permitidas = original === null
     ? null
-    : new Set(Array.from({ length: original }, (_, index) => denominatorBps(index + 1)));
+    : new Set(Array.from({ length: topePorcion(original) }, (_, index) => denominatorBps(index + 1)));
   for (const item of items) {
     if (guardadas.get(item.item_id) === item.declared_fraction_bps) continue;
     if (permitidas === null) {
@@ -2982,6 +2983,11 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       req.items.some((item) => !validNonNegativeCents(item.price_cents) || !Number.isSafeInteger(item.quantity) || item.quantity < 1)) {
     return fail(400, 'validation_error');
   }
+  // D375 · como el dueño (`expected_participants: safeInt.min(1).max(MAX_PERSONAS)`): 1..50.
+  if (!Number.isSafeInteger(req.expected_participants) || req.expected_participants < 1
+      || req.expected_participants > MAX_PERSONAS) {
+    return fail(400, 'validation_error');
+  }
   let sum: number;
   try {
     sum = sumCents(...req.items.map((item) => {
@@ -3387,7 +3393,8 @@ export async function mockLockItems(
           return fail(400, 'validation_error', { message: 'fraction_bps inválido' });
         }
         if (original !== null) {
-          const allowed = Array.from({ length: original }, (_, index) => denominatorBps(index + 1));
+          // D375 · hasta min(N, 20), como `validateItemFractions` del dueño.
+          const allowed = Array.from({ length: topePorcion(original) }, (_, index) => denominatorBps(index + 1));
           if (!allowed.includes(rq.fraction_bps)) return fail(400, 'fraction_not_allowed_for_original_participants');
         }
         requestedBps = rq.fraction_bps;

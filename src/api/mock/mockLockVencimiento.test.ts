@@ -93,6 +93,20 @@ describe('V04 · fracciones naturales en el mock contractual', () => {
     expect(libre.claims.filter((claim) => claim.who === 'user')).toHaveLength(1);
   });
 
+  it('🔴 D375 · con N = 50 la porción sigue en 20: 1/20 entra, 1/21 es 400, y el bps legacy no lanza', async () => {
+    // API-9: sin min(N, 20), la lista de 1..50 llegaba a 21 y `denominatorBps` lanzaba un Error que no es de la API.
+    const { mock, mesa, libre } = await cargar('disabled');
+    mesa.original_participants = 50;
+    const veinte = await mock.mockLockItems(mesa.code, [{ item_id: libre.id, fraction_denominator: 20 }], 'user');
+    expect(veinte.claims).toEqual([{ item_id: libre.id, fraction_bps: 500 }]);
+    await expect(mock.mockLockItems(mesa.code, [{ item_id: libre.id, fraction_denominator: 21 }], 'user'))
+      .rejects.toMatchObject({ status: 400, message: 'validation_error' });
+    const cuarto = await mock.mockLockItems(mesa.code, [{ item_id: libre.id, fraction_bps: 2500 }], 'user');
+    expect(cuarto.claims).toEqual([{ item_id: libre.id, fraction_bps: 2500 }]);
+    await expect(mock.mockLockItems(mesa.code, [{ item_id: libre.id, fraction_bps: 6667 }], 'user'))
+      .rejects.toMatchObject({ status: 400, message: 'fraction_not_allowed_for_original_participants' });
+  });
+
   it('N conocido cierra denominadores mayores y el bypass legacy', async () => {
     const { mock, mesa, libre } = await cargar('disabled');
     mesa.original_participants = 2;

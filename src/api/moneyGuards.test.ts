@@ -232,6 +232,27 @@ describe('frontera contractual monetaria', () => {
  * Aceptar `none` **no relaja nada de lo demás**. Cada combinación que no sea la
  * exacta del dueño sigue fallando, y las de `card`/`wallet` no cambian.
  */
+describe('D375 · POST /mesas: una mesa de hasta 50 personas', () => {
+  const pedido = (n: number) => ({ ...mesaRequest, expected_participants: n });
+  const respuesta = (expected: number, original: number | null) => ({
+    mesa: { id: UUID_A, code: 'PM-123', total_cents: '1000', division_mode: 'igual', expected_participants: expected, original_participants: original, status: 'open', expires_at: '2026-08-02T12:00:00.000Z', created_at: '2026-08-02T11:30:00.000Z' },
+    guarantee: { method: 'card', status: 'open' },
+  });
+
+  it('🔴 acepta 21 y 50 (antes el tope era 20)', () => {
+    for (const n of [21, 50]) {
+      expect(createMesaResponse(respuesta(n, n), pedido(n)).mesa.expected_participants, String(n)).toBe(n);
+    }
+  });
+
+  it('🔴 rechaza 51 en expected_participants y en original_participants', () => {
+    expect(() => createMesaResponse(respuesta(51, 51), pedido(51))).toThrow('money_response_malformed');
+    expect(() => createMesaResponse(respuesta(50, 51), pedido(50))).toThrow('money_response_malformed');
+    // La coherencia con el pedido no cambia: 49 publicado contra 50 pedido.
+    expect(() => createMesaResponse(respuesta(50, 49), pedido(50))).toThrow('money_response_malformed');
+  });
+});
+
 describe('C3 · garantía `none`, y sólo en su combinación exacta', () => {
   // Mismo molde que `mesaRequest`, con el método de C3: el decoder compara el
   // request COMPLETO contra la respuesta, así que un objeto parcial no sirve.

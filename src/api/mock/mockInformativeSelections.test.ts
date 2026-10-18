@@ -236,6 +236,24 @@ describe('mock selección informativa v2', () => {
       .toEqual([{ item_id: first.id, declared_fraction_bps: 3333 }]);
   });
 
+  it('🔴 D375 · con N = 50 (sube el tope de personas) la porción sigue en 1/20: nada lanza, 1/21 no existe', async () => {
+    // API-9: sin min(N, 20), el Set de 1..50 llegaba a 21 y `denominatorBps` lanzaba un Error que no es de la API.
+    const { mock, mesa } = await subject();
+    mesa.original_participants = 50;
+    const first = mesa.items[0]!;
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 500 }], confirm_closure: true,
+    });
+    expect(saved.selection.items).toEqual([{ item_id: first.id, declared_fraction_bps: 500 }]);
+    // 476 (1/21) no está en el dominio del dueño: 400 de forma, nunca un 1/21.
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 476 as never }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 400, message: 'validation_error' });
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 6667 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 400, message: 'fraction_not_allowed_for_original_participants' });
+  });
+
   it('sin N sólo admite las seis legacy y contesta 409 sin inventar N', async () => {
     const { mock, mesa } = await subject();
     delete mesa.original_participants;

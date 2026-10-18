@@ -12,9 +12,30 @@ export function validateRestaurantLabel(raw: string): RestaurantLabelValidation 
   return { ok: true, normalized };
 }
 
+/**
+ * D375 · el tope de personas de una mesa: 50 desde App Backend 2.187.0 (antes,
+ * 20). Es el `MAX_PERSONAS` del dueño (`services/mesaPresentation.js`) y el
+ * 1..50 de `create.expected_participants` y `read.original_participants` del
+ * contrato espejado. Lo usan el contador de «¿Cómo dividen?», el decodificador
+ * de `POST /mesas` y el mock.
+ */
+export const MAX_PERSONAS = 50;
+
+/**
+ * D375 · la porción NO sube: un plato se parte en a lo sumo 20
+ * (`lock.fraction_denominator` 1..20, `<= min(original_participants, 20)`).
+ * Es el `MAX_PARTICIPANTES` del dueño; `topePorcion(n)` es su `topePorcion`.
+ */
+export const TOPE_PORCION = 20;
+
+/** Hasta qué k se puede partir un plato en una mesa de N personas: min(N, 20). */
+export function topePorcion(original: number): number {
+  return Math.min(original, TOPE_PORCION);
+}
+
 /** Nunca deriva N de `expected_participants`, miembros actuales o cantidades. */
 export function originalParticipants(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 20
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= MAX_PERSONAS
     ? value
     : null;
 }
@@ -33,7 +54,7 @@ export function canLabelPrivateUnknownRestaurant(input: {
 }
 
 export function denominatorBps(denominator: number): number {
-  if (!Number.isSafeInteger(denominator) || denominator < 1 || denominator > 20) {
+  if (!Number.isSafeInteger(denominator) || denominator < 1 || denominator > TOPE_PORCION) {
     throw new Error('fraction_denominator_invalid');
   }
   return Math.floor(10000 / denominator);
@@ -43,20 +64,20 @@ export function initialDenominator(original: number, remainingBps: number): numb
   if (originalParticipants(original) === null || !Number.isSafeInteger(remainingBps) || remainingBps < 0 || remainingBps > 10000) {
     return null;
   }
-  for (let denominator = 1; denominator <= original; denominator += 1) {
+  // D375 · hasta min(N, 20): con N > 20, el 21 no es una porción (denominatorBps lanzaría).
+  for (let denominator = 1; denominator <= topePorcion(original); denominator += 1) {
     if (denominatorBps(denominator) <= remainingBps) return denominator;
   }
   return null;
 }
 
 /**
- * Inverso de `denominatorBps` para 1..N: el k cuyo `floor(10000/k)` es `bps`,
- * o `null` (una fracción legacy como 6667 no tiene k). Lo usa «igual» para
- * mostrar como elegido lo que el GET propio trae en bps.
+ * Inverso de `denominatorBps` para 1..min(N, 20): el k cuyo `floor(10000/k)` es
+ * `bps`, o `null` (una fracción legacy como 6667 no tiene k).
  */
 export function denominatorFromBps(bps: number, original: number | null): number | null {
   if (original === null || originalParticipants(original) === null) return null;
-  for (let denominator = 1; denominator <= original; denominator += 1) {
+  for (let denominator = 1; denominator <= topePorcion(original); denominator += 1) {
     if (denominatorBps(denominator) === bps) return denominator;
   }
   return null;

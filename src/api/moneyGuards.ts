@@ -1,4 +1,5 @@
 import { centsToDisplay } from '../utils/money';
+import { MAX_PERSONAS } from './mesaPresentation';
 import type { CreateMesaRequest, CreateMesaResponse, CreateTransferRequest, CreateTransferResponse, DivisionSlot, PayMesaRequest, PayMesaResponse, PaymentType, TopupCardResponse, TopupOxxoResponse, TopupStatusResponse } from './types';
 
 /** Respuestas monetarias inválidas son ambiguas: nunca habilitan otro intento. */
@@ -126,7 +127,7 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   const participants = mesa.expected_participants;
   const originalParticipants = mesa.original_participants;
   const mesaStatus = mesa.status;
-  if ((division !== 'consumo' && division !== 'igual') || typeof participants !== 'number' || !Number.isSafeInteger(participants) || participants < 1 || participants > 20 || (mesaStatus !== 'open' && mesaStatus !== 'pending_auth')) fail();
+  if ((division !== 'consumo' && division !== 'igual') || typeof participants !== 'number' || !Number.isSafeInteger(participants) || participants < 1 || participants > MAX_PERSONAS || (mesaStatus !== 'open' && mesaStatus !== 'pending_auth')) fail();
   // El dueño siempre publica la clave. En una creación nueva debe contener el
   // N exacto; sólo un replay idempotente puede traer `null`, porque las mesas
   // creadas antes de que existiera metadata.original_participants no se
@@ -135,7 +136,7 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   if (originalParticipants === null) {
     if (root?.idempotent !== true) fail();
   } else if (typeof originalParticipants !== 'number' || !Number.isSafeInteger(originalParticipants)
-      || originalParticipants < 1 || originalParticipants > 20) fail();
+      || originalParticipants < 1 || originalParticipants > MAX_PERSONAS) fail();
   const method = enumValue(guarantee.method, GUARANTEE_METHODS);
   const status = enumValue(guarantee.status, new Set(['open', 'requires_action', 'none']));
   if (total !== positiveExpectation(expected.total_cents) || division !== expected.division_mode

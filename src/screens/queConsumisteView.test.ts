@@ -25,6 +25,11 @@ describe('porcionesDisponibles · regla 4 del diseño y definición 2 de la deci
     expect(porcionesDisponibles(4, 0)).toEqual([]);
   });
 
+  it('🔴 D375 · en una mesa de 50 personas siguen siendo Entero, ½, ⅓ y ¼', () => {
+    expect(porcionesDisponibles(50, 10000)).toEqual([1, 2, 3, 4]);
+    expect(porcionesDisponibles(50, 2500)).toEqual([4]);
+  });
+
   it('sin el dato de personas no limita por personas', () => {
     expect(porcionesDisponibles(null, 10000)).toEqual([1, 2, 3, 4]);
     expect(porcionesDisponibles(null, 5000)).toEqual([2, 3, 4]);

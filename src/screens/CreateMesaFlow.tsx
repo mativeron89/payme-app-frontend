@@ -62,7 +62,7 @@ import {
 import { MARCO_ENTERO, recortePixeles, type Marco } from '../camara/marcoDelRecorte';
 import { RecorteDelTicket } from '../components/RecorteDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
-import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
+import { MAX_PERSONAS, canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
@@ -2386,7 +2386,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   {participants ?? '—'}
                 </div>
                 <button
-                  onClick={() => setParticipants(participants === null ? pisoComensales : Math.min(20, participants + 1))}
+                  onClick={() => setParticipants(participants === null ? pisoComensales : Math.min(MAX_PERSONAS, participants + 1))}
                   aria-label={t('Un comensal más')}
                 >
                   +

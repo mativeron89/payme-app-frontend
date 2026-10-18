@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
 import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
+import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 
 /**
  * §1.4 (2026-08-06) · EL STEPPER SE PREGUNTA SIEMPRE, Y EL 4 INVENTADO MURIÓ.
@@ -144,6 +145,39 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // corte es que no hay pantalla de pago, no el rótulo del círculo.
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
+  });
+
+  test('🔴 D375 · una mesa de hasta 50 personas: el contador llega a 50 y no pasa, y la mesa se crea con 50', async ({ page }) => {
+    // Antes el tope era 20 (`Math.min(20, …)`), y el decodificador de POST /mesas rechazaba 21+. El dueño 2.187.0 acepta
+    // 1..50; la porción sigue en 20 (eso lo prueban los unitarios).
+    await configurarTicketSinQr(page, { ocr: 'no_merchant' });
+    await ingresar(page);
+    await page.getByRole('button', { name: 'Escanear', exact: true }).click();
+    await sacarFoto(page);
+    await page.getByRole('radio', { name: /En partes iguales/ }).click();
+    const grupo = page.getByRole('group', { name: '¿Cuántos pagan?', exact: true });
+    const mas = page.getByRole('button', { name: 'Un comensal más' });
+    await mas.click(); // — → 2, el piso de partes iguales
+    await expect(grupo.locator('.val')).toHaveText('2');
+    for (let i = 0; i < 48; i += 1) await mas.click();
+    await expect(grupo.locator('.val')).toHaveText('50');
+    // Un toque más no pasa de 50.
+    await mas.click();
+    await expect(grupo.locator('.val')).toHaveText('50');
+
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
+    const codigo = (await page.locator('.share-code-txt').innerText()).trim();
+    const mesa = await page.evaluate((code) => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
+      const m = st.mesas.find((x: { code: string }) => x.code === code);
+      const partes = (m.slots ?? []) as Array<{ amount_cents: number }>;
+      return {
+        n: m.expected_participants, original: m.original_participants, partes: partes.length,
+        suma: partes.reduce((s, p) => s + p.amount_cents, 0), total: m.total_cents,
+      };
+    }, codigo);
+    expect(mesa).toEqual({ n: 50, original: 50, partes: 50, suma: mesa.total, total: mesa.total });
   });
 
   test('partes iguales con N=3: viaja el 3 elegido y la parte es $280 — no el 4 fantasma (2-A.3)', async ({ page }) => {

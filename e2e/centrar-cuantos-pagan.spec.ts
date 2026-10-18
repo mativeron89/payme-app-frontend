@@ -16,8 +16,8 @@ import { sacarFoto } from './_camara';
  * - Ningún monto al lado: ni «$», ni «c/u», ni la reserva invisible.
  * - Sin número, el «—» y la tarjeta con el borde punteado en --warning (canvas
  *   69 del paquete del tutorial); con número, el borde vuelve a ser sólido.
- * - El «−» y el «+» no se mueven bajo el dedo al cambiar N (del piso a 20, el
- *   tope de hoy), tampoco al primer toque.
+ * - El «−» y el «+» no se mueven bajo el dedo al cambiar N (del piso a 50, el
+ *   tope desde D375), tampoco al primer toque.
  *
  * 🔴 Se mide el TEXTO del título (con un `Range`), no su caja: un título de
  * ancho completo con el texto a la izquierda tiene la caja centrada. Y el grupo
@@ -49,7 +49,7 @@ const mas = (page: Page) => page.getByRole('button', { name: 'Un comensal más' 
 
 /** Lleva N al valor pedido desde el estado actual (piso incluido). */
 async function ponerN(page: Page, n: number): Promise<void> {
-  for (let i = 0; i < 25; i += 1) {
+  for (let i = 0; i < 60; i += 1) {
     const actual = Number(await page.locator('.division-stepper .stepper .val').textContent());
     if (actual === n) return;
     await (Number.isNaN(actual) || actual < n ? mas(page) : page.getByRole('button', { name: 'Un comensal menos' })).click();
@@ -140,13 +140,13 @@ for (const [ancho, alto] of [[390, 664], [375, 667]] as const) {
     }
 
     for (const forma of FORMAS) {
-      test(`«${forma.nombre}»: el «−» y el «+» no se mueven al cambiar N (${forma.piso}, 9, 12 y 20), tampoco al primer toque`, async ({ page }) => {
+      test(`«${forma.nombre}»: el «−» y el «+» no se mueven al cambiar N (${forma.piso}, 9, 12, 20 y 50), tampoco al primer toque`, async ({ page }) => {
         await page.setViewportSize({ width: ancho, height: alto });
         await hastaComoDividen(page);
         await page.getByRole('radio', { name: forma.radio }).click();
         const antes = await medir(page);
         const posiciones: Array<{ menos: number; mas: number }> = [];
-        for (const n of [forma.piso, 9, 12, 20]) {
+        for (const n of [forma.piso, 9, 12, 20, 50]) {
           await ponerN(page, n);
           await expect(page.locator('.division-stepper .stepper .val')).toHaveText(String(n));
           const { menos, mas: x } = await medir(page);
