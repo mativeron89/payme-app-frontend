@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { hastaCompartir, pedidosDePropina, selectorDePropina } from './fixtures/mi-parte-d344';
@@ -122,6 +122,10 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     await expect(page.locator('.ticket-title-card')).toHaveText('¿Cómo dividen?');
     await expect(page.locator('.ticket-total-card .ticket-title-amount')).toHaveText('$840');
     await expect(page.locator('.ticket-total-card').getByRole('button', { name: 'Ver el ticket', exact: true })).toBeVisible();
+    // D360-2 · sin la leyenda de arriba de las formas. Control positivo: las tres formas, que se pintaban junto con
+    // ella, ya están; la ausencia se busca en toda la pantalla.
+    await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?', exact: true }).getByRole('radio')).toHaveCount(3);
+    await expect(page.getByText('Revisa el ticket, elige el reparto', { exact: false })).toHaveCount(0);
     // D377 · en las tres formas, − N + solo: ni monto, ni «$—», ni «c/u».
     // Primero el control positivo (el grupo con su «—»), después la ausencia.
     const tarjeta = page.locator('.division-stepper');
@@ -269,6 +273,10 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     await expect(page.getByRole('button', { name: 'Zifon natural 900 ML', exact: true })).toBeVisible();
     // Un nombre mixto queda tal cual.
     await expect(page.locator('.qc-renglon[data-plato="Tiramisú"] .qc-nombre').first()).toHaveText('Tiramisú');
+    // D360-5a · sin «¿Compartieron un plato?». Control positivo: es una mesa por consumo, con la lista de platos a la
+    // vista, que es donde se pintaba la ayuda.
+    await expect(page.locator('.qc-lista .qc-renglon').first()).toBeVisible();
+    await expect(page.getByText('¿Compartieron un plato?', { exact: true })).toHaveCount(0);
     await capturar(page, 'd360-06-nombres-en-mayusculas', page.locator('.qc-lista'));
     // D360-6 · al marcar un plato, la tira de porciones aparece debajo, sin taparlo
     // (el Tagliatelle de PA-2847, renombrado acá «100 HUGEL COPA»). Captura para Mati.
@@ -443,5 +451,81 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     await hoja.getByRole('button', { name: 'Cerrar', exact: true }).click();
     await expect(hoja).toHaveCount(0);
     await expect(engranaje).toBeFocused();
+  });
+});
+
+// ─── D360-5a · tampoco en el ticket de un viaje ──────────────────────────────
+
+test.describe('D360-5a · sin «¿Compartieron un plato?» en el ticket de un viaje', () => {
+  test('🔴 «¿Qué consumiste?» con sus platos y sin la ayuda de porciones', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.viajes.v1', 'encendido'));
+    await relojFueraDeLasFechasDeLosViajes(page);
+    await ingresar(page);
+    // «Mariscos El Faro», de Cancún 2026 (mock): un ticket por consumos que todavía se puede elegir.
+    await irEnLaApp(page, '/viaje-ticket/d1000000-0000-4000-8000-000000000001.d2000000-0000-4000-8000-000000000105');
+    // Control positivo: la tarjeta donde vivía la ayuda, con un plato a la vista.
+    const consumos = page.getByRole('region', { name: '¿Qué consumiste?', exact: true });
+    await expect(consumos.getByText('Tacos de pescado (3)', { exact: true })).toBeVisible();
+    await expect(page.getByText('¿Compartieron un plato?', { exact: true })).toHaveCount(0);
+  });
+});
+
+// ─── D379 · la memoria de las invitaciones, entre cierres de la hoja ─────────
+
+test.describe('D379 · «Invitar amigos» en la hoja del engranaje conserva lo enviado', () => {
+  test('🔴 un error ambiguo, cerrar y reabrir: el reintento usa la MISMA key, y «Invitado ✓» queda', async ({ page }) => {
+    await ingresar(page);
+    const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
+    await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
+    await expect(aviso).toHaveCount(0);
+    await page.goto('/#/mesa/PA-2847');
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    // Se anota la Idempotency-Key de cada invitación; la primera falla sin respuesta (un error ambiguo: no se sabe
+    // si llegó), que es el caso en que el reintento tiene que reusarla.
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta);
+      const original = api.inviteFriend.bind(api);
+      const claves: string[] = [];
+      Reflect.set(window, '__clavesDeInvitar', claves);
+      api.inviteFriend = async (code: string, paymeId: string, key: string) => {
+        claves.push(key);
+        if (claves.length === 1) throw new Error('red caída');
+        return original(code, paymeId, key);
+      };
+    });
+    const claves = () => page.evaluate(() => [...(Reflect.get(window, '__clavesDeInvitar') as string[])]);
+    const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    const abrirPanel = hoja.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true });
+    const sofia = hoja.locator('.inv-row').filter({ hasText: 'Sofía Fernández' });
+
+    await engranaje.click();
+    await abrirPanel.click();
+    await sofia.getByRole('button', { name: 'Invitar', exact: true }).click();
+    await expect(page.locator('.toast')).toHaveText('No pudimos confirmar la invitación a Sofía. Reintenta la misma: vamos a reutilizarla.');
+    expect(await claves()).toHaveLength(1);
+
+    // Cerrar la hoja pliega el panel: al reabrirla está «Invitar amigos», sin la lista.
+    await page.keyboard.press('Escape');
+    await expect(hoja).toHaveCount(0);
+    await engranaje.click();
+    await expect(abrirPanel).toBeVisible();
+    await expect(hoja.locator('.inv-row')).toHaveCount(0);
+    await abrirPanel.click();
+    await sofia.getByRole('button', { name: 'Invitar', exact: true }).click();
+    await expect(page.locator('.toast')).toHaveText('Invitación enviada a Sofía ✓');
+    await expect(sofia.getByRole('button', { name: 'Invitado ✓', exact: true })).toBeDisabled();
+    const enviadas = await claves();
+    expect(enviadas).toHaveLength(2);
+    expect(enviadas[1], 'el reintento después de reabrir reusa la Idempotency-Key').toBe(enviadas[0]);
+
+    // Otra vez cerrar y reabrir: «Invitado ✓» sigue y no se manda nada más.
+    await page.keyboard.press('Escape');
+    await expect(hoja).toHaveCount(0);
+    await engranaje.click();
+    await abrirPanel.click();
+    await expect(sofia.getByRole('button', { name: 'Invitado ✓', exact: true })).toBeDisabled();
+    expect(await claves()).toHaveLength(2);
   });
 });

@@ -6,7 +6,7 @@ import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { useHojaModal } from '../components/useHojaModal';
 import { Avatar, useToast } from '../components/ui';
-import { InviteFriends } from '../components/InviteFriends';
+import { InviteFriends, type MemoriaDeInvitaciones } from '../components/InviteFriends';
 import { Desplegable, SolicitudesParaUnirse } from '../components/TuMesa';
 import type { SolicitudParaElTitular } from '../api/joinRequests';
 import type { MesaDetail, MesaItem } from '../api/types';
@@ -217,6 +217,10 @@ export interface MesaDetailViewProps {
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
   onOpenInvite: () => void;
+  /** D379 · al cerrar la hoja del engranaje, el panel de invitar se pliega. */
+  onCloseInvite?: () => void;
+  /** D379 · la memoria de las invitaciones de la mesa: sobrevive a cerrar y reabrir la hoja. */
+  memoriaDeInvitaciones?: MemoriaDeInvitaciones;
   onCopyInvitationLink: () => void;
   onBack: () => void;
   /**
@@ -528,6 +532,8 @@ export function MesaDetailView({
   onGoToPay,
   onRetryFrozenPay,
   onOpenInvite,
+  onCloseInvite,
+  memoriaDeInvitaciones,
   onCopyInvitationLink,
   onBack,
   propinaDeLaMesa = null,
@@ -582,6 +588,9 @@ export function MesaDetailView({
   }, [hojaDeLaMesa, hayConfiguracion]);
   const cerrarHojaDeLaMesa = (): void => {
     setHojaDeLaMesa(false);
+    // D379 · el panel de invitar se pliega con la hoja: al reabrirla se ve «Invitar amigos», y lo enviado se conserva
+    // (la memoria de la mesa).
+    onCloseInvite?.();
     requestAnimationFrame(() => engranajeRef.current?.focus());
   };
   /**
@@ -613,7 +622,7 @@ export function MesaDetailView({
           </button>
         )}
       </div>
-      {inviteOpen && <InviteFriends code={code} />}
+      {inviteOpen && <InviteFriends code={code} memoria={memoriaDeInvitaciones} />}
     </div>
   ) : null;
   const cd = countdownTo(mesa.expires_at);

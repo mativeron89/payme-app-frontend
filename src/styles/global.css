@@ -10706,8 +10706,11 @@ h1.pay-title-lbl {
   margin: 0 0 var(--sp-3);
 }
 
+/* D379 · en la hoja, 12 entre la fila de compartir (o su panel de invitar) y la
+   propina. En la pantalla ya no hay fila: la línea de la propina queda a 12 de la
+   tarjeta de arriba (su margen de abajo) y deja 12 abajo (el suyo). */
 .hoja-de-la-mesa .mesa-secondary-actions {
-  margin-top: 0;
+  margin: 0 0 var(--sp-3);
 }
 
 .hoja-de-la-mesa .propina-mesa {
@@ -10733,14 +10736,6 @@ h1.pay-title-lbl {
 }
 .propina-mesa-confirmar-acciones .btn {
   flex: 1;
-}
-
-/* En «Tu mesa», después de «Copiar link» / «Invitar amigos», el mismo aire que
-   hay arriba de esa fila (`.mesa-secondary-actions` lleva `--sp-3` arriba). */
-.mesa-secondary-actions + .propina-mesa,
-.mesa-secondary-actions + .propina-mesa-lectura,
-.mesa-secondary-actions + .mi-parte-desglose {
-  margin-top: var(--sp-3);
 }
 
 /* Quien no es el organizador lee la propina de la mesa, sin poder cambiarla. */

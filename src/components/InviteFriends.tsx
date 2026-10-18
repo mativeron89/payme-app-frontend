@@ -3,7 +3,7 @@ import { useIdioma } from '../i18n/idioma';
 import { api, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
-import type { Friend, Group } from '../api/types';
+import type { CreateInvitationResponse, Friend, Group } from '../api/types';
 import { fold } from '../utils/format';
 import { useToast } from './ui';
 import { Icon } from './Icon';
@@ -55,7 +55,95 @@ interface Invitable {
   has_avatar?: boolean;
 }
 
-export function InviteFriends({ code }: { code: string }) {
+/**
+ * D379 · la memoria de las invitaciones de UNA mesa, fuera del panel.
+ *
+ * Desde D379 el panel vive en la hoja del engranaje de «Tu mesa», que se cierra
+ * con la ✕, Escape, el velo o sola: cada cierre lo desmonta. Si la clave de una
+ * invitación ambigua («Reintenta la misma: vamos a reutilizarla») o la reserva
+ * de una en curso vivieran en el componente, se perderían al cerrar, y reabrir
+ * y reintentar mandaría otra `Idempotency-Key`: la invitación se podía
+ * duplicar. Por eso las claves por mesa+destinatario, lo reservado (en curso o
+ * ya invitado) y los «Invitado ✓» viven acá, y quien abre la mesa
+ * (`MesaScreen`) crea una por mesa e identidad y la conserva mientras tanto.
+ * Sin memoria de afuera (la pantalla «Compartir la mesa»), el panel usa una
+ * propia, como antes.
+ */
+export interface MemoriaDeInvitaciones {
+  /** El código de la mesa: la operación es mesa+destinatario. */
+  readonly mesa: string;
+  /** Una key por mesa+destinatario; un error ambiguo libera el botón, no la key. */
+  readonly claves: Map<string, string>;
+  /** Reservados ANTES de ceder el event loop: en curso o ya invitados (el guard contra dobles envíos). */
+  readonly reservados: Set<string>;
+  /** «Invitado ✓». */
+  readonly invitados: Set<string>;
+  /** Quién se entera cuando cambia (el panel montado, si hay uno). */
+  readonly oyentes: Set<() => void>;
+}
+
+export function crearMemoriaDeInvitaciones(mesa: string): MemoriaDeInvitaciones {
+  return { mesa, claves: new Map(), reservados: new Set(), invitados: new Set(), oyentes: new Set() };
+}
+
+function avisar(memoria: MemoriaDeInvitaciones): void {
+  for (const oyente of [...memoria.oyentes]) oyente();
+}
+
+/** En curso: reservado y todavía sin «Invitado ✓». */
+export function invitacionEnCurso(memoria: MemoriaDeInvitaciones, paymeId: string): boolean {
+  return memoria.reservados.has(paymeId) && !memoria.invitados.has(paymeId);
+}
+
+export type ResultadoDeInvitar =
+  | { readonly tipo: 'reservado' }
+  | { readonly tipo: 'enviada' }
+  | { readonly tipo: 'vencida' }
+  | { readonly tipo: 'error'; readonly code: string; readonly status: number | null; readonly definitivo: boolean };
+
+/**
+ * Una invitación idempotente sobre la memoria de la mesa. Si ya está reservada
+ * (en curso o invitada) no manda nada. La key se reutiliza mientras el error sea
+ * ambiguo y se descarta con una respuesta definitiva, un vencimiento o un envío
+ * confirmado. La memoria se actualiza aunque el panel ya no esté montado.
+ */
+export async function invitarConMemoria(
+  memoria: MemoriaDeInvitaciones,
+  paymeId: string,
+  enviar: (idempotencyKey: string) => Promise<CreateInvitationResponse>,
+  nuevaClave: () => string = newIdempotencyKey,
+): Promise<ResultadoDeInvitar> {
+  if (memoria.reservados.has(paymeId)) return { tipo: 'reservado' };
+  memoria.reservados.add(paymeId);
+  avisar(memoria);
+  const operacion = `${memoria.mesa}::${paymeId}`;
+  try {
+    const key = memoria.claves.get(operacion) ?? nuevaClave();
+    memoria.claves.set(operacion, key);
+    const invitation = await enviar(key);
+    memoria.claves.delete(operacion);
+    if (invitation.invitation.status === 'expired') {
+      memoria.reservados.delete(paymeId);
+      return { tipo: 'vencida' };
+    }
+    memoria.invitados.add(paymeId);
+    return { tipo: 'enviada' };
+  } catch (err) {
+    const failure = extractApiError(err);
+    const definitivo = isDefinitiveMutationError(failure.code, failure.status);
+    if (definitivo) memoria.claves.delete(operacion);
+    memoria.reservados.delete(paymeId);
+    return { tipo: 'error', code: failure.code, status: failure.status, definitivo };
+  } finally {
+    avisar(memoria);
+  }
+}
+
+export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
+  code: string;
+  /** D379 · la memoria de la mesa, si quien abre el panel la conserva entre cierres (la hoja del engranaje). */
+  memoria?: MemoriaDeInvitaciones;
+}) {
   const { t } = useIdioma();
   const toast = useToast();
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -65,22 +153,26 @@ export function InviteFriends({ code }: { code: string }) {
   const [mode, setMode] = useState<'friends' | 'groups'>('friends');
   const [q, setQ] = useState('');
   const { enabled: arrobaHabilitada } = useUsernameCapability();
-  const [invited, setInvited] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<Set<string>>(new Set());
   /** Grupo abierto en el acordeón. Uno solo: dos abiertos empujan de más. */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   /** Integrantes por grupo, cacheados: `GET /groups/:id` se pide al abrir. */
   const [members, setMembers] = useState<Record<string, Invitable[]>>({});
   const [loadingGroup, setLoadingGroup] = useState<string | null>(null);
   const [groupError, setGroupError] = useState<string | null>(null);
-  const sentRef = useRef<Set<string>>(new Set());
-  /** Una key por mesa+destinatario; un error ambiguo libera el botón, no la key. */
-  const invitationKeysRef = useRef<Map<string, string>>(new Map());
+  // Sin memoria de afuera, una propia por mesa: cambiar de mesa empieza de cero, como antes.
+  const memoriaPropia = useRef<MemoriaDeInvitaciones | null>(null);
+  if (!memoriaDeAfuera && memoriaPropia.current?.mesa !== code) memoriaPropia.current = crearMemoriaDeInvitaciones(code);
+  const memoria = memoriaDeAfuera ?? memoriaPropia.current!;
+  const [, setVersion] = useState(0);
+  useEffect(() => {
+    const repintar = () => setVersion((v) => v + 1);
+    memoria.oyentes.add(repintar);
+    // Lo que cambió mientras el panel no estaba (una invitación en curso que terminó) se ve al volver.
+    repintar();
+    return () => { memoria.oyentes.delete(repintar); };
+  }, [memoria]);
 
   useEffect(() => {
-    sentRef.current.clear();
-    setInvited(new Set());
-    setBusy(new Set());
     setOpenGroup(null);
   }, [code]);
 
@@ -126,44 +218,25 @@ export function InviteFriends({ code }: { code: string }) {
   }, [groups, q]);
 
   async function invite(f: Invitable) {
-    if (sentRef.current.has(f.payme_id)) return;
-    sentRef.current.add(f.payme_id);
-    setBusy((s) => new Set(s).add(f.payme_id));
-    const operation = `${code}::${f.payme_id}`;
-    try {
-      const key = invitationKeysRef.current.get(operation) ?? newIdempotencyKey();
-      invitationKeysRef.current.set(operation, key);
-      const invitation = await api.inviteFriend(code, f.payme_id, key);
-      if (invitation.invitation.status === 'expired') {
-        invitationKeysRef.current.delete(operation);
-        sentRef.current.delete(f.payme_id);
-        toast(t('La invitación anterior a {0} venció. Toca de nuevo para generar otra.', f.first_name));
-        return;
-      }
-      invitationKeysRef.current.delete(operation);
-      setInvited((s) => new Set(s).add(f.payme_id));
-      toast(t('Invitación enviada a {0} ✓', f.first_name));
-    } catch (err) {
-      const failure = extractApiError(err);
-      const definitive = isDefinitiveMutationError(failure.code, failure.status);
-      if (definitive) invitationKeysRef.current.delete(operation);
-      sentRef.current.delete(f.payme_id);
-      toast(
-        failure.code === 'mesa_not_invitable'
-          ? t('La mesa ya no acepta invitados')
-          : isServiceUnavailable(failure.status)
-            ? t('El servicio no pudo confirmar la invitación a {0}. Reintenta esta misma invitación; no generes otra.', f.first_name)
-            : definitive
-              ? t('No pudimos invitar a {0}', f.first_name)
-              : t('No pudimos confirmar la invitación a {0}. Reintenta la misma: vamos a reutilizarla.', f.first_name),
-      );
-    } finally {
-      setBusy((s) => {
-        const n = new Set(s);
-        n.delete(f.payme_id);
-        return n;
-      });
+    const r = await invitarConMemoria(memoria, f.payme_id, (key) => api.inviteFriend(code, f.payme_id, key));
+    if (r.tipo === 'reservado') return;
+    if (r.tipo === 'vencida') {
+      toast(t('La invitación anterior a {0} venció. Toca de nuevo para generar otra.', f.first_name));
+      return;
     }
+    if (r.tipo === 'enviada') {
+      toast(t('Invitación enviada a {0} ✓', f.first_name));
+      return;
+    }
+    toast(
+      r.code === 'mesa_not_invitable'
+        ? t('La mesa ya no acepta invitados')
+        : isServiceUnavailable(r.status)
+          ? t('El servicio no pudo confirmar la invitación a {0}. Reintenta esta misma invitación; no generes otra.', f.first_name)
+          : r.definitivo
+            ? t('No pudimos invitar a {0}', f.first_name)
+            : t('No pudimos confirmar la invitación a {0}. Reintenta la misma: vamos a reutilizarla.', f.first_name),
+    );
   }
 
   /**
@@ -204,7 +277,8 @@ export function InviteFriends({ code }: { code: string }) {
   }
 
   function fila(f: Invitable, key: string) {
-    const done = invited.has(f.payme_id);
+    const done = memoria.invitados.has(f.payme_id);
+    const enviando = invitacionEnCurso(memoria, f.payme_id);
     return (
       <div key={key} className="inv-row">
         {/* Pedido de Mati (2026-09-25): la misma foto que en Amigos (n196),
@@ -232,10 +306,10 @@ export function InviteFriends({ code }: { code: string }) {
         <button
           type="button"
           className={`btn btn-sm btn-fit ${done ? 'btn-ghost' : 'btn-outline'}`}
-          disabled={done || busy.has(f.payme_id)}
+          disabled={done || enviando}
           onClick={() => void invite(f)}
         >
-          {done ? t('Invitado ✓') : busy.has(f.payme_id) ? t('Enviando…') : t('Invitar')}
+          {done ? t('Invitado ✓') : enviando ? t('Enviando…') : t('Invitar')}
         </button>
       </div>
     );

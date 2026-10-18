@@ -74,7 +74,8 @@ export function AyudaDeOpcion({
         className={`ayuda-opcion-boton${abierta ? ' on' : ''}`}
         aria-label={t('Cómo funciona: {0}', opcion)}
         aria-expanded={abierta}
-        aria-controls={id}
+        // Sólo apunta a la burbuja cuando existe: cerrada no está en el documento.
+        aria-controls={abierta ? id : undefined}
         onClick={() => { if (abierta) cerrar(); else onAbrir(); }}
         onKeyDown={(e) => { if (abierta && e.key === 'Escape') { e.preventDefault(); cerrar(); } }}
       >

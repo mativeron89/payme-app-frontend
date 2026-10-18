@@ -125,15 +125,16 @@ describe('D212 · la cámara nativa', () => {
 });
 
 describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () => {
-  const ACCEPT_DEL_DUENO = 'image/jpeg,image/jpg,image/png';
+  /** El respaldo estricto del `accept` (antes de que cargue la configuración del OCR). */
+  const ACCEPT_RESPALDO_ESTRICTO = 'image/jpeg,image/jpg,image/png';
 
   it('🔴 abre la misma entrada SIN capture y con el accept del dueño', () => {
     const { doc, creadas } = documentoFalso();
-    crearCamaraNativa(doc).abrirMenu(ACCEPT_DEL_DUENO);
+    crearCamaraNativa(doc).abrirMenu(ACCEPT_RESPALDO_ESTRICTO);
     expect(creadas).toHaveLength(1);
     const e = creadas[0]!;
     expect(e.atributos.has('capture')).toBe(false);
-    expect(e.accept).toBe(ACCEPT_DEL_DUENO);
+    expect(e.accept).toBe(ACCEPT_RESPALDO_ESTRICTO);
     expect(e.atributos.get('data-camara')).toBe('nativa');
     expect(e.clics).toBe(1);
   });
@@ -141,15 +142,15 @@ describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () 
   it('🔴 después del menú, abrir() vuelve a poner capture y image/* (y al revés)', () => {
     const { doc, creadas } = documentoFalso();
     const camara = crearCamaraNativa(doc);
-    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    camara.abrirMenu(ACCEPT_RESPALDO_ESTRICTO);
     camara.abrir();
     const e = creadas[0]!;
     expect(creadas).toHaveLength(1);
     expect(e.atributos.get('capture')).toBe('environment');
     expect(e.accept).toBe('image/*');
-    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    camara.abrirMenu(ACCEPT_RESPALDO_ESTRICTO);
     expect(e.atributos.has('capture')).toBe(false);
-    expect(e.accept).toBe(ACCEPT_DEL_DUENO);
+    expect(e.accept).toBe(ACCEPT_RESPALDO_ESTRICTO);
   });
 
   it('🔴 la foto llega con cómo se abrió: «menu» o «camara»', () => {
@@ -157,7 +158,7 @@ describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () 
     const camara = crearCamaraNativa(doc);
     const origenes: string[] = [];
     camara.alRecibirFoto((_f, origen) => origenes.push(origen));
-    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    camara.abrirMenu(ACCEPT_RESPALDO_ESTRICTO);
     creadas[0]!.elegir(foto());
     camara.abrir();
     creadas[0]!.elegir(foto());

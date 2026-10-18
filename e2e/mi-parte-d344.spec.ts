@@ -94,6 +94,14 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       'Propina (10 % de la mesa) $19.75',
       'Tu parte $238.50',
     ]);
+    // D360 · P47 · la propina en negrita, rótulo y monto. Control positivo: «Tus platos», en el mismo desglose, no lo
+    // está (la medición distingue).
+    const pesos = (rotulo: string) => desglose(page).locator('.mi-parte-desglose-fila').filter({ hasText: rotulo })
+      .evaluate((fila) => [...fila.children].map((c) => Number(getComputedStyle(c).fontWeight)));
+    expect(await pesos('Propina (10 % de la mesa)')).toEqual([700, 700]);
+    const platos = await pesos('Tus platos');
+    expect(platos).toHaveLength(2);
+    for (const peso of platos) expect(peso).toBeLessThan(700);
     await expect(page.locator('.mi-parte-amt')).toHaveText('$238.50');
     await capturar(page, 'd344-02-mi-parte-partes-iguales', desglose(page));
   });

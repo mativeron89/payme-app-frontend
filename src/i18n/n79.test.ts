@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { traducir } from './idioma';
 
-/** n79 · AF-I18N-N79 · los textos que pasaron por el traductor (cinco; D377 sacó «c/u» con el monto del contador). */
+/**
+ * n79 · AF-I18N-N79 · los textos que pasaron por el traductor. Eran cinco; D377 sacó «c/u» con el monto del
+ * contador: quedan tres literales de CreateMesaFlow y el nombre accesible del plato de MesaDetailView.
+ */
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 describe('n79 · el español de los textos traducidos queda byte-idéntico', () => {

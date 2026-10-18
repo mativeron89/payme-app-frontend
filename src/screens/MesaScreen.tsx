@@ -52,6 +52,7 @@ import type {
 } from '../api/types';
 import { denominatorBps, originalParticipants, topePorcion } from '../api/mesaPresentation';
 import { useAuth } from '../auth/AuthContext';
+import { crearMemoriaDeInvitaciones } from '../components/InviteFriends';
 import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
@@ -490,6 +491,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [cardsOpen, setCardsOpen] = useState(false);
   // T-F1: invitador in-app desplegable en la mesa (el paso compartir es one-shot).
   const [inviteOpen, setInviteOpen] = useState(false);
+  /**
+   * D379 · la memoria de las invitaciones in-app de ESTA mesa (claves por
+   * destinatario, lo reservado y los «Invitado ✓»). El panel vive en la hoja
+   * del engranaje y se desmonta al cerrarla: la memoria queda acá, así reabrir y
+   * reintentar reutiliza la misma `Idempotency-Key`. Es una por mesa e
+   * identidad: cambia con la mesa, el token de invitado o la cuenta.
+   */
+  const memoriaDeInvitaciones = useMemo(
+    () => crearMemoriaDeInvitaciones(code),
+    // `guestToken` y la cuenta no se leen adentro: están para renovarla cuando cambia la identidad.
+    [code, guestToken, session?.principal_id],
+  );
   const shareAttemptsRef = useRef<Map<string, string>>(new Map());
   const shareLinksRef = useRef<Map<string, string>>(new Map());
   const shareInFlightRef = useRef(createInFlightMutex());
@@ -3135,6 +3148,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       informativeLoadError={!!informativePersistenceActive && informativeState === 'error'}
       onRetryInformative={reload}
       onOpenInvite={() => setInviteOpen(true)}
+      onCloseInvite={() => setInviteOpen(false)}
+      memoriaDeInvitaciones={memoriaDeInvitaciones}
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
