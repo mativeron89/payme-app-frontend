@@ -198,3 +198,54 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?' })).toBeVisible();
   });
 });
+
+// ─── D360-5b · D370 · los nombres que vienen todo en mayúsculas ──────────────
+
+/** Le pone nombres en mayúsculas a tres platos de PA-2847 (del titular en el mock) y recarga. */
+async function platosEnMayusculas(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts';
+    const store = await import(/* @vite-ignore */ ruta) as {
+      state: { mesas: Array<{ code: string; items: Array<{ name: string }> }> };
+      persist: () => void;
+    };
+    const mesa = store.state.mesas.find((m) => m.code === 'PA-2847');
+    if (!mesa) throw new Error('PA-2847 ausente');
+    const nuevos: Record<string, string> = {
+      'Tagliatelle Bolognese': '100 HUGEL COPA',
+      'Risotto ai Funghi': 'ZIFON NATURAL 900 ML',
+      'Pizza Margherita': 'CERVEZA IPA',
+    };
+    for (const item of mesa.items) if (nuevos[item.name]) item.name = nuevos[item.name]!;
+    store.persist();
+    await new Promise<void>((r) => queueMicrotask(r));
+  });
+  await page.reload();
+}
+
+test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
+  test('🔴 en «Tu mesa»: «100 Hugel copa», «Zifon natural 900 ML», «Cerveza IPA»; lo guardado no cambia', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/mesa/PA-2847');
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    await platosEnMayusculas(page);
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    const nombre = (crudo: string) => page.locator(`.qc-renglon[data-plato="${crudo}"] .qc-nombre`);
+    // `data-plato` sigue con lo guardado; lo que se ve, con mayúscula inicial.
+    await expect(nombre('100 HUGEL COPA')).toHaveText('100 Hugel copa');
+    await expect(nombre('ZIFON NATURAL 900 ML')).toHaveText('Zifon natural 900 ML');
+    await expect(nombre('CERVEZA IPA')).toHaveText('Cerveza IPA');
+    // El nombre accesible dice lo mismo que se ve.
+    await expect(page.getByRole('button', { name: 'Zifon natural 900 ML', exact: true })).toBeVisible();
+    // Un nombre mixto queda tal cual.
+    await expect(page.locator('.qc-renglon[data-plato="Tiramisú"] .qc-nombre').first()).toHaveText('Tiramisú');
+    await capturar(page, 'd360-06-nombres-en-mayusculas', page.locator('.qc-lista'));
+    // Lo guardado en el mock sigue en mayúsculas.
+    const guardados = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem('payme_mock_state_v1') ?? '{}');
+      const mesa = (state.mesas ?? []).find((m: { code: string }) => m.code === 'PA-2847');
+      return (mesa?.items ?? []).map((i: { name: string }) => i.name).filter((n: string) => /HUGEL|ZIFON|IPA/.test(n));
+    });
+    expect(guardados.sort()).toEqual(['100 HUGEL COPA', 'CERVEZA IPA', 'ZIFON NATURAL 900 ML']);
+  });
+});

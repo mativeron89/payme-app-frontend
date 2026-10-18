@@ -89,6 +89,7 @@ import { formatMXN } from '../utils/format';
 import { reservaDelMonto } from './reservaDelMonto';
 import { centsToString, splitEqual, sumCents } from '../utils/money';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
+import { nombreDePlato } from '../utils/nombreDePlato';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
@@ -2552,7 +2553,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 </div>
               <div className="tk-list">
                 {editItems.map((it, idx) => {
-                  const nombre = it.name.trim();
+                  // D360-5b · D370 · el nombre como se muestra en la fila y en sus
+                  // nombres accesibles. El campo que se edita, «En el ticket
+                  // decía…» y lo que se manda al crear la mesa siguen tal cual.
+                  const nombre = nombreDePlato(it.name.trim());
                   const etiqueta = nombre || t('consumo {0}', idx + 1);
                   const confidenceWarning = it.lowConfidence ? (
                     <span

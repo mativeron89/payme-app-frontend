@@ -14,6 +14,7 @@ import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
 import { useUsernameCapability } from '../api/username';
 import { countdownTo, formatMXN } from '../utils/format';
+import { nombreDePlato } from '../utils/nombreDePlato';
 import {
   availableSlotsOf,
   bpsLabel,
@@ -831,14 +832,18 @@ export function MesaDetailView({
       >
         {mesa.items.map((i) => <div key={i.id} className="qc-renglon" data-plato={i.name}>{(() => {
           const fullPrice = i.price_cents * i.quantity;
-          const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
+          // D360-5b · D370 · el nombre como se muestra (y se anuncia): un nombre
+          // todo en mayúsculas va con mayúscula inicial. `data-plato` y las
+          // claves siguen con el nombre tal cual lo guardó el dueño.
+          const nombre = nombreDePlato(i.name);
+          const nombreAria = i.quantity > 1 ? t('{0} por {1}', nombre, i.quantity) : nombre;
           // D240 puntos 3 y 16 · la cantidad va ANTES del nombre («2 × Tiramisú»),
           // como en el ticket y en Mesas, y en su propio elemento: la elipsis
           // corta el nombre, nunca la cantidad.
           const titulo = (clase: string) => (
             <span className="qc-titulo">
               {i.quantity > 1 && <span className="qc-cant">{i.quantity} ×</span>}
-              <span className={clase}>{i.name}</span>
+              <span className={clase}>{nombre}</span>
             </span>
           );
           // En igualdad la selección sólo declara consumo y no reclama el
@@ -932,7 +937,7 @@ export function MesaDetailView({
                   <button
                     type="button"
                     className="qc-circulo qc-circulo--marcado"
-                    aria-label={t('Soltar {0}', i.name)}
+                    aria-label={t('Soltar {0}', nombre)}
                     onClick={() => { setAbierto(null); onToggleItem(i.id); }}
                   >
                     <Icon name="check" size={14} />
@@ -941,7 +946,7 @@ export function MesaDetailView({
                   <button
                     type="button"
                     className="qc-circulo qc-circulo--marcado"
-                    aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
+                    aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', nombre)}
                     aria-busy={soltando === i.id || undefined}
                     disabled={soltando !== null}
                     onClick={() => onReleaseItem(i.id)}

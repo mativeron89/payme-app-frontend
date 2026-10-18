@@ -21,6 +21,7 @@ import { personalZoneCaption } from '../utils/personalDates';
 import { parametroDeTicket } from './viajes/viajesView';
 import { useTandaVigente } from './useTandaVigente';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -287,7 +288,7 @@ function LoConsumido({ visita }: { visita: Visita }) {
       {visita.items.map((it, i) => (
         <li key={i} className="rest-item">
           <span className="rest-item-frac">{it.fractionBps < 10000 ? bpsLabel(it.fractionBps) : ''}</span>
-          <span className="rest-item-nombre">{it.name}</span>
+          <span className="rest-item-nombre">{nombreDePlato(it.name)}</span>
           <span className="rest-item-monto">{formatMXN(it.amountCents)}</span>
         </li>
       ))}

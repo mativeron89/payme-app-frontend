@@ -15,6 +15,7 @@
 import type { MesaDetail, MesaItem } from '../api/types';
 import { bpsLabel, bpsValido } from './mesaItemsView';
 import { agruparIguales, nombreConCantidad } from './agruparIguales';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
  * ¿Guardar este borrador cierra la mesa? La regla del dueño: todo plato queda
@@ -99,7 +100,7 @@ export function lineasElegidas(elegidos: readonly Elegido[]): { key: string; tex
   }).map((g) => ({
     key: g.key,
     texto: g.primero.bps >= 10000
-      ? nombreConCantidad(g.cantidad, g.primero.name)
-      : `${nombreConCantidad(g.cantidad, g.primero.name)} · ${bpsLabel(g.primero.bps)}`,
+      ? nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))
+      : `${nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))} · ${bpsLabel(g.primero.bps)}`,
   }));
 }

@@ -17,6 +17,7 @@ import { montoParaEscribir, partesIguales } from './QuienPago';
 import type { ConAjustes } from './ticketView';
 import { unirNombres } from './viajeView';
 import { nombreCompleto, type T } from './viajesView';
+import { nombreDePlato } from '../../utils/nombreDePlato';
 
 /**
  * D278-3 · D282-2 · corregir un ticket ya cargado (`PATCH /api/viajes/:id/tickets/:tid`, App Backend 2.182.0), puro: sin
@@ -267,8 +268,10 @@ export function avisoPrevio(ticket: TicketDelViaje, borrador: Borrador, t: T): s
     }
     if (!toque) continue;
     const elegido = 10000 - i.remaining_bps;
-    if (elegido - i.my_bps > 0) deOtros.push({ nombre: i.name, toque });
-    if (i.my_bps > 0) mios.push(i.name);
+    // D360-5b · D370 · el aviso nombra el plato como se muestra; el borrador
+    // (lo que se guarda) sigue con el nombre tal cual.
+    if (elegido - i.my_bps > 0) deOtros.push({ nombre: nombreDePlato(i.name), toque });
+    if (i.my_bps > 0) mios.push(nombreDePlato(i.name));
   }
   if (deOtros.length === 0) return mios.length > 0 ? t('Vas a tener que volver a elegir {0}.', unirNombres(mios, t)) : null;
   let texto: string;

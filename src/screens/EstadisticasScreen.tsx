@@ -31,6 +31,7 @@ import { AnilloSvg, type FormaAnillo } from './AnilloSvg';
 import { nombreDelPeriodo } from '../utils/meses';
 import { useTandaVigente } from './useTandaVigente';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -343,7 +344,7 @@ function PlatoMasPedido({ plato }: { plato: NonNullable<StatsResponse['top_dish'
     <>
       <h2 className="stat-sect">{t('Plato más pedido')}</h2>
       <div className="card card-p">
-        <div className="stat-dish">{plato.name}</div>
+        <div className="stat-dish">{nombreDePlato(plato.name)}</div>
         <div className="stat-lbl">
           {entero(plato.times)} {plato.times === 1 ? t('vez') : t('veces')}
         </div>
@@ -520,7 +521,7 @@ function AccesoQueComes({ acceso, clave, inicio }: { acceso: Sondeo<PlatosDelPer
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
   const primero = datos?.dishes[0];
   let sub: string | null = null;
-  if (datos && primero) sub = `${t('{0} es lo más elegido', primero.name)} · ${platosTexto(datos.distinctDishes, t)}`;
+  if (datos && primero) sub = `${t('{0} es lo más elegido', nombreDePlato(primero.name))} · ${platosTexto(datos.distinctDishes, t)}`;
   else if (datos) sub = t('Sin platos en {0}', enElPeriodo);
   return <FilaDeAcceso titulo={t('Qué comes')} sub={sub} destino="platos" />;
 }

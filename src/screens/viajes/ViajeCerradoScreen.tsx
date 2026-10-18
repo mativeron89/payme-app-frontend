@@ -23,6 +23,7 @@ import './viajes.css';
 import './viaje.css';
 import './listas.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { nombreDePlato } from '../../utils/nombreDePlato';
 
 /**
  * AF-VIAJES · D242 · el detalle de un viaje cerrado (1s): `GET …/resumen`.
@@ -371,7 +372,7 @@ function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar }: {
           {l.items.map((i, k) => (
             <li key={k} className="vjd-item">
               <span>
-                {i.name}
+                {nombreDePlato(i.name)}
                 {i.fraction_bps < 10000 && ` · ${etiquetaPorcion(i.fraction_bps, t)}`}
               </span>
               <span className="vjd-item-monto">{formatMXN(i.amount_cents)}</span>

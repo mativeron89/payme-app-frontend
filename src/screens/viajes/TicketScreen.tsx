@@ -52,6 +52,7 @@ import { circuloDelViaje } from './circuloDelViaje';
 import './viajes.css';
 import './ticket.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
+import { nombreDePlato } from '../../utils/nombreDePlato';
 
 /**
  * AF-VIAJES · D242 · un ticket del viaje: elegir lo que consumí (1i), «Pagar
@@ -669,11 +670,13 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
   return (
     <div className="qc-lista vjt-lista">
       {ticket.items.map((i) => {
-        const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
+        // D360-5b · D370 · el nombre como se muestra y se anuncia.
+        const nombre = nombreDePlato(i.name);
+        const nombreAria = i.quantity > 1 ? t('{0} por {1}', nombre, i.quantity) : nombre;
         const titulo = (clase: string) => (
           <span className="qc-titulo">
             {i.quantity > 1 && <span className="qc-cant">{i.quantity} ×</span>}
-            <span className={clase}>{i.name}</span>
+            <span className={clase}>{nombre}</span>
           </span>
         );
         const bps = seleccion.get(i.id) ?? 0;
@@ -716,7 +719,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
                   <button
                     type="button"
                     className="qc-circulo qc-circulo--marcado"
-                    aria-label={t('Soltar {0}', i.name)}
+                    aria-label={t('Soltar {0}', nombre)}
                     onClick={() => onSoltar(i.id)}
                   >
                     <Icon name="check" size={14} />

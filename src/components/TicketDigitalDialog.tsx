@@ -15,6 +15,7 @@ import { ticketDigitalView, type TicketDigitalView } from '../screens/ticketDigi
 import { formatMXN } from '../utils/format';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { Icon } from './Icon';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 type Estado =
   | { readonly tipo: 'cargando' }
@@ -180,7 +181,7 @@ export function TicketDigitalDialog({
                   {estado.ticket.items.map((item, index) => (
                     <li key={`${item.name}:${index}`}>
                       <span className="ticket-digital-qty">{item.quantity} ×</span>
-                      <span className="ticket-digital-name">{item.name}</span>
+                      <span className="ticket-digital-name">{nombreDePlato(item.name)}</span>
                       <span className="ticket-digital-price">{formatMXN(item.unitPriceCents)}</span>
                     </li>
                   ))}

@@ -25,8 +25,9 @@ describe('n79 · el español de los textos traducidos queda byte-idéntico', () 
       expect(traducir(literal, 'es')).toBe(literal);
       expect(traducir(literal, 'en'), literal).not.toBe(literal);
     }
-    // El nombre accesible del plato: antes `${name} por ${n}`.
-    expect(readFileSync(join(RAIZ, 'src/screens/MesaDetailView.tsx'), 'utf8')).toContain("t('{0} por {1}', i.name, i.quantity)");
+    // El nombre accesible del plato: antes `${name} por ${n}`. D360-5b · el nombre
+    // es el que se muestra (`nombreDePlato`), así que la variable es `nombre`.
+    expect(readFileSync(join(RAIZ, 'src/screens/MesaDetailView.tsx'), 'utf8')).toContain("t('{0} por {1}', nombre, i.quantity)");
     const nombre = 'Tiramisú';
     const cantidad = 2;
     expect(traducir('{0} por {1}', 'es', nombre, cantidad)).toBe(`${nombre} por ${cantidad}`);

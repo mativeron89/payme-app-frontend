@@ -48,6 +48,7 @@ import {
   type FuenteDeMesas,
   type RenglonDeMesas,
 } from './mesasEnLinea';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -573,7 +574,7 @@ export function MesasScreen() {
             {agruparPropios(m.items).map((g) => (
               <div key={g.key} className="hist-detail-row">
                 <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
-                <span className="hist-detail-name">{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                <span className="hist-detail-name">{nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))}</span>
                 <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
               </div>
             ))}
@@ -653,7 +654,7 @@ export function MesasScreen() {
                 {movement.items.length > 0 ? agruparDelPago(movement.id, movement.items).map((g) => (
                   <div key={g.key} className="hist-detail-row">
                     <span className="hist-detail-name">
-                      <span>{nombreConCantidad(g.cantidad, g.primero.name)}</span>
+                      <span>{nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))}</span>
                       {g.primero.declared_fraction_bps != null && (
                         <span className="hist-detail-declared">
                           {t('Declaraste {0}', bpsLabel(g.primero.declared_fraction_bps))}

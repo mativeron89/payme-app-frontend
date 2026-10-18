@@ -19,6 +19,7 @@ import { AnilloSvg } from './AnilloSvg';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { useTandaVigente } from './useTandaVigente';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
  * **Qué comes** — pantalla 2c de «Mis estadísticas», sólo la vista por PLATOS
@@ -293,7 +294,7 @@ function TusPlatos({ datos, clave }: { datos: PlatosDelPeriodo; clave: ClavePeri
   const { t } = useIdioma();
   const veces = datos.dishes.map((d) => d.times);
   const pcts = porcentajesEnteros(veces);
-  const resumen = datos.dishes.map((d, i) => `${d.name} ${pcts[i]}%`).join(', ');
+  const resumen = datos.dishes.map((d, i) => `${nombreDePlato(d.name)} ${pcts[i]}%`).join(', ');
   return (
     <section className="stat-anillo-card" aria-labelledby="platos-titulo">
       <div>
@@ -321,7 +322,7 @@ function TusPlatos({ datos, clave }: { datos: PlatosDelPeriodo; clave: ClavePeri
           <li key={`${d.restaurant.id}:${d.name}`} className="stat-anillo-fila">
             <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
             <span className="plato-texto">
-              <span className="stat-anillo-nombre">{d.name}</span>
+              <span className="stat-anillo-nombre">{nombreDePlato(d.name)}</span>
               <span className="plato-rest">{d.restaurant.name}</span>
             </span>
             <span className="stat-anillo-visitas">{vecesTexto(d.times, t)}</span>

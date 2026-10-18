@@ -24,7 +24,8 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
   // pseudoelemento del círculo (definición 4: sin agrandar lo visible).
   it('la liberación queda en el renglón, sin X roja, con nombre accesible y blanco de 44px', () => {
     expect(mesa).toContain('className="qc-circulo qc-circulo--marcado"');
-    expect(mesa).toContain("t('Soltar {0}', i.name)");
+    // D360-5b · con el nombre como se muestra (`nombreDePlato`).
+    expect(mesa).toContain("t('Soltar {0}', nombre)");
     expect(mesa).not.toContain("'x-circle'");
     expect(css).toMatch(/button\.qc-circulo::after\s*\{[\s\S]*width:\s*var\(--tap-min\)/);
   });
