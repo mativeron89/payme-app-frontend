@@ -1,10 +1,11 @@
 import { splitEqual, tipFromBps } from '../../utils/money';
 
 /**
- * D344 · «Mi parte» de una mesa, **sólo para el mock**. Port de `services/parteDeMesa.js` de App Backend 2.186.0.
+ * D344 · «Mi parte» de una mesa, **sólo para el mock**. Port de `services/parteDeMesa.js` de App Backend 2.186.1 (el que trae el
+ * inventario de 2.187.0).
  *
  * 🔴 La app NO calcula «Mi parte»: la muestra tal como la publica el dueño en `GET /api/mesas/:code?share_version=1`
- * (contrato `contract-mirror/contract/mesa-mi-parte-v1.json`, cc0f617e…). Esto vive en `mock/` para que el modo de
+ * (contrato `contract-mirror/contract/mesa-mi-parte-v1.json`, 475258cf…). Esto vive en `mock/` para que el modo de
  * ejemplo responda lo mismo que el dueño; lo que vale es el servidor. No es un cálculo de dinero de producto: sólo existe
  * en mesas sin garantía, que el servidor nunca cobra. Nada fuera de `src/api/mock/` lo importa directo; la cadena que lo
  * usa (`store.ts` → `mockApi.ts`) sale del mock sólo por la rama `IS_MOCK ? mockApi : realApi` de `src/api/index.ts`,
@@ -13,10 +14,11 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  *
  * ## Procedencia
  *
- * `services/parteDeMesa.js` en `6fa84b3570d701b0cb30c91fc56ed6a01127b326`, sha256 `8ccd1788…4796` (medido con
+ * `services/parteDeMesa.js` en `c8432e745741188cf88b3a0babb2f0f41856e6e9`, sha256 `447ea41a…5fdd` (medido con
  * `git show … | shasum -a 256`, y es el que declara `scripts/mirror-inventory.json`). El espejo no copia ese archivo
  * (D268: sólo `contract/*.json`), así que la prueba de equivalencia son los vectores del dueño
- * (`tests/parte-de-mesa.test.js`, a18a286b…), portados en `parteDeMesa.test.ts`.
+ * (`tests/parte-de-mesa.test.js`, e14ec51c…) y los `ejemplos` del contrato, portados en `parteDeMesa.test.ts`.
+ * 2.186.1 (respecto de 2.186.0, `8ccd1788…`): la guarda de enteros seguros en `neto`.
  *
  * Usa `tipFromBps` y `splitEqual` de `src/utils/money.ts`, que son aritméticamente idénticos a los de `utils/money.js`
  * del dueño en ese commit (sha256 `86542329…2891`, el del inventario): comparados línea por línea, las mismas guardas en
@@ -48,9 +50,9 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  */
 
 export const PROCEDENCIA = {
-  commit: '6fa84b3570d701b0cb30c91fc56ed6a01127b326',
+  commit: 'c8432e745741188cf88b3a0babb2f0f41856e6e9',
   ruta: 'services/parteDeMesa.js',
-  sha256: '8ccd178853ac6890e884e4672e0580b6fff41285386d63529b11d41cb09a4796',
+  sha256: '447ea41a867edd808dc7f2e0fcf79571d743b98f3e13a1cc25608fd478c75fdd',
   dinero: { ruta: 'utils/money.js', sha256: '86542329793934a1866a7d101d0c21002f99cf838ca7aef2cf2dcf5a2a432891' },
 } as const;
 
@@ -163,8 +165,13 @@ export function propinaTotal(base: number, setting: PropinaDeLaMesa | null | und
 export function neto({ P, D = 0, S = 0, V = 0, omitidos = false }: AjustesDelTicket & { readonly P: number }): Neto {
   exigir([P, D, S, V].every(enteroNoNegativo) && P > 0);
   if (omitidos) return { P, D: 0, S: 0, V: 0, N: P, omitidos: true, motivo: 'mesa_corregida' };
-  if (P + S + V - D <= 0) return { P, D: 0, S: 0, V: 0, N: P, omitidos: true, motivo: 'neto_no_positivo' };
-  return { P, D, S, V, N: P + S + V - D, omitidos: false, motivo: null };
+  // 2.186.1 · si P + S + V no es un entero seguro, lanza antes de restar: con `number`, una suma más allá de 2^53 se
+  // redondea en silencio y el neto quedaba un centavo corrido. Dentro de ese rango la resta es exacta.
+  const bruto = P + S + V;
+  if (!Number.isSafeInteger(bruto)) throw error('parte_mesa_desborde');
+  const N = bruto - D;
+  if (N <= 0) return { P, D: 0, S: 0, V: 0, N: P, omitidos: true, motivo: 'neto_no_positivo' };
+  return { P, D, S, V, N, omitidos: false, motivo: null };
 }
 
 function parte(platos: number, netoDeLaPersona: number, propina: number): MiParte {

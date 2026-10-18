@@ -24,7 +24,34 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D344 · «Mi parte» y la propina de la mesa · App Backend v2.186.0 · 2026-10-17
+### D375 · una mesa de hasta 50 personas · App Backend v2.187.0 (trae 2.186.1) · 2026-10-18
+
+Decisiones D375 (tope de 50 personas, owner-first) y D378 (publicar el dueño 2.187.0), dentro de la entrega D360 del
+front. Según el Bibliotecario V, el dueño 2.187.0 está servido (Railway sobre `0099eb9`, `/ready` con 78/78).
+
+- Contenido: owner **`c8432e745741188cf88b3a0babb2f0f41856e6e9`** (v2.187.0, commit C: `MAX_PERSONAS = 50`; la
+  porción sigue en 20, con `min(original_participants, 20)`).
+- Inventario: el del owner en **`0099eb93b32c973c1e7289848654627be11a8620`** (v2.187.0, commit D;
+  `contract/mirror-inventory.json`, sha256 `d839a06e69c74f62725d7987380887d6afb21857a965d2ae7275891251b538c7`),
+  adoptado con `--adoptar-inventario` sin editarlo (byte-idéntico). Declara `c8432e7`, 144 entradas (una nueva). Que
+  diga `c8432e7` y no `0099eb9` no es un desfase: `0099eb9` sólo regenera el inventario.
+- 🔴 **Trae también 2.186.1** (`d9d9d4c`, los pendientes menores de la revisión G5 de «Mi parte»), que el espejo
+  anterior (`6fa84b3`, 2.186.0) nunca adoptó. El inventario es por commit: no se puede adoptar sólo D375.
+- **14 archivos espejados**, los mismos. Cambian dos:
+  - `contract/mesa-presentation-v1.json` (sha256 `38a600d547da3fff395a3c313b42500ee3e3694127e27a90adedecc89a8548b8`):
+    `create.expected_participants` y `read.original_participants` pasan de 1..20 a 1..50; `lock.fraction_denominator`
+    sigue en 1..20, ahora con `<= min(original_participants, 20)`;
+  - `contract/mesa-mi-parte-v1.json` (sha256 `475258cf7d34b91a874b8a94d4b25107f1c99da236d837ee504d14cf36e9f4bb`),
+    de 2.186.1: la guarda de enteros seguros en el neto, el redondeo de las fracciones («Redondeo» por
+    `share_totals`), el 409 en el reintento del PUT, la vista previa sólo por consumo y los `ejemplos`, que
+    `src/api/mock/parteDeMesa.test.ts` (⑦) corre contra el mock.
+- Sólo por hash, desde `6fa84b3`: cambian `schemas/index.js`, `services/mesaPresentation.js` y
+  `services/parteDeMesa.js`; entra `db/migrate_mesa_tope_50_personas_v2.187.0.sql`. Los hechos del dueño se
+  regeneraron en local: cambian el commit y el sha de `schemas/index.js`, ningún hecho.
+- El mock de «Mi parte» (`src/api/mock/parteDeMesa.ts`) se re-portó a 2.186.1 (la guarda de `neto`), con sus vectores.
+- `--integridad`: 14 copiados y 130 sólo por hash. `--paridad`: espejo = inventario = fuente en `c8432e7`, 144/144.
+
+### Refresh anterior · D344 · «Mi parte» y la propina de la mesa · App Backend v2.186.0 · 2026-10-17
 
 Orden `AF-D344-MI-PARTE-FRONT-20261017` (sha256 `b8b0a0fdcf5c08ffd6585100fa6227f2d41a46fa9746f71dab5885c805f552d4`).
 Según la orden, el dueño 2.186.0 está servido (`79124eb`, medido por el Bibliotecario V).

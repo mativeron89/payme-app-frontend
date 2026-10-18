@@ -2,12 +2,12 @@
   "version": 1,
   "scope": "consumo item selection and optional label of unidentified ticket mesa; no payments/equal division change",
   "create": {
-    "expected_participants": "Explicit integer 1..20 recorded as original_participants in existing mesa metadata. Omission retains historical default expected_participants=1 but original_participants=null. Client cannot set metadata/provenance.",
+    "expected_participants": "Explicit integer 1..50 (1..20 until v2.187.0, D375) recorded as original_participants in existing mesa metadata. Omission retains historical default expected_participants=1 but original_participants=null. Client cannot set metadata/provenance.",
     "restaurant_label": "Optional string, <=400 raw UTF-16 units, no C0/DEL, NFC+trim+collapse whitespace, <=200 normalized units; blank equivalent to omitted. Only own private unknown fallback with no RFC/generic name; otherwise 409 restaurant_label_not_allowed. No restaurant mutation.",
     "idempotency": "Normalized nonempty label included in hash. Different N provenance conflicts for new rows, including omitted vs explicit1. Historical hashes unaffected when label omitted. Same key concurrent creation returns same mesa."
   },
   "read": {
-    "original_participants": "Integer1..20 or null on POST /mesas, replay, GET /mesas/:code. Historical records without provenance stay null even if expected_participants>1. Never derive from participants_count/quantity.",
+    "original_participants": "Integer1..50 (1..20 until v2.187.0, D375) or null on POST /mesas, replay, GET /mesas/:code. Historical records without provenance stay null even if expected_participants>1. Never derive from participants_count/quantity.",
     "restaurant_name": "GET mesa detail/open/mine project the per-mesa label for unverified restaurant; verified restaurant name wins. Same access controls/audience as before. Client renders as text, never innerHTML."
   },
   "lock": {
@@ -20,7 +20,7 @@
         }
       ]
     },
-    "fraction_denominator": "Strict numeric integer1..20, exclusive with fraction_bps. Consumo only; must be <=original_participants. Canonical requested bps = integer quotient 10000/n. Do not calculate cents client-side.",
+    "fraction_denominator": "Strict numeric integer1..20, exclusive with fraction_bps. Consumo only; must be <=original_participants (so <=min(original_participants, 20): a 50-person mesa still splits a dish in at most 20). Canonical requested bps = integer quotient 10000/n. Do not calculate cents client-side.",
     "errors": {
       "400": [
         "fraction_denominator_consumo_only",

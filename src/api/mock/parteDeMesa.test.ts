@@ -14,6 +14,7 @@ import {
   propinaTotal,
   totales,
   type AjustesDelTicket,
+  type EntradaDeCalculo,
   type MiParte,
   type PersonaConPlatos,
   type PropinaDeLaMesa,
@@ -21,18 +22,20 @@ import {
 import { repartirPorMayorResto } from './viajesCalculo';
 
 /**
- * D344 · el port de «Mi parte» del dueño (`services/parteDeMesa.js`, App Backend 2.186.0), sólo para el mock. Todo en
- * centavos enteros.
+ * D344 · el port de «Mi parte» del dueño (`services/parteDeMesa.js`, App Backend 2.186.1 en el inventario de 2.187.0),
+ * sólo para el mock. Todo en centavos enteros.
  *
  *   ① la procedencia declarada es la que adoptó el inventario;
  *   ② vectores calculados A MANO, con la cuenta escrita al lado (no salen de este código);
- *   ③ la equivalencia: los vectores de `tests/parte-de-mesa.test.js` del dueño en `6fa84b3`, sha256
- *     `a18a286b601cb5c70e9c83e8bd2c296d50986d2c1c92d63a9b66da70057b29f4` (secciones ① y ②; la ④ es de
+ *   ③ la equivalencia: los vectores de `tests/parte-de-mesa.test.js` del dueño en `c8432e7`, sha256
+ *     `e14ec51cca45561e67127336df8e908d21fb819dd01a9860c816e5bbd725d23f` (secciones ① y ②; la ④ es de
  *     `ajustesAplicables`, que no se porta), y el ⑧ de `tests/mi-parte-http.test.js`, sha256
- *     `fb82d646fc650ca329222e846440acfc5c76356884cc406bf7d15fa82adbc658`;
+ *     `ce639e9420684486d11c1150732c9d69fd7624bb4624f935ddf8924acfa3dcf0` (lo que 2.186.1 le sumó a ese archivo es
+ *     del HTTP: orden 403/400, bordes del cuerpo y la mesa legacy; no es de este cálculo);
  *   ④ las propiedades del dueño, con la misma semilla;
  *   ⑤ las simplificaciones declaradas;
- *   ⑥ la guarda estática del CAMINO del build real hasta el módulo; no mide el bundle (ver ⑥).
+ *   ⑥ la guarda estática del CAMINO del build real hasta el módulo; no mide el bundle (ver ⑥);
+ *   ⑦ los `ejemplos` del contrato espejado (2.186.1), corridos contra este port.
  */
 
 const persona = (id: string, p: number): PersonaConPlatos => ({ id, p });
@@ -350,6 +353,14 @@ describe('③ la equivalencia con el dueño · tests/parte-de-mesa.test.js ① y
     expect(propinaTotal(0, { tip_cents: 5000 }), '«Otro» no depende de la base').toBe(5000);
   });
 
+  it('🔴 la propina por % redondea lejos del cero (round_half_away de tipFromBps): ni piso, ni al par, ni hacia abajo', () => {
+    // 2.186.1 · revisión G5, punto 7: todos los ejemplos daban un % exacto y floor o half-even pasaban igual.
+    expect(propinaTotal(1050, { tip_bps: 1500 }), '157,5 ¢ → 158 (el piso daría 157)').toBe(158);
+    expect(propinaTotal(25, { tip_bps: 1000 }), '2,5 ¢ → 3 (al par o hacia abajo daría 2)').toBe(3);
+    const r = calcular({ modo: 'consumo', P: 1050, personas: [persona('a', 1050)], setting: { tip_bps: 1500 }, yo: 'a' });
+    expect([r.share_totals.tip_cents, r.my_share!.tip_cents]).toEqual([158, 158]);
+  });
+
   it('🔴 la base es máx(0, P − D): con un descuento mayor o igual que los platos, la propina por % es 0', () => {
     expect(baseDePropina(17000, 2000)).toBe(15000);
     expect(baseDePropina(17000, 17000)).toBe(0);
@@ -387,6 +398,18 @@ describe('③ la equivalencia con el dueño · tests/parte-de-mesa.test.js ① y
       .toEqual({ P: 100, D: 0, S: 0, V: 0, N: 100, omitidos: true, motivo: 'mesa_corregida' });
   });
 
+  it('🔴 redondeo: un plato de 2 ¢ en tres cuartos le da a una persona −1 ¢ de «ajustes» sin ningún ajuste del ticket', () => {
+    // 2.186.1 · revisión G5, punto 2: no cambia el cálculo, se describe. Cada cuarto nominal vale 1 ¢, lo elegido suma 3
+    // sobre una línea de 2, y el neto (2) se reparte sobre pesos que suman 3. La suma sigue exacta y nadie queda negativo.
+    const personas = [persona('ana', 1), persona('beto', 1), persona('caro', 1)];
+    const partes = personas.map((x) => calcular({ modo: 'consumo', P: 2, personas, yo: x.id }));
+    expect(partes.map((r) => r.my_share)).toEqual([E(1, 0, 0, 1), E(1, 0, 0, 1), E(1, -1, 0, 0)]);
+    const t = partes[2]!.share_totals;
+    expect([t.discounts_cents, t.service_cents, t.tax_added_cents, t.adjustments_cents, t.adjustments_omitted],
+      'share_totals no trae ningún ajuste del ticket: el −1 ¢ es redondeo').toEqual([0, 0, 0, 0, false]);
+    expect(suma(partes.map((r) => r.my_share!.total_cents))).toBe(2);
+  });
+
   it('quien no eligió nada no recibe nada; en partes iguales, quien no tiene parte recibe null', () => {
     const r = calcular({ modo: 'consumo', P: 10000, personas: [persona('a', 10000), persona('b', 0)], ajustes: { D: 1000 }, setting: { tip_bps: 1000 }, yo: 'b' });
     expect(r.my_share).toEqual(E(0, 0, 0, 0));
@@ -414,6 +437,23 @@ describe('③ la equivalencia con el dueño · tests/parte-de-mesa.test.js ① y
       .toThrow(/parte_mesa_desborde/);
     expect(() => parteConsumo({ N: 100, T: Number.MAX_SAFE_INTEGER, personas: [persona('a', 100)], U: 0, yo: 'a' })).toThrow(/parte_mesa_desborde/);
     expect(() => parteIgual({ P: 100, N: 100, T: Number.MAX_SAFE_INTEGER, n: 1, k: 0 })).toThrow(/parte_mesa_desborde/);
+  });
+
+  it('🔴 el neto no se calcula si P + S + V no es un entero seguro: antes salía corrido un centavo, sin lanzar', () => {
+    // 2.186.1 · revisión G5, punto 1. Con `number`, MAX + 2 se redondeaba antes de restar D: N salía …990 donde es …991.
+    const MAX = Number.MAX_SAFE_INTEGER;
+    expect(() => neto({ P: MAX, D: 2, S: 2 })).toThrow(/^parte_mesa_desborde$/);
+    expect(() => neto({ P: MAX - 4, D: 7, S: 5, V: 1 })).toThrow(/^parte_mesa_desborde$/);
+    expect(() => neto({ P: MAX - 2, S: 2, V: 1 }), 'P + S + V = 2^53: ya no es seguro').toThrow(/^parte_mesa_desborde$/);
+    expect(() => calcular({ modo: 'igual', P: MAX, ajustes: { D: 2, S: 2 }, n: 1, k: 0 })).toThrow(/parte_mesa_desborde/);
+    // En el borde exacto (P + S + V = MAX) calcula, y la identidad del contrato se cumple.
+    const borde = neto({ P: MAX - 2, S: 1, V: 1, D: 5 });
+    expect([borde.N, borde.omitidos]).toEqual([MAX - 5, false]);
+    const t = calcular({ modo: 'igual', P: MAX - 2, ajustes: { S: 1, V: 1, D: 5 }, n: 1, k: 0 }).share_totals;
+    expect(t.items_cents + t.adjustments_cents + t.tip_cents).toBe(t.total_cents);
+    expect(t.total_cents).toBe(MAX - 5);
+    // La mesa corregida no suma ajustes: P solo, aunque llegara al borde.
+    expect(neto({ P: MAX, omitidos: true }).N).toBe(MAX);
   });
 
   it('🔴 el total de la mesa controla su propio desborde: con dos personas, o sin parte, ninguna parte desborda y igual lanza', () => {
@@ -476,6 +516,8 @@ describe('④ propiedades, con la semilla fija del dueño (tests/parte-de-mesa.t
       });
       expect(tot.tip_basis_cents, ctx).toBe(Math.max(0, P - D));
       if (setting.tip_bps !== undefined) {
+        // 2.186.1 · revisión G5, punto 7: la propina es EXACTAMENTE la de tipFromBps sobre B, no sólo una cota.
+        expect(tot.tip_cents, ctx).toBe(tipFromBps(Math.max(0, P - D), 1, setting.tip_bps));
         expect(tot.tip_cents <= tipFromBps(P, 1, setting.tip_bps), ctx).toBe(true);
         if (D >= P) expect(tot.tip_cents, ctx).toBe(0);
       }
@@ -554,6 +596,33 @@ describe('⑤ las simplificaciones del mock: lo que arma quien llama', () => {
  * flecha o un literal que termina en uno de esos) cuenta como que puede correr; y una referencia al cargar cuenta
  * aunque no sea una llamada. Todo eso falla cerrado.
  */
+describe('⑦ los `ejemplos` del contrato espejado (2.186.1): «sirven también para probar el mock de App Frontend»', () => {
+  const contrato = JSON.parse(readFileSync(new URL('../../../contract-mirror/contract/mesa-mi-parte-v1.json', import.meta.url), 'utf8')) as {
+    ejemplos: {
+      casos: ReadonlyArray<{ id: string; entrada: EntradaDeCalculo; my_share: MiParte | null; share_totals?: unknown }>;
+      sin_calculo: ReadonlyArray<{ id: string; entrada: EntradaDeCalculo; error: string }>;
+    };
+  };
+  const { casos, sin_calculo: sinCalculo } = contrato.ejemplos;
+
+  it('hay ejemplos que correr (si no, lo de abajo pasaría en vacío)', () => {
+    expect(casos.length).toBeGreaterThan(0);
+    expect(sinCalculo.length).toBeGreaterThan(0);
+  });
+
+  it('🔴 cada caso da la parte del contrato y, si la declara, los totales de la mesa', () => {
+    for (const caso of casos) {
+      const r = calcular(caso.entrada);
+      expect(r.my_share, caso.id).toEqual(caso.my_share);
+      if (caso.share_totals !== undefined) expect(r.share_totals, caso.id).toEqual(caso.share_totals);
+    }
+  });
+
+  it('🔴 lo que el contrato no calcula lanza su error, nunca sale como número', () => {
+    for (const caso of sinCalculo) expect(() => calcular(caso.entrada), caso.id).toThrow(new RegExp(`^${caso.error}$`));
+  });
+});
+
 describe('⑥ 🔴 la guarda estática: el camino del build real hasta «Mi parte» del mock (no el bundle)', () => {
   const MODULO = '/src/api/mock/parteDeMesa';
   const MOCK = '/src/api/mock';

@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-hechos-del-dueno.mjs, SÓLO EN LOCAL, con el repo del dueño en el commit del inventario. No se edita a mano. D268.",
   "version": 1,
-  "commit": "6fa84b3570d701b0cb30c91fc56ed6a01127b326",
+  "commit": "c8432e745741188cf88b3a0babb2f0f41856e6e9",
   "fuentes": {
     "routes/account.js": "c19eaf44aec24fa28ff52e98657f5efd91b15cc97eceb2c43275e1a10899a2bd",
     "routes/config.js": "81b8012c9ceb2cbc2b74ee029d5885d12f4e5f8929ad758818f552644e3c5698",
@@ -10,7 +10,7 @@
     "routes/mesas.js": "8238526701437d50ca05f7893476b12cc66c50116355c00436af0d964202a1f4",
     "routes/notifications.js": "cd069d53a137d091408a6beb018ed3f9e4c7e78bd2af733e13f8cd528097e607",
     "routes/ocr.js": "fe550379c57c252298bb872bb8461e5b13eb37e20e418cd3e4deefb57c9b8877",
-    "schemas/index.js": "ca6dd1b38fb57ed48dcd9c3f4982bc37f79163fa71f6227e737cb7f6926f7cba",
+    "schemas/index.js": "9e3bfa788f81d3fd9ac80c7b160ae5659c68d6a521a8c1fe25f26cf8b5d96fe2",
     "services/invitationAuthority.js": "e5d5a7c22dc77a8c1562973aa40a0248a6eb34f044db721e10339313aa4dd0d3",
     "services/notifications.js": "195aef6bb8915c2d17b3cd3291e453a4ac695b57d48593b29c1c94f1e7d563e0",
     "services/ocrResponseContract.js": "3782bf8a0cf3187a6fc8f71d681a08602f67728b9a24b951e392370e9f7e3920",
