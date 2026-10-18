@@ -227,6 +227,8 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     // de nuevo sería otra URL; la revalidación con los mismos bytes no la cambia.
     const antes = await pedidosDeFotos(page);
     await irEnLaApp(page, '/mesa/PA-2847');
+    // D360-4a · al volver, quiénes arranca cerrado otra vez: se abre para ver la foto.
+    await abrirQuienes(page);
     await expect(foto).toHaveAttribute('src', src!);
     await expect.poll(() => pedidosDeFotos(page)).toBeGreaterThan(antes);
     await expect(foto).toHaveAttribute('src', src!);
