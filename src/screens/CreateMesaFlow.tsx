@@ -6,7 +6,6 @@ import {
   modoContrato,
   participantesTrasCambio,
   pisoDe,
-  reparteElTotal,
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
@@ -86,8 +85,7 @@ import { guardarTicketEscaneado } from './viajes/ticketEscaneado';
 import { nombreDeViajeRecordado } from './viajes/circuloDelViaje';
 import { useCapacidadViajes } from '../api/viajes';
 import { formatMXN } from '../utils/format';
-import { reservaDelMonto } from './reservaDelMonto';
-import { centsToString, splitEqual, sumCents } from '../utils/money';
+import { centsToString, sumCents } from '../utils/money';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import { createInFlightMutex } from '../utils/inFlight';
@@ -2191,9 +2189,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * Toda esa traducción vive en `divisionModo.ts`, en un solo lugar.
    */
   if (step === 'ticket') {
-    // splitEqual, igual que el backend: la suma de las partes da el total
-    // exacto (el primer comensal absorbe los centavos sobrantes).
-    const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
       <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
@@ -2372,15 +2367,13 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             </div>
             {/* El nombre accesible y el rótulo visible comparten la misma
                 pregunta; consumo cuenta mesa, igual/total cuentan pagadores. */}
-            {/* AF-NOMBRE-EN-TICKET · pedido 127: el monto por persona va AL LADO
-                del selector, no debajo, para que las tres formas y este bloque
-                entren en una vista a 390×664 y 375×667.
-                AF-CENTRAR-CUANTOS-PAGAN · pedido 136 («Centra el ¿Cuántos
-                pagan?»): el grupo «– N + monto» va centrado. Para que el «+» no
-                se corra bajo el dedo, el bloque del monto reserva SIEMPRE su
-                ancho con una copia invisible del monto más ancho posible (el de
-                N=1, que es el total, escrito con ceros), y el rótulo está en los
-                dos estados: el ancho no cambia al elegir ni al cambiar N. */}
+            {/* D377 · «Como el diseño» (Mati): en las tres formas, sólo −, el
+                número y +, centrado y sin el monto de al lado: «cuánto paga cada
+                uno se ve después, en «Mi parte»». Sale la caja que reservaba el
+                ancho del monto (pedidos 127 y 136, D181): era lo que descentraba
+                el grupo (P03). Sin número, el «—» y el borde punteado de la
+                tarjeta (`division-stepper--pending`). El «+» no se corre bajo el
+                dedo al cambiar N porque el número ocupa siempre su ancho mínimo. */}
             <div className="division-stepper-fila">
               <div data-guia="personas" className="stepper" role="group" aria-label={preguntaStepper}>
                 <button
@@ -2399,42 +2392,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   +
                 </button>
               </div>
-              {/* D366 · en «Por lo que pidió cada uno» sale el monto con su
-                  rótulo «base de propina · c/u» (y el marcador «$—»): el grupo
-                  − N + queda solo y centrado. En «En partes iguales» y «Pagar
-                  el total» sigue «$X c/u», como antes (respuesta de V a D366).
-                  D360 · P04 · con el ticket incompleto el monto es «$—», nunca
-                  un «$0» calculado sobre un total que no hay. */}
-              {reparteElTotal(division) && (
-                <div className="division-stepper-monto">
-                  {/* Con ceros y no con el total: el total ya está arriba (§5 bis ·
-                      F, «un dato, un lugar») y una copia, aunque invisible, lo
-                      repetiría en el documento. Con números tabulares todos los
-                      dígitos miden lo mismo, así que el ancho es idéntico. */}
-                  {/* D181 · el más ancho de los repartos posibles, no el total: un total
-                      entero se ve «$840» y un reparto puede llevar centavos («$93.34»).
-                      Ver `reservaDelMonto.ts`. */}
-                  <div className="reserva-monto" aria-hidden="true">{reservaDelMonto(total, true)}</div>
-                  {participants !== null && (
-                    ticketCompleto && (
-                      <>
-                        <div className="split-amt" aria-live="polite">{formatMXN(perSlot)}</div>
-                        <div className="split-amt-lbl">{t('c/u')}</div>
-                      </>
-                    )
-                  )}
-                  {/* Sin número todavía (o sin total), el lugar del monto no
-                      queda vacío: un marcador apagado («$—» y su rótulo) en la
-                      misma caja, así el monto real aparece en el mismo lugar. Es
-                      decorativo: la pregunta ya la dice el grupo del selector. */}
-                  {(participants === null || !ticketCompleto) && (
-                    <>
-                      <div className="marcador-monto" aria-hidden="true">$—</div>
-                      <div className="marcador-rotulo" aria-hidden="true">{t('c/u')}</div>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>

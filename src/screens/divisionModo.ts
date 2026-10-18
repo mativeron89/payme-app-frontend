@@ -83,15 +83,6 @@ export function tituloStepper(m: ModoUI): string {
 }
 
 /**
- * Qué significa el importe que se muestra bajo el stepper. En las dos formas
- * que reparten el total es lo que paga cada uno; en consumo es sólo la base de
- * propina — decir «c/u» ahí sería afirmar un importe que nadie va a pagar.
- */
-export function reparteElTotal(m: ModoUI): boolean {
-  return modoContrato(m) === 'igual';
-}
-
-/**
  * Al cambiar de forma, un N ya elegido puede dejar de ser válido (elegí 1 en
  * consumo y paso a una que exige 2). **Se vuelve a preguntar en vez de
  * corregirlo solo:** un número que la app ajusta sin avisar es un número que

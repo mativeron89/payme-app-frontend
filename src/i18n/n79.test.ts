@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { traducir } from './idioma';
 
-/** n79 · AF-I18N-N79 · los cinco textos que pasaron por el traductor. */
+/** n79 · AF-I18N-N79 · los textos que pasaron por el traductor (cinco; D377 sacó «c/u» con el monto del contador). */
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 describe('n79 · el español de los textos traducidos queda byte-idéntico', () => {
@@ -13,12 +13,11 @@ describe('n79 · el español de los textos traducidos queda byte-idéntico', () 
    * clave es el literal que había en la base (`d566933`). Se afirma sobre la
    * función real y sobre el código que la usa.
    */
-  it('🔴 los cinco textos traducidos: el español es el de antes y hay traducción', () => {
+  it('🔴 los textos traducidos: el español es el de antes y hay traducción', () => {
     const LITERALES = [
       ['src/screens/CreateMesaFlow.tsx', 'No pudimos leer el ticket'],
       ['src/screens/CreateMesaFlow.tsx', 'Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.'],
       ['src/screens/CreateMesaFlow.tsx', 'El servicio de lectura no está disponible. Puedes cargar los consumos a mano.'],
-      ['src/screens/CreateMesaFlow.tsx', 'c/u'],
     ] as const;
     for (const [archivo, literal] of LITERALES) {
       expect(readFileSync(join(RAIZ, archivo), 'utf8'), literal).toContain(`t('${literal}')`);

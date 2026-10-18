@@ -4,7 +4,6 @@ import {
   modoContrato,
   participantesTrasCambio,
   pisoDe,
-  reparteElTotal,
   tituloStepper,
 } from './divisionModo';
 import { hechoDelDueno } from '../../scripts/hechosDelDueno';
@@ -72,12 +71,6 @@ describe('las tres formas de dividir de §1.3-bis contra las dos del contrato', 
     expect(tituloStepper('total')).toBe('¿Cuántos pagan?');
     expect(tituloStepper('consumo')).toBe('¿Cuántos son en la mesa?');
     expect(new Set(TODOS.map(tituloStepper)).size).toBe(2);
-  });
-
-  it('sólo las que reparten el total muestran un importe «c/u»', () => {
-    expect(reparteElTotal('igual')).toBe(true);
-    expect(reparteElTotal('total')).toBe(true);
-    expect(reparteElTotal('consumo')).toBe(false);
   });
 
   describe('cambiar de forma no corrige el número por su cuenta', () => {

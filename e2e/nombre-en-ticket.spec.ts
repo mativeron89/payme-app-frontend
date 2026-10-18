@@ -86,8 +86,9 @@ async function medirAlBajar(page: Page) {
  * El alto que importa es el VISIBLE en el navegador del teléfono: la captura de
  * Mati (347×592, proporción 0,586) da unos 390×664 en Safari de un iPhone de
  * 6,1" con sus barras. Se mide ahí y en el iPhone SE (375×667), en los tres
- * estados: sin número, con número en «En partes iguales» («c/u») y con número
- * en «Por lo que pidió cada uno» (desde D366, sin monto al lado del selector).
+ * estados: sin número, con número en «En partes iguales» y con número en «Por
+ * lo que pidió cada uno». Desde D377 ninguna forma lleva monto al lado del
+ * selector.
  * 390×844 y 430×932 quedan como control.
  *
  * 🔴 D289 (Mati, 2026-10-11, «El diseño tal cual»): con la tarjeta blanca de D285 la tarjeta del ticket mide unos
@@ -121,7 +122,9 @@ test.describe('AF-NOMBRE-EN-TICKET · «¿Cómo dividen?» en una sola vista (y 
       await capturar(page, `como-dividen-${ancho}x${alto}-sin-numero`);
 
       await completarDivision(page);
-      await expect(page.locator('.split-amt')).toBeVisible();
+      // D377 · con número y sin monto al lado: el número es el control positivo.
+      await expect(page.getByRole('group', { name: '¿Cuántos pagan?', exact: true }).locator('.val')).toHaveText(/^\d+$/);
+      await expect(page.locator('.division-stepper')).not.toContainText('$');
       const igual = await acreditar('iguales con número');
       await capturar(page, `como-dividen-${ancho}x${alto}-con-numero`);
 

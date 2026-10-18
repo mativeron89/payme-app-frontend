@@ -4,38 +4,32 @@ import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { sacarFoto } from './_camara';
 
 /**
- * AF-CENTRAR-CUANTOS-PAGAN · pedido 136 de Mati: «Centra el ¿Cuántos pagan?»,
- * sobre la captura de 0.209.0 a 390×664, donde el título y el selector iban a
- * la izquierda y el monto por persona a la derecha.
+ * AF-CENTRAR-CUANTOS-PAGAN · pedido 136 de Mati: «Centra el ¿Cuántos pagan?».
+ *
+ * D377 · «Como el diseño» (Mati, 2026-10-18): en las tres formas el contador es
+ * sólo −, el número y +, centrado y sin el monto de al lado («cuánto paga cada
+ * uno se ve después, en «Mi parte»»). Sale la caja que reservaba el ancho del
+ * monto (pedidos 127 y 136, D181): era lo que descentraba el grupo (P03).
  *
  * - El título, centrado.
- * - El grupo `– N +` con el monto, JUNTO y centrado en la tarjeta.
- * - El «+» no se mueve bajo el dedo al cambiar N (1, 9 y 12).
- * - Sigue entrando todo en una vista a 390×664 y 375×667 (pedido 127).
+ * - El grupo `− N +` centrado en la tarjeta, sin número y con número.
+ * - Ningún monto al lado: ni «$», ni «c/u», ni la reserva invisible.
+ * - Sin número, el «—» y la tarjeta con el borde punteado en --warning (canvas
+ *   69 del paquete del tutorial); con número, el borde vuelve a ser sólido.
+ * - El «−» y el «+» no se mueven bajo el dedo al cambiar N (del piso a 20, el
+ *   tope de hoy), tampoco al primer toque.
  *
- * 🔴 Se mide el TEXTO (con un `Range`), no la caja: un título de ancho completo
- * con el texto a la izquierda tiene la caja centrada. Y en la base el selector
- * y el monto están en los dos bordes (`space-between`), así que su extensión
- * conjunta TAMBIÉN está centrada; lo que no hay es grupo. Por eso además se
- * pide que el monto esté pegado al selector.
- *
- * 🔴 D181 · los montos ya no miden todos lo mismo («$840», «$93.34»): con el
- * «+» fijo y el monto pegado al selector, el grupo VISIBLE no puede quedar
- * centrado para todos los montos a la vez. Lo que se centra es el LUGAR del
- * grupo: el selector y la caja reservada para el monto más ancho posible
- * (`reservaDelMonto`). Un monto más corto que la reserva deja el grupo visible
- * corrido a la izquierda, a lo sumo la mitad de lo que le falta: se mide eso.
- *
- * D366 · en «Por lo que pidió cada uno» sale el monto con su rótulo «base de
- * propina · c/u» (y el marcador «$—»): ahí el grupo es sólo `– N +` y queda
- * centrado solo. En «En partes iguales» y «Pagar el total» sigue «$X c/u», y
- * su centrado fino es P03 (espera las imágenes de Mati).
+ * 🔴 Se mide el TEXTO del título (con un `Range`), no su caja: un título de
+ * ancho completo con el texto a la izquierda tiene la caja centrada. Y el grupo
+ * se mide desde el borde izquierdo del «−» hasta el derecho del «+», no por la
+ * caja de `.stepper`: una caja de ancho completo con el contenido a la
+ * izquierda también está «centrada».
  */
 
 const FORMAS = [
-  { nombre: 'Pagar el total', radio: /Pagar el total/ },
-  { nombre: 'En partes iguales', radio: /En partes iguales/ },
-  { nombre: 'Por lo que pidió cada uno', radio: /Por lo que pidió cada uno/ },
+  { nombre: 'Pagar el total', radio: /Pagar el total/, pregunta: '¿Cuántos pagan?', piso: 1 },
+  { nombre: 'En partes iguales', radio: /En partes iguales/, pregunta: '¿Cuántos pagan?', piso: 2 },
+  { nombre: 'Por lo que pidió cada uno', radio: /Por lo que pidió cada uno/, pregunta: '¿Cuántos son en la mesa?', piso: 1 },
 ] as const;
 
 async function capturar(page: Page, nombre: string): Promise<void> {
@@ -66,115 +60,102 @@ async function ponerN(page: Page, n: number): Promise<void> {
 async function medir(page: Page) {
   return page.evaluate(() => {
     const card = document.querySelector('.division-stepper')!.getBoundingClientRect();
-    const texto = (el: Element) => {
-      const r = document.createRange();
-      r.selectNodeContents(el);
-      return r.getBoundingClientRect();
-    };
-    const titulo = texto(document.querySelector('.division-stepper-title')!);
-    const stepper = document.querySelector('.division-stepper .stepper')!.getBoundingClientRect();
-    // Lo VISIBLE del monto: el importe y su rótulo («c/u» o «base de propina ·
-    // c/u»), o sin número el marcador «$—» y su rótulo. Nunca la reserva
-    // invisible de ancho (`.reserva-monto`).
-    const montoEl = document.querySelector('.division-stepper .split-amt, .division-stepper .marcador-monto');
-    const rotuloEl = document.querySelector('.division-stepper .split-amt-lbl, .division-stepper .marcador-rotulo');
-    const monto = montoEl ? texto(montoEl) : null;
-    const rotulo = rotuloEl ? texto(rotuloEl) : null;
-    const boton = document.querySelector('.division-stepper .stepper button[aria-label="Un comensal más"]')!.getBoundingClientRect();
-    const derecha = Math.max(stepper.right, monto?.right ?? 0, rotulo?.right ?? 0);
-    const izquierdaMonto = monto ? Math.min(monto.left, rotulo?.left ?? Infinity) : null;
-    // El lugar del grupo: el selector y la caja del monto (que reserva el más
-    // ancho). D366 · sin monto («Por lo que pidió cada uno»), el selector solo.
-    const cajaEl = document.querySelector('.division-stepper-monto');
-    const cajaDerecha = cajaEl ? cajaEl.getBoundingClientRect().right : stepper.right;
+    const r = document.createRange();
+    r.selectNodeContents(document.querySelector('.division-stepper-title')!);
+    const titulo = r.getBoundingClientRect();
+    const boton = (nombre: string) =>
+      document.querySelector(`.division-stepper .stepper button[aria-label="${nombre}"]`)!.getBoundingClientRect();
+    const menos = boton('Un comensal menos');
+    const mas = boton('Un comensal más');
     return {
       centro: card.left + card.width / 2,
       tituloCentro: (titulo.left + titulo.right) / 2,
-      grupoCentro: (stepper.left + cajaDerecha) / 2,
-      hayMonto: cajaEl !== null,
-      // Lo que el grupo visible se corre: la mitad de lo que el monto no llena de la caja.
-      corrimientoVisible: (stepper.left + derecha) / 2 - (stepper.left + cajaDerecha) / 2,
-      faltante: cajaDerecha - derecha,
-      hueco: izquierdaMonto === null ? null : izquierdaMonto - stepper.right,
-      mas: boton.left,
+      grupoCentro: (menos.left + mas.right) / 2,
+      menos: menos.left,
+      mas: mas.left,
     };
   });
 }
 
+/** El color computado de un token, para comparar bordes sin escribir el valor a mano. */
+async function colorDelToken(page: Page, token: string): Promise<string> {
+  return page.evaluate((tk) => {
+    const el = document.createElement('span');
+    el.style.color = `var(${tk})`;
+    document.body.append(el);
+    const c = getComputedStyle(el).color;
+    el.remove();
+    return c;
+  }, token);
+}
+
+/**
+ * D377 · ningún monto al lado del contador. Antes de llamarla, el control
+ * positivo (el grupo con su «—» o su número): si no, una ausencia pasa sin
+ * probar nada. Se mira el texto (que también ve una copia invisible) y las
+ * clases que tenía el monto.
+ */
+async function sinMonto(page: Page): Promise<void> {
+  const tarjeta = page.locator('.division-stepper');
+  await expect(tarjeta).not.toContainText('$');
+  await expect(tarjeta).not.toContainText('c/u');
+  await expect(tarjeta.locator('.split-amt, .split-amt-lbl, .reserva-monto, .marcador-monto, .marcador-rotulo, .division-stepper-monto')).toHaveCount(0);
+}
+
 for (const [ancho, alto] of [[390, 664], [375, 667]] as const) {
-  test.describe(`AF-CENTRAR-CUANTOS-PAGAN · a ${ancho}×${alto}`, () => {
+  test.describe(`AF-CENTRAR-CUANTOS-PAGAN · D377 · a ${ancho}×${alto}`, () => {
     for (const forma of FORMAS) {
-      test(`🔴 «${forma.nombre}»: título y grupo «– N + monto» centrados, el monto junto al selector`, async ({ page }) => {
+      test(`🔴 «${forma.nombre}»: título y grupo «− N +» centrados, sin monto al lado; sin número, el borde punteado`, async ({ page }) => {
         await page.setViewportSize({ width: ancho, height: alto });
         await hastaComoDividen(page);
         await page.getByRole('radio', { name: forma.radio }).click();
+        await expect(page.getByRole('radio', { name: forma.radio })).toHaveAttribute('aria-checked', 'true');
+        const grupo = page.getByRole('group', { name: forma.pregunta, exact: true });
+        const tarjeta = page.locator('.division-stepper');
+        const advertencia = await colorDelToken(page, '--warning');
+        expect(advertencia, 'el token existe y no es el del borde de siempre').not.toBe(await colorDelToken(page, '--border'));
 
-        if (forma.nombre === 'Por lo que pidió cada uno') {
-          // D366 · sin monto ni marcador: el grupo es `– N +`, centrado con y sin número.
-          await expect(page.getByRole('radio', { name: forma.radio })).toHaveAttribute('aria-checked', 'true');
-          await expect(page.locator('.division-stepper .marcador-monto, .division-stepper .split-amt, .division-stepper-monto')).toHaveCount(0);
-          await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
-          for (const n of [null, 4] as const) {
-            if (n !== null) await ponerN(page, n);
-            const sinMonto = await medir(page);
-            const ds = JSON.stringify(sinMonto);
-            expect(sinMonto.hayMonto, ds).toBe(false);
-            expect(Math.abs(sinMonto.tituloCentro - sinMonto.centro), `título · ${ds}`).toBeLessThanOrEqual(2);
-            expect(Math.abs(sinMonto.grupoCentro - sinMonto.centro), `grupo · ${ds}`).toBeLessThanOrEqual(2);
-          }
-          await capturar(page, `cuantos-son-${ancho}x${alto}-por-consumo`);
-          return;
-        }
-
-        // Sin número: el marcador apagado ocupa el lugar del monto y el grupo
-        // ya se lee centrado.
-        const marcador = page.locator('.division-stepper .marcador-monto');
-        await expect(marcador).toHaveText('$—');
-        await expect(marcador).toHaveAttribute('aria-hidden', 'true');
-        const grises = await page.evaluate(() => {
-          const c = (s: string) => getComputedStyle(document.querySelector(s)!).color;
-          return { marcador: c('.division-stepper .marcador-monto'), rotulo: c('.division-stepper .marcador-rotulo') };
-        });
-        expect(grises.marcador, 'el marcador va en el gris del texto secundario').toBe(grises.rotulo);
+        // Sin número: «—», sin monto y el borde punteado en --warning.
+        await expect(grupo.locator('.val')).toHaveText('—');
+        await sinMonto(page);
+        await expect(tarjeta).toHaveCSS('border-top-style', 'dashed');
+        await expect(tarjeta).toHaveCSS('border-top-color', advertencia);
         const sin = await medir(page);
         const ds = JSON.stringify(sin);
         expect(Math.abs(sin.tituloCentro - sin.centro), `título sin número · ${ds}`).toBeLessThanOrEqual(2);
         expect(Math.abs(sin.grupoCentro - sin.centro), `grupo sin número · ${ds}`).toBeLessThanOrEqual(2);
-        if (forma.nombre === 'Pagar el total') await capturar(page, `cuantos-pagan-${ancho}x${alto}-sin-numero`);
+        await capturar(page, `cuantos-pagan-${ancho}x${alto}-${forma.piso === 2 ? 'iguales' : forma.nombre === 'Pagar el total' ? 'total' : 'consumo'}-sin-numero`);
 
+        // Con número: el número, sin monto y el borde sólido.
         await ponerN(page, 4);
-        await expect(page.locator('.division-stepper .split-amt[aria-live]')).toBeVisible();
-        await expect(marcador).toHaveCount(0);
+        await expect(grupo.locator('.val')).toHaveText('4');
+        await sinMonto(page);
+        await expect(tarjeta).toHaveCSS('border-top-style', 'solid');
         const m = await medir(page);
         const d = JSON.stringify(m);
         expect(Math.abs(m.tituloCentro - m.centro), `título · ${d}`).toBeLessThanOrEqual(2);
         expect(Math.abs(m.grupoCentro - m.centro), `grupo · ${d}`).toBeLessThanOrEqual(2);
-        // D181 · el monto entra en su reserva: si la pasara, la caja crecería y el «+» se correría.
-        expect(m.faltante, `el monto entra en la reserva · ${d}`).toBeGreaterThanOrEqual(-1);
-        expect(m.hueco, `el monto va junto al selector · ${d}`).not.toBeNull();
-        // Junto al selector: con «c/u» el monto define el ancho y el hueco es el
-        // del grupo (12).
-        expect(m.hueco!, `el monto va junto al selector · ${d}`).toBeLessThanOrEqual(16);
-        if (forma.nombre === 'Pagar el total') await capturar(page, `cuantos-pagan-${ancho}x${alto}-con-numero`);
+        await capturar(page, `cuantos-pagan-${ancho}x${alto}-${forma.piso === 2 ? 'iguales' : forma.nombre === 'Pagar el total' ? 'total' : 'consumo'}-con-numero`);
       });
     }
 
-    // «Pagar el total» (con «c/u», el monto define el ancho) y «Por lo que pidió
-    // cada uno» (desde D366 sin monto: el «+» queda fijo igual). Las dos
-    // arrancan en 1.
-    for (const forma of [FORMAS[0], FORMAS[2]]) {
-      test(`«${forma.nombre}»: el «+» no se mueve al cambiar N (1, 9 y 12), tampoco al primer toque`, async ({ page }) => {
+    for (const forma of FORMAS) {
+      test(`«${forma.nombre}»: el «−» y el «+» no se mueven al cambiar N (${forma.piso}, 9, 12 y 20), tampoco al primer toque`, async ({ page }) => {
         await page.setViewportSize({ width: ancho, height: alto });
         await hastaComoDividen(page);
         await page.getByRole('radio', { name: forma.radio }).click();
-        const antes = (await medir(page)).mas;
-        const posiciones: number[] = [];
-        for (const n of [1, 9, 12]) {
+        const antes = await medir(page);
+        const posiciones: Array<{ menos: number; mas: number }> = [];
+        for (const n of [forma.piso, 9, 12, 20]) {
           await ponerN(page, n);
-          posiciones.push((await medir(page)).mas);
+          await expect(page.locator('.division-stepper .stepper .val')).toHaveText(String(n));
+          const { menos, mas: x } = await medir(page);
+          posiciones.push({ menos, mas: x });
         }
-        for (const x of [...posiciones, antes]) {
-          expect(Math.abs(x - posiciones[0]!), JSON.stringify({ antes, posiciones })).toBeLessThanOrEqual(1);
+        const d = JSON.stringify({ antes, posiciones });
+        for (const p of [...posiciones, antes]) {
+          expect(Math.abs(p.mas - posiciones[0]!.mas), `+ · ${d}`).toBeLessThanOrEqual(1);
+          expect(Math.abs(p.menos - posiciones[0]!.menos), `− · ${d}`).toBeLessThanOrEqual(1);
         }
       });
     }

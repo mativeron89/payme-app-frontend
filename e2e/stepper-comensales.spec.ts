@@ -165,7 +165,9 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await mas.click(); // — → 2 (piso de iguales, del contrato)
     await mas.click(); // 2 → 3
     await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('3');
-    await expect(page.getByText('$280')).toBeVisible();
+    // D377 · sin monto al lado del contador: la parte de $280 se lee en la mesa (abajo).
+    await expect(page.locator('.division-stepper')).not.toContainText('$280');
+    await expect(page.locator('.division-stepper')).not.toContainText('c/u');
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Garantizar', exact: true }).click();

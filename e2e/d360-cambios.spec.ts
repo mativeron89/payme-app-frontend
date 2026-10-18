@@ -61,17 +61,23 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     expect(caja!.y + caja!.height, 'la explicación va arriba de la opción').toBeLessThanOrEqual(opcionCaja!.y);
     await capturar(page, 'd360-01-ayuda-pagar-el-total');
 
-    // Abrir otro cierra el anterior: una a la vez.
-    await ayuda(page, 'En partes iguales').click();
-    await expect(explicacion(page)).toHaveCount(1);
-    await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.');
-    await expect(ayuda(page, 'Pagar el total')).toHaveAttribute('aria-expanded', 'false');
-
     // Escape la cierra y el foco vuelve a su «?».
     await page.keyboard.press('Escape');
     await expect(explicacion(page)).toHaveCount(0);
-    await expect(ayuda(page, 'En partes iguales')).toBeFocused();
+    await expect(ayuda(page, 'Pagar el total')).toBeFocused();
+    await expect(ayuda(page, 'Pagar el total')).toHaveAttribute('aria-expanded', 'false');
+
+    // Abrir otro cierra el anterior: una a la vez. Abierta, la burbuja tapa la
+    // opción de arriba (va arriba de la suya), así que se abre de arriba hacia
+    // abajo: «En partes iguales» y después «Pagar el total».
+    await ayuda(page, 'En partes iguales').click();
+    await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.');
+    await ayuda(page, 'Pagar el total').click();
+    await expect(explicacion(page)).toHaveCount(1);
+    await expect(explicacion(page)).toHaveText('Sólo algunas personas van a pagar la cuenta, pero todos pueden marcar lo que comieron.');
     await expect(ayuda(page, 'En partes iguales')).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Escape');
+    await expect(explicacion(page)).toHaveCount(0);
 
     // La ✕ la cierra y el foco vuelve al «?».
     await ayuda(page, 'Por lo que pidió cada uno').click();
@@ -101,26 +107,34 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     expect(Math.round(o!.x + o!.width - (signo!.x + signo!.width))).toBe(20);
   });
 
-  test('🔴 la tarjeta partida y el contador: por consumo sin «base de propina»; en partes iguales, «$X c/u»', async ({ page }) => {
+  test('🔴 la tarjeta partida y el contador: en las tres formas, sólo − N +, sin monto al lado (D366 · D377)', async ({ page }) => {
     await hastaComoDividen(page);
     // Título solo en su tarjeta; el total con «Ver el ticket», en otra.
     await expect(page.locator('.ticket-title-card')).toHaveText('¿Cómo dividen?');
     await expect(page.locator('.ticket-total-card .ticket-title-amount')).toHaveText('$840');
     await expect(page.locator('.ticket-total-card').getByRole('button', { name: 'Ver el ticket', exact: true })).toBeVisible();
-    // Por lo que pidió cada uno (la de entrada): − N + solo, ni monto ni «$—».
-    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
-    await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toBeVisible();
-    await expect(page.locator('.division-stepper .marcador-monto, .division-stepper .split-amt')).toHaveCount(0);
-    await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
-    await capturar(page, 'd360-02-como-dividen-por-consumo');
-    // En partes iguales sigue el monto por persona.
+    // D377 · en las tres formas, − N + solo: ni monto, ni «$—», ni «c/u».
+    // Primero el control positivo (el grupo con su «—»), después la ausencia.
+    const tarjeta = page.locator('.division-stepper');
+    for (const [radio, pregunta] of [
+      [/Por lo que pidió cada uno/, '¿Cuántos son en la mesa?'],
+      [/En partes iguales/, '¿Cuántos pagan?'],
+      [/Pagar el total/, '¿Cuántos pagan?'],
+    ] as const) {
+      await page.getByRole('radio', { name: radio }).click();
+      await expect(page.getByRole('group', { name: pregunta, exact: true }).locator('.val')).toHaveText('—');
+      await expect(tarjeta).not.toContainText('$');
+      await expect(tarjeta).not.toContainText('c/u');
+      await expect(tarjeta).not.toContainText('base de propina');
+      if (pregunta === '¿Cuántos son en la mesa?') await capturar(page, 'd360-02-como-dividen-por-consumo');
+    }
+    // En partes iguales con número (el piso es 2: tres toques dan 4), sigue sin monto.
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
-    await expect(page.locator('.division-stepper .marcador-monto')).toHaveText('$—');
     const mas = page.getByRole('button', { name: 'Un comensal más' });
-    for (let i = 0; i < 4; i += 1) await mas.click();
-    // 840 ÷ 4 = 210.
-    await expect(page.locator('.division-stepper .split-amt')).toHaveText('$210');
-    await expect(page.locator('.division-stepper .split-amt-lbl')).toHaveText('c/u');
+    for (let i = 0; i < 3; i += 1) await mas.click();
+    await expect(page.getByRole('group', { name: '¿Cuántos pagan?', exact: true }).locator('.val')).toHaveText('4');
+    await expect(tarjeta).not.toContainText('$');
+    await expect(tarjeta).not.toContainText('c/u');
     await capturar(page, 'd360-03-como-dividen-partes-iguales');
   });
 });
@@ -157,9 +171,9 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await cerrarElTicket(page);
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
     const mas = page.getByRole('button', { name: 'Un comensal más' });
-    for (let i = 0; i < 4; i += 1) await mas.click();
-    // 800 ÷ 4 = 200.
-    await expect(page.locator('.division-stepper .split-amt')).toHaveText('$200');
+    // El piso de partes iguales es 2: tres toques dan 4.
+    for (let i = 0; i < 3; i += 1) await mas.click();
+    await expect(page.getByRole('group', { name: '¿Cuántos pagan?', exact: true }).locator('.val')).toHaveText('4');
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
     const code = (await page.locator('.share-code-txt').innerText()).trim();
@@ -167,9 +181,15 @@ test.describe('P04 · D371 · el plato en $0', () => {
     const mesa = await page.evaluate((c) => {
       const state = JSON.parse(localStorage.getItem('payme_mock_state_v1') ?? '{}');
       const m = (state.mesas ?? []).find((x: { code: string }) => x.code === c);
-      return m ? { total: m.total_cents, agua: m.items.filter((i: { name: string }) => i.name === 'Agua mineral').map((i: { price_cents: number }) => i.price_cents) } : null;
+      return m ? {
+        total: m.total_cents,
+        agua: m.items.filter((i: { name: string }) => i.name === 'Agua mineral').map((i: { price_cents: number }) => i.price_cents),
+        n: m.expected_participants,
+        parte: m.slots?.[0]?.amount_cents,
+      } : null;
     }, code);
-    expect(mesa).toEqual({ total: 80000, agua: [0] });
+    // D377 · la parte ya no se ve en el contador: la cuenta (800 ÷ 4 = 200) se lee en la mesa.
+    expect(mesa).toEqual({ total: 80000, agua: [0], n: 4, parte: 20000 });
   });
 
   test('🔴 un precio vacío no es $0: el total dice «—» y no se puede seguir hasta completarlo', async ({ page }) => {
@@ -241,6 +261,14 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     // Un nombre mixto queda tal cual.
     await expect(page.locator('.qc-renglon[data-plato="Tiramisú"] .qc-nombre').first()).toHaveText('Tiramisú');
     await capturar(page, 'd360-06-nombres-en-mayusculas', page.locator('.qc-lista'));
+    // D360-6 · al marcar un plato, la tira de porciones aparece debajo, sin taparlo
+    // (el Tagliatelle de PA-2847, renombrado acá «100 HUGEL COPA»). Captura para Mati.
+    const hugel = page.locator('.qc-renglon[data-plato="100 HUGEL COPA"]');
+    await page.getByRole('button', { name: '100 Hugel copa', exact: true }).click();
+    await expect(hugel.locator('.qc-porciones')).toBeVisible();
+    const [cajaFila, cajaTira] = await Promise.all([hugel.locator('[data-estado="mio"]').boundingBox(), hugel.locator('.qc-porciones').boundingBox()]);
+    expect(cajaTira!.y, 'la tira no tapa el renglón').toBeGreaterThanOrEqual(cajaFila!.y + cajaFila!.height - 1);
+    await capturar(page, 'd360-11-porcion-debajo', hugel);
     // Lo guardado en el mock sigue en mayúsculas.
     const guardados = await page.evaluate(() => {
       const state = JSON.parse(localStorage.getItem('payme_mock_state_v1') ?? '{}');

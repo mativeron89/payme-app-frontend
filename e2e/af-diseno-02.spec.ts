@@ -128,13 +128,16 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrirTicket(page);
 
     const titulo = page.locator('.title-card').first();
+    // D366 · la tarjeta se parte (canvas 2c): el título solo, y el total con «Ver el ticket» en otra.
+    const delTotal = page.locator('.ticket-total-card');
     await expect(page.locator('.demo-strip')).toHaveCount(0);
-    await expect(titulo).not.toContainText('La Parolaccia');
-    await expect(titulo).not.toContainText('Roma Norte, CDMX');
-    await expect(titulo.getByText('$840', { exact: true })).toBeVisible();
-    await expect(titulo.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
-    // D285 (0.242.0): el total va en 32/800 debajo de la fila del título, alineado a la izquierda.
-    await expect(titulo.getByText('$840', { exact: true })).toHaveCSS('font-size', '32px');
+    await expect(titulo).toHaveText('¿Cómo dividen?');
+    await expect(delTotal).not.toContainText('La Parolaccia');
+    await expect(delTotal).not.toContainText('Roma Norte, CDMX');
+    await expect(delTotal.getByText('$840', { exact: true })).toBeVisible();
+    await expect(delTotal.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
+    // D285 (0.242.0): el total va en 32/800, alineado a la izquierda (desde D366, en su tarjeta).
+    await expect(delTotal.getByText('$840', { exact: true })).toHaveCSS('font-size', '32px');
     await expect(titulo).toHaveCSS('text-align', 'left');
 
     const stepper = page.locator('.division-stepper');
@@ -143,11 +146,13 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(stepper.locator('svg')).toHaveCount(0);
     await expect(stepper).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(stepper).toHaveCSS('border-top-style', 'dashed');
+    // D377 · el punteado del diseño, en --warning (#92620a).
+    await expect(stepper).toHaveCSS('border-top-color', 'rgb(146, 98, 10)');
 
     const total = page.getByRole('radio', { name: /Pagar el total/ });
     await expect(total.locator('.div-total-icon')).toHaveCount(1);
 
-    const abrir = titulo.getByRole('button', { name: /Ver el ticket/ });
+    const abrir = delTotal.getByRole('button', { name: /Ver el ticket/ });
     await abrir.click();
     const dialogo = page.getByRole('dialog', { name: /Ticket ·/ });
     await expect(dialogo).toBeVisible();

@@ -499,7 +499,6 @@ export const EN: Record<string, string> = {
   // n79 · AF-I18N-N79: textos que se mostraban sin pasar por el traductor.
   "Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.": "We reached this month's reading limit. You can add the items by hand.",
   "El servicio de lectura no está disponible. Puedes cargar los consumos a mano.": "The reading service isn't available. You can add the items by hand.",
-  "c/u": "each",
   "{0} por {1}": "{0} × {1}",
   "No pudimos leer este ítem": "We couldn't read this item",
   "No pudimos leer la tarjeta.": "We couldn't read the card.",
