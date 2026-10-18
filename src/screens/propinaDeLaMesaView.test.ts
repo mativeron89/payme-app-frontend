@@ -9,6 +9,7 @@ import {
   presetDe,
   puedeFijarPropina,
   rechazoOcultaElSelector,
+  rechazoReleeLaMesa,
   sanearOtro,
   servicioImpreso,
   settingDeOtro,
@@ -422,6 +423,27 @@ describe('mensajeDeRechazo', () => {
     ].map((m) => m.texto);
     for (const x of textos) expect(x.length).toBeGreaterThan(0);
     expect(new Set(textos).size).toBe(6);
+  });
+});
+
+/**
+ * Contrato del dueño 2.186.1 (`mesa-mi-parte-v1.json`, `escritura.cliente`): un 409 en un reintento del PUT /tip no
+ * dice que la propina quedó sin fijar; se relee el GET.
+ */
+describe('rechazoReleeLaMesa · el 409 del reintento relee la mesa (2.186.1)', () => {
+  it('🔴 mesa_not_active y tip_setting_not_applicable releen; los demás no', () => {
+    expect(rechazoReleeLaMesa('mesa_not_active')).toBe(true);
+    expect(rechazoReleeLaMesa('tip_setting_not_applicable')).toBe(true);
+    for (const otro of ['not_mesa_organizer', 'mesa_not_found', 'validation_error', '', null, 'MESA_NOT_ACTIVE']) {
+      expect(rechazoReleeLaMesa(otro), String(otro)).toBe(false);
+    }
+  });
+
+  it('🔴 el cableado: MesaScreen relee con este predicado, no con un código suelto', () => {
+    const fuente = Object.values(import.meta.glob('/src/screens/MesaScreen.tsx', { query: '?raw', import: 'default', eager: true }))[0] as string;
+    expect(fuente, 'no se pudo leer MesaScreen.tsx').toBeTruthy();
+    expect(fuente).toContain('if (rechazoReleeLaMesa(estadoPropina.codigo)) reload();');
+    expect(fuente).not.toContain("estadoPropina.codigo === 'mesa_not_active') reload()");
   });
 });
 

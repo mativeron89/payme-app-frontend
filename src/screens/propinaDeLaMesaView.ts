@@ -150,3 +150,15 @@ export function mensajeDeRechazo(
 export function rechazoOcultaElSelector(codigo: string | null): boolean {
   return codigo === 'not_mesa_organizer' || codigo === 'tip_setting_not_applicable';
 }
+
+/**
+ * Un rechazo después del cual se relee la mesa (`GET` con `share_version=1`).
+ * Contrato del dueño 2.186.1 (`mesa-mi-parte-v1.json`, `escritura.cliente`): un
+ * 409 en un reintento del PUT —`mesa_not_active`, o `tip_setting_not_applicable`
+ * si el dinero se encendió entre un intento y otro— no dice que la propina
+ * quedó sin fijar: el primer PUT pudo guardarse antes, y lo que vale es lo que
+ * trae el GET. El aviso y el selector no cambian por esto.
+ */
+export function rechazoReleeLaMesa(codigo: string | null): boolean {
+  return codigo === 'mesa_not_active' || codigo === 'tip_setting_not_applicable';
+}

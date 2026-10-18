@@ -100,6 +100,7 @@ import {
   mismaPropina,
   puedeFijarPropina,
   rechazoOcultaElSelector,
+  rechazoReleeLaMesa,
 } from './propinaDeLaMesaView';
 
 /**
@@ -719,7 +720,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * `tip_setting`, y `share_totals`/«Mi parte» cambian con la propina. La lectura
    * completa avanza la época, así que un refresco que salió antes se descarta.
    * Ante 409 `mesa_not_active` (pendiente MENOR 4) también: se muestra lo que
-   * quedó guardado, que puede ser el valor de un 200 perdido. Sólo en la
+   * quedó guardado, que puede ser el valor de un 200 perdido. Y ante 409
+   * `tip_setting_not_applicable` (contrato 2.186.1: el dinero se encendió entre
+   * un intento y otro, y el primer PUT pudo guardarse). Sólo en la
    * transición desde «guardando»: si el pedido terminó en «Compartir la mesa»,
    * la primera lectura de esta pantalla ya es posterior.
    */
@@ -730,7 +733,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (antes !== 'guardando') return;
     if (estadoPropina.fase === 'guardada') { reload(); return; }
     if (estadoPropina.fase !== 'rechazada') return;
-    if (estadoPropina.codigo === 'mesa_not_active') reload();
+    if (rechazoReleeLaMesa(estadoPropina.codigo)) reload();
     // Estos dos sacan el selector de la pantalla: el aviso no puede quedar adentro.
     if (rechazoOcultaElSelector(estadoPropina.codigo)) toast(mensajeDeRechazo(estadoPropina, t));
   }, [estadoPropina, reload, toast, t]);
