@@ -10579,6 +10579,10 @@ h1.pay-title-lbl {
   margin: 0;
   color: var(--text);
 }
+/* D360 · P47 · la propina en negrita, el renglón entero (rótulo y monto). */
+.mi-parte-desglose-propina {
+  font-weight: 700;
+}
 .mi-parte-desglose-total {
   border-top: 1px solid var(--gray-l);
   margin-top: 4px;

@@ -463,7 +463,8 @@ function DesgloseDeMiParte({
             <dd>{mia.adjustments_cents < 0 ? montoDeDescuento(-mia.adjustments_cents) : formatMXN(mia.adjustments_cents)}</dd>
           </div>
         )}
-        <div className="mi-parte-desglose-fila">
+        {/* D360 · P47 · «Poner en negrita la propina»: el renglón entero. */}
+        <div className="mi-parte-desglose-fila mi-parte-desglose-propina">
           <dt>{rotuloDePropina(tipSetting, t)}</dt>
           <dd>{formatMXN(mia.tip_cents)}</dd>
         </div>
