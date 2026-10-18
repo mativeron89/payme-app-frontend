@@ -799,18 +799,6 @@ export function MesaDetailView({
   const enfocarListo = (): void => {
     requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('.appbar-center')?.focus());
   };
-  /**
-   * D223 · D (aprobado) · el encabezado de «Tus consumos»: cuántos elegiste, no
-   * cuánto (el monto vive en la burbuja y en la barra). En partes iguales lo
-   * elegido son partes. D360-5a · sin nada elegido no dice nada: «Toca para
-   * elegir» salió. El renglón queda (vacío) para que elegir el primer plato no
-   * mueva la lista (regla 1).
-   */
-  const resumenDeConsumos = selected.size === 0
-    ? ''
-    : esConsumo
-      ? (selected.size === 1 ? t('1 elegido · toca para modificar') : t('{0} elegidos · toca para modificar', selected.size))
-      : (selected.size === 1 ? t('1 parte · toca para modificar') : t('{0} partes · toca para modificar', selected.size));
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
 
   /**
@@ -1290,10 +1278,12 @@ export function MesaDetailView({
             {/* D344 · la propina de la mesa: el selector, o lo que quedó si no se puede cambiar. */}
             {propinaDeLaMesa ?? (propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>)}
             {desgloseDeMiParte}
+            {/* D369 · sin subtítulo: ni «Toca para elegir» ni «N elegidos · toca
+                para modificar». La barra de abajo ya dice cuántos platos elegiste,
+                y la cabecera queda en un renglón que no cambia al elegir. */}
             <Desplegable
               className="tus-consumos"
               titulo={t('Tus consumos')}
-              resumen={resumenDeConsumos}
               abierto={consumosAbierto}
               onToggle={() => setConsumosAbierto((a) => !a)}
             >

@@ -7,7 +7,7 @@ import { abrirQuienes } from './_mesa';
  * («Todo junto, como el diseño», turno 2 · 2.9–2.11): quiénes están,
  * solicitudes para unirse (sólo si hay), compartir, tus consumos y cerrar mesa.
  * D360-4a · «Quiénes» arranca cerrado y sin la cantidad de personas; D360-7 ·
- * «Tus consumos» arranca abierto; D360-5a · sin «Toca para elegir». Los casos
+ * «Tus consumos» arranca abierto; D360-5a y D369 · sin subtítulo. Los casos
  * T01–T19 y los negativos de privacidad de las pruebas de aceptación de Codex
  * (`PRUEBAS_ACEPTACION_UNIRME.md`).
  *
@@ -221,23 +221,26 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.getByText(/quiere unirse/)).toHaveCount(0);
   });
 
-  test('🔴 T16 · tus consumos: abierto por defecto (D360-7) y sin «Toca para elegir» (D360-5a); elegir, cerrar y no se pierde nada', async ({ page }) => {
+  test('🔴 T16 · tus consumos: abierto por defecto (D360-7) y sin subtítulo (D360-5a, D369); elegir, cerrar y no se pierde nada', async ({ page }) => {
     await tuMesa(page);
     const tc = cabecera(consumos(page));
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.qc-lista')).toBeVisible();
-    // Sin nada elegido el resumen no dice nada, pero su renglón está (regla 1:
-    // elegir el primer plato no mueve la lista).
-    await expect(tc.locator('.desplegable-resumen')).toHaveText('\u00a0');
-    await expect(tc).not.toContainText('Toca para elegir');
+    // La cabecera es sólo el título, en un renglón: no dice nada al elegir.
+    await expect(tc).toHaveText('Tus consumos');
+    await expect(tc.locator('.desplegable-resumen')).toHaveCount(0);
+    const altoCabecera = (await tc.boundingBox())!.height;
     await page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] .qc-fila').click();
-    await expect(tc).toContainText('1 elegido · toca para modificar');
+    // Cuántos elegiste lo dice la barra de abajo (D369).
+    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 plato');
     await page.locator('.qc-renglon[data-plato="Risotto ai Funghi"] .qc-fila').click();
-    await expect(tc).toContainText('2 elegidos · toca para modificar');
+    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 2 platos');
+    await expect(tc).toHaveText('Tus consumos');
+    expect((await tc.boundingBox())!.height).toBe(altoCabecera);
     const barra = await page.locator('.mi-parte').textContent();
     await tc.click();
     await expect(page.locator('.qc-lista')).toBeHidden();
-    await expect(tc).toContainText('2 elegidos · toca para modificar');
+    await expect(tc).toHaveText('Tus consumos');
     await expect(page.locator('.mi-parte')).toHaveText(barra!);
     await tc.click();
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] .qc-mia')).toBeVisible();
@@ -256,17 +259,19 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.locator('.qc-lista')).toBeInViewport();
   });
 
-  test('D · en partes iguales, «[n] partes · toca para modificar»', async ({ page }) => {
+  test('D · en partes iguales, la cabecera tampoco dice cuántas partes (D369)', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/mesa/${mesa.code}`);
     const tc = cabecera(consumos(page));
-    // Abierta desde el principio y sin «Toca para elegir» (D360-7 y D360-5a).
+    // Abierta desde el principio y sin subtítulo (D360-7, D360-5a y D369).
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
-    await expect(tc).not.toContainText('Toca para elegir');
+    await expect(tc).toHaveText('Tus consumos');
     await page.locator('.qc-renglon .qc-fila').first().click();
-    await expect(tc).toContainText('1 parte · toca para modificar');
+    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 plato');
+    await expect(tc).toHaveText('Tus consumos');
+    await expect(tc).not.toContainText('toca para modificar');
   });
 
   test('🔴 T17 · compartir: el código como texto, «Copiar link» e «Invitar amigos» de siempre, sin «Copiar código»', async ({ page }) => {

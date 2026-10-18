@@ -9,9 +9,10 @@ import { Icon } from './Icon';
  * `<button aria-expanded>` que abre y cierra su cuerpo; la tarjeta es una
  * región con el título como nombre.
  *
- * D360-4a · sin `resumen` la cabecera es de un renglón: «Quiénes están en la
- * mesa» ya no dice cuántas personas son. Con `resumen` (aunque sea vacío) siguen
- * los dos renglones, para que el resumen que cambia no mueva lo de abajo.
+ * D360-4a · D369 · sin `resumen` la cabecera es de un renglón: «Quiénes están
+ * en la mesa» ya no dice cuántas personas son y «Tus consumos» ya no lleva
+ * subtítulo. Con `resumen` (aunque sea vacío) siguen los dos renglones, para
+ * que el resumen que cambia no mueva lo de abajo (lo usan las solicitudes).
  */
 export function Desplegable({
   titulo,

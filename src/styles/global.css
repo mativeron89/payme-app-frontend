@@ -5740,10 +5740,10 @@ button.qc-circulo::after {
 .desplegable.quienes {
   margin-top: 0;
 }
-/* Título arriba y resumen abajo, siempre en dos renglones: el resumen cambia
-   (vacío → «2 elegidos · toca para modificar») y en uno solo, a
-   375 px, el título bajaba a dos renglones y la lista de abajo saltaba 8 px
-   (regla 1 de «¿Qué consumiste?»: elegir nunca mueve la lista). */
+/* Con resumen, título arriba y resumen abajo, siempre en dos renglones: el
+   resumen que cambia no mueve lo de abajo (era la regla 1 de «¿Qué
+   consumiste?» cuando «Tus consumos» lo tenía). D360-4a y D369: «Quiénes» y
+   «Tus consumos» ya no tienen resumen y van en un renglón (--sola). */
 .desplegable-cabecera {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
