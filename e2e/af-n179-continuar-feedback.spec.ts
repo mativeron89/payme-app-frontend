@@ -45,7 +45,9 @@ async function hastaConsumoDos(
   await sumar.click();
   await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('2');
   await expect(page.getByText('$840', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('$420', { exact: true })).toBeVisible();
+  // D366/D377 · el contador ya no lleva monto al lado: con el «2» de arriba como
+  // control positivo, la tarjeta del contador no muestra ningún importe.
+  await expect(page.locator('.division-stepper')).not.toContainText('$');
 }
 
 async function clickCentro(locator: Locator, page: Page): Promise<void> {
