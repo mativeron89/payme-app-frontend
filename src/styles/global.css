@@ -6751,6 +6751,10 @@ button.qc-circulo::after {
   background: var(--surface);
   touch-action: pan-y;
   transition: transform var(--mo-fast, 120ms) ease-out;
+  /* D360-8 · causa 3: la presión larga en una fila sin detalle seleccionaba el
+     texto y cortaba el gesto. Lo que se arrastra no se selecciona. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .deslizable-frente--arrastrando {
