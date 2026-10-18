@@ -177,7 +177,8 @@ test.describe('el stepper de comensales (§1.4)', () => {
         suma: partes.reduce((s, p) => s + p.amount_cents, 0), total: m.total_cents,
       };
     }, codigo);
-    expect(mesa).toEqual({ n: 50, original: 50, partes: 50, suma: mesa.total, total: mesa.total });
+    // El ticket de la costura es de $840: 50 partes que suman exacto el total.
+    expect(mesa).toEqual({ n: 50, original: 50, partes: 50, suma: 84000, total: 84000 });
   });
 
   test('partes iguales con N=3: viaja el 3 elegido y la parte es $280 — no el 4 fantasma (2-A.3)', async ({ page }) => {

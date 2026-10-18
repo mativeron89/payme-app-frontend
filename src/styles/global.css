@@ -9526,6 +9526,22 @@ h1.pay-title-lbl {
   border-radius: 10px;
 }
 
+/* Si arriba no entra (la primera opción, contra el borde de lo que se desplaza),
+   la burbuja va abajo de la opción, con la punta hacia arriba. */
+.ayuda-opcion-burbuja--abajo {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+.ayuda-opcion-burbuja--abajo::after {
+  top: -8px;
+  bottom: auto;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
 @keyframes ayuda-opcion-entra {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

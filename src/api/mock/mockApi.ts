@@ -2983,7 +2983,8 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       req.items.some((item) => !validNonNegativeCents(item.price_cents) || !Number.isSafeInteger(item.quantity) || item.quantity < 1)) {
     return fail(400, 'validation_error');
   }
-  // D375 · como el dueño (`expected_participants: safeInt.min(1).max(MAX_PERSONAS)`): 1..50.
+  // D375 · el rango del dueño (`expected_participants: safeInt.min(1).max(MAX_PERSONAS)`): 1..50. El dueño además
+  // acepta omitirlo en consumo (lo completa en 1); el front siempre lo manda (`CreateMesaRequest`), así que acá se exige.
   if (!Number.isSafeInteger(req.expected_participants) || req.expected_participants < 1
       || req.expected_participants > MAX_PERSONAS) {
     return fail(400, 'validation_error');

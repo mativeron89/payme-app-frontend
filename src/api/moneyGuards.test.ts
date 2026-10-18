@@ -247,6 +247,8 @@ describe('D375 · POST /mesas: una mesa de hasta 50 personas', () => {
 
   it('🔴 rechaza 51 en expected_participants y en original_participants', () => {
     expect(() => createMesaResponse(respuesta(51, 51), pedido(51))).toThrow('money_response_malformed');
+    // 51 en original con 50 pedido lo rechazan el tope y la coherencia con el pedido a la vez: la coherencia hace
+    // inalcanzable aislar el tope de original. Que el tope de original sube a 50 lo prueba «acepta 21 y 50».
     expect(() => createMesaResponse(respuesta(50, 51), pedido(50))).toThrow('money_response_malformed');
     // La coherencia con el pedido no cambia: 49 publicado contra 50 pedido.
     expect(() => createMesaResponse(respuesta(50, 49), pedido(50))).toThrow('money_response_malformed');

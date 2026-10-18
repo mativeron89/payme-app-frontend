@@ -67,21 +67,30 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     await expect(ayuda(page, 'Pagar el total')).toBeFocused();
     await expect(ayuda(page, 'Pagar el total')).toHaveAttribute('aria-expanded', 'false');
 
-    // Abrir otro cierra el anterior: una a la vez. Abierta, la burbuja tapa la
-    // opción de arriba (va arriba de la suya), así que se abre de arriba hacia
-    // abajo: «En partes iguales» y después «Pagar el total».
+    // Abrir otro cierra el anterior: una a la vez. Abierta, una burbuja tapa la
+    // opción vecina (es el diseño), así que el otro «?» se abre con el teclado
+    // (Enter), que prueba lo mismo sin depender de qué tapa la burbuja.
     await ayuda(page, 'En partes iguales').click();
     await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.');
-    await ayuda(page, 'Pagar el total').click();
+    await ayuda(page, 'Pagar el total').press('Enter');
     await expect(explicacion(page)).toHaveCount(1);
     await expect(explicacion(page)).toHaveText('Sólo algunas personas van a pagar la cuenta, pero todos pueden marcar lo que comieron.');
     await expect(ayuda(page, 'En partes iguales')).toHaveAttribute('aria-expanded', 'false');
+    // El foco pasa a la burbuja nueva, también al cambiar de una a otra.
+    await expect(explicacion(page)).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(explicacion(page)).toHaveCount(0);
 
-    // La ✕ la cierra y el foco vuelve al «?».
+    // La ✕ la cierra y el foco vuelve al «?». La primera opción no tiene lugar
+    // arriba (lo que se desplaza empieza ahí): su burbuja va abajo, entera, y la
+    // ✕ se puede tocar (arriba quedaba recortada y la tapaba la tarjeta del total).
     await ayuda(page, 'Por lo que pidió cada uno').click();
     await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems y paga por lo que consumió.');
+    await expect(explicacion(page)).toHaveClass(/ayuda-opcion-burbuja--abajo/);
+    const [abajo, primera] = await Promise.all([explicacion(page).boundingBox(), consumo.boundingBox()]);
+    expect(abajo!.y, 'la explicación va abajo de la primera opción').toBeGreaterThanOrEqual(primera!.y + primera!.height);
+    await expect(page.getByRole('button', { name: 'Cerrar la explicación', exact: true })).toBeInViewport({ ratio: 1 });
+    await capturar(page, 'd360-12-ayuda-primera-opcion-abajo');
     await page.getByRole('button', { name: 'Cerrar la explicación', exact: true }).click();
     await expect(explicacion(page)).toHaveCount(0);
     await expect(ayuda(page, 'Por lo que pidió cada uno')).toBeFocused();

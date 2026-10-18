@@ -294,8 +294,14 @@ test('D327 · porciones reales conservan selección y cálculo', async ({ page }
   await expect(radio).toBeChecked();
   // Los pasos disponibles cambian con el estado real; avanzar no toca la porción.
   const antes = await datos(page), ruta = page.url();
-  for (let i = 0; i < 2 && await page.locator('.guia-foco').getAttribute('data-objetivo') !== 'porcion'; i++) {
+  // Después de cada «Siguiente» se espera a que el foco cambie de paso antes de volver a mirar: leerlo en el acto
+  // podía ver todavía el paso anterior y tocar «Siguiente» de más, salteando «porcion» (rojo en la corrida focal
+  // del 2026-10-18, verde en la completa: una carrera del test, no de la guía).
+  for (let i = 0; i < 2; i++) {
+    const actual = await page.locator('.guia-foco').getAttribute('data-objetivo');
+    if (actual === 'porcion') break;
     await guia(page).getByRole('button', { name: 'Siguiente', exact: true }).click();
+    await expect(page.locator('.guia-foco')).not.toHaveAttribute('data-objetivo', actual ?? '');
   }
   await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'porcion');
   await geometria(page); await captura(page, 'ticket-porcion-real', info);
