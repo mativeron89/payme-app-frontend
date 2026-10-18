@@ -15,8 +15,10 @@ import { ingresar, irEnLaApp } from './_app';
  * (D63): WebKit no corre acá.
  */
 
+// CDP es sólo de Chromium, y toda la suite de navegador corre en Chromium
+// (`playwright.config.ts`). Sin `test.skip`: en otro navegador estas pruebas
+// tienen que fallar a la vista, no saltearse (`corteGuard.test.ts`).
 test.use({ viewport: { width: 375, height: 667 } });
-test.skip(({ browserName }) => browserName !== 'chromium', 'CDP: sólo Chromium');
 
 const tusMesas = (page: Page) => page.getByRole('region', { name: 'Tus mesas' });
 const tarjeta = (page: Page) => tusMesas(page).locator('.tu-mesa').first();
