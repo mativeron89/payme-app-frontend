@@ -84,6 +84,9 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await mesaSinGarantia(page);
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
     await expect(boton(page)).toBeVisible();
+    // D379 · invitar y copiar viven en la hoja del engranaje: se miden con la hoja abierta (cerrar sigue en la pantalla).
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' }).getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
     const colores = await page.evaluate(() => {
       const lum = (c: string) => {
         const [r, g, b] = (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number).map((v) => {
@@ -120,6 +123,9 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await mesaSinGarantia(page);
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
     await expect(boton(page)).toBeVisible();
+    // D379 · copiar e invitar están en la hoja del engranaje: se abre para que el barrido los vea.
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    await expect(page.locator('.mesa-secondary-actions button')).toHaveCount(2);
     const sinEstilo = await page.evaluate(() => {
       const selectores: string[] = [];
       const recorrer = (reglas: CSSRuleList) => {
@@ -163,6 +169,13 @@ test.describe('AF-34 · cerrar la mesa', () => {
     const code = await mesaSinGarantia(page);
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
     await expect(boton(page)).toBeVisible();
+    // Control positivo del testigo de rol (D379): el organizador ve el engranaje y, adentro, «Copiar link».
+    const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
+    await engranaje.click();
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    await expect(hoja.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(hoja).toHaveCount(0);
     await page.evaluate(async (c) => {
       const storePath = '/src/api/mock/store.ts';
       const store = await import(/* @vite-ignore */ storePath) as {
@@ -172,16 +185,24 @@ test.describe('AF-34 · cerrar la mesa', () => {
       location.hash = '#/mesas';
     }, code);
     await page.evaluate((c) => { location.hash = `#/mesa/${c}`; }, code);
+    // Testigo positivo de que cargó la vista de quien no organiza.
+    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     await expect(boton(page)).toHaveCount(0);
-    // Testigo de que la vista SÍ cambió de rol (y no quedó la del organizador).
+    // Testigo de que la vista SÍ cambió de rol (y no quedó la del organizador): sin el engranaje, que sólo tiene
+    // el organizador (D379: compartir vive ahí; arriba se vio que el organizador sí lo tiene, con «Copiar link»).
+    await expect(engranaje).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toHaveCount(0);
   });
 
   test('en una mesa CON garantía no se ofrece (testigo: el organizador ve el resto)', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
-    await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
+    // D379 · el testigo es el engranaje del organizador y, adentro, «Copiar link» (compartir vive en su hoja).
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })
+      .getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(boton(page)).toHaveCount(0);
   });
 

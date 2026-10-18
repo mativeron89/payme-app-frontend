@@ -105,11 +105,16 @@ test.describe('D181', () => {
     }
   });
 
-  test('3 · en la mesa: copiar e invitar en una fila, mitad y mitad; cerrar centrado en rojo clarito', async ({ page }) => {
+  test('3 · en la mesa: copiar e invitar en una fila, mitad y mitad (en el engranaje, D379); cerrar centrado en rojo clarito', async ({ page }) => {
     await mesaConSusBotones(page);
-    const copiar = page.getByRole('button', { name: 'Copiar link de invitación', exact: true });
-    const invitar = page.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true });
-    const cerrar = page.getByRole('button', { name: 'Cerrar mesa', exact: true });
+    // Por clase y no por rol: con la hoja abierta, la pantalla de atrás queda inerte.
+    const cerrar = page.locator('.mesa-cerrar .btn-cerrar-mesa');
+    await expect(cerrar).toHaveText(/Cerrar mesa/);
+    // D379 · copiar e invitar viven en la hoja del engranaje; cerrar, al final de la pantalla.
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    const copiar = hoja.getByRole('button', { name: 'Copiar link de invitación', exact: true });
+    const invitar = hoja.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true });
     await expect(copiar).toBeVisible();
     await expect(copiar).toHaveText('Copiar link');
     await expect(invitar).toHaveText('Invitar amigos');
@@ -117,7 +122,8 @@ test.describe('D181', () => {
       const caja = (el: Element) => el.getBoundingClientRect();
       const fila = document.querySelector('.mesa-acciones-fila')!;
       const [a, b] = [...fila.querySelectorAll('.btn')];
-      const contenedor = caja(document.querySelector('.mesa-secondary-actions')!);
+      // Cerrar se centra en su propio bloque (`.mesa-cerrar`), al final de la pantalla.
+      const contenedor = caja(document.querySelector('.mesa-cerrar')!);
       const c = caja(document.querySelector('.btn-cerrar-mesa')!);
       const cortado = (el: Element) => (el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth;
       return {
@@ -125,7 +131,6 @@ test.describe('D181', () => {
         anchos: [caja(a!).width, caja(b!).width],
         filaAncho: caja(fila).width,
         dentro: caja(b!).right <= caja(fila).right + 0.5 && caja(a!).left >= caja(fila).left - 0.5,
-        cerrarDebajo: c.top >= caja(a!).bottom,
         centrado: Math.abs((c.left + c.width / 2) - (contenedor.left + contenedor.width / 2)),
         cortados: [cortado(a!), cortado(b!), cortado(document.querySelector('.btn-cerrar-mesa')!)],
       };
@@ -134,7 +139,6 @@ test.describe('D181', () => {
     // Mitad y mitad (con los 8 px entre los dos), y los dos dentro de la fila.
     for (const ancho of m.anchos) expect(Math.abs(ancho - (m.filaAncho - 8) / 2)).toBeLessThanOrEqual(1);
     expect(m.dentro).toBe(true);
-    expect(m.cerrarDebajo).toBe(true);
     expect(m.centrado).toBeLessThanOrEqual(1);
     expect(m.cortados).toEqual([false, false, false]);
     await expect(cerrar).toHaveCSS('background-color', 'rgb(253, 236, 234)');
@@ -148,7 +152,10 @@ test.describe('D181 · a 320 px', () => {
 
   test('3 · los botones de la mesa entran sin cortarse', async ({ page }) => {
     await mesaConSusBotones(page);
-    // D223 · «Cerrar mesa» va al final de «Tu mesa», fuera del bloque de compartir.
+    // D223 · «Cerrar mesa» va al final de «Tu mesa», fuera del bloque de compartir. D379 · el bloque de compartir
+    // vive en la hoja del engranaje: se abre para medir los tres.
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    await expect(page.locator('.mesa-secondary-actions .btn')).toHaveCount(2);
     const cortados = await page.evaluate(() => [...document.querySelectorAll('.mesa-secondary-actions .btn, .mesa-cerrar .btn')]
       .map((el) => (el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth));
     expect(cortados).toEqual([false, false, false]);

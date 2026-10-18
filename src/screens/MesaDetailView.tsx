@@ -584,6 +584,38 @@ export function MesaDetailView({
     setHojaDeLaMesa(false);
     requestAnimationFrame(() => engranajeRef.current?.focus());
   };
+  /**
+   * D379 · «Copiar link» e «Invitar amigos», con el panel de invitar que se abre
+   * debajo, dentro de la hoja del engranaje (sólo el organizador, y sólo con la
+   * mesa recibiendo gente: el mismo criterio que el código para unirse).
+   * AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar con
+   * borde turquesa. D181 · en la misma fila, mitad y mitad: a 320 px cada mitad
+   * mide ~140 px, el texto visible es corto y el nombre accesible, el completo.
+   */
+  const compartirDeLaMesa = codigoParaUnirse !== null ? (
+    <div className="mesa-secondary-actions">
+      <div className="mesa-acciones-fila">
+        <button
+          className="btn btn-borde-turquesa btn-sm"
+          onClick={onCopyInvitationLink}
+          aria-label={t('Copiar link de invitación')}
+        >
+          <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link')}
+        </button>
+        {!inviteOpen && (
+          <button
+            className="btn btn-turquesa btn-sm"
+            onClick={onOpenInvite}
+            data-guia="invitar"
+            aria-label={t('Invitar amigos de PayMe')}
+          >
+            <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}
+          </button>
+        )}
+      </div>
+      {inviteOpen && <InviteFriends code={code} />}
+    </div>
+  ) : null;
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
@@ -1288,40 +1320,9 @@ export function MesaDetailView({
             )}
             {/* T-F1: el organizador puede invitar amigos in-app también acá —
                 la pantalla de compartir post-crear se ve UNA sola vez.
-                D223 · arriba, el código como TEXTO, para dictarlo (sin botón de
-                copiar el código: para compartir están «Copiar link» e «Invitar
-                amigos», que siguen igual). */}
-            {(mesa.status === 'open' || mesa.status === 'partially_paid') && (
-              <div className="mesa-secondary-actions">
-                {/* D360-4b · el código para unirse pasó a la hoja del engranaje. */}
-                {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
-                    con borde turquesa.
-                    D181 · «en la misma fila las burbujas de copiar link e invitar amigos
-                    (que entren bien por temas de tamaño)»: mitad y mitad. A 320 px cada
-                    mitad mide ~140 px, y el texto completo no entra ni a 390: se ve
-                    corto, y el nombre accesible sigue siendo el completo (lo contiene). */}
-                <div className="mesa-acciones-fila">
-                  <button
-                    className="btn btn-borde-turquesa btn-sm"
-                    onClick={onCopyInvitationLink}
-                    aria-label={t('Copiar link de invitación')}
-                  >
-                    <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link')}
-                  </button>
-                  {!inviteOpen && (
-                    <button
-                      className="btn btn-turquesa btn-sm"
-                      onClick={onOpenInvite}
-                      data-guia="invitar"
-                      aria-label={t('Invitar amigos de PayMe')}
-                    >
-                      <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos')}
-                    </button>
-                  )}
-                </div>
-                {inviteOpen && <InviteFriends code={code} />}
-              </div>
-            )}
+                D379 (Mati, «Pasarlos al engranaje») · «Copiar link» e «Invitar
+                amigos» pasaron a la hoja del engranaje, junto al código y la
+                propina (`compartirDeLaMesa`, abajo). */}
             {/* D344 · la propina de la mesa. D360-4b · el selector pasó a la hoja
                 del engranaje; en la página queda lo que se fijó (como lo ve quien
                 no organiza) y, si hace falta, que se está guardando o que falló. */}
@@ -1379,7 +1380,7 @@ export function MesaDetailView({
         )}
       </div>
       {hojaDeLaMesa && hayConfiguracion && (
-        <HojaDeLaMesa codigo={codigoParaUnirse} propina={propinaDeLaMesa} onCerrar={cerrarHojaDeLaMesa} />
+        <HojaDeLaMesa codigo={codigoParaUnirse} compartir={compartirDeLaMesa} propina={propinaDeLaMesa} onCerrar={cerrarHojaDeLaMesa} />
       )}
       {hojaCierre === 'cerrar' && onCerrarMesa && (
         <HojaAntesDeCerrar

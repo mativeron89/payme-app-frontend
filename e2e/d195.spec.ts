@@ -70,6 +70,8 @@ test.describe('D195 · los buscadores de la burbuja, sin borde de foco', () => {
   test('Invitar a la mesa: «Buscar contactos para invitar»', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    // D379 · «Invitar amigos» vive en la hoja del engranaje.
+    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
     await page.getByRole('button', { name: 'Invitar amigos de PayMe' }).click();
     await sinBordeDeFoco(page, page.getByRole('textbox', { name: 'Buscar contactos para invitar', exact: true }));
   });

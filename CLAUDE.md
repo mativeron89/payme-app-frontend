@@ -223,8 +223,8 @@ D285 (opción 4c de Claude Design, `PANTALLA-tarjeta-de-titulo-blanca.md`, e25d9
 - **El ícono de cada pantalla** es el de la tabla de la especificación. El naranja (`--brand`, con el check) sólo va en
   «¡Listo!».
 - **Excepción D360-4b (0.253.0):** en «Tu mesa», el organizador ve el **engranaje** en lugar de la tienda (fila 6 de la
-  tabla). El cuadro es un botón que abre la hoja de configuración (`HojaDeLaMesa`): el código para unirse y la propina
-  de la mesa. Si no hay nada que configurar (la mesa ya no recibe gente y la propina no se puede cambiar), vuelve la
+  tabla). El cuadro es un botón que abre la hoja de configuración (`HojaDeLaMesa`): el código para unirse, «Copiar link»
+  e «Invitar amigos» (D379) y la propina de la mesa. Si no hay nada que configurar (la mesa ya no recibe gente y la propina no se puede cambiar), vuelve la
   tienda. Quien no organiza sigue con los cubiertos.
 - **Excepción D366 (0.253.0):** en «¿Cómo dividen?», el total del ticket va en una tarjeta propia debajo de la de título,
   con su nota del IVA; la de título queda sólo con el cuadro y el título.

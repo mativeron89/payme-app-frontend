@@ -82,6 +82,8 @@ async function irAAmigos(page: Page): Promise<void> {
 
 async function abrirInvitar(page: Page): Promise<void> {
   await page.goto('/#/mesa/PA-2847');
+  // D379 · «Invitar amigos» vive en la hoja del engranaje.
+  await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
   await page.getByRole('button', { name: 'Invitar amigos de PayMe' }).click();
   await expect(fila(page, '.inv-row', 'Sofía Fernández')).toBeVisible();
 }

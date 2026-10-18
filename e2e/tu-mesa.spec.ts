@@ -38,7 +38,7 @@ const consumos = (page: Page) => page.getByRole('region', { name: 'Tus consumos'
 const cabecera = (region: ReturnType<typeof quienes>) => region.locator('.desplegable-cabecera');
 
 test.describe('D223 · «Tu mesa» del titular', () => {
-  test('🔴 T01 · el título y el orden: quiénes → solicitudes → compartir → tus consumos → cerrar mesa', async ({ page }) => {
+  test('🔴 T01 · el título y el orden: quiénes → solicitudes → tus consumos → cerrar mesa (compartir, en el engranaje: D379)', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
     await costura(page, { solicitudes: 1 });
     await ingresar(page);
@@ -52,12 +52,14 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.locator('.mi-progress')).toBeVisible();
     await expect(page.locator('.mi-count')).toBeVisible();
     const orden = await page.evaluate(() => {
-      const selectores = ['.desplegable.quienes', '.desplegable.solicitudes', '.mesa-secondary-actions', '.desplegable.tus-consumos', '.mesa-cerrar'];
+      const selectores = ['.desplegable.quienes', '.desplegable.solicitudes', '.desplegable.tus-consumos', '.mesa-cerrar'];
       const els = selectores.map((s) => document.querySelector(s));
       if (els.some((e) => !e)) return selectores.filter((_, i) => !els[i]);
       return els.every((e, i) => i === 0 || (els[i - 1]!.compareDocumentPosition(e!) & Node.DOCUMENT_POSITION_FOLLOWING)) ? 'en orden' : 'desordenado';
     });
     expect(orden).toBe('en orden');
+    // D379 · «Copiar link» e «Invitar amigos» ya no están en la pantalla: viven en la hoja del engranaje.
+    await expect(page.locator('.mesa-secondary-actions')).toHaveCount(0);
     await expect(page.locator('.mesa-cerrar .btn-cerrar-mesa')).toHaveText(/Cerrar mesa/);
     // «Listo» sigue en el círculo.
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
@@ -274,18 +276,23 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(tc).not.toContainText('toca para modificar');
   });
 
-  test('🔴 T17 · compartir: «Copiar link» e «Invitar amigos» de siempre en la página, y el código como texto en el engranaje (D360-4b), sin «Copiar código»', async ({ page }) => {
+  test('🔴 T17 · compartir: el código como texto, «Copiar link» e «Invitar amigos», todo en el engranaje (D360-4b · D379), sin «Copiar código»', async ({ page }) => {
     await tuMesa(page);
-    // D360-4b · el código pasó a la hoja del engranaje.
+    // D360-4b y D379 · ni el código ni los botones de compartir están en la pantalla.
+    const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
+    await expect(engranaje).toBeVisible();
     await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invitar amigos de PayMe' })).toHaveCount(0);
+    await engranaje.click();
     const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
     await expect(hoja.locator('.mesa-codigo-para-unirse')).toHaveText('Código para unirse: PA-2847');
+    await expect(hoja.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
+    await expect(hoja.getByRole('button', { name: 'Invitar amigos de PayMe' })).toBeVisible();
+    await expect(hoja.getByRole('button', { name: /Copiar código/ })).toHaveCount(0);
     await hoja.getByRole('button', { name: 'Cerrar', exact: true }).click();
     await expect(hoja).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Configuración de la mesa', exact: true })).toBeFocused();
-    await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Invitar amigos de PayMe' })).toBeVisible();
+    await expect(engranaje).toBeFocused();
     await expect(page.getByRole('button', { name: /Copiar código/ })).toHaveCount(0);
     // El código no sube a la burbuja (decisión 77).
     await expect(page.locator('.mesa-selection-title')).not.toContainText('PA-2847');

@@ -270,8 +270,12 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
       value: { writeText: async () => undefined },
     });
   });
+  // D379 · «Copiar link» vive en la hoja del engranaje de «Tu mesa».
+  await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
   await page.getByRole('button', { name: 'Copiar link de invitación', exact: true }).click();
   await expect(page.locator('.toast')).toHaveText('Link de invitación copiado ✓');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
   // M04 (`9c78a7b`, v0.184.0) dejó `.mesa-selection-title` en 12px 16px; D285 (0.242.0) la lleva al padding
   // 16 / 18 de todas las tarjetas, con el cuadro del ícono a la izquierda.
   await acreditar(page, '07-mis-items');

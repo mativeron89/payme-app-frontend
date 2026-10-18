@@ -106,7 +106,8 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await seam(page, 'antiguo');
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
-    await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toBeVisible();
+    // Testigo de que el resto de la mesa del organizador cargó: su engranaje (D379: compartir vive ahí).
+    await expect(page.getByRole('button', { name: 'Configuración de la mesa', exact: true })).toBeVisible();
     await expect.poll(() => pedidos(page)).toBeGreaterThan(0);
     await expect(seccion(page)).toHaveCount(0);
   });

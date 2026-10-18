@@ -9,20 +9,25 @@ import { useHojaModal } from './useHojaModal';
  * poder modificarla)» (literal de Mati).
  *
  * La hoja que abre el engranaje de «Tu mesa» (sólo el organizador): el código
- * para unirse, como texto para dictarlo, y el selector de la propina de la mesa
+ * para unirse, como texto para dictarlo; «Copiar link» e «Invitar amigos»
+ * (D379, Mati: «Pasarlos al engranaje»); y el selector de la propina de la mesa
  * (D344), el mismo de «Compartir la mesa». Es modal (`useHojaModal`: foco
  * adentro, Escape cierra, la pantalla de atrás inerte), como «Antes de cerrar».
  *
- * No decide nada: el selector y su `PUT /tip` siguen siendo de `MesaScreen` y
- * `propinaDeLaMesa.ts`; acá sólo se dibujan.
+ * No decide nada: los botones de compartir, el selector y su `PUT /tip` siguen
+ * siendo de `MesaDetailView`, `MesaScreen` y `propinaDeLaMesa.ts`; acá sólo se
+ * dibujan.
  */
 export function HojaDeLaMesa({
   codigo,
+  compartir,
   propina,
   onCerrar,
 }: {
   /** El código para unirse, o `null` si la mesa ya no recibe gente. */
   codigo: string | null;
+  /** D379 · «Copiar link» e «Invitar amigos» (con su panel), o `null` si la mesa ya no recibe gente. */
+  compartir: ReactNode;
   /** El selector de la propina de la mesa, o `null` si no se puede cambiar. */
   propina: ReactNode;
   onCerrar: () => void;
@@ -50,6 +55,7 @@ export function HojaDeLaMesa({
             {t('Código para unirse:')} <strong>{codigo}</strong>
           </p>
         )}
+        {compartir}
         {propina}
       </div>
     </div>,

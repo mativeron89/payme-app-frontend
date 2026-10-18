@@ -294,14 +294,18 @@ test('D327 · porciones reales conservan selección y cálculo', async ({ page }
   await expect(radio).toBeChecked();
   // Los pasos disponibles cambian con el estado real; avanzar no toca la porción.
   const antes = await datos(page), ruta = page.url();
-  // Después de cada «Siguiente» se espera a que el foco cambie de paso antes de volver a mirar: leerlo en el acto
-  // podía ver todavía el paso anterior y tocar «Siguiente» de más, salteando «porcion» (rojo en la corrida focal
-  // del 2026-10-18, verde en la completa: una carrera del test, no de la guía).
-  for (let i = 0; i < 2; i++) {
-    const actual = await page.locator('.guia-foco').getAttribute('data-objetivo');
+  // La guía se reacomoda sola cuando cambia lo que hay a la vista: si el paso actual deja de estar (al elegir el plato
+  // puede no quedar ningún «elegir-consumo»), salta al primero que queda, en el cuadro siguiente. Leer el paso en el
+  // acto podía ver el viejo y tocar «Siguiente» de más, pasando «porcion» (rojo intermitente en las corridas del
+  // 2026-10-18: una carrera del test, no de la guía). Se deja asentar el cuadro y se navega hasta «porcion» con
+  // Siguiente o Atrás, esperando que cambie el paso después de cada toque; navegar no toca la porción.
+  const foco = page.locator('.guia-foco');
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const actual = await foco.getAttribute('data-objetivo');
     if (actual === 'porcion') break;
-    await guia(page).getByRole('button', { name: 'Siguiente', exact: true }).click();
-    await expect(page.locator('.guia-foco')).not.toHaveAttribute('data-objetivo', actual ?? '');
+    await guia(page).getByRole('button', { name: actual === 'elegir-consumo' ? 'Siguiente' : 'Atrás', exact: true }).click();
+    await expect(foco).not.toHaveAttribute('data-objetivo', actual ?? '');
   }
   await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'porcion');
   await geometria(page); await captura(page, 'ticket-porcion-real', info);
@@ -340,6 +344,36 @@ test('D327 · restaurante: ticket, modal prioritario y reparto sin acciones auto
   await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
   await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeFocused();
   expect(page.url()).toBe(ruta);
+});
+
+test('D379 · en «Tu mesa» el paso «invitar» se saltea solo: «Invitar amigos» vive en el engranaje', async ({ page }) => {
+  // La guía sólo ofrece los pasos cuyo control está a la vista (GuiaContenido, `buscar`). Desde D379 «Invitar amigos»
+  // está en la hoja del engranaje: con la hoja cerrada el paso no aparece, sin tocar la guía ni su ancla.
+  await entrar(page); await abrir(page);
+  await irEnLaApp(page, '/mesa/PA-2847');
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  await expect(page.locator('[data-guia="invitar"]')).toHaveCount(0);
+  await expect(page.locator('.guia-foco')).toHaveAttribute('data-objetivo', 'consumos');
+  const vistos: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const actual = await page.locator('.guia-foco').getAttribute('data-objetivo');
+    if (actual) vistos.push(actual);
+    const boton = guia(page).locator('.guia-siguiente');
+    if (await boton.textContent() === 'Terminar guía') break;
+    await boton.click();
+    await expect(page.locator('.guia-foco')).not.toHaveAttribute('data-objetivo', actual ?? '');
+  }
+  // Control positivo: recorrió la mesa de punta a punta (del primer paso al último).
+  expect(vistos[0]).toBe('consumos');
+  expect(vistos.at(-1)).toBe('continuar');
+  await expect(guia(page).locator('.guia-siguiente')).toHaveText('Terminar guía');
+  expect(vistos, JSON.stringify(vistos)).not.toContain('invitar');
+  // El ancla sigue en el botón, ahora dentro de la hoja.
+  await guia(page).getByRole('button', { name: 'Cerrar guía' }).click();
+  await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
+  const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+  await expect(hoja.locator('[data-guia="invitar"]')).toHaveCount(1);
+  await expect(hoja.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true })).toHaveAttribute('data-guia', 'invitar');
 });
 
 test('D328 · cierre con acción principal realmente deshabilitada conserva borrador y enfoca Volver', async ({ page }) => {

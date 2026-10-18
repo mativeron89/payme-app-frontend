@@ -10700,9 +10700,14 @@ h1.pay-title-lbl {
   outline-offset: 2px;
 }
 
-/* La hoja del engranaje: el código arriba, después el selector de la propina. */
+/* La hoja del engranaje: el código arriba; después «Copiar link» e «Invitar
+   amigos» (D379) y el selector de la propina. */
 .hoja-de-la-mesa .mesa-codigo-para-unirse {
   margin: 0 0 var(--sp-3);
+}
+
+.hoja-de-la-mesa .mesa-secondary-actions {
+  margin-top: 0;
 }
 
 .hoja-de-la-mesa .propina-mesa {

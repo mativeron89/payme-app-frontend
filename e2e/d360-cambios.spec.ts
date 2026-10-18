@@ -397,21 +397,32 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     ]);
     expect(caja!.x + caja!.width, 'el engranaje va a la izquierda del título').toBeLessThanOrEqual(titulo!.x);
     expect(Math.min(caja!.width, caja!.height), 'se toca con 44 px').toBeGreaterThanOrEqual(44);
-    // En la página: el código ya no está; «Copiar link», «Invitar amigos» y lo
-    // que se fijó de propina, sí. El selector no.
-    await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Copiar link/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Invitar amigos/ })).toBeVisible();
+    // En la página: lo que se fijó de propina (D380, «Sí, que se vea»). Ni el
+    // código, ni «Copiar link» ni «Invitar amigos» (D379, «Pasarlos al
+    // engranaje»), ni el selector.
     await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toBeVisible();
+    await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invitar amigos de PayMe' })).toHaveCount(0);
     await expect(selectorDePropina(page)).toHaveCount(0);
     await expect(hoja).toHaveCount(0);
     await capturar(page, 'd360-09-tu-mesa-engranaje');
 
-    // Abre la hoja: el código, como texto, y el mismo selector con lo guardado.
+    // Abre la hoja: el código, como texto; «Copiar link» e «Invitar amigos» en una
+    // fila, mitad y mitad (D181), con el ancla de la guía; y el mismo selector con
+    // lo guardado.
     await engranaje.click();
     await expect(hoja).toBeVisible();
     await expect(engranaje).toHaveAttribute('aria-expanded', 'true');
     await expect(hoja.locator('.mesa-codigo-para-unirse')).toHaveText(`Código para unirse: ${code}`);
+    const copiar = hoja.getByRole('button', { name: 'Copiar link de invitación', exact: true });
+    const invitar = hoja.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true });
+    await expect(copiar).toHaveText('Copiar link');
+    await expect(invitar).toHaveText('Invitar amigos');
+    await expect(invitar).toHaveAttribute('data-guia', 'invitar');
+    const [cajaCopiar, cajaInvitar] = await Promise.all([copiar.boundingBox(), invitar.boundingBox()]);
+    expect(Math.round(cajaCopiar!.y), 'en la misma fila').toBe(Math.round(cajaInvitar!.y));
+    expect(Math.abs(cajaCopiar!.width - cajaInvitar!.width), 'mitad y mitad').toBeLessThanOrEqual(1);
     await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })
       .getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(hoja.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
