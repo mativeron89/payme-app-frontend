@@ -95,6 +95,24 @@ async function deslizar(page: Page, tarjeta: Locator, dx: number, desdeDerecha =
   await page.mouse.up();
 }
 
+/**
+ * D360 · P09 · el mismo arrastre, con el dedo (eventos táctiles por CDP; la suite corre en Chromium). Desde que
+ * toda mesa terminada es un botón, el puntero del escritorio la enfoca al apretar; un arrastre con el dedo no es un
+ * toque y no enfoca, como en el teléfono.
+ */
+async function deslizarConElDedo(page: Page, tarjeta: Locator, dx: number): Promise<void> {
+  const caja = (await tarjeta.boundingBox())!;
+  const y = caja.y + Math.min(30, caja.height / 2);
+  const x = caja.x + caja.width - 40;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (let k = 1; k <= 8; k += 1) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * k) / 8, y }] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
 async function abrirYEliminar(page: Page, tarjeta: Locator): Promise<void> {
   await deslizar(page, tarjeta, -120);
   await expect(abierta(tarjeta)).toHaveCount(1);
@@ -131,9 +149,11 @@ test.describe('D239 · el gesto', () => {
     await cerradaYQuieta(mesa);
 
     // Tocar afuera, con el foco fuera de la tarjeta: si no, la cerraría el
-    // `blur` del botón rojo y no el toque (deslizar de vuelta lo enfoca).
+    // `blur` del botón rojo y no el toque (deslizar de vuelta lo enfoca). Con el
+    // dedo: el puntero del escritorio enfoca la tarjeta, que es un botón (P09).
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await deslizar(page, mesa, -120);
+    await deslizarConElDedo(page, mesa, -120);
+    await expect(abierta(mesa)).toHaveCount(1);
     expect(await mesa.evaluate((e) => e.contains(document.activeElement))).toBe(false);
     await page.getByRole('heading', { name: 'Mesas', exact: true }).click();
     await expect(abierta(mesa)).toHaveCount(0);
