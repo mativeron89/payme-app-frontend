@@ -5619,10 +5619,32 @@ button.qc-circulo::after {
   color: var(--text);
 }
 
-/* Regla 3 · el renglón convertido en selector: Entero · ½ · ⅓ · ¼ (botones de
-   28 px) + «Soltar». Nada flota encima de otros platos. */
+/* Regla 3 · el selector: Entero · ½ · ⅓ · ¼ (botones de 28 px) + «Soltar».
+   Nada flota encima de otros platos. `.qc-mia--abierta` es la forma de antes
+   (el renglón convertido en selector) y la sigue usando el ticket de viaje. */
 .qc-mia--abierta {
   gap: 8px;
+}
+
+/* D360-6 · en la mesa el selector ya no reemplaza al renglón (tapaba el plato
+   elegido): va en una tira DEBAJO, del mismo ancho que el renglón propio, y se
+   va al elegir la porción. Empuja lo de abajo; no flota encima de nada. El
+   margen de abajo del scroll deja libre la barra (la reserva de 132 px). */
+.qc-porciones {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  scroll-margin-bottom: 132px;
+}
+
+.qc-pildora--abierta svg {
+  transform: rotate(180deg);
 }
 
 .qc-selector {

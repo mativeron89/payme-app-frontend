@@ -143,18 +143,22 @@ test.describe('D240 punto 3 · el listado al elegir', () => {
     await capturar(page, '03-todos-elegidos');
   });
 
-  test('regla 1 a 375: elegir, cambiar la porción o soltar no mueve el renglón siguiente', async ({ page }) => {
+  test('regla 1 a 375: la tira de porciones empuja el siguiente justo su alto (D360-6); elegida o soltada, nada se movió', async ({ page }) => {
     await abrirMesa(page);
     const siguiente = renglon(page, 'Risotto ai Funghi');
     const arriba = () => siguiente.evaluate((e) => e.getBoundingClientRect().top - e.closest('.qc-lista')!.getBoundingClientRect().top);
     const antes = await arriba();
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
     await tagliatelle.locator('button.qc-libre').click();
+    // Incondicional: el Tagliatelle de la mesa nueva tiene cuatro porciones, así
+    // que la tira tiene que estar (antes un `if` la salteaba en silencio).
+    const tira = tagliatelle.locator('.qc-porciones');
+    await expect(tira).toBeVisible();
+    const altoTira = await tira.evaluate((e) => e.getBoundingClientRect().height + parseFloat(getComputedStyle(e).marginBottom));
+    expect(Math.abs((await arriba()) - antes - altoTira)).toBeLessThanOrEqual(2);
+    await tagliatelle.getByRole('radio', { name: '½' }).click();
+    await expect(tira).toHaveCount(0);
     expect(Math.abs((await arriba()) - antes)).toBeLessThanOrEqual(2);
-    if (await tagliatelle.getByRole('radio', { name: '½' }).count()) {
-      await tagliatelle.getByRole('radio', { name: '½' }).click();
-      expect(Math.abs((await arriba()) - antes)).toBeLessThanOrEqual(2);
-    }
     await tagliatelle.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
     expect(Math.abs((await arriba()) - antes)).toBeLessThanOrEqual(2);
   });

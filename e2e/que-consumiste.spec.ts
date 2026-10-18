@@ -52,15 +52,15 @@ async function plantarAjenos(page: Page, code: string): Promise<void> {
 }
 
 /**
- * El renglón por el plato (`data-plato`), no por su texto: con el selector
- * abierto el renglón muestra las porciones en lugar del nombre, como el diseño.
- * El primero si hay dos (el mock separa los dos Tiramisú).
+ * El renglón por el plato (`data-plato`), no por su texto. Desde D360-6 el
+ * selector va en una tira DEBAJO del renglón (antes reemplazaba al nombre), y
+ * la tira es parte del mismo `.qc-renglon`. El primero si hay dos (el mock
+ * separa los dos Tiramisú).
  */
 const renglon = (page: Page, nombre: string): Locator =>
   page.locator(`.qc-renglon[data-plato="${nombre}"]`).first();
 /** El alto del renglón visible (`.qc-fila`), sin el separador de 1 px. */
 const alto = (l: Locator) => l.locator('.qc-fila').evaluate((e) => e.getBoundingClientRect().height);
-const arriba = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().top);
 /**
  * Regla 7 por su efecto, no por cómo se escribe: los trazos que se PINTAN.
  * `check` es el glifo del círculo marcado; `M9 9l6 6` es el trazo de la X de
@@ -118,12 +118,24 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await expect(page.locator('.mi-soltar, .mi-frac')).toHaveCount(0);
   });
 
-  test('reglas 3 y 4 · marcar abre el selector EN el renglón con Entero · ½ · ⅓ · ¼ + «Soltar», y elegir lo cierra', async ({ page }) => {
+  test('reglas 3 y 4 · marcar abre la tira DEBAJO del plato (D360-6) con Entero · ½ · ⅓ · ¼ + «Soltar», sin taparlo, y elegir la cierra', async ({ page }) => {
     await abrirMesa(page);
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     const selector = tagliatelle.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(selector).toBeVisible();
+    // D360-6 · el plato elegido se sigue viendo entero, con su nombre, y la tira
+    // empieza donde termina el renglón: no lo tapa.
+    const fila = tagliatelle.locator('[data-estado="mio"]');
+    await expect(fila).toBeVisible();
+    await expect(fila.locator('.qc-nombre')).toHaveText('Tagliatelle Bolognese');
+    const [cajaFila, cajaTira] = await Promise.all([fila.boundingBox(), tagliatelle.locator('.qc-porciones').boundingBox()]);
+    expect(cajaTira!.y, 'la tira tapa el renglón').toBeGreaterThanOrEqual(cajaFila!.y + cajaFila!.height - 1);
+    // La píldora dice que la tira está abierta y cuál es.
+    const pildora = tagliatelle.getByRole('button', { name: /^Cambiar la porción/ });
+    await expect(pildora).toHaveAttribute('aria-expanded', 'true');
+    const idTira = await tagliatelle.locator('.qc-porciones').getAttribute('id');
+    await expect(pildora).toHaveAttribute('aria-controls', idTira!);
     await expect(selector.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
     // Nace marcado con la mayor que cabe: Entero.
     await expect(selector.getByRole('radio', { name: 'Entero' })).toHaveAttribute('aria-checked', 'true');
@@ -132,6 +144,8 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
 
     await selector.getByRole('radio', { name: '½' }).click();
     await expect(selector).toHaveCount(0);
+    await expect(tagliatelle.locator('.qc-porciones')).toHaveCount(0);
+    await expect(pildora).toHaveAttribute('aria-expanded', 'false');
     // Regla 2 · el renglón propio: la píldora con su porción y tu parte, sin el precio del plato.
     await expect(tagliatelle.locator('[data-estado="mio"]')).toBeVisible();
     await expect(tagliatelle.getByRole('button', { name: 'Cambiar la porción de Tagliatelle Bolognese: ½' })).toHaveText('½');
@@ -216,7 +230,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await expect(agua.locator('[data-estado="mio"] .qc-pildora')).toHaveText('¼');
   });
 
-  test('regla 1 · todos los renglones miden lo mismo: elegir, cambiar la porción o soltar no mueve la lista', async ({ page }) => {
+  test('regla 1 · los renglones miden lo mismo; la tira abierta empuja lo de abajo justo su alto (D360-6) y al cerrarse todo vuelve', async ({ page }) => {
     const code = await abrirMesa(page);
     await plantarAjenos(page, code);
     const libre = renglon(page, 'Risotto ai Funghi');
@@ -227,21 +241,29 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     // D344 · con la propina de la mesa encima, la lista queda más abajo y el clic
     // haría scroll: se centra antes de medir, así lo que se mide es la lista.
     await libre.evaluate((e) => e.scrollIntoView({ block: 'center' }));
-    const antes = await arriba(siguiente);
+    // Contra la lista y no contra la pantalla: el scroll que hace la tira al
+    // abrirse (para no quedar debajo de la barra) no cuenta.
+    const relativo = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().top - e.closest('.qc-lista')!.getBoundingClientRect().top);
+    const antes = await relativo(siguiente);
 
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
-    // Abierto: el selector vive en el renglón; el siguiente no baja.
-    const conSelector = await arriba(siguiente);
+    // D360-6 · abierta, la tira va debajo del plato: el siguiente baja lo que
+    // mide la tira más su margen de abajo (6), ni más ni menos.
+    const tira = libre.locator('.qc-porciones');
+    await expect(tira).toBeVisible();
+    const altoTira = await tira.evaluate((e) => e.getBoundingClientRect().height + parseFloat(getComputedStyle(e).marginBottom));
+    const abierta = await relativo(siguiente);
+    expect(Math.abs(abierta - antes - altoTira), `con la tira bajó ${abierta - antes}px y la tira mide ${altoTira}px`).toBeLessThanOrEqual(2);
     await libre.getByRole('radio', { name: '½' }).click();
-    const cerrado = await arriba(siguiente);
-    // El propio mide 50 + 3 + 3: lo mismo que el normal de 56 (D240 punto 3;
-    // antes 44 + 3 + 3, 2 px más que el normal de 48).
-    for (const [cuando, y] of [['con el selector', conSelector], ['con la píldora', cerrado]] as const) {
-      expect(Math.abs(y - antes), `el siguiente se movió ${y - antes}px ${cuando}`).toBeLessThanOrEqual(2);
-    }
+    await expect(tira).toHaveCount(0);
+    // Cerrada: el propio mide 50 + 3 + 3, lo mismo que el normal de 56 (D240
+    // punto 3), así que con la píldora el siguiente queda donde estaba.
+    const cerrado = await relativo(siguiente);
+    expect(Math.abs(cerrado - antes), `el siguiente se movió ${cerrado - antes}px con la píldora`).toBeLessThanOrEqual(2);
     await libre.getByRole('button', { name: /^Cambiar la porción/ }).click();
     await libre.getByRole('button', { name: 'Soltar', exact: true }).click();
-    expect(Math.abs((await arriba(siguiente)) - antes)).toBeLessThanOrEqual(1);
+    await expect(libre.locator('.qc-porciones')).toHaveCount(0);
+    expect(Math.abs((await relativo(siguiente)) - antes)).toBeLessThanOrEqual(1);
   });
 
   test('definición 4 · zona táctil de 44 px sin agrandar lo visible', async ({ page }) => {

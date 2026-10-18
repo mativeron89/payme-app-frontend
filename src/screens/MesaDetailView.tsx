@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -583,10 +583,25 @@ export function MesaDetailView({
   const original = originalParticipants(mesa.original_participants);
   /** AF-QUE-CONSUMISTE · el renglón propio que muestra el selector, o ninguno. */
   const [abierto, setAbierto] = useState<string | null>(null);
+  const idDeLaTira = useId();
+  const tiraRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * D360-6 · la tira de porciones aparece DEBAJO del plato: al abrirse se trae a
+   * la vista (su `scroll-margin-bottom` deja libre la barra de abajo) y el foco
+   * pasa a la porción marcada, porque el botón que se tocó ya no está.
+   */
+  useEffect(() => {
+    if (abierto === null) return;
+    const tira = tiraRef.current;
+    if (!tira) return;
+    tira.scrollIntoView?.({ block: 'nearest' });
+    tira.querySelector<HTMLButtonElement>('.qc-opcion.on')?.focus({ preventScroll: true });
+  }, [abierto]);
   /**
    * Regla 3 del diseño · marcar un plato lo toma con la mayor porción que cabe
-   * (la decide `MesaScreen`) y, si hay más de una, abre el selector en el mismo
-   * renglón; con una sola opción se marca directo (regla 4).
+   * (la decide `MesaScreen`) y, si hay más de una, abre el selector; con una
+   * sola opción se marca directo (regla 4). D360-6 · el selector ya no
+   * reemplaza al renglón: va en una tira debajo, y se va al elegir.
    */
   const tomarPlato = (id: string, cuantasOpciones: number): void => {
     onToggleItem(id);
@@ -812,7 +827,9 @@ export function MesaDetailView({
             porción o soltar nunca mueve la lista;
           - regla 2: lo propio queda en su lugar, en teal, con la píldora de
             porción y tu parte;
-          - regla 3: la píldora abre el selector EN el mismo renglón;
+          - regla 3: la píldora abre el selector (D360-6: en una tira DEBAJO
+            del renglón, que se va al elegir la porción; ya no lo reemplaza y,
+            mientras está abierta, la lista sí se mueve);
           - reglas 5 y 6: «Queda ½» y «Lo eligió otro», sin nombre;
           - regla 7: se suelta tocando el círculo o «Soltar», sin X roja.
           El estado (selección, límites de D79, bloqueos) sigue siendo de
@@ -879,37 +896,42 @@ export function MesaDetailView({
             // Con la edición bloqueada (D79: leyendo, guardando, sólo lectura)
             // el renglón propio no ofrece nada: ni selector, ni píldora que
             // abra, ni círculo que suelte. Se ve lo elegido y nada más.
-            if (sel && abierto === i.id && !editBloqueado) {
-              return (
-                <div key={i.id} className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
-                  <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
-                    {opciones.map((d) => {
-                      const elegida = bps === denominatorBps(d);
-                      return (
-                        <button
-                          key={d}
-                          type="button"
-                          role="radio"
-                          aria-checked={elegida}
-                          className={`qc-opcion${elegida ? ' on' : ''}`}
-                          onClick={() => elegirPorcion(i.id, d)}
-                        >
-                          {etiquetaPorcion(denominatorBps(d), t)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    className="qc-soltar"
-                    onClick={() => { setAbierto(null); onToggleItem(i.id); }}
-                  >
-                    {t('Soltar')}
-                  </button>
+            const tiraAbierta = sel && abierto === i.id && !editBloqueado && opciones.length > 1;
+            const idTira = `${idDeLaTira}-${i.id}`;
+            // D360-6 · «esa burbuja debe aparecer abajo del consumo y desaparecer
+            // cuando se selecciona la cantidad para no tapar el ítem que se
+            // seleccionó» (literal de Mati): el renglón queda como está —nombre,
+            // píldora y tu parte— y la tira va debajo. Nada flota encima de
+            // otros platos: la tira empuja lo de abajo.
+            const tira = tiraAbierta ? (
+              <div key="tira" ref={tiraRef} id={idTira} className="qc-porciones">
+                <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
+                  {opciones.map((d) => {
+                    const elegida = bps === denominatorBps(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        role="radio"
+                        aria-checked={elegida}
+                        className={`qc-opcion${elegida ? ' on' : ''}`}
+                        onClick={() => elegirPorcion(i.id, d)}
+                      >
+                        {etiquetaPorcion(denominatorBps(d), t)}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            }
-            return (
+                <button
+                  type="button"
+                  className="qc-soltar"
+                  onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                >
+                  {t('Soltar')}
+                </button>
+              </div>
+            ) : null;
+            const fila = (
               <div
                 key={i.id}
                 className="qc-fila qc-mia"
@@ -955,10 +977,11 @@ export function MesaDetailView({
                 {sel && opciones.length > 1 && !editBloqueado ? (
                   <button
                     type="button"
-                    className="qc-pildora"
+                    className={`qc-pildora${tiraAbierta ? ' qc-pildora--abierta' : ''}`}
                     aria-label={t('Cambiar la porción de {0}: {1}', nombreAria, etiqueta)}
-                    aria-expanded={false}
-                    onClick={() => setAbierto(i.id)}
+                    aria-expanded={tiraAbierta}
+                    aria-controls={tiraAbierta ? idTira : undefined}
+                    onClick={() => setAbierto(tiraAbierta ? null : i.id)}
                   >
                     {etiqueta}
                     <Icon name="chevron-down" size={12} />
@@ -969,6 +992,7 @@ export function MesaDetailView({
                 {parte !== null && <span className="qc-parte">{formatMXN(parte)}</span>}
               </div>
             );
+            return tira ? <>{fila}{tira}</> : fila;
           }
 
           if (bloqueado) {
