@@ -105,7 +105,10 @@ test.describe('el camino de pago completo', () => {
     // pagos (decisión 90, definición 1): lo que distingue el corte es a dónde
     // lleva, y eso lo mide el recorrido de abajo (Inicio, cero cobrado).
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
-    await expect(page.getByRole('radiogroup', { name: /propina/i })).toHaveCount(0);
+    // D344 · el selector de propina DEL PAGO sigue sin existir. El que hay es
+    // otro: la propina de la mesa del organizador, que no cobra nada.
+    await expect(page.getByRole('radiogroup', { name: /^(Elige tu propina|Propina)$/ })).toHaveCount(0);
+    await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })).toHaveCount(1);
 
     /**
      * 🔴 **D-R8 cambió a dónde lleva el círculo, y el motivo viejo caducó.**

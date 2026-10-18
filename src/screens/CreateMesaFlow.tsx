@@ -10,7 +10,7 @@ import {
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
@@ -45,7 +45,13 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
-import { desgloseDelTicket, montoDeDescuento, notaDeLoQueNoSeReparte } from './desgloseDelTicket';
+import {
+  desgloseDelTicket,
+  montoDeDescuento,
+  notaDeLoQueNoSeReparte,
+  notaNeutraDelAlta,
+  type LoQueNoSeReparte,
+} from './desgloseDelTicket';
 import { abrirCamaraNativa, alRecibirFotoDeLaCamara } from '../camara/camaraNativa';
 import {
   codificarFoto,
@@ -85,6 +91,10 @@ import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/mon
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { leerParteDelDetalle, type ParteDelDetalle, type TipSetting } from '../api/miParte';
+import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
+import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
+import { mensajeDeRechazo, mismaPropina, rechazoOcultaElSelector } from './propinaDeLaMesaView';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -379,6 +389,42 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const confirm3dsInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
+  /**
+   * D344 · la propina de la mesa en «Compartir la mesa», apenas se crea la mesa
+   * sin garantía y antes de que salga el link (respuesta 1 de V). La vista
+   * previa necesita `share_totals`, que existe recién con la mesa: se lee el
+   * detalle negociado una vez. El pedido vive en `propinaDeLaMesa.ts` y
+   * sobrevive a irse de esta pantalla; «Tu mesa» espera su respuesta.
+   */
+  const [parteAlCompartir, setParteAlCompartir] = useState<ParteDelDetalle | null>(null);
+  const codigoCreado = created?.mesa.code ?? null;
+  const creadaSinGarantia = created?.guarantee.method === 'none';
+  const cuentaDePropina = session?.principal_id ?? null;
+  const clavePropina = useMemo(
+    () => (cuentaDePropina && codigoCreado ? { cuenta: cuentaDePropina, code: codigoCreado } : null),
+    [cuentaDePropina, codigoCreado],
+  );
+  const estadoPropina = useEstadoDePropina(clavePropina);
+  const sesionDePropinaRef = useRef(session);
+  sesionDePropinaRef.current = session;
+  useEffect(() => {
+    setParteAlCompartir(null);
+    if (step !== 'share' || !codigoCreado || !creadaSinGarantia || !sinGarantia || enViaje) return;
+    let vigente = true;
+    api.getMesa(codigoCreado)
+      .then((r) => { if (vigente) setParteAlCompartir(leerParteDelDetalle(r.mesa)); })
+      .catch(() => undefined);
+    return () => { vigente = false; };
+  }, [step, codigoCreado, creadaSinGarantia, sinGarantia, enViaje]);
+  // Un rechazo que saca el selector de la pantalla se avisa afuera de él.
+  const faseDePropinaRef = useRef(estadoPropina.fase);
+  useEffect(() => {
+    const antes = faseDePropinaRef.current;
+    faseDePropinaRef.current = estadoPropina.fase;
+    if (antes === 'guardando' && estadoPropina.fase === 'rechazada' && rechazoOcultaElSelector(estadoPropina.codigo)) {
+      toast(mensajeDeRechazo(estadoPropina, t));
+    }
+  }, [estadoPropina, toast, t]);
   const [link, setLink] = useState<string | null>(null);
   const [linkState, setLinkState] = useState<LinkState>('idle');
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -936,6 +982,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     totales: scannedTotals,
     ajustes: scannedAdjustments,
   });
+  /** D344 · la nota del alta: neutra si la mesa va a ser sin garantía (dinero apagado), la de siempre si no. */
+  const notaDelAlta = (aparte: LoQueNoSeReparte): string | null => (sinGarantia
+    ? notaNeutraDelAlta(aparte, t)
+    : notaDeLoQueNoSeReparte(aparte, t));
   const totalMismatch =
     scannedTotalCents !== null && ticketValid && total !== scannedTotalCents && desglose.tipo !== 'cierra'
       ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
@@ -2156,11 +2206,15 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           <div className="ticket-title-amount">{formatMXN(total)}</div>
           {/* D215 · D218 · «Dejarlo para los pagos»: con IVA agregado o con un
               descuento, lo que se divide es la suma de los platos. Se dice, sin
-              ámbar y sin frenar nada. Una sola nota aunque sean las dos cosas. */}
-          {desglose.tipo === 'cierra' && notaDeLoQueNoSeReparte(desglose.aparte, t) && (
+              ámbar y sin frenar nada. Una sola nota aunque sean las dos cosas.
+              D344 · en la mesa que va a ser sin garantía «Mi parte» sí los
+              incluye, salvo que el dueño no los pueda aplicar: antes de crearla
+              no se sabe, y la nota dice dónde se ve sin afirmar ninguna de las
+              dos cosas (respuesta 4 de V). Con garantía, la de siempre. */}
+          {desglose.tipo === 'cierra' && notaDelAlta(desglose.aparte) && (
             <p className="ticket-title-iva">
               <Icon name="info" size={15} className="ico-inline" />
-              <span>{notaDeLoQueNoSeReparte(desglose.aparte, t)}</span>
+              <span>{notaDelAlta(desglose.aparte)}</span>
             </p>
           )}
           <div
@@ -3053,6 +3107,22 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   if (step === 'share' && created) {
     const code = created.mesa.code;
     const displayedRestaurantName = normalizedRestaurantLabel ?? restaurant?.name;
+    // D344 · lo guardado: lo que confirmó el PUT si terminó acá, o lo que publica el dueño.
+    const propinaGuardada = estadoPropina.fase === 'guardada'
+      ? estadoPropina.setting
+      : (parteAlCompartir?.tipSetting ?? null);
+    const ofrecePropina = !!clavePropina
+      && parteAlCompartir !== null
+      && parteAlCompartir.tipSetting !== undefined
+      && !(estadoPropina.fase === 'rechazada' && rechazoOcultaElSelector(estadoPropina.codigo));
+    const elegirPropina = (setting: TipSetting | null): void => {
+      if (!clavePropina) return;
+      if (estadoPropina.fase !== 'agotada' && estadoPropina.fase !== 'rechazada'
+          && mismaPropina(setting, propinaGuardada)) return;
+      void guardarPropinaDeLaMesa(
+        clavePropina, setting, dependenciasDePropina(() => sesionDePropinaRef.current?.principal_id ?? null),
+      );
+    };
     const copiarLink = () => {
       if (!link) return;
       void writeClipboardText(link).then((copied) =>
@@ -3076,6 +3146,15 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           </FilaDeTitulo>
         </div>
         <div className="scroll flow-scroll share-flow-scroll">
+          {ofrecePropina && (
+            <PropinaDeLaMesa
+              guardada={propinaGuardada}
+              totales={parteAlCompartir?.shareTotals}
+              estado={estadoPropina}
+              onElegir={elegirPropina}
+              onReintentar={() => { if (estadoPropina.fase === 'agotada') elegirPropina(estadoPropina.deseado); }}
+            />
+          )}
           <div className="share-card">
             {/* La maqueta final separa la credencial de las acciones visuales,
                 pero el refinamiento es aditivo: tocar el código y el botón

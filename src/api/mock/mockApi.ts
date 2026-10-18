@@ -3880,6 +3880,68 @@ export async function mockCloseMesa(
   return delay({ mesa_status: 'expired', closure_reason: 'closed_by_organizer' });
 }
 
+/**
+ * D344 · v2.186.0 · espejo de `PUT /:code/tip` (`contract/mesa-mi-parte-v1.json`,
+ * `escritura`). En el orden del dueño: quien no participa, 404; quien participa
+ * sin ser el organizador, 403 `not_mesa_organizer`; un cuerpo que no es
+ * exactamente `{tip_setting: X}`, 400 `validation_error`; una mesa con garantía
+ * o con el dinero encendido, 409 `tip_setting_not_applicable`; una mesa que no
+ * está abierta, 409 `mesa_not_active` con su estado y motivo. Repetir el mismo
+ * valor da lo mismo. Costura `payme.app.mock.propina_mesa.v1`: `error` (500,
+ * transitorio, para ver el reintento y su tope).
+ */
+let pedidosDePropina = 0;
+/** Cuántos `PUT /tip` llegaron: el reintento y el «gana la última» se miden con esto. */
+export function contarPedidosDePropina(): number {
+  return pedidosDePropina;
+}
+
+function tipSettingDelCuerpo(body: unknown): { ok: true; setting: MockTipSetting } | { ok: false } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false };
+  const claves = Object.keys(body);
+  if (claves.length !== 1 || claves[0] !== 'tip_setting') return { ok: false };
+  const x = (body as { tip_setting: unknown }).tip_setting;
+  if (x === null) return { ok: true, setting: null };
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return { ok: false };
+  const k = Object.keys(x);
+  if (k.length !== 1) return { ok: false };
+  const v = (x as Record<string, unknown>)[k[0]!];
+  if (k[0] === 'tip_bps' && Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= 10_000) {
+    return { ok: true, setting: { tip_bps: v as number } };
+  }
+  if (k[0] === 'tip_cents' && Number.isSafeInteger(v) && (v as number) >= 0) {
+    return { ok: true, setting: { tip_cents: v as number } };
+  }
+  return { ok: false };
+}
+
+type MockTipSetting = { tip_bps: number } | { tip_cents: number } | null;
+
+export async function mockFijarPropinaDeLaMesa(
+  code: string,
+  body: unknown,
+  identity: MockIdentity,
+): Promise<{ tip_setting: MockTipSetting }> {
+  pedidosDePropina += 1;
+  const costura = (() => {
+    try { return localStorage.getItem('payme.app.mock.propina_mesa.v1'); } catch { return null; }
+  })();
+  if (costura === 'error') return fail(500, 'internal_error');
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (identity === 'guest' || !mesa.openedByUser) return fail(403, 'not_mesa_organizer');
+  const leido = tipSettingDelCuerpo(body);
+  if (!leido.ok) return fail(400, 'validation_error');
+  const dineroVivo = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true;
+  if (mesa.guarantee_mode !== false || dineroVivo) return fail(409, 'tip_setting_not_applicable');
+  settleIfExpired(mesa);
+  if (mesa.status !== 'open') {
+    return fail(409, 'mesa_not_active', { mesa_status: mesa.status, closure_reason: mesa.closure_reason ?? null });
+  }
+  mesa.tip_setting = leido.setting;
+  return delay({ tip_setting: leido.setting });
+}
+
 export async function mockPayMesa(
   code: string,
   req: PayMesaRequest,

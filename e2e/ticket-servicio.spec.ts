@@ -60,7 +60,8 @@ test.describe('D224 · «¿Cómo dividen?» y su hoja con el cargo por servicio 
   test('🔴 servicio: la línea en la hoja, el total impreso, la nota, y no es un plato ni se reparte', async ({ page }) => {
     await hastaElTicket(page, 'servicio');
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
-    await expect(nota(page)).toHaveText('Lo que paga cada uno todavía no incluye el cargo por servicio ($85)');
+    // D344 · con el dinero apagado la mesa va a ser sin garantía: la nota es la neutra (respuesta 4 de V).
+    await expect(nota(page)).toHaveText('Cómo queda el cargo por servicio ($85) en lo que paga cada uno se ve en «Mi parte» al crear la mesa');
     await expect(avisoAmbar(page)).toHaveCount(0);
     await capturar(page, 'nota');
     await abrirHoja(page);
@@ -80,7 +81,7 @@ test.describe('D224 · «¿Cómo dividen?» y su hoja con el cargo por servicio 
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
     await expect(nota(page)).toHaveCount(1);
     await expect(nota(page)).toHaveText(
-      `Lo que paga cada uno todavía no incluye el cargo por servicio ($85) ni el descuento (${MENOS}$50)`,
+      `Cómo quedan el cargo por servicio ($85) y el descuento (${MENOS}$50) en lo que paga cada uno se ve en «Mi parte» al crear la mesa`,
     );
     await abrirHoja(page);
     expect(await filas(page)).toEqual(['Cargo por servicio $85', `Descuento ${MENOS}$50`, 'Total del ticket $875']);
@@ -91,7 +92,7 @@ test.describe('D224 · «¿Cómo dividen?» y su hoja con el cargo por servicio 
   test('🔴 IVA agregado y servicio: Subtotal, IVA, Cargo por servicio y Total, en el orden de la cuenta', async ({ page }) => {
     await hastaElTicket(page, 'servicio_iva');
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
-    await expect(nota(page)).toHaveText('Lo que paga cada uno todavía no incluye el IVA ($134.40) ni el cargo por servicio ($85)');
+    await expect(nota(page)).toHaveText('Cómo quedan el IVA ($134.40) y el cargo por servicio ($85) en lo que paga cada uno se ve en «Mi parte» al crear la mesa');
     await abrirHoja(page);
     expect(await filas(page)).toEqual([
       'Subtotal $840', 'IVA $134.40', 'Cargo por servicio $85', 'Total del ticket $1,059.40',

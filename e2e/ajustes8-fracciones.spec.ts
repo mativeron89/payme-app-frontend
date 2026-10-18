@@ -91,6 +91,19 @@ const porciones = (page: Page) => page
   .getByRole('radio');
 
 /**
+ * D344 · el selector de PORCIONES no ofrece «Otro». Desde 0.252.0 la pantalla del
+ * organizador tiene otro «Otro», el de la propina de la mesa, así que la ausencia
+ * se mira dentro del selector de porciones, y el de la propina se afirma presente
+ * para que esa ausencia no pase por la causa equivocada.
+ */
+async function sinOtroEnLasPorciones(page: Page): Promise<void> {
+  await expect(page.getByRole('radiogroup', { name: 'Porción de Pizza para compartir' })
+    .getByRole('radio', { name: 'Otro' })).toHaveCount(0);
+  await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })
+    .getByRole('radio', { name: 'Otro', exact: true })).toHaveCount(1);
+}
+
+/**
  * 🔴 **La decisión 90 de Mati (2026-09-26) cambió lo que V04 ofrecía.** El
  * selector natural daba Entero, ½, ⅓, ¼ y «Otro» con un denominador a mano
  * hasta N; las mesas históricas mostraban además ⅔ y ¾ con un aviso. Ahora son
@@ -105,7 +118,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
 
     await expect(porciones(page)).toHaveText(['Entero', '½']);
     await expect(page.getByRole('radio', { name: '⅓' })).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
+    await sinOtroEnLasPorciones(page);
   });
 
   test('N=7 ofrece Entero · ½ · ⅓ · ¼ sin Otro, y envía el denominador; el dueño fija 3333 bps', async ({ page }, testInfo) => {
@@ -113,7 +126,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
     await sembrar(page, 'PA-9207', 7);
 
     await expect(porciones(page)).toHaveText(['Entero', '½', '⅓', '¼']);
-    await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
+    await sinOtroEnLasPorciones(page);
     await page.getByRole('radio', { name: '⅓' }).click();
     await page.screenshot({ path: testInfo.outputPath('v04-fraccion-un-tercio.png'), fullPage: true });
 
@@ -129,7 +142,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
     await sembrar(page, 'PA-9299', null);
 
     await expect(porciones(page)).toHaveText(['Entero', '½', '⅓', '¼']);
-    await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
+    await sinOtroEnLasPorciones(page);
     await page.getByRole('radio', { name: '¼' }).click();
     await grabarLocks(page);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();

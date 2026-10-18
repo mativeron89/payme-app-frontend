@@ -52,7 +52,8 @@ test.describe('D218 · «Ver el ticket» con el descuento aparte', () => {
     await hastaElTicket(page, 'descuento');
     // Lo que se divide no cambia: el descuento no se reparte.
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
-    await expect(nota(page)).toHaveText(`Lo que paga cada uno todavía no incluye el descuento (${MENOS}$50)`);
+    // D344 · con el dinero apagado la mesa va a ser sin garantía: la nota es la neutra (respuesta 4 de V).
+    await expect(nota(page)).toHaveText(`Cómo queda el descuento (${MENOS}$50) en lo que paga cada uno se ve en «Mi parte» al crear la mesa`);
     await expect(avisoAmbar(page)).toHaveCount(0);
     await expect(hoja(page)).toHaveCount(0);
     await capturar(page, 'nota');
@@ -71,7 +72,7 @@ test.describe('D218 · «Ver el ticket» con el descuento aparte', () => {
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
     await expect(nota(page)).toHaveCount(1);
     await expect(nota(page)).toHaveText(
-      `Lo que paga cada uno todavía no incluye el IVA ($134.40) ni el descuento (${MENOS}$50)`,
+      `Cómo quedan el IVA ($134.40) y el descuento (${MENOS}$50) en lo que paga cada uno se ve en «Mi parte» al crear la mesa`,
     );
     await expect(avisoAmbar(page)).toHaveCount(0);
     await abrirHoja(page);

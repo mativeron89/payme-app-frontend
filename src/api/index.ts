@@ -39,6 +39,7 @@ import {
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeMesaCerrada, type MesaCerrada } from './cerrarMesa';
+import { cuerpoDelPutDePropina, leerRespuestaDelPutDePropina, type TipSetting } from './miParte';
 import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, rutaDeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
 import {
@@ -478,6 +479,13 @@ export interface Api {
   releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
   /** AF-34 · n98 · el organizador cierra la mesa sin garantía. La confirmación la pide la pantalla. */
   closeMesa(code: string): Promise<MesaCerrada>;
+  /**
+   * D344 · `PUT /api/mesas/:code/tip`: la propina de la mesa, sólo el
+   * organizador, en la mesa sin garantía abierta y con el dinero apagado.
+   * `null` vuelve a «sin fijar». Devuelve lo que quedó guardado. El reintento lo
+   * maneja `propinaDeLaMesa.ts`; acá va un pedido por llamada.
+   */
+  fijarPropinaDeLaMesa(code: string, setting: TipSetting | null, timeoutMs?: number): Promise<TipSetting | null>;
   /**
    * AF-BORRAR-MESAS · D238/D239 · borrar de la app una mesa terminada
    * (`PUT /mesas/:code/hidden`, `{ include_history }`) y deshacerlo (`DELETE`).
@@ -933,15 +941,18 @@ const realApi: Api = {
   // D218 · D224 · `adjustments_version=2` (el descuento y el cargo por servicio
   // aparte, App Backend 2.168.0; las filas v1 salen igual con 1 y con 2) y
   // L1 · `totals_version=2` (subtotal e IVA también con IVA agregado, 2.165.0;
-  // uno anterior lo ignora). Strings exactos y fijos, escritos acá para que la
-  // guarda de interpolaciones no tenga nada que eximir: sin ellos el dueño
-  // contesta byte por byte como antes.
+  // uno anterior lo ignora). D344 · `share_version=1` (2.186.0): la propina de
+  // la mesa y «Mi parte», que se leen con `leerParteDelDetalle`. Strings exactos
+  // y fijos, escritos acá para que la guarda de interpolaciones no tenga nada
+  // que eximir: sin ellos el dueño contesta byte por byte como antes.
   getMesa: (code, guestToken) =>
     guestToken
       ? httpGuestRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2`, guestToken,
+        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1`, guestToken,
       )
-      : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2`),
+      : httpRequest<MesaDetailResponse>(
+        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1`,
+      ),
   getInformativeSelection: async (code) => informativeSelectionResponse(
     await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),
   ),
@@ -1056,6 +1067,11 @@ const realApi: Api = {
     ),
   closeMesa: async (code) =>
     decodeMesaCerrada(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/close`)),
+  fijarPropinaDeLaMesa: async (code, setting, timeoutMs) => leerRespuestaDelPutDePropina(
+    await httpRequest<unknown>(
+      'PUT', `/mesas/${encodeURIComponent(code)}/tip`, cuerpoDelPutDePropina(setting), undefined, timeoutMs,
+    ),
+  ),
   ocultarMesa: async (code, incluirHistorial) => decodeMesaOcultada(
     await httpRequest<unknown>('PUT', `/mesas/${encodeURIComponent(code)}/hidden`, { include_history: incluirHistorial }),
     { code, hidden: true },
@@ -1641,6 +1657,9 @@ const mockApi: Api = {
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
   closeMesa: async (code) => decodeMesaCerrada(await mock.mockCloseMesa(code, 'user')),
+  fijarPropinaDeLaMesa: async (code, setting) => leerRespuestaDelPutDePropina(
+    await mock.mockFijarPropinaDeLaMesa(code, cuerpoDelPutDePropina(setting), 'user'),
+  ),
   ocultarMesa: async (code, incluirHistorial) =>
     decodeMesaOcultada(await mock.mockOcultarMesa(code, { include_history: incluirHistorial }), { code, hidden: true }),
   mostrarMesa: async (code) => decodeMesaOcultada(await mock.mockMostrarMesa(code), { code, hidden: false }),

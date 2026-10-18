@@ -92,6 +92,15 @@ import {
   type InformativeSelectionState,
 } from './informativeSelectionView';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { leerParteDelDetalle, type TipSetting } from '../api/miParte';
+import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
+import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
+import {
+  mensajeDeRechazo,
+  mismaPropina,
+  puedeFijarPropina,
+  rechazoOcultaElSelector,
+} from './propinaDeLaMesaView';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -383,6 +392,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const isGuest = !!guestToken;
   const previewingAsGuest = isGuest && !!session;
+  /**
+   * D344 · el `PUT /tip` de esta mesa, con clave cuenta + código: lo pudo
+   * empezar «Compartir la mesa» antes de llegar acá. Mientras se guarda no se
+   * eligen platos (contrato, `escritura.cliente`) y el refresco no pisa la
+   * propina que está en camino.
+   */
+  const cuentaDePropina = session?.principal_id ?? null;
+  const clavePropina = useMemo(
+    () => (cuentaDePropina && !isGuest ? { cuenta: cuentaDePropina, code } : null),
+    [cuentaDePropina, isGuest, code],
+  );
+  const estadoPropina = useEstadoDePropina(clavePropina);
+  const propinaGuardando = estadoPropina.fase === 'guardando';
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [view, setView] = useState<View>('detail');
@@ -668,6 +690,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const puedeRefrescarRef = useRef(false);
   puedeRefrescarRef.current = view === 'detail'
     && !busy
+    && !propinaGuardando
     && !cierrePropio
     && (mesa?.status === 'open' || mesa?.status === 'partially_paid')
     && informativeState !== 'loading';
@@ -690,6 +713,27 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       document.removeEventListener('visibilitychange', alVolver);
     };
   }, [refrescarMesa]);
+
+  /**
+   * D344 · al terminar el `PUT /tip` se vuelve a leer la mesa: el 200 trae sólo
+   * `tip_setting`, y `share_totals`/«Mi parte» cambian con la propina. La lectura
+   * completa avanza la época, así que un refresco que salió antes se descarta.
+   * Ante 409 `mesa_not_active` (pendiente MENOR 4) también: se muestra lo que
+   * quedó guardado, que puede ser el valor de un 200 perdido. Sólo en la
+   * transición desde «guardando»: si el pedido terminó en «Compartir la mesa»,
+   * la primera lectura de esta pantalla ya es posterior.
+   */
+  const faseDePropinaRef = useRef(estadoPropina.fase);
+  useEffect(() => {
+    const antes = faseDePropinaRef.current;
+    faseDePropinaRef.current = estadoPropina.fase;
+    if (antes !== 'guardando') return;
+    if (estadoPropina.fase === 'guardada') { reload(); return; }
+    if (estadoPropina.fase !== 'rechazada') return;
+    if (estadoPropina.codigo === 'mesa_not_active') reload();
+    // Estos dos sacan el selector de la pantalla: el aviso no puede quedar adentro.
+    if (rechazoOcultaElSelector(estadoPropina.codigo)) toast(mensajeDeRechazo(estadoPropina, t));
+  }, [estadoPropina, reload, toast, t]);
 
   /**
    * AF-25 · n72 · quiénes se sumaron, **sólo si soy el organizador**. A otro no
@@ -894,6 +938,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const tipChosen = tipIsChosen(tip);
 
   function toggleItem(id: string) {
+    // D344 · con la propina de la mesa en camino no se elige (la fila ya está apagada).
+    if (propinaGuardando) return;
     // B-06: con un pago sin confirmar, cambiar la selección cambiaría el
     // payload de la clave congelada → 409 en el reintento (o, peor, un cobro
     // nuevo). Primero se resuelve ese pago.
@@ -3004,6 +3050,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // El JSX vive en `MesaDetailView`: es la pantalla que §1.5 rediseña, y tenerla
   // en el mismo archivo que el pago hacía que un cambio visual rozara dinero.
   // Acá queda el cableado — estado adentro, intenciones afuera.
+  //
+  // D344 · el selector de la propina de la mesa (sólo el organizador, mesa sin
+  // garantía abierta y el corte DECLARADO: con el riel en `pending` el dueño
+  // podría contestar 409). Lo que no se puede cambiar, se lee en la vista.
+  const parteDeLaMesa = leerParteDelDetalle(mesa);
+  const propinaGuardada = parteDeLaMesa.tipSetting ?? null;
+  const ofrecePropina = !!clavePropina
+    && !(estadoPropina.fase === 'rechazada' && rechazoOcultaElSelector(estadoPropina.codigo))
+    && puedeFijarPropina({
+      esTitular: esOrganizador,
+      pagosCortados: corteDeclarado,
+      guaranteeMode: mesa.guarantee_mode,
+      status: mesa.status,
+      tipSetting: parteDeLaMesa.tipSetting,
+    });
+  const elegirPropina = (setting: TipSetting | null): void => {
+    if (!clavePropina) return;
+    // Repetir lo guardado no cambia nada: no se espera por eso.
+    if (estadoPropina.fase !== 'agotada' && estadoPropina.fase !== 'rechazada'
+        && mismaPropina(setting, propinaGuardada)) return;
+    void guardarPropinaDeLaMesa(clavePropina, setting, dependenciasDePropina(() => sesionRef.current?.principal_id ?? null));
+  };
+  const selectorDePropina = ofrecePropina ? (
+    <PropinaDeLaMesa
+      guardada={propinaGuardada}
+      totales={mesa.guarantee_mode === false ? parteDeLaMesa.shareTotals : null}
+      estado={estadoPropina}
+      onElegir={elegirPropina}
+      onReintentar={() => { if (estadoPropina.fase === 'agotada') elegirPropina(estadoPropina.deseado); }}
+    />
+  ) : null;
   return (
     <MesaDetailView
       mesa={mesa}
@@ -3057,6 +3134,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}
+      propinaDeLaMesa={selectorDePropina}
+      propinaGuardando={propinaGuardando}
     />
   );
 }

@@ -250,6 +250,35 @@ beforeAll(() => {
   }
 }, 180_000);
 
+/**
+ * 🔴 D344 · el cálculo de «Mi parte» portado al mock (`src/api/mock/parteDeMesa.ts`)
+ * es SÓLO del build mock: lo que vale es el servidor. La guarda de su test fija
+ * el camino (nada fuera del mock lo importa ni lo corre al cargar); ésta mide el
+ * artefacto. La marca es uno de sus códigos de error, que no aparece en otro
+ * lado: si se renombra, la ausencia pasaría en vacío, y por eso se exige en el
+ * fuente y en el mock (control positivo).
+ */
+describe('🔴 D344 · el cálculo portado de «Mi parte» viaja sólo en el build mock', () => {
+  const MARCA = 'parte_mesa_desborde';
+  const variante = (nombre: string) => {
+    const a = construidos.find((c) => c.nombre === nombre);
+    expect(a, `el artefacto ${nombre} no se construyó`).toBeDefined();
+    return a!;
+  };
+
+  it('la marca existe en el port (si no, las dos de abajo no miden nada)', () => {
+    expect(readFileSync(join(RAIZ, 'src/api/mock/parteDeMesa.ts'), 'utf8')).toContain(MARCA);
+  });
+
+  it('el build mock lo trae (control positivo)', () => {
+    expect(variante('webapp mock').texto).toContain(MARCA);
+  });
+
+  it('🔴 el build real no lo trae', () => {
+    expect(variante('webapp real').texto).not.toContain(MARCA);
+  });
+});
+
 describe.each([0, 1])('artefacto distribuible #%i', (i) => {
   const art = () => {
     const a = construidos[i];

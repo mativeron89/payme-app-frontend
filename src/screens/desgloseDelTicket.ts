@@ -139,3 +139,83 @@ export function notaDeLoQueNoSeReparte(
   if (descuentoCents > 0) return t('Lo que paga cada uno todavía no incluye el descuento ({0})', montoDeDescuento(descuentoCents));
   return null;
 }
+
+/**
+ * D344 · la nota de la mesa sin garantía cuando el dueño publica «Mi parte»
+ * con los ajustes aplicados (`share_totals` no nulo y `adjustments_omitted`
+ * falso): lo que paga cada uno YA incluye el IVA aparte, el cargo por servicio
+ * y el descuento. Las mismas siete combinaciones y el mismo orden que
+ * `notaDeLoQueNoSeReparte` (texto aprobado por V, respuesta 4). Los montos son
+ * los de `share_totals`. `null` si no hay ninguno.
+ */
+export function notaDeLoQueYaIncluyeMiParte(
+  totales: { readonly tax_added_cents: number; readonly service_cents: number; readonly discounts_cents: number },
+  t: (s: string, ...args: unknown[]) => string,
+): string | null {
+  const iva = totales.tax_added_cents;
+  const servicio = totales.service_cents;
+  const descuento = totales.discounts_cents;
+  if (servicio > 0) {
+    if (iva > 0 && descuento > 0) {
+      return t('Lo que paga cada uno ya incluye el IVA ({0}), el cargo por servicio ({1}) y el descuento ({2})',
+        formatMXN(iva), formatMXN(servicio), montoDeDescuento(descuento));
+    }
+    if (iva > 0) {
+      return t('Lo que paga cada uno ya incluye el IVA ({0}) y el cargo por servicio ({1})', formatMXN(iva), formatMXN(servicio));
+    }
+    if (descuento > 0) {
+      return t('Lo que paga cada uno ya incluye el cargo por servicio ({0}) y el descuento ({1})',
+        formatMXN(servicio), montoDeDescuento(descuento));
+    }
+    return t('Lo que paga cada uno ya incluye el cargo por servicio ({0})', formatMXN(servicio));
+  }
+  if (iva > 0 && descuento > 0) {
+    return t('Lo que paga cada uno ya incluye el IVA ({0}) y el descuento ({1})', formatMXN(iva), montoDeDescuento(descuento));
+  }
+  if (iva > 0) return t('Lo que paga cada uno ya incluye el IVA ({0})', formatMXN(iva));
+  if (descuento > 0) return t('Lo que paga cada uno ya incluye el descuento ({0})', montoDeDescuento(descuento));
+  return null;
+}
+
+/**
+ * D344 · la nota de «¿Cómo dividen?» en una mesa que va a ser sin garantía
+ * (dinero apagado). Va ANTES de crear la mesa, sin `share_totals`: no puede
+ * decir «todavía no incluye» (después «Mi parte» sí lo incluye) ni «ya
+ * incluye» (si la mesa se corrige, el dueño no aplica los ajustes). Por eso es
+ * neutra: dice dónde se ve (respuesta 4 de V). Mismas siete combinaciones.
+ */
+export function notaNeutraDelAlta(
+  aparte: LoQueNoSeReparte,
+  t: (s: string, ...args: unknown[]) => string,
+): string | null {
+  const { ivaCents, descuentoCents } = aparte;
+  const servicioCents = aparte.servicioCents ?? 0;
+  if (servicioCents > 0) {
+    const servicio = formatMXN(servicioCents);
+    if (ivaCents > 0 && descuentoCents > 0) {
+      return t('Cómo quedan el IVA ({0}), el cargo por servicio ({1}) y el descuento ({2}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa',
+        formatMXN(ivaCents), servicio, montoDeDescuento(descuentoCents));
+    }
+    if (ivaCents > 0) {
+      return t('Cómo quedan el IVA ({0}) y el cargo por servicio ({1}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa',
+        formatMXN(ivaCents), servicio);
+    }
+    if (descuentoCents > 0) {
+      return t('Cómo quedan el cargo por servicio ({0}) y el descuento ({1}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa',
+        servicio, montoDeDescuento(descuentoCents));
+    }
+    return t('Cómo queda el cargo por servicio ({0}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa', servicio);
+  }
+  if (ivaCents > 0 && descuentoCents > 0) {
+    return t('Cómo quedan el IVA ({0}) y el descuento ({1}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa',
+      formatMXN(ivaCents), montoDeDescuento(descuentoCents));
+  }
+  if (ivaCents > 0) {
+    return t('Cómo queda el IVA ({0}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa', formatMXN(ivaCents));
+  }
+  if (descuentoCents > 0) {
+    return t('Cómo queda el descuento ({0}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa',
+      montoDeDescuento(descuentoCents));
+  }
+  return null;
+}

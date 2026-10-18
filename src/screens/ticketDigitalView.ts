@@ -1,6 +1,7 @@
 import { sumaDeTipo, ticketAdjustmentsOf } from '../api/contractResponses';
 import type { MesaDetail, TicketAdjustment, TicketTotals } from '../api/types';
 import { desgloseDelTicket, type DesgloseDelTicket, type FilaDelDesglose, type LoQueNoSeReparte } from './desgloseDelTicket';
+import { leerParteDelDetalle } from '../api/miParte';
 
 export interface TicketDigitalItem {
   readonly name: string;
@@ -32,6 +33,28 @@ export interface TicketDigitalView {
    * descuento de hoy, el total de los consumos y las líneas aparte.
    */
   readonly apartes?: { readonly descuentoCents: number; readonly servicioCents: number };
+  /**
+   * D344 · en la mesa sin garantía, cuando el dueño publica «Mi parte» con los
+   * ajustes aplicados (`share_totals` no nulo y `adjustments_omitted` falso): lo
+   * que paga cada uno YA incluye estos montos, y la nota de «no se reparte»
+   * cambia. Sólo los montos de la mesa, nunca la parte de nadie (R5, R7).
+   */
+  readonly yaIncluye?: {
+    readonly tax_added_cents: number;
+    readonly service_cents: number;
+    readonly discounts_cents: number;
+  };
+}
+
+/** D344 · los ajustes que «Mi parte» ya incluye, o `null` si rige la nota de siempre. */
+function loQueYaIncluyeMiParte(mesa: MesaDetail): TicketDigitalView['yaIncluye'] | null {
+  if (mesa.guarantee_mode !== false) return null;
+  const totales = leerParteDelDetalle(mesa).shareTotals;
+  if (!totales || totales.adjustments_omitted) return null;
+  const { tax_added_cents, service_cents, discounts_cents } = totales;
+  return tax_added_cents > 0 || service_cents > 0 || discounts_cents > 0
+    ? { tax_added_cents, service_cents, discounts_cents }
+    : null;
 }
 
 function enteroSeguro(value: unknown, min: number): value is number {
@@ -65,11 +88,13 @@ export function ticketDigitalView(mesa: MesaDetail, expectedCode: string): Ticke
     };
   });
 
+  const yaIncluye = loQueYaIncluyeMiParte(mesa);
   const base = {
     code: mesa.code,
     restaurantName: mesa.restaurant.name,
     items,
     totalCents: mesa.total_cents,
+    ...(yaIncluye ? { yaIncluye } : {}),
   };
 
   // D218 · D224 · los ajustes van PRIMERO: con una fila v2 (cargo por servicio,

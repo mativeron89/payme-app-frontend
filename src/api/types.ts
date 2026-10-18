@@ -768,6 +768,16 @@ export interface MesaDetail {
    * los ítems del recibo). Una fila v2 trae además `ticket_totals`.
    */
   ticket_adjustments?: TicketAdjustment[];
+  /**
+   * D344 · App Backend 2.186.0, con `share_version=1` (`contract/mesa-mi-parte-v1.json`):
+   * la propina que fijó el organizador, los totales de la mesa y la parte de
+   * quien mira. Vienen las tres juntas (en null con la garantía) o ninguna.
+   * `unknown` A PROPÓSITO: se leen sólo con `leerParteDelDetalle` (`miParte.ts`),
+   * que valida cada una y, si algo no cierra, la cuenta como ausente.
+   */
+  tip_setting?: unknown;
+  share_totals?: unknown;
+  my_share?: unknown;
 }
 
 export interface MesaDetailResponse {

@@ -4,7 +4,13 @@ import { extractApiError } from '../api/errors';
 import { isCurrentSession, loadSession } from '../api/storage';
 import { useAuth } from '../auth/AuthContext';
 import { useIdioma } from '../i18n/idioma';
-import { montoDeDescuento, notaDeLoQueNoSeReparte, type FilaDelDesglose, type LoQueNoSeReparte } from '../screens/desgloseDelTicket';
+import {
+  montoDeDescuento,
+  notaDeLoQueNoSeReparte,
+  notaDeLoQueYaIncluyeMiParte,
+  type FilaDelDesglose,
+  type LoQueNoSeReparte,
+} from '../screens/desgloseDelTicket';
 import { ticketDigitalView, type TicketDigitalView } from '../screens/ticketDigitalView';
 import { formatMXN } from '../utils/format';
 import { RequestEpoch } from '../utils/requestEpoch';
@@ -197,7 +203,9 @@ export function TicketDigitalDialog({
                     <span>{t('Total del ticket')}</span>
                     <strong>{formatMXN(estado.ticket.desglose.filas.find((fila) => fila.clave === 'total')!.cents)}</strong>
                   </div>
-                  <p className="ticket-digital-nota">{notaDelServicio(estado.ticket.desglose.aparte, t)}</p>
+                  <p className="ticket-digital-nota">
+                    {notaConMiParte(estado.ticket, notaDelServicio(estado.ticket.desglose.aparte, t), t)}
+                  </p>
                 </>
               ) : estado.ticket.apartes ? (
                 /* D224 · una fila v2 cuyo impreso no se pudo deducir: como la
@@ -223,7 +231,7 @@ export function TicketDigitalDialog({
                     )}
                   </dl>
                   <p className="ticket-digital-nota">
-                    {notaDelServicio({ ivaCents: 0, ...estado.ticket.apartes }, t)}
+                    {notaConMiParte(estado.ticket, notaDelServicio({ ivaCents: 0, ...estado.ticket.apartes }, t), t)}
                   </p>
                 </>
               ) : estado.ticket.discountCents !== undefined ? (
@@ -242,7 +250,7 @@ export function TicketDigitalDialog({
                       <dd>{montoDeDescuento(estado.ticket.discountCents)}</dd>
                     </div>
                   </dl>
-                  <p className="ticket-digital-nota">{t('El descuento no se reparte.')}</p>
+                  <p className="ticket-digital-nota">{notaConMiParte(estado.ticket, t('El descuento no se reparte.'), t)}</p>
                 </>
               ) : (
                 <>
@@ -272,7 +280,11 @@ export function TicketDigitalDialog({
                   </div>
                   {estado.ticket.totals?.ivaAparte && (
                     <p className="ticket-digital-nota">
-                      {notaDeLoQueNoSeReparte({ ivaCents: estado.ticket.totals.taxCents, descuentoCents: 0 }, t)}
+                      {notaConMiParte(
+                        estado.ticket,
+                        notaDeLoQueNoSeReparte({ ivaCents: estado.ticket.totals.taxCents, descuentoCents: 0 }, t),
+                        t,
+                      )}
                     </p>
                   )}
                 </>
@@ -283,6 +295,19 @@ export function TicketDigitalDialog({
       </section>
     </div>
   );
+}
+
+/**
+ * D344 · en la mesa sin garantía con «Mi parte» publicada y los ajustes
+ * aplicados, la nota dice que lo que paga cada uno YA los incluye (respuesta 4
+ * de V). En cualquier otro caso, la de siempre.
+ */
+function notaConMiParte(
+  ticket: TicketDigitalView,
+  deSiempre: string | null,
+  t: (s: string, ...args: unknown[]) => string,
+): string | null {
+  return ticket.yaIncluye ? notaDeLoQueYaIncluyeMiParte(ticket.yaIncluye, t) : deSiempre;
 }
 
 /** D224 · el rótulo de cada fila del desglose, con los textos de «¿Cómo dividen?». */

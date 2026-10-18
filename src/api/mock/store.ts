@@ -1,4 +1,5 @@
-import { centsToDisplay, splitEqual } from '../../utils/money';
+import { centsToDisplay, fractionAmount, splitEqual } from '../../utils/money';
+import { calcular as calcularParteDeMesa } from './parteDeMesa';
 import type {
   ActiveStaff,
   AppNotification,
@@ -137,6 +138,12 @@ export interface MockMesa {
   guarantee_mode?: boolean;
   /** C3 · el discriminador del cierre sin cobros; `null` = cierre monetario. */
   closure_reason?: 'all_items_selected' | 'time' | 'closed_by_organizer' | null;
+  /**
+   * D344 · `mesas.tip_setting_bps` / `tip_setting_cents` del dueño (2.186.0): la
+   * propina de la mesa que fija el organizador con `PUT /:code/tip`. Ausente o
+   * `null` = sin fijar.
+   */
+  tip_setting?: { tip_bps: number } | { tip_cents: number } | null;
   /** G-38 · sólo UUID interno de una guardada; nunca `pm_`. */
   guarantee_saved_payment_method_id?: string | null;
   /**
@@ -1610,6 +1617,86 @@ export function restanteInformativoPorPlato(m: MockMesa): Map<string, number> {
   return new Map(m.items.map((i) => [i.id, restanteDeDeclarado(declarado.get(i.id) ?? 0)]));
 }
 
+/**
+ * D344 · las tres claves de «Mi parte», como las publica el dueño con
+ * `share_version=1` (la app siempre lo negocia): `parteDelDetalle` de
+ * `routes/mesas.js` en 2.186.0, con el cálculo portado en `parteDeMesa.ts`.
+ * Con garantía, las tres en null. Si el cálculo lanza (un «Otro» que desborda,
+ * una mesa sin platos), `tip_setting` sale igual y las otras dos en null.
+ *
+ * Simplificaciones del mock (además de las de `parteDeMesa.ts`):
+ *   · la mesa sin garantía es `guarantee_mode === false` (el dueño exige además
+ *     `metadata.sin_garantia`);
+ *   · las personas son 'user' y 'other' (todos los demás juntos); el orden es
+ *     el organizador primero;
+ *   · los platos de cada uno son sus reclamos (el monto pagado, o la fracción
+ *     nominal de la línea), y lo que nadie eligió, la línea menos lo elegido;
+ *   · en partes iguales, `k` es la posición de 'user' en ese orden;
+ *   · los ajustes siguen `ajustesAplicablesMock`, abajo.
+ */
+function parteDeLaMesaMock(m: MockMesa, identity: MockIdentity): Pick<MesaDetail, 'tip_setting' | 'share_totals' | 'my_share'> {
+  if ((m.guarantee_mode ?? true) !== false) return { tip_setting: null, share_totals: null, my_share: null };
+  const setting = m.tip_setting ?? null;
+  try {
+    const P = m.total_cents;
+    const ajustes = ajustesAplicablesMock(m);
+    const orden: Array<'user' | 'other'> = m.openedByUser ? ['user', 'other'] : ['other', 'user'];
+    if (m.division_mode === 'igual') {
+      const k = identity === 'guest' ? -1 : orden.indexOf('user');
+      return { tip_setting: setting, ...calcularParteDeMesa({ modo: 'igual', P, ajustes, setting, n: m.expected_participants || 1, k }) };
+    }
+    const porPersona = new Map<string, number>();
+    let U = 0;
+    for (const item of m.items) {
+      const linea = item.price_cents * item.quantity;
+      let elegido = 0;
+      for (const c of item.claims) {
+        const monto = c.amount_cents ?? fractionAmount(linea, c.fraction_bps);
+        porPersona.set(c.who, (porPersona.get(c.who) ?? 0) + monto);
+        elegido += monto;
+      }
+      U += Math.max(0, linea - elegido);
+    }
+    const personas = orden.map((id) => ({ id, p: porPersona.get(id) ?? 0 }));
+    return { tip_setting: setting, ...calcularParteDeMesa({ modo: 'consumo', P, ajustes, setting, personas, U, yo: identity }) };
+  } catch {
+    return { tip_setting: setting, share_totals: null, my_share: null };
+  }
+}
+
+/**
+ * D344 · `origenItems.ajustesAplicables` del dueño, simplificado: con la fila de
+ * ajustes, una mesa corregida (total ≠ suma de los platos del recibo) omite;
+ * si no, D, S y el IVA aparte (fila v2, con la regla de Viajes). Con sólo
+ * `ticket_totals` v2: el IVA aparte si se publica con IVA agregado, y una mesa
+ * corregida omite sólo si el ticket sumaba el IVA aparte. Nada más, nada.
+ */
+function ajustesAplicablesMock(m: MockMesa): { D: number; S: number; V: number; omitidos: boolean } {
+  const nada = { D: 0, S: 0, V: 0, omitidos: false };
+  const omitidos = { D: 0, S: 0, V: 0, omitidos: true };
+  const fila = m.ticket_adjustments;
+  if (fila) {
+    if (m.total_cents !== fila.items_total_cents) return omitidos;
+    const D = fila.discounts_cents.reduce((s, x) => s + x, 0);
+    const S = fila.version === 2 ? fila.service_charges_cents.reduce((s, x) => s + x, 0) : 0;
+    const iva = fila.version === 2 ? fila.tax_cents : null;
+    const aparte = fila.version === 2 && iva !== null && iva > 0
+      && (fila.subtotal_cents === fila.items_total_cents || (fila.subtotal_cents === fila.items_total_cents - D && D !== iva));
+    return { D, S, V: aparte && iva !== null ? iva : 0, omitidos: false };
+  }
+  const tt = m.ticket_totals;
+  if (tt) {
+    if (!ticketTotalsPublicables(m)) {
+      if (tt.version !== 2) return nada;
+      return tt.tax_cents > 0 && tt.subtotal_cents === tt.items_total_cents ? omitidos : nada;
+    }
+    const aparte = tt.version === 2 && tt.tax_cents > 0
+      && m.total_cents === tt.items_total_cents && m.total_cents === tt.subtotal_cents;
+    return { D: 0, S: 0, V: aparte ? tt.tax_cents : 0, omitidos: false };
+  }
+  return nada;
+}
+
 export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
   const restantesInformativos = admiteSeleccionInformativa(m) ? restanteInformativoPorPlato(m) : null;
   const parteAntigua = (() => {
@@ -1717,6 +1804,8 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
           : {}),
       }
       : {}),
+    // D344 · `share_version=1`: la app siempre lo negocia, así que el mock siempre las publica.
+    ...parteDeLaMesaMock(m, identity),
   };
 }
 

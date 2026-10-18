@@ -63,7 +63,8 @@ test.describe('D209 · «Ver el ticket» con subtotal e IVA', () => {
     await hastaElTicket(page, 'iva_agregado');
     // Lo que se divide son los platos: el IVA no se reparte (D215).
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
-    await expect(notaIva(page)).toHaveText('Lo que paga cada uno todavía no incluye el IVA ($134.40)');
+    // D344 · con el dinero apagado la mesa va a ser sin garantía: la nota es la neutra (respuesta 4 de V).
+    await expect(notaIva(page)).toHaveText('Cómo queda el IVA ($134.40) en lo que paga cada uno se ve en «Mi parte» al crear la mesa');
     // Sin ámbar y sin abrir la hoja a la fuerza: el total cierra.
     await expect(avisoAmbar(page)).toHaveCount(0);
     await expect(hoja(page)).toHaveCount(0);

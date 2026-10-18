@@ -1,3 +1,22 @@
+# 0.252.0 · 2026-10-17
+
+- D344 (D351/D355): en la mesa sin garantía, el organizador fija la propina de toda la mesa: 0, 5, 10, 15 o 20 %, u «Otro» con un monto. Aparece arriba de «Compartir la mesa», apenas se crea la mesa y antes de mandar el link, y en «Tu mesa» para cambiarla o quitarla mientras esté abierta. También en las mesas cargadas a mano. No obliga, no bloquea y no trae nada marcado: sin elegir, la propina es 0 y no se muestra ningún %.
+- La vista previa del % va sobre los platos después del descuento (la base que publica el servidor, nunca la de `/pay`). Si el ticket trae servicio, lo avisa sin frenar. Un «Otro» de más de 3 veces los platos de la mesa pide confirmar («Sí, dejarla» / «Cambiarla»).
+- La propina se guarda aparte del alta, con `PUT /api/mesas/:code/tip`. Mientras se guarda no se eligen platos. Ante una falla de red, timeout, 5xx o 429 reintenta hasta 3 veces (8 s por intento, esperas de 1 s y 2 s) y después se destraba con un aviso. Un 400, 403, 404 o 409 se informa sin reintentar; un 409 de mesa cerrada vuelve a leer la mesa y muestra lo guardado. El pedido sobrevive a salir de «Compartir la mesa», y si se elige otra propina mientras sale, gana la última.
+- «Mi parte» suma platos, ajustes del ticket (descuento, servicio e IVA aparte) y propina con los montos del servidor (`share_version=1`), en «Cómo se arma tu parte». El renglón de ajustes dice «Descuento», «Descuento y cargos del ticket» o, con un centavo suelto sin ajustes, «Redondeo». Antes de «Listo», por consumo, la fila de abajo muestra la vista previa del contrato (puede diferir en un centavo); en partes iguales, la parte del servidor, o lo de antes si no la publica. Quien no organiza ve la propina de la mesa sin poder cambiarla y nunca la parte de otro.
+- Si los ajustes del ticket no se aplican (la mesa se corrigió, o el descuento cubre toda la cuenta), todos lo ven con los textos aprobados.
+- Las notas de lo que «no se reparte»: en la mesa sin garantía con «Mi parte», dicen que lo que paga cada uno ya lo incluye, también en «Ver el ticket». En «¿Cómo dividen?» de una mesa que va a ser sin garantía, una nota neutra que dice dónde se ve. Con garantía, las de siempre.
+- Los tres datos del detalle se leen con validación propia y, si algo no cierra (también una propina que no es la que fijó el organizador), cuentan como ausentes: rige lo de antes. Un 408 cuenta como timeout (transitorio); el 425, como respuesta fija.
+- El mock porta el cálculo del servidor (`src/api/mock/parteDeMesa.ts`, con los vectores del dueño) y su `PUT`. Que no viaje en el build real lo miden dos guardas: la del camino en su test y la del artefacto en `scripts/artefactos.test.ts` (el real no trae su marca y el mock sí; un mutante que lo vuelve alcanzable desde el código real la pone roja).
+- Espejo del contrato del dueño 2.186.0: entra `mesa-mi-parte-v1.json`; inventario de `79124eb` (declara `6fa84b3`, 143 archivos) y hechos del dueño regenerados.
+- Cambian a propósito, porque ahora la pantalla del organizador tiene la propina de la mesa:
+  - `ticket-descuento`, `ticket-iva` y `ticket-servicio`: la nota del alta con el dinero apagado pasa a la neutra;
+  - `pago-completo`: la ausencia del selector del PAGO se afirma por su nombre;
+  - `ajustes8-fracciones` e `informative-selections`: «el selector de porciones no ofrece Otro» se mira dentro de ese selector, con el «Otro» de la propina como control positivo;
+  - `que-consumiste` (regla 1): el renglón se centra antes de medir, porque la lista quedó más abajo y el clic hacía scroll; lo que se mide no cambia.
+- Huecos del contrato en GAPS.md: G-42 (`my_share` null de una invitación pendiente), G-43 (el «Redondeo») y G-44 (el 404 del `PUT`).
+- Sin pagos, Viajes, backend ni cambios en Tus restaurantes, Estadísticas, importes, idempotencia, B-06 o el censo P36. El tutorial no explica esta propina hasta que se publique (D343). Nada se publica sin el OK de Mati.
+
 # 0.250.1 · 2026-10-17
 
 - D345: en la pantalla de carga, el triángulo oscuro de arriba sube por detrás de la barra de estado (la hora y la batería), así el degradé llega al borde y ya no lo corta una franja navy lisa. Lo pidió Mati: «hay que modificar el color para que se una».

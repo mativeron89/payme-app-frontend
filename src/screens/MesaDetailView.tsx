@@ -1,5 +1,5 @@
 import { AyudaDePorciones } from '../ayuda/AyudaContextual';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -36,6 +36,19 @@ import {
   seleccionCierraLaMesa,
 } from './antesDeCerrar';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { leerParteDelDetalle, type MyShare, type ShareTotals, type TipSetting } from '../api/miParte';
+import {
+  avisoDeAjustesOmitidos,
+  miParteDelDueno,
+  muestraElDesglose,
+  renglonDeAjustes,
+  rotuloDeAjustes,
+  rotuloDePropina,
+  totalesDeLaMesa,
+  vistaPreviaPorConsumo,
+} from './miParteView';
+import { textoDeLaPropinaDeLaMesa } from './propinaDeLaMesaView';
+import { montoDeDescuento } from './desgloseDelTicket';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -205,6 +218,17 @@ export interface MesaDetailViewProps {
   onOpenInvite: () => void;
   onCopyInvitationLink: () => void;
   onBack: () => void;
+  /**
+   * D344 · el selector de la propina de la mesa del organizador, armado por
+   * `MesaScreen` (que tiene la sesión y el pedido). `null`/ausente ⇒ no se
+   * ofrece y, si el dueño publica la propina, se lee.
+   */
+  propinaDeLaMesa?: ReactNode;
+  /**
+   * D344 · mientras el `PUT /tip` está en vuelo no se eligen platos (contrato,
+   * `escritura.cliente`): las filas, «Soltar» y «Listo» quedan quietos.
+   */
+  propinaGuardando?: boolean;
 }
 
 /**
@@ -409,6 +433,50 @@ function HojaAntesDeCerrar({
   );
 }
 
+/**
+ * D344 · «Cómo se arma tu parte»: los montos que publica el dueño en `my_share`
+ * (lo que vale). Platos, el renglón de ajustes con el rótulo del contrato, la
+ * propina y el total. Nunca la parte de nadie más (R5).
+ */
+function DesgloseDeMiParte({
+  totales,
+  mia,
+  tipSetting,
+}: {
+  readonly totales: ShareTotals;
+  readonly mia: MyShare;
+  readonly tipSetting: TipSetting | null;
+}) {
+  const { t } = useIdioma();
+  const tituloId = useId();
+  const renglon = renglonDeAjustes(totales, mia);
+  return (
+    <section className="card mi-parte-desglose" aria-labelledby={tituloId}>
+      <div className="mi-parte-desglose-titulo" id={tituloId}>{t('Cómo se arma tu parte')}</div>
+      <dl>
+        <div className="mi-parte-desglose-fila">
+          <dt>{t('Tus platos')}</dt>
+          <dd>{formatMXN(mia.items_cents)}</dd>
+        </div>
+        {renglon && (
+          <div className="mi-parte-desglose-fila">
+            <dt>{rotuloDeAjustes(renglon, t)}</dt>
+            <dd>{mia.adjustments_cents < 0 ? montoDeDescuento(-mia.adjustments_cents) : formatMXN(mia.adjustments_cents)}</dd>
+          </div>
+        )}
+        <div className="mi-parte-desglose-fila">
+          <dt>{rotuloDePropina(tipSetting, t)}</dt>
+          <dd>{formatMXN(mia.tip_cents)}</dd>
+        </div>
+        <div className="mi-parte-desglose-fila mi-parte-desglose-total">
+          <dt>{t('Tu parte')}</dt>
+          <dd>{formatMXN(mia.total_cents)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 export function MesaDetailView({
   mesa,
   invitacionPendiente = false,
@@ -455,6 +523,8 @@ export function MesaDetailView({
   onOpenInvite,
   onCopyInvitationLink,
   onBack,
+  propinaDeLaMesa = null,
+  propinaGuardando = false,
 }: MesaDetailViewProps) {
   const { t } = useIdioma();
   /** AF-USERNAME-D104 · «Quiénes se sumaron» muestra el @, nunca el `payme_id`. */
@@ -498,6 +568,25 @@ export function MesaDetailView({
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
+  /**
+   * D344 · «Mi parte» con platos, ajustes y propina (P2–P4), sólo en la mesa
+   * sin garantía y con lo que publica el dueño (`share_version=1`). Sin eso,
+   * todo como antes. La vista previa antes de «Listo» es SÓLO por consumo; en
+   * partes iguales va la parte del servidor, o lo de antes si no la publica.
+   */
+  const parteDelDueno = useMemo(() => leerParteDelDetalle(mesa), [mesa]);
+  const totales = totalesDeLaMesa(parteDelDueno, mesa.guarantee_mode);
+  const mia = miParteDelDueno(parteDelDueno, mesa.guarantee_mode);
+  const montoDeMiParte = esConsumo
+    ? (totales ? vistaPreviaPorConsumo(itemsAmount, totales) ?? itemsAmount : itemsAmount)
+    : (totales && mia ? mia.total_cents : itemsAmount);
+  const propinaLeida = mesa.guarantee_mode === false && parteDelDueno.tipSetting !== undefined
+    ? textoDeLaPropinaDeLaMesa(parteDelDueno.tipSetting, t)
+    : null;
+  const avisoOmitidos = totales ? avisoDeAjustesOmitidos(totales, t) : null;
+  const desgloseDeMiParte = totales && muestraElDesglose(mia, esConsumo) ? (
+    <DesgloseDeMiParte totales={totales} mia={mia} tipSetting={parteDelDueno.tipSetting ?? null} />
+  ) : null;
   const original = originalParticipants(mesa.original_participants);
   /** AF-QUE-CONSUMISTE · el renglón propio que muestra el selector, o ninguno. */
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -629,7 +718,7 @@ export function MesaDetailView({
             {mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}
             <span className="mi-parte-platos"> · {textoPlatos(selected.size, t)}</span>
           </span>
-          <span className="mi-parte-amt">{formatMXN(itemsAmount)}</span>
+          <span className="mi-parte-amt">{formatMXN(montoDeMiParte)}</span>
         </>
       )}
     </div>
@@ -766,8 +855,10 @@ export function MesaDetailView({
           // 1A.3 · 'indeterminado' bloquea igual que 'tomado'.
           const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
           const registrado = !sel && esMioElegido(i, esConsumo);
-          const soltableRegistrado = registrado && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
-          const editBloqueado = !esConsumo && informativeEditingBlocked;
+          const soltableRegistrado = registrado && soltarDisponible && !frozenScope && !propinaGuardando
+            && sePuedeSoltar(i, mesa, esConsumo);
+          // D344 · mientras se guarda la propina de la mesa, tampoco se elige.
+          const editBloqueado = (!esConsumo && informativeEditingBlocked) || propinaGuardando;
           // Regla 4 · las porciones que caben en la mesa y en lo que queda.
           const restanteParaPorcion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
           const opciones = porcionesDisponibles(original, restanteParaPorcion);
@@ -1030,6 +1121,13 @@ export function MesaDetailView({
             {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
           </div>
         )}
+        {/* D344 · concreción 7: por qué los ajustes del ticket no entran. Lo ve
+            todo participante: cambia la parte de cada uno. */}
+        {avisoOmitidos && (
+          <div className="note note-amber aviso-ajustes-omitidos" role="status" style={{ marginBottom: 12 }}>
+            {avisoOmitidos}
+          </div>
+        )}
         {esTitular ? (
           <>
             {/* D223 · «Tu mesa» (turno 2 · 2.9–2.11), en este orden: quiénes
@@ -1175,6 +1273,9 @@ export function MesaDetailView({
                 {inviteOpen && <InviteFriends code={code} />}
               </div>
             )}
+            {/* D344 · la propina de la mesa: el selector, o lo que quedó si no se puede cambiar. */}
+            {propinaDeLaMesa ?? (propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>)}
+            {desgloseDeMiParte}
             <Desplegable
               className="tus-consumos"
               titulo={t('Tus consumos')}
@@ -1204,7 +1305,14 @@ export function MesaDetailView({
               </div>
             )}
           </>
-        ) : listaDeConsumos}
+        ) : (
+          <>
+            {/* D344 · R5: quien no organiza ve la propina de la mesa y su parte, sin cambiar nada. */}
+            {propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>}
+            {desgloseDeMiParte}
+            {listaDeConsumos}
+          </>
+        )}
       </div>
       {hojaCierre === 'cerrar' && onCerrarMesa && (
         <HojaAntesDeCerrar
@@ -1278,7 +1386,7 @@ export function MesaDetailView({
             if (listoCierraLaMesa) { setHojaCierre('seleccion'); return; }
             onGoToPay();
           },
-          disabled: busy || (!esConsumo && informativeEditingBlocked),
+          disabled: busy || propinaGuardando || (!esConsumo && informativeEditingBlocked),
         } : {
           // Decisión 90 de Mati, definición 1: el círculo dice «Listo» también
           // cuando sigue al pago.
@@ -1288,7 +1396,7 @@ export function MesaDetailView({
             if (faltaElegirConsumos) { frenarSinEleccion(); return; }
             onGoToPay();
           },
-          disabled: continuarDeshabilitado,
+          disabled: continuarDeshabilitado || propinaGuardando,
         }}
       />
     </div>

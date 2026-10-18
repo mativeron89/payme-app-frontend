@@ -224,6 +224,9 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     // D240 punto 3 · 56 (eran 48): el nombre ocupa hasta dos líneas.
     expect(await alto(libre)).toBeCloseTo(56, 0);
     expect(await alto(renglon(page, 'Tiramisú'))).toBeCloseTo(56, 0);
+    // D344 · con la propina de la mesa encima, la lista queda más abajo y el clic
+    // haría scroll: se centra antes de medir, así lo que se mide es la lista.
+    await libre.evaluate((e) => e.scrollIntoView({ block: 'center' }));
     const antes = await arriba(siguiente);
 
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();

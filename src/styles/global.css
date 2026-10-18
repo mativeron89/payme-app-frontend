@@ -10405,3 +10405,163 @@ h1.pay-title-lbl {
   right: 28px;
   border-bottom: 12px solid var(--teal);
 }
+
+/* ─── D344 · la propina de la mesa y «Mi parte» con ajustes ───
+   El selector es del ORGANIZADOR y no es el de `/pay`: clases propias para que
+   ningún localizador del pago (`.tip-pill`, el radiogroup «Propina») lo
+   encuentre. Mismo lenguaje visual: píldoras de igual ancho y «Otro» abajo. */
+.propina-mesa {
+  margin-bottom: var(--sp-3);
+  padding: 14px var(--sp-4);
+  border-radius: var(--r-lg);
+}
+.propina-mesa-titulo {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.propina-mesa-servicio {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  color: #78350f;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.propina-mesa-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.propina-mesa-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 6px;
+  border-radius: 20px;
+  border: 2px solid var(--gray-b);
+  background: #fff;
+  color: var(--navy);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.propina-mesa-pill.sel {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+.propina-mesa-pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.propina-mesa-pill--otro {
+  flex: 0 0 100%;
+}
+.propina-mesa-otro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-weight: 700;
+}
+.propina-mesa-otro .input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+}
+.propina-mesa-error,
+.propina-mesa-estado--error {
+  color: #991b1b;
+}
+.propina-mesa-error,
+.propina-mesa-previa,
+.propina-mesa-estado {
+  margin: 10px 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.propina-mesa-previa {
+  color: var(--text-muted);
+}
+.propina-mesa-estado p {
+  margin: 0 0 6px;
+}
+.propina-mesa-quitar {
+  margin-top: 8px;
+}
+.propina-mesa-confirmar {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--orange-l);
+  border: 1px solid var(--orange);
+  color: #7c2d12;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.propina-mesa-confirmar p {
+  margin: 0 0 8px;
+}
+.propina-mesa-confirmar-acciones {
+  display: flex;
+  gap: 8px;
+}
+.propina-mesa-confirmar-acciones .btn {
+  flex: 1;
+}
+
+/* En «Tu mesa», después de «Copiar link» / «Invitar amigos», el mismo aire que
+   hay arriba de esa fila (`.mesa-secondary-actions` lleva `--sp-3` arriba). */
+.mesa-secondary-actions + .propina-mesa,
+.mesa-secondary-actions + .propina-mesa-lectura,
+.mesa-secondary-actions + .mi-parte-desglose {
+  margin-top: var(--sp-3);
+}
+
+/* Quien no es el organizador lee la propina de la mesa, sin poder cambiarla. */
+.propina-mesa-lectura {
+  margin: 0 0 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* «Cómo se arma tu parte»: platos, ajustes, propina y el total del dueño. */
+.mi-parte-desglose {
+  margin-bottom: var(--sp-3);
+  padding: 14px var(--sp-4);
+  border-radius: var(--r-lg);
+}
+.mi-parte-desglose-titulo {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.mi-parte-desglose dl {
+  margin: 0;
+}
+.mi-parte-desglose-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mi-parte-desglose-fila dd {
+  margin: 0;
+  color: var(--text);
+}
+.mi-parte-desglose-total {
+  border-top: 1px solid var(--gray-l);
+  margin-top: 4px;
+  padding-top: 8px;
+  font-weight: 700;
+  color: var(--text);
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { desgloseDelTicket, montoDeDescuento, notaDeLoQueNoSeReparte } from './desgloseDelTicket';
+import { notaDeLoQueYaIncluyeMiParte, notaNeutraDelAlta } from './desgloseDelTicket';
 
 /**
  * D209 · D215 · D218 · cuándo «Ver el ticket» muestra subtotal, IVA y
@@ -159,5 +160,132 @@ describe('desgloseDelTicket · con cargo por servicio (D224)', () => {
       .toBe('Lo que paga cada uno todavía no incluye el cargo por servicio ($85) ni el descuento (−$50)');
     expect(notaDeLoQueNoSeReparte({ ivaCents: 13440, descuentoCents: 5000, servicioCents: 8500 }, t))
       .toBe('Lo que paga cada uno todavía no incluye el IVA ($134.40), el cargo por servicio ($85) ni el descuento (−$50)');
+  });
+});
+
+/**
+ * D344 · las notas de «Mi parte» (respuesta 4 de V, aprobada). Montos distintos
+ * en los tres campos para que un argumento cambiado de lugar se note:
+ *   · IVA 13440 centavos      → formatMXN → «$134.40»
+ *   · servicio 8525 centavos  → formatMXN → «$85.25»
+ *   · descuento 5070 centavos → montoDeDescuento → «−$50.70» (U+2212 + «$50.70»)
+ */
+describe('D344 · notaDeLoQueYaIncluyeMiParte: lo que paga cada uno YA incluye los ajustes', () => {
+  const t = (s: string, ...a: unknown[]) => a.reduce<string>((acc, v, i) => acc.replace(`{${i}}`, String(v)), s);
+  const totales = (tax_added_cents: number, service_cents: number, discounts_cents: number) =>
+    ({ tax_added_cents, service_cents, discounts_cents });
+
+  // Las siete combinaciones, en el orden IVA, servicio, descuento; la última
+  // unión con «y». Un caso por término de cada condición del código.
+  it.each([
+    ['sólo IVA', totales(13440, 0, 0), 'Lo que paga cada uno ya incluye el IVA ($134.40)'],
+    ['sólo servicio', totales(0, 8525, 0), 'Lo que paga cada uno ya incluye el cargo por servicio ($85.25)'],
+    ['sólo descuento', totales(0, 0, 5070), 'Lo que paga cada uno ya incluye el descuento (−$50.70)'],
+    ['IVA y servicio', totales(13440, 8525, 0),
+      'Lo que paga cada uno ya incluye el IVA ($134.40) y el cargo por servicio ($85.25)'],
+    ['IVA y descuento', totales(13440, 0, 5070),
+      'Lo que paga cada uno ya incluye el IVA ($134.40) y el descuento (−$50.70)'],
+    ['servicio y descuento', totales(0, 8525, 5070),
+      'Lo que paga cada uno ya incluye el cargo por servicio ($85.25) y el descuento (−$50.70)'],
+    ['los tres', totales(13440, 8525, 5070),
+      'Lo que paga cada uno ya incluye el IVA ($134.40), el cargo por servicio ($85.25) y el descuento (−$50.70)'],
+  ])('🔴 %s: el texto exacto aprobado', (_caso, entrada, esperado) => {
+    expect(notaDeLoQueYaIncluyeMiParte(entrada, t)).toBe(esperado);
+  });
+
+  it('🔴 sin ninguno de los tres: null', () => {
+    expect(notaDeLoQueYaIncluyeMiParte(totales(0, 0, 0), t)).toBeNull();
+  });
+
+  it('🔴 la última unión es «y», nunca «ni», y no dice «todavía no incluye»', () => {
+    const combinaciones = [
+      totales(13440, 0, 0), totales(0, 8525, 0), totales(0, 0, 5070), totales(13440, 8525, 0),
+      totales(13440, 0, 5070), totales(0, 8525, 5070), totales(13440, 8525, 5070),
+    ];
+    for (const c of combinaciones) {
+      const nota = notaDeLoQueYaIncluyeMiParte(c, t);
+      expect(nota, JSON.stringify(c)).not.toBeNull();
+      expect(nota, JSON.stringify(c)).toContain('ya incluye');
+      expect(nota, JSON.stringify(c)).not.toContain(' ni ');
+      expect(nota, JSON.stringify(c)).not.toContain('todavía no incluye');
+    }
+  });
+
+  it('🔴 el descuento lleva el menos tipográfico U+2212, no el guion ASCII', () => {
+    const nota = notaDeLoQueYaIncluyeMiParte(totales(0, 0, 5070), t)!;
+    expect(nota).toContain('(−$50.70)');
+    expect(nota).not.toContain('-$50.70');
+  });
+
+  it('el descuento va en positivo en la entrada y en negativo en el texto, con miles', () => {
+    // 125050 centavos → «$1,250.50»; con el menos: «−$1,250.50».
+    expect(notaDeLoQueYaIncluyeMiParte(totales(0, 0, 125050), t))
+      .toBe('Lo que paga cada uno ya incluye el descuento (−$1,250.50)');
+  });
+});
+
+describe('D344 · notaNeutraDelAlta: la nota de «¿Cómo dividen?» antes de crear la mesa', () => {
+  const t = (s: string, ...a: unknown[]) => a.reduce<string>((acc, v, i) => acc.replace(`{${i}}`, String(v)), s);
+  const final = ' en lo que paga cada uno se ve en «Mi parte» al crear la mesa';
+
+  // Singular («Cómo queda el …») con uno; plural («Cómo quedan …») con dos o tres.
+  it.each([
+    ['sólo IVA', { ivaCents: 13440, descuentoCents: 0, servicioCents: 0 }, `Cómo queda el IVA ($134.40)${final}`, 1],
+    ['sólo servicio', { ivaCents: 0, descuentoCents: 0, servicioCents: 8525 },
+      `Cómo queda el cargo por servicio ($85.25)${final}`, 1],
+    ['sólo descuento', { ivaCents: 0, descuentoCents: 5070, servicioCents: 0 }, `Cómo queda el descuento (−$50.70)${final}`, 1],
+    ['IVA y servicio', { ivaCents: 13440, descuentoCents: 0, servicioCents: 8525 },
+      `Cómo quedan el IVA ($134.40) y el cargo por servicio ($85.25)${final}`, 2],
+    ['IVA y descuento', { ivaCents: 13440, descuentoCents: 5070, servicioCents: 0 },
+      `Cómo quedan el IVA ($134.40) y el descuento (−$50.70)${final}`, 2],
+    ['servicio y descuento', { ivaCents: 0, descuentoCents: 5070, servicioCents: 8525 },
+      `Cómo quedan el cargo por servicio ($85.25) y el descuento (−$50.70)${final}`, 2],
+    ['los tres', { ivaCents: 13440, descuentoCents: 5070, servicioCents: 8525 },
+      `Cómo quedan el IVA ($134.40), el cargo por servicio ($85.25) y el descuento (−$50.70)${final}`, 3],
+  ])('🔴 %s: el texto exacto, neutro', (_caso, aparte, esperado, cuantos) => {
+    const nota = notaNeutraDelAlta(aparte, t);
+    expect(nota).toBe(esperado);
+    // Lo que pide la especificación, además del texto exacto.
+    expect(nota).not.toContain('todavía no incluye');
+    expect(nota).not.toContain('ya incluye');
+    expect(nota!.endsWith('se ve en «Mi parte» al crear la mesa')).toBe(true);
+    expect(nota!.startsWith(cuantos === 1 ? 'Cómo queda el ' : 'Cómo quedan el ')).toBe(true);
+  });
+
+  it('🔴 sin ninguno: null, con el servicio en cero o sin la clave', () => {
+    expect(notaNeutraDelAlta({ ivaCents: 0, descuentoCents: 0, servicioCents: 0 }, t)).toBeNull();
+    expect(notaNeutraDelAlta({ ivaCents: 0, descuentoCents: 0 }, t)).toBeNull();
+  });
+
+  it('🔴 sin la clave del servicio cuenta como cero: rige la combinación sin servicio', () => {
+    expect(notaNeutraDelAlta({ ivaCents: 13440, descuentoCents: 0 }, t)).toBe(`Cómo queda el IVA ($134.40)${final}`);
+    expect(notaNeutraDelAlta({ ivaCents: 13440, descuentoCents: 5070 }, t))
+      .toBe(`Cómo quedan el IVA ($134.40) y el descuento (−$50.70)${final}`);
+  });
+});
+
+describe('D344 · notaDeLoQueNoSeReparte sigue igual (no cambió con «Mi parte»)', () => {
+  const t = (s: string, ...a: unknown[]) => a.reduce<string>((acc, v, i) => acc.replace(`{${i}}`, String(v)), s);
+  const inicio = 'Lo que paga cada uno todavía no incluye';
+
+  // Las siete de siempre, con los mismos montos de arriba: «ni» en la última unión.
+  it.each([
+    ['sólo IVA', { ivaCents: 13440, descuentoCents: 0, servicioCents: 0 }, `${inicio} el IVA ($134.40)`],
+    ['sólo servicio', { ivaCents: 0, descuentoCents: 0, servicioCents: 8525 }, `${inicio} el cargo por servicio ($85.25)`],
+    ['sólo descuento', { ivaCents: 0, descuentoCents: 5070, servicioCents: 0 }, `${inicio} el descuento (−$50.70)`],
+    ['IVA y servicio', { ivaCents: 13440, descuentoCents: 0, servicioCents: 8525 },
+      `${inicio} el IVA ($134.40) ni el cargo por servicio ($85.25)`],
+    ['IVA y descuento', { ivaCents: 13440, descuentoCents: 5070, servicioCents: 0 },
+      `${inicio} el IVA ($134.40) ni el descuento (−$50.70)`],
+    ['servicio y descuento', { ivaCents: 0, descuentoCents: 5070, servicioCents: 8525 },
+      `${inicio} el cargo por servicio ($85.25) ni el descuento (−$50.70)`],
+    ['los tres', { ivaCents: 13440, descuentoCents: 5070, servicioCents: 8525 },
+      `${inicio} el IVA ($134.40), el cargo por servicio ($85.25) ni el descuento (−$50.70)`],
+  ])('🔴 %s: el texto de siempre', (_caso, aparte, esperado) => {
+    expect(notaDeLoQueNoSeReparte(aparte, t)).toBe(esperado);
+  });
+
+  it('sin ninguno: null, como siempre', () => {
+    expect(notaDeLoQueNoSeReparte({ ivaCents: 0, descuentoCents: 0, servicioCents: 0 }, t)).toBeNull();
   });
 });

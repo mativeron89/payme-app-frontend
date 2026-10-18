@@ -421,7 +421,11 @@ test.describe('Listo · selección informativa v2', () => {
     await page.getByRole('button', { name: plato('Tagliatelle Bolognese') }).click();
     const fracciones = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(fracciones.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
-    await expect(page.getByRole('radio', { name: 'Otro', exact: true })).toHaveCount(0);
+    // D344 · la ausencia, dentro del selector de porciones: desde 0.252.0 está el
+    // «Otro» de la propina de la mesa, que se afirma presente como control.
+    await expect(fracciones.getByRole('radio', { name: 'Otro', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })
+      .getByRole('radio', { name: 'Otro', exact: true })).toHaveCount(1);
     await expect(fracciones.getByRole('radio', { name: 'Entero', exact: true })).toHaveAttribute('aria-checked', 'true');
     await fracciones.getByRole('radio', { name: '¼', exact: true }).click();
 
