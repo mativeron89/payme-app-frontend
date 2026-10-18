@@ -486,7 +486,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   recibirFotoRef.current = recibirFoto;
   useEffect(() => {
     if (step !== 'scan') return undefined;
-    return alRecibirFotoDeLaCamara((foto) => { void recibirFotoRef.current(foto, 'camara'); });
+    // D368 · la que llega del menú del teléfono puede ser del carrete: se trata
+    // como de la galería («Elegir otra» en el marco).
+    return alRecibirFotoDeLaCamara((foto, origen) => {
+      void recibirFotoRef.current(foto, origen === 'menu' ? 'galeria' : 'camara');
+    });
   }, [step]);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
@@ -1807,10 +1811,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    *    ya preparada mientras se sube y los avisos de siempre. Si la persona
    *    cancela la cámara, acá tiene «Sacar foto» (el botón redondo, que la
    *    vuelve a abrir) y la galería. Nunca una pantalla muerta.
-   *  - Abajo a la izquierda, la galería: el mismo `<input type="file">` SIN
-   *    `capture` de la decisión 91, que en iPhone ofrece Fototeca y Archivos
-   *    (y Drive, si está instalado). La foto elegida pasa por la misma
-   *    preparación que la de la cámara.
+   *  - La galería, en su propia fila arriba del botón redondo (D214; antes,
+   *    abajo a la izquierda): el mismo `<input type="file">` SIN `capture` de la
+   *    decisión 91, que en iPhone ofrece Fototeca y Archivos (y Drive, si está
+   *    instalado). La foto elegida pasa por la misma preparación que la de la
+   *    cámara.
+   *  - D368 · el «Escanear» de la barra ya no abre la cámara directo: abre el
+   *    menú del teléfono (Fototeca o Tomar foto). El botón redondo, «Sacar
+   *    otra» y «Reintentar» siguen con la cámara directo.
    *  - Sin marco ni recuadro: la foto es la de la cámara entera.
    *  - El título sigue siendo «Escanea el ticket».
    *
@@ -2112,8 +2120,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             </>
           ) : (
           <>
-          {/* AF-GALERIA · decisión 91 («Sí, las dos»), D177 y D212: la galería,
-              abajo a la izquierda. 🔴 El `accept` sale del DUEÑO del contrato, no
+          {/* AF-GALERIA · decisión 91 («Sí, las dos»), D177 y D212: la galería
+              (desde D214, en su fila arriba del botón redondo). 🔴 El `accept` sale del DUEÑO del contrato, no
               de una lista acá: Textract procesa jpeg y png. `readOcrRail` lo
               construye según el modo publicado. ⚠️ `accept` es una SUGERENCIA, no
               un gate: la foto igual pasa por `recibirFoto`, que la convierte a

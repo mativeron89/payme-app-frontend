@@ -18,8 +18,13 @@ import { expect, type FileChooser, type Page } from '@playwright/test';
  * 1400×1050): se decodifica y se vuelve a codificar como lo haría la de una
  * cámara, y supera el piso de 10 KB del mock.
  *
- * Los selectores de la GALERÍA (sin `capture`) no se tocan acá: los specs de
- * galería usan `setInputFiles` o su propio `waitForEvent('filechooser')`.
+ * Los selectores de la GALERÍA no se tocan acá: los specs de galería usan
+ * `setInputFiles` o su propio `waitForEvent('filechooser')`.
+ *
+ * D368 · el «Escanear» de la barra abre la MISMA entrada sin `capture` (el menú
+ * del teléfono), así que ya no se la distingue por `capture`: la entrada nativa
+ * lleva `data-camara="nativa"` (`camaraNativa.ts`) y el registro cuenta las dos
+ * formas de abrirla. La galería de «Escanea el ticket» no la lleva.
  */
 interface Registro {
   /** Las abiertas que todavía no sacaron foto. */
@@ -43,9 +48,9 @@ export async function camaraSimulada(page: Page): Promise<void> {
   const registro: Registro = { pendientes: [], abiertas: 0 };
   camaras.set(page, registro);
   page.on('filechooser', (selector) => {
-    void selector.element().getAttribute('capture').then(
-      (capture) => {
-        if (capture === null) return;
+    void selector.element().getAttribute('data-camara').then(
+      (marca) => {
+        if (marca !== 'nativa') return;
         registro.abiertas += 1;
         registro.pendientes.push(selector);
       },

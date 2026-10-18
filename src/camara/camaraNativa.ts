@@ -18,13 +18,35 @@
  * sobrevivir a la navegación. La recibe quien esté escuchando
  * (`alRecibirFoto`); si no hay nadie, se descarta: una foto que llega tarde no
  * aparece después en otra mesa (la misma regla que D202).
+ *
+ * D368 · «Que el iPhone pregunte»: la misma entrada tiene dos formas de abrirse.
+ * - `abrir()`: con `capture`, la cámara directo (el botón redondo de «Escanea el
+ *   ticket», «Sacar otra», «Reintentar», «Escanear otro» del viaje).
+ * - `abrirMenu(accept)`: SIN `capture` y con el `accept` del dueño, así el
+ *   teléfono muestra su menú (en el iPhone, Fototeca o Tomar foto): una foto del
+ *   carrete queda a un toque. Es la del «Escanear» de la barra, también en un
+ *   viaje. Que iOS respete el cambio de atributo en una entrada ya usada es
+ *   conducta de plataforma: lo comprueba la prueba de Mati (D63).
+ * La foto llega con la forma en que se abrió (`origen`): desde el menú puede ser
+ * del carrete, así que la pantalla la trata como de la galería.
+ *
+ * La entrada lleva `data-camara` para que el registro de la suite e2e la
+ * reconozca en las dos formas (sin `capture` ya no se distingue por eso).
  */
 
+/** Cómo se abrió la entrada: la cámara directo o el menú del teléfono. */
+export type OrigenDeLaFoto = 'camara' | 'menu';
+
+/** Lo que la cámara directo acepta: cualquier foto, la cámara manda JPEG o HEIC. */
+const ACCEPT_DE_LA_CAMARA = 'image/*';
+
 export interface CamaraNativa {
-  /** Abre la cámara. Sólo dentro de un toque. */
+  /** Abre la cámara directo. Sólo dentro de un toque. */
   abrir(): void;
+  /** D368 · abre el menú del teléfono (sin `capture`), con ese `accept`. Sólo dentro de un toque. */
+  abrirMenu(accept: string): void;
   /** Quién recibe la próxima foto. Devuelve cómo dejar de escuchar. */
-  alRecibirFoto(receptor: (foto: File) => void): () => void;
+  alRecibirFoto(receptor: (foto: File, origen: OrigenDeLaFoto) => void): () => void;
 }
 
 /** Lo mínimo del `document` que hace falta: los tests pasan uno falso. */
@@ -32,14 +54,17 @@ export type DocumentoParaCamara = Pick<Document, 'createElement' | 'body'>;
 
 export function crearCamaraNativa(doc: DocumentoParaCamara): CamaraNativa {
   let entrada: HTMLInputElement | null = null;
-  let receptor: ((foto: File) => void) | null = null;
+  let receptor: ((foto: File, origen: OrigenDeLaFoto) => void) | null = null;
+  /** Cómo se abrió la última vez: con eso llega la foto. */
+  let origen: OrigenDeLaFoto = 'camara';
 
   const laEntrada = (): HTMLInputElement => {
     if (entrada?.isConnected) return entrada;
     const nueva = doc.createElement('input');
     nueva.type = 'file';
-    nueva.accept = 'image/*';
+    nueva.accept = ACCEPT_DE_LA_CAMARA;
     nueva.setAttribute('capture', 'environment');
+    nueva.setAttribute('data-camara', 'nativa');
     nueva.hidden = true;
     nueva.setAttribute('aria-hidden', 'true');
     nueva.tabIndex = -1;
@@ -47,7 +72,7 @@ export function crearCamaraNativa(doc: DocumentoParaCamara): CamaraNativa {
       const foto = nueva.files?.[0] ?? null;
       // Sin limpiar, la misma foto no dispararía `change` otra vez.
       nueva.value = '';
-      if (foto && receptor) receptor(foto);
+      if (foto && receptor) receptor(foto, origen);
     });
     doc.body.append(nueva);
     entrada = nueva;
@@ -56,7 +81,18 @@ export function crearCamaraNativa(doc: DocumentoParaCamara): CamaraNativa {
 
   return {
     abrir() {
-      laEntrada().click();
+      const e = laEntrada();
+      e.accept = ACCEPT_DE_LA_CAMARA;
+      e.setAttribute('capture', 'environment');
+      origen = 'camara';
+      e.click();
+    },
+    abrirMenu(accept) {
+      const e = laEntrada();
+      e.accept = accept;
+      e.removeAttribute('capture');
+      origen = 'menu';
+      e.click();
     },
     alRecibirFoto(nuevo) {
       receptor = nuevo;
@@ -74,12 +110,35 @@ function laCamara(): CamaraNativa {
   return unica;
 }
 
-/** Abre la cámara nativa. Sólo dentro de un toque (ver arriba). */
+/** Abre la cámara nativa directo. Sólo dentro de un toque (ver arriba). */
 export function abrirCamaraNativa(): void {
   laCamara().abrir();
 }
 
-/** Recibe la foto de la cámara nativa mientras la pantalla escucha. */
-export function alRecibirFotoDeLaCamara(receptor: (foto: File) => void): () => void {
+/**
+ * D368 · de dónde sale el `accept` del menú: lo registra la barra
+ * (`AppBottomBar`) con `acceptVigente` de `ocrRail`. Así este módulo y los del
+ * viaje que abren el menú no importan la fachada de la API.
+ */
+let leerAcceptDelMenu: (() => string) | null = null;
+
+export function registrarAcceptDelMenu(leer: () => string): void {
+  leerAcceptDelMenu = leer;
+}
+
+/**
+ * D368 · abre el menú de fotos del teléfono (Fototeca o Tomar foto) con el
+ * `accept` del dueño. Sólo dentro de un toque (ver arriba). Si nadie registró
+ * de dónde leer el `accept` (no pasa en la app: la barra lo registra al
+ * cargar), abre la cámara directo, como antes de D368.
+ */
+export function abrirMenuDeFotos(): void {
+  const leer = leerAcceptDelMenu;
+  if (leer) laCamara().abrirMenu(leer());
+  else laCamara().abrir();
+}
+
+/** Recibe la foto de la cámara nativa mientras la pantalla escucha, con cómo se abrió. */
+export function alRecibirFotoDeLaCamara(receptor: (foto: File, origen: OrigenDeLaFoto) => void): () => void {
   return laCamara().alRecibirFoto(receptor);
 }

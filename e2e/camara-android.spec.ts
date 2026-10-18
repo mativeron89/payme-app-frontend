@@ -18,12 +18,20 @@ import { ingresar } from './_app';
 const { defaultBrowserType: _navegador, ...pixel7 } = devices['Pixel 7'];
 test.use(pixel7);
 
-test('perfil Pixel 7 (no es un Android real): «Nueva» pide la cámara trasera y la galería no', async ({ page }) => {
+test('perfil Pixel 7 (no es un Android real): «Nueva» abre el menú (D368); el botón redondo, la cámara trasera; la galería no', async ({ page }) => {
   await ingresar(page);
   expect(await page.evaluate(() => navigator.userAgent)).toContain('Android');
-  const [camara] = await Promise.all([
+  const [menu] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: 'Escanear', exact: true }).click(),
+  ]);
+  // D368 · el «Escanear» de la barra, sin `capture` (el menú del teléfono).
+  expect(await menu.element().getAttribute('capture')).toBeNull();
+  expect(await menu.element().getAttribute('data-camara')).toBe('nativa');
+  // El botón redondo de «Escanea el ticket» sigue pidiendo la cámara trasera.
+  const [camara] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Sacar foto', exact: true }).click(),
   ]);
   expect(await camara.element().getAttribute('capture')).toBe('environment');
   expect(await camara.element().getAttribute('accept')).toBe('image/*');

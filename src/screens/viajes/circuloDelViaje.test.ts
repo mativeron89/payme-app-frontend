@@ -62,18 +62,21 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
       .toMatchObject({ label: 'Escanear', icon: 'camera', ariaLabel: 'Escanear ticket para Cancún 2026' });
   });
 
-  it('🔴 un viaje: el toque abre la cámara EN EL MISMO gesto y el escaneo de ese viaje', async () => {
+  it('🔴 un viaje: el toque abre el menú de fotos (D368) EN EL MISMO gesto y el escaneo de ese viaje', async () => {
     vi.resetModules();
     const camara = vi.fn();
+    const menu = vi.fn();
     const ir = vi.fn();
-    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara }));
+    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara, abrirMenuDeFotos: menu }));
     vi.doMock('../../router', async (orig) => ({ ...(await orig<typeof import('../../router')>()), navigate: ir }));
     try {
       const { centroPorFechas } = await import('./circuloDelViaje');
       centroPorFechas([CANCUN], undefined, es)!.onClick();
-      expect(camara).toHaveBeenCalledTimes(1);
+      // D368 · el menú del teléfono (sin `capture`), no la cámara directo.
+      expect(camara).not.toHaveBeenCalled();
+      expect(menu).toHaveBeenCalledTimes(1);
       expect(ir).toHaveBeenCalledWith('scan', VIAJE.id);
-      expect(camara.mock.invocationCallOrder[0]).toBeLessThan(ir.mock.invocationCallOrder[0]!);
+      expect(menu.mock.invocationCallOrder[0]).toBeLessThan(ir.mock.invocationCallOrder[0]!);
     } finally {
       vi.doUnmock('../../camara/camaraNativa');
       vi.doUnmock('../../router');
@@ -84,7 +87,7 @@ describe('🔴 D276-1 · el círculo de la barra según las fechas (`centroPorFe
   it('🔴 dos viajes: «Escanear» abre la hoja «¿Para qué viaje?» y NO la cámara (se abre en el toque que elige)', async () => {
     vi.resetModules();
     const camara = vi.fn();
-    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara }));
+    vi.doMock('../../camara/camaraNativa', () => ({ abrirCamaraNativa: camara, abrirMenuDeFotos: camara }));
     try {
       const { centroPorFechas } = await import('./circuloDelViaje');
       const { abrirHojaParaQueViaje, hojaParaQueViajeAbierta, cerrarHojaParaQueViaje } = await import('./hojaParaQueViajeEstado');

@@ -193,11 +193,16 @@ for (const ancho of [375, 320] as const) {
 }
 
 test.describe('D212 · «Nueva» abre la cámara nativa', () => {
-  test('🔴 en el mismo toque: la cámara trasera del teléfono, y «Escanea el ticket» debajo', async ({ page }) => {
+  test('🔴 en el mismo toque: el menú del teléfono (D368, sin `capture`, con el accept del dueño), y «Escanea el ticket» debajo', async ({ page }) => {
     await ingresar(page);
     const selector = await tocarNueva(page);
-    expect(await atributo(selector, 'capture')).toBe('environment');
-    expect(await atributo(selector, 'accept')).toBe('image/*');
+    // D368 · «Que el iPhone pregunte»: la entrada nativa sin `capture`, para que
+    // el teléfono ofrezca Fototeca o Tomar foto. El `accept` es el del dueño: el
+    // respaldo estricto, porque la configuración del OCR todavía no cargó (se
+    // carga en «Escanea el ticket», después del toque).
+    expect(await atributo(selector, 'capture')).toBeNull();
+    expect(await atributo(selector, 'data-camara')).toBe('nativa');
+    expect(await atributo(selector, 'accept')).toBe('image/jpeg,image/jpg,image/png');
     expect(selector.isMultiple()).toBe(false);
     // Debajo, la pantalla del paso 1: la ayuda corta, sin marco ni video.
     await expect(page).toHaveURL(/:\d+\/scan$/);

@@ -14,6 +14,7 @@ class EntradaFalsa {
   readonly atributos = new Map<string, string>();
   private oyente: (() => void) | null = null;
   setAttribute(nombre: string, valor: string) { this.atributos.set(nombre, valor); }
+  removeAttribute(nombre: string) { this.atributos.delete(nombre); }
   addEventListener(evento: string, oyente: () => void) { if (evento === 'change') this.oyente = oyente; }
   click() { this.clics += 1; }
   /** Lo que hace el navegador cuando la persona toca «Usar foto». */
@@ -120,5 +121,46 @@ describe('D212 · la cámara nativa', () => {
     camara.abrir();
     creadas[0]!.elegir(null);
     expect(recibidas).toEqual([]);
+  });
+});
+
+describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () => {
+  const ACCEPT_DEL_DUENO = 'image/jpeg,image/jpg,image/png';
+
+  it('🔴 abre la misma entrada SIN capture y con el accept del dueño', () => {
+    const { doc, creadas } = documentoFalso();
+    crearCamaraNativa(doc).abrirMenu(ACCEPT_DEL_DUENO);
+    expect(creadas).toHaveLength(1);
+    const e = creadas[0]!;
+    expect(e.atributos.has('capture')).toBe(false);
+    expect(e.accept).toBe(ACCEPT_DEL_DUENO);
+    expect(e.atributos.get('data-camara')).toBe('nativa');
+    expect(e.clics).toBe(1);
+  });
+
+  it('🔴 después del menú, abrir() vuelve a poner capture y image/* (y al revés)', () => {
+    const { doc, creadas } = documentoFalso();
+    const camara = crearCamaraNativa(doc);
+    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    camara.abrir();
+    const e = creadas[0]!;
+    expect(creadas).toHaveLength(1);
+    expect(e.atributos.get('capture')).toBe('environment');
+    expect(e.accept).toBe('image/*');
+    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    expect(e.atributos.has('capture')).toBe(false);
+    expect(e.accept).toBe(ACCEPT_DEL_DUENO);
+  });
+
+  it('🔴 la foto llega con cómo se abrió: «menu» o «camara»', () => {
+    const { doc, creadas } = documentoFalso();
+    const camara = crearCamaraNativa(doc);
+    const origenes: string[] = [];
+    camara.alRecibirFoto((_f, origen) => origenes.push(origen));
+    camara.abrirMenu(ACCEPT_DEL_DUENO);
+    creadas[0]!.elegir(foto());
+    camara.abrir();
+    creadas[0]!.elegir(foto());
+    expect(origenes).toEqual(['menu', 'camara']);
   });
 });

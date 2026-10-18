@@ -173,13 +173,19 @@ async function capturar(page: Page, nombre: string): Promise<void> {
   if (dir) await page.screenshot({ path: `${dir}/${nombre}.png` });
 }
 
-/** «Nueva», la foto de la cámara y el marco en pantalla. */
+/**
+ * «Nueva», la foto de la CÁMARA y el marco en pantalla. D368 · el «Escanear» de
+ * la barra abre el menú del teléfono (la foto puede ser del carrete y el marco
+ * ofrece «Elegir otra»); estas pruebas son de la foto de la cámara, así que la
+ * sacan con el botón redondo, que sigue abriendo la cámara directo.
+ */
 async function conLaFoto(page: Page, foto: ArchivoDeFoto): Promise<void> {
   await ingresar(page);
   await espiarOcr(page);
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   // El piso del dueño publicado antes de la foto (ver `camara-nativa.spec`).
   await expect(page.locator('.camara-controles input[type="file"]')).toHaveAttribute('accept', /image\/heic/);
+  await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page, foto, { usar: false });
   await expect(marco(page)).toBeVisible();
 }

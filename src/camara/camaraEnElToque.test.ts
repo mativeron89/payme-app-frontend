@@ -13,13 +13,32 @@ import { describe, expect, it } from 'vitest';
  */
 const barra = readFileSync(new URL('../components/AppBottomBar.tsx', import.meta.url), 'utf8');
 const flujo = readFileSync(new URL('../screens/CreateMesaFlow.tsx', import.meta.url), 'utf8');
+const circulo = readFileSync(new URL('../screens/viajes/circuloDelViaje.ts', import.meta.url), 'utf8');
+const hoja = readFileSync(new URL('../screens/viajes/HojaParaQueViaje.tsx', import.meta.url), 'utf8');
 
 const llamadas = (fuente: string) => fuente.match(/abrirCamaraNativa\(\)/g)?.length ?? 0;
+/** D368 · el menú del teléfono (el `accept` vigente lo lee la cámara en el mismo toque). */
+const menus = (fuente: string) => fuente.match(/abrirMenuDeFotos\(\)/g)?.length ?? 0;
 
 describe('D212 · la cámara nativa se abre dentro del toque', () => {
-  it('🔴 «Nueva» la abre en su propio onClick, antes de navegar y sin esperar nada', () => {
-    expect(llamadas(barra)).toBe(1);
-    expect(barra).toMatch(/onClick: \(\) => \{\s*abrirCamaraNativa\(\);\s*navigate\('scan'\);\s*\}/);
+  it('🔴 «Nueva» abre el menú del teléfono (D368) en su propio onClick, antes de navegar y sin esperar nada', () => {
+    expect(llamadas(barra)).toBe(0);
+    expect(menus(barra)).toBe(1);
+    // Entre la apertura y `navigate` sólo puede haber comentarios.
+    const sinComentarios = barra.replace(/\/\/[^\n]*/g, '');
+    expect(sinComentarios).toMatch(/onClick: \(\) => \{\s*abrirMenuDeFotos\(\);\s*navigate\('scan'\);\s*\}/);
+    // Y la barra registra de dónde lee el `accept` el menú: el vigente del dueño.
+    expect(sinComentarios).toContain('registrarAcceptDelMenu(acceptVigente);');
+  });
+
+  it('🔴 D368 · en un viaje, el «Escanear» de la barra y «¿Para qué viaje?» también abren el menú en el toque', () => {
+    const sin = (f: string) => f.replace(/\/\/[^\n]*/g, '');
+    expect(llamadas(circulo)).toBe(0);
+    expect(menus(circulo)).toBe(1);
+    expect(sin(circulo)).toMatch(/onClick: \(\) => \{\s*abrirMenuDeFotos\(\);\s*navigate\('scan', id\);\s*\}/);
+    expect(llamadas(hoja)).toBe(0);
+    expect(menus(hoja)).toBe(1);
+    expect(sin(hoja)).toMatch(/onClick=\{\(\) => \{\s*abrirMenuDeFotos\(\);\s*alElegir\(\);/);
   });
 
   it('🔴 en el flujo, sólo `doScan` la abre, y `doScan` sólo se usa como onClick', () => {
@@ -33,15 +52,19 @@ describe('D212 · la cámara nativa se abre dentro del toque', () => {
   });
 
   it('ninguna se llama desde un efecto ni después de un await', () => {
-    const efectos = [barra, flujo].flatMap((fuente) =>
+    const efectos = [barra, flujo, circulo, hoja].flatMap((fuente) =>
       [...fuente.matchAll(/useEffect\(\(\) => \{([\s\S]*?)\n {2}\}, \[/g)].map((m) => m[1]!));
     // Control: el barrido ve los efectos del flujo, incluido el que RECIBE la foto.
     expect(efectos.length).toBeGreaterThanOrEqual(8);
     expect(efectos.some((cuerpo) => cuerpo.includes('alRecibirFotoDeLaCamara'))).toBe(true);
     for (const cuerpo of efectos) {
       expect(cuerpo).not.toContain('abrirCamaraNativa');
+      expect(cuerpo).not.toContain('abrirMenuDeFotos');
       expect(cuerpo).not.toContain('doScan');
     }
-    for (const fuente of [barra, flujo]) expect(fuente).not.toMatch(/await[^;]*\n?[^;]*abrirCamaraNativa/);
+    for (const fuente of [barra, flujo, circulo, hoja]) {
+      expect(fuente).not.toMatch(/await[^;]*\n?[^;]*abrirCamaraNativa/);
+      expect(fuente).not.toMatch(/await[^;]*\n?[^;]*abrirMenuDeFotos/);
+    }
   });
 });
