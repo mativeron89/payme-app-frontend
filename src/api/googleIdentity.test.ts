@@ -503,6 +503,77 @@ describe('AF-GOOGLE-REDIRECT · «Entrar» en la misma pestaña (decisiones 92 y
       .toEqual({ uxMode: 'redirect', loginUri: LOGIN_URI, state: 'alta:abc' });
   });
 
+  it('🔴 P02-b · sin alSalir, renderButton recibe EXACTAMENTE las ocho opciones de siempre (popup y redirect)', async () => {
+    const OCHO = ['locale', 'shape', 'size', 'state', 'text', 'theme', 'type', 'width'];
+    const popup = renderGoogleIdentityButton(options(new FakeContainer()));
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await popup.ready;
+    popup.dispose();
+    const redirect = renderGoogleIdentityButton(conRedirect(new FakeContainer()));
+    await redirect.ready;
+    expect(api.renderButton).toHaveBeenCalledTimes(2);
+    for (const llamada of api.renderButton.mock.calls) expect(Object.keys(llamada[1]).sort()).toEqual(OCHO);
+  });
+
+  it('🔴 P02-b · con alSalir (redirect), click_listener lo llama una vez por toque; después de dispose, ya no', async () => {
+    const alSalir = vi.fn();
+    const handle = renderGoogleIdentityButton({
+      ...options(new FakeContainer()), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), alSalir },
+    });
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await handle.ready;
+    const opciones = api.renderButton.mock.calls[0][1] as { click_listener?: () => void };
+    expect(typeof opciones.click_listener).toBe('function');
+    opciones.click_listener!();
+    expect(alSalir).toHaveBeenCalledTimes(1);
+    handle.dispose();
+    opciones.click_listener!();
+    expect(alSalir, 'un botón ya desmontado no marca').toHaveBeenCalledTimes(1);
+  });
+
+  it('P02-b · un alSalir que tira no hace tirar a click_listener (la marca nunca frena la ida)', async () => {
+    const handle = renderGoogleIdentityButton({
+      ...options(new FakeContainer()),
+      redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), alSalir: () => { throw new Error('sin storage'); } },
+    });
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await handle.ready;
+    const opciones = api.renderButton.mock.calls[0][1] as { click_listener?: () => void };
+    expect(() => opciones.click_listener!()).not.toThrow();
+  });
+
+  it('🔴 P02-b · mock: primero la marca, después la ida, una sola vez aunque toquen dos veces; el dataset no cambia', async () => {
+    vi.stubEnv('VITE_MOCK', '1');
+    const orden: string[] = [];
+    const container = new FakeContainer();
+    const handle = renderGoogleIdentityButton({
+      ...options(container),
+      redirect: { loginUri: LOGIN_URI, simularEnMock: () => { orden.push('ida'); }, alSalir: () => { orden.push('salida'); } },
+    });
+    await handle.ready;
+    const button = container.children[0] as FakeButtonElement;
+    expect(button.dataset).toEqual({ uxMode: 'redirect', loginUri: LOGIN_URI });
+    button.dispatch('click');
+    button.dispatch('click');
+    expect(orden).toEqual(['salida', 'ida']);
+  });
+
+  it('P02-b · mock: un alSalir que tira no impide la ida', async () => {
+    vi.stubEnv('VITE_MOCK', '1');
+    const simularEnMock = vi.fn();
+    const container = new FakeContainer();
+    const handle = renderGoogleIdentityButton({
+      ...options(container),
+      redirect: { loginUri: LOGIN_URI, simularEnMock, alSalir: () => { throw new Error('x'); } },
+    });
+    await handle.ready;
+    (container.children[0] as FakeButtonElement).dispatch('click');
+    expect(simularEnMock).toHaveBeenCalledTimes(1);
+  });
+
   it('mock sin redirect: el botón no dice modo y entrega la credencial como siempre', async () => {
     vi.stubEnv('VITE_MOCK', '1');
     const onCredential = vi.fn();

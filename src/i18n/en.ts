@@ -885,6 +885,7 @@ export const EN: Record<string, string> = {
   "{0} identificados": "{0} identified",
   "No pudimos completar el ingreso. Prueba de nuevo.": "We couldn't complete sign-in. Try again.",
   "Continuar con Google": "Continue with Google",
+  "Parece que Google no terminó. Toca «Continuar con Google» de nuevo.": "It looks like Google didn't finish. Tap “Continue with Google” again.",
   "Continuar con Facebook": "Continue with Facebook",
   // AF-16 · tocar Google en el ingreso también sirve para registrarse.
   "Crea tu cuenta con Google": "Create your account with Google",

@@ -34,6 +34,8 @@
  * se borra. Vive y muere con el retorno: `olvidarRetornoAMesa` borra los dos.
  */
 
+import { olvidarSalidaAGoogle } from './salidaAGoogle';
+
 export const CLAVE_RETORNO_MESA = 'payme.app.retorno_mesa.v1';
 
 /** 30 minutos: lo que razonablemente dura un alta con Google. */
@@ -75,13 +77,16 @@ function olvidarSoloElRetorno(almacen: Almacen | null): void {
 }
 
 /**
- * Olvida la vuelta a la mesa: el retorno y el modo (P02-a). Cada borrado en su
- * propio intento: si uno falla, los otros corren igual. Lo llaman el cierre de
- * la custodia, el rechazo terminal, el cierre de sesión y `tomarRetornoAMesa`.
+ * Olvida la vuelta a la mesa: el retorno, el modo (P02-a) y la marca de salida
+ * a Google (P02-b, `salidaAGoogle.ts`). Cada borrado en su propio intento: si
+ * uno falla, los otros corren igual. Lo llaman el cierre de la custodia, el
+ * rechazo terminal, el cierre de sesión y `tomarRetornoAMesa`: cerrar sesión es
+ * el único lugar del alcance donde se engancha el borrado de la salida.
  */
 export function olvidarRetornoAMesa(almacen: Almacen | null = sesion()): void {
   olvidarSoloElRetorno(almacen);
   olvidarModoDeMesa(almacen);
+  olvidarSalidaAGoogle(almacen);
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   recordarRetornoAMesa,
   tomarRetornoAMesa,
 } from './retornoTrasIngreso';
+import { CLAVE_SALIDA_GOOGLE, marcarSalidaAGoogle } from './salidaAGoogle';
 
 /**
  * AF-INVITACION-TRAS-GOOGLE · la marca de a qué mesa volver después de entrar
@@ -147,11 +148,13 @@ describe('P02-a · D372 · el modo de la invitación (alta o ingreso), en su pro
     expect(leerModoDeMesa(T0 + VIDA_RETORNO_MS, m)).toEqual({ code: 'PA-2847', modo: 'login', savedAt: T0 });
   });
 
-  it('🔴 olvidar la vuelta borra el retorno Y el modo, y deja lo ajeno', () => {
+  it('🔴 olvidar la vuelta borra el retorno, el modo y la salida a Google (P02-b), y deja lo ajeno', () => {
     const m = memoria();
     recordarRetornoAMesa('PA-2847', T0, m);
     recordarModoDeMesa('PA-2847', 'register', T0, m);
+    marcarSalidaAGoogle(T0, m);
     m.datos.set('ajena', '1');
+    expect(m.datos.has(CLAVE_SALIDA_GOOGLE)).toBe(true);
     olvidarRetornoAMesa(m);
     expect([...m.datos.keys()]).toEqual(['ajena']);
   });
@@ -164,12 +167,14 @@ describe('P02-a · D372 · el modo de la invitación (alta o ingreso), en su pro
     expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
   });
 
-  it('si borrar el retorno falla, el modo se borra igual (cada borrado en su intento)', () => {
+  it('si borrar el retorno falla, el modo y la salida se borran igual (cada borrado en su intento)', () => {
     const m = memoria();
     recordarModoDeMesa('PA-2847', 'login', T0, m);
+    marcarSalidaAGoogle(T0, m);
     const quisquilloso = { ...m, removeItem: (k: string) => { if (k === CLAVE_RETORNO_MESA) throw new Error('no'); m.datos.delete(k); } };
     olvidarRetornoAMesa(quisquilloso);
     expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
+    expect(m.datos.has(CLAVE_SALIDA_GOOGLE)).toBe(false);
   });
 
   it('un retorno inválido se borra al leerse, sin llevarse el modo (es otro registro, con su propia validez)', () => {

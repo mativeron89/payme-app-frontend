@@ -41,6 +41,7 @@ import {
   type ContextoAlta,
 } from '../api/googleAltaRedirect';
 import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDiagnostico';
+import { hayVueltaDeGoogle, marcarSalidaAGoogle, olvidarSalidaAGoogle, revisarSalidaAGoogle } from '../api/salidaAGoogle';
 import {
   linkIntentValido,
   socialAuthSnapshot,
@@ -567,6 +568,11 @@ export function LoginScreen({
   );
   const contextoAlta = useRef<ContextoAlta | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * P02-b · D372 · «Parece que Google no terminó». Va aparte de `error`, que se
+   * limpia en muchos lugares: el aviso se borraría solo.
+   */
+  const [avisoGoogle, setAvisoGoogle] = useState(false);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
   const [paquete, setPaquete] = useState<PaqueteState>({ status: 'idle' });
@@ -874,6 +880,43 @@ export function LoginScreen({
   }, [vueltaGoogle, descartarVueltaGoogle, social.status, t]);
 
   /**
+   * P02-b · D372 · si la persona salió a Google (la marca de `salidaAGoogle.ts`)
+   * y la página vuelve a cargar SIN una vuelta de Google, se le avisa una vez,
+   * junto al botón. Con una vuelta (en curso, con error o del alta) la marca se
+   * borra sin avisar: Google terminó.
+   *
+   * Espera a que el botón exista (`googleAuthority`): el aviso dice «toca
+   * Continuar con Google». Además, al cerrar sesión este efecto corre antes que
+   * el del `AuthProvider` que borra la marca (`olvidarRetornoAMesa`), y la
+   * autoridad nace después, en una promesa: así el cierre de sesión llega primero.
+   * El ref hace que la revisión sea una sola (también con StrictMode).
+   */
+  const salidaRevisada = useRef(false);
+  useEffect(() => {
+    if (salidaRevisada.current) return;
+    const vuelta = { fase: vueltaGoogle.fase, hayVueltaDeAlta: hayCodigoAlta() || vueltaAltaSnapshot().estado !== 'ausente' };
+    if (hayVueltaDeGoogle(vuelta)) {
+      salidaRevisada.current = true;
+      olvidarSalidaAGoogle();
+      return;
+    }
+    if (googleAuthority === null) return;
+    salidaRevisada.current = true;
+    if (revisarSalidaAGoogle(vuelta)) setAvisoGoogle(true);
+  }, [vueltaGoogle.fase, googleAuthority]);
+  // P02-b · la página que vuelve del bfcache no se remonta: la misma revisión en `pageshow` con `persisted`.
+  useEffect(() => {
+    const fase = vueltaGoogle.fase;
+    const alMostrar = (evento: PageTransitionEvent) => {
+      if (!evento.persisted) return;
+      const vuelta = { fase, hayVueltaDeAlta: hayCodigoAlta() || vueltaAltaSnapshot().estado !== 'ausente' };
+      if (revisarSalidaAGoogle(vuelta)) setAvisoGoogle(true);
+    };
+    window.addEventListener('pageshow', alMostrar);
+    return () => window.removeEventListener('pageshow', alMostrar);
+  }, [vueltaGoogle.fase]);
+
+  /**
    * D268 · S-02 · el `state` del botón en redirect, fabricado ANTES de dibujarlo:
    * con el binding del dueño, el par PKCE (`entrar:`/`crear:` + challenge, y el
    * verifier en `sessionStorage`); sin él, el de antes. Cada remonte del botón
@@ -924,11 +967,17 @@ export function LoginScreen({
     // AF-GOOGLE-REDIRECT · en la misma pestaña Google vuelve por el `login_uri`
     // y el canje ocurre al volver (AuthContext): acá no llega ninguna credencial.
     // D268 · S-02 · con el binding, `entrar:<challenge>`; sin él, sin `state` (el de siempre).
+    // P02-b · al tocar el botón que sale a Google, la marca de salida (y el aviso, si estaba, se va).
+    const alSalir = () => {
+      marcarSalidaAGoogle();
+      setAvisoGoogle(false);
+    };
     const redirect = authority.purpose === 'login' && authority.redirect && estadoListo
       ? {
           loginUri: GOOGLE_REDIRECT_LOGIN_URI,
           ...(estadoListo.state !== undefined ? { state: estadoListo.state } : {}),
           simularEnMock: (credencial: string, state?: string) => { void simularIdaYVueltaMock(credencial, state); },
+          alSalir,
         }
       // AF-GOOGLE-ALTA-REDIRECT · el mismo `login_uri`, con el `state` de alta
       // (wire D102 §2): D268 `crear:<challenge>` con el binding, `alta:<id>` sin él.
@@ -938,6 +987,7 @@ export function LoginScreen({
             loginUri: GOOGLE_REDIRECT_LOGIN_URI,
             state: estadoListo.state,
             simularEnMock: (credencial: string, state?: string) => { void simularIdaYVueltaAltaMock(credencial, state); },
+            alSalir,
           }
         : undefined;
     try {
@@ -1753,7 +1803,9 @@ export function LoginScreen({
     && error === null && facebookCallbackPhase !== 'error'
     && altaVuelta === 'nada' && !altaConGoogle && !pasoVincular && !tieneCredencial && !perfilGoogle
     && email === '' && password === '' && firstName === '' && lastName === ''
-    && aceptaMayor === null && aceptaTerminos === null;
+    && aceptaMayor === null && aceptaTerminos === null
+    // P02-b · recargar por versión nueva se llevaría el aviso, que ya se consumió.
+    && !avisoGoogle;
   useRecargaPorVersionNueva(
     recargaPorVersion,
     () => pantallaIntacta && !hayCodigoAlta() && !authActionActive.current,
@@ -1765,6 +1817,11 @@ export function LoginScreen({
   const ranuraGoogle = (
     <div className="social-provider-slot">
       {paqueteVigente && googlePuedeCrear && casillasLegales}
+      {avisoGoogle && (
+        <p className="note note-teal ingreso-aviso-salida-google" role="status">
+          {t('Parece que Google no terminó. Toca «Continuar con Google» de nuevo.')}
+        </p>
+      )}
       <div
         className={[googleInerte && 'social-google-gated', googleReleyendo && 'social-google-releyendo']
           .filter(Boolean).join(' ') || undefined}

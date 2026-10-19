@@ -49,6 +49,12 @@ interface GoogleIdentityApi {
       locale: 'es' | 'en';
       state: string;
       width: number;
+      /**
+       * P02-b · `GsiButtonConfiguration.click_listener`: GIS lo llama al tocar el
+       * botón. Que lo llame en `ux_mode: 'redirect'` ANTES de navegar no está
+       * verificado: lo prueba Mati en el iPhone (D63).
+       */
+      click_listener?: () => void;
     },
   ): void;
 }
@@ -349,6 +355,12 @@ export interface GoogleButtonOptions {
      * cuenta» (wire D102 §2): el mismo `login_uri`, otro camino.
      */
     readonly state?: string;
+    /**
+     * P02-b · se llama al TOCAR el botón, antes de que la página salga a Google
+     * (`salidaAGoogle.ts`). Va dentro de `redirect` a propósito: en popup la
+     * página no se va, y una marca ahí daría avisos falsos.
+     */
+    readonly alSalir?: () => void;
   };
 }
 
@@ -398,6 +410,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
   if (previous) deactivateMount(previous, false);
 
   let mockDelivered = false;
+  const alSalir = options.redirect?.alSalir;
   const mountRecord: GoogleMount = {
     owner: Symbol('google-identity-mount'),
     container: options.container,
@@ -440,6 +453,12 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
       }
       if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord || mockDelivered) return;
       mockDelivered = true;
+      // P02-b · primero la marca de salida, después la ida: como GIS, que avisa el toque antes de navegar.
+      try {
+        redirect.alSalir?.();
+      } catch {
+        // La marca nunca frena la ida.
+      }
       redirect.simularEnMock(credencialMock(), redirect.state);
     });
     options.container.append(button);
@@ -460,6 +479,17 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
         locale: options.locale,
         state: options.redirect?.state ?? (routeState as string),
         width: Math.max(200, Math.min(360, Math.floor(options.container.clientWidth || 320))),
+        // P02-b · sólo en redirect y sólo si alguien lo pide: sin `alSalir`, las opciones son las de siempre.
+        ...(alSalir ? {
+          click_listener: () => {
+            if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord) return;
+            try {
+              alSalir();
+            } catch {
+              // La marca nunca frena la ida.
+            }
+          },
+        } : {}),
       });
     }).catch((error) => {
       deactivateMount(mountRecord, true, false);

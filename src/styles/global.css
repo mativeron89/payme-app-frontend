@@ -1466,6 +1466,16 @@ html.app-de-inicio-ios .app {
 .social-provider-retry {
   min-height: var(--tap-min);
 }
+
+/* P02-b · D372 · «Parece que Google no terminó»: arriba del botón de Google, al
+   ancho máximo de ese botón (360, el de GIS), con el estilo de una nota
+   informativa (no es un error y no suma naranja). */
+.ingreso-aviso-salida-google {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 0 var(--sp-2);
+  text-align: center;
+}
 .social-auth-divider {
   display: flex;
   align-items: center;
