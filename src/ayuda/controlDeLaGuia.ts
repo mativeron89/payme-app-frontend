@@ -49,7 +49,8 @@ export function debeEmpezar(a: Apertura, paso: IdDePaso, pagina: PageId, ejemplo
 
 /**
  * ¿La guía se cierra por la ruta (sin navegar)?
- * - Antes de empezar: si la persona se fue de la página donde la abrió, o si hoy pasa a caer en un viaje (D365).
+ * - Antes de empezar: si la persona se fue de la página donde la abrió, o si hoy pasa a caer en un viaje (D365). La
+ *   fecha se lee al dibujar: a medianoche la guía se cierra en el próximo render (un toque, otra pantalla), no sola.
  * - Empezada: si alguien descartó el ejemplo, si en la fase de la foto hoy pasa a caer en un viaje (la cámara de la
  *   barra lleva al viaje), o si la persona se fue del recorrido (Q7).
  */

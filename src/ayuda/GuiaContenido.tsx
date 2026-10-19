@@ -29,8 +29,11 @@ const buscar = (ancla: string) => Array.from(document.querySelectorAll<HTMLEleme
  * Una ventana encima (banco, otra hoja) esconde la guía hasta que se cierra
  * (ficha, «Colocación» 5). La excepción es la hoja del ticket de 3a, que lleva
  * `data-guia-convive` mientras el ejemplo está ahí y convive con la burbuja.
+ * Enmienda 10: lo que lleva `data-guia-espera` (el aviso «Tu foto entre
+ * amigos») cuenta como ventana mientras se ve: un aviso de privacidad no se
+ * tapa nunca.
  */
-const hayModal = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"], dialog[open]'))
+const hayModal = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"], dialog[open], [data-guia-espera]'))
   .some((e) => visible(e) && !e.hasAttribute('data-guia-convive'));
 const sinMovimiento = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 

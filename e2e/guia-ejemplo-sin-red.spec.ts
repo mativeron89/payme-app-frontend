@@ -12,7 +12,7 @@ import {
  * «Cero» es la definición de V (respuestas al plan, 4ad77ba9…): de 2a a 4a no hay pedidos de la familia mesa,
  * ticket, invitación, propina, OCR ni pago, y nada se escribe. Revisión de V sobre ff5dec7 (a2b729e4…): los
  * recorridos arrancan por la tarjeta y el motor, como la persona, y se mide en cuatro lugares, cada uno con su
- * control positivo en el mismo caso:
+ * control positivo (en el mismo caso, salvo donde se dice):
  *
  * 1. **La red.** `page.route('**\/*')` cuenta todo pedido a cualquier origen y ruta, salvo los módulos que sirve Vite
  *    (`contarLaRed`, con la lista de excluidos a la vista). Control: tres sondas (otro origen, mismo origen, un
@@ -20,8 +20,11 @@ import {
  * 2. **La fachada.** Un espía sobre `api` (el MISMO objeto que usan las pantallas) anota cada llamada con la clase de
  *    `CLASIFICACION_DEL_EJEMPLO`: ningún `cortado`, y los `local` sólo con PA-1224. Control: los locales sí se llamaron.
  * 3. **Las escrituras.** El estado del mock, todo `localStorage` y todo `sessionStorage`, iguales antes y después; la
- *    única diferencia admitida es la tarjeta Tutorial oculta, después de «Terminar guía» (Q1).
- * 4. **Lo que se ve.** Sin link, sin invitar, sin propina, sin engranaje, sin «Cerrar mesa».
+ *    única diferencia admitida es la tarjeta Tutorial oculta, después de «Terminar guía» (Q1). Controles: esa clave
+ *    misma (localStorage) y una sonda (sessionStorage), en el mismo caso; el estado del mock, en el test de la mesa
+ *    real.
+ * 4. **Lo que se ve.** Sin link, sin invitar, sin propina, sin engranaje, sin «Cerrar mesa». Control: el test de la
+ *    mesa real, donde todo eso aparece.
  *
  * 🔴 **Esto corre contra el mock, no contra el servidor.** En modo mock la app no hace HTTP a la API: la cuenta de la
  * red vigila lo que se le escape a la fachada (un fetch, una imagen, un script). En el build real la garantía es
@@ -45,6 +48,10 @@ async function redEnCero(page: Page, red: Awaited<ReturnType<typeof contarLaRed>
 /** Lo escrito después es lo de antes; con «Terminar guía», más la tarjeta Tutorial oculta (y nada más). */
 async function sinEscrituras(page: Page, antes: Awaited<ReturnType<typeof escrito>>, { terminada = false } = {}): Promise<void> {
   if (terminada) await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), CLAVE_TARJETA_OCULTA)).toBe('1');
+  // Control del volcado de sessionStorage: una sonda escrita a mano aparece (y se saca antes de comparar).
+  await page.evaluate(() => sessionStorage.setItem('__sonda_d363', '1'));
+  expect((await escrito(page)).session.__sonda_d363).toBe('1');
+  await page.evaluate(() => sessionStorage.removeItem('__sonda_d363'));
   const despues = await escrito(page);
   expect(antes.local[CLAVE_TARJETA_OCULTA]).toBeUndefined();
   const esperado = terminada ? { ...antes.local, [CLAVE_TARJETA_OCULTA]: '1' } : antes.local;

@@ -4,6 +4,7 @@ import { formatMXN } from '../utils/format';
 import { confirmedConsumptionProgress } from '../screens/mesaItemsView';
 import { mesaDeEjemploEnInicio, useEjemplo } from './ejemplo/estadoEjemplo';
 import { detalleDeEjemplo } from './ejemplo/mesaDeEjemplo';
+import { useAvisoDeFotos } from './avisoDeFotos';
 import { useGuia } from './GuiaProvider';
 import { tarjetaVisible, useEnFechasDeViaje } from './inicioGuia';
 import './ayuda.css';
@@ -23,12 +24,14 @@ export function TarjetaTutorial({ aperturaPendiente }: { readonly aperturaPendie
   const guia = useGuia();
   const ejemplo = useEjemplo();
   const enFechasDeViaje = useEnFechasDeViaje();
+  const avisoDeFotos = useAvisoDeFotos();
   if (!guia || !tarjetaVisible({
     noVolverAMostrar: guia.noVolverAMostrar,
     tarjetaOculta: guia.tarjetaOculta,
     enFechasDeViaje,
     aperturaPendiente,
     mesaDeEjemploEnInicio: mesaDeEjemploEnInicio(ejemplo),
+    avisoDeFotos,
   })) return null;
   return (
     <section className="tarjeta-tutorial" data-guia="tarjeta-tutorial" aria-label={t('Tutorial')}>

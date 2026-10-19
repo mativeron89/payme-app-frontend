@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { useInformarAvisoDeFotos } from '../ayuda/avisoDeFotos';
 import {
   acknowledgementForDisplayedNotice,
   type FriendAvatarNoticeAcknowledgement,
@@ -43,7 +44,7 @@ export function FriendAvatarNoticeView({
 }) {
   const { t } = useIdioma();
   return (
-    <aside className="friend-avatar-notice" aria-label={t('Actualización del Aviso de Privacidad')}>
+    <aside className="friend-avatar-notice" aria-label={t('Actualización del Aviso de Privacidad')} data-guia-espera="">
       <div className="friend-avatar-notice-icon" aria-hidden="true">
         <Icon name="users" size={21} />
       </div>
@@ -80,6 +81,10 @@ export function FriendAvatarNoticeView({
 export function FriendAvatarNotice() {
   const { session } = useAuth();
   const [ready, setReady] = useState<ReadyNotice | null>(null);
+  // D363 · enmienda 10: la guía nunca tapa este aviso. Mientras se consulta, «sin saber»; a la vista, pendiente.
+  const [consultaLista, setConsultaLista] = useState(false);
+  useInformarAvisoDeFotos(session ? `${session.family_id}:${session.principal_id}` : null,
+    !consultaLista ? 'sin-saber' : ready !== null ? 'pendiente' : 'resuelto');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -89,7 +94,8 @@ export function FriendAvatarNotice() {
     const request = epoch.current.next();
     setReady(null);
     setError(false);
-    if (deferred(expected) || !isCurrentSession(expected)) return;
+    if (deferred(expected) || !isCurrentSession(expected)) { setConsultaLista(true); return; }
+    setConsultaLista(false);
     void Promise.all([api.getFriendAvatarNotice(expected), api.getPrivacyNotice()])
       .then(([state, legal]) => {
         if (!epoch.current.isCurrent(request) || !isCurrentSession(expected)) return;
@@ -100,6 +106,7 @@ export function FriendAvatarNotice() {
       })
       .catch(() => { /* backend anterior, texto inconsistente o red: no se acusa ni se habilita */ })
       .finally(() => {
+        if (epoch.current.isCurrent(request) && isCurrentSession(expected)) setConsultaLista(true);
       });
   }, []);
 

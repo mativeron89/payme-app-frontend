@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { MOCK_USER } from '../src/api/mock/seedData';
+import { RESTAURANTE_DE_EJEMPLO } from '../src/ayuda/ejemplo/fixtureEjemplo';
 import { relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, sacarFoto } from './_camara';
 
@@ -58,8 +59,8 @@ export const capaVisible = (page: Page) => page.locator('.guia-capa[data-activa]
 export const TEXTO_2A = '¿Cómo divido la cuenta?';
 export const TEXTO_2B = 'Saca o elige una foto: te mostraremos un ticket de ejemplo.';
 export const TEXTO_3A = 'Este es el ticket de ejemplo.';
-/** El id inventado del restaurante del ejemplo (`fixtureEjemplo.ts`). */
-export const ID_RESTAURANTE_DEL_EJEMPLO = 'e0e0e0e0-1224-4000-8000-0000000000aa';
+/** El id inventado del restaurante del ejemplo, leído de la fuente (`fixtureEjemplo.ts`): si cambia, el e2e lo sigue. */
+export const ID_RESTAURANTE_DEL_EJEMPLO = RESTAURANTE_DE_EJEMPLO.id;
 
 /** La fase del ejemplo, o 'apagado'. */
 export const fase = (page: Page) => page.evaluate(async () => {
@@ -112,19 +113,34 @@ export async function espiarLaFachada(page: Page): Promise<void> {
 
 export const llamadas = (page: Page) => page.evaluate(() => (window as unknown as { __llamadas: Llamada[] }).__llamadas);
 
-/** Anota si el ejemplo se prendió alguna vez desde que se llama (suscripto al mismo store que lee la app). */
+/**
+ * Anota, desde que se llama, si el ejemplo se prendió alguna vez y cuántas veces arrancó (de apagado a encendido) y
+ * se descartó (de encendido a apagado). Suscripto al mismo store que lee la app.
+ */
 export async function espiarElEjemplo(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const ruta = '/src/ayuda/ejemplo/estadoEjemplo.ts';
     const { ejemploLocal } = await import(/* @vite-ignore */ ruta) as {
       ejemploLocal: { leer: () => { activo: boolean }; suscribir: (o: () => void) => () => void };
     };
-    const w = window as unknown as { __ejemploSePrendio: boolean };
-    w.__ejemploSePrendio = ejemploLocal.leer().activo;
-    ejemploLocal.suscribir(() => { if (ejemploLocal.leer().activo) w.__ejemploSePrendio = true; });
+    const w = window as unknown as { __ejemplo: { sePrendio: boolean; arranques: number; descartes: number } };
+    let antes = ejemploLocal.leer().activo;
+    w.__ejemplo = { sePrendio: antes, arranques: 0, descartes: 0 };
+    ejemploLocal.suscribir(() => {
+      const ahora = ejemploLocal.leer().activo;
+      if (ahora) w.__ejemplo.sePrendio = true;
+      if (!antes && ahora) w.__ejemplo.arranques += 1;
+      if (antes && !ahora) w.__ejemplo.descartes += 1;
+      antes = ahora;
+    });
   });
 }
-export const ejemploSePrendio = (page: Page) => page.evaluate(() => (window as unknown as { __ejemploSePrendio: boolean }).__ejemploSePrendio);
+type EspiaDelEjemplo = { sePrendio: boolean; arranques: number; descartes: number };
+export const ejemploSePrendio = (page: Page) => page.evaluate(() => (window as unknown as { __ejemplo: EspiaDelEjemplo }).__ejemplo.sePrendio);
+export const transicionesDelEjemplo = (page: Page) => page.evaluate(() => {
+  const e = (window as unknown as { __ejemplo: EspiaDelEjemplo }).__ejemplo;
+  return { arranques: e.arranques, descartes: e.descartes };
+});
 
 /** 2f → 2a. */
 export async function abrirDesdeLaTarjeta(page: Page): Promise<Locator> {
@@ -164,9 +180,14 @@ export async function createMesaRealSinDatosDelEjemplo(page: Page): Promise<void
   const creadas = (await llamadas(page)).filter((l) => l.metodo === 'createMesa');
   expect(creadas.length, 'control positivo: el flujo real llegó a createMesa').toBeGreaterThanOrEqual(1);
   for (const c of creadas) {
-    const pedido = JSON.parse(c.arg0!) as { total_cents: number; restaurant_id?: string };
+    const pedido = JSON.parse(c.arg0!) as {
+      total_cents: number; restaurant_id?: string; division_mode: string; expected_participants: number;
+    };
     expect(pedido.total_cents).toBe(84000);
     expect(pedido.restaurant_id).not.toBe(ID_RESTAURANTE_DEL_EJEMPLO);
+    // Lo que eligió en el flujo fresco de `abrirUnaMesaReal` (un reinicio a medias dejaría lo del ejemplo).
+    expect(pedido.division_mode).toBe('consumo');
+    expect(pedido.expected_participants).toBe(1);
   }
 }
 

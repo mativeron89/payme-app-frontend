@@ -3,6 +3,7 @@ import { camarasAbiertas } from './_camara';
 import {
   abrirDesdeLaTarjeta, abrirUnaMesaReal, botonTutorial, burbuja, capaVisible, createMesaRealSinDatosDelEjemplo, ejemploSePrendio,
   entrar, espiarElEjemplo, espiarLaFachada, fase, hastaElTicket, hastaLaCamara, llamadas, pathname, tarjeta, TEXTO_2A, TEXTO_2B,
+  transicionesDelEjemplo,
 } from './_guia';
 
 /**
@@ -84,6 +85,7 @@ test.describe('revisión de V · el ejemplo arranca con la primera burbuja', () 
 
   test('tocar Tutorial otra vez, o Más → Ayuda, con la guía abierta no la reinicia ni la deja a medias', async ({ page }) => {
     await entrar(page);
+    await espiarElEjemplo(page);
     await abrirDesdeLaTarjeta(page);
     expect(await fase(page)).toBe('foto');
     await botonTutorial(page).click();
@@ -98,12 +100,23 @@ test.describe('revisión de V · el ejemplo arranca con la primera burbuja', () 
     await hastaLaCamara(page);
     expect(await pathname(page)).toBe('/scan');
     expect(await fase(page)).toBe('foto');
+    // Un solo arranque y ningún descarte: ni reinició ni se cerró y se volvió a abrir.
+    expect(await transicionesDelEjemplo(page)).toEqual({ arranques: 1, descartes: 0 });
   });
 
   test('irse de la 2a a una mesa real cierra la guía antes de que la mesa pida lo suyo: nada se corta', async ({ page }) => {
     await entrar(page);
     await espiarLaFachada(page);
     await abrirDesdeLaTarjeta(page);
+    // Control del espía: con el ejemplo activo, una llamada cortada queda anotada con su rechazo.
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as { api: { getPaymentMethods: () => Promise<unknown> } };
+      await api.getPaymentMethods().catch(() => undefined);
+    });
+    await expect.poll(async () => (await llamadas(page)).filter((l) => l.metodo === 'getPaymentMethods').map((l) => l.rechazo))
+      .toEqual(['PedidoCortadoPorElEjemplo']);
+    await page.evaluate(() => { (window as unknown as { __llamadas: unknown[] }).__llamadas = []; });
     await page.locator('button:has(.mesa-go)').first().click();
     await expect.poll(() => pathname(page)).toMatch(/^\/mesa\/PA-\d{4}$/);
     await expect(page.locator('.guia-capa')).toHaveCount(0);
@@ -129,6 +142,56 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
     const seTocan = !(cajas.b.bottom <= cajas.i.top || cajas.b.top >= cajas.i.bottom
       || cajas.b.right <= cajas.i.left || cajas.b.left >= cajas.i.right);
     expect(seTocan, JSON.stringify(cajas)).toBe(false);
+  });
+
+  // Enmienda 10 (V, 19/10): un aviso de privacidad no puede quedar tapado nunca. Midió que la 2a tapaba el aviso
+  // «Tu foto entre amigos» (a 390 × 844, también sus botones): mientras está pendiente, la guía no se ofrece.
+  for (const { tamano, respuesta } of [
+    { tamano: { width: 390, height: 844 }, respuesta: 'Ahora no' },
+    { tamano: { width: 375, height: 667 }, respuesta: 'Entendido' },
+  ] as const) {
+    test(`enmienda 10 · con el aviso «Tu foto entre amigos» pendiente (${tamano.width} × ${tamano.height}) no hay tarjeta y Más → Ayuda espera; con «${respuesta}» vuelven las dos`, async ({ page }) => {
+      await page.setViewportSize(tamano);
+      await entrar(page, { dejarElAvisoDeFotos: true });
+      const aviso = page.getByRole('complementary', { name: 'Actualización del Aviso de Privacidad', exact: true });
+      await expect(aviso).toBeVisible();
+      // El aviso a la vista es el aviso consultado y pendiente: desde ahí, la tarjeta no está.
+      await expect(tarjeta(page)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Más', exact: true }).click();
+      const fila = page.getByRole('button', { name: 'Cómo usar PayMe' });
+      await expect(fila).toBeDisabled();
+      await expect(page.getByText('Primero responde el aviso «Tu foto entre amigos» en Inicio.', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Inicio', exact: true }).click();
+      await aviso.getByRole('button', { name: respuesta, exact: true }).click();
+      await expect(aviso).toHaveCount(0);
+      // Control positivo: respondido el aviso, vuelven la fila y la tarjeta, y la 2a aparece.
+      await page.getByRole('button', { name: 'Más', exact: true }).click();
+      await expect(fila).toBeEnabled();
+      await expect(page.getByText('Primero responde el aviso «Tu foto entre amigos» en Inicio.', { exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Inicio', exact: true }).click();
+      await abrirDesdeLaTarjeta(page);
+      await expect.poll(() => fase(page)).toBe('foto');
+      await expect(aviso).toHaveCount(0);
+    });
+  }
+
+  test('enmienda 10 · lo que lleva data-guia-espera esconde la burbuja mientras se ve (costura: un aside marcado agregado al DOM con la 2a a la vista)', async ({ page }) => {
+    await entrar(page);
+    await abrirDesdeLaTarjeta(page);
+    await page.evaluate(() => {
+      const a = document.createElement('aside');
+      a.id = 'aviso-de-prueba';
+      a.setAttribute('data-guia-espera', '');
+      a.style.cssText = 'position:fixed;top:0;left:0;width:24px;height:24px;background:#000';
+      document.body.append(a);
+    });
+    await expect(capaVisible(page)).toHaveCount(0);
+    await expect(page.locator('.guia-capa:not([data-activa])')).toHaveCount(1);
+    // Control: sin el aside, la 2a vuelve; el ejemplo siguió encendido.
+    await page.evaluate(() => document.getElementById('aviso-de-prueba')!.remove());
+    await expect(burbuja(page, TEXTO_2A)).toBeVisible();
+    expect(await fase(page)).toBe('foto');
   });
 
   test('una ventana que tapa la pantalla hace esperar a la guía (costura: un diálogo aria-modal agregado al DOM); al irse, aparece la 2a y arranca el ejemplo', async ({ page }) => {

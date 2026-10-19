@@ -58,7 +58,8 @@ async function entrar(page: Page, o: Opciones = {}): Promise<void> {
   await page.getByLabel(en ? /^Password$/ : /^Contraseña$/).fill('demo-e2e');
   await page.getByRole('button', { name: en ? 'Log in' : 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: en ? /^Scan/ : /^Escanear/ }).first()).toBeVisible();
-  // El aviso de fotos tiene prioridad en Inicio (la guía espera a que se resuelva): se pospone, como hace la persona.
+  // El aviso de fotos se pospone, como hace la persona: el recorrido no lo mira. La guía ya no lo espera (V, 19/10);
+  // que quede a la vista con la 2a encima lo mide guia-motor-y-seguro.spec.ts.
   const aviso = page.getByRole('complementary', { name: en ? 'Privacy Notice update' : 'Actualización del Aviso de Privacidad', exact: true });
   await expect(aviso).toBeVisible();
   await aviso.getByRole('button', { name: en ? 'Not now' : 'Ahora no', exact: true }).click();

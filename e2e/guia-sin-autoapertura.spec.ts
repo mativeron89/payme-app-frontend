@@ -38,12 +38,13 @@ test.describe('D364 · la guía no se abre sola', () => {
     await expect(tarjeta(page)).toBeVisible();
     expect(await capaVista(page)).toBe(false);
     expect(await ejemploSePrendio(page)).toBe(false);
-    // Control positivo, en el mismo documento.
+    // Control positivo, en el mismo documento: la capa y el ejemplo.
     await abrirDesdeLaTarjeta(page);
     expect(await capaVista(page)).toBe(true);
+    await expect.poll(() => ejemploSePrendio(page)).toBe(true);
   });
 
-  test('al entrar en frío por el link de una mesa (una cuenta nueva que se suma): la guía cerrada', async ({ page }) => {
+  test('al entrar en frío por el link de una mesa (sin sesión, y se vuelve a entrar desde el link): la guía cerrada', async ({ page }) => {
     await entrar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
     // Sin el @ (costura del mock, `payme.app.mock.username.v1`): la puerta del @ no tapa la app de la cuenta nueva.
@@ -56,6 +57,7 @@ test.describe('D364 · la guía no se abre sola', () => {
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
     await expect(page.getByText('Te invitaron a una mesa', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
+    // En el mock cualquier email entra a la misma cuenta: lo que se prueba es la entrada por el link, no una cuenta nueva.
     await page.getByLabel('Email', { exact: true }).fill('invitada-d364@payme.test');
     await page.getByLabel(/^Contraseña$/).fill('sintetico-d364');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
@@ -64,8 +66,9 @@ test.describe('D364 · la guía no se abre sola', () => {
     await espiarElEjemplo(page);
     expect(await capaVista(page)).toBe(false);
 
-    // Control positivo, en el mismo documento: en Inicio (la pantalla de bienvenida no tiene barra), tocar Tutorial la
-    // abre. El aviso de fotos de la cuenta nueva ya no la hace esperar (V, 2026-10-19).
+    expect(await ejemploSePrendio(page)).toBe(false);
+    // Control positivo, en el mismo documento: en Inicio, tocar Tutorial la abre. Costura: la pantalla de bienvenida
+    // no tiene barra, así que se llega a Inicio con history.pushState. El aviso de fotos ya no hace esperar (V, 19/10).
     await page.evaluate(() => {
       history.pushState(null, '', '/home');
       window.dispatchEvent(new Event('popstate'));
@@ -73,6 +76,7 @@ test.describe('D364 · la guía no se abre sola', () => {
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await abrirDesdeLaTarjeta(page);
     expect(await capaVista(page)).toBe(true);
+    await expect.poll(() => ejemploSePrendio(page)).toBe(true);
   });
 });
 

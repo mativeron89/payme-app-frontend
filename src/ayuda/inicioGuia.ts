@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { api } from '../api';
+import type { EstadoDelAvisoDeFotos } from './avisoDeFotos';
 import { useCapacidadViajes, type EstadoCapacidadViajes } from '../api/viajes';
 import {
   hoyLocal,
@@ -108,6 +109,8 @@ export interface EntradaDeLaTarjeta {
   readonly aperturaPendiente: boolean | null;
   /** 4a · la mesa de ejemplo ocupa su lugar en Inicio. */
   readonly mesaDeEjemploEnInicio: boolean;
+  /** Enmienda 10 · el aviso «Tu foto entre amigos» de Inicio: la tarjeta espera a que esté resuelto. */
+  readonly avisoDeFotos: EstadoDelAvisoDeFotos;
 }
 
 /** D364 · D365 · ¿se muestra la tarjeta Tutorial en Inicio? Sólo con todo sabido y en «no». */
@@ -116,6 +119,7 @@ export function tarjetaVisible(e: EntradaDeLaTarjeta): boolean {
     && e.tarjetaOculta === false
     && e.enFechasDeViaje === false
     && e.aperturaPendiente === false
+    && e.avisoDeFotos === 'resuelto'
     && !e.mesaDeEjemploEnInicio;
 }
 
@@ -123,7 +127,7 @@ export function tarjetaVisible(e: EntradaDeLaTarjeta): boolean {
  * 'sin-saber-viaje' · no se sabe si hoy cae en un viaje (la capacidad o la lista no llegaron): la fila espera con su
  * línea. 'sin-saber' · sólo falta la lectura local de la apertura, que es un instante: espera sin línea.
  */
-export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' | 'sin-saber-viaje' | 'sin-saber';
+export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' | 'aviso-de-fotos' | 'sin-saber-viaje' | 'sin-saber';
 
 /**
  * Más → Ayuda → «Cómo usar PayMe». Q9 · dentro de las fechas de un viaje se ve
@@ -134,9 +138,12 @@ export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' |
 export function estadoDeLaAyuda(e: {
   readonly enFechasDeViaje: boolean | null;
   readonly aperturaPendiente: boolean | null;
+  /** Enmienda 10 · con el aviso «Tu foto entre amigos» pendiente, la fila espera con su línea; sin saber, no se traba. */
+  readonly avisoDeFotos: EstadoDelAvisoDeFotos;
 }): EstadoDeLaAyuda {
   if (e.enFechasDeViaje === true) return 'en-viaje';
   if (e.enFechasDeViaje === null) return 'sin-saber-viaje';
+  if (e.avisoDeFotos === 'pendiente') return 'aviso-de-fotos';
   if (e.aperturaPendiente === null) return 'sin-saber';
   return e.aperturaPendiente ? 'apertura-pendiente' : 'disponible';
 }

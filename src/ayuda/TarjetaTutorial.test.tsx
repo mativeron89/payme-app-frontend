@@ -8,8 +8,10 @@ import { TarjetaMesaDeEjemplo, TarjetaTutorial } from './TarjetaTutorial';
 const guia = vi.hoisted(() => ({
   valor: null as null | { noVolverAMostrar: boolean | null; tarjetaOculta: boolean | null; abrir: () => void; ocultarTarjeta: () => void; terminar: () => void },
   enFechasDeViaje: false as boolean | null,
+  avisoDeFotos: 'resuelto' as 'sin-saber' | 'pendiente' | 'resuelto',
 }));
 vi.mock('./GuiaProvider', () => ({ useGuia: () => guia.valor }));
+vi.mock('./avisoDeFotos', () => ({ useAvisoDeFotos: () => guia.avisoDeFotos }));
 vi.mock('./inicioGuia', async (original) => ({
   ...(await original<typeof import('./inicioGuia')>()),
   useEnFechasDeViaje: () => guia.enFechasDeViaje,
@@ -18,6 +20,7 @@ vi.mock('./inicioGuia', async (original) => ({
 beforeEach(() => {
   guia.valor = { noVolverAMostrar: false, tarjetaOculta: false, abrir: vi.fn(), ocultarTarjeta: vi.fn(), terminar: vi.fn() };
   guia.enFechasDeViaje = false;
+  guia.avisoDeFotos = 'resuelto';
 });
 afterEach(() => ejemploLocal.descartar());
 
@@ -44,6 +47,15 @@ describe('D363 · 2f · la tarjeta Tutorial', () => {
     expect(renderToStaticMarkup(<TarjetaTutorial aperturaPendiente={false} />)).toBe('');
     guia.valor = null;
     expect(renderToStaticMarkup(<TarjetaTutorial aperturaPendiente={false} />)).toBe('');
+  });
+
+  it('enmienda 10 · con el aviso «Tu foto entre amigos» pendiente o sin consultar, no se ve; resuelto, sí (control)', () => {
+    for (const aviso of ['pendiente', 'sin-saber'] as const) {
+      guia.avisoDeFotos = aviso;
+      expect(renderToStaticMarkup(<TarjetaTutorial aperturaPendiente={false} />), aviso).toBe('');
+    }
+    guia.avisoDeFotos = 'resuelto';
+    expect(renderToStaticMarkup(<TarjetaTutorial aperturaPendiente={false} />)).toContain('data-guia="tarjeta-tutorial"');
   });
 
   it('4a · con la mesa de ejemplo en Inicio, la tarjeta le deja el lugar', () => {

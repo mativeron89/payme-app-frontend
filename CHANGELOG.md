@@ -40,7 +40,7 @@ El tutorial del paquete de Claude Design (zip 0d97650b…, ficha `PANTALLA-tutor
   - 4: una línea en `PestanaViajes.test.tsx` y otra en `ViajesEnInicio.test.tsx`, que fijan el texto de `avisoSinMesas`;
   - 5: «invitarás», futuro de tú y texto de la ficha, entra en la lista de español legítimo de la guarda de voseo.
 - **Se borra `e2e/guia-opcional-d326.spec.ts`**, incluido su test D379 (P4): describía la guía que deja de existir. Lo reemplaza `e2e/guia-tutorial.spec.ts`, más `e2e/guia-ejemplo-sin-red.spec.ts`, el que cuenta cero.
-- **La guía espera sólo a lo que tapa la pantalla** (decisión de V del 19/10, ver abajo): la puerta legal o la del @, y cualquier ventana abierta. El toque en Tutorial les gana a una invitación pendiente y al aviso de fotos, que quedan a la vista.
+- **La guía espera sólo a lo que tapa la pantalla** (decisión de V del 19/10, ver abajo): la puerta legal o la del @, y cualquier ventana abierta. El toque en Tutorial le gana a una invitación pendiente, que queda a la vista. Con el aviso «Tu foto entre amigos» pendiente, la guía no se ofrece (enmienda 10).
 - **El inglés** de las frases nuevas lo redactó AF y lo aprueba Diseño.
 - **No se implementó (se declara):**
   - la salida animada de 120 ms;
@@ -51,23 +51,52 @@ El tutorial del paquete de Claude Design (zip 0d97650b…, ficha `PANTALLA-tutor
   - El código de PA-1224 en Compartir se ve deshabilitado, porque no hay link.
 - **No medido:** el menú del iPhone al tocar Escanear (D368) es de la plataforma. Lo ve Mati en su prueba.
 - **Corrección:** el mensaje del commit 1 de esta entrega (01b8d0f) dice «53 mutantes». Son 51 de comportamiento y 5 de tipos.
-- **Corrección tras la revisión de V sobre `ff5dec7`** (a2b729e4…, CORREGIR). Seis commits sucesores, cada uno con `commit-con-gates.sh` (`385f7f7c…`):
+- **Corrección tras la revisión de V sobre `ff5dec7`** (a2b729e4…, CORREGIR). Ocho commits sucesores (seis de código y tests, uno del CHANGELOG y uno por la revisión del delta), todos con `commit-con-gates.sh` (`385f7f7c…`). El script corre los gates del CI salvo Playwright: los e2e se corrieron aparte (ver «Se declara»).
+  - **Antes de programar,** el diseño de la corrección pasó por una revisión en sólo lectura (wf_e62d166b-e7d), que cambió dos cosas: las dos salidas y abrir con la guía abierta. **Después,** el delta pasó por otra (wf_159f9258-48a), que trajo el último commit.
   - **El MEDIO.** El ejemplo se prendía en `abrir()`, antes de cargar el motor de la guía: si el `import()` fallaba, quedaba activo sin guía, y con el ticket de ejemplo en pantalla «Continuar» podía terminar en un `createMesa` real con sus platos. Ahora la guía se abre «antes de empezar» y el ejemplo se prende cuando la 2a se ve de verdad (`controlDeLaGuia.ts`). Con el motor caído el ejemplo nunca se prende, y Escanear da la cámara real sin rebotar.
-  - **Dos salidas.** Salir (la ✕, «otro momento», Escape, «Cerrar guía») vuelve a Inicio sólo si el ejemplo había empezado y la persona está en una pantalla del recorrido. El cierre por la ruta (irse, el ejemplo descartado, un viaje que empieza hoy) cierra sin navegar ni mover el foco, en un `useLayoutEffect`: la pantalla nueva ya no ve el ejemplo activo cuando pide lo suyo.
+  - **Dos salidas.** Salir (la ✕, «otro momento», Escape, «Cerrar guía») vuelve a Inicio sólo si el ejemplo había empezado y la persona está en una pantalla del recorrido. El cierre por la ruta (irse, el ejemplo descartado, un viaje que empieza hoy) cierra sin navegar ni mover el foco, en un `useLayoutEffect`. Con eso, los efectos pasivos de la pantalla nueva y lo que pida después ya ven el ejemplo apagado. Su render y sus layout effects todavía lo ven encendido, y ninguno de ellos llama a la fachada (lo verificó la revisión del delta).
   - **Abrir con la guía abierta no hace nada.** Un segundo toque en Tutorial o en Más → Ayuda dejaba la guía a medias.
-  - **El seguro de CreateMesaFlow.** Si el ejemplo se apaga con su ticket en pantalla, se vuelve a «Escanea el ticket» sin nada del ejemplo. Tres guardas cubren continuar, `createMesa` y `resolveRestaurant`. Además, en la fachada, un pedido que nombra al restaurante del ejemplo nunca sale, como PA-1224.
-  - **D365.** La cámara de un viaje (`scan` con su id) no es del recorrido en ninguna fase, y salir desde ahí no saca a nadie a Inicio. Si hoy pasa a caer en un viaje en la fase de la foto, la guía se cierra.
-  - **Ayuda.** Mientras no se sabe si hoy cae en un viaje, la fila espera con su línea, «Disponible cuando sepamos si hoy estás de viaje» (texto aprobado por V; el inglés espera a Diseño). Al volver a la ventana o a la pestaña se vuelve a pedir lo que faltó, así que la tarjeta Tutorial también vuelve. Si sólo falta la lectura local de la apertura, espera sin línea.
+  - **El seguro de CreateMesaFlow.** Si el ejemplo se apaga con su ticket en pantalla, se vuelve a «Escanea el ticket» sin nada del ejemplo (la transición, con su e2e y su mutante). Además hay tres guardas: dos vuelven al principio (continuar y `createMesa`) y la de `resolveRestaurant` sólo corta el pedido. Son defensa en profundidad y ningún test de comportamiento las alcanza, porque la transición actúa antes; una guarda de cableado fija que existen. En la fachada, un pedido que nombra al restaurante del ejemplo nunca sale, como PA-1224.
+  - **D365.** La cámara de un viaje (`scan` con su id) no es del recorrido en ninguna fase, y salir desde ahí no saca a nadie a Inicio. Si hoy pasa a caer en un viaje en la fase de la foto, la guía se cierra en el próximo render: la fecha se lee al dibujar, así que a medianoche se cierra al tocar algo o al cambiar de pantalla, no sola.
+  - **Ayuda.** Mientras no se sabe si hoy cae en un viaje, la fila espera con su línea, «Disponible cuando sepamos si hoy estás de viaje» (concreción de V, con registro durable en la enmienda 9; el inglés espera a Diseño). Al volver a la ventana o a la pestaña se vuelve a pedir lo que faltó, así que la tarjeta Tutorial también vuelve. Si sólo falta la lectura local de la apertura, espera sin línea.
   - **El mock** ya no genera PA-1224 (`codigoDeMesaDelMock`). El comentario de `fixtureEjemplo.ts` queda rotulado como inferencia: `joinRequests.ts` es el decodificador del front, no el generador del dueño.
-  - **Los tests.** Los recorridos de red cero arrancan por la tarjeta. La red se cuenta con `page.route('**/*')` y tres sondas como control. Se comparan todo `localStorage`, todo `sessionStorage` y el estado del mock. Hay e2e del motor caído, del seguro, de la invitación pendiente, de una ventana real, del doble toque, de la mesa real desde la 2a, del foco, de D364 (al entrar y por el link de una mesa) y del reintento de Ayuda; la geometría, a 430 × 932 y en horizontal para 2a y 2b. La lista «pasa» de la fachada queda fijada como literal.
-- **Decisión de V (19/10), la prioridad:** el toque explícito en Tutorial (D364) les gana a una invitación pendiente y al aviso de fotos. Esperan sólo la puerta legal o la del @ y las ventanas que tapan la pantalla. Con eso, `usePrioridadGuia` queda sin uso y sale.
-- **Enmiendas de `d363_front`, de la 6 a la 8:**
+  - **Los tests.** Los recorridos de red cero arrancan por la tarjeta. La red se cuenta con `page.route('**/*')` y tres sondas como control. Se comparan todo `localStorage`, todo `sessionStorage` y el estado del mock. Hay e2e de estos casos:
+    - el motor caído, el seguro, el doble toque y la mesa real desde la 2a;
+    - la invitación pendiente, el aviso «Tu foto entre amigos» pendiente (sin tarjeta y con la fila esperando, a 390 × 844 con «Ahora no» y a 375 × 667 con «Entendido»; al responderlo, vuelven), lo marcado con `data-guia-espera` (costura) y una ventana real;
+    - el foco, D364 (al entrar y por el link de una mesa) y el reintento de Ayuda;
+    - la geometría, a 430 × 932 y en horizontal para 2a y 2b.
+
+    La lista «pasa» de la fachada queda fijada como literal, y un censo sobre todo `src/` fija que sólo el provider prende el ejemplo.
+- **Concreción de V (19/10), la prioridad,** con registro durable en la enmienda 9: el toque explícito en Tutorial (D364) les gana a una invitación pendiente y al aviso de fotos, que no es un modal. Esperan sólo la puerta legal o la del @ y las ventanas que tapan la pantalla. Con eso, `usePrioridadGuia` queda sin uso y sale.
+- **Enmienda 10 (V, 19/10): «Un aviso de privacidad no puede quedar tapado nunca».** La medición dio que, con el aviso a la vista, la 2a lo tapaba:
+  - a 390 × 844, la burbuja (y 551–713) se cruzaba con el aviso (y 366–619) y tapaba sus dos botones;
+  - a 375 × 667, se cruzaban, aunque los botones quedaban tocables.
+
+  Ahora, mientras el aviso está pendiente:
+  - la tarjeta Tutorial no aparece (tampoco mientras se consulta en Inicio);
+  - la fila de Más → Ayuda espera con su línea, «Primero responde el aviso «Tu foto entre amigos» en Inicio.» (concreción de V; el inglés espera a Diseño);
+  - el motor trata lo marcado con `data-guia-espera` como una ventana: la burbuja espera mientras se ve. Eso cubre la vuelta a Inicio en 4a con el aviso sin consultar.
+
+  Al responder el aviso, con «Entendido» o «Ahora no», vuelven. La invitación sigue sin frenar la guía. `FriendAvatarNotice.tsx` informa su estado a un store nuevo, `src/ayuda/avisoDeFotos.ts` (por cuenta y familia), con el diff que aprobó V: es la forma de D328, otro consumidor y la marca en el `aside`.
+- **Enmiendas de `d363_front`, de la 6 a la 9:**
   - 6: el mock sin PA-1224, los tests de la ronda y la ruta de `TuMesa` corregida (`src/components/`);
   - 7: `InvitacionEnInicio.tsx` y `FriendAvatarNotice.tsx` pierden sólo la llamada a `usePrioridadGuia` y su import;
-  - 8: también el estado `consultaLista`, que sólo la alimentaba.
+  - 8: también el estado `consultaLista`, que sólo la alimentaba;
+  - 9: los cuatro e2e nuevos (`_guia.ts`, `guia-motor-y-seguro`, `guia-ayuda-reintento`, `guia-sin-autoapertura`), las dos aprobaciones de V con registro durable y el `.finally(() => {})` que quedó vacío, que se borra (con eso `FriendAvatarNotice.tsx` volvía al blob de antes de D328, `2f1bee7f…`);
+  - 10: el aviso «Tu foto entre amigos» no se tapa nunca (arriba). `FriendAvatarNotice.tsx` difiere de `2f1bee7f…` sólo en el diff aprobado.
 - **Se declara:**
-  - En `FriendAvatarNotice.tsx` quedó un `.finally(() => {})` vacío: no estaba en la lista autorizada y no se tocó.
-  - 3a, 2d y 2e en horizontal no se midieron (aprobado por V).
+  - **Las cuentas de e2e de dos mensajes de commit juntan corridas distintas:**
+    - En `8c3c937`, «16/16 de las dos de la guía sobre este árbol» es de una corrida hecha sobre un árbol con dos líneas de e2e distintas de las commiteadas.
+    - En `390ca22`, «10/10» fue primero 9/10 (falló el control del link) y después 1/1 con ese test cambiado.
+    - Valen la regresión sobre `8c80bd9` (60 specs, 489 de 489, `retries: 0` local, 14:57–15:21 UTC) y la corrida conjunta de las specs de la guía sobre el SHA final, que va en la entrega a V y en el PR.
+  - El test del link entra con otro email, pero en el mock es la misma cuenta: prueba la entrada por el link, no una cuenta nueva. Para llegar a Inicio desde la bienvenida usa una costura (`history.pushState`).
+  - En el e2e del reintento de Ayuda, que nada se pida antes del regreso se ve en el instante. Que no haya un reintento por temporizador lo fija el unitario de `escucharElRegreso`.
+  - **Lo que la revisión de V pidió en tests y no se hizo:**
+    - el cambio de cuenta y el cierre de sesión con el ejemplo a medias;
+    - la puerta del @ o la legal a mitad de sesión;
+    - el zoom al 200 % y «Reducir movimiento»;
+    - «Ver mesa →» de 4a, el recorrido completo desde Más → Ayuda, la apertura pendiente y la galería del ejemplo;
+    - 3a, 2d y 2e en horizontal (no se midieron, aprobado por V).
   - La tarjeta Tutorial, con la lista de viajes caída, vuelve al regresar a la app o al remontar Inicio, no sola.
 - **La clase de `a32688b`:** un `;` en lugar de `&&` en la cadena de gates. Como no había un script de commit, se censaron los 554 comandos de commit o push de la sesión (17/9–19/10):
   - 107 tienen un `;` o un salto de línea después de un gate, y 23 tapan el rc con un pipe;

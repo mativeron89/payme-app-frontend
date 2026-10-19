@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   abrirLaGuia, cargarElMotor, cierraPorLaRuta, debeEmpezar, guiaEspera, GUIA_CERRADA, salirVuelveAInicio, type Apertura,
@@ -125,7 +126,49 @@ describe('el cableado: el provider usa estas funciones y nada más prende el eje
     expect(motor).not.toContain('navigate(');
   });
 
+  it('en todo src/, el único que prende el ejemplo es el provider, una sola vez (control: el método existe)', () => {
+    const raiz = new URL('../', import.meta.url).pathname;
+    const archivos: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) recorrer(p);
+        else if (/\.(ts|tsx)$/.test(e.name) && !/\.test\.(ts|tsx)$/.test(e.name) && !/\.testutil\./.test(e.name)) archivos.push(p);
+      }
+    };
+    recorrer(raiz);
+    const conEmpezar = archivos
+      .map((p) => ({ p: p.slice(raiz.length), n: (readFileSync(p, 'utf8').match(/\.empezar\(/g) ?? []).length }))
+      .filter((a) => a.n > 0);
+    expect(conEmpezar).toEqual([{ p: 'ayuda/GuiaProvider.tsx', n: 1 }]);
+    expect(readFileSync(join(raiz, 'ayuda/ejemplo/estadoEjemplo.ts'), 'utf8')).toContain('  empezar(): void {');
+  });
+
   it('el descarte del ejemplo al desmontar (cambio de cuenta o de familia) es de layout, no pasivo', () => {
     expect(provider).toContain('useLayoutEffect(() => () => ejemploLocal.descartar(), []);');
+  });
+});
+
+describe('el cableado del seguro de CreateMesaFlow (la fuente)', () => {
+  // 🔴 Las tres guardas son defensa en profundidad: la transición vuelve al principio antes de que se pueda tocar
+  // «Continuar», así que ningún test de comportamiento las alcanza (el e2e del seguro acredita la transición). Esto
+  // fija que existen y dónde están.
+  const flujo = readFileSync(new URL('../screens/CreateMesaFlow.tsx', import.meta.url), 'utf8');
+  const cuerpo = (desde: string, hasta: string) => flujo.slice(flujo.indexOf(desde), flujo.indexOf(hasta, flujo.indexOf(desde)));
+
+  it('los platos del ejemplo prenden la ref, y la transición vuelve al principio si el ejemplo se apaga con ellos', () => {
+    expect(cuerpo('function cargarTicketDeEjemplo() {', 'soltarRecorte();')).toContain('ticketDeEjemploRef.current = true;');
+    expect(flujo).toMatch(/useLayoutEffect\(\(\) => \{\s*const antes = ejemploAntesRef\.current;\s*ejemploAntesRef\.current = ejemplo;\s*if \(antes && !ejemplo && ticketDeEjemploRef\.current\) volverAlPrincipioDelEjemplo\(\);/);
+  });
+
+  it('las tres guardas: resolveRestaurant corta, continuar y createMesa vuelven al principio', () => {
+    expect(cuerpo('async function resolveTicketRestaurant(', 'if (restaurantIdRef.current) {')).toContain('if (ticketDeEjemploRef.current) return null;');
+    expect(cuerpo('async function createMesa() {', 'if (!ticketValid) {')).toMatch(/if \(ticketDeEjemploRef\.current\) \{\s*volverAlPrincipioDelEjemplo\(\);\s*finishTicketContinuation\(\);\s*return;\s*\}/);
+    expect(cuerpo('async function continueFromTicket() {', 'let resolved = restaurant;')).toMatch(/if \(ticketDeEjemploRef\.current\) \{\s*volverAlPrincipioDelEjemplo\(\);\s*return;\s*\}/);
+  });
+
+  it('sólo un ticket real apaga la ref (la carga manual y la lectura del OCR) y la vuelta al principio', () => {
+    expect(flujo.match(/ticketDeEjemploRef\.current = false;/g)).toHaveLength(3);
+    expect(cuerpo('function volverAlPrincipioDelEjemplo() {', 'setStep(\'scan\');')).toContain('ticketDeEjemploRef.current = false;');
   });
 });

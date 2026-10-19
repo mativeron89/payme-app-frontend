@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
 import { useAperturaPendiente } from './aperturaPendiente';
+import { useAvisoDeFotos } from './avisoDeFotos';
 import { useGuia } from './GuiaProvider';
 import { estadoDeLaAyuda, useEnFechasDeViaje } from './inicioGuia';
 import './ayuda.css';
@@ -17,12 +18,15 @@ import './ayuda.css';
  * Mientras no se sabe si hoy cae en un viaje, también deshabilitada (del lado
  * seguro) y con su línea; lo que no llegó se vuelve a pedir al volver a la app
  * (`useEnFechasDeViaje`, revisión de V sobre ff5dec7, punto 3). Si sólo falta
- * la lectura local de la apertura (un instante), espera sin línea.
+ * la lectura local de la apertura (un instante), espera sin línea. Enmienda 10: con el aviso «Tu foto entre amigos»
+ * pendiente, también espera con su línea (un aviso de privacidad no se tapa nunca).
  */
 export function AccesoGuia() {
   const { t } = useIdioma();
   const guia = useGuia();
-  const estado = estadoDeLaAyuda({ enFechasDeViaje: useEnFechasDeViaje(), aperturaPendiente: useAperturaPendiente() });
+  const estado = estadoDeLaAyuda({
+    enFechasDeViaje: useEnFechasDeViaje(), aperturaPendiente: useAperturaPendiente(), avisoDeFotos: useAvisoDeFotos(),
+  });
   const [avisar, setAvisar] = useState(false);
   const idNota = useId();
   if (!guia) return null;
@@ -30,13 +34,15 @@ export function AccesoGuia() {
     ? t('Disponible fuera de las fechas de un viaje')
     : estado === 'sin-saber-viaje'
       ? t('Disponible cuando sepamos si hoy estás de viaje')
-      : estado === 'apertura-pendiente' && avisar ? t('Primero resuelve la mesa que dejaste sin confirmar en Inicio.') : null;
+      : estado === 'aviso-de-fotos'
+        ? t('Primero responde el aviso «Tu foto entre amigos» en Inicio.')
+        : estado === 'apertura-pendiente' && avisar ? t('Primero resuelve la mesa que dejaste sin confirmar en Inicio.') : null;
   return <section className="ayuda-acceso ayuda-acceso--ayuda" aria-label={t('Ayuda')}>
     <h2 className="ayuda-seccion">{t('Ayuda')}</h2>
     <button
       type="button"
       className="list-row guia-fila"
-      disabled={estado === 'en-viaje' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}
+      disabled={estado === 'en-viaje' || estado === 'aviso-de-fotos' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}
       aria-describedby={nota ? idNota : undefined}
       onClick={(e) => {
         if (estado === 'apertura-pendiente') { setAvisar(true); return; }

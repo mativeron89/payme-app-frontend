@@ -78,6 +78,7 @@ export const EN: Record<string, string> = {
   // D363 · Q9 · la fila de Ayuda en fechas de un viaje, y con una apertura sin confirmar.
   "Disponible fuera de las fechas de un viaje": "Available outside trip dates",
   "Disponible cuando sepamos si hoy estás de viaje": "Available once we know whether you're traveling today",
+  "Primero responde el aviso «Tu foto entre amigos» en Inicio.": "First respond to the “Your photo among friends” notice on Home.",
   "Primero resuelve la mesa que dejaste sin confirmar en Inicio.": "First, resolve the table you left unconfirmed on Home.",
   // D363 · 2f · 4a · la tarjeta Tutorial y la mesa de ejemplo en Inicio.
   "Tutorial": "Tutorial",

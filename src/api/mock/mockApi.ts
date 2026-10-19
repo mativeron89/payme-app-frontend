@@ -135,6 +135,16 @@ const LATENCY_MS = 350;
  * (0–5000). Las e2e de «pestañas sin parpadeo» la fijan a un lado y al otro del
  * umbral de 300 ms del esqueleto. Sin costura, los 350 ms de siempre.
  */
+export function latencia(): number {
+  try {
+    const valor = localStorage.getItem('payme.app.mock.latencia.v1');
+    if (valor !== null && /^\d{1,4}$/.test(valor) && Number(valor) <= 5000) return Number(valor);
+  } catch {
+    // sin almacenamiento: la de siempre
+  }
+  return LATENCY_MS;
+}
+
 /** El número de la mesa de ejemplo del tutorial (`PA-1224`). */
 const NUMERO_DEL_EJEMPLO = Number(/^PA-(\d{4})$/.exec(CODIGO_EJEMPLO)?.[1]);
 
@@ -147,16 +157,6 @@ const NUMERO_DEL_EJEMPLO = Number(/^PA-(\d{4})$/.exec(CODIGO_EJEMPLO)?.[1]);
 export function codigoDeMesaDelMock(azar: () => number = Math.random): string {
   const n = Math.floor(azar() * 8999) + 1000;
   return `PA-${n >= NUMERO_DEL_EJEMPLO ? n + 1 : n}`;
-}
-
-export function latencia(): number {
-  try {
-    const valor = localStorage.getItem('payme.app.mock.latencia.v1');
-    if (valor !== null && /^\d{1,4}$/.test(valor) && Number(valor) <= 5000) return Number(valor);
-  } catch {
-    // sin almacenamiento: la de siempre
-  }
-  return LATENCY_MS;
 }
 
 function validNonNegativeCents(value: unknown): value is number {

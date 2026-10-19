@@ -14,6 +14,7 @@ beforeEach(() => { pedidos.getConfig = []; pedidos.precargar = []; pedidos.falla
 
 const SABIDO: EntradaDeLaTarjeta = {
   noVolverAMostrar: false, tarjetaOculta: false, enFechasDeViaje: false, aperturaPendiente: false, mesaDeEjemploEnInicio: false,
+  avisoDeFotos: 'resuelto',
 };
 const viaje = (desde: string | null, hasta: string | null, estado: ViajeConFechas['estado'] = 'abierto'): ViajeConFechas =>
   ({ id: 'v', nombre: 'Viaje', estado, fecha_desde: desde, fecha_hasta: hasta });
@@ -30,6 +31,8 @@ describe('D364 · D365 · la tarjeta Tutorial', () => {
       { enFechasDeViaje: true }, { enFechasDeViaje: null },
       { aperturaPendiente: true }, { aperturaPendiente: null },
       { mesaDeEjemploEnInicio: true },
+      // Enmienda 10 · el aviso «Tu foto entre amigos» pendiente, o todavía sin consultar en Inicio.
+      { avisoDeFotos: 'pendiente' }, { avisoDeFotos: 'sin-saber' },
     ] as const) {
       expect(tarjetaVisible({ ...SABIDO, ...cambio }), JSON.stringify(cambio)).toBe(false);
     }
@@ -55,22 +58,31 @@ describe('D365 · dentro de las fechas de un viaje', () => {
 
 describe('Q8 · Q9 · Más → Ayuda → «Cómo usar PayMe»', () => {
   it('disponible con todo sabido; en fechas de viaje, deshabilitada; con una apertura pendiente, avisa', () => {
-    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: false })).toBe('disponible');
-    expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: false })).toBe('en-viaje');
-    expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: null })).toBe('en-viaje');
-    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: true })).toBe('apertura-pendiente');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: false, avisoDeFotos: 'resuelto' })).toBe('disponible');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: false, avisoDeFotos: 'resuelto' })).toBe('en-viaje');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: null, avisoDeFotos: 'resuelto' })).toBe('en-viaje');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: true, avisoDeFotos: 'resuelto' })).toBe('apertura-pendiente');
   });
 
   it('mientras algo no se sabe, espera', () => {
     // Sin saber si hoy cae en un viaje, espera con su línea; si sólo falta la lectura local de la apertura, sin línea.
-    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: false })).toBe('sin-saber-viaje');
-    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: null })).toBe('sin-saber-viaje');
-    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: null })).toBe('sin-saber');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: false, avisoDeFotos: 'resuelto' })).toBe('sin-saber-viaje');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: null, avisoDeFotos: 'resuelto' })).toBe('sin-saber-viaje');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: null, avisoDeFotos: 'resuelto' })).toBe('sin-saber');
+  });
+
+  it('enmienda 10 · con el aviso «Tu foto entre amigos» pendiente, espera con su línea; sin saber del aviso, no se traba', () => {
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: false, avisoDeFotos: 'pendiente' })).toBe('aviso-de-fotos');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: true, avisoDeFotos: 'pendiente' })).toBe('aviso-de-fotos');
+    // Control: sin saber del aviso (recargar en Más sin pasar por Inicio), disponible.
+    expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: false, avisoDeFotos: 'sin-saber' })).toBe('disponible');
+    // Las fechas de un viaje explican primero.
+    expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: false, avisoDeFotos: 'pendiente' })).toBe('en-viaje');
   });
 
   it('la fila no se habilita sin saber ni en fechas de viaje, y con una apertura pendiente no abre la guía', () => {
     const fuente = readFileSync(new URL('./AccesoGuia.tsx', import.meta.url), 'utf8');
-    expect(fuente).toContain("disabled={estado === 'en-viaje' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}");
+    expect(fuente).toContain("disabled={estado === 'en-viaje' || estado === 'aviso-de-fotos' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}");
     expect(fuente).toContain("if (estado === 'apertura-pendiente') { setAvisar(true); return; }");
   });
 });
@@ -82,8 +94,8 @@ describe('D364 · la guía ya no arranca sola', () => {
     expect(provider).not.toContain('MutationObserver');
     expect(provider).not.toContain('abrir(null)');
     expect(motor).not.toContain("t('No volver a mostrar')");
-    // Control: lo que la abre ahora existe.
-    expect(provider).toContain('ejemploLocal.empezar();');
+    // Control: lo que la abre ahora existe (la apertura; el ejemplo arranca con la primera burbuja, controlDeLaGuia.ts).
+    expect(provider).toContain('abrirLaGuia(aperturaRef.current, rutaRef.current.pagina)');
   });
 });
 
