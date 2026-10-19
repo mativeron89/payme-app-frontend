@@ -16,7 +16,8 @@ import './ayuda.css';
  * sin confirmar se ve, pero el ejemplo no arranca y en su lugar sale un aviso.
  * Mientras no se sabe si hoy cae en un viaje, también deshabilitada (del lado
  * seguro) y con su línea; lo que no llegó se vuelve a pedir al volver a la app
- * (`useEnFechasDeViaje`, revisión de V sobre ff5dec7, punto 3).
+ * (`useEnFechasDeViaje`, revisión de V sobre ff5dec7, punto 3). Si sólo falta
+ * la lectura local de la apertura (un instante), espera sin línea.
  */
 export function AccesoGuia() {
   const { t } = useIdioma();
@@ -27,15 +28,15 @@ export function AccesoGuia() {
   if (!guia) return null;
   const nota = estado === 'en-viaje'
     ? t('Disponible fuera de las fechas de un viaje')
-    : estado === 'sin-saber'
-      ? t('Disponible cuando terminemos de revisar tus viajes de hoy')
+    : estado === 'sin-saber-viaje'
+      ? t('Disponible cuando sepamos si hoy estás de viaje')
       : estado === 'apertura-pendiente' && avisar ? t('Primero resuelve la mesa que dejaste sin confirmar en Inicio.') : null;
   return <section className="ayuda-acceso ayuda-acceso--ayuda" aria-label={t('Ayuda')}>
     <h2 className="ayuda-seccion">{t('Ayuda')}</h2>
     <button
       type="button"
       className="list-row guia-fila"
-      disabled={estado === 'en-viaje' || estado === 'sin-saber'}
+      disabled={estado === 'en-viaje' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}
       aria-describedby={nota ? idNota : undefined}
       onClick={(e) => {
         if (estado === 'apertura-pendiente') { setAvisar(true); return; }

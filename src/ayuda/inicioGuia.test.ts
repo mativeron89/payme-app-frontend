@@ -62,13 +62,15 @@ describe('Q8 · Q9 · Más → Ayuda → «Cómo usar PayMe»', () => {
   });
 
   it('mientras algo no se sabe, espera', () => {
-    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: false })).toBe('sin-saber');
+    // Sin saber si hoy cae en un viaje, espera con su línea; si sólo falta la lectura local de la apertura, sin línea.
+    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: false })).toBe('sin-saber-viaje');
+    expect(estadoDeLaAyuda({ enFechasDeViaje: null, aperturaPendiente: null })).toBe('sin-saber-viaje');
     expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: null })).toBe('sin-saber');
   });
 
   it('la fila no se habilita sin saber ni en fechas de viaje, y con una apertura pendiente no abre la guía', () => {
     const fuente = readFileSync(new URL('./AccesoGuia.tsx', import.meta.url), 'utf8');
-    expect(fuente).toContain("disabled={estado === 'en-viaje' || estado === 'sin-saber'}");
+    expect(fuente).toContain("disabled={estado === 'en-viaje' || estado === 'sin-saber-viaje' || estado === 'sin-saber'}");
     expect(fuente).toContain("if (estado === 'apertura-pendiente') { setAvisar(true); return; }");
   });
 });
@@ -87,17 +89,33 @@ describe('D364 · la guía ya no arranca sola', () => {
 
 describe('revisión de V sobre ff5dec7, punto 3 · lo que no se supo se vuelve a pedir al volver', () => {
   it('con la capacidad sin saber, la config; con Viajes encendido, la lista; con Viajes apagado, nada', async () => {
+    const esperar = () => new Promise((r) => setTimeout(r, 0));
     reintentarSaberSiHayViaje('pendiente');
     expect(pedidos).toMatchObject({ getConfig: [1], precargar: [] });
     reintentarSaberSiHayViaje('encendida');
     expect(pedidos).toMatchObject({ getConfig: [1], precargar: [1] });
     reintentarSaberSiHayViaje('apagada');
     expect(pedidos).toMatchObject({ getConfig: [1], precargar: [1] });
+    await esperar();
     // Una config que falla no rompe nada: queda para el próximo regreso.
     pedidos.falla = true;
     expect(() => reintentarSaberSiHayViaje('pendiente')).not.toThrow();
-    await Promise.resolve();
+    await esperar();
     expect(pedidos.getConfig).toHaveLength(2);
+    reintentarSaberSiHayViaje('pendiente');
+    expect(pedidos.getConfig).toHaveLength(3);
+    await esperar();
+  });
+
+  it('dos regresos seguidos (el foco y la pestaña visible llegan juntos) piden una sola config', async () => {
+    reintentarSaberSiHayViaje('pendiente');
+    reintentarSaberSiHayViaje('pendiente');
+    expect(pedidos.getConfig).toHaveLength(1);
+    await new Promise((r) => setTimeout(r, 0));
+    // Terminada, el próximo regreso vuelve a pedir.
+    reintentarSaberSiHayViaje('pendiente');
+    expect(pedidos.getConfig).toHaveLength(2);
+    await new Promise((r) => setTimeout(r, 0));
   });
 
   it('escucha el foco de la ventana y la pestaña que vuelve a verse; oculta, no; al montar no pide; y deja de escuchar', () => {

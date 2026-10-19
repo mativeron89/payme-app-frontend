@@ -60,9 +60,13 @@ export function useEnFechasDeViaje(): boolean | null {
  * deja pedirla de nuevo después de un error).
  */
 export function reintentarSaberSiHayViaje(capacidad: EstadoCapacidadViajes): void {
-  if (capacidad === 'pendiente') void api.getConfig().catch(() => undefined);
-  else if (capacidad === 'encendida') precargarViajesAbiertos();
+  if (capacidad === 'pendiente') {
+    // Una config a la vez: dos regresos seguidos (el foco y la pestaña visible llegan juntos) piden una sola.
+    if (configEnVuelo) return;
+    configEnVuelo = api.getConfig().then(() => undefined, () => undefined).finally(() => { configEnVuelo = null; });
+  } else if (capacidad === 'encendida') precargarViajesAbiertos();
 }
+let configEnVuelo: Promise<void> | null = null;
 
 /**
  * Llama a `alVolver` cada vez que la ventana recupera el foco o la pestaña vuelve a verse. Al montar no pide nada
@@ -115,7 +119,11 @@ export function tarjetaVisible(e: EntradaDeLaTarjeta): boolean {
     && !e.mesaDeEjemploEnInicio;
 }
 
-export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' | 'sin-saber';
+/**
+ * 'sin-saber-viaje' · no se sabe si hoy cae en un viaje (la capacidad o la lista no llegaron): la fila espera con su
+ * línea. 'sin-saber' · sólo falta la lectura local de la apertura, que es un instante: espera sin línea.
+ */
+export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' | 'sin-saber-viaje' | 'sin-saber';
 
 /**
  * Más → Ayuda → «Cómo usar PayMe». Q9 · dentro de las fechas de un viaje se ve
@@ -128,6 +136,7 @@ export function estadoDeLaAyuda(e: {
   readonly aperturaPendiente: boolean | null;
 }): EstadoDeLaAyuda {
   if (e.enFechasDeViaje === true) return 'en-viaje';
-  if (e.enFechasDeViaje === null || e.aperturaPendiente === null) return 'sin-saber';
+  if (e.enFechasDeViaje === null) return 'sin-saber-viaje';
+  if (e.aperturaPendiente === null) return 'sin-saber';
   return e.aperturaPendiente ? 'apertura-pendiente' : 'disponible';
 }

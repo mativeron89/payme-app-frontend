@@ -29,13 +29,21 @@ describe('D364 · Q9 · Más → Ayuda → «Cómo usar PayMe»', () => {
   });
 
   it('revisión de V, punto 3 · mientras no se sabe si hoy cae en un viaje: deshabilitada, pero con su línea', () => {
-    for (const cambio of [{ enFechasDeViaje: null }, { aperturaPendiente: null }] as const) {
+    for (const cambio of [{ enFechasDeViaje: null }, { enFechasDeViaje: null, aperturaPendiente: null }] as const) {
       Object.assign(estado, { enFechasDeViaje: false, aperturaPendiente: false }, cambio);
       const html = renderToStaticMarkup(<AccesoGuia />);
       expect(fila(html), JSON.stringify(cambio)).toContain('disabled');
       const id = /aria-describedby="([^"]+)"/.exec(fila(html))?.[1];
       expect(id, JSON.stringify(cambio)).toBeTruthy();
-      expect(html).toContain(`<p id="${id}" class="ayuda-nota">Disponible cuando terminemos de revisar tus viajes de hoy</p>`);
+      expect(html).toContain(`<p id="${id}" class="ayuda-nota">Disponible cuando sepamos si hoy estás de viaje</p>`);
     }
+  });
+
+  it('si sólo falta la lectura local de la apertura (un instante), espera sin línea', () => {
+    estado.aperturaPendiente = null;
+    const html = renderToStaticMarkup(<AccesoGuia />);
+    expect(fila(html)).toContain('disabled');
+    expect(fila(html)).not.toContain('aria-describedby');
+    expect(html).not.toContain('ayuda-nota');
   });
 });
