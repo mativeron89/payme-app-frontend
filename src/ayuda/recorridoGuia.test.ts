@@ -60,6 +60,12 @@ describe('D363 · el paso sale de la fase del ejemplo y de la ruta', () => {
     });
   });
 
+  it('D365 · en la cámara de un viaje no hay burbuja, aunque la fase sea la de la foto', () => {
+    expect(pasoDeLaGuia(en({ pagina: 'scan', param: 'v-0001' }), t)).toBeNull();
+    // Control: en la cámara de restaurante, sí.
+    expect(pasoDeLaGuia(en({ pagina: 'scan', param: null }), t)).toMatchObject({ id: 'camara' });
+  });
+
   it('una fase en la pantalla equivocada no inventa un paso', () => {
     expect(pasoDeLaGuia(en({ fase: 'ticket', pagina: 'home' }), t)).toBeNull();
     expect(pasoDeLaGuia(en({ fase: 'mesa', pagina: 'home' }), t)).toBeNull();
@@ -89,11 +95,21 @@ describe('D363 · Q7 · irse del recorrido cierra la guía', () => {
     expect(enElRecorrido({ fase: 'listo', pagina: 'mesas', param: null })).toBe(false);
   });
 
+  it('D365 · la cámara de un viaje no es del recorrido en ninguna fase', () => {
+    for (const fase of ['foto', 'ticket', 'dividir', 'compartir'] as const) {
+      expect(enElRecorrido({ fase, pagina: 'scan', param: 'v-0001' }), fase).toBe(false);
+      // Control: la de restaurante, sí.
+      expect(enElRecorrido({ fase, pagina: 'scan', param: null }), fase).toBe(true);
+    }
+  });
+
   it('al salir desde la cámara o la mesa de ejemplo se vuelve a Inicio; desde Inicio o Más, no se navega', () => {
     expect(saliendoVuelveAInicio({ pagina: 'scan', param: null })).toBe(true);
     expect(saliendoVuelveAInicio({ pagina: 'mesa', param: 'PA-1224' })).toBe(true);
     expect(saliendoVuelveAInicio({ pagina: 'mesa', param: 'PA-12240' })).toBe(false);
     expect(saliendoVuelveAInicio({ pagina: 'home', param: null })).toBe(false);
     expect(saliendoVuelveAInicio({ pagina: 'mas', param: null })).toBe(false);
+    // D365 · desde la cámara de un viaje no se saca a nadie a Inicio.
+    expect(saliendoVuelveAInicio({ pagina: 'scan', param: 'v-0001' })).toBe(false);
   });
 });

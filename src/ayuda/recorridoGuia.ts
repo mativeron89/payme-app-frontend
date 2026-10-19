@@ -60,6 +60,8 @@ export interface DondeEsta {
 export function pasoDeLaGuia(d: DondeEsta, t: T): Paso | null {
   const base = { senal: 'punta', referencia: null, anillo: 'oscuro', negrita: false, salida: 'equis', pie: 'nada', contador: null, dentroDeLaHoja: false } as const;
   if (d.fase === 'foto') {
+    // D365 · la cámara de un viaje (`scan` con el id del viaje) no es del recorrido: no hay burbuja.
+    if (d.pagina === 'scan' && d.param !== null) return null;
     if (d.pagina === 'scan') {
       return { ...base, id: 'camara', ancla: 'foto', referencia: 'galeria', lado: 'arriba', senal: 'flecha', anillo: 'claro',
         textos: [t('Saca o elige una foto: te mostraremos un ticket de ejemplo.')] };
@@ -103,17 +105,29 @@ export function pasoDeLaGuia(d: DondeEsta, t: T): Paso | null {
  */
 export function enElRecorrido(d: Pick<DondeEsta, 'fase' | 'pagina' | 'param'>): boolean {
   const mesaDeEjemplo = d.pagina === 'mesa' && esCodigoDeEjemplo(d.param);
+  const camara = camaraDeRestaurante(d);
   switch (d.fase) {
-    case 'foto': return d.pagina === 'home' || d.pagina === 'mas' || d.pagina === 'scan';
+    case 'foto': return d.pagina === 'home' || d.pagina === 'mas' || camara;
     case 'ticket':
-    case 'dividir': return d.pagina === 'scan';
-    case 'compartir': return d.pagina === 'scan' || mesaDeEjemplo;
+    case 'dividir': return camara;
+    case 'compartir': return camara || mesaDeEjemplo;
     case 'mesa': return mesaDeEjemplo;
     case 'listo': return d.pagina === 'home' || mesaDeEjemplo;
   }
 }
 
-/** Al salir desde una pantalla del recorrido, la guía vuelve a Inicio: la tarjeta Tutorial queda a la vista. */
+/**
+ * D365 · la cámara del recorrido es la de abrir una mesa de restaurante: `scan` sin parámetro. Con el id de un viaje
+ * es la cámara del viaje (la de la barra pasa a llevar ahí si cambia el día o llegan los viajes).
+ */
+function camaraDeRestaurante(d: Pick<DondeEsta, 'pagina' | 'param'>): boolean {
+  return d.pagina === 'scan' && d.param === null;
+}
+
+/**
+ * Al salir desde una pantalla del recorrido, la guía vuelve a Inicio: la tarjeta Tutorial queda a la vista. Desde la
+ * cámara de un viaje no: la persona fue ahí por su cuenta (D365).
+ */
 export function saliendoVuelveAInicio(d: Pick<DondeEsta, 'pagina' | 'param'>): boolean {
-  return d.pagina === 'scan' || (d.pagina === 'mesa' && esCodigoDeEjemplo(d.param));
+  return camaraDeRestaurante(d) || (d.pagina === 'mesa' && esCodigoDeEjemplo(d.param));
 }
