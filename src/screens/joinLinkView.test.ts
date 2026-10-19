@@ -229,7 +229,7 @@ describe('D372 · los textos del canje pasan por t()', () => {
     }
   });
 
-  it('🔴 el cableado: la pantalla le pasa su t (si no, los textos salen en español con la app en inglés)', () => {
+  it('🔴 el cableado: la pantalla le pasa su t (si no, los textos quedan en español aunque la app cambie de idioma)', () => {
     const pantalla = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'JoinMesaScreen.tsx'), 'utf8')
       .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     expect(pantalla).toContain('joinLinkMessage(outcome, t)');
