@@ -3,7 +3,12 @@ import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { LEGAL_ACCEPTANCE_REQUIRED, USERNAME_REQUIRED } from '../api/http';
-import { recordarRetornoAMesa } from '../api/retornoTrasIngreso';
+import {
+  modoRecordadoParaMesa,
+  recordarModoDeMesa,
+  recordarRetornoAMesa,
+  type ModoDeIngreso,
+} from '../api/retornoTrasIngreso';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { ensureSocialAuthCapability, useSocialAuthCapability } from '../api/socialAuth';
 import { autoridadDeAlta } from './LoginScreen';
@@ -144,8 +149,12 @@ export function JoinMesaScreen({
    * El alta no se abre sola: §1.2-A es una pantalla propia con DOS acciones, y
    * recién al tocar una se muestra el formulario en el modo que corresponde.
    * `null` = todavía se está viendo el 401.
+   *
+   * P02-a · sin sesión, arranca en el modo que se eligió para ESTA mesa, si se
+   * recuerda: una recarga (o la pestaña que el navegador descarta al volver de
+   * Google) ya no devuelve a A ni obliga a repetir el toque.
    */
-  const [authMode, setAuthMode] = useState<'register' | 'login' | null>(null);
+  const [authMode, setAuthMode] = useState<ModoDeIngreso | null>(() => (session ? null : modoRecordadoParaMesa(code)));
   /**
    * Canje cerrado. Es lo ÚNICO que habilita §1.2-C, y con él el permiso de
    * nombrar el restaurante: a esta altura ya hay sesión y quien mira es un
@@ -411,6 +420,7 @@ export function JoinMesaScreen({
                   // AF-INVITACION-TRAS-GOOGLE · si el alta sale a Google y vuelve
                   // a la raíz, esta marca devuelve a la persona a ESTA mesa.
                   recordarRetornoAMesa(code);
+                  recordarModoDeMesa(code, 'register');
                   setAuthMode('register');
                 }}
               >
@@ -424,6 +434,7 @@ export function JoinMesaScreen({
                 : 'link-btn link-btn-outline'}
               onClick={() => {
                 recordarRetornoAMesa(code);
+                recordarModoDeMesa(code, 'login');
                 setAuthMode('login');
               }}
             >

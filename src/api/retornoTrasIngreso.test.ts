@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLAVE_MODO_MESA,
   CLAVE_RETORNO_MESA,
   VIDA_RETORNO_MS,
+  leerModoDeMesa,
   leerRetornoAMesa,
+  modoRecordadoParaMesa,
   olvidarRetornoAMesa,
+  recordarModoDeMesa,
   recordarRetornoAMesa,
   tomarRetornoAMesa,
 } from './retornoTrasIngreso';
@@ -93,5 +97,87 @@ describe('retornoTrasIngreso · la marca', () => {
     expect(m.datos.size).toBe(0);
     expect(() => { recordarRetornoAMesa('PA-2847', T0, null); olvidarRetornoAMesa(null); }).not.toThrow();
     expect(leerRetornoAMesa(T0, null)).toBeNull();
+  });
+});
+
+describe('P02-a · D372 · el modo de la invitación (alta o ingreso), en su propio registro', () => {
+  it('🔴 se guarda como {code, modo, savedAt}; el retorno sigue con sus dos claves; los dos se leen', () => {
+    const m = memoria();
+    recordarRetornoAMesa('PA-2847', T0, m);
+    recordarModoDeMesa('PA-2847', 'register', T0, m);
+    expect(JSON.parse(m.datos.get(CLAVE_MODO_MESA)!)).toEqual({ code: 'PA-2847', modo: 'register', savedAt: T0 });
+    expect(Object.keys(JSON.parse(m.datos.get(CLAVE_RETORNO_MESA)!)).sort()).toEqual(['code', 'savedAt']);
+    expect(leerRetornoAMesa(T0 + 1, m)).toEqual({ code: 'PA-2847', savedAt: T0 });
+    expect(modoRecordadoParaMesa('PA-2847', T0 + 1, m)).toBe('register');
+  });
+
+  it('el modo de OTRA mesa no se usa, y no se borra', () => {
+    const m = memoria();
+    recordarModoDeMesa('PA-1111', 'login', T0, m);
+    expect(modoRecordadoParaMesa('PA-2847', T0 + 1, m)).toBeNull();
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(true);
+  });
+
+  it('un código raro o un modo que no es alta ni ingreso no se anotan', () => {
+    const m = memoria();
+    recordarModoDeMesa('PA 2847', 'login', T0, m);
+    recordarModoDeMesa('PA-2847', 'otro' as never, T0, m);
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
+  });
+
+  it.each([
+    ['vencido', JSON.stringify({ code: 'PA-2847', modo: 'login', savedAt: T0 - VIDA_RETORNO_MS - 1 })],
+    ['del futuro', JSON.stringify({ code: 'PA-2847', modo: 'login', savedAt: T0 + 1 })],
+    ['con una clave de más', JSON.stringify({ code: 'PA-2847', modo: 'login', savedAt: T0, token: 'x' })],
+    ['sin modo', JSON.stringify({ code: 'PA-2847', savedAt: T0 })],
+    ['con otro modo', JSON.stringify({ code: 'PA-2847', modo: 'admin', savedAt: T0 })],
+    ['que no es JSON', '{'],
+  ])('🔴 un modo %s da null y se borra SÓLO el modo (el retorno queda)', (_, crudo) => {
+    const m = memoria();
+    recordarRetornoAMesa('PA-2847', T0, m);
+    m.datos.set(CLAVE_MODO_MESA, crudo);
+    expect(leerModoDeMesa(T0, m)).toBeNull();
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
+    expect(m.datos.has(CLAVE_RETORNO_MESA)).toBe(true);
+  });
+
+  it('control positivo: a los 30 minutos justos todavía vale', () => {
+    const m = memoria();
+    recordarModoDeMesa('PA-2847', 'login', T0, m);
+    expect(leerModoDeMesa(T0 + VIDA_RETORNO_MS, m)).toEqual({ code: 'PA-2847', modo: 'login', savedAt: T0 });
+  });
+
+  it('🔴 olvidar la vuelta borra el retorno Y el modo, y deja lo ajeno', () => {
+    const m = memoria();
+    recordarRetornoAMesa('PA-2847', T0, m);
+    recordarModoDeMesa('PA-2847', 'register', T0, m);
+    m.datos.set('ajena', '1');
+    olvidarRetornoAMesa(m);
+    expect([...m.datos.keys()]).toEqual(['ajena']);
+  });
+
+  it('tomar el retorno (al entrar) también se lleva el modo', () => {
+    const m = memoria();
+    recordarRetornoAMesa('PA-2847', T0, m);
+    recordarModoDeMesa('PA-2847', 'register', T0, m);
+    tomarRetornoAMesa(T0 + 1, m);
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
+  });
+
+  it('si borrar el retorno falla, el modo se borra igual (cada borrado en su intento)', () => {
+    const m = memoria();
+    recordarModoDeMesa('PA-2847', 'login', T0, m);
+    const quisquilloso = { ...m, removeItem: (k: string) => { if (k === CLAVE_RETORNO_MESA) throw new Error('no'); m.datos.delete(k); } };
+    olvidarRetornoAMesa(quisquilloso);
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(false);
+  });
+
+  it('un retorno inválido se borra al leerse, sin llevarse el modo (es otro registro, con su propia validez)', () => {
+    const m = memoria();
+    recordarModoDeMesa('PA-2847', 'login', T0, m);
+    m.datos.set(CLAVE_RETORNO_MESA, '{');
+    expect(leerRetornoAMesa(T0, m)).toBeNull();
+    expect(m.datos.has(CLAVE_RETORNO_MESA)).toBe(false);
+    expect(m.datos.has(CLAVE_MODO_MESA)).toBe(true);
   });
 });
