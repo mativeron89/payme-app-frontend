@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { expect, type Locator, type Page } from '@playwright/test';
+import { MOCK_USER } from '../src/api/mock/seedData';
 import { relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, sacarFoto } from './_camara';
 
@@ -167,3 +169,132 @@ export async function createMesaRealSinDatosDelEjemplo(page: Page): Promise<void
     expect(pedido.restaurant_id).not.toBe(ID_RESTAURANTE_DEL_EJEMPLO);
   }
 }
+
+/** 3a → 2c (Siguiente). */
+export async function hastaDividir(page: Page): Promise<void> {
+  await burbuja(page, TEXTO_3A).getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: /Ticket/ })).toHaveCount(0);
+  await expect(capaVisible(page)).toHaveCount(0);
+  await expect.poll(() => fase(page)).toBe('dividir');
+}
+export const TEXTO_2D = 'Aquí invitarás a tus amigos a sumarse a la mesa.';
+/** 2c → 2d. */
+export async function hastaCompartir(page: Page, forma: RegExp = /Por lo que pidió cada uno/, toques = 1): Promise<void> {
+  await page.getByRole('radio', { name: forma }).click();
+  for (let i = 0; i < toques; i += 1) await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(burbuja(page, TEXTO_2D)).toBeVisible();
+}
+/** 2d (1 de 2 → 2 de 2) → 2e. */
+export async function hastaTuMesa(page: Page): Promise<void> {
+  await burbuja(page, TEXTO_2D).getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await expect(burbuja(page, 'Toca Continuar para elegir lo tuyo.')).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.locator('.qc-lista')).toBeVisible();
+}
+
+/**
+ * La geometría de la ficha (la misma que `guia-tutorial.spec.ts`): la burbuja entra entera en la ventana, no tapa el
+ * control ni su anillo, el control sigue tocable y cada botón tiene 44 de alto. Coordenadas de ventana (P5).
+ */
+export async function geometria(page: Page, ancla: string): Promise<void> {
+  await expect(async () => {
+    const m = await page.evaluate((a) => {
+      const b = document.querySelector<HTMLElement>('.guia-capa[data-activa] .guia-burbuja')!.getBoundingClientRect();
+      const anillo = document.querySelector<HTMLElement>('.guia-capa[data-activa] .guia-anillo')!.getBoundingClientRect();
+      const control = Array.from(document.querySelectorAll<HTMLElement>(`[data-guia="${a}"]`)).find((e) => e.getClientRects().length > 0)!;
+      const fab = control.querySelector('.appbar-fab') ?? control;
+      const r = fab.getBoundingClientRect();
+      const tocable = (e: Element) => {
+        const q = e.getBoundingClientRect();
+        const hit = document.elementFromPoint((q.left + q.right) / 2, (q.top + q.bottom) / 2);
+        return hit === e || (hit !== null && e.contains(hit));
+      };
+      return {
+        dentro: b.left >= 0 && b.right <= window.innerWidth && b.top >= 0 && b.bottom <= window.innerHeight,
+        noTapa: b.bottom <= anillo.top || b.top >= anillo.bottom,
+        anilloRodea: anillo.left <= r.left && anillo.right >= r.right && anillo.top <= r.top && anillo.bottom >= r.bottom,
+        controlTocable: tocable(fab),
+        botones: Array.from(document.querySelectorAll('.guia-capa[data-activa] .guia-burbuja button')).map((e) => e.getBoundingClientRect().height),
+        burbuja: b.toJSON(), anillo: anillo.toJSON(), control: r.toJSON(),
+      };
+    }, ancla);
+    const d = JSON.stringify(m);
+    expect(m.dentro, d).toBe(true);
+    expect(m.noTapa, d).toBe(true);
+    expect(m.anilloRodea, d).toBe(true);
+    expect(m.controlTocable, d).toBe(true);
+    for (const alto of m.botones) expect(alto, d).toBeGreaterThanOrEqual(44);
+  }).toPass({ timeout: 10000 });
+}
+
+/**
+ * Revisión de V sobre ff5dec7 · la red, con `page.route('**\/*')`: cuenta TODO pedido a cualquier origen y a cualquier
+ * ruta desde que se llama, salvo los módulos que sirve el servidor de Vite (mismo origen, tipo script, bajo /src/,
+ * /node_modules/, /@vite/, /@id/, /@fs/ o /@react-refresh) y las fuentes bajo /src/assets/fonts/. Lo excluido se
+ * guarda aparte (así se ve que el motor de la guía se cargó y no se contó). Lo de otro origen se aborta. También
+ * cuenta los websockets que se abren.
+ */
+export interface Red { readonly contados: string[]; readonly excluidos: string[]; readonly websockets: string[] }
+
+export async function contarLaRed(page: Page): Promise<{ cerrar: () => Promise<Red> }> {
+  const origen = new URL(page.url()).origin;
+  const red: Red = { contados: [], excluidos: [], websockets: [] };
+  const DE_VITE = /^\/(src|node_modules|@vite|@id|@fs|@react-refresh)(\/|$)/;
+  const manejar = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const mismo = url.origin === origen;
+    const modulo = mismo && req.resourceType() === 'script' && DE_VITE.test(url.pathname);
+    const fuente = mismo && req.resourceType() === 'font' && url.pathname.startsWith('/src/assets/fonts/');
+    if (modulo || fuente) { red.excluidos.push(url.pathname); return route.continue(); }
+    red.contados.push(`${req.method()} ${req.resourceType()} ${url.origin === origen ? '' : url.origin}${url.pathname}`);
+    return mismo ? route.continue() : route.abort('blockedbyclient');
+  };
+  const alAbrir = (ws: { url: () => string }) => { red.websockets.push(ws.url()); };
+  await page.route('**/*', manejar);
+  page.on('websocket', alAbrir);
+  return {
+    cerrar: async () => {
+      await page.unroute('**/*', manejar);
+      page.off('websocket', alAbrir);
+      return red;
+    },
+  };
+}
+
+/**
+ * Control positivo de `contarLaRed`, dentro de la ventana: un fetch a otro origen, un fetch del mismo origen fuera de
+ * la API y un script fuera de las rutas de Vite. Tienen que aparecer los tres, y nada más.
+ */
+export const SONDAS_DE_RED = ['GET fetch https://sonda.invalid/x', 'GET fetch /api/__sonda', 'GET script /__sonda.js'];
+export async function sondearLaRed(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await fetch('https://sonda.invalid/x').catch(() => undefined);
+    await fetch('/api/__sonda').catch(() => undefined);
+    await new Promise<void>((listo) => {
+      const s = document.createElement('script');
+      s.src = '/__sonda.js';
+      s.onload = () => listo();
+      s.onerror = () => listo();
+      document.head.append(s);
+    });
+  });
+}
+
+/** Lo escrito: el estado del mock en memoria, todo `localStorage` y todo `sessionStorage`. */
+export async function escrito(page: Page): Promise<{ store: string; local: Record<string, string>; session: Record<string, string> }> {
+  return page.evaluate(async () => {
+    const rutaStore = '/src/api/mock/store.ts';
+    const { state } = await import(/* @vite-ignore */ rutaStore) as { state: unknown };
+    const volcar = (s: Storage) => {
+      const o: Record<string, string> = {};
+      for (let i = 0; i < s.length; i += 1) { const k = s.key(i)!; o[k] = s.getItem(k)!; }
+      return o;
+    };
+    return { store: JSON.stringify(state), local: volcar(localStorage), session: volcar(sessionStorage) };
+  });
+}
+
+/** La clave de la tarjeta Tutorial oculta (Q1) de la cuenta del mock, como la arma `preferenciaGuia.ts`. */
+export const CLAVE_TARJETA_OCULTA = `payme.app.guia.tarjeta.v1.mock.${createHash('sha256').update(`auth:${MOCK_USER.id}`).digest('hex')}`;
