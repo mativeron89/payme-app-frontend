@@ -21,6 +21,7 @@ import {
   type UploadProgress,
 } from './http';
 import * as mock from './mock/mockApi';
+import { envolverApi } from '../ayuda/ejemplo/apiEjemplo';
 import {
   acceptInvitationLinkResponse,
   acceptInvitationResponse,
@@ -1920,4 +1921,5 @@ const mockApi: Api = {
   },
 };
 
-export const api: Api = IS_MOCK ? mockApi : realApi;
+// D363 · D367 · la envoltura del tutorial: con el ejemplo apagado, todo pasa tal cual.
+export const api: Api = envolverApi(IS_MOCK ? mockApi : realApi);

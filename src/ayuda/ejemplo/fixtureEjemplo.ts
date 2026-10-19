@@ -1,0 +1,50 @@
+/**
+ * D363 · D367 · el ticket de la mesa de ejemplo del tutorial nuevo.
+ *
+ * Los datos son los de la ficha de Claude Design (`PANTALLA-tutorial-tu-turno.md`,
+ * zip `0d97650b…`): «Restaurante Ejemplo», tres platos de cantidad 1 y $600 de
+ * total, mesa `PA-1224`. **Son inventados**: no salen de ninguna cuenta.
+ *
+ * 🔴 **El código es imposible a propósito.** El dueño numera las mesas con cinco
+ * cifras (`joinRequests.ts`, `/^PA-\d{5}$/`), así que `PA-1224` no puede existir
+ * en el servidor. Aun así nada se apoya en eso: la fachada envuelta
+ * (`apiEjemplo.ts`) y el guard de `App.tsx` comparan contra ESTA constante y
+ * rechazan el código sin salir a la red, con el ejemplo apagado o encendido
+ * (enmienda 1 de `d363_front`, punto 4).
+ */
+
+export const CODIGO_EJEMPLO = 'PA-1224';
+
+/** ¿Es el código de la mesa de ejemplo? Sin distinguir mayúsculas ni espacios de los bordes. */
+export function esCodigoDeEjemplo(code: unknown): boolean {
+  return typeof code === 'string' && code.trim().toUpperCase() === CODIGO_EJEMPLO;
+}
+
+export interface PlatoDeEjemplo {
+  readonly id: string;
+  readonly name: string;
+  readonly price_cents: number;
+}
+
+/**
+ * Los ids tienen forma de uuid v4 porque la selección informativa del dueño
+ * exige uuid en cada `item_id` (`informativeSelectionResponse`). El prefijo
+ * `e0e0e0e0-1224` los hace reconocibles en un volcado.
+ */
+export const PLATOS_DE_EJEMPLO: readonly PlatoDeEjemplo[] = [
+  { id: 'e0e0e0e0-1224-4000-8000-000000000001', name: 'Tagliatelle Bolognese', price_cents: 19500 },
+  { id: 'e0e0e0e0-1224-4000-8000-000000000002', name: 'Risotto ai Funghi', price_cents: 22000 },
+  { id: 'e0e0e0e0-1224-4000-8000-000000000003', name: 'Pizza Margherita', price_cents: 18500 },
+];
+
+export const RESTAURANTE_DE_EJEMPLO = {
+  id: 'e0e0e0e0-1224-4000-8000-0000000000aa',
+  name: 'Restaurante Ejemplo',
+  category: 'italian',
+  address: null,
+} as const;
+
+export const ID_MESA_DE_EJEMPLO = 'e0e0e0e0-1224-4000-8000-0000000000bb';
+
+/** La mesa sin garantía vive cinco horas (C3), como la de verdad. */
+export const VIDA_DE_LA_MESA_DE_EJEMPLO_MS = 5 * 60 * 60_000;
