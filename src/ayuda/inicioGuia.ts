@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { api } from '../api';
 import { useCapacidadViajes, type EstadoCapacidadViajes } from '../api/viajes';
 import {
   hoyLocal,
@@ -44,7 +45,42 @@ export function useEnFechasDeViaje(): boolean | null {
   useEffect(() => {
     if (capacidad === 'encendida' && abiertos === null) precargarViajesAbiertos();
   }, [capacidad, abiertos]);
-  return enFechasDeViaje(capacidad, abiertos, hoyLocal());
+  const sabido = enFechasDeViaje(capacidad, abiertos, hoyLocal());
+  useEffect(() => {
+    if (sabido !== null) return undefined;
+    return escucharElRegreso(window, document, () => reintentarSaberSiHayViaje(capacidad));
+  }, [sabido, capacidad]);
+  return sabido;
+}
+
+/**
+ * Revisión de V sobre ff5dec7, punto 3 · lo que no se supo (la config que no llegó, la lista de viajes que falló) se
+ * vuelve a pedir: si no, la tarjeta Tutorial y la fila de Ayuda, las dos entradas de D364, quedaban muertas. Con la
+ * capacidad sin saber, la config (que la trae); con Viajes encendido, la lista de abiertos (`precargarViajesAbiertos`
+ * deja pedirla de nuevo después de un error).
+ */
+export function reintentarSaberSiHayViaje(capacidad: EstadoCapacidadViajes): void {
+  if (capacidad === 'pendiente') void api.getConfig().catch(() => undefined);
+  else if (capacidad === 'encendida') precargarViajesAbiertos();
+}
+
+/**
+ * Llama a `alVolver` cada vez que la ventana recupera el foco o la pestaña vuelve a verse. Al montar no pide nada
+ * nuevo: el arranque ya pide la config y la lista. Devuelve cómo dejar de escuchar.
+ */
+export function escucharElRegreso(
+  ventana: EventTarget,
+  documento: EventTarget & { readonly visibilityState?: string },
+  alVolver: () => void,
+): () => void {
+  const alEnfocar = () => alVolver();
+  const alCambiar = () => { if (documento.visibilityState !== 'hidden') alVolver(); };
+  ventana.addEventListener('focus', alEnfocar);
+  documento.addEventListener('visibilitychange', alCambiar);
+  return () => {
+    ventana.removeEventListener('focus', alEnfocar);
+    documento.removeEventListener('visibilitychange', alCambiar);
+  };
 }
 
 export interface EntradaDeLaTarjeta {

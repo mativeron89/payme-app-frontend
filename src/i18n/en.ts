@@ -77,6 +77,7 @@ export const EN: Record<string, string> = {
   "Cómo usar PayMe": "How to use PayMe",
   // D363 · Q9 · la fila de Ayuda en fechas de un viaje, y con una apertura sin confirmar.
   "Disponible fuera de las fechas de un viaje": "Available outside trip dates",
+  "Disponible cuando terminemos de revisar tus viajes de hoy": "Available once we finish checking today's trips",
   "Primero resuelve la mesa que dejaste sin confirmar en Inicio.": "First, resolve the table you left unconfirmed on Home.",
   // D363 · 2f · 4a · la tarjeta Tutorial y la mesa de ejemplo en Inicio.
   "Tutorial": "Tutorial",

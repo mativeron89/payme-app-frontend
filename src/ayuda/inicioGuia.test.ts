@@ -1,7 +1,16 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ViajeConFechas } from '../api/viajesDeHoy';
-import { enFechasDeViaje, estadoDeLaAyuda, tarjetaVisible, type EntradaDeLaTarjeta } from './inicioGuia';
+import {
+  enFechasDeViaje, escucharElRegreso, estadoDeLaAyuda, reintentarSaberSiHayViaje, tarjetaVisible, type EntradaDeLaTarjeta,
+} from './inicioGuia';
+
+const pedidos = vi.hoisted(() => ({ getConfig: [] as number[], precargar: [] as number[], falla: false }));
+vi.mock('../api', () => ({
+  api: { getConfig: () => { pedidos.getConfig.push(1); return pedidos.falla ? Promise.reject(new Error('red')) : Promise.resolve({}); } },
+}));
+vi.mock('../screens/viajes/useViajesDeHoy', () => ({ precargarViajesAbiertos: () => { pedidos.precargar.push(1); } }));
+beforeEach(() => { pedidos.getConfig = []; pedidos.precargar = []; pedidos.falla = false; });
 
 const SABIDO: EntradaDeLaTarjeta = {
   noVolverAMostrar: false, tarjetaOculta: false, enFechasDeViaje: false, aperturaPendiente: false, mesaDeEjemploEnInicio: false,
@@ -73,5 +82,46 @@ describe('D364 · la guía ya no arranca sola', () => {
     expect(motor).not.toContain("t('No volver a mostrar')");
     // Control: lo que la abre ahora existe.
     expect(provider).toContain('ejemploLocal.empezar();');
+  });
+});
+
+describe('revisión de V sobre ff5dec7, punto 3 · lo que no se supo se vuelve a pedir al volver', () => {
+  it('con la capacidad sin saber, la config; con Viajes encendido, la lista; con Viajes apagado, nada', async () => {
+    reintentarSaberSiHayViaje('pendiente');
+    expect(pedidos).toMatchObject({ getConfig: [1], precargar: [] });
+    reintentarSaberSiHayViaje('encendida');
+    expect(pedidos).toMatchObject({ getConfig: [1], precargar: [1] });
+    reintentarSaberSiHayViaje('apagada');
+    expect(pedidos).toMatchObject({ getConfig: [1], precargar: [1] });
+    // Una config que falla no rompe nada: queda para el próximo regreso.
+    pedidos.falla = true;
+    expect(() => reintentarSaberSiHayViaje('pendiente')).not.toThrow();
+    await Promise.resolve();
+    expect(pedidos.getConfig).toHaveLength(2);
+  });
+
+  it('escucha el foco de la ventana y la pestaña que vuelve a verse; oculta, no; al montar no pide; y deja de escuchar', () => {
+    const ventana = new EventTarget();
+    const documento: EventTarget & { visibilityState: string } = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    let veces = 0;
+    const dejar = escucharElRegreso(ventana, documento, () => { veces += 1; });
+    expect(veces).toBe(0);
+    ventana.dispatchEvent(new Event('focus'));
+    expect(veces).toBe(1);
+    documento.dispatchEvent(new Event('visibilitychange'));
+    expect(veces).toBe(2);
+    documento.visibilityState = 'hidden';
+    documento.dispatchEvent(new Event('visibilitychange'));
+    expect(veces).toBe(2);
+    dejar();
+    documento.visibilityState = 'visible';
+    ventana.dispatchEvent(new Event('focus'));
+    documento.dispatchEvent(new Event('visibilitychange'));
+    expect(veces).toBe(2);
+  });
+
+  it('el hook lo cablea mientras no se sabe, con la capacidad de ese momento (la fuente)', () => {
+    const fuente = readFileSync(new URL('./inicioGuia.ts', import.meta.url), 'utf8');
+    expect(fuente).toMatch(/const sabido = enFechasDeViaje\(capacidad, abiertos, hoyLocal\(\)\);\s*useEffect\(\(\) => \{\s*if \(sabido !== null\) return undefined;\s*return escucharElRegreso\(window, document, \(\) => reintentarSaberSiHayViaje\(capacidad\)\);\s*\}, \[sabido, capacidad\]\);\s*return sabido;/);
   });
 });
