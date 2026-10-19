@@ -240,6 +240,12 @@ export interface MesaDetailViewProps {
    * la hoja del engranaje cerrada, la página lo dice y ofrece abrirla.
    */
   propinaConFalla?: boolean;
+  /**
+   * D363 · D367 · P2 · es la mesa de ejemplo del tutorial (lo decide
+   * `MesaScreen`). Sin engranaje, sin solicitudes, sin «Cerrar mesa», y el
+   * «Listo» sólo guarda: nunca abre «Con esto se cierra la mesa».
+   */
+  ejemplo?: boolean;
 }
 
 /**
@@ -540,6 +546,7 @@ export function MesaDetailView({
   propinaDeLaMesa = null,
   propinaGuardando = false,
   propinaConFalla = false,
+  ejemplo = false,
 }: MesaDetailViewProps) {
   const { t } = useIdioma();
   /** AF-USERNAME-D104 · «Quiénes se sumaron» muestra el @, nunca el `payme_id`. */
@@ -582,7 +589,7 @@ export function MesaDetailView({
   const [hojaDeLaMesa, setHojaDeLaMesa] = useState(false);
   const engranajeRef = useRef<HTMLButtonElement | null>(null);
   const codigoParaUnirse = mesa.status === 'open' || mesa.status === 'partially_paid' ? code : null;
-  const hayConfiguracion = esTitular && (codigoParaUnirse !== null || !!propinaDeLaMesa);
+  const hayConfiguracion = esTitular && (codigoParaUnirse !== null || !!propinaDeLaMesa) && !ejemplo;
   // Si la hoja se queda sin nada (la mesa dejó de recibir gente y la propina ya
   // no se puede cambiar), se cierra sola: nunca una hoja vacía. Como al cerrarla
   // a mano, el panel de invitar se pliega (D379).
@@ -863,7 +870,7 @@ export function MesaDetailView({
    * borrador se suma»): con una respuesta perdida o dos pestañas, la mesa podía
    * cerrarse sin la hoja.
    */
-  const listoCierraLaMesa = mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo
+  const listoCierraLaMesa = !ejemplo && mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo
     ? seleccionCierraLaMesa(
       mesa,
       (item) => item.remaining_bps,
@@ -1323,6 +1330,7 @@ export function MesaDetailView({
                 ) : null}
               </Desplegable>
             )}
+            {/* D363 · en el ejemplo `MesaScreen` no pide las solicitudes: quedan en «oculto». */}
             {solicitudes.estado === 'error' && (
               <div className="note note-amber solicitudes-error" role="alert">
                 {t('No pudimos cargar las solicitudes.')}{' '}
@@ -1379,7 +1387,7 @@ export function MesaDetailView({
             {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
                 `close_not_applicable` a las otras). D223 · al final, centrado,
                 en tinte de error. */}
-            {onCerrarMesa && sePuedeCerrar(mesa) && (
+            {!ejemplo && onCerrarMesa && sePuedeCerrar(mesa) && (
               <div className="mesa-cerrar">
                 {/* D181 · «abajo centrado la de cerrar mesa, ésta tiene que tener
                     un rojo clarito». Rojo claro de fondo y rojo oscuro de texto

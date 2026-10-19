@@ -100,7 +100,7 @@ const DEL_EJEMPLO = readdirSync(AQUI)
 describe('D363 · el ejemplo no sale a la red ni guarda nada', () => {
   it('hay archivos del ejemplo que revisar (si no, la guarda pasaría vacía)', () => {
     expect(DEL_EJEMPLO.map((a) => relative(AQUI, a)).sort()).toEqual(
-      ['apiEjemplo.ts', 'estadoEjemplo.ts', 'fixtureEjemplo.ts', 'mesaDeEjemplo.ts'],
+      ['apiEjemplo.ts', 'estadoEjemplo.ts', 'fixtureEjemplo.ts', 'mesaDeEjemplo.ts', 'rutaDelEjemplo.ts'],
     );
   });
 

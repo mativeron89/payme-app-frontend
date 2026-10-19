@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { informativeSelectionResponse } from '../../api/contractResponses';
 import { originalParticipants } from '../../api/mesaPresentation';
@@ -5,6 +6,7 @@ import { leerParteDelDetalle } from '../../api/miParte';
 import { decodeParticipantes } from '../../api/participantes';
 import { cerroPorSeleccion } from '../../screens/MesaScreen';
 import { readInformativeSelectionCapability } from '../../screens/informativeSelectionView';
+import { propioEnConsumo, seleccionCierraLaMesa } from '../../screens/antesDeCerrar';
 import { confirmedConsumptionProgress, restanteInformativo } from '../../screens/mesaItemsView';
 import { EjemploLocal, type EstadoDelEjemplo } from './estadoEjemplo';
 import { CODIGO_EJEMPLO, PLATOS_DE_EJEMPLO } from './fixtureEjemplo';
@@ -114,6 +116,16 @@ describe('D363 · reservar y soltar en «por lo que pidió cada uno»', () => {
     });
     const segunda = bloquearEnEjemplo(con(estado, primera.seleccion), [{ item_id: TAGLIATELLE, fraction_bps: 10000 }]);
     expect([...segunda.seleccion]).toEqual([[TAGLIATELLE, 10000]]);
+  });
+
+  it('punto 2 · sin la bandera, elegir los tres platos abriría «Con esto se cierra la mesa»; por eso va primera', () => {
+    const { mesa } = detalleDeEjemplo(armada('consumo', 1));
+    const borrador = new Map(PLATOS_DE_EJEMPLO.map((p) => [p.id, 10000]));
+    expect(seleccionCierraLaMesa(
+      mesa, (item) => item.remaining_bps, (item) => propioEnConsumo(item, borrador), borrador, { escribeConCualquierBorrador: true },
+    )).toBe(true);
+    const vista = readFileSync(new URL('../../screens/MesaDetailView.tsx', import.meta.url), 'utf8');
+    expect(vista).toContain('const listoCierraLaMesa = !ejemplo && ');
   });
 
   it('nunca dice que la selección cerró la mesa, aunque cubra los tres platos', () => {

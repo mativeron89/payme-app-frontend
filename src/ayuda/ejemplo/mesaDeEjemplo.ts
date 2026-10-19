@@ -19,6 +19,7 @@ import {
   ID_MESA_DE_EJEMPLO,
   PLATOS_DE_EJEMPLO,
   RESTAURANTE_DE_EJEMPLO,
+  TOTAL_DE_EJEMPLO_CENTS as TOTAL_CENTS,
   VIDA_DE_LA_MESA_DE_EJEMPLO_MS,
 } from './fixtureEjemplo';
 
@@ -63,8 +64,6 @@ function armado(estado: EstadoDelEjemplo): EstadoArmado {
   if (!mesaArmada(estado)) throw new RechazoDelEjemplo('ejemplo_sin_mesa');
   return estado;
 }
-
-const TOTAL_CENTS = PLATOS_DE_EJEMPLO.reduce((suma, plato) => suma + plato.price_cents, 0);
 
 /** El detalle de `GET /mesas/PA-1224`: una mesa abierta sin garantía, con la selección del ejemplo. */
 export function detalleDeEjemplo(estadoActual: EstadoDelEjemplo): MesaDetailResponse {

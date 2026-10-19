@@ -86,6 +86,8 @@ import { nombreDeViajeRecordado } from './viajes/circuloDelViaje';
 import { useCapacidadViajes } from '../api/viajes';
 import { formatMXN } from '../utils/format';
 import { centsToString, sumCents } from '../utils/money';
+import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
+import { CODIGO_EJEMPLO, PLATOS_DE_EJEMPLO, RESTAURANTE_DE_EJEMPLO, TOTAL_DE_EJEMPLO_CENTS } from '../ayuda/ejemplo/fixtureEjemplo';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import { createInFlightMutex } from '../utils/inFlight';
@@ -192,6 +194,13 @@ function lineTotalCents(it: EditItem): number | null {
 export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string | null } = {}) {
   const enViaje = viajeId !== null;
   const { t } = useIdioma();
+  /**
+   * D363 · D367 · la mesa de ejemplo del tutorial pasa por acá (2a → 2d). Con el
+   * ejemplo activo la foto no se lee, el ticket es el del ejemplo, «Continuar»
+   * no crea ninguna mesa y Compartir no genera link, invitaciones ni propina.
+   * Nunca dentro de un viaje: el ejemplo es sólo de restaurante (D365).
+   */
+  const ejemplo = useEjemplo().activo && !enViaje;
   // D250 · el escaneo de un viaje se titula «Ticket para {viaje}»: con el nombre
   // que dejó la pantalla del viaje o, si no hay (una recarga), el que da el dueño.
   const [nombreDelViaje, setNombreDelViaje] = useState<string | null>(() => nombreDeViajeRecordado(viajeId));
@@ -305,6 +314,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   // El ticket nace PLEGADO. `totalMismatch` lo fuerza a abrirse, así que este
   // booleano es la intención de la persona, no el estado visible.
   const [ticketAbierto, setTicketAbierto] = useState(false);
+  // D363 · en el ejemplo, cerrar la hoja del ticket (3a) es llegar a ¿Cómo dividen? (2c).
+  useEffect(() => {
+    if (ejemplo && step === 'ticket' && !ticketAbierto) ejemploLocal.irA('dividir');
+  }, [ejemplo, step, ticketAbierto]);
   /**
    * §1.4 (spec 2026-08-06): el stepper se pregunta SIEMPRE y nace SIN ELEGIR.
    * Acá vivía `useState(4)` — un 4 que en modo consumo nadie veía ni podía
@@ -411,6 +424,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   sesionDePropinaRef.current = session;
   useEffect(() => {
     setParteAlCompartir(null);
+    // D363 · en el ejemplo no corre: no hay `created` (la mesa de ejemplo no se crea), así que no hay código.
     if (step !== 'share' || !codigoCreado || !creadaSinGarantia || !sinGarantia || enViaje) return;
     let vigente = true;
     api.getMesa(codigoCreado)
@@ -577,6 +591,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}`)
     : '';
   useEffect(() => {
+    // D363 · el ejemplo trae su restaurante: no se lee el del QR.
+    if (ejemplo) return;
     if (!restaurantId) {
       // n179: sin QR, la identidad se obtiene del ticket y se resuelve por el
       // endpoint autenticado. La ausencia ya no es un error previo al OCR.
@@ -607,7 +623,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     return () => {
       alive = false;
     };
-  }, [restaurantId]);
+  }, [restaurantId, ejemplo]);
 
   useEffect(() => {
     // Una sesión nueva nunca hereda el fallback ni el resultado privado de la
@@ -1079,6 +1095,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * cancela la cámara, sigue ahí.
    */
   async function recibirFoto(original: Blob, origen: 'camara' | 'galeria') {
+    if (ejemplo) {
+      cargarTicketDeEjemplo();
+      return;
+    }
     if (capturandoRef.current) return;
     capturandoRef.current = true;
     setCapturando(true);
@@ -1111,6 +1131,31 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       capturandoRef.current = false;
       setCapturando(false);
     }
+  }
+
+  /**
+   * D363 · 2b → 3a: en el ejemplo la foto, venga de la cámara o del menú del
+   * teléfono (D368), no se decodifica ni se lee: no hay recorte ni `scanTicket`.
+   * Llega el ticket de ejemplo con el mismo estado que deja una lectura buena, el
+   * restaurante es el del ejemplo (no se resuelve contra nadie) y la hoja del
+   * ticket se abre por estado, no con un toque sintético (3a).
+   */
+  function cargarTicketDeEjemplo() {
+    soltarRecorte();
+    setCaptura(null);
+    setScanIssue(null);
+    setRestaurant({ ...RESTAURANTE_DE_EJEMPLO });
+    setRestaurantRecordOnly(false);
+    setRestaurantError(null);
+    setEditItems(PLATOS_DE_EJEMPLO.map((p) => ({ name: p.name, priceStr: centsToString(p.price_cents), quantity: 1 })));
+    setScannedTotalCents(TOTAL_DE_EJEMPLO_CENTS);
+    setScannedTotals(null);
+    setScannedAdjustments(null);
+    setEditingItems(false);
+    setExpandedItem(null);
+    setTicketAbierto(true);
+    setStep('ticket');
+    ejemploLocal.irA('ticket');
   }
 
   /**
@@ -1635,6 +1680,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   async function continueFromTicket() {
     let handedOffToCreation = false;
     try {
+      // D363 · «Continuar» del ejemplo: ni restaurante, ni `createMesa`, ni journal
+      // de dinero. La mesa de ejemplo se arma en memoria y se pasa a Compartir.
+      if (ejemplo) {
+        if (participants === null) return;
+        ejemploLocal.armarMesa(division, participants);
+        setStep('share');
+        return;
+      }
       let resolved = restaurant;
       let recordOnly = restaurantRecordOnly;
       if (!resolved) {
@@ -1789,6 +1842,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       // D212 · vuelve «Escanea el ticket», sin la foto anterior: «Sacar foto»
       // abre la cámara. «Volver» no la abre solo.
       setCaptura(null);
+      if (ejemplo) ejemploLocal.irA('foto');
       return setStep('scan');
     }
     if (step === 'garantia') return setStep('ticket');
@@ -2647,6 +2701,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   ))}
                 </dl>
               )}
+              {/* D363 · D367 · en el ejemplo el ticket no se edita: sin «Modificar ítems». */}
+              {!ejemplo && (
               <div className="tk-foot">
                 <button
                   className="tk-edit-link"
@@ -2664,6 +2720,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </button>
                 )}
                 </div>
+              )}
               </div>
             </div>
           </div>
@@ -3105,13 +3162,16 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * eso abriría una segunda mesa con un segundo hold por el total (B-06).
    * Por eso lleva a Inicio, que es una salida lateral, y no al paso anterior.
    */
-  if (step === 'share' && created) {
-    const code = created.mesa.code;
+  // D363 · la mesa de ejemplo no se crea: Compartir muestra su código, PA-1224.
+  const codigoDeCompartir = ejemplo ? CODIGO_EJEMPLO : created?.mesa.code ?? null;
+  if (step === 'share' && codigoDeCompartir !== null) {
+    const code = codigoDeCompartir;
     const displayedRestaurantName = normalizedRestaurantLabel ?? restaurant?.name;
     // D344 · lo guardado: lo que confirmó el PUT si terminó acá, o lo que publica el dueño.
     const propinaGuardada = estadoPropina.fase === 'guardada'
       ? estadoPropina.setting
       : (parteAlCompartir?.tipSetting ?? null);
+    // D367 · en el ejemplo no hay propina: sin `created` no hay `clavePropina` ni `parteAlCompartir`.
     const ofrecePropina = !!clavePropina
       && parteAlCompartir !== null
       && parteAlCompartir.tipSetting !== undefined
@@ -3183,6 +3243,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             {/* La corrección visual del 2026-08-24 fija «Copiar link» primero y
                 WhatsApp segundo. El orden del DOM conserva ese mismo orden de
                 foco por teclado; ambas superficies transportan el link completo. */}
+            {/* D367 · en el ejemplo no hay link que copiar ni mandar. */}
+            {!ejemplo && (
             <div className="share-actions">
               <button
                 type="button"
@@ -3202,6 +3264,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 <Icon name="message" size={18} className="ico-inline" /> {t('WhatsApp')}
               </a>
             </div>
+            )}
           </div>
           {/* 🔴 A1 · ACÁ SE IMPRIMÍA EL LINK Y SU AVISO, y se retiraron.
               El comentario viejo defendía lo contrario —«esconderla detrás del
@@ -3212,12 +3275,13 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               va a saber que se está pagando un precio conocido.
               ⚠️ Lo que se retira es el link EN TEXTO, no el estado: «generando» y
               el error siguen, porque un fallo silencioso sería otra cosa. */}
+          {/* En el ejemplo `makeLink` no corre: el link nunca pasa por «loading». */}
           {linkState === 'loading' && (
             <p className="share-link" aria-busy="true">
               {t('Generando el link…')}
             </p>
           )}
-          {linkState !== 'ready' && linkState !== 'loading' && (
+          {!ejemplo && linkState !== 'ready' && linkState !== 'loading' && (
             <div className="state-error" role="alert">
               <div className="state-error-row">
                 <Icon name="x-circle" size={22} />
@@ -3233,7 +3297,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </button>
             </div>
           )}
-          <InviteFriends code={code} />
+          {!ejemplo && <InviteFriends code={code} />}
         </div>
         {/* Barra completa sin posición activa. Hasta el 2026-08-13 el círculo NO
             llevaba flecha, y el motivo estaba escrito: "no significa avanzar un

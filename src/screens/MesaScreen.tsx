@@ -95,6 +95,8 @@ import {
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { leerParteDelDetalle, type TipSetting } from '../api/miParte';
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
+import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
+import { esCodigoDeEjemplo } from '../ayuda/ejemplo/fixtureEjemplo';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
 import {
   mensajeDeRechazo,
@@ -394,6 +396,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const isGuest = !!guestToken;
   const previewingAsGuest = isGuest && !!session;
+  /**
+   * D363 · D367 · P2 · la mesa de ejemplo del tutorial (2e). UN solo booleano,
+   * el que baja a `MesaDetailView` (censo P36: sólo booleanos). La mesa la
+   * contesta de memoria la fachada envuelta; acá se saltean lo que pediría al
+   * servidor por su cuenta (solicitudes, tarjetas) y la propina. En pantalla
+   * queda «Tu mesa» del titular sin engranaje, sin solicitudes y sin «Cerrar mesa».
+   */
+  const ejemplo = useEjemplo().activo && !isGuest && esCodigoDeEjemplo(code);
+  useEffect(() => { if (ejemplo) ejemploLocal.irA('mesa'); }, [ejemplo]);
   /**
    * D344 · el `PUT /tip` de esta mesa, con clave cuenta + código: lo pudo
    * empezar «Compartir la mesa» antes de llegar acá. Mientras se guarda no se
@@ -801,7 +812,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * optimista (X11): después del 200 se recargan las solicitudes y, al aceptar,
    * quiénes están; con un conflicto, también, y se dice por qué.
    */
-  const admiteSolicitudes = esOrganizador && (mesa?.status === 'open' || mesa?.status === 'partially_paid');
+  const admiteSolicitudes = !ejemplo && esOrganizador && (mesa?.status === 'open' || mesa?.status === 'partially_paid');
   const [solicitudes, setSolicitudes] = useState<SolicitudesDeUnirse>({ estado: 'oculto' });
   const cargarSolicitudes = useCallback((silencioso = false) => {
     const identityEpoch = identityEpochRef.current.capture();
@@ -893,7 +904,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [esOrganizador, quienes]);
 
   useEffect(() => {
-    if (!isGuest) {
+    // D363 · punto 8 · el ejemplo no tiene tarjetas que leer: los pagos no son parte del tutorial.
+    if (!isGuest && !ejemplo) {
       const identityEpoch = identityEpochRef.current.capture();
       let alive = true;
       api
@@ -926,7 +938,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       return () => { alive = false; };
     }
     return undefined;
-  }, [isGuest, guestToken, code]);
+  }, [isGuest, guestToken, code, ejemplo]);
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
   const informativePersistenceActive = mesa?.division_mode === 'igual' && !CORTE.allowsPay;
@@ -1147,6 +1159,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   function volverAInicio(): void {
     if (isGuest) { reload(); return; }
+    // D363 · el «Listo» del ejemplo también termina en Inicio, donde sigue la guía (4a).
+    if (ejemplo) ejemploLocal.irA('listo');
     navigate('home');
   }
 
@@ -3127,6 +3141,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       quienesSeSumaron={quienes}
       fotoDe={(participantId) => fotosRef.current?.url(participantId) ?? null}
       onReintentarQuienes={() => cargarQuienes()}
+      ejemplo={ejemplo}
       solicitudes={solicitudes}
       decidiendo={decidiendo}
       onDecidirSolicitud={(id, accion) => { void decidirSolicitud(id, accion); }}

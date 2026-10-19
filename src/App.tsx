@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { GuiaProvider } from './ayuda/GuiaProvider';
+import { useEjemplo } from './ayuda/ejemplo/estadoEjemplo';
+import { enforceRutaDelEjemplo, esRutaDelEjemploSinEjemplo } from './ayuda/ejemplo/rutaDelEjemplo';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { useIdioma } from './i18n/idioma';
 import { ToastProvider } from './components/ui';
@@ -165,6 +167,12 @@ function Shell() {
   useEffect(() => {
     enforceViajesRouteGuard(capacidadViajes, route.page);
   }, [capacidadViajes, route.page]);
+  // D363 · `#/mesa/PA-1224` sin el ejemplo activo no monta nada y vuelve a Inicio (`rutaDelEjemplo.ts`).
+  const ejemploActivo = useEjemplo().activo;
+  const rutaDelEjemplo = esRutaDelEjemploSinEjemplo(route.page, route.param, ejemploActivo);
+  useEffect(() => {
+    enforceRutaDelEjemplo(route.page, route.param, ejemploActivo);
+  }, [route.page, route.param, ejemploActivo]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.
@@ -258,6 +266,7 @@ function Shell() {
     />
   ) : null;
 
+  if (rutaDelEjemplo) return null;
   if (route.page === 'mesa' && route.param && linkToken) {
     if (puertaCerrada) return puertaCerrada;
     if (arrobaCerrada) return arrobaCerrada;

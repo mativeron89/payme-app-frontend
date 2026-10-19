@@ -37,6 +37,9 @@ export const PLATOS_DE_EJEMPLO: readonly PlatoDeEjemplo[] = [
   { id: 'e0e0e0e0-1224-4000-8000-000000000003', name: 'Pizza Margherita', price_cents: 18500 },
 ];
 
+/** $600: la suma de los platos, que es también el total impreso del ticket de ejemplo. */
+export const TOTAL_DE_EJEMPLO_CENTS = PLATOS_DE_EJEMPLO.reduce((suma, plato) => suma + plato.price_cents, 0);
+
 export const RESTAURANTE_DE_EJEMPLO = {
   id: 'e0e0e0e0-1224-4000-8000-0000000000aa',
   name: 'Restaurante Ejemplo',
