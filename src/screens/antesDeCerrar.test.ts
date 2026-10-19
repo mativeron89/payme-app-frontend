@@ -190,6 +190,69 @@ describe('D389 · seleccionCierraLaMesa con un plato de $0 (mesa sin garantía)'
   });
 });
 
+/**
+ * F1 (revisión de V sobre 0.253.1) · la hoja usa la tolerancia del dueño: un faltante de menos de 100 bps cuenta
+ * como cubierto. Con 3 × ⅓, el tercero elige 3333 sobre 3334 y el dueño cierra la mesa; antes el front calculaba 1 y
+ * la hoja no salía. Viene de 0.227.0, no de D389.
+ */
+describe('F1 · seleccionCierraLaMesa con la tolerancia del dueño', () => {
+  it('🔴 consumo: ⅓ sobre los 3334 que quedan cierra: la hoja aparece', () => {
+    expect(consumo([item({ id: 'a', remaining_bps: 3334 }), item({ id: 'b', remaining_bps: 0 })], [['a', 3333]])).toBe(true);
+  });
+
+  it('consumo: lo exacto sigue cerrando (⅔ sobre ⅔, ⅓ sobre ⅓)', () => {
+    expect(consumo([item({ id: 'a', remaining_bps: 6667 })], [['a', 6667]])).toBe(true);
+    expect(consumo([item({ id: 'a', remaining_bps: 3333 })], [['a', 3333]])).toBe(true);
+  });
+
+  it('el borde: un faltante de 100 o más no cierra (el dueño compara con «< 100»)', () => {
+    expect(consumo([item({ id: 'a', remaining_bps: 3433 })], [['a', 3333]])).toBe(false);
+    expect(consumo([item({ id: 'a', remaining_bps: 6667 })], [['a', 3333]])).toBe(false);
+  });
+
+  it('un faltante de 99 sí cierra (el borde)', () => {
+    expect(consumo([item({ id: 'a', remaining_bps: 3432 })], [['a', 3333]])).toBe(true);
+  });
+
+  it('consumo: un plato que el borrador no toca y quedó en 50 (claims viejos) no se da por cubierto', () => {
+    expect(consumo([item({ id: 'a', remaining_bps: 50 }), item({ id: 'b' })], [['b', 10000]])).toBe(false);
+  });
+
+  const igual = (items: MesaItem[], guardadas: Array<[string, number]>, borrador: Array<[string, number]>) => {
+    const g = new Map(guardadas);
+    return seleccionCierraLaMesa({ items }, (i) => i.informative_remaining_bps, (i) => g.get(i.id) ?? 0, new Map(borrador));
+  };
+
+  it('🔴 «igual»: otros declararon 6666 y el borrador declara ⅓: 9999 declarado cierra', () => {
+    expect(igual([item({ id: 'a', informative_remaining_bps: 3334 })], [], [['a', 3333]])).toBe(true);
+  });
+
+  it('control: en «igual» con 6667 restantes, ⅓ no cierra', () => {
+    expect(igual([item({ id: 'a', informative_remaining_bps: 6667 })], [], [['a', 3333]])).toBe(false);
+  });
+
+  it('«igual»: con el plato ya en 0 por la tolerancia (9999 declarado), reenviar lo mío no cierra: sale por «no cambia nada»', () => {
+    expect(igual([item({ id: 'a', informative_remaining_bps: 0 })], [['a', 3333]], [['a', 3333]])).toBe(false);
+  });
+
+  /**
+   * T3 · la última línea con «ya no quedaba nada» en true: «igual», todo publicado en 0, y lo que cambia es el $0
+   * propio. Este pedido no la cierra. Los tests que dan true ya llegaban a la última línea, pero ninguno llegaba con
+   * todo publicado en 0 (el de «ni el agua» sale antes, por `!cambia`), y el mutante `return true` sobrevivía.
+   */
+  it('si ya no quedaba nada y lo único que cambia es el $0 propio, este pedido no la cierra', () => {
+    expect(seleccionCierraLaMesa(
+      {
+        items: [item({ id: 'p', informative_remaining_bps: 0 }), item({ id: 'agua', price_cents: 0, informative_remaining_bps: 0 })],
+        guarantee_mode: false,
+      },
+      (i) => i.informative_remaining_bps,
+      (i) => (i.id === 'agua' ? 5000 : 0),
+      new Map(),
+    )).toBe(false);
+  });
+});
+
 describe('D240 punto 8 · lo que muestra la hoja', () => {
   const items = [
     item({ id: 't1', name: 'Tiramisú', price_cents: 7000, my_bps: 10000 }),

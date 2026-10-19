@@ -13,17 +13,24 @@
  * Todo se calcula con lo que el front ya tiene: no cambia el contrato.
  */
 import type { MesaDetail, MesaItem } from '../api/types';
-import { bpsLabel, bpsValido } from './mesaItemsView';
+import { bpsLabel, bpsValido, restanteAlGuardar } from './mesaItemsView';
 import { agruparIguales, nombreConCantidad } from './agruparIguales';
 import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
  * ¿Guardar este borrador cierra la mesa? La regla del dueño: todo plato queda
  * sin nada por elegir. Por plato, lo que queda más lo propio guardado (que el
- * borrador reemplaza en «igual»; en consumo se suma, y lo propio es 0) menos
- * el borrador tiene que dar 0. Un borrador que ya no entra no cuenta (el dueño
+ * borrador reemplaza en «igual»; en consumo se suma, y lo propio es 0, con el
+ * límite anotado en `restanteAlGuardar`) menos el borrador tiene que dar 0. Un borrador que ya no entra no cuenta (el dueño
  * lo rechaza). Ante un dato desconocido, `false`: no avisa, y «La mesa se
  * cerró» sigue siendo la red.
+ *
+ * F1 · «dar 0» es con la tolerancia del dueño (`restanteAlGuardar`): si el
+ * borrador toca el plato y dejaría menos de 100 bps, el dueño lo da por
+ * completo. Con 3 × ⅓, el tercero elige 3333 sobre 3334 y la mesa se cierra:
+ * antes el front calculaba 1 y la hoja no salía. Viene de 0.227.0, no de D389.
+ * «Ya no quedaba nada» lee lo publicado, que el dueño ya publica con la
+ * tolerancia aplicada: sigue siendo `restante !== 0`.
  *
  * D389 · en una mesa SIN garantía, un plato de $0 (`price_cents === 0`) cuenta
  * como cubierto aunque nadie lo elija, y una mesa sin ningún plato con importe
@@ -61,13 +68,14 @@ export function seleccionCierraLaMesa(
     const propio = propioRegistrado(item);
     if (!bpsValido(restante) || !bpsValido(propio)) return false;
     if (restante !== 0) yaCompleta = false;
-    const disponible = Math.min(10000, restante + propio);
     const nuevo = borrador.get(item.id) ?? 0;
-    if (!bpsValido(nuevo) || nuevo > disponible) return false;
+    // F1 · con la tolerancia del dueño: ⅓ sobre los 3334 que quedan completa el plato.
+    const queda = restanteAlGuardar(restante, propio, nuevo);
+    if (queda === null) return false;
     if (nuevo !== propio) cambia = true;
     if (ceroCubierto && item.price_cents === 0) continue;
     conImporte = true;
-    if (disponible - nuevo !== 0) return false;
+    if (queda !== 0) return false;
   }
   // Reenviar lo mismo no escribe nada: el dueño no la cierra.
   if (!cambia) return false;

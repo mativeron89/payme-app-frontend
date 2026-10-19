@@ -1,6 +1,6 @@
 # 0.253.1 · 2026-10-18
 
-Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOOP-PAYME-004-A01-CODEX-DICTAMEN-01, sha256 15c4603e…), más la parte del front de D389, que se publica después del dueño 2.188.0.
+Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOOP-PAYME-004-A01-CODEX-DICTAMEN-01, sha256 15c4603e…), más la parte del front de D389 y F1 de la revisión de V.
 
 - **H01 · «Ver el ticket» tapaba el total** en la tarjeta del total de «¿Cómo dividen?». La fila no dejaba bajar de renglón al botón, y el importe se podía achicar sin que su texto se acomodara. Con $840 a 320 px, o con $1,250.50 a 375 y a 390 px, el texto quedaba debajo del botón.
   - Ahora, si el total y el botón no entran juntos, el botón baja de renglón, y el importe nunca se achica por debajo de su texto.
@@ -9,7 +9,11 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
   - Un e2e nuevo mide a 320, 375 y 390 px, con $840, $1,250.50 y $12,345.67, el rectángulo del texto del total (Range) contra el del botón. Los totales salen del ticket del mock, cambiando el precio de un plato. Exige que no haya intersección ni desborde, y que los dos queden dentro de la tarjeta.
   - Con el CSS de 0.253.0 da rojo en 320/$840, 375/$1,250.50 y 390/$1,250.50: es el control positivo.
   - El test de la tarjeta (`af-correcciones-visuales-01`) también mide el texto con Range, no su caja.
-- **D389 · un plato de $0 cuenta como elegido para cerrar la mesa (la parte del front).** Mati: «Que cuente como elegido». Es la enmienda a D76/D81 sólo para el $0, con el dueño primero (owner-first): **0.253.1 se publica sólo con App Backend 2.188.0 servido.** Resuelve lo que la entrada de 0.253.0 dejaba «para después» en P04.
+- **D389 · un plato de $0 cuenta como elegido para cerrar la mesa (la parte del front).** Mati: «Que cuente como elegido». Es la enmienda a D76/D81 sólo para el $0. Resuelve lo que la entrada de 0.253.0 dejaba «para después» en P04.
+  - **El orden de publicación es front primero y back 2.188.0 después.** Es una decisión técnica de V, por la auditoría A04 de Codex: publicar el back primero deja a las pestañas con 0.253.0 cerrando la mesa sin la hoja, y eso no se deshace. Publicar el front primero es reversible. Hasta que 2.188.0 esté servido, en una mesa con el agua en $0 sin elegir pasan dos cosas:
+    - la hoja avisa un cierre que el back 2.187.0 no hace, y «Guardar y cerrar» vuelve a Inicio con la mesa abierta;
+    - adentro se ve «Asignado 100 %», y la tarjeta de Inicio, que sale del back, sigue en 99 %.
+    - Nada de esto es irreversible: lo elegido se puede soltar y la mesa sigue abierta.
   - **La pantalla** (`confirmedConsumptionProgress` y la barra en vivo): en una mesa sin garantía, un plato de importe 0 cuenta como cubierto aunque nadie lo elija. Antes la mesa quedaba en «Asignado 99 %» con «Por asignar $0.00». Vale también para «igual» informativo. El plato se sigue pudiendo elegir y su `remaining_bps` no cambia.
   - **La hoja «Con esto se cierra la mesa»** (D240-8, `seleccionCierraLaMesa`), con la misma regla. Lo encontró la revisión de App Backend: con 2.188.0 servido y el agua en $0 sin elegir, el último «Listo» cerraba la mesa sin la hoja y ya no se podía corregir lo elegido.
     - Como el dueño, una mesa sin ningún plato con importe no se cierra por selección.
@@ -21,7 +25,28 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
   - **Tests:**
     - Unitarios de la pantalla, de la hoja y del mock, con control positivo: con garantía, o sin la regla, el mismo caso queda en 99 %, la hoja no sale y la mesa no se cierra. También un plato con precio sin elegir, un plato con precio elegido casi entero (9999 bps), el borrador del $0 que ya no entra, la mesa toda en $0 y la mesa abierta de antes de 2.188.0.
     - e2e (`d360-cambios`): con el agua en $0 sin elegir, elegir los otros seis platos muestra la hoja; «Guardar y cerrar» cierra la mesa y queda al 100 %. Sin la regla de la hoja da rojo justo ahí: la hoja no aparece.
-    - 19 mutantes (pantalla, hoja y mock), todos rojos, cada uno en su test.
+    - 29 mutantes (pantalla, hoja, mock, F1 y la procedencia), todos rojos, cada uno en su test. El artefacto (la lista, el log y el script) queda fuera del repo, en `~/.codex/runs/payme-af-d341-tutorial-propina-20261017/mutantes/hotfix-0.253.1/` (`mut-hotfix-final.json` 79ea09fc…, `mutantes-hotfix-final.log` df366031…).
+- **F1 · la hoja «antes de cerrar» con la tolerancia del dueño** (revisión interna de V sobre 0.253.1). Viene de 0.227.0, no de D389. El dueño da por completo un plato al que le faltan menos de 100 bps (`COMPLETING_TOLERANCE_BPS` de `services/itemClaims.js`):
+  - en consumo, `effectiveBps` absorbe el remanente;
+  - en «igual», `restanteDe` lo da por cubierto.
+  - **El problema:** el front exigía 0 exacto. Con 3 × ⅓, el tercero elige 3333 sobre los 3334 que quedan: el front calculaba 1 y no mostraba la hoja, y el dueño cerraba la mesa.
+  - **Ahora** una sola función, `restanteAlGuardar` (`mesaItemsView.ts`), calcula cuánto queda si se guarda el borrador, con la tolerancia. La usan la hoja (`seleccionCierraLaMesa`) y la barra en vivo (`progresoConBorrador`). En la barra, el importe asignado del tercero ya llega al total del plato; antes quedaba unos centavos debajo.
+    - La tolerancia sólo vale si el borrador toca el plato: sin tocarlo manda lo publicado, porque el cierre de consumo suma lo guardado contra 10000 exacto.
+    - «Ya no quedaba nada» y el avance registrado leen lo publicado, que el dueño ya entrega con la tolerancia aplicada, así que no cambian.
+  - **La constante** (`TOLERANCIA_DE_COMPLETAR`) está atada al sha256 de sus dos fuentes en el dueño, el que declara el inventario adoptado: `services/itemClaims.js` (la constante y `effectiveBps`) y `services/informativeSelections.js` (`restanteDe`).
+    - Las dos son iguales en c8432e7 y en 2.187.0 (0099eb93).
+    - En 2.188.0 (66659eae), `itemClaims.js` no cambia; `informativeSelections.js` cambia por D389, con `restanteDe` igual.
+    - Un test se pone rojo si el inventario adopta otra versión de cualquiera de las dos, para volver a medir.
+    - Las dos réplicas del mock usan el mismo valor; la de consumo, además, se prueba por comportamiento.
+  - **Queda igual, y se declara** (todo es anterior a F1):
+    - En consumo, el llamador da 0 como lo propio, porque el borrador suma a lo registrado. El dueño en realidad suelta lo propio liberable del plato que el pedido toca y lo vuelve a tomar. Sólo difiere si el borrador incluye un plato que esta cuenta ya registró, con una respuesta perdida o con dos pestañas. Va aparte: está en `MesaDetailView.tsx`, fuera de esta entrega.
+    - En «igual», si lo publicado ya está en 0 por la tolerancia, el faltante real (1 a 99 bps) no se ve. Al bajar lo propio, la barra en vivo puede diferir en esos bps de lo que publique el dueño; la decisión de cierre no cambia.
+    - `fractionPreview` estima «tu parte» comparando la porción con lo que queda, sin la tolerancia. Con ⅓ sobre 3334, muestra unos centavos menos de lo que le asigna el dueño (medido: 3 en un plato de $300, 10 en uno de $1,000, 0 en uno de $120). Es un estimado (el comprobante usa lo del dueño), y lo usa también el ticket de Viajes, que no está en esta entrega.
+  - **Tests:**
+    - ⅓ sobre 3334 y un faltante de 99 cierran y muestran la hoja; ⅔ sobre ⅔ y ⅓ sobre ⅓ siguen cerrando; un faltante de 100 o más no cierra (el borde).
+    - Un plato que el borrador no toca y quedó en 50 no se da por cubierto. En «igual», 9999 declarado cierra.
+    - En el mock, el tercer ⅓ sobre 3334 se guarda como 3334 y cierra la mesa; con un faltante de 100 se guarda lo pedido y sigue abierta.
+    - T3: un test nuevo llega a la última línea con «ya no quedaba nada» en true. Ninguno llegaba así, y el mutante `return true` sobrevivía.
 - **Corrige el preámbulo de 0.253.0** (O01 de Codex), sin reescribir esa entrada:
   - «Nada se publica sin el OK de Mati (D63)» quedó viejo. Desde D382, lo que está en verde se publica sin pedirle el OK a Mati: el CI completo del PR sobre el SHA exacto y el GREEN de V. Mati lo prueba después (D63). Lo que el canon pide aprobar aparte (v2.51) sigue igual.
   - «Sin … idempotencia» tampoco vale: 0.253.0 sí tocó la idempotencia del lado del front (la memoria de las invitaciones), sin cambiar el servidor.
