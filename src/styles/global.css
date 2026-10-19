@@ -9409,13 +9409,19 @@ h1.pay-title-lbl {
 
 .ticket-total-fila {
   display: flex;
+  /* 0.253.1 · H01 (dictamen A01 de Codex): si el total y «Ver el ticket» no
+     entran en una fila (un total de miles, o una pantalla de 320), el botón
+     baja de renglón. Antes no podía, y el texto del total quedaba debajo del
+     botón. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
 }
 
+/* Sin `min-width: 0`: el importe nunca se achica por debajo de su texto, así
+   que se lee entero (H01). */
 .ticket-total-card .ticket-title-amount {
-  min-width: 0;
   line-height: 1;
   letter-spacing: -0.02em;
 }

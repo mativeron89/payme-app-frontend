@@ -51,6 +51,68 @@ export function bpsValido(valor: unknown): valor is number {
 }
 
 /**
+ * F1 (revisión de V sobre 0.253.1) · la tolerancia con la que el dueño da un
+ * plato por completo: un faltante de MENOS de 100 bps cuenta como cubierto
+ * (3 × ⅓ = 9999 cierra el plato). Es `COMPLETING_TOLERANCE_BPS` de
+ * `services/itemClaims.js` (:51). La usan `effectiveBps` en consumo (el pedido
+ * que dejaría menos de 100 se queda con todo lo que queda) e
+ * `informativeSelections.restanteDe` en «igual», que la importa.
+ *
+ * Procedencia: las dos fuentes, con el sha256 que declara
+ * `scripts/mirror-inventory.json` (el de c8432e7, el mismo en 0099eb93, que es
+ * 2.187.0 servido). El espejo no copia esos archivos (D268): el test ata el valor
+ * a esos sha y se pone rojo si el inventario adopta otro, para volver a medir.
+ * `itemClaims.js` es el mismo también en 66659eae (2.188.0);
+ * `informativeSelections.js` cambia en 2.188.0 (D389), con `restanteDe` igual.
+ */
+export const TOLERANCIA_DE_COMPLETAR = {
+  bps: 100,
+  fuentes: [
+    {
+      ruta: 'services/itemClaims.js',
+      donde: '`COMPLETING_TOLERANCE_BPS` (:51) y `effectiveBps` (:59-66)',
+      sha256: '85d6f8575d4fdee16383f0e336751fabde17fde2f0412d0ec47219e01c558214',
+    },
+    {
+      ruta: 'services/informativeSelections.js',
+      donde: '`restanteDe` (:64-65), que importa la constante',
+      sha256: '6b9daba7dd5620d79c5ee541419d7199a70a23ca69289f242fa7e2e1cad20c6d',
+    },
+  ],
+} as const;
+
+/**
+ * Cuánto queda de un plato si se guarda este borrador, con la decisión del
+ * dueño sobre si queda completo. `restante` es lo que publica (ya con la
+ * tolerancia aplicada), `propio` lo mío que el borrador reemplaza y `nuevo` lo
+ * del borrador. `null` si el borrador no entra: el dueño lo rechaza. Si el
+ * borrador toca el plato y dejaría menos de la tolerancia, queda 0: en consumo
+ * `effectiveBps` absorbe el remanente y en «igual» `restanteDe` lo da por
+ * cubierto. Sin tocarlo, lo publicado manda (el cierre de consumo suma lo
+ * guardado contra 10000 exacto).
+ *
+ * Lo que da el llamador como `propio`, y sus límites (anteriores a F1):
+ * - «igual»: lo guardado. Si lo publicado ya está en 0 por la tolerancia, el
+ *   faltante real (1 a 99 bps) no se ve: al bajar lo propio, el importe puede
+ *   diferir en esos bps del que publique el dueño. La decisión de cierre no
+ *   cambia, porque la diferencia queda en 100 o más.
+ * - consumo, en la hoja: lo liberable del plato que el borrador toca
+ *   (`propioEnConsumo` de `antesDeCerrar`), como el dueño, que lo suelta y lo
+ *   vuelve a tomar. La barra en vivo todavía da 0 (el borrador suma): sólo
+ *   difiere si el borrador incluye un plato que esta cuenta ya registró (una
+ *   respuesta perdida, dos pestañas), y ahí es sólo lo que muestra.
+ *
+ * Lo usan la hoja «antes de cerrar» (`seleccionCierraLaMesa`) y la barra en
+ * vivo (`progresoConBorrador`): una sola definición.
+ */
+export function restanteAlGuardar(restante: number, propio: number, nuevo: number): number | null {
+  const disponible = Math.min(10000, restante + propio);
+  if (!bpsValido(nuevo) || nuevo > disponible) return null;
+  const queda = disponible - nuevo;
+  return nuevo > 0 && queda < TOLERANCIA_DE_COMPLETAR.bps ? 0 : queda;
+}
+
+/**
  * La fracción con la que se PRESELECCIONA un ítem recién tildado: la mayor que
  * entra en lo que queda. `null` cuando el dato no es válido o cuando no entra
  * ninguna — y `null` significa "no se selecciona", nunca "tomá el entero".
@@ -253,8 +315,7 @@ export function progresoConBorrador(
     if (!bpsValido(restante)) return restante;
     const propio = bpsValido(propioRegistrado(item)) ? propioRegistrado(item) : 0;
     const nuevo = borrador.get(item.id) ?? 0;
-    const disponible = Math.min(10000, restante + propio);
-    return bpsValido(nuevo) && nuevo <= disponible ? disponible - nuevo : restante;
+    return restanteAlGuardar(restante, propio, nuevo) ?? restante;
   });
   if (enVivo.status !== 'known') return registrado;
   if (enVivo.complete && !registrado.complete) return { ...enVivo, complete: false, visualPercent: 99 };

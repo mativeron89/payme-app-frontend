@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { DivisionSlot, MesaDetail, MesaItem } from '../api/types';
 import {
   FRACTIONS,
+  TOLERANCIA_DE_COMPLETAR,
+  restanteAlGuardar,
   availableSlotsOf,
   bpsLabel,
   bpsValido,
@@ -633,5 +636,72 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía',
   it('la barra en vivo (progresoConBorrador) también llega a 100 sin elegir el $0', () => {
     const r = progresoConBorrador(conCero({ guarantee_mode: false }), (i) => i.remaining_bps, () => 0, new Map());
     expect(r).toMatchObject({ complete: true, visualPercent: 100 });
+  });
+});
+
+/**
+ * F1 (revisión de V sobre 0.253.1) · la tolerancia con la que el dueño da un plato por completo: un faltante de menos
+ * de 100 bps cuenta como cubierto. Antes el front exigía 0 exacto y, con 3 × ⅓, el último «Listo» cerraba la mesa sin
+ * la hoja. Viene de 0.227.0, no de D389.
+ */
+describe('F1 · la tolerancia del dueño (COMPLETING_TOLERANCE_BPS)', () => {
+  const leer = (ruta: string) => readFileSync(new URL(ruta, import.meta.url), 'utf8');
+
+  it('🔴 la procedencia: el sha256 de las dos fuentes del dueño es el del inventario adoptado (si cambia, volver a medir)', () => {
+    const inventario = JSON.parse(leer('../../scripts/mirror-inventory.json')) as {
+      archivos: ReadonlyArray<{ origen: string; sha256: string }>;
+    };
+    expect(TOLERANCIA_DE_COMPLETAR.fuentes.map((f) => f.ruta)).toEqual(['services/itemClaims.js', 'services/informativeSelections.js']);
+    for (const fuente of TOLERANCIA_DE_COMPLETAR.fuentes) {
+      const sha = inventario.archivos.find((a) => a.origen === fuente.ruta)?.sha256;
+      expect(sha, `el inventario adoptó otro ${fuente.ruta}: volver a medir ${fuente.donde}`).toBe(fuente.sha256);
+    }
+    expect(TOLERANCIA_DE_COMPLETAR.bps).toBe(100);
+  });
+
+  it('las dos réplicas del mock usan el mismo valor (consumo y «igual»)', () => {
+    expect(leer('../api/mock/mockApi.ts')).toContain(`const COMPLETING_TOLERANCE_BPS = ${TOLERANCIA_DE_COMPLETAR.bps};`);
+    expect(leer('../api/mock/store.ts')).toContain(`return 10000 - declarado < ${TOLERANCIA_DE_COMPLETAR.bps} ? 0 : 10000 - declarado;`);
+  });
+
+  it('🔴 ⅓ sobre los 3334 que quedan completa el plato; también un faltante de 99', () => {
+    expect(restanteAlGuardar(3334, 0, 3333)).toBe(0);
+    expect(restanteAlGuardar(3432, 0, 3333)).toBe(0);
+  });
+
+  it('el borde: un faltante de 100 o más no lo completa (el dueño compara con «< 100»)', () => {
+    expect(restanteAlGuardar(3433, 0, 3333)).toBe(100);
+    expect(restanteAlGuardar(6667, 0, 3333)).toBe(3334);
+  });
+
+  it('lo exacto sigue igual: ⅔ sobre ⅔ y ⅓ sobre ⅓ dan 0', () => {
+    expect(restanteAlGuardar(6667, 0, 6667)).toBe(0);
+    expect(restanteAlGuardar(3333, 0, 3333)).toBe(0);
+  });
+
+  it('sin tocar el plato manda lo publicado: un restante viejo de 50 sigue en 50 (el cierre de consumo suma contra 10000 exacto)', () => {
+    expect(restanteAlGuardar(50, 0, 0)).toBe(50);
+  });
+
+  it('«igual»: el borrador reemplaza lo propio; 3333 propios + 3333 de otros y el borrador pide ⅔ → 0', () => {
+    expect(restanteAlGuardar(3334, 3333, 6667)).toBe(0);
+    expect(restanteAlGuardar(3334, 3333, 3333)).toBe(3334);
+  });
+
+  it('un borrador que no entra es null (el dueño lo rechaza)', () => {
+    expect(restanteAlGuardar(3334, 0, 5000)).toBeNull();
+    expect(restanteAlGuardar(3334, 0, 3333.5)).toBeNull();
+  });
+
+  it('🔴 la barra en vivo: con 3 × ⅓, el importe asignado del tercero ya llega al total del plato (antes, unos centavos menos)', () => {
+    const tercio = mesa({ items: [item({ id: 'a', price_cents: 30000, remaining_bps: 3334 })], total_cents: 30000 });
+    const r = progresoConBorrador(tercio, (i) => i.remaining_bps, () => 0, new Map([['a', 3333]]));
+    expect(r).toMatchObject({ status: 'known', assignedCents: 30000, differenceCents: 0, complete: false, visualPercent: 99 });
+  });
+
+  it('control: con un faltante de 100 la barra en vivo no lo da por entero', () => {
+    const casi = mesa({ items: [item({ id: 'a', price_cents: 30000, remaining_bps: 3433 })], total_cents: 30000 });
+    const r = progresoConBorrador(casi, (i) => i.remaining_bps, () => 0, new Map([['a', 3333]]));
+    expect(r.status === 'known' && r.differenceCents).toBeGreaterThan(0);
   });
 });

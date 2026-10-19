@@ -146,10 +146,14 @@ test('División muestra el acceso al ticket compacto, sin subtítulo, al lado de
   const card = page.locator('.ticket-title-card');
   const totalCard = page.locator('.ticket-total-card');
   const trigger = page.getByRole('button', { name: 'Ver el ticket', exact: true });
+  await expect(totalCard.locator('.ticket-title-amount')).toHaveText('$840');
   await expect(trigger.locator('.tk-fold-sub')).toHaveCount(0);
-  const [cardBox, filaBox, totalCardBox, triggerBox, totalBox] = await Promise.all([
+  // H01 (dictamen A01 de Codex) · el total se mide por el rectángulo de su TEXTO (Range), no por su caja: la caja se
+  // podía encoger y el texto quedar debajo del botón.
+  const totalBox = await textoDelTotal(page);
+  const [cardBox, filaBox, totalCardBox, triggerBox] = await Promise.all([
     card.boundingBox(), card.locator('.title-card-fila').boundingBox(),
-    totalCard.boundingBox(), trigger.boundingBox(), totalCard.locator('.ticket-title-amount').boundingBox(),
+    totalCard.boundingBox(), trigger.boundingBox(),
   ]);
   await expect(card).not.toContainText('La Parolaccia');
   await expect(card.locator('.ticket-title-amount, .ticket-title-fold')).toHaveCount(0);
@@ -166,6 +170,99 @@ test('División muestra el acceso al ticket compacto, sin subtítulo, al lado de
   // A la derecha: donde termina el contenido (padding 16 + borde 1).
   expect((totalCardBox!.x + totalCardBox!.width) - (triggerBox!.x + triggerBox!.width)).toBeCloseTo(17, 0);
 });
+
+/** El rectángulo del TEXTO del total (Range), no el de su caja. */
+async function textoDelTotal(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate(() => {
+    const monto = document.querySelector('.ticket-total-card .ticket-title-amount')!;
+    const rango = document.createRange();
+    rango.selectNodeContents(monto);
+    const r = rango.getBoundingClientRect();
+    return { x: r.left, y: r.top, width: r.width, height: r.height };
+  });
+}
+
+// ─── H01 · dictamen A01 de Codex (D390) sobre 0.253.0: «Ver el ticket» tapaba el total ───────────────────────────
+//
+// La fila del total no dejaba bajar de renglón al botón (`flex: none`, ~183 px) y el importe se podía encoger
+// (`min-width: 0`) sin que su texto se acomodara: el texto quedaba DEBAJO del botón. Codex lo midió con $840 a 320 px
+// y con $1,250.50 a 375 y 390. Acá, con el flujo real: el ticket del mock suma $840 y se cambia el precio de un plato
+// para llegar a $1,250.50 y $12,345.67. Se mide el rectángulo del texto (Range) contra el del botón.
+
+async function hastaComoDividen(page: Page): Promise<void> {
+  await ingresar(page);
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
+  await sacarFoto(page);
+  await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+}
+
+/** Cambia el precio de «Tagliatelle Bolognese» ($195) en la hoja del ticket y la cierra. */
+async function precioDelTagliatelle(page: Page, precio: string): Promise<void> {
+  await page.getByRole('button', { name: 'Ver el ticket', exact: true }).click();
+  const hoja = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Modificar ítems' }).click();
+  await page.getByRole('button', { name: 'Modificar Tagliatelle Bolognese', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Precio por unidad', exact: true }).fill(precio);
+  await hoja.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Precio por unidad', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+async function medirElTotal(page: Page) {
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate(() => {
+    const tarjeta = document.querySelector('.ticket-total-card')!;
+    const monto = tarjeta.querySelector<HTMLElement>('.ticket-title-amount')!;
+    const boton = tarjeta.querySelector('.ticket-title-fold')!.getBoundingClientRect();
+    const rango = document.createRange();
+    rango.selectNodeContents(monto);
+    const texto = rango.getBoundingClientRect();
+    const t = tarjeta.getBoundingClientRect();
+    const dentro = (r: DOMRect) => r.left >= t.left - 0.5 && r.right <= t.right + 0.5;
+    const ancho = Math.max(0, Math.min(texto.right, boton.right) - Math.max(texto.left, boton.left));
+    const alto = Math.max(0, Math.min(texto.bottom, boton.bottom) - Math.max(texto.top, boton.top));
+    return {
+      interseccion: Math.round(ancho * alto * 100) / 100,
+      textoDentro: dentro(texto),
+      botonDentro: dentro(boton),
+      desborda: monto.scrollWidth > monto.clientWidth + 0.5,
+    };
+  });
+}
+
+async function capturar(page: Page, nombre: string): Promise<void> {
+  const dir = process.env.PAYME_E2E_CAPTURAS;
+  if (!dir) return;
+  const solo = process.env.PAYME_E2E_CAPTURAS_SOLO?.split(',').map((n) => n.trim()).filter(Boolean);
+  if (solo && !solo.includes(nombre)) return;
+  await page.screenshot({ path: `${dir}/${nombre}.png`, animations: 'disabled' });
+}
+
+const TOTALES = [['$840', null], ['$1,250.50', '605.50'], ['$12,345.67', '11700.67']] as const;
+
+for (const [ancho, alto] of [[320, 568], [375, 667], [390, 844]] as const) {
+  test.describe(`H01 · a ${ancho} px`, () => {
+    test.use({ viewport: { width: ancho, height: alto } });
+
+    test(`🔴 el total se lee entero y «Ver el ticket» no lo tapa: $840, $1,250.50 y $12,345.67`, async ({ page }) => {
+      await hastaComoDividen(page);
+      const monto = page.locator('.ticket-total-card .ticket-title-amount');
+      for (const [total, precio] of TOTALES) {
+        if (precio) await precioDelTagliatelle(page, precio);
+        // Control positivo: el total que se mide es el que se quiso poner.
+        await expect(monto).toHaveText(total);
+        // La captura va antes de las aserciones: también se toma cuando el caso falla (el «antes» del arreglo).
+        if (ancho === 390 && total === '$1,250.50') await capturar(page, 'h01-390-1250');
+        const m = await medirElTotal(page);
+        expect(m.interseccion, `${total} a ${ancho}: el texto del total y el botón no se tocan`).toBe(0);
+        expect(m.desborda, `${total} a ${ancho}: el texto no desborda su caja`).toBe(false);
+        expect([m.textoDentro, m.botonDentro], `${total} a ${ancho}: los dos dentro de la tarjeta`).toEqual([true, true]);
+      }
+    });
+  });
+}
 
 test('Configuración retira el cartel demo y conserva reinicio como fila compacta', async ({ page }) => {
   await ingresar(page);

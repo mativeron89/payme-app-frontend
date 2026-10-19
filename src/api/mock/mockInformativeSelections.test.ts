@@ -361,6 +361,61 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (
     expect(r.mesa.status).toBe('open');
   });
 
+  /**
+   * Como el dueño (`con_importe > 0`): una mesa sin ningún plato con importe no se da por cubierta, ni en el cierre por
+   * selección ni en la cobertura informativa. Sin esa regla, la mesa toda en $0 se cerraba con cualquier pedido.
+   */
+  it('consumo: una mesa toda en $0 no se cierra por selección, aunque se elija todo', async () => {
+    const consumo = await conCero('consumo', false);
+    consumo.pescado.price_cents = 0;
+    consumo.mesa.total_cents = 0;
+    const r = await consumo.mock.mockLockItems(consumo.mesa.code, [
+      { item_id: consumo.cero.id, fraction_bps: 10000 },
+      { item_id: consumo.pescado.id, fraction_bps: 10000 },
+    ], 'user');
+    expect(r).not.toHaveProperty('closure_reason');
+    expect(consumo.mesa.status).toBe('open');
+  });
+
+  it('igual informativo: una mesa toda en $0 no queda cubierta, aunque se declare todo', async () => {
+    const igual = await conCero('igual', false);
+    igual.pescado.price_cents = 0;
+    igual.mesa.total_cents = 0;
+    const cobertura = await igual.mock.mockReplaceInformativeSelection(igual.mesa.code, {
+      items: [{ item_id: igual.cero.id, declared_fraction_bps: 10000 }, { item_id: igual.pescado.id, declared_fraction_bps: 10000 }],
+      confirm_closure: true,
+    });
+    expect(cobertura.coverage.all_items_selected).toBe(false);
+    expect(cobertura.mesa.status).toBe('open');
+  });
+
+  /**
+   * F1 · el mock absorbe como el dueño (`effectiveBps` con `COMPLETING_TOLERANCE_BPS`): el ⅓ que deja menos de 100
+   * bps se guarda con todo lo que queda y la mesa se cierra; con un faltante de 100, se guarda lo pedido. Es lo que
+   * la hoja «antes de cerrar» predice con `restanteAlGuardar`.
+   */
+  async function tercio(otros: [number, number]) {
+    const r = await conCero('consumo', false);
+    r.mesa.items = [r.pescado];
+    r.pescado.claims = otros.map((fraction_bps) => ({ who: 'other' as const, fraction_bps, amount_cents: null, status: 'locked' as const }));
+    return r;
+  }
+
+  it('🔴 F1 · consumo: el tercer ⅓ sobre los 3334 que quedan se guarda como 3334 y cierra la mesa', async () => {
+    const { mock, mesa, pescado } = await tercio([3333, 3333]);
+    const r = await mock.mockLockItems(mesa.code, [{ item_id: pescado.id, fraction_bps: 3333 }], 'user');
+    expect(pescado.claims.filter((c) => c.who === 'user').map((c) => c.fraction_bps)).toEqual([3334]);
+    expect(r).toMatchObject({ mesa_status: 'expired', closure_reason: 'all_items_selected' });
+  });
+
+  it('F1 · el borde: con un faltante de 100 se guarda lo pedido y la mesa sigue abierta', async () => {
+    const { mock, mesa, pescado } = await tercio([3333, 3234]);
+    const r = await mock.mockLockItems(mesa.code, [{ item_id: pescado.id, fraction_bps: 3333 }], 'user');
+    expect(pescado.claims.filter((c) => c.who === 'user').map((c) => c.fraction_bps)).toEqual([3333]);
+    expect(r).not.toHaveProperty('closure_reason');
+    expect(mesa.status).toBe('open');
+  });
+
   it('🔴 /mesas/open: con el plato con precio elegido, assignment_complete es true; con garantía, false', async () => {
     for (const garantia of [false, true]) {
       vi.resetModules();

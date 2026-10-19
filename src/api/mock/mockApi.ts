@@ -2115,6 +2115,10 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
  * `assignment_complete` de `/mesas/open`. La mesa sin garantía del mock se
  * reconoce por `guarantee_mode === false` (el dueño exige además su marca
  * interna `sin_garantia`, que el mock no necesita: no tiene mesas legacy).
+ * Y, como el dueño, una mesa sin ningún plato con importe no se da por
+ * cubierta (`con_importe > 0`): el cierre por selección y la cobertura
+ * informativa lo piden aparte; `assignment_complete` ya lo exige con
+ * `total_cents > 0` y «líneas = total».
  */
 function ceroCubierto(m: MockMesa, item: MockMesa['items'][number]): boolean {
   return m.guarantee_mode === false && item.price_cents * item.quantity === 0;
@@ -2474,7 +2478,8 @@ function informativePaymentsDisabled(): boolean {
  */
 function informativeCoverage(mesa: MockMesa): boolean {
   const restantes = restanteInformativoPorPlato(mesa);
-  return mesa.items.length > 0 && mesa.items.every((item) => restantes.get(item.id) === 0 || ceroCubierto(mesa, item));
+  return mesa.items.some((item) => !ceroCubierto(mesa, item))
+    && mesa.items.every((item) => restantes.get(item.id) === 0 || ceroCubierto(mesa, item));
 }
 
 /**
@@ -3455,6 +3460,7 @@ export async function mockLockItems(
   const cerradaPorSeleccion = mesa.guarantee_mode === false
     && mesa.division_mode === 'consumo'
     && (mesa.status === 'open' || mesa.status === 'partially_paid')
+    && mesa.items.some((i) => !ceroCubierto(mesa, i))
     && mesa.items.every((i) => ceroCubierto(mesa, i) || i.claims
       .filter((cl) => cl.status === 'locked' || cl.status === 'paid')
       .reduce((suma, cl) => suma + cl.fraction_bps, 0) >= 10000);

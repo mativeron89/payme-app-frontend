@@ -33,6 +33,7 @@ import {
   elegidosAlGuardar,
   elegidosRegistrados,
   lineasElegidas,
+  propioEnConsumo,
   seleccionCierraLaMesa,
 } from './antesDeCerrar';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
@@ -856,9 +857,20 @@ export function MesaDetailView({
    * con algo nuevo que guardar y con lo que el dueño publica de cada plato: en
    * consumo el borrador se suma; en «igual», con la selección guardada ya leída,
    * la reemplaza.
+   * En consumo, lo propio de un plato que el borrador toca es lo liberable, que
+   * el dueño suelta y vuelve a tomar (`propioEnConsumo`, con el fail-safe hacia
+   * mostrar la hoja), y el dueño escribe con cualquier borrador no vacío. Antes
+   * era siempre 0: con una respuesta perdida o dos pestañas, la mesa podía
+   * cerrarse sin la hoja.
    */
   const listoCierraLaMesa = mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo
-    ? seleccionCierraLaMesa(mesa, (item) => item.remaining_bps, () => 0, selected)
+    ? seleccionCierraLaMesa(
+      mesa,
+      (item) => item.remaining_bps,
+      (item) => propioEnConsumo(item, selected),
+      selected,
+      { escribeConCualquierBorrador: true },
+    )
     : guardadaLeida && !informativeSaved && informativoPublicado(mesa)
       && seleccionCierraLaMesa(
         mesa,

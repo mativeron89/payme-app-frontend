@@ -219,9 +219,11 @@ test.describe('P04 · D371 · el plato en $0', () => {
 
   /**
    * D389 · un plato de $0 cuenta como elegido para cerrar la mesa (mesa sin garantía, la regla del dueño 2.188.0 y
-   * su réplica en el mock). Antes la mesa quedaba en 99 % y no se cerraba sola con el agua sin elegir.
+   * su réplica en el mock). Antes la mesa quedaba en 99 % y no se cerraba sola con el agua sin elegir. Y la hoja
+   * «antes de cerrar» (D240-8) tiene que salir: sin la regla en `seleccionCierraLaMesa`, el «Listo» se mandaba directo
+   * y el dueño cerraba la mesa sin que se pudiera corregir lo elegido.
    */
-  test('🔴 D389 · con el agua en $0 sin elegir, elegir los demás platos cierra la mesa, al 100 %', async ({ page }) => {
+  test('🔴 D389 · con el agua en $0 sin elegir, elegir los demás platos avisa con la hoja y cierra la mesa, al 100 %', async ({ page }) => {
     await hastaComoDividen(page);
     await editarPrecio(page, 'Agua mineral', '0');
     await expect(page.locator('.ticket-title-amount')).toHaveText('$800');
@@ -240,6 +242,12 @@ test.describe('P04 · D371 · el plato en $0', () => {
     for (let i = 0; i < 6; i += 1) await conPrecio.nth(i).getByRole('button').first().click();
     await expect(page.locator('.qc-lista .qc-renglon [data-estado="mio"]')).toHaveCount(6);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // La hoja sale ANTES de mandar nada: la mesa sigue en «Tu mesa» y lo elegido se puede revisar.
+    const hoja = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
+    await expect(hoja).toBeVisible();
+    await expect(hoja.getByText('Con tu selección ya se eligió todo lo de la mesa.')).toBeVisible();
+    await expect(page).toHaveURL(/\/mesa\//);
+    await hoja.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
     await expect(page.getByText('Se eligieron todos los consumos.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
