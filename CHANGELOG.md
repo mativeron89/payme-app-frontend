@@ -21,6 +21,12 @@ Orden `d341-noche/ORDEN_AF_0_255_1_PULIDO_TUTORIAL_20261019.md` (6289bfe8…), b
     - la invitación pendiente, también a 375 × 667.
   - E10-2: el aside marcado esconde la capa en el mismo tick, sin esperar un cuadro.
   - T6: mientras fallan los viajes, la tarjeta Tutorial no está.
+- **El CI de main sobre `12de695` dio rojo en un test de la guía,** y por eso no se publicó (producción siguió en 0.255.0).
+  - **El test:** `guia-motor-y-seguro.spec.ts`, el del doble toque. Falló en sus tres intentos porque, en Más, la burbuja de 2a tapaba la fila de Ayuda y el toque no llegaba.
+  - **Dónde pasó:** en el CI del PR y en local, sobre el mismo SHA, la fila quedaba fuera de esa franja.
+  - **La causa probable, no medida:** el cambio de disposición del runner por la migración de `ubuntu-latest` a Ubuntu 26.
+  - **El arreglo, sólo en el test:** se dispara el click sobre la fila (`dispatchEvent`, rotulado como costura). Lo que se prueba es que su handler, con la guía abierta, no hace nada; el unitario de `abrirLaGuia` también lo fija.
+  - **Por qué no se llevó la fila al centro con scroll:** si eso alcanzaba sólo se iba a ver en el CI, porque en local no se reproduce.
 - **R3 · riesgo conocido, se declara y no se cambia código:**
   - Sin el ejemplo, `/mesa/PA-1224` vuelve a Inicio y la fachada rechaza ese código. Una mesa real con ese código quedaría inalcanzable.
   - V midió que el dueño generó códigos de 4 cifras sólo entre `5acf8e9` (2026-07-11) y `e8a3faf` (2026-08-03); desde entonces son de 5.

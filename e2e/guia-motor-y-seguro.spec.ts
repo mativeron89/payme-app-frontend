@@ -94,7 +94,11 @@ test.describe('revisión de V · el ejemplo arranca con la primera burbuja', () 
     // Más es del recorrido en la fase de la foto: la fila de Ayuda tampoco reabre.
     await page.getByRole('button', { name: 'Más', exact: true }).click();
     await expect.poll(() => pathname(page)).toBe('/mas');
-    await page.getByRole('button', { name: 'Cómo usar PayMe' }).click();
+    // Costura: en Más la 2a va arriba de la barra y, según la disposición del runner, tapa la fila de Ayuda (el CI de
+    // main sobre 12de695 lo vio en sus tres intentos: el toque físico no llega). Se dispara el click sobre la fila, que
+    // es lo que se prueba: su handler, con la guía abierta, no hace nada. El no-op lo fija también el unitario de
+    // abrirLaGuia.
+    await page.getByRole('button', { name: 'Cómo usar PayMe' }).dispatchEvent('click');
     await expect(burbuja(page, TEXTO_2A)).toBeVisible();
     expect(await fase(page)).toBe('foto');
     await hastaLaCamara(page);
