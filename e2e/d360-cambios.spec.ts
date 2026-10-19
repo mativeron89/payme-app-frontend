@@ -435,6 +435,12 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
       .getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(hoja.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
     await capturar(page, 'd360-10-hoja-de-la-mesa');
+    // Con propina, 12 entre la fila de compartir y la propina.
+    const aireConPropina = await hoja.evaluate((el) => {
+      const fila = el.querySelector('.mesa-secondary-actions')!;
+      return el.querySelector('.propina-mesa')!.getBoundingClientRect().top - fila.getBoundingClientRect().bottom;
+    });
+    expect(Math.abs(aireConPropina - 12), 'entre compartir y la propina, 12').toBeLessThanOrEqual(1);
 
     // Cambiarla desde la hoja la guarda; Escape cierra y el foco vuelve al engranaje.
     await hoja.getByRole('radio', { name: '15%', exact: true }).click();
@@ -529,6 +535,16 @@ test.describe('D379 · «Invitar amigos» en la hoja del engranaje conserva lo e
     };
 
     await engranaje.click();
+    // PA-2847 tiene garantía: su hoja no lleva propina, la fila de compartir es lo último y la hoja termina con su
+    // relleno, sin 12 de más (enmienda 15). Control positivo: la fila está y la propina no.
+    await expect(abrirPanel).toBeVisible();
+    await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })).toHaveCount(0);
+    const final = await hoja.evaluate((el) => ({
+      aire: el.getBoundingClientRect().bottom - el.querySelector('.mesa-secondary-actions')!.getBoundingClientRect().bottom,
+      relleno: parseFloat(getComputedStyle(el).paddingBottom),
+    }));
+    expect(Math.abs(final.aire - final.relleno), 'debajo de compartir, sólo el relleno de la hoja').toBeLessThanOrEqual(1);
+    await capturar(page, 'd360-13-hoja-sin-propina');
     await abrirPanel.click();
     await boton('Invitar').click();
     await expect(toast).toHaveText('No pudimos confirmar la invitación a Sofía. Reintenta la misma: vamos a reutilizarla.');
