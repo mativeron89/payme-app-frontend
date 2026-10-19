@@ -1817,9 +1817,13 @@ export function LoginScreen({
   const ranuraGoogle = (
     <div className="social-provider-slot">
       {paqueteVigente && googlePuedeCrear && casillasLegales}
+      {/* P02-b · con las casillas del alta a la vista y sin marcar, Google no responde hasta marcarlas: el aviso lo dice
+          (respuesta de V, punto 8). */}
       {avisoGoogle && (
         <p className="note note-teal ingreso-aviso-salida-google" role="status">
-          {t('Parece que Google no terminó. Toca «Continuar con Google» de nuevo.')}
+          {googleInerte
+            ? t('Parece que Google no terminó. Marca las casillas y toca «Continuar con Google» de nuevo.')
+            : t('Parece que Google no terminó. Toca «Continuar con Google» de nuevo.')}
         </p>
       )}
       <div

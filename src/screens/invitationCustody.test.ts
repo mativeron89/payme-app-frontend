@@ -406,6 +406,33 @@ describe('ORDEN 4B · la pantalla delega, no reimplementa', () => {
     expect(texto).toContain('closeInvitationCustody()');
     expect(texto).toContain('settleInvitationFailure(status)');
   });
+
+  /**
+   * D372 · el rediseño de la pantalla no puede mover la secuencia: abrir la
+   * custodia, canjear, cerrarla recién cuando el canje cierra (en el `.then`) y
+   * resolver el fallo en el `.catch`. Cada una, una sola vez. Sobre el código sin
+   * comentarios, para que un comentario que las nombre no cuente.
+   */
+  it('🔴 D372 · y en ESTE orden: abre, canjea, cierra al canjear y resuelve el fallo en el catch', () => {
+    const codigo = cuerpo()
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    const veces = (s: string) => codigo.split(s).length - 1;
+    for (const llamada of ['openInvitationCustody(', 'closeInvitationCustody(', 'settleInvitationFailure(', '.acceptInvitationLink(']) {
+      expect(veces(llamada), llamada).toBe(1);
+    }
+    const abre = codigo.indexOf('openInvitationCustody(code, token)');
+    const canjea = codigo.indexOf('.acceptInvitationLink(token)');
+    const alCanjear = codigo.indexOf('.then(', canjea);
+    const cierra = codigo.indexOf('closeInvitationCustody()');
+    const alFallar = codigo.indexOf('.catch(', canjea);
+    const resuelve = codigo.indexOf('settleInvitationFailure(status)');
+    // Control positivo: las seis marcas están.
+    for (const [nombre, i] of Object.entries({ abre, canjea, alCanjear, cierra, alFallar, resuelve })) expect(i, nombre).toBeGreaterThan(-1);
+    expect([abre < canjea, canjea < alCanjear, alCanjear < cierra, cierra < alFallar, alFallar < resuelve])
+      .toEqual([true, true, true, true, true]);
+  });
 });
 
 // ─── Ancla ───────────────────────────────────────────────────────────────────
