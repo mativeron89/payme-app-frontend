@@ -1,5 +1,57 @@
 # 0.255.0 · 2026-10-19
 
+## Tutorial nuevo «Tu turno» (D363–D367)
+
+El tutorial del paquete de Claude Design (zip 0d97650b…, ficha `PANTALLA-tutorial-tu-turno.md`), con el plan técnico (5358aac7…), su delta (55b036c9…) y las respuestas de V (4ad77ba9… y 57d0cc6e…, que manda). Reemplaza la guía de D327/D328 y sustituye al PR #67, sin borrar su rama.
+
+- **Cómo se llega (D364).** La guía ya no arranca sola al entrar ni al sumarse por un link; deja sin efecto D328 y la recomendación 2 de D343.
+  - La abren la **tarjeta «Tutorial»** de Inicio y **Más → Ayuda → «Cómo usar PayMe»**.
+  - La tarjeta va debajo de la invitación pendiente, si la hay (Q5). Su ✕ roja la quita para esta cuenta y este dispositivo (Q1).
+  - «Terminar guía» también la quita. Si la guía se abre desde Ayuda y se deja a medias, la tarjeta vuelve.
+  - No aparece dentro de las fechas de un viaje (D365), con una apertura de mesa sin confirmar, ni a quien marcó el «No volver a mostrar» de antes (D364, Q8). Esa marca ahora sólo se lee: nada la vuelve a escribir.
+  - Mientras algo de eso todavía no se sabe, la tarjeta no aparece, para no aparecer y después irse.
+  - En las fechas de un viaje, la fila de Ayuda se ve deshabilitada y dice «Disponible fuera de las fechas de un viaje» (Q9). Con una apertura sin confirmar, la fila avisa y el ejemplo no arranca.
+- **El recorrido, sobre una mesa de ejemplo.** «Restaurante Ejemplo», tres platos, $600, mesa PA-1224.
+  - **2a:** la burbuja sobre Escanear, sin ✕, con «Realizar el tutorial en otro momento».
+  - **2b:** la leyenda va 12 arriba de la galería, con la flecha al costado del disparador. Dice «Saca o elige una foto: te mostraremos un ticket de ejemplo.» (P1 de V, por D368). La foto no se lee.
+  - **3a:** la hoja del ticket se abre sola y la burbuja convive con ella, arriba. Su Siguiente cierra la hoja; Escape también la cierra primero.
+  - **2c:** sin burbuja; los «?» son de la app.
+  - **2d:** dos subpasos (Q2): la tarjeta de invitar con «1 de 2» y después la flecha a Continuar con «2 de 2».
+  - **2e:** «Tus consumos», con el texto de la ficha. En «En partes iguales» y «Pagar el total», el de selección opcional (Q10).
+  - **4a:** en Inicio, la mesa de ejemplo con la píldora «Ejemplo», en el lugar de la tarjeta. Dice cuánto ya se eligió de la cuenta (D367, Q6), y «Ver mesa →» hace lo mismo que «Terminar guía».
+  - El «Listo» del ejemplo termina en Inicio.
+- **Salir en cualquier paso** cierra la guía y borra la mesa de ejemplo (D367, Q7). Vale para la ✕, Escape, «otro momento», otra pestaña y «Volver», que en el ejemplo, desde ¿Cómo dividen?, vuelve a Inicio. La tarjeta sigue a la vista.
+- **La mesa de ejemplo es 100 % local** (`src/ayuda/ejemplo/`).
+  - **El estado** vive en memoria, sin storage.
+  - **La fachada `api` está envuelta.** Cada uno de los 157 métodos tiene una clase: 6 locales (se contestan de memoria), 34 cortados (se rechazan sin salir) y 117 que pasan.
+  - Mientras dura el ejemplo, no se pide nada de la familia mesa, ticket, invitación, propina, OCR ni pago, y no se escribe nada.
+  - **Las costuras en pantalla** (un solo booleano `ejemplo`, P2): la foto, el restaurante del QR, «Continuar» (ni `createMesa` ni journal), «Modificar ítems», el link, invitar y la propina de Compartir, y en «Tu mesa» el engranaje, el «Listo» que cierra, las solicitudes, las tarjetas (`getPaymentMethods`) y «Cerrar mesa».
+  - **La ruta:** `/mesa/PA-1224` sin el ejemplo vuelve a Inicio sin pedir nada.
+  - **El e2e corre contra el mock;** en el build real, la garantía es estructural: la clasificación de la fachada, las costuras y el rechazo local de PA-1224.
+- **Concreción de V (no de Mati ni de Claude Design):**
+  - el texto de 2d «2 de 2»: «Toca Continuar para elegir lo tuyo.»;
+  - el de 2e en «igual»: «**Marca lo que consumiste, si quieres.** Si compartiste, selecciona cuánto del plato consumiste. Toca Listo para guardar lo que elegiste.»;
+  - con la mesa de ejemplo en Inicio no se dice «No tienes mesas abiertas» (enmienda 2, confirmada);
+  - el criterio de la fachada: aceptar una invitación real y las lecturas de Inicio pasan, porque usan ids o tokens reales; el saldo y los movimientos, cortados (familia dinero).
+- **Enmiendas de `d363_front`:**
+  - 1: los seis ajustes del reporte de anclas;
+  - 2: lo de arriba sobre «No tienes mesas abiertas»;
+  - 3: el glifo `map` en `Icon.tsx`, que es el ícono del diseño aprobado del tutorial (D363), no el proyecto de íconos E2 que pausó D324;
+  - 4: una línea en `PestanaViajes.test.tsx` y otra en `ViajesEnInicio.test.tsx`, que fijan el texto de `avisoSinMesas`;
+  - 5: «invitarás», futuro de tú y texto de la ficha, entra en la lista de español legítimo de la guarda de voseo.
+- **Se borra `e2e/guia-opcional-d326.spec.ts`**, incluido su test D379 (P4): describía la guía que deja de existir. Lo reemplaza `e2e/guia-tutorial.spec.ts`, más `e2e/guia-ejemplo-sin-red.spec.ts`, el que cuenta cero.
+- **Inicio sigue esperando** a la consulta de invitaciones y al aviso de privacidad de fotos antes de mostrar la burbuja: el aviso va primero.
+- **El inglés** de las frases nuevas lo redactó AF y lo aprueba Diseño.
+- **No se implementó (se declara):**
+  - la salida animada de 120 ms;
+  - el desvanecimiento de la tarjeta de ejemplo al terminar (200 ms) y la subida de lo de abajo (280 ms).
+  - La guía entra animada (200 ms, sólo opacidad con «Reducir movimiento») y sale sin animación.
+- **Se declara:**
+  - En 2e, a 390 y a 375, la burbuja va arriba de «Tus consumos» y tapa la cabecera y «Quiénes». Es la regla de la ficha: 12 del área segura.
+  - El código de PA-1224 en Compartir se ve deshabilitado, porque no hay link.
+- **No medido:** el menú del iPhone al tocar Escanear (D368) es de la plataforma. Lo ve Mati en su prueba.
+- **Corrección:** el mensaje del commit 1 de esta entrega (01b8d0f) dice «53 mutantes». Son 51 de comportamiento y 5 de tipos.
+
 ## Seguimiento de 0.254.0
 
 Lo que dejaron la revisión de V sobre 0.254.0 y la propia de AF sobre el merge. La entrada de 0.254.0 no se reescribe: lo que quedó viejo se corrige acá.
