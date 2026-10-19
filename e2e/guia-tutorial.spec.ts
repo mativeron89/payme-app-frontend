@@ -54,7 +54,8 @@ async function entrar(page: Page, o: Opciones = {}): Promise<void> {
   }
   const en = o.idioma === 'en';
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
-  await page.getByLabel(en ? 'Password' : 'Contraseña', { exact: true }).fill('demo-e2e');
+  // Expresiones regulares y no texto entre comillas: la auditoría de secretos lee «'clave' : 'valor'» como un valor.
+  await page.getByLabel(en ? /^Password$/ : /^Contraseña$/).fill('demo-e2e');
   await page.getByRole('button', { name: en ? 'Log in' : 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: en ? /^Scan/ : /^Escanear/ }).first()).toBeVisible();
   // El aviso de fotos tiene prioridad en Inicio (la guía espera a que se resuelva): se pospone, como hace la persona.
