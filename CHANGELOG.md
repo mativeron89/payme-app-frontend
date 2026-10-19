@@ -1,3 +1,18 @@
+# 0.253.1 · 2026-10-18
+
+Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOOP-PAYME-004-A01-CODEX-DICTAMEN-01, sha256 15c4603e…).
+
+- **H01 · «Ver el ticket» tapaba el total** en la tarjeta del total de «¿Cómo dividen?». La fila no dejaba bajar de renglón al botón, y el importe se podía achicar sin que su texto se acomodara. Con $840 a 320 px, o con $1,250.50 a 375 y a 390 px, el texto quedaba debajo del botón.
+  - Ahora, si el total y el botón no entran juntos, el botón baja de renglón, y el importe nunca se achica por debajo de su texto.
+  - Es sólo CSS: no cambian los importes ni la lógica.
+- **Tests:**
+  - Un e2e nuevo mide a 320, 375 y 390 px, con $840, $1,250.50 y $12,345.67, el rectángulo del texto del total (Range) contra el del botón. Los totales salen del ticket del mock, cambiando el precio de un plato. Exige que no haya intersección ni desborde, y que los dos queden dentro de la tarjeta.
+  - Con el CSS de 0.253.0 da rojo en 320/$840, 375/$1,250.50 y 390/$1,250.50: es el control positivo.
+  - El test de la tarjeta (`af-correcciones-visuales-01`) también mide el texto con Range, no su caja.
+- **Corrige el preámbulo de 0.253.0** (O01 de Codex), sin reescribir esa entrada:
+  - «Nada se publica sin el OK de Mati (D63)» quedó viejo. Desde D382, lo que está en verde se publica sin pedirle el OK a Mati: el CI completo del PR sobre el SHA exacto y el GREEN de V. Mati lo prueba después (D63). Lo que el canon pide aprobar aparte (v2.51) sigue igual.
+  - «Sin … idempotencia» tampoco vale: 0.253.0 sí tocó la idempotencia del lado del front (la memoria de las invitaciones), sin cambiar el servidor.
+
 # 0.253.0 · 2026-10-18
 
 Los cambios que pidió Mati después de probar la app (D360, con D366, D368, D369, D370, D371 y D377) y la parte del front del tope de 50 personas (D375, owner-first: el dueño 2.187.0 está servido según lo midió el Bibliotecario V; acá no se midió). Sin pagos, importes, idempotencia, B-06 ni el censo P36. La «lectura de siempre» del OCR no se toca. Nada se publica sin el OK de Mati (D63).
