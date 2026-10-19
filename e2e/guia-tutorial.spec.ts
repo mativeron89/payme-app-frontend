@@ -266,9 +266,14 @@ test.describe('D363 · el recorrido', () => {
     expect(lista.some((l) => l.metodo === 'lockItems' && l.codigo === 'PA-1224')).toBe(true);
     expect(await mesasDelMock(page)).toBe(antes);
 
-    // La tarjeta no vuelve: terminar la guía la oculta para esta cuenta y este dispositivo (Q1).
+    // La tarjeta no vuelve: terminar la guía la oculta para esta cuenta y este dispositivo (Q1). Con el aviso de fotos
+    // respondido otra vez después de recargar (su «Ahora no» vive en memoria): si no, la tarjeta faltaría por el aviso
+    // (enmienda 10) y esta ausencia no diría nada de Q1.
     await page.reload();
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    const aviso = page.getByRole('complementary', { name: 'Actualización del Aviso de Privacidad', exact: true });
+    await aviso.getByRole('button', { name: 'Ahora no', exact: true }).click();
+    await expect(aviso).toHaveCount(0);
     await expect(tarjeta(page)).toHaveCount(0);
   });
 
@@ -353,6 +358,11 @@ test.describe('D363 · la tarjeta y Más → Ayuda', () => {
     await expect(tarjeta(page)).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    // El «Ahora no» del aviso de fotos vive en memoria: la recarga lo trae de vuelta, y con el aviso pendiente la
+    // tarjeta espera (enmienda 10). Se responde otra vez, como haría la persona.
+    const aviso = page.getByRole('complementary', { name: 'Actualización del Aviso de Privacidad', exact: true });
+    await aviso.getByRole('button', { name: 'Ahora no', exact: true }).click();
+    await expect(aviso).toHaveCount(0);
     await expect(tarjeta(page)).toHaveCount(0);
     // 1o · Más → Ayuda abre 2a (sobre Escanear, en Más) y crea otra mesa de ejemplo.
     await page.getByRole('button', { name: 'Más', exact: true }).click();

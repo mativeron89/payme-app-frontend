@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink } from './_app';
 import {
-  abrirDesdeLaTarjeta, ejemploSePrendio, entrar, espiarElEjemplo, geometria, hastaLaCamara, pathname, tarjeta,
+  abrirDesdeLaTarjeta, ejemploSePrendio, entrar, espiarElEjemplo, geometria, hastaLaCamara, pathname, posponerElAvisoDeFotos, tarjeta,
 } from './_guia';
 
 /**
@@ -74,6 +74,9 @@ test.describe('D364 · la guía no se abre sola', () => {
       window.dispatchEvent(new Event('popstate'));
     });
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    // El `goto` del link recargó: el «Ahora no» del aviso de fotos, que vive en memoria, se perdió, y con el aviso
+    // pendiente la tarjeta espera (enmienda 10). Se responde, como haría la persona.
+    await posponerElAvisoDeFotos(page);
     await abrirDesdeLaTarjeta(page);
     expect(await capaVista(page)).toBe(true);
     await expect.poll(() => ejemploSePrendio(page)).toBe(true);

@@ -77,7 +77,11 @@ El tutorial del paquete de Claude Design (zip 0d97650b…, ficha `PANTALLA-tutor
   - la fila de Más → Ayuda espera con su línea, «Primero responde el aviso «Tu foto entre amigos» en Inicio.» (concreción de V; el inglés espera a Diseño);
   - el motor trata lo marcado con `data-guia-espera` como una ventana: la burbuja espera mientras se ve. Eso cubre la vuelta a Inicio en 4a con el aviso sin consultar.
 
-  Al responder el aviso, con «Entendido» o «Ahora no», vuelven. La invitación sigue sin frenar la guía. `FriendAvatarNotice.tsx` informa su estado a un store nuevo, `src/ayuda/avisoDeFotos.ts` (por cuenta y familia), con el diff que aprobó V: es la forma de D328, otro consumidor y la marca en el `aside`.
+  Al responder el aviso, con «Entendido» o «Ahora no», vuelven. La invitación sigue sin frenar la guía.
+
+  **Conducta que queda a la vista (se declara):**
+  - El «Ahora no» del aviso «Tu foto entre amigos» vive en memoria, como antes. Después de recargar, el aviso vuelve a quedar pendiente y la tarjeta Tutorial espera hasta que se responda de nuevo.
+  - Recién recargado, Más → Ayuda puede abrirse antes de que Inicio sepa del aviso («sin saber» no traba la fila). La regla `data-guia-espera` evita que la burbuja lo tape al volver a Inicio. `FriendAvatarNotice.tsx` informa su estado a un store nuevo, `src/ayuda/avisoDeFotos.ts` (por cuenta y familia), con el diff que aprobó V: es la forma de D328, otro consumidor y la marca en el `aside`.
 - **Enmiendas de `d363_front`, de la 6 a la 9:**
   - 6: el mock sin PA-1224, los tests de la ronda y la ruta de `TuMesa` corregida (`src/components/`);
   - 7: `InvitacionEnInicio.tsx` y `FriendAvatarNotice.tsx` pierden sólo la llamada a `usePrioridadGuia` y su import;
@@ -88,7 +92,8 @@ El tutorial del paquete de Claude Design (zip 0d97650b…, ficha `PANTALLA-tutor
   - **Las cuentas de e2e de dos mensajes de commit juntan corridas distintas:**
     - En `8c3c937`, «16/16 de las dos de la guía sobre este árbol» es de una corrida hecha sobre un árbol con dos líneas de e2e distintas de las commiteadas.
     - En `390ca22`, «10/10» fue primero 9/10 (falló el control del link) y después 1/1 con ese test cambiado.
-    - Valen la regresión sobre `8c80bd9` (60 specs, 489 de 489, `retries: 0` local, 14:57–15:21 UTC) y la corrida conjunta de las specs de la guía sobre el SHA final, que va en la entrega a V y en el PR.
+    - Valen la regresión sobre `8c80bd9` (60 specs, 489 de 489, `retries: 0` local, 14:57–15:21 UTC) y el CI completo del PR sobre el SHA final (D168, por decisión de V).
+    - La corrida conjunta de las cinco specs de la guía sobre `3c165bd` dio 31 de 33. Los dos rojos eran tests que asumían el aviso de fotos resuelto después de recargar; se arreglaron sin otra corrida local, y la reserva de 24 corridas quedó agotada.
   - El test del link entra con otro email, pero en el mock es la misma cuenta: prueba la entrada por el link, no una cuenta nueva. Para llegar a Inicio desde la bienvenida usa una costura (`history.pushState`).
   - En el e2e del reintento de Ayuda, que nada se pida antes del regreso se ve en el instante. Que no haya un reintento por temporizador lo fija el unitario de `escucharElRegreso`.
   - **Lo que la revisión de V pidió en tests y no se hizo:**
