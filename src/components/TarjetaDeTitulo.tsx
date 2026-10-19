@@ -39,13 +39,38 @@ export const ICONOS_DE_TARJETA = {
 
 export type IconoDeTarjeta = keyof typeof ICONOS_DE_TARJETA;
 
-/** El cuadro de 48 × 48 con el ícono. `cierre`: el naranja de «¡Listo!», el único. */
-export function CuadroDeTarjeta({ icono, cierre = false }: { icono: IconoDeTarjeta; cierre?: boolean }) {
+/**
+ * D372 · los dos íconos nuevos de la invitación, del canvas de Claude Design
+ * (`App-Te-invitaron-a-una-mesa.dc.html`, 764c46e2…, `IC.link` e `IC.retry`):
+ * el link cortado de los rechazos y «reintentar» de lo que se puede reintentar.
+ * Misma convención: trazo, 24 × 24, un solo `<path>`. Van en un mapa aparte
+ * para no tocar el censo de D285 (`ICONOS_DE_TARJETA`).
+ */
+export const ICONOS_DE_LA_INVITACION = {
+  'link-cortado': 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1M4 4l16 16',
+  reintentar: 'M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6',
+} as const;
+
+export type IconoDeLaInvitacion = keyof typeof ICONOS_DE_LA_INVITACION;
+
+const TRAZOS: Readonly<Record<IconoDeTarjeta | IconoDeLaInvitacion, string>> = { ...ICONOS_DE_TARJETA, ...ICONOS_DE_LA_INVITACION };
+
+/**
+ * El cuadro de 48 × 48 con el ícono. `cierre`: el naranja de «¡Listo!», el único.
+ * `exito` (D372): el verde del canje hecho («¡Te sumaste a la mesa!»).
+ */
+export function CuadroDeTarjeta({ icono, cierre = false, exito = false }: {
+  icono: IconoDeTarjeta | IconoDeLaInvitacion;
+  cierre?: boolean;
+  exito?: boolean;
+}) {
+  const clase = cierre ? 'title-card-cuadro title-card-cuadro--cierre'
+    : exito ? 'title-card-cuadro title-card-cuadro--exito' : 'title-card-cuadro';
   return (
-    <span className={cierre ? 'title-card-cuadro title-card-cuadro--cierre' : 'title-card-cuadro'} data-icono={icono} aria-hidden="true">
+    <span className={clase} data-icono={icono} aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={cierre ? 2.6 : 1.7}
         strokeLinecap="round" strokeLinejoin="round" focusable="false">
-        <path d={ICONOS_DE_TARJETA[icono]} />
+        <path d={TRAZOS[icono]} />
       </svg>
     </span>
   );

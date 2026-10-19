@@ -3967,6 +3967,117 @@ html.app-de-inicio-ios .app {
   color: var(--text-muted);
 }
 
+/* ─── D372 · la invitación base (Claude Design, con las resoluciones de V) ───
+   Una tarjeta (`TarjetaDeLink`, sobre .title-card) para los diez estados, y la
+   barra reducida de D y E. Separaciones en la escala (Q3: 20 → 24, 10 → 12);
+   las alturas propias (botón 52, barra 64, resguardo 104) se quedan. Las
+   duraciones (40, 120 y 200 ms) van locales acá (Q5), sin tokens --mo-*. */
+
+/* El cuerpo: DM Sans 16/1.5, a 12 de la fila (el gap de la tarjeta). */
+.link-cuerpo {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* D · el restaurante, si llegó: 16/1.5 en 600. Nunca antes del canje. */
+.link-restaurante {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Los botones, dentro de la tarjeta: 24 del cuerpo (12 de acá más el gap de 12
+   de la tarjeta) y 12 entre ellos. */
+.link-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+
+/* D y E · la barra reducida: blanca, de borde a borde, esquinas de 24 arriba y
+   la sombra de .appbar-block (adenda b). Su alto es el de la barra principal
+   (`--appbar-alto`: 64 en Safari, y la regla del área segura de D173). Va
+   absoluta contra `.app`, nunca fixed (D256), y sin translateX: la entrada usa
+   transform. El círculo va montado a −16. */
+.link-barra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--appbar-alto);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -2px 8px rgba(16, 30, 59, 0.08);
+  z-index: 19;
+}
+
+.link-barra .link-round {
+  margin-top: -16px;
+}
+
+/* C · el aro de espera, dentro del cuadro navy: 24 × 24, borde de 3, una vuelta
+   por segundo. Quieto con «reducir movimiento» (abajo). */
+.link-aro {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--on-dark);
+  animation: spin 1s linear infinite;
+}
+
+/* La entrada de la tarjeta y de la barra: 200 ms, con 40 de retraso. La banda no
+   anima («ya está»). La salida de C no se programa (ver el CHANGELOG). */
+.link-screen > .title-card,
+.link-alta > .title-card,
+.link-barra {
+  animation: link-entra 200ms cubic-bezier(0.2, 0, 0, 1) 40ms both;
+}
+
+@keyframes link-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes link-entra-quieta {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* «Reducir movimiento»: sólo la opacidad, en 120 ms, sin retraso; el aro quieto. */
+@media (prefers-reduced-motion: reduce) {
+  .link-screen > .title-card,
+  .link-alta > .title-card,
+  .link-barra {
+    animation: link-entra-quieta 120ms linear both;
+  }
+  .link-aro {
+    animation: none;
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    COMPARTIR · SPEC_APP.md §1.7
    El momento de triunfo del organizador. El código es el protagonista y el
@@ -4853,6 +4964,24 @@ html.app-de-inicio-ios .app {
 
 .title-card-cuadro--cierre {
   background: var(--brand);
+}
+
+/* D372 · el canje hecho («¡Te sumaste a la mesa!»): el cuadro en --success, con
+   el tilde en blanco (el --on-dark del cuadro, 5.48:1). Reemplaza al círculo de
+   72 de antes. */
+.title-card-cuadro--exito {
+  background: var(--success);
+}
+
+/* D374 · en B la tarjeta va SUELTA, arriba del formulario, que no cambia: sin
+   banda propia ni el montaje de −42 (la banda la pone la cabecera del
+   formulario). 16 arriba (más el área segura), 16 a los lados y 16 hasta el
+   formulario (adenda de V, d). Fija: no se mueve con el scroll de `.ingreso`
+   (adenda c). La sombra es la de 2s, que es exactamente --sh-2. */
+.title-card.title-card--suelta {
+  flex: none;
+  margin: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+  box-shadow: var(--sh-2);
 }
 
 /* D285 · el ticket del viaje cargando o no disponible (fila 21): dos siluetas en
