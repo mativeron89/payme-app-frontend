@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { usePrioridadGuia } from '../ayuda/GuiaProvider';
 import {
   acknowledgementForDisplayedNotice,
   type FriendAvatarNoticeAcknowledgement,
@@ -81,8 +80,6 @@ export function FriendAvatarNoticeView({
 export function FriendAvatarNotice() {
   const { session } = useAuth();
   const [ready, setReady] = useState<ReadyNotice | null>(null);
-  const [consultaLista, setConsultaLista] = useState(false);
-  usePrioridadGuia('foto', !consultaLista || ready !== null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -92,8 +89,7 @@ export function FriendAvatarNotice() {
     const request = epoch.current.next();
     setReady(null);
     setError(false);
-    if (deferred(expected) || !isCurrentSession(expected)) { setConsultaLista(true); return; }
-    setConsultaLista(false);
+    if (deferred(expected) || !isCurrentSession(expected)) return;
     void Promise.all([api.getFriendAvatarNotice(expected), api.getPrivacyNotice()])
       .then(([state, legal]) => {
         if (!epoch.current.isCurrent(request) || !isCurrentSession(expected)) return;
@@ -104,7 +100,6 @@ export function FriendAvatarNotice() {
       })
       .catch(() => { /* backend anterior, texto inconsistente o red: no se acusa ni se habilita */ })
       .finally(() => {
-        if (epoch.current.isCurrent(request) && isCurrentSession(expected)) setConsultaLista(true);
       });
   }, []);
 

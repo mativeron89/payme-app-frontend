@@ -9,7 +9,7 @@ import {
   tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
@@ -202,6 +202,21 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    */
   const estadoDelEjemplo = useEjemplo();
   const ejemplo = estadoDelEjemplo.activo && !enViaje;
+  /**
+   * Revisión de V sobre ff5dec7 · el seguro: los platos del ejemplo están en pantalla (desde que llegan hasta que se
+   * vuelve al principio o los reemplaza un ticket real). Con esto en `true`, ningún camino real sigue: ni
+   * `resolveRestaurant` ni `createMesa`.
+   */
+  const ticketDeEjemploRef = useRef(false);
+  // Si el ejemplo se apaga con su ticket en pantalla (alguien lo descartó, el motor de la guía no estaba), el flujo
+  // vuelve a «Escanea el ticket» sin nada del ejemplo. De layout: antes de que nada vea los platos en modo real.
+  const ejemploAntesRef = useRef(ejemplo);
+  useLayoutEffect(() => {
+    const antes = ejemploAntesRef.current;
+    ejemploAntesRef.current = ejemplo;
+    if (antes && !ejemplo && ticketDeEjemploRef.current) volverAlPrincipioDelEjemplo();
+    // `volverAlPrincipioDelEjemplo` sólo usa setters y refs.
+  }, [ejemplo]);
   // D250 · el escaneo de un viaje se titula «Ticket para {viaje}»: con el nombre
   // que dejó la pantalla del viaje o, si no hay (una recarga), el que da el dueño.
   const [nombreDelViaje, setNombreDelViaje] = useState<string | null>(() => nombreDeViajeRecordado(viajeId));
@@ -692,6 +707,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   }
 
   async function resolveTicketRestaurant(merchant = ocrMerchant) {
+    // El seguro: con los platos del ejemplo en pantalla no se resuelve nada contra el servidor.
+    if (ticketDeEjemploRef.current) return null;
     if (restaurantIdRef.current) {
       return restaurantRef.current
         ? { restaurant: restaurantRef.current, record_only: false as const }
@@ -1150,6 +1167,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * ticket se abre por estado, no con un toque sintético (3a).
    */
   function cargarTicketDeEjemplo() {
+    ticketDeEjemploRef.current = true;
     soltarRecorte();
     setCaptura(null);
     setScanIssue(null);
@@ -1165,6 +1183,40 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     setTicketAbierto(true);
     setStep('ticket');
     ejemploLocal.irA('ticket');
+  }
+
+  /**
+   * Revisión de V sobre ff5dec7 · vuelve a «Escanea el ticket» sin nada del ejemplo: ni platos, ni total, ni forma de
+   * dividir, ni personas, ni el restaurante del ejemplo (el del QR, si lo hay, lo vuelve a leer su efecto). No toca una
+   * foto real que esté llegando: ni `intentoLecturaRef` ni el recorte.
+   */
+  function volverAlPrincipioDelEjemplo() {
+    ticketDeEjemploRef.current = false;
+    ticketFallbackRef.current = null;
+    resolutionRef.current = null;
+    ocrReceiptRef.current = null;
+    setOcrMerchant(undefined);
+    setEditItems([]);
+    setScannedTotalCents(null);
+    setScannedTotals(null);
+    setScannedAdjustments(null);
+    setParticipants(null);
+    setDivision('consumo');
+    setAyudaAbierta(null);
+    setEditingItems(false);
+    setExpandedItem(null);
+    setTicketAbierto(false);
+    setError(null);
+    setRestaurantError(null);
+    setRestaurantLabel('');
+    setEditandoNombre(false);
+    setNombreRechazado(false);
+    setNombreErrorEnPantalla(false);
+    if (restaurantRef.current?.id === RESTAURANTE_DE_EJEMPLO.id) {
+      setRestaurant(null);
+      setRestaurantRecordOnly(false);
+    }
+    setStep('scan');
   }
 
   /**
@@ -1240,6 +1292,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     // ya no existe. Es estado de VISTA, no de datos: se reinicia donde se
     // reinician los datos.
     setTicketAbierto(false);
+    ticketDeEjemploRef.current = false;
     setEditItems([{ name: '', priceStr: '', quantity: 1 }]);
     setEditingItems(true);
     setExpandedItem(0);
@@ -1299,6 +1352,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         replaceRoute('viaje-ticket-nuevo', viajeId);
         return;
       }
+      ticketDeEjemploRef.current = false;
       setEditItems(
         decision.response.items.map((i) => ({
           name: i.name,
@@ -1366,6 +1420,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   }
 
   async function createMesa() {
+    // El seguro, en la escritura misma: nunca una mesa real con los platos del ejemplo.
+    if (ticketDeEjemploRef.current) {
+      volverAlPrincipioDelEjemplo();
+      finishTicketContinuation();
+      return;
+    }
     if (!ticketValid) {
       finishTicketContinuation();
       return;
@@ -1695,6 +1755,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         if (participants === null) return;
         ejemploLocal.armarMesa(division, participants);
         setStep('share');
+        return;
+      }
+      // El seguro: el ejemplo se apagó con sus platos en pantalla. Se vuelve al principio, sin pedir nada.
+      if (ticketDeEjemploRef.current) {
+        volverAlPrincipioDelEjemplo();
         return;
       }
       let resolved = restaurant;

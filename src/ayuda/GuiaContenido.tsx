@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
-import { navigate, useRoute, type PageId } from '../router';
+import type { PageId } from '../router';
 import { BurbujaGuia } from './BurbujaGuia';
 import { ejemploLocal, useEjemplo } from './ejemplo/estadoEjemplo';
 import { posicionGuia, SEPARACION_CON_FLECHA, SEPARACION_CON_PUNTA, type Caja, type Posicion } from './posicionGuia';
-import { enElRecorrido, pasoDeLaGuia, saliendoVuelveAInicio } from './recorridoGuia';
+import { pasoDeLaGuia, type IdDePaso } from './recorridoGuia';
 import './guiaInteractiva.css';
 
 export interface GuiaContenidoProps {
   pagina: PageId;
-  /** Cierra la guía y descarta la mesa de ejemplo (la tarjeta Tutorial sigue en Inicio). */
-  onCerrar: () => void;
+  param: string | null;
+  /** El ejemplo ya arrancó. Antes, la guía muestra la 2a de la fase de la foto con el ejemplo apagado. */
+  empezado: boolean;
+  /** Salir (la ✕, «otro momento», Escape): el provider descarta y decide si vuelve a Inicio. */
+  onSalir: () => void;
   /** «Terminar guía» (4a): además oculta la tarjeta Tutorial. */
   onTerminar: () => void;
-  prioridad: boolean;
+  /** Cada burbuja que se ve de verdad; el provider prende el ejemplo con la primera 2a (`controlDeLaGuia.ts`). */
+  onPrimeraBurbuja: (id: IdDePaso) => void;
+  /** La puerta legal o la del @: la guía espera. */
+  espera: boolean;
 }
 
 const visible = (e: HTMLElement) => e.getClientRects().length > 0 && !e.closest('[hidden], [inert]') && getComputedStyle(e).visibility !== 'hidden';
@@ -52,18 +58,20 @@ function radioDelAnillo(control: HTMLElement): string {
 /**
  * D363 · el motor del tutorial «Tu turno». El paso sale de la fase de la mesa
  * de ejemplo y de la ruta (`recorridoGuia.ts`); el DOM sólo se mide. Sin API,
- * sin clicks sintéticos, sin callbacks de negocio: lo único que hace por su
- * cuenta es volver a Inicio al salir desde la cámara o la mesa de ejemplo, y
- * cerrar la hoja del ticket con Siguiente (3a) moviendo la fase del ejemplo.
+ * sin clicks sintéticos, sin callbacks de negocio, sin navegar: lo único que
+ * hace por su cuenta es cerrar la hoja del ticket con Siguiente (3a) moviendo
+ * la fase del ejemplo. Cuándo se cierra y adónde se vuelve lo decide el
+ * provider (`controlDeLaGuia.ts`).
  */
-export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaContenidoProps) {
+export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, onPrimeraBurbuja, espera }: GuiaContenidoProps) {
   const { t } = useIdioma();
-  const { param } = useRoute();
   const ejemplo = useEjemplo();
   const [subpaso, setSubpaso] = useState<0 | 1>(0);
   useEffect(() => { setSubpaso(0); }, [ejemplo.fase]);
-  const donde = { fase: ejemplo.fase, pagina, param, subpaso, division: ejemplo.division };
-  const paso = ejemplo.activo ? pasoDeLaGuia(donde, t) : null;
+  // Antes de empezar, la fase es la de la foto: la 2a sobre Escanear, con el ejemplo todavía apagado.
+  const fase = ejemplo.activo ? ejemplo.fase : 'foto';
+  const donde = { fase, pagina, param, subpaso, division: ejemplo.division };
+  const paso = ejemplo.activo || !empezado ? pasoDeLaGuia(donde, t) : null;
   const clave = paso ? `${paso.id}:${paso.ancla}` : '';
   const [medida, setMedida] = useState<Medida>(inicial);
   /**
@@ -73,15 +81,6 @@ export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaC
   const [destino, setDestino] = useState<HTMLElement | null>(null);
   const burbuja = useRef<HTMLElement>(null);
   const raiz = useRef<HTMLDivElement>(null);
-
-  const salir = useCallback(() => {
-    if (saliendoVuelveAInicio({ pagina, param })) navigate('home');
-    onCerrar();
-  }, [pagina, param, onCerrar]);
-
-  // Q7 · irse del recorrido (otra pestaña, «Volver», una ruta ajena) cierra la guía sin aviso.
-  const fueraDelRecorrido = !ejemplo.activo || !enElRecorrido({ fase: ejemplo.fase, pagina, param });
-  useEffect(() => { if (fueraDelRecorrido) onCerrar(); }, [fueraDelRecorrido, onCerrar]);
 
   const siguiente = useCallback(() => {
     if (paso?.id === 'ticket') ejemploLocal.irA('dividir');
@@ -96,7 +95,7 @@ export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaC
     const areaSegura = areaSeguraArriba();
     const medir = () => {
       raf = 0;
-      const modal = prioridad || hayModal();
+      const modal = espera || hayModal();
       const control = buscar(paso.ancla);
       const dondeMontar = paso.dentroDeLaHoja ? control : document.body;
       setDestino((prev) => (prev === dondeMontar ? prev : dondeMontar));
@@ -171,9 +170,14 @@ export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaC
       window.visualViewport?.removeEventListener('resize', pedir); window.visualViewport?.removeEventListener('scroll', pedir);
     };
     // `paso` cambia de identidad en cada render; `clave` es su identidad real.
-  }, [clave, prioridad]);
+  }, [clave, espera]);
 
   const activa = !!paso && !medida.modal && !!medida.posicion && !!medida.objetivo;
+
+  // La burbuja se ve de verdad: el provider prende el ejemplo con la primera 2a. De layout: antes de pintar.
+  useLayoutEffect(() => {
+    if (activa && paso) onPrimeraBurbuja(paso.id);
+  }, [activa, paso?.id, onPrimeraBurbuja]);
 
   // Foco a la burbuja al aparecer cada paso (ficha, «Accesibilidad»).
   useEffect(() => {
@@ -197,11 +201,11 @@ export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaC
     const escape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !activa || !paso || paso.id === 'ticket') return;
       e.stopPropagation();
-      if (paso.pie === 'terminar') onTerminar(); else salir();
+      if (paso.pie === 'terminar') onTerminar(); else onSalir();
     };
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
-  }, [activa, paso, salir, onTerminar]);
+  }, [activa, paso, onSalir, onTerminar]);
 
   if (!paso || !destino || !destino.isConnected) return null;
   // Una sola burbuja por paso: mientras no está a la vista (una ventana encima, el scroll, la medida) se dibuja
@@ -218,7 +222,7 @@ export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaC
         ancho={medida.ancho || window.innerWidth - 32}
         t={t}
         burbujaRef={burbuja}
-        onSalir={salir}
+        onSalir={onSalir}
         onSiguiente={siguiente}
         onTerminar={onTerminar}
       />

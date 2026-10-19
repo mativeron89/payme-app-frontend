@@ -1,6 +1,6 @@
 import type { Api } from '../../api';
 import { ejemploLocal, type EjemploLocal } from './estadoEjemplo';
-import { esCodigoDeEjemplo } from './fixtureEjemplo';
+import { esCodigoDeEjemplo, RESTAURANTE_DE_EJEMPLO } from './fixtureEjemplo';
 import {
   bloquearEnEjemplo,
   detalleDeEjemplo,
@@ -280,6 +280,17 @@ function respuestasLocales(ejemplo: EjemploLocal): { readonly [K in MetodoLocal]
 type Metodo = (...args: unknown[]) => unknown;
 
 /**
+ * Revisión de V sobre ff5dec7 · el seguro estructural del restaurante del ejemplo, como el de PA-1224: un pedido que
+ * lo nombra (su id como primer argumento, o un pedido con su `restaurant_id`, como el de `createMesa`) nunca sale, con
+ * el ejemplo encendido o apagado. Ese id es inventado (`fixtureEjemplo.ts`): ningún pedido legítimo lo lleva.
+ */
+function nombraAlRestauranteDelEjemplo(primero: unknown): boolean {
+  if (primero === RESTAURANTE_DE_EJEMPLO.id) return true;
+  return typeof primero === 'object' && primero !== null
+    && (primero as { readonly restaurant_id?: unknown }).restaurant_id === RESTAURANTE_DE_EJEMPLO.id;
+}
+
+/**
  * Envuelve la fachada. 🔴 **Lee el método de `base` en cada llamada**, y el
  * objeto que devuelve es uno común y asignable: los tests que reemplazan
  * `api.X` (o espían `base.X`) siguen funcionando como antes de la envoltura.
@@ -296,7 +307,7 @@ export function envolverApi(base: Api, ejemplo: EjemploLocal = ejemploLocal): Ap
       if (activo && delEjemplo && clase === 'local') {
         return (locales[metodo as MetodoLocal] as Metodo)(...args);
       }
-      if (delEjemplo || (activo && clase === 'cortado')) {
+      if (delEjemplo || nombraAlRestauranteDelEjemplo(args[0]) || (activo && clase === 'cortado')) {
         return Promise.reject(new PedidoCortadoPorElEjemplo(metodo));
       }
       return (base[metodo] as Metodo).apply(base, args);

@@ -83,6 +83,16 @@ export function escucharElRegreso(
   };
 }
 
+/**
+ * Lo mismo, sólo leyendo: no pide la lista ni escucha el regreso. Lo usa el provider de la guía (siempre montado) para
+ * cerrarla si hoy pasa a caer en un viaje; los pedidos quedan a cargo de quien muestra las entradas.
+ */
+export function useEnFechasDeViajeSinPedir(): boolean | null {
+  const capacidad = useCapacidadViajes();
+  const abiertos = useSyncExternalStore(suscribirViajesAbiertos, viajesAbiertosRecordados, () => null);
+  return enFechasDeViaje(capacidad, abiertos, hoyLocal());
+}
+
 export interface EntradaDeLaTarjeta {
   /** D328 · quien marcó «No volver a mostrar» no ve la tarjeta (D364, Q8). */
   readonly noVolverAMostrar: boolean | null;

@@ -10,7 +10,7 @@ import {
   type ClaseDelMetodo,
 } from './apiEjemplo';
 import { EjemploLocal } from './estadoEjemplo';
-import { PLATOS_DE_EJEMPLO } from './fixtureEjemplo';
+import { PLATOS_DE_EJEMPLO, RESTAURANTE_DE_EJEMPLO } from './fixtureEjemplo';
 
 /**
  * La población sale de la interfaz `Api` leída con el compilador, no de una
@@ -79,6 +79,37 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
     expect([...RECIBEN_CODIGO_DE_MESA].sort()).toEqual([...porLaInterfaz].sort());
   });
 
+  it('revisión de V sobre ff5dec7 · la lista «pasa» está fijada: un método nuevo o reclasificado se decide a mano', () => {
+    // Literal, no un snapshot: `-u` no lo reescribe. Los 117 que pasan tal cual a la fachada con el ejemplo activo.
+    const pasa = (Object.keys(CLASIFICACION_DEL_EJEMPLO) as Array<keyof typeof CLASIFICACION_DEL_EJEMPLO>)
+      .filter((m) => CLASIFICACION_DEL_EJEMPLO[m] === 'pasa').sort();
+    expect(pasa).toEqual([
+      'acceptFriendRequest', 'acceptInvitation', 'acceptInvitationLink', 'acceptLegal', 'aceptarViaje',
+      'acknowledgeFriendAvatarNotice', 'addFriend', 'addGroupMember', 'blockUser', 'borrarNotaDeViaje',
+      'cambiarLinkDeInvitacion', 'cancelFriendRequest', 'cargarGastoDeViaje', 'cargarTicketDeViaje', 'cerrarViaje',
+      'completeRecovery', 'corregirTicketDeViaje', 'crearNotaDeViaje', 'crearViaje', 'createGroup',
+      'deleteAllNotifications', 'deleteGroup', 'deleteNotification', 'deleteProfileAvatar', 'editarNotaDeViaje',
+      'editarViaje', 'elegirEnTicketDeViaje', 'eliminarTicketDeViaje', 'facebookLoginComplete', 'facebookLoginStart',
+      'facebookRegisterComplete', 'facebookRegisterStart', 'getAvatarDeMiembroDeViaje', 'getCierreDeViaje',
+      'getConfig', 'getFotoDeViaje', 'getFriendAvatar', 'getFriendAvatarNotice', 'getFriends', 'getGroup',
+      'getGroups', 'getHistory', 'getIncomingFriendRequests', 'getInvitacionesAViajes', 'getInvitationInviterAvatar',
+      'getInviterAvatar', 'getLegalAcceptance', 'getLegalText', 'getLinkDeInvitacion', 'getLinkedProviders', 'getMe',
+      'getMovement', 'getMyMesas', 'getNotasDeViaje', 'getNotificationPreferences', 'getNotifications',
+      'getOpenMesas', 'getOutgoingFriendRequests', 'getPendingInvitations', 'getPrivacyNotice', 'getProfileAvatar',
+      'getProfileIdentity', 'getResumenDeViaje', 'getStats', 'getStatsDayparts', 'getStatsDishes',
+      'getStatsEvolution', 'getStatsIngredients', 'getStatsRestaurants', 'getTicketDeViaje', 'getUnreadCount',
+      'getUsername', 'getUsernameAvatar', 'getUsernameSuggestion', 'getViaje', 'getViajes', 'getVisitasDeViajes',
+      'googleContinue', 'googleContinueLink', 'googleLink', 'googleLinkRedirectComplete', 'googleLinkRedirectStart',
+      'googleLogin', 'googleRedirectRedeem', 'googleRedirectSignup', 'googleRegister', 'invitarAlViaje', 'login',
+      'logout', 'marcarPresentesEnTicket', 'marcarTransferenciaDeViaje', 'markAllNotificationsRead',
+      'markNotificationRead', 'mostrarPago', 'ocultarPago', 'onLegalAcceptanceRequired', 'onSessionExpired',
+      'onUsernameRequired', 'ordenarNotasDeViaje', 'putNotificationPreferences', 'putProfileAvatar', 'putUsername',
+      'quitarFotoDeViaje', 'rechazarViaje', 'register', 'rejectFriendRequest', 'removeFriend', 'removeGroupMember',
+      'requestRecovery', 'restoreSession', 'revisarTicketDeViaje', 'salirDeViaje', 'searchUsernames',
+      'subirFotoDeViaje', 'tildarItemDeNota', 'unblockUser', 'updateProfileIdentity',
+    ]);
+  });
+
   it('P3 · cerrar la mesa, pagar y pedir las solicitudes quedan cortados; y crear una mesa también', () => {
     for (const metodo of ['closeMesa', 'payMesa', 'getMesaJoinRequests', 'createMesa', 'scanTicket', 'fijarPropinaDeLaMesa', 'createInvitation', 'getPaymentMethods'] as const) {
       expect(CLASIFICACION_DEL_EJEMPLO[metodo], metodo).toBe('cortado');
@@ -109,6 +140,24 @@ describe('D363 · la fachada envuelta', () => {
     }
     expect(llamadas.every((l) => l.args[0] === 'PA-12240')).toBe(true);
     expect(llamadas).toHaveLength(RECIBEN_CODIGO_DE_MESA.size);
+  });
+
+  it('el restaurante del ejemplo nunca sale: ni createMesa con su restaurant_id ni getRestaurant con su id, apagado o activo', async () => {
+    for (const activo of [false, true]) {
+      const { base, llamadas } = baseFalsa();
+      const ejemplo = new EjemploLocal();
+      if (activo) ejemplo.empezar();
+      const envuelta = envolverApi(base, ejemplo);
+      await expect(llamar(envuelta, 'createMesa', { restaurant_id: RESTAURANTE_DE_EJEMPLO.id, total_cents: 60000 })).rejects.toBeInstanceOf(PedidoCortadoPorElEjemplo);
+      await expect(llamar(envuelta, 'getRestaurant', RESTAURANTE_DE_EJEMPLO.id)).rejects.toBeInstanceOf(PedidoCortadoPorElEjemplo);
+      expect(llamadas, String(activo)).toEqual([]);
+    }
+    // Control positivo: con el ejemplo apagado, otro restaurante pasa en los dos.
+    const { base, llamadas } = baseFalsa();
+    const envuelta = envolverApi(base, new EjemploLocal());
+    await expect(llamar(envuelta, 'createMesa', { restaurant_id: 'b0000000-0000-4000-8000-000000000001', total_cents: 60000 })).resolves.toBe('base:createMesa');
+    await expect(llamar(envuelta, 'getRestaurant', 'b0000000-0000-4000-8000-000000000001')).resolves.toBe('base:getRestaurant');
+    expect(llamadas.map((l) => l.metodo)).toEqual(['createMesa', 'getRestaurant']);
   });
 
   it('un método que no recibe código de mesa no se corta por un texto igual a PA-1224', async () => {
