@@ -34,6 +34,20 @@ La pantalla «Te invitaron a una mesa» con el diseño base de Claude Design, m�
   - La guarda de la custodia fija ahora también el orden de las tres llamadas.
   - e2e de los diez estados y de P02 (`invitacion-estados`, `invitacion-mesa-google-redirect`).
 
+## D389 · un plato de $0 cuenta como elegido para cerrar la mesa (la parte del front)
+
+Mati: «Que cuente como elegido». Es la enmienda a D76/D81 sólo para el $0, con el dueño 2.188.0 primero (owner-first): **0.254.0 se publica sólo con 2.188.0 servido.**
+
+- **La pantalla** (`confirmedConsumptionProgress`): en una mesa sin garantía, un plato de importe 0 cuenta como cubierto aunque nadie lo haya elegido. Antes la mesa quedaba en «Asignado 99 %» con «Por asignar $0.00». Vale también para la barra en vivo y para «igual» informativo. El plato sigue siendo elegible y su `remaining_bps` no cambia.
+- **El mock** replica las tres reglas del dueño con la misma guarda: el cierre por selección (`items/lock`), la cobertura informativa (`complete()`) y `assignment_complete` de `/mesas/open`.
+- **Se declara la guarda:** el dueño exige una marca interna que no publica (`sin_garantia`). El front usa `guarantee_mode === false`. Las mesas legacy con ese valor no tienen platos de $0, porque el OCR los descarta y el $0 a mano llegó con D371.
+- **El contrato** no cambia por esta entrega. Si el dueño publica algo en 2.188.0, se espeja cuando esté servido.
+- **Tests:**
+  - Unitarios de la pantalla y del mock, con control positivo: con garantía, o sin la regla, el mismo caso queda en 99 % y no se cierra.
+  - Un plato con precio elegido casi entero (9999 bps) no cuenta como cubierto, aunque su importe redondee al total.
+  - Un e2e: con el agua en $0 sin elegir, elegir los demás cierra la mesa al 100 %. Sin la regla de la pantalla, queda en rojo.
+  - Mutantes, todos rojos.
+
 ## Seguimiento de 0.253.0
 
 Lo que dejó la revisión de 0.253.0 (la de V y la propia de AF). La entrada de 0.253.0 no se reescribe: lo que quedó viejo se corrige acá.

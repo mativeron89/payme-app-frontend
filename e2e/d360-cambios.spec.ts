@@ -217,6 +217,35 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await expect(page.locator('.ticket-title-amount')).toHaveText('$840');
   });
 
+  /**
+   * D389 · un plato de $0 cuenta como elegido para cerrar la mesa (mesa sin garantía, la regla del dueño 2.188.0 y
+   * su réplica en el mock). Antes la mesa quedaba en 99 % y no se cerraba sola con el agua sin elegir.
+   */
+  test('🔴 D389 · con el agua en $0 sin elegir, elegir los demás platos cierra la mesa, al 100 %', async ({ page }) => {
+    await hastaComoDividen(page);
+    await editarPrecio(page, 'Agua mineral', '0');
+    await expect(page.locator('.ticket-title-amount')).toHaveText('$800');
+    await cerrarElTicket(page);
+    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+    const mas = page.getByRole('button', { name: 'Un comensal más' });
+    for (let i = 0; i < 4; i += 1) await mas.click();
+    await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('4');
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    // Se eligen todos los platos con precio; el agua ($0) queda sin elegir. Control: son los seis con precio.
+    const conPrecio = page.locator('.qc-lista .qc-renglon').filter({ hasNotText: 'Agua mineral' });
+    await expect(conPrecio).toHaveCount(6);
+    for (let i = 0; i < 6; i += 1) await conPrecio.nth(i).getByRole('button').first().click();
+    await expect(page.locator('.qc-lista .qc-renglon [data-estado="mio"]')).toHaveCount(6);
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
+    await expect(page.getByText('Se eligieron todos los consumos.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
+    await expect(page.getByRole('progressbar', { name: 'Asignado 100% de la mesa' })).toBeVisible();
+  });
+
   test('el ticket entero en $0 sigue sin poder abrirse (lo exige el dueño)', async ({ page }) => {
     await hastaComoDividen(page);
     for (const plato of ['Tagliatelle Bolognese', 'Risotto ai Funghi', 'Pizza Margherita', 'Tiramisú', 'Agua mineral', 'Vino tinto (copa)']) {

@@ -287,3 +287,89 @@ describe('mock selección informativa v2', () => {
     })).rejects.toMatchObject({ status: 400, message: 'validation_error' });
   });
 });
+
+/**
+ * D389 · réplica del dueño 2.188.0: en una mesa SIN garantía, un plato de $0 cuenta como cubierto aunque nadie lo
+ * elija, en los tres lugares: el cierre por selección (`items/lock`), la cobertura informativa y `assignment_complete`
+ * de `/mesas/open`. Cada caso con su control: con garantía, o con algo con precio sin elegir, no alcanza.
+ */
+describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (mock)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    storage();
+  });
+
+  /** Una mesa con dos platos: uno de $0 y uno de $120 (total $120). */
+  async function conCero(division: 'consumo' | 'igual', garantia: boolean) {
+    const mock = await import('./mockApi');
+    const { state } = await import('./store');
+    const mesa = state.mesas.find((m) => m.division_mode === division && m.items.length >= 1)!;
+    const base = mesa.items[0]!;
+    mesa.status = 'open';
+    mesa.guarantee_mode = garantia;
+    mesa.guarantee_method = garantia ? 'card' : 'none';
+    mesa.closure_reason = null;
+    mesa.original_participants = undefined;
+    mesa.items = [
+      { ...base, id: 'd3890000-0000-4000-8000-000000000001', name: 'Agua de la casa', price_cents: 0, quantity: 1, claims: [], status: 'available', lockedBy: null, lock_expires_at: null },
+      { ...base, id: 'd3890000-0000-4000-8000-000000000002', name: 'Pescado', price_cents: 12000, quantity: 1, claims: [], status: 'available', lockedBy: null, lock_expires_at: null },
+    ];
+    mesa.total_cents = 12000;
+    const [cero, pescado] = mesa.items as [typeof base, typeof base];
+    return { mock, state, mesa, cero, pescado };
+  }
+
+  it('🔴 consumo: elegir sólo el plato con precio cierra la mesa (all_items_selected)', async () => {
+    const { mock, mesa, pescado } = await conCero('consumo', false);
+    const r = await mock.mockLockItems(mesa.code, [{ item_id: pescado.id, fraction_bps: 10000 }], 'user');
+    expect(r).toMatchObject({ mesa_status: 'expired', closure_reason: 'all_items_selected' });
+    expect(mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
+  });
+
+  it('control: elegir sólo el $0 no cierra (falta lo que tiene precio); y con garantía, el mismo pedido tampoco', async () => {
+    const sinGarantia = await conCero('consumo', false);
+    const soloCero = await sinGarantia.mock.mockLockItems(sinGarantia.mesa.code, [{ item_id: sinGarantia.cero.id, fraction_bps: 10000 }], 'user');
+    expect(soloCero).not.toHaveProperty('closure_reason');
+    expect(sinGarantia.mesa.status).toBe('open');
+
+    vi.resetModules();
+    storage();
+    const conGarantia = await conCero('consumo', true);
+    const r = await conGarantia.mock.mockLockItems(conGarantia.mesa.code, [{ item_id: conGarantia.pescado.id, fraction_bps: 10000 }], 'user');
+    expect(r).not.toHaveProperty('closure_reason');
+    expect(conGarantia.mesa.status).toBe('open');
+  });
+
+  it('🔴 igual informativo: declarar sólo el plato con precio da la cobertura completa y cierra', async () => {
+    const { mock, mesa, pescado } = await conCero('igual', false);
+    const r = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: pescado.id, declared_fraction_bps: 10000 }],
+      confirm_closure: true,
+    });
+    expect(r.coverage.all_items_selected).toBe(true);
+    expect(r.mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
+  });
+
+  it('control: en igual informativo, declarar sólo el $0 no cubre la mesa', async () => {
+    const { mock, mesa, cero } = await conCero('igual', false);
+    const r = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: cero.id, declared_fraction_bps: 10000 }],
+      confirm_closure: true,
+    });
+    expect(r.coverage.all_items_selected).toBe(false);
+    expect(r.mesa.status).toBe('open');
+  });
+
+  it('🔴 /mesas/open: con el plato con precio elegido, assignment_complete es true; con garantía, false', async () => {
+    for (const garantia of [false, true]) {
+      vi.resetModules();
+      storage();
+      const { mock, mesa, pescado } = await conCero('consumo', garantia);
+      mesa.openedByUser = true;
+      pescado.claims = [{ who: 'other', fraction_bps: 10000, amount_cents: null, status: 'locked' }];
+      const abierta = (await mock.mockOpenMesas()).mesas.find((m) => m.code === mesa.code)!;
+      expect(abierta, `garantía ${garantia}`).toMatchObject({ assigned_cents: 12000, assignment_complete: !garantia });
+    }
+  });
+});
