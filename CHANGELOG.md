@@ -1,5 +1,39 @@
 # 0.254.0 · 2026-10-18
 
+## Invitación base (D372–D374) y P02
+
+La pantalla «Te invitaron a una mesa» con el diseño base de Claude Design, más las resoluciones de V (plan e8f4b5d8…, respuestas 50132dea…, adenda 9c34b50c… y las respuestas del 2026-10-19). P-1 y P-3 no se programan (D372). La lógica no cambia: `joinLinkStage`, la custodia y el retorno a la mesa siguen igual.
+
+- **Una tarjeta para los diez estados** (`TarjetaDeLink`, sobre `.title-card`), montada en la banda compacta, con los botones adentro. Reemplaza a la burbuja de 240, al banner de B y al pie con botones.
+  - **A1:** «Crear cuenta gratis» en naranja y «Ya tengo cuenta · Entrar» con borde.
+  - **A2 (D373):** sin alta, «Entrar» en naranja con letra blanca: 2,96:1, el riesgo aceptado y conservado por D310, que se declara. Mientras la capability del alta está pendiente, «Entrar» va con borde, para no mostrar dos naranjas seguidos; un e2e lo mira cuadro a cuadro.
+  - **B (D374):** la tarjeta va suelta arriba del formulario, que no cambia: sin banda propia, 16 arriba, a los lados y hasta el formulario, fija al desplazarlo. Su texto sigue el modo en que abre el formulario.
+  - **C:** el aro de espera dentro del cuadro navy (`progressbar`), «Sumándote a la mesa…».
+  - **D:** el cuadro verde con el tilde y el restaurante debajo si llegó (si no, nada).
+  - **E:** el link cortado para E1 y E2, uno solo, sin pistas del motivo; la tienda para E3, con su nota afuera de la tarjeta.
+  - **F:** «reintentar», con «Reintentar» con borde dentro de la tarjeta.
+  - **Barra reducida** (`BarraDeLink`) sólo en D y E: el círculo naranja de siempre, montado a −16; alto `--appbar-alto` (la regla del área segura de D173) y la sombra de `.appbar-block`. `AppBottomBar` no cambia.
+- **Los textos de C, E y F pasan por `t()`:** antes salían en español con la app en inglés.
+- **P02-a · la recarga vuelve a B.** El modo que se eligió en la invitación (alta o ingreso) se recuerda 30 minutos en un registro propio y se borra con el retorno. Con «register» restaurado, B espera a saber si hay alta antes de montar el formulario. Si `/api/config` se cuelga, el formulario aparece cuando esa lectura vence: hasta 30 s, sólo en una recarga con el modo guardado.
+- **P02-b · «Parece que Google no terminó.»** Si la persona salió a Google y vuelve sin terminar, un aviso junto al botón: «Toca «Continuar con Google» de nuevo.». Si las casillas del alta están a la vista y sin marcar, dice «Marca las casillas y toca «Continuar con Google» de nuevo.».
+  - La marca guarda sólo la hora y vale 30 minutos. Se borra con una vuelta de Google, al cerrar sesión, al vencer y al avisar. Sin `pagehide`.
+  - **No verificado:** que Google llame a `click_listener` en redirect antes de navegar. Lo prueba Mati en el iPhone; si no lo llama, P02-b no aparece y P02-a sigue.
+- **Se declara:**
+  - Medidas fuera de la escala: el botón de 52, la barra de 64, el resguardo de 104, el montaje de 42, el círculo de 56 y el radio de 24.
+  - La banda mide 118 más el área segura (el canvas pide 113 con una fila de 30; la fila del logo queda en 44, la del toque oculto).
+  - El logo queda en 22 con peso 800 (el canvas, Poppins 24 en 700).
+  - Del cuadro al título, 14 (2q pone 16); el relleno de la tarjeta, 16/18.
+  - Las sombras: `--sh-mounted` en la tarjeta montada, `--sh-2` en B (la de 2s) y la de `.appbar-block` en la barra.
+  - El título es un `<h1>` (el canvas usa `<h2>`).
+  - Las duraciones son locales: 200 ms de entrada con 40 de retraso; con «reducir movimiento», sólo opacidad en 120 ms y el aro quieto. La salida de C no se programa.
+  - Los dos íconos nuevos (link cortado y reintentar) van en un mapa aparte del de D285.
+  - En B el área segura queda dos veces (la tarjeta y la cabecera del formulario); en el mock, la banda de demo queda entre la tarjeta y el formulario.
+  - El inglés nuevo («It looks like Google didn't finish…» y su variante) espera la aprobación de Diseño.
+- **Tests:**
+  - Unitarios de la tarjeta, la barra, los íconos, la lógica pura (`iconoDelResultado`, `entrarEnNaranja`, `formularioDeB`), el modo y la salida, con controles positivos y mutantes rojos.
+  - La guarda de la custodia fija ahora también el orden de las tres llamadas.
+  - e2e de los diez estados y de P02 (`invitacion-estados`, `invitacion-mesa-google-redirect`).
+
 ## Seguimiento de 0.253.0
 
 Lo que dejó la revisión de 0.253.0 (la de V y la propia de AF). La entrada de 0.253.0 no se reescribe: lo que quedó viejo se corrige acá.
