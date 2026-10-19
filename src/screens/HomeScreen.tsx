@@ -38,6 +38,8 @@ import {
   hayRestaurantesPendientes, restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes,
 } from './viajes/ViajesEnInicio';
 import { useAperturaPendiente } from '../ayuda/aperturaPendiente';
+import { mesaDeEjemploEnInicio, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
+import { TarjetaMesaDeEjemplo, TarjetaTutorial } from '../ayuda/TarjetaTutorial';
 import { AvisoSinMesas } from './AvisoSinMesas';
 
 /**
@@ -337,8 +339,10 @@ export function HomeScreen() {
    */
   const sinPendientesDeViajes = !conViajes
     || hayRestaurantesPendientes(viajesEnInicio, pendientesDeViajes, viajesFallaron) === false;
+  // D363 · enmienda 2 de V · la mesa de ejemplo de 4a cuenta como mesa: con ella en Inicio no se dice «No tienes».
+  const ejemploEnInicio = mesaDeEjemploEnInicio(useEjemplo());
   const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'
-    && sinPendientesDeViajes;
+    && sinPendientesDeViajes && !ejemploEnInicio;
 
   return (
     <div className="screen has-appbar">
@@ -444,6 +448,10 @@ export function HomeScreen() {
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}
         <InvitacionEnInicio />
+        {/* D363 · 2f · la tarjeta Tutorial va debajo de la invitación pendiente (Q5), y en 4a la mesa de ejemplo
+            ocupa su lugar; una mesa abierta real queda debajo, donde siempre. */}
+        <TarjetaTutorial aperturaPendiente={aperturaPendiente} />
+        <TarjetaMesaDeEjemplo />
         <FriendAvatarNotice />
         {/* D176 · la guía «Agregar a inicio», la primera vez y sólo en Safari de iOS. */}
         <AvisoAgregarAInicio />

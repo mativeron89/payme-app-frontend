@@ -126,6 +126,8 @@ const GLYPHS = {
   /* Interrogación del estado DESCONOCIDO (SISTEMA_DISENO.md §5): el acordeón
      de Historial la muestra mientras G-33 siga sin respuesta del contrato. */
   help: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9.5 9.3a2.5 2.5 0 1 1 3.7 2.3c-.8.5-1.2 1-1.2 1.9v.3', 'M12 16.8v.4'] },
+  // D363 · el mapa plegado del cuadro de la tarjeta Tutorial (diseño aprobado del tutorial; no es el proyecto de íconos E2).
+  map: { d: ['M9 4 3 6.5v13.5L9 17.5l6 2.5 6-2.5V4l-6 2.5Z', 'M9 4v13.5', 'M15 6.5V20'] },
   'arrow-up-right': { d: ['M7 17 17 7', 'M9 7h8v8'] },
   'arrow-down-left': { d: ['M17 7 7 17', 'M15 17H7V9'] },
   minus: { d: ['M5 12h14'] },

@@ -13,3 +13,16 @@
 .ayuda-contextual p { margin: 0 0 8px; }
 .ux-siguiente { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .ayuda-acceso :focus-visible, .ayuda-contextual summary:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+/* D363 · 2f · la tarjeta «Tutorial» de Inicio, con el estilo de la burbuja del viaje (`.viaje-tarjeta`):
+   blanca, radio 22, borde 1 px, alto 96; el cuadro de 64 con radio 18 y el ícono de 28; «Tutorial» 20/700;
+   la ✕ roja de 18 con 44 de toque, arriba a la derecha. */
+.tarjeta-tutorial { position: relative; box-sizing: border-box; display: flex; margin: var(--sp-6) var(--sp-4) 0; min-height: 96px; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--sh-1), var(--sh-3); }
+.tarjeta-tutorial-abrir { box-sizing: border-box; flex: 1; min-width: 0; padding: 16px 52px 16px 16px; display: flex; align-items: center; gap: 14px; background: transparent; border: 0; text-align: left; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tarjeta-tutorial-cuadro { flex: none; width: 64px; height: 64px; display: grid; place-items: center; border-radius: 18px; background: var(--action); color: var(--action-fg); }
+.tarjeta-tutorial-titulo { font-family: var(--font-display); font-size: 20px; line-height: 1.25; font-weight: 700; color: var(--text); }
+.tarjeta-tutorial-quitar { position: absolute; top: 2px; right: 2px; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; background: transparent; border: 0; color: var(--danger); cursor: pointer; }
+.tarjeta-tutorial-quitar svg path { stroke-width: 2.6; }
+/* Con `overflow: hidden` un anillo por fuera quedaría cortado: va por dentro, como en la tarjeta del viaje. */
+.tarjeta-tutorial-abrir:focus-visible, .tarjeta-tutorial-quitar:focus-visible { outline: 2px solid var(--action); outline-offset: -3px; }
+/* 4a · la píldora «Ejemplo» de la mesa de ejemplo, en el lugar del estado: 12.5/700 sobre el tinte de advertencia. */
+.badge-ejemplo { background: var(--warning-tint); color: var(--warning); font-size: 12.5px; font-weight: 700; }

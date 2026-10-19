@@ -64,6 +64,15 @@ export function mesaArmada(estado: EstadoDelEjemplo): estado is EstadoArmado {
   return estado.activo && estado.division !== null && estado.personas !== null && estado.armadaEn !== null;
 }
 
+/**
+ * 4a · la mesa de ejemplo está en Inicio: después del «Listo» y hasta terminar o
+ * salir. Ocupa el lugar de la tarjeta Tutorial y cuenta como mesa para el aviso
+ * «No tienes mesas abiertas» (enmienda 2 de `d363_front`).
+ */
+export function mesaDeEjemploEnInicio(estado: EstadoDelEjemplo): boolean {
+  return mesaArmada(estado) && estado.fase === 'listo';
+}
+
 export class EjemploLocal {
   private estado: EstadoDelEjemplo = EJEMPLO_APAGADO;
   private readonly oyentes = new Set<() => void>();

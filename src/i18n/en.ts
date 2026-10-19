@@ -101,6 +101,11 @@ export const EN: Record<string, string> = {
   // D363 · Q9 · la fila de Ayuda en fechas de un viaje, y con una apertura sin confirmar.
   "Disponible fuera de las fechas de un viaje": "Available outside trip dates",
   "Primero resuelve la mesa que dejaste sin confirmar en Inicio.": "First, resolve the table you left unconfirmed on Home.",
+  // D363 · 2f · 4a · la tarjeta Tutorial y la mesa de ejemplo en Inicio.
+  "Tutorial": "Tutorial",
+  "Quitar el tutorial de Inicio": "Remove the tutorial from Home",
+  "Mesa de ejemplo": "Sample table",
+  "Ejemplo": "Sample",
   "Cerrar guía": "Close guide",
   "No pudimos abrir la guía. Puedes seguir usando PayMe.": "We couldn’t open the guide. You can keep using PayMe.",
   "Escanea y revisa": "Scan and review",

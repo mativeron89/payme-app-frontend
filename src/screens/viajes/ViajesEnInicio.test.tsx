@@ -393,7 +393,7 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
   });
 
   it('🔴 sólo con la lista de mesas leída y vacía (ni cargando ni con error), y no en la pestaña Viajes (D246)', () => {
-    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'\n    && sinPendientesDeViajes;");
+    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'\n    && sinPendientesDeViajes && !ejemploEnInicio;");
     // D275 §3 (1g) · con un restaurante pendiente, o mientras los pendientes no se leyeron, tampoco. D302 · sin contar los
     // viajes que todavía no empezaron (`viajesEnInicio`).
     expect(home).toContain("const sinPendientesDeViajes = !conViajes\n    || hayRestaurantesPendientes(viajesEnInicio, pendientesDeViajes, viajesFallaron) === false;");

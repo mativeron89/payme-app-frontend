@@ -178,7 +178,7 @@ describe('Inicio · la tercera pestaña depende de la capacidad', () => {
   });
 
   it('🔴 D246 · con la pestaña Viajes no se ve «No tienes mesas abiertas» (D277: al final del contenido)', () => {
-    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'\n    && sinPendientesDeViajes;");
+    expect(home).toContain("const avisoSinMesas = openMesas !== null && !mesasFallaron && porUrgencia.length === 0 && tab !== 'viajes'\n    && sinPendientesDeViajes && !ejemploEnInicio;");
     expect(home).toContain('{avisoSinMesas && <AvisoSinMesas />}');
   });
 });

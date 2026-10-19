@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { EJEMPLO_APAGADO, EjemploLocal, mesaArmada } from './estadoEjemplo';
+import { EJEMPLO_APAGADO, EjemploLocal, mesaArmada, mesaDeEjemploEnInicio } from './estadoEjemplo';
 
 describe('D363 · el estado de la mesa de ejemplo (en memoria)', () => {
   it('nace apagado y empezar() lo prende en Escanear, sin mesa ni selección', () => {
@@ -38,6 +38,19 @@ describe('D363 · el estado de la mesa de ejemplo (en memoria)', () => {
     expect(mesaArmada({ ...EJEMPLO_APAGADO, ...forma, activo: true, personas: null })).toBe(false);
     expect(mesaArmada({ ...EJEMPLO_APAGADO, ...forma, activo: true, armadaEn: null })).toBe(false);
     expect(mesaArmada({ ...EJEMPLO_APAGADO, ...forma, activo: true, division: null })).toBe(false);
+  });
+
+  it('4a · la mesa de ejemplo está en Inicio sólo armada y después del «Listo»', () => {
+    const ejemplo = new EjemploLocal();
+    ejemplo.empezar();
+    ejemplo.irA('listo');
+    expect(mesaDeEjemploEnInicio(ejemplo.leer())).toBe(false);
+    ejemplo.armarMesa('consumo', 1, 0);
+    expect(mesaDeEjemploEnInicio(ejemplo.leer())).toBe(false);
+    ejemplo.irA('listo');
+    expect(mesaDeEjemploEnInicio(ejemplo.leer())).toBe(true);
+    ejemplo.descartar();
+    expect(mesaDeEjemploEnInicio(ejemplo.leer())).toBe(false);
   });
 
   it('rechaza el N que la pantalla tampoco deja: el piso de cada forma y el tope de 50 (D375)', () => {
