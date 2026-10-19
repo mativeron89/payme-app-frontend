@@ -99,7 +99,7 @@ export function GuiaProvider({ children, pagina, principal, habilitada }: {
   }), [abrir, cerrar, terminar, ocultarTarjeta, abierta, noMostrar, oculta, prioridad]);
   return <Contexto.Provider value={contexto}>
     {children}
-    {abierta && (Motor ? <Motor pagina={pagina} onCerrar={cerrar} prioridad={prioridadPendiente} /> : (
+    {abierta && (Motor ? <Motor pagina={pagina} onCerrar={cerrar} onTerminar={terminar} prioridad={prioridadPendiente} /> : (
       <aside className="guia-carga" aria-label={t('Guía interactiva')} hidden={prioridadPendiente}>
         <p role="status">{fallo ? t('No pudimos abrir la guía. Puedes seguir usando PayMe.') : t('Cargando…')}</p>
         <button type="button" onClick={cerrar}>{t('Cerrar guía')}</button>

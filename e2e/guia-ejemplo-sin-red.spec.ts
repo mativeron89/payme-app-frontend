@@ -195,13 +195,6 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await empezarElEjemplo(page);
 
     await hastaElTicketDeEjemplo(page);
-    // Volver desde ¿Cómo dividen? es volver a Escanear: la fase también vuelve, y otra foto trae el mismo ticket.
-    await page.getByRole('button', { name: 'Volver', exact: true }).click();
-    await expect.poll(() => fase(page)).toBe('foto');
-    await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
-    await sacarFoto(page, undefined, { usar: false });
-    await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
-    await expect.poll(() => fase(page)).toBe('dividir');
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     await expect(page.getByRole('group', { name: /¿Cuántos pagan\?/ })).toContainText('2');
@@ -230,6 +223,24 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     expect(guardado).toEqual({ fase: 'listo', seleccion: [5000] });
     expect(await escrito(page)).toEqual(antes);
     expect(pedidos()).toBe(0);
+  });
+
+  test('Q7 · «Volver» desde ¿Cómo dividen? descarta la mesa de ejemplo y vuelve a Inicio, sin pedir nada', async ({ page }) => {
+    await preparar(page);
+    const antes = await escrito(page);
+    await vaciarLlamadas(page);
+    await empezarElEjemplo(page);
+    await hastaElTicketDeEjemplo(page);
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
+    expect(await fase(page)).toBe('foto');
+    expect(await page.evaluate(async () => {
+      const ruta = '/src/ayuda/ejemplo/estadoEjemplo.ts';
+      const { ejemploLocal } = await import(/* @vite-ignore */ ruta) as { ejemploLocal: { leer: () => { activo: boolean } } };
+      return ejemploLocal.leer().activo;
+    })).toBe(false);
+    sinRedEnLaFachada(await llamadas(page));
+    expect(await escrito(page)).toEqual(antes);
   });
 
   test('sin el ejemplo, /mesa/PA-1224 vuelve a Inicio y no se pide la mesa', async ({ page }) => {

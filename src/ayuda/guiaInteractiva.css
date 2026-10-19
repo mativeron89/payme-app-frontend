@@ -1,29 +1,61 @@
-/* D327: portal no modal. Sólo la burbuja recibe eventos; la app conserva sus gestos. */
+/* D363 · la capa del tutorial «Tu turno» (ficha de Claude Design, «Burbuja de la guía», «Flecha, punta y anillo»
+   y «Movimiento»). Portal no modal: sólo la burbuja recibe eventos; la app conserva sus gestos. Todo con los
+   tokens de global.css; las duraciones van acá, como literales (no hay tokens de movimiento). */
 .guia-capa { position: relative; z-index: 180; pointer-events: none; }
-.guia-capa[hidden] { display: none; }
-.guia-foco { position: fixed; border: 3px solid var(--action); border-radius: 14px; box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px color-mix(in srgb, var(--action) 28%, transparent); pointer-events: none; box-sizing: border-box; }
-.guia-burbuja { position: fixed; box-sizing: border-box; overflow: auto; overscroll-behavior: contain; pointer-events: auto; padding: 4px 16px 8px; border: 1px solid var(--border); border-top: 3px solid var(--action); border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: 0 8px 32px #0b173033; font-family: inherit; }
-.guia-cabeza { display: flex; align-items: center; gap: 8px; }
-.guia-progreso { flex: 1; font-size: 12px; line-height: 1.4; font-weight: 600; color: var(--text-muted); }
-.guia-burbuja h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; color: var(--navy); }
-.guia-burbuja p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
-.guia-burbuja .guia-nota { font-size: 12px; color: var(--text-muted); }
-.guia-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
-.guia-acciones button, .guia-carga button { min-height: 44px; min-width: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--navy); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.guia-acciones .guia-siguiente { margin-left: auto; background: var(--navy); border-color: var(--navy); color: var(--on-dark); }
-.guia-acciones button:disabled { opacity: .5; cursor: default; }
+/* Sin `display: none`: mientras no está a la vista, el motor necesita medir el alto de la burbuja. */
+.guia-capa:not([data-activa]) { visibility: hidden; }
+.guia-capa:not([data-activa]) * { animation: none; }
+
+/* El anillo: 4 de aire + 2 de --action + 2 de --surface, el radio del control + 4. */
+.guia-anillo { position: fixed; box-sizing: border-box; pointer-events: none; box-shadow: 0 0 0 2px var(--action), 0 0 0 4px var(--surface); animation: guia-anillo-entra 200ms cubic-bezier(0.2, 0, 0, 1); }
+/* Blanco sobre la cámara (y sobre navy). */
+.guia-anillo--claro { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--action); }
+
+/* La flecha, donde la persona tiene que tocar: 28 × 28, --action con borde 2 de --surface, apunta al control. */
+.guia-flecha { position: fixed; box-sizing: border-box; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--action); border: 2px solid var(--surface); color: var(--action-fg); pointer-events: none; animation: guia-entra-arriba 200ms cubic-bezier(0.2, 0, 0, 1); }
+.guia-flecha svg { transform: rotate(90deg); }
+.guia-flecha[data-lado="abajo"] svg { transform: rotate(-90deg); }
+.guia-flecha[data-lado="abajo"] { animation-name: guia-entra-abajo; }
+/* 2b · al costado del disparador, apuntando a él (la flecha del ícono ya mira a la derecha). */
+.guia-flecha[data-lado="costado"] svg { transform: none; }
+.guia-flecha[data-lado="costado"] { animation-name: guia-aparece; }
+
+/* La burbuja: ventana − 32, fondo --teal-l, borde 1 --border, radio 16, sombra --sh-3, relleno 16. */
+.guia-burbuja { position: fixed; box-sizing: border-box; overflow: visible; pointer-events: auto; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--teal-l); color: var(--text); box-shadow: var(--sh-3); font-family: var(--font-body); text-align: center; animation: guia-entra-arriba 200ms cubic-bezier(0.2, 0, 0, 1); }
+.guia-burbuja[data-lado="abajo"] { animation-name: guia-entra-abajo; }
+.guia-burbuja:focus { outline: none; }
 .guia-burbuja :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
-.guia-burbuja h2:focus { outline: none; }
-@media (max-height: 480px) and (min-width: 600px) {
-  .guia-burbuja { padding: 4px 12px 8px; display: grid; grid-template-columns: minmax(0, 1fr) 260px; column-gap: 12px; }
-  .guia-cabeza { grid-column: 2; grid-row: 1; }
-  .guia-burbuja > [aria-live] { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
-  .guia-burbuja > [aria-live] h2 { min-height: 0; }
-  .guia-acciones { grid-column: 2; grid-row: 2; align-self: end; flex-wrap: nowrap; }
-  .guia-nota { grid-column: 1 / -1; }
-  .guia-burbuja h2 { font-size: 16px; margin-bottom: 4px; }
-  .guia-burbuja p { margin-bottom: 6px; }
-}
+.guia-texto { max-height: inherit; overflow: auto; }
+.guia-texto--con-equis { padding: 0 40px; }
+.guia-texto p { margin: 0; font-size: 16px; line-height: 1.5; color: var(--text); }
+.guia-texto p + p { margin-top: 4px; }
+.guia-texto .guia-primera { font-weight: 700; }
+
+/* La punta, donde sólo se explica: cuadrado de 14 girado 45°, mismo fondo y borde, sobresale 10. */
+.guia-punta { position: absolute; left: calc(var(--guia-centro) - 7px); width: 14px; height: 14px; background: var(--teal-l); border: 1px solid var(--border); transform: rotate(45deg); }
+.guia-burbuja[data-lado="arriba"] .guia-punta { bottom: -8px; border-top: 0; border-left: 0; }
+.guia-burbuja[data-lado="abajo"] .guia-punta { top: -8px; border-bottom: 0; border-right: 0; }
+
+/* ✕ de 44 a 4 del borde, ícono 20 en --text-muted. Igual que Escape. */
+.guia-cerrar { position: absolute; top: 4px; right: 4px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: transparent; border: 0; border-radius: 12px; color: var(--text-muted); cursor: pointer; }
+
+/* El pie, sólo donde hay Siguiente (o el contador de 2d): fila de 44 a 12 del texto; el contador al centro. */
+.guia-pie { position: relative; display: flex; align-items: center; justify-content: flex-end; min-height: 44px; margin-top: 12px; }
+.guia-contador { position: absolute; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.guia-pie--final { justify-content: center; }
+.guia-siguiente { min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--action); color: var(--action-fg); font-family: var(--font-display); font-size: 16px; font-weight: 700; cursor: pointer; }
+
+/* 2a · «Realizar el tutorial en otro momento»: enlace 16/600 en --link, subrayado, 44 de toque, centrado. */
+.guia-otro-momento { display: block; min-height: 44px; margin: 8px auto 0; padding: 0 8px; background: transparent; border: 0; color: var(--link); font-family: var(--font-body); font-size: 16px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+/* Entrar: opacidad 0 → 1 y 8 px desde el lado del control, 200 ms; el anillo escala 1.04 → 1. */
+/* «arriba» / «abajo» es dónde queda la burbuja: entra desde el lado del control, o sea del lado contrario. */
+@keyframes guia-entra-arriba { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes guia-entra-abajo { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes guia-anillo-entra { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+@keyframes guia-aparece { from { opacity: 0; } to { opacity: 1; } }
+
+/* Reducir movimiento: sólo opacidad, 120 ms; nada se desplaza ni escala. */
 @media (prefers-reduced-motion: reduce) {
-  .guia-capa *, .guia-carga { scroll-behavior: auto; animation: none; transition: none; }
+  .guia-anillo, .guia-flecha, .guia-burbuja { animation: guia-aparece 120ms linear; }
 }

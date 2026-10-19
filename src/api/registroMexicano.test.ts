@@ -154,6 +154,8 @@ const ESPANOL_LEGITIMO = new Set([
   // AF-VIAJES · 1q (texto decidido): «Podrás salir cuando se cierre el viaje…».
   // Futuro de tú, no voseo.
   'podrás',
+  // D363 · 2d (texto de la ficha del tutorial): «Aquí invitarás a tus amigos…». Futuro de tú, no voseo.
+  'invitarás',
   // AF2 · futuro de tercera persona del texto aprobado de la puerta (decisión
   // 46): «se mostrará a tus amigos». No es voseo.
   'mostrará',

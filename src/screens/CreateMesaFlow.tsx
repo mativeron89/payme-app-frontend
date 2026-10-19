@@ -200,7 +200,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * no crea ninguna mesa y Compartir no genera link, invitaciones ni propina.
    * Nunca dentro de un viaje: el ejemplo es sólo de restaurante (D365).
    */
-  const ejemplo = useEjemplo().activo && !enViaje;
+  const estadoDelEjemplo = useEjemplo();
+  const ejemplo = estadoDelEjemplo.activo && !enViaje;
   // D250 · el escaneo de un viaje se titula «Ticket para {viaje}»: con el nombre
   // que dejó la pantalla del viaje o, si no hay (una recarga), el que da el dueño.
   const [nombreDelViaje, setNombreDelViaje] = useState<string | null>(() => nombreDeViajeRecordado(viajeId));
@@ -318,6 +319,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   useEffect(() => {
     if (ejemplo && step === 'ticket' && !ticketAbierto) ejemploLocal.irA('dividir');
   }, [ejemplo, step, ticketAbierto]);
+  // Y al revés: el Siguiente de la guía en 3a mueve la fase, y la hoja se cierra (sin un toque sintético). Sólo en ese
+  // paso de fase: si la persona la vuelve a abrir en 2c, queda abierta.
+  const faseAnteriorRef = useRef(estadoDelEjemplo.fase);
+  useEffect(() => {
+    const anterior = faseAnteriorRef.current;
+    faseAnteriorRef.current = estadoDelEjemplo.fase;
+    if (ejemplo && anterior === 'ticket' && estadoDelEjemplo.fase === 'dividir') setTicketAbierto(false);
+  }, [ejemplo, estadoDelEjemplo.fase]);
   /**
    * §1.4 (spec 2026-08-06): el stepper se pregunta SIEMPRE y nace SIN ELEGIR.
    * Acá vivía `useState(4)` — un 4 que en modo consumo nadie veía ni podía
@@ -1827,6 +1836,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       return;
     }
     if (step === 'scan') return enViaje && viajeId !== null ? navigate('viaje', viajeId) : navigate('home');
+    // D363 · Q7 · en el ejemplo, «Volver» desde el ticket o ¿Cómo dividen? es irse del recorrido: la mesa de
+    // ejemplo se descarta (la guía se cierra sola al verlo) y se vuelve a Inicio, con la tarjeta Tutorial a la vista.
+    if (step === 'ticket' && ejemplo) {
+      ejemploLocal.descartar();
+      return navigate('home');
+    }
     if (step === 'ticket') {
       // Volver a cámara inicia OTRO ticket. Sólo acá rota el fallback; los
       // reintentos dentro de Scan conservan el UUID del intento actual.
@@ -1842,7 +1857,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       // D212 · vuelve «Escanea el ticket», sin la foto anterior: «Sacar foto»
       // abre la cámara. «Volver» no la abre solo.
       setCaptura(null);
-      if (ejemplo) ejemploLocal.irA('foto');
       return setStep('scan');
     }
     if (step === 'garantia') return setStep('ticket');
@@ -2184,6 +2198,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           <button
             type="button"
             className="camara-galeria"
+            data-guia="galeria"
             onClick={() => fileInput.current?.click()}
             disabled={scanning || capturando}
           >
@@ -2464,6 +2479,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             <div
               ref={ticketRef}
               className="ticket-sheet"
+              data-guia="hoja-ticket"
+              // D363 · 3a · la hoja convive con la burbuja de la guía, sólo mientras el ejemplo está ahí.
+              data-guia-convive={ejemplo && estadoDelEjemplo.fase === 'ticket' ? '' : undefined}
               role="dialog"
               tabIndex={-1}
               aria-modal="true"
@@ -3216,7 +3234,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               onReintentar={() => { if (estadoPropina.fase === 'agotada') elegirPropina(estadoPropina.deseado); }}
             />
           )}
-          <div className="share-card">
+          <div className="share-card" data-guia="compartir">
             {/* La maqueta final separa la credencial de las acciones visuales,
                 pero el refinamiento es aditivo: tocar el código y el botón
                 «Copiar link» copian la misma credencial completa con `?t=`. */}

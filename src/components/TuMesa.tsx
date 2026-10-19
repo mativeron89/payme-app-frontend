@@ -32,11 +32,15 @@ export function Desplegable({
   const cuerpoId = useId();
   const tituloId = useId();
   return (
-    <section className={`card desplegable${className ? ` ${className}` : ''}`} aria-labelledby={tituloId}>
+    <section
+      className={`card desplegable${className ? ` ${className}` : ''}`}
+      aria-labelledby={tituloId}
+      // D363 · 2e · el anillo de la guía encierra la tarjeta entera de «Tus consumos», no sólo su cabecera.
+      data-guia={className === 'tus-consumos' ? 'consumos' : undefined}
+    >
       <button
         type="button"
         className={`desplegable-cabecera${resumen === undefined ? ' desplegable-cabecera--sola' : ''}`}
-        data-guia={className === 'tus-consumos' ? 'consumos' : undefined}
         aria-expanded={abierto}
         aria-controls={cuerpoId}
         onClick={onToggle}

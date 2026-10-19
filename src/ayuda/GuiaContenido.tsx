@@ -1,113 +1,165 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
-import type { PageId } from '../router';
-import { posicionGuia, type Caja, type Posicion } from './posicionGuia';
+import { navigate, useRoute, type PageId } from '../router';
+import { BurbujaGuia } from './BurbujaGuia';
+import { ejemploLocal, useEjemplo } from './ejemplo/estadoEjemplo';
+import { posicionGuia, SEPARACION_CON_FLECHA, SEPARACION_CON_PUNTA, type Caja, type Posicion } from './posicionGuia';
+import { enElRecorrido, pasoDeLaGuia, saliendoVuelveAInicio } from './recorridoGuia';
 import './guiaInteractiva.css';
 
 export interface GuiaContenidoProps {
-  pagina: PageId; onCerrar: () => void; prioridad: boolean;
+  pagina: PageId;
+  /** Cierra la guía y descarta la mesa de ejemplo (la tarjeta Tutorial sigue en Inicio). */
+  onCerrar: () => void;
+  /** «Terminar guía» (4a): además oculta la tarjeta Tutorial. */
+  onTerminar: () => void;
+  prioridad: boolean;
 }
-interface Paso { id: string; titulo: string; texto: string }
-type T = (s: string, ...args: unknown[]) => string;
-function catalogo(pagina: PageId, t: T): Paso[] {
-  const p = (id: string, titulo: string, texto: string): Paso => ({ id, titulo, texto });
-  const camara = p('camara', t('Escanear'), t('Toca la cámara para fotografiar un ticket y revisar sus datos.'));
-  const reparto = p('reparto', t('Decide cómo dividir'), t('Divide por consumo, en partes iguales o por el total.'));
-  const porcion = p('porcion', t('Elige tu porción'), t('Marca la porción que consumiste cuando compartas un plato.'));
-  const parte = p('mi-parte', t('Revisa tu parte'), t('Este es el importe de tu selección según el reparto. Revisa lo elegido antes de confirmarlo.'));
-  const pago = p('quien-pago', t('¿Quién pagó?'), t('Marca quién pagó este gasto. Puedes indicar varias personas y ajustar los montos con los controles de la pantalla.'));
-  if (pagina === 'home') return [camara,
-    p('tab-viajes', t('Viajes'), t('Aquí encuentras tus viajes. Toca la pestaña y abre uno para conocer sus controles.')),
-    p('nav-mesas', t('Mesas'), t('Abre una mesa en la que participas. La guía se adapta a los controles disponibles para tu rol.'))];
-  if (pagina === 'mas') return [p('nav-home', t('Empieza en Inicio'), t('Toca Inicio para recorrer restaurantes o viajes. La guía permanece abierta y puedes cerrarla cuando quieras.'))];
-  if (pagina === 'scan') return [
-    p('foto', t('Sacar foto'), t('Toca este botón para abrir la cámara. Puedes usar también la galería de esta pantalla.')),
-    p('revisar-ticket', t('Escanea y revisa'), t('Abre el ticket para revisar platos, cantidades y total antes de continuar.')),
-    reparto, p('personas', t('Cuántas personas'), t('Indica cuántas personas son con los botones − y +. El número lo eliges tú.')),
-    p('continuar', t('Continuar'), t('Cuando hayas revisado el ticket y el reparto, este control continúa el flujo de la mesa.'))];
-  if (pagina === 'mesa') return [p('consumos', t('Tus consumos'), t('Abre tus consumos y toca los platos que te corresponden. Cada persona confirma su propia selección.')),
-    porcion, parte, p('invitar', t('Invita a la mesa'), t('Como organizador, puedes invitar a tus amigos desde este control.')),
-    p('continuar', t('Confirma tu selección'), t('Revisa los platos y las porciones que elegiste. Toca Listo para confirmar tu selección.'))];
-  if (pagina === 'viaje') return [camara, p('agregar-gasto', t('Agregar gasto'), t('Registra un gasto sin foto. Tú escribes la descripción, el monto y quién pagó.')),
-    p('mi-balance', t('Tu balance'), t('Es lo pagado menos lo consumido. Puede cambiar mientras agregan gastos o eligen consumos.')),
-    p('balance', t('Consulta el balance'), t('Abre el balance para revisar consumos y cuánto pagó cada miembro del viaje.'))];
-  if (pagina === 'viaje-gasto') return [p('descripcion-gasto', t('Descripción'), t('Escribe qué gasto quieres registrar. Puedes seguir editando con la guía abierta.')),
-    p('monto-gasto', t('Monto'), t('Escribe el total del gasto que quieres compartir.')), pago,
-    p('guardar-gasto', t('Revisa antes de guardar'), t('Revisa la descripción, el total y quién pagó. Toca Listo para registrar el gasto.'))];
-  if (pagina === 'viaje-ticket-nuevo') return [pago, reparto];
-  if (pagina === 'viaje-ticket') return [p('elegir-consumo', t('Elige lo tuyo'), t('Toca un plato disponible para elegirlo. Si lo compartieron, después podrás indicar tu porción.')),
-    porcion, parte, p('listo-consumos', t('Confirma tu selección'), t('Revisa los platos y las porciones que elegiste. Toca Listo para confirmar tu selección.'))];
-  if (pagina === 'viaje-balance') return [p('tab-consumos', t('Consumos'), t('Aquí están los consumos del viaje. Abre uno para revisar su ticket y reparto.')),
-    p('tab-miembros', t('Miembros'), t('Esta pestaña muestra cuánto pagó cada persona, no cuánto le corresponde consumir.'))];
-  return [];
-}
+
 const visible = (e: HTMLElement) => e.getClientRects().length > 0 && !e.closest('[hidden], [inert]') && getComputedStyle(e).visibility !== 'hidden';
-const buscar = (id: string) => Array.from(document.querySelectorAll<HTMLElement>(`[data-guia="${id}"]`)).find(visible) ?? null;
-const hayModal = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"], dialog[open]')).some(visible);
-interface Medida { objetivo: Caja | null; posicion: Posicion | null; espacio: Caja; zoom: number; modal: boolean }
-const inicial: Medida = { objetivo: null, posicion: null, espacio: { left: 12, top: 12, right: 360, bottom: 700 }, zoom: 1, modal: false };
+const buscar = (ancla: string) => Array.from(document.querySelectorAll<HTMLElement>(`[data-guia="${ancla}"]`)).find(visible) ?? null;
+/**
+ * Una ventana encima (banco, otra hoja) esconde la guía hasta que se cierra
+ * (ficha, «Colocación» 5). La excepción es la hoja del ticket de 3a, que lleva
+ * `data-guia-convive` mientras el ejemplo está ahí y convive con la burbuja.
+ */
+const hayModal = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"], dialog[open]'))
+  .some((e) => visible(e) && !e.hasAttribute('data-guia-convive'));
+const sinMovimiento = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-/** Sin API, router imperativo ni callbacks de negocio. Sólo DOM descriptivo y estado efímero del tutorial. */
-export function GuiaContenido({ pagina, onCerrar, prioridad }: GuiaContenidoProps) {
+interface Medida { objetivo: Caja | null; posicion: Posicion | null; ancho: number; zoom: number; modal: boolean; radio: string }
+const inicial: Medida = { objetivo: null, posicion: null, ancho: 0, zoom: 1, modal: false, radio: '0px' };
+
+/** El área segura de arriba (la muesca), medida con una sonda: JS no lee `env()` directo. */
+function areaSeguraArriba(): number {
+  const sonda = document.createElement('div');
+  sonda.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';
+  document.body.append(sonda);
+  const alto = sonda.getBoundingClientRect().height;
+  sonda.remove();
+  return alto;
+}
+
+/** El anillo toma el radio del control + 4; un círculo sigue siendo un círculo. */
+function radioDelAnillo(control: HTMLElement): string {
+  const radio = getComputedStyle(control).borderTopLeftRadius;
+  if (radio.endsWith('%')) return '50%';
+  const px = Number.parseFloat(radio);
+  return `${(Number.isFinite(px) ? px : 0) + 4}px`;
+}
+
+/**
+ * D363 · el motor del tutorial «Tu turno». El paso sale de la fase de la mesa
+ * de ejemplo y de la ruta (`recorridoGuia.ts`); el DOM sólo se mide. Sin API,
+ * sin clicks sintéticos, sin callbacks de negocio: lo único que hace por su
+ * cuenta es volver a Inicio al salir desde la cámara o la mesa de ejemplo, y
+ * cerrar la hoja del ticket con Siguiente (3a) moviendo la fase del ejemplo.
+ */
+export function GuiaContenido({ pagina, onCerrar, onTerminar, prioridad }: GuiaContenidoProps) {
   const { t } = useIdioma();
-  const pasos = catalogo(pagina, t);
-  const [disponibles, setDisponibles] = useState<string[]>([]);
-  const [elegido, setElegido] = useState<string | null>(null);
-  const [pausada, setPausada] = useState(false);
+  const { param } = useRoute();
+  const ejemplo = useEjemplo();
+  const [subpaso, setSubpaso] = useState<0 | 1>(0);
+  useEffect(() => { setSubpaso(0); }, [ejemplo.fase]);
+  const donde = { fase: ejemplo.fase, pagina, param, subpaso, division: ejemplo.division };
+  const paso = ejemplo.activo ? pasoDeLaGuia(donde, t) : null;
+  const clave = paso ? `${paso.id}:${paso.ancla}` : '';
   const [medida, setMedida] = useState<Medida>(inicial);
-  const panel = useRef<HTMLElement>(null);
-  const titulo = useRef<HTMLHeadingElement>(null);
+  /**
+   * Dónde se monta la burbuja: el `body`, o la hoja del ticket en 3a. Se resuelve al medir, después del commit: en
+   * el render la hoja todavía puede no estar en el DOM, y la burbuja no aparecería nunca.
+   */
+  const [destino, setDestino] = useState<HTMLElement | null>(null);
+  const burbuja = useRef<HTMLElement>(null);
   const raiz = useRef<HTMLDivElement>(null);
-  const focoInicial = useRef(false);
-  const indices = pasos.filter((p) => disponibles.includes(p.id));
-  const indice = Math.max(0, indices.findIndex((p) => p.id === elegido));
-  const paso = indices[indice];
-  const clave = paso?.id ?? '';
-  const listaIds = pasos.map((p) => p.id).join(',');
 
-  useEffect(() => { setElegido(null); }, [pagina]);
+  const salir = useCallback(() => {
+    if (saliendoVuelveAInicio({ pagina, param })) navigate('home');
+    onCerrar();
+  }, [pagina, param, onCerrar]);
+
+  // Q7 · irse del recorrido (otra pestaña, «Volver», una ruta ajena) cierra la guía sin aviso.
+  const fueraDelRecorrido = !ejemplo.activo || !enElRecorrido({ fase: ejemplo.fase, pagina, param });
+  useEffect(() => { if (fueraDelRecorrido) onCerrar(); }, [fueraDelRecorrido, onCerrar]);
+
+  const siguiente = useCallback(() => {
+    if (paso?.id === 'ticket') ejemploLocal.irA('dividir');
+    else if (paso?.id === 'invitar') setSubpaso(1);
+  }, [paso?.id]);
+
   useLayoutEffect(() => {
+    if (!paso) { setMedida(inicial); setDestino(null); return undefined; }
     let raf = 0;
+    let desplazado = false;
+    // Antes de empezar a observar: la sonda entra y sale del `body` sin despertar al observador.
+    const areaSegura = areaSeguraArriba();
     const medir = () => {
       raf = 0;
-      const ids = listaIds.split(',').filter((id) => id && buscar(id));
-      setDisponibles((prev) => prev.join(',') === ids.join(',') ? prev : ids);
       const modal = prioridad || hayModal();
-      if (modal) setPausada(true);
-      const objetivo = clave ? buscar(clave) : null;
+      const control = buscar(paso.ancla);
+      const dondeMontar = paso.dentroDeLaHoja ? control : document.body;
+      setDestino((prev) => (prev === dondeMontar ? prev : dondeMontar));
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
       const vw = window.visualViewport;
       const izquierda = vw?.offsetLeft ?? 0, arriba = vw?.offsetTop ?? 0;
-      const ancho = vw?.width ?? window.innerWidth, alto = vw?.height ?? window.innerHeight;
-      const screen = document.querySelector('.screen');
-      const techo = Math.max(arriba, screen?.querySelector('.hdr')?.getBoundingClientRect().bottom ?? arriba);
-      const pies = Array.from(document.querySelectorAll<HTMLElement>('.appbar-block, .appbar-fab, .vj-pie')).filter(visible);
-      const piso = Math.min(arriba + alto, ...pies.map((p) => p.getBoundingClientRect().top));
-      const espacio = { left: izquierda + 12, top: techo + 8, right: izquierda + ancho - 12, bottom: Math.max(techo + 80, piso - 12) };
-      const cajaControl = objetivo?.getBoundingClientRect();
-      const circulo = objetivo?.querySelector('.appbar-fab')?.getBoundingClientRect();
-      const caja = cajaControl && circulo ? { left: Math.min(cajaControl.left, circulo.left), right: Math.max(cajaControl.right, circulo.right), top: Math.min(cajaControl.top, circulo.top), bottom: Math.max(cajaControl.bottom, circulo.bottom) } : cajaControl;
-      const rect = caja && caja.right > izquierda && caja.left < izquierda + ancho && caja.bottom > arriba && caja.top < arriba + alto
-        ? { left: caja.left, top: caja.top, right: caja.right, bottom: caja.bottom } : null;
-      const burbuja = panel.current?.getBoundingClientRect();
-      // El aviso aparece sólo en pausa: no debe agrandar la medida que decide si podemos retomarla.
-      const nota = panel.current?.querySelector<HTMLElement>('.guia-nota');
-      const extra = nota ? nota.getBoundingClientRect().height + (Number.parseFloat(getComputedStyle(nota).marginBottom) || 0) * zoom : 0;
-      const posicion = rect && burbuja ? posicionGuia(rect, espacio, burbuja.width, burbuja.height - extra) : null;
-      const next = { objetivo: rect, posicion, espacio, zoom, modal };
+      const anchoVentana = vw?.width ?? window.innerWidth, altoVentana = vw?.height ?? window.innerHeight;
+      // Ficha, «Colocación» 2: 16 a los lados; 12 del área segura y de la barra (incluido el círculo que sobresale).
+      const pies = Array.from(document.querySelectorAll<HTMLElement>('.appbar-block, .appbar-fab')).filter(visible);
+      const piso = Math.min(arriba + altoVentana, ...pies.map((p) => p.getBoundingClientRect().top));
+      // Los pasos que señalan la barra (2a y 2d) miden contra la ventana: la burbuja va arriba de la barra.
+      const contraLaBarra = paso.ancla === 'camara' || paso.ancla === 'continuar';
+      const espacio = {
+        left: izquierda + 16,
+        top: arriba + areaSegura + 12,
+        right: izquierda + anchoVentana - 16,
+        bottom: contraLaBarra ? arriba + altoVentana - 12 : Math.max(arriba + areaSegura + 92, piso - 12),
+      };
+      const caja = control?.getBoundingClientRect();
+      const circulo = control?.querySelector('.appbar-fab')?.getBoundingClientRect();
+      const rect = caja && circulo
+        ? { left: circulo.left, right: circulo.right, top: circulo.top, bottom: circulo.bottom }
+        : caja ? { left: caja.left, right: caja.right, top: caja.top, bottom: caja.bottom } : null;
+      // A la vista = el borde del control del lado de la burbuja. La hoja del ticket (3a) tapa la barra y «Tus
+      // consumos» (2e) puede seguir debajo: lo que importa es el borde de arriba, donde va la burbuja.
+      const aLaVista = rect !== null && (contraLaBarra || (paso.lado === 'arriba'
+        ? rect.top >= espacio.top - 8 && rect.top <= espacio.bottom
+        : rect.bottom >= espacio.top && rect.bottom <= espacio.bottom + 8));
+      // Ficha, «Colocación» 4: si el control no está en pantalla, primero el scroll (280 ms) y después la burbuja.
+      if (control && rect && !aLaVista && !desplazado && !modal) {
+        desplazado = true;
+        const alto = rect.bottom - rect.top;
+        control.scrollIntoView({ block: alto > altoVentana / 2 ? 'nearest' : 'center', inline: 'nearest', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+      }
+      const ancho = espacio.right - espacio.left;
+      const alto = burbuja.current?.scrollHeight ?? 160;
+      const separacion = paso.senal === 'flecha' ? SEPARACION_CON_FLECHA : SEPARACION_CON_PUNTA;
+      // 2b · la leyenda se ubica a 12 arriba de la galería; la flecha va al costado del disparador.
+      const referencia = paso.referencia ? buscar(paso.referencia)?.getBoundingClientRect() : null;
+      const posicion = rect && aLaVista
+        ? referencia
+          ? posicionGuia({ left: referencia.left, top: referencia.top, right: referencia.right, bottom: referencia.bottom }, espacio, ancho, alto, paso.lado, 12)
+          : posicionGuia(rect, espacio, ancho, alto, paso.lado, separacion)
+        : null;
+      const next: Medida = {
+        objetivo: rect && aLaVista ? rect : null,
+        posicion,
+        ancho,
+        zoom,
+        modal,
+        radio: circulo ? '50%' : control ? radioDelAnillo(control) : '0px',
+      };
       setMedida((prev) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
     };
     const pedir = () => { if (!raf) raf = requestAnimationFrame(medir); };
     const mutation = new MutationObserver((records) => {
-      if (records.some((r) => !raiz.current?.contains(r.target))) pedir();
+      if (records.some((r) => !raiz.current?.contains(r.target) && !burbuja.current?.contains(r.target))) pedir();
     });
-    mutation.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'open', 'class', 'style', 'aria-modal', 'data-guia'] });
+    mutation.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'open', 'class', 'style', 'aria-modal', 'data-guia', 'data-guia-convive'] });
     const resize = new ResizeObserver(pedir);
-    if (panel.current) resize.observe(panel.current);
-    const objetivo = clave ? buscar(clave) : null;
-    if (objetivo) resize.observe(objetivo);
+    if (burbuja.current) resize.observe(burbuja.current);
+    const control = buscar(paso.ancla);
+    if (control) resize.observe(control);
     window.addEventListener('resize', pedir);
     document.addEventListener('scroll', pedir, true);
     window.visualViewport?.addEventListener('resize', pedir);
@@ -118,61 +170,59 @@ export function GuiaContenido({ pagina, onCerrar, prioridad }: GuiaContenidoProp
       window.removeEventListener('resize', pedir); document.removeEventListener('scroll', pedir, true);
       window.visualViewport?.removeEventListener('resize', pedir); window.visualViewport?.removeEventListener('scroll', pedir);
     };
-  }, [clave, listaIds, pausada, prioridad]);
+    // `paso` cambia de identidad en cada render; `clave` es su identidad real.
+  }, [clave, prioridad]);
+
+  const activa = !!paso && !medida.modal && !!medida.posicion && !!medida.objetivo;
+
+  // Foco a la burbuja al aparecer cada paso (ficha, «Accesibilidad»).
   useEffect(() => {
-    if (!focoInicial.current && !prioridad && !medida.modal && !hayModal()) { titulo.current?.focus({ preventScroll: true }); focoInicial.current = true; }
-  }, [medida.modal, prioridad]);
+    if (activa) burbuja.current?.focus({ preventScroll: true });
+  }, [activa, clave]);
+
+  // El control señalado se describe con la burbuja.
+  useEffect(() => {
+    if (!activa || !paso) return undefined;
+    const control = buscar(paso.ancla);
+    if (!control) return undefined;
+    const antes = control.getAttribute('aria-describedby');
+    const id = burbuja.current?.getAttribute('aria-labelledby');
+    if (!id) return undefined;
+    control.setAttribute('aria-describedby', `${antes ? `${antes} ` : ''}${id}`);
+    return () => { if (antes === null) control.removeAttribute('aria-describedby'); else control.setAttribute('aria-describedby', antes); };
+  }, [activa, clave]);
+
+  // Escape = ✕ (y en 2a, «otro momento»). En 3a lo atiende la hoja del ticket: primero se cierra ella.
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !prioridad && !hayModal()) { e.stopPropagation(); onCerrar(); }
+      if (e.key !== 'Escape' || !activa || !paso || paso.id === 'ticket') return;
+      e.stopPropagation();
+      if (paso.pie === 'terminar') onTerminar(); else salir();
     };
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
-  }, [onCerrar, prioridad]);
-  useEffect(() => {
-    if (!clave || pausada || medida.modal || !medida.posicion) return;
-    const objetivo = buscar(clave);
-    if (!objetivo) return;
-    const antes = objetivo.getAttribute('aria-describedby');
-    objetivo.setAttribute('aria-describedby', `${antes ? `${antes} ` : ''}guia-explicacion`);
-    return () => { if (antes === null) objetivo.removeAttribute('aria-describedby'); else objetivo.setAttribute('aria-describedby', antes); };
-  }, [clave, pausada, medida.modal, medida.posicion]);
+  }, [activa, paso, salir, onTerminar]);
 
-  function ir(p: Paso | undefined) {
-    if (!p) return;
-    setElegido(p.id);
-    const objetivo = buscar(p.id);
-    // Sólo al pedir otro paso; jamás al login ni al navegar por la app.
-    objetivo?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
-  }
-  const { espacio, zoom } = medida;
-  const activa = !pausada && !!paso && !!medida.posicion && !!medida.objetivo;
-  const posicion = activa ? medida.posicion : null;
-  const left = posicion?.left ?? espacio.left;
-  const top = posicion?.top ?? espacio.top;
-  const maxWidth = Math.max(120, (espacio.right - espacio.left) / zoom);
-  const maxHeight = Math.max(80, (espacio.bottom - espacio.top) / zoom);
-  const target = activa ? medida.objetivo : null;
-  return createPortal(<div ref={raiz} className="guia-capa" hidden={medida.modal}>
-    {target && <div className="guia-foco" aria-hidden="true" data-objetivo={clave} style={{ left: (target.left - 4) / zoom, top: (target.top - 4) / zoom, width: (target.right - target.left + 8) / zoom, height: (target.bottom - target.top + 8) / zoom }} />}
-    <section ref={panel} className="guia-burbuja" role="region" aria-label={t('Guía interactiva')} data-lado={posicion?.lado ?? 'pausa'}
-      style={{ left: left / zoom, top: top / zoom, width: Math.min(window.innerWidth > 600 ? 560 : 328, maxWidth), maxHeight }}>
-      <div className="guia-cabeza">
-        <span className="guia-progreso">{paso ? t('{0} de {1}', indice + 1, indices.length) : t('Guía en pausa')}</span>
-        <button type="button" className="guia-cerrar" onClick={onCerrar} aria-label={t('Cerrar guía')}><Icon name="x" size={18} /></button>
-      </div>
-      <div aria-live="polite" aria-atomic="true">
-        <h2 ref={titulo} tabIndex={-1}>{pausada ? t('Continúa cuando quieras') : paso?.titulo ?? t('Abre una mesa o un viaje')}</h2>
-        <p id="guia-explicacion">{pausada ? t('La guía se pausó para dejarte usar la pantalla. Retómala cuando estés listo.')
-          : paso?.texto ?? t('Esta pantalla no tiene pasos disponibles. Sigue usando la app; la guía acompaña los controles de restaurantes y viajes.')}</p>
-      </div>
-      {!pausada && paso && !activa && <p className="guia-nota">{t('Desplaza la pantalla para ver el control. También puedes pasar al siguiente paso o cerrar la guía.')}</p>}
-      <div className="guia-acciones">
-        {pausada ? <button type="button" className="guia-siguiente" onClick={() => setPausada(false)}>{t('Retomar guía')}</button> : <>
-          <button type="button" disabled={indice === 0} onClick={() => ir(indices[indice - 1])}>{t('Atrás')}</button>
-          {paso && <button type="button" className="guia-siguiente" onClick={() => indice < indices.length - 1 ? ir(indices[indice + 1]) : onCerrar()}>{indice < indices.length - 1 ? t('Siguiente') : t('Terminar guía')}</button>}
-        </>}
-      </div>
-    </section>
-  </div>, document.body);
+  if (!paso || !destino || !destino.isConnected) return null;
+  // Una sola burbuja por paso: mientras no está a la vista (una ventana encima, el scroll, la medida) se dibuja
+  // invisible, para que el motor sepa su alto; `hidden` la dejaría en 0.
+  return createPortal(
+    <div ref={raiz} className="guia-capa" data-activa={activa ? '' : undefined} aria-hidden={activa ? undefined : true}>
+      <BurbujaGuia
+        key={clave}
+        paso={paso}
+        posicion={activa && medida.posicion ? medida.posicion : { left: 0, top: 0, lado: paso.lado, maxAlto: 9999, centro: 24 }}
+        objetivo={activa && medida.objetivo ? medida.objetivo : { left: 0, top: 0, right: 0, bottom: 0 }}
+        radio={medida.radio}
+        zoom={medida.zoom}
+        ancho={medida.ancho || window.innerWidth - 32}
+        t={t}
+        burbujaRef={burbuja}
+        onSalir={salir}
+        onSiguiente={siguiente}
+        onTerminar={onTerminar}
+      />
+    </div>,
+    destino,
+  );
 }
