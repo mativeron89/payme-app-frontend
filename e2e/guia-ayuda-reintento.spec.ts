@@ -32,6 +32,9 @@ for (const regreso of ['focus', 'visibilitychange'] as const) {
   test(`con la lista de viajes caída, Ayuda espera con su línea; al volver (${regreso}) se vuelve a pedir y se habilita, y la tarjeta Tutorial vuelve`, async ({ page }) => {
     await entrar(page, { antesDeEntrar: viajesQueFallan });
     await expect.poll(() => pedidos(page)).toBeGreaterThan(0);
+    // T6 · mientras fallan los viajes, la tarjeta Tutorial no está (el aviso de fotos ya se respondió en `entrar`).
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    await expect(tarjeta(page)).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Más', exact: true }).click();
     const fila = page.getByRole('button', { name: 'Cómo usar PayMe' });

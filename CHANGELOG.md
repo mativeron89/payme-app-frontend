@@ -1,3 +1,31 @@
+# 0.255.1 · 2026-10-19
+
+## Pulido del tutorial (los BAJO de la revisión de V sobre `64113ed`)
+
+Orden `d341-noche/ORDEN_AF_0_255_1_PULIDO_TUTORIAL_20261019.md` (6289bfe8…), bloque `d363_pulido`. Revisión de origen: `d341-noche/REVISION_V_WORKFLOW_TUTORIAL_FIX_64113ED_20261019.md` (b8d74a3c…). Sin producto nuevo ni textos visibles nuevos.
+
+- **E10-2 · la burbuja no se pinta ni un cuadro encima del aviso.** `guiaInteractiva.css` esconde la capa (`visibility`, así el motor sigue midiendo) mientras haya en la página algo con `data-guia-espera`, como el aviso «Tu foto entre amigos». Hasta ahora la escondía sólo el motor, en el `requestAnimationFrame` siguiente; queda de respaldo.
+- **E10-3 · la tarjeta Tutorial no aparece tarde en cada vuelta a Inicio.**
+  - `avisoDeFotos.ts` conserva el último estado sabido del aviso de esa cuenta y familia, en memoria (nunca en el almacenamiento del navegador).
+  - La consulta que el aviso repite al montarse Inicio informa «sin saber», y eso ya no pisa lo sabido. Si la respuesta lo cambia, gana la respuesta.
+  - Una recarga lo borra, igual que el «Ahora no».
+- **E10-4/T7 · cinco textos viejos contra la enmienda 10:**
+  - cuatro comentarios: `controlDeLaGuia.ts` (`guiaEspera`), `guia-sin-autoapertura.spec.ts`, `guia-tutorial.spec.ts` y `_guia.ts` (decía que `guia-tutorial.spec.ts` «no se toca», y se tocó);
+  - la quinta es una línea de la sección de 0.255.0 de este CHANGELOG, que no se reescribe: **«Concreción de V (19/10), la prioridad… les gana a una invitación pendiente y al aviso de fotos»** vale para la invitación. Para el aviso de fotos rige la enmienda 10 de la misma sección: con el aviso pendiente, la guía no se ofrece.
+- **Tests:**
+  - T3: en el recorrido de red cero vuelven los tres platos en la hoja del ticket y el valor del contador del ejemplo («Por lo que pidió cada uno» y «En partes iguales»).
+  - T4: `/mesa/PA-1224` sin el ejemplo cuenta la red (`contarLaRed`, con sus sondas) y compara todo lo escrito.
+  - T5/E10-9:
+    - el aviso real «Tu foto entre amigos» aparece con la guía en curso (abierta desde Más recién entrada, hasta 4a): la capa no se pinta, los botones del aviso se tocan, y la 4a aparece al responderlo;
+    - un `dialog[open]` esconde la burbuja (costura);
+    - la invitación pendiente, también a 375 × 667.
+  - E10-2: el aside marcado esconde la capa en el mismo tick, sin esperar un cuadro.
+  - T6: mientras fallan los viajes, la tarjeta Tutorial no está.
+- **R3 · riesgo conocido, se declara y no se cambia código:**
+  - Sin el ejemplo, `/mesa/PA-1224` vuelve a Inicio y la fachada rechaza ese código. Una mesa real con ese código quedaría inalcanzable.
+  - V midió que el dueño generó códigos de 4 cifras sólo entre `5acf8e9` (2026-07-11) y `e8a3faf` (2026-08-03); desde entonces son de 5.
+  - Que exista esa mesa: no se sabe.
+
 # 0.255.0 · 2026-10-19
 
 ## Tutorial nuevo «Tu turno» (D363–D367)

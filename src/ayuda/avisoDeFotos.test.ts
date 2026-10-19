@@ -20,6 +20,35 @@ describe('enmienda 10 · el estado del aviso «Tu foto entre amigos», por cuent
   });
 });
 
+describe('0.255.1 · E10-3 · el último estado sabido, en memoria', () => {
+  it('una consulta nueva («sin saber») no pisa lo sabido de la misma cuenta; la respuesta sí', () => {
+    const a = duenoDelAviso({ family_id: 'f1', principal_id: 'p1' })!;
+    informarAvisoDeFotos(a, 'resuelto');
+    informarAvisoDeFotos(a, 'sin-saber');
+    expect(avisoDeFotos(a)).toBe('resuelto');
+    informarAvisoDeFotos(a, 'pendiente');
+    expect(avisoDeFotos(a)).toBe('pendiente');
+    informarAvisoDeFotos(a, 'sin-saber');
+    expect(avisoDeFotos(a)).toBe('pendiente');
+    informarAvisoDeFotos(a, 'resuelto');
+    expect(avisoDeFotos(a)).toBe('resuelto');
+  });
+
+  it('otra cuenta o familia empieza sin saber, y lo de la anterior no le vale', () => {
+    const a = duenoDelAviso({ family_id: 'f1', principal_id: 'p1' })!;
+    const otra = duenoDelAviso({ family_id: 'f2', principal_id: 'p1' })!;
+    informarAvisoDeFotos(a, 'resuelto');
+    informarAvisoDeFotos(otra, 'sin-saber');
+    expect(avisoDeFotos(otra)).toBe('sin-saber');
+    expect(avisoDeFotos(a)).toBe('sin-saber');
+  });
+
+  it('no usa el almacenamiento del navegador (la fuente)', () => {
+    const fuente = readFileSync(new URL('./avisoDeFotos.ts', import.meta.url), 'utf8');
+    expect(fuente).not.toMatch(/localStorage|sessionStorage|indexedDB/);
+  });
+});
+
 describe('enmienda 10 · el cableado (la fuente)', () => {
   it('el aviso informa su estado y se marca con data-guia-espera; el motor lo trata como una ventana', () => {
     const aviso = readFileSync(new URL('../components/FriendAvatarNotice.tsx', import.meta.url), 'utf8');

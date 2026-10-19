@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
 import {
-  abrirDesdeLaTarjeta, burbuja, CLAVE_TARJETA_OCULTA, contarLaRed, entrar, escrito, espiarLaFachada, fase, hastaCompartir,
-  hastaElTicket, hastaLaCamara, hastaTuMesa, llamadas, pathname, SONDAS_DE_RED, sondearLaRed, tarjeta, type Llamada,
+  abrirDesdeLaTarjeta, burbuja, CLAVE_TARJETA_OCULTA, contarLaRed, entrar, escrito, espiarLaFachada, fase,
+  hastaElTicket, hastaLaCamara, hastaTuMesa, llamadas, pathname, SONDAS_DE_RED, sondearLaRed, tarjeta, TEXTO_2D, type Llamada,
 } from './_guia';
 
 /**
@@ -103,13 +103,23 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await abrirDesdeLaTarjeta(page);
     await hastaLaCamara(page);
     await hastaElTicket(page);
-    await expect(page.getByRole('dialog', { name: /Ticket/ }).getByText('Restaurante Ejemplo', { exact: true })).toBeVisible();
+    const hoja = page.getByRole('dialog', { name: /Ticket/ });
+    await expect(hoja.getByText('Restaurante Ejemplo', { exact: true })).toBeVisible();
+    // T3 · los tres platos del ejemplo en la hoja (como en ff5dec7).
+    for (const plato of ['Tagliatelle Bolognese', 'Risotto ai Funghi', 'Pizza Margherita']) {
+      await expect(hoja.getByText(plato, { exact: true })).toBeVisible();
+    }
     await expect(page.locator('.ticket-title-amount')).toHaveText('$600');
     await expect(page.getByRole('group', { name: 'Marco del recorte' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
     await burbuja(page, 'Este es el ticket de ejemplo.').getByRole('button', { name: 'Siguiente', exact: true }).click();
     await expect.poll(() => fase(page)).toBe('dividir');
-    await hastaCompartir(page);
+    // T3 · el valor del contador del ejemplo antes de Continuar (como en ff5dec7).
+    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+    await page.getByRole('button', { name: 'Un comensal más' }).click();
+    await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('1');
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(burbuja(page, TEXTO_2D)).toBeVisible();
     await compartirDelEjemplo(page);
     await hastaTuMesa(page);
     await tuMesaDelEjemplo(page);
@@ -147,7 +157,12 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await hastaElTicket(page);
     await burbuja(page, 'Este es el ticket de ejemplo.').getByRole('button', { name: 'Siguiente', exact: true }).click();
     await expect.poll(() => fase(page)).toBe('dividir');
-    await hastaCompartir(page, /En partes iguales/, 1);
+    await page.getByRole('radio', { name: /En partes iguales/ }).click();
+    await page.getByRole('button', { name: 'Un comensal más' }).click();
+    // T3 · el contador en «igual» (como en ff5dec7).
+    await expect(page.getByRole('group', { name: /¿Cuántos pagan\?/ })).toContainText('2');
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(burbuja(page, TEXTO_2D)).toBeVisible();
     await compartirDelEjemplo(page);
     await hastaTuMesa(page);
     await tuMesaDelEjemplo(page);
@@ -194,11 +209,13 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await sinEscrituras(page, antes);
   });
 
-  test('sin el ejemplo, /mesa/PA-1224 vuelve a Inicio y no se pide la mesa', async ({ page }) => {
+  test('sin el ejemplo, /mesa/PA-1224 vuelve a Inicio, no se pide la mesa, no sale nada y no se escribe nada', async ({ page }) => {
     await relojFueraDeLasFechasDeLosViajes(page);
     await ingresar(page);
     await espiarLaFachada(page);
     const antes = await escrito(page);
+    // T4 · la red y todo lo escrito, como en ff5dec7.
+    const red = await contarLaRed(page);
     await page.evaluate(() => {
       history.pushState(null, '', '/mesa/PA-1224');
       window.dispatchEvent(new Event('popstate'));
@@ -206,7 +223,8 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await expect.poll(() => pathname(page)).toBe('/home');
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     expect((await llamadas(page)).filter((l) => l.codigo?.toUpperCase() === 'PA-1224')).toEqual([]);
-    expect((await escrito(page)).store).toBe(antes.store);
+    await redEnCero(page, red, { motor: false });
+    await sinEscrituras(page, antes);
   });
 
   test('con el QR de un restaurante: sin el ejemplo se lee el restaurante; con el ejemplo (desde la tarjeta), no', async ({ page }) => {

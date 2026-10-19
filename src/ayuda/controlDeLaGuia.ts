@@ -73,9 +73,10 @@ export function salirVuelveAInicio(a: Apertura, donde: Donde): boolean {
 }
 
 /**
- * ¿La guía espera? Con la puerta legal o la del @ (`habilitada` en false). Ya no espera a las invitaciones ni al
- * aviso de fotos (V, 2026-10-19: el toque explícito de D364 les gana); las ventanas que tapan la pantalla las mira el
- * motor (`hayModal`).
+ * ¿La guía espera? Con la puerta legal o la del @ (`habilitada` en false). Ya no espera a las invitaciones (V,
+ * 2026-10-19: el toque explícito de D364 le gana). El aviso «Tu foto entre amigos» no se tapa nunca (enmienda 10):
+ * con él pendiente, la tarjeta y la fila de Ayuda no ofrecen la guía (`avisoDeFotos.ts`), y el motor lo trata como
+ * una ventana (`data-guia-espera`). Las ventanas que tapan la pantalla las mira el motor (`hayModal`).
  */
 export function guiaEspera(habilitada: boolean): boolean {
   return !habilitada;

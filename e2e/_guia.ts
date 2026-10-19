@@ -7,8 +7,8 @@ import { camaraSimulada, sacarFoto } from './_camara';
 
 /**
  * D363 · revisión de V sobre ff5dec7 · lo que comparten los e2e de la corrección del tutorial. Las mismas formas que
- * `guia-tutorial.spec.ts` (que no se toca), más los espías que pidió la revisión: los argumentos y los rechazos de la
- * fachada, y si el ejemplo llegó a prenderse alguna vez.
+ * `guia-tutorial.spec.ts`, más los espías que pidió la revisión: los argumentos y los rechazos de la fachada, y si el
+ * ejemplo llegó a prenderse alguna vez.
  */
 
 export interface OpcionesDeEntrada {

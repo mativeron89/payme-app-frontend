@@ -5,6 +5,10 @@
 /* Sin `display: none`: mientras no está a la vista, el motor necesita medir el alto de la burbuja. */
 .guia-capa:not([data-activa]) { visibility: hidden; }
 .guia-capa:not([data-activa]) * { animation: none; }
+/* Enmienda 10 · E10-2: el aviso «Tu foto entre amigos» (lo que lleva `data-guia-espera`) no se tapa nunca. Mientras
+   esté en la página la capa no se pinta, ni un cuadro antes de que el motor la esconda (el motor lo ve recién en el
+   requestAnimationFrame siguiente; queda de respaldo). `visibility` y no `display`: el motor sigue midiendo. */
+body:has([data-guia-espera]) .guia-capa { visibility: hidden; }
 
 /* El anillo: 4 de aire + 2 de --action + 2 de --surface, el radio del control + 4. */
 .guia-anillo { position: fixed; box-sizing: border-box; pointer-events: none; box-shadow: 0 0 0 2px var(--action), 0 0 0 4px var(--surface); animation: guia-anillo-entra 200ms cubic-bezier(0.2, 0, 0, 1); }

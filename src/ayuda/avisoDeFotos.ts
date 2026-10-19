@@ -10,6 +10,11 @@ import { useAuth } from '../auth/AuthContext';
  * - y el motor trata el aviso a la vista (`data-guia-espera`) como una ventana: la burbuja espera.
  *
  * Por cuenta y familia: el estado de otra sesión no vale para ésta.
+ *
+ * 0.255.1 · E10-3: se conserva el último estado sabido de esa cuenta y familia, en memoria (nunca en el almacenamiento
+ * del navegador). Cada vez que se monta Inicio el aviso vuelve a consultar e informa «sin saber»; eso no pisa lo ya
+ * sabido, así la tarjeta no aparece tarde ni empuja lo de abajo. Si la respuesta lo cambia, gana la respuesta. Una
+ * recarga lo borra, igual que el «Ahora no».
  */
 export type EstadoDelAvisoDeFotos = 'sin-saber' | 'pendiente' | 'resuelto';
 
@@ -18,6 +23,8 @@ const oyentes = new Set<() => void>();
 
 export function informarAvisoDeFotos(dueno: string, estado: EstadoDelAvisoDeFotos): void {
   if (actual.dueno === dueno && actual.estado === estado) return;
+  // Una consulta nueva en curso no borra lo ya sabido de esta cuenta y familia.
+  if (actual.dueno === dueno && estado === 'sin-saber') return;
   actual = { dueno, estado };
   for (const oyente of [...oyentes]) oyente();
 }

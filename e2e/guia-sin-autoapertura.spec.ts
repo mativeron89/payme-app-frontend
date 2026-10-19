@@ -68,7 +68,8 @@ test.describe('D364 · la guía no se abre sola', () => {
 
     expect(await ejemploSePrendio(page)).toBe(false);
     // Control positivo, en el mismo documento: en Inicio, tocar Tutorial la abre. Costura: la pantalla de bienvenida
-    // no tiene barra, así que se llega a Inicio con history.pushState. El aviso de fotos ya no hace esperar (V, 19/10).
+    // no tiene barra, así que se llega a Inicio con history.pushState. Con el aviso de fotos pendiente la tarjeta espera
+    // (enmienda 10): por eso, abajo, se lo responde.
     await page.evaluate(() => {
       history.pushState(null, '', '/home');
       window.dispatchEvent(new Event('popstate'));
