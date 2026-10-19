@@ -5,11 +5,12 @@ import { extractApiError } from '../api/errors';
 import { LEGAL_ACCEPTANCE_REQUIRED, USERNAME_REQUIRED } from '../api/http';
 import { recordarRetornoAMesa } from '../api/retornoTrasIngreso';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
-import { useSocialAuthCapability } from '../api/socialAuth';
+import { ensureSocialAuthCapability, useSocialAuthCapability } from '../api/socialAuth';
 import { autoridadDeAlta } from './LoginScreen';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
-import { Icon } from '../components/Icon';
+import { BarraDeLink } from '../components/BarraDeLink';
+import { TarjetaDeLink } from '../components/TarjetaDeLink';
 import { EVENTO_RUTA, navigate, ubicacionActual } from '../router';
 import {
   closeInvitationCustody,
@@ -17,7 +18,14 @@ import {
   settleInvitationFailure,
 } from './invitationCustody';
 import { LoginScreen } from './LoginScreen';
-import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
+import {
+  entrarEnNaranja,
+  formularioDeB,
+  iconoDelResultado,
+  joinLinkMessage,
+  joinLinkStage,
+  type JoinLinkOutcome,
+} from './joinLinkView';
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · la pantalla que reemplaza a "ver la mesa con el
@@ -171,6 +179,22 @@ export function JoinMesaScreen({
    * crearla. Ahora lee la misma autoridad que el formulario.
    */
   const signupAvailable = autoridadDeAlta(signup, social.publicRegistration) !== null;
+  /**
+   * D373 · P02-a · si ya se intentó leer la capability del alta. `ensure`
+   * resuelve con éxito o con falla (nunca deja nada esperando): con la lectura
+   * pendiente «Entrar» va con borde, para no mostrar dos naranjas seguidos.
+   */
+  const [capacidadIntentada, setCapacidadIntentada] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    void ensureSocialAuthCapability().then(() => {
+      if (vivo) setCapacidadIntentada(true);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const capacidadPendiente = social.status === 'pending';
 
   /**
    * ⭐ LA SECUENCIA DE CUSTODIA, Y EL ORDEN NO ES NEGOCIABLE.
@@ -306,38 +330,35 @@ export function JoinMesaScreen({
     outcome,
   });
 
-  /** §1.2-C · canje exitoso. Un solo destino: Mis ítems. */
+  /**
+   * §1.2-C · canje exitoso. Un solo destino: Mis ítems. D372: la tarjeta con el
+   * cuadro verde y el tilde, el restaurante debajo si llegó (si no, nada), y la
+   * barra reducida con el círculo.
+   *
+   * Las ramas D, A y la final devuelven un fragmento con el mismo primer hijo
+   * (`.link-screen` con la banda): de C a D, E o F la banda no se vuelve a montar.
+   */
   if (stage === 'joined' && joined) {
     return (
-      <div className="link-screen">
-        <AppHeader compact />
-        <div className="link-mid">
-          <div className="link-check" aria-hidden="true">
-            <Icon name="check" size={38} />
-          </div>
-          <div>
-            <div className="link-ok-title">{t('¡Te sumaste a la mesa!')}</div>
-            {/* Sin el código de mesa: no aporta nada en el momento de celebrar. */}
-            {restaurant && <div className="link-ok-sub">{restaurant}</div>}
-          </div>
+      <>
+        <div className="link-screen link-screen--con-barra">
+          <AppHeader compact />
+          {/* Sin el código de mesa: no aporta nada en el momento de celebrar. */}
+          <TarjetaDeLink
+            key="joined"
+            cuadro={{ icono: 'check', exito: true }}
+            titulo={t('¡Te sumaste a la mesa!')}
+            restaurante={restaurant}
+          />
         </div>
-        <div className="link-foot">
-          <button
-            type="button"
-            className="link-round"
-            onClick={() => salirAMisItems(joined)}
-            aria-label={t('Ver mis ítems')}
-          >
-            <Icon name="arrow-right" size={24} />
-          </button>
-        </div>
-      </div>
+        <BarraDeLink etiqueta={t('Ver mis ítems')} alTocar={() => salirAMisItems(joined)} />
+      </>
     );
   }
 
   /**
    * §1.2-A · 401. Sin sesión no se ve la mesa: se ve esto, con el token ya
-   * guardado. La burbuja es GENÉRICA a propósito —"Te invitaron a una mesa"—
+   * guardado. La tarjeta es GENÉRICA a propósito —"Te invitaron a una mesa"—
    * y no nombra el restaurante: para saber que el token es válido habría que
    * preguntarle al backend, y el endpoint que lo diría sin sesión es el
    * preview público que el cierre del pago sin cuenta prohíbe. Además, un link
@@ -345,106 +366,111 @@ export function JoinMesaScreen({
    */
   if (stage === 'signup') {
     if (authMode) {
+      // D374 · B: la tarjeta suelta arriba del formulario, que no cambia. Su texto
+      // sigue al modo que de verdad abre el formulario (P02-a: sin alta, «register»
+      // baja a «login»).
+      const formulario = formularioDeB({
+        elegido: authMode,
+        altaDisponible: signupAvailable,
+        capacidadPendiente,
+        capacidadIntentada,
+      });
       return (
-        <div className="screen">
-          <div className="join-banner">
-            <Icon name="sushi" size={22} />
-            <div>
-              <div className="join-banner-title">{t('Te invitaron a una mesa')}</div>
-              <div className="caption">
-                {authMode === 'register'
-                  ? t('Crea tu cuenta o entra para sumarte y pagar tu parte.')
-                  : t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
-              </div>
-            </div>
-          </div>
-          <LoginScreen initialMode={authMode} />
+        <div className="screen link-alta">
+          <TarjetaDeLink
+            key="alta"
+            suelta
+            cuadro={{ icono: 'persona-mas' }}
+            titulo={t('Te invitaron a una mesa')}
+            cuerpo={formulario.modo === 'register'
+              ? t('Crea tu cuenta o entra para sumarte y pagar tu parte.')
+              : t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
+          />
+          {formulario.montar && <LoginScreen initialMode={formulario.modo} />}
         </div>
       );
     }
     return (
-      <div className="link-screen">
-        <AppHeader compact />
-        <div className="link-mid">
-          <div className="link-bubble">
-            <div className="link-bubble-title">{t('Te invitaron a una mesa')}</div>
-          </div>
-        </div>
-        <div className="link-foot">
-          <p className="link-foot-copy">
-            {t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
-          </p>
-          {/* Único elemento naranja de la pantalla, con el texto en navy. */}
-          {signupAvailable && (
+      <>
+        <div className="link-screen">
+          <AppHeader compact />
+          <TarjetaDeLink
+            key="signup"
+            cuadro={{ icono: 'persona-mas' }}
+            titulo={t('Te invitaron a una mesa')}
+            cuerpo={t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
+          >
+            {/* D373 · un solo naranja: «Crear cuenta gratis» si hay alta; si no,
+                «Entrar» (blanco sobre naranja, 2,96:1, riesgo aceptado y declarado),
+                con borde mientras no se sabe si hay alta. */}
+            {signupAvailable && (
+              <button
+                type="button"
+                className="link-btn link-btn-brand"
+                onClick={() => {
+                  // AF-INVITACION-TRAS-GOOGLE · si el alta sale a Google y vuelve
+                  // a la raíz, esta marca devuelve a la persona a ESTA mesa.
+                  recordarRetornoAMesa(code);
+                  setAuthMode('register');
+                }}
+              >
+                {t('Crear cuenta gratis')}
+              </button>
+            )}
             <button
               type="button"
-              className="link-btn link-btn-brand"
+              className={entrarEnNaranja({ altaDisponible: signupAvailable, capacidadPendiente, capacidadIntentada })
+                ? 'link-btn link-btn-brand'
+                : 'link-btn link-btn-outline'}
               onClick={() => {
-                // AF-INVITACION-TRAS-GOOGLE · si el alta sale a Google y vuelve
-                // a la raíz, esta marca devuelve a la persona a ESTA mesa.
                 recordarRetornoAMesa(code);
-                setAuthMode('register');
+                setAuthMode('login');
               }}
             >
-              {t('Crear cuenta gratis')}
+              {t('Ya tengo cuenta · Entrar')}
             </button>
-          )}
-          <button
-            type="button"
-            className="link-btn link-btn-outline"
-            onClick={() => {
-              recordarRetornoAMesa(code);
-              setAuthMode('login');
-            }}
-          >
-            {t('Ya tengo cuenta · Entrar')}
-          </button>
+          </TarjetaDeLink>
         </div>
-      </div>
+      </>
     );
   }
 
+  /**
+   * C, E y F · la misma tarjeta: el aro en C; el link cortado en los rechazos
+   * (uno solo, sin pistas del motivo), la tienda en la mesa cerrada y
+   * «reintentar» en lo reintentable. `key={outcome}` la vuelve a montar al
+   * cambiar de estado, así la entrada se repite.
+   */
   const message = joinLinkMessage(outcome, t);
   return (
-    <div className="link-screen">
-      <AppHeader compact />
-      <div className="link-mid">
-        <div className="link-bubble">
-          <div className="link-bubble-title">{message.title}</div>
-          <div className="link-bubble-body">{message.body}</div>
-        </div>
-        {/* Pantalla D · la línea que cierra el círculo ANTES de soltar al
-            recién registrado a un Inicio vacío: la explicación vive acá, que
-            es la pantalla que sabe qué pasó — Inicio no adivina. */}
-        {message.nota && <p className="link-nota">{message.nota}</p>}
+    <>
+      <div className={stage === 'blocked' ? 'link-screen link-screen--con-barra' : 'link-screen'}>
+        <AppHeader compact />
+        <TarjetaDeLink
+          key={outcome}
+          cuadro={outcome === 'joining' ? { aro: message.title } : { icono: iconoDelResultado(outcome) }}
+          titulo={message.title}
+          cuerpo={message.body}
+          nota={message.nota}
+        >
+          {stage === 'retry' && (
+            <button
+              type="button"
+              className="link-btn link-btn-outline"
+              onClick={() => setAttempt((n) => n + 1)}
+            >
+              {t('Reintentar')}
+            </button>
+          )}
+        </TarjetaDeLink>
       </div>
-      <div className="link-foot">
-        {stage === 'retry' && (
-          <button
-            type="button"
-            className="link-btn link-btn-outline"
-            onClick={() => setAttempt((n) => n + 1)}
-          >
-            {t('Reintentar')}
-          </button>
-        )}
-        {/**
-         * §1.2-B · la salida del terminal es el círculo, no un botón de texto.
-         * El spec la manda a login si no hay sesión y a Inicio si la hay; acá
-         * sólo se llega con sesión —sin ella la rama de arriba muestra el 401—,
-         * así que el destino es Inicio.
-         */}
-        {stage === 'blocked' && (
-          <button
-            type="button"
-            className="link-round"
-            onClick={() => navigate('home')}
-            aria-label={t('Ir a PayMe')}
-          >
-            <Icon name="arrow-right" size={24} />
-          </button>
-        )}
-      </div>
-    </div>
+      {/**
+       * §1.2-B · la salida del terminal es el círculo, no un botón de texto.
+       * El spec la manda a login si no hay sesión y a Inicio si la hay; acá
+       * sólo se llega con sesión —sin ella la rama de arriba muestra el 401—,
+       * así que el destino es Inicio.
+       */}
+      {stage === 'blocked' && <BarraDeLink etiqueta={t('Ir a PayMe')} alTocar={() => navigate('home')} />}
+    </>
   );
 }

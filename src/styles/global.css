@@ -3027,27 +3027,6 @@ html.app-de-inicio-ios .app {
   margin-bottom: 8px;
 }
 
-/* ─── Cierre del pago sin cuenta · banner del canje por link ───
-   Encabeza el alta cuando alguien abre un link de invitación sin sesión. Dice
-   POR QUÉ se le pide cuenta, sin revelar nada de la mesa: ni restaurante, ni
-   total, ni gente. Antes de canjear el token no hay de dónde sacarlo —las tres
-   rutas de mesa exigen sesión desde v2.32.0— y está bien que no lo haya. */
-.join-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 14px 16px 0;
-  padding: 14px;
-  border-radius: 14px;
-  background: var(--teal-l);
-  color: #0a7b80;
-}
-.join-banner-title {
-  font-weight: 700;
-  font-size: var(--fs-legacy-base);
-  color: var(--navy);
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    ESTRUCTURA DE LA APP · SISTEMA_DISENO.md §5 bis
    Tres componentes compartidos por toda la app del comensal. Ninguna pantalla
@@ -3369,10 +3348,14 @@ html.app-de-inicio-ios .app {
 }
 
 /* Variante COMPACTA — solo la entrada por link (SPEC_APP.md §1.2). Menos
-   padding, logo más chico, curva más cerrada. No usarla en ningún otro lado. */
+   padding, logo más chico, curva más cerrada. No usarla en ningún otro lado.
+   D372 · su alto: 16 arriba (más el área segura), la fila del logo (44, la del
+   toque oculto, que no se achica), 16, y los 42 donde monta la tarjeta. Mide 118
+   más el área segura (el canvas pide 113, con una fila de 30). `.hdr` no cambia. */
 .hdr-compact {
+  height: calc(var(--sp-4) + var(--tap-min) + var(--sp-4) + 42px + env(safe-area-inset-top));
   border-radius: 0 0 26px 26px;
-  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) 0;
 }
 /* Se achica el CUERPO en `.hdr-mark` — no el wordmark suelto — para que el
    símbolo (1.2em) baje con él y la proporción de 283d88d se conserve sola. */
@@ -3774,13 +3757,14 @@ html.app-de-inicio-ios .app {
 /* ══════════════════════════════════════════════════════════════════════════
    ENTRADA POR LINK · SPEC_APP.md §1.2 — 401, 403 y "Sumate a la mesa"
 
-   Es la primera pantalla que ve casi todo el mundo que llega por link, y su
-   esqueleto es DISTINTO del resto de la app (v5, ratificado 2026-08-04):
-   banda compacta, una burbuja angosta flotando en el medio exacto del espacio
-   libre, y el bloque de acción pegado abajo.
+   Es la primera pantalla que ve casi todo el mundo que llega por link. Desde
+   D372 (diseño base de Claude Design, con las resoluciones de V) es una banda
+   compacta con UNA tarjeta montada (`TarjetaDeLink`, sobre .title-card) para
+   los diez estados: los botones van adentro de la tarjeta. Reemplaza a la
+   burbuja angosta en el medio y al bloque de acción pegado abajo (v5).
 
-   Ninguna de las tres lleva barra inferior: nadie de estas pantallas tiene
-   home todavía.
+   D y E llevan una barra reducida propia (`BarraDeLink`) con el círculo; A, B,
+   C y F no llevan barra.
 
    Lo que ninguna de las tres puede hacer: nombrar el restaurante o la mesa
    ANTES del canje. Ni el 401 ni el 403. Después del canje sí (§1.2-C), porque
@@ -3788,60 +3772,34 @@ html.app-de-inicio-ios .app {
    momentos con permisos distintos, y que el copy difiera es correcto.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* Un bloque que hace scroll con la banda adentro: el −42 de la tarjeta no se
+   recorta, y A o E2 en inglés se desplazan enteras a 375 × 667. Sin flex, así
+   la banda no se encoge. */
 .link-screen {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  padding-bottom: var(--sp-6);
+}
+
+/* D y E · el resguardo de la barra: su alto más 40 (104 en Safari, fuera de
+   escala, declarado). */
+.link-screen--con-barra {
+  padding-bottom: calc(var(--appbar-alto) + 40px);
+}
+
+/* B · la tarjeta suelta arriba del formulario, sobre el fondo de la app. */
+.link-alta {
   background: var(--bg);
 }
 
-/* El espacio libre entre la banda y el bloque de abajo. La burbuja flota en el
-   MEDIO EXACTO, con aire parejo arriba y abajo: un solo tramo flexible
-   centrado da los dos espaciadores iguales del spec sin nodos vacíos. */
-.link-mid {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-4);
-  padding: var(--sp-6) var(--sp-4);
-  text-align: center;
-}
-
-/* La burbuja NO va de borde a borde: es angosta y centrada. */
-.link-bubble {
-  width: 240px;
-  max-width: 100%;
-  padding: var(--sp-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
-}
-
-.link-bubble-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-h2);
-  line-height: var(--lh-h2);
-  font-weight: 700;
-  color: var(--text);
-}
-
-.link-bubble-body {
-  margin-top: var(--sp-2);
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text-muted); /* 5.43:1 sobre --surface */
-}
-
-/* Pantalla D · la línea "tu cuenta ya está lista", entre la burbuja y el
-   círculo. Fuera de la burbuja a propósito: es otra información (tu cuenta),
-   no parte del rechazo (la mesa). */
+/* E3 · la línea "tu cuenta ya está lista", debajo de la tarjeta. Fuera de la
+   tarjeta a propósito: es otra información (tu cuenta), no parte del rechazo
+   (la mesa). 12 arriba y 32 a los lados (D372). */
 .link-nota {
-  margin: var(--sp-4) var(--sp-4) 0;
+  margin: var(--sp-3) var(--sp-8) 0;
   text-align: center;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
@@ -3849,37 +3807,23 @@ html.app-de-inicio-ios .app {
   color: var(--text-muted);
 }
 
-/* Bloque de acción, pegado abajo. */
-.link-foot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom));
-  text-align: center;
-}
-
-.link-foot-copy {
-  margin-bottom: var(--sp-2);
-  font-family: var(--font-body);
-  font-size: var(--fs-body); /* el cuerpo a 16px, aplicado en esta pantalla */
-  line-height: var(--lh-body);
-  color: var(--text-muted); /* 5.05:1 sobre --bg */
-}
-
 /* Los dos botones del 401 son de ANCHO COMPLETO, no el círculo naranja: es la
    primera acción que ve un desconocido sin ningún contexto de la app, y un
-   ícono minimalista ahí sería críptico. */
+   ícono minimalista ahí sería críptico. D372: dentro de la tarjeta, de 52 de
+   alto (fuera de escala, por encima de los 44 mínimos); un texto largo pasa a
+   dos renglones sin cortarse. */
 .link-btn {
   width: 100%;
-  min-height: var(--tap-min);
-  padding: var(--sp-4);
+  min-height: 52px;
+  padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-md);
   border: none;
   cursor: pointer;
   font-family: var(--font-display);
   font-size: var(--fs-body);
+  line-height: 1.25;
   font-weight: 700;
+  text-wrap: pretty;
 }
 
 /* ⭐ CUARTO uso permitido del naranja (SISTEMA_DISENO.md §1, enmienda del
@@ -3889,13 +3833,14 @@ html.app-de-inicio-ios .app {
    barra activa antes de tener cuenta.
 
    🔴 El texto va en BLANCO desde la enmienda del 2026-08-08 (antes navy,
-   5.77:1). Da 2.84:1 y NO pasa AA — ratificado por Mati con el número
-   adelante. Acá pesa más que en los otros dos usos: es la PRIMERA pantalla
-   que ve un desconocido, y suele mirarse con poca luz. Queda dicho, no
-   escondido. */
+   5.77:1). Da 2.96:1 con el naranja de D310 y NO pasa AA — ratificado por Mati
+   con el número adelante. D373: en A2 (sin alta) es «Entrar». Acá pesa más
+   que en los otros dos usos: es la PRIMERA pantalla que ve un desconocido, y
+   suele mirarse con poca luz. Queda dicho, no escondido. */
 .link-btn-brand {
   background: var(--brand);
   color: var(--brand-fg);
+  border: 1.5px solid var(--brand);
 }
 
 /* "Ya tengo cuenta · Entrar" es un botón CON BORDE, no un link suelto: como
@@ -3903,7 +3848,7 @@ html.app-de-inicio-ios .app {
    mismo peso visual que el primario sin competirle en color. */
 .link-btn-outline {
   background: var(--surface);
-  color: var(--action); /* 16.36:1 sobre blanco */
+  color: var(--action); /* 16.52:1 sobre blanco */
   border: 1.5px solid var(--action);
 }
 
@@ -3928,43 +3873,11 @@ html.app-de-inicio-ios .app {
      en la tabla de tres usos permitidos, y se reportó como tal. Mati lo revisó
      y ratificó los CINCO usos, no tres. Ya no es deriva: es un uso aprobado, y
      su glifo blanco sigue la misma regla que los demás. */
-  color: var(--brand-fg); /* blanco, 2.84:1 — ver arriba */
+  color: var(--brand-fg); /* blanco, 2.96:1 — ver arriba */
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: var(--sh-2);
-}
-
-/* §1.2-C · el tilde del canje: 72px en --success, con el glifo en blanco
-   (5.48:1). El ícono va SIEMPRE con texto al lado — el color no es el único
-   portador de significado. */
-.link-check {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--r-full);
-  background: var(--success);
-  color: var(--action-fg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.link-ok-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-h2);
-  line-height: var(--lh-h2);
-  font-weight: 700;
-  color: var(--text);
-}
-
-/* El nombre del restaurante, SIN el código de mesa: no aporta nada en el
-   momento de celebrar. */
-.link-ok-sub {
-  margin-top: var(--sp-1);
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text-muted);
 }
 
 /* ─── D372 · la invitación base (Claude Design, con las resoluciones de V) ───

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 // que `node:fs` exigiría @types/node — una dependencia nueva, y agregar
 // dependencias sin OK previo de Mati está prohibido por el CLAUDE.md del repo.
 import CSS from './global.css?raw'
+import PANTALLA_DEL_LINK from '../screens/JoinMesaScreen.tsx?raw'
 
 /**
  * Fija los tokens de ../../../diseno/SISTEMA_DISENO.md §1–§3.
@@ -436,17 +437,101 @@ describe('entrada por link · SPEC_APP.md §1.2', () => {
     expect(contrast('action', 'surface')).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('el tilde de 72px del canje pasa AA en blanco sobre --success', () => {
-    const check = rule('.link-check')
-    expect(check).toContain('background: var(--success)')
-    expect(check).toContain('color: var(--action-fg)')
-    expect(contrast('action-fg', 'success')).toBeGreaterThanOrEqual(4.5)
+  it('D372 · el canje hecho: el cuadro verde de la tarjeta, con el tilde en el blanco del cuadro, pasa AA', () => {
+    // Reemplaza al tilde de 72 (`.link-check`). El blanco lo hereda de `.title-card-cuadro` (--on-dark).
+    const exito = rule('.title-card-cuadro--exito')
+    expect(exito).toContain('background: var(--success)')
+    expect(exito, 'sin color propio: el del cuadro').not.toMatch(/(^|[^-])color:/m)
+    expect(rule('.title-card-cuadro')).toContain('color: var(--on-dark)')
+    expect(contrast('on-dark', 'success')).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('el área táctil de los botones no baja del mínimo de la app', () => {
-    expect(rule('.link-btn')).toContain('min-height: var(--tap-min)')
+  it('el área táctil de los botones no baja del mínimo de la app (D372: 52, con relleno 12/16)', () => {
+    const boton = rule('.link-btn')
+    expect(boton).toContain('min-height: 52px')
+    expect(boton).toContain('padding: var(--sp-3) var(--sp-4)')
+    expect(52, 'el alto del diseño no baja del mínimo de la app').toBeGreaterThanOrEqual(parseFloat(token('tap-min')))
     // El círculo es de 56px por spec, ya por encima de los 44.
     expect(rule('.link-round')).toContain('width: 56px')
+  })
+})
+
+/** Los bloques `@media (prefers-reduced-motion: reduce) { … }` enteros, con las llaves balanceadas. */
+function bloquesSinMovimiento(): string[] {
+  const out: string[] = []
+  const inicio = /@media \(prefers-reduced-motion: reduce\)\s*\{/g
+  for (const m of CSS.matchAll(inicio)) {
+    let nivel = 1
+    let i = m.index! + m[0].length
+    const desde = i
+    while (nivel > 0 && i < CSS.length) {
+      if (CSS[i] === '{') nivel++
+      else if (CSS[i] === '}') nivel--
+      i++
+    }
+    out.push(CSS.slice(desde, i - 1))
+  }
+  return out
+}
+
+describe('D372 · la invitación base (Claude Design, con las resoluciones de V)', () => {
+  it('🔴 la barra reducida: la sombra ES la de la barra principal (derivada, no copiada), de borde a borde, sin transform', () => {
+    const sombra = (cuerpo: string) => cuerpo.match(/box-shadow:\s*([^;]+);/)![1]
+    const barra = rule('.link-barra')
+    expect(sombra(barra)).toBe(sombra(rule('.appbar-block')))
+    for (const decl of ['position: absolute', 'left: 0', 'right: 0', 'bottom: 0', 'height: var(--appbar-alto)', 'border-radius: 24px 24px 0 0']) {
+      expect(barra, decl).toContain(decl)
+    }
+    expect(barra, 'la entrada usa transform: la barra no puede depender de un translateX').not.toMatch(/transform/)
+    expect(rule('.link-barra .link-round')).toContain('margin-top: -16px')
+  })
+
+  it('🔴 .hdr no cambia; .hdr-compact tiene su alto propio y no se suman reglas compactas nuevas', () => {
+    const hdr = rule('.hdr')
+    expect(hdr).toContain('height: calc(154px + env(safe-area-inset-top))')
+    expect(hdr).toContain('padding: calc(14px + env(safe-area-inset-top)) 16px 56px')
+    const compacta = rule('.hdr-compact')
+    expect(compacta).toContain('height: calc(var(--sp-4) + var(--tap-min) + var(--sp-4) + 42px + env(safe-area-inset-top))')
+    expect(compacta).toContain('padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) 0')
+    const selectores = [...CSS.matchAll(/^\s*(\.hdr-compact[^{,]*?)\s*[{,]/gm)].map((m) => m[1]!.trim())
+    expect(selectores).toEqual(['.hdr-compact', '.hdr-compact .hdr-mark'])
+  })
+
+  it('B · la tarjeta suelta: sin el montaje de −42, 16/16/16 con el área segura, --sh-2, sin encogerse', () => {
+    const suelta = rule('.title-card.title-card--suelta')
+    expect(suelta).toContain('margin: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4)')
+    expect(suelta).toContain('box-shadow: var(--sh-2)')
+    expect(suelta).toContain('flex: none')
+  })
+
+  it('la entrada: 200 ms con 40 de retraso, en la tarjeta montada, la suelta y la barra', () => {
+    expect(CSS).toMatch(/\.link-screen > \.title-card,\s*\.link-alta > \.title-card,\s*\.link-barra \{\s*animation: link-entra 200ms cubic-bezier\(0\.2, 0, 0, 1\) 40ms both;/)
+  })
+
+  it('🔴 con «reducir movimiento», el aro quieto y la entrada sólo con opacidad; control positivo: el extractor ve otros bloques', () => {
+    const bloques = bloquesSinMovimiento()
+    // Control positivo: el mismo extractor encuentra el de la burbuja de la guía.
+    expect(bloques.some((b) => b.includes('.ayuda-opcion-burbuja'))).toBe(true)
+    const nuestro = bloques.find((b) => b.includes('.link-aro'))
+    expect(nuestro, 'falta el bloque de la invitación').toBeDefined()
+    expect(nuestro!).toMatch(/\.link-aro \{\s*animation: none;/)
+    expect(nuestro!).toMatch(/animation: link-entra-quieta 120ms linear both;/)
+    expect(CSS).toMatch(/@keyframes link-entra-quieta \{\s*from \{\s*opacity: 0;\s*\}\s*to \{\s*opacity: 1;\s*\}\s*\}/)
+  })
+
+  it('🔴 lo que reemplazó la tarjeta no queda ni en el CSS ni en la pantalla; control positivo: la misma búsqueda ve .link-round', () => {
+    const viejas = ['join-banner', 'link-mid', 'link-bubble', 'link-foot', 'link-check', 'link-ok-title', 'link-ok-sub']
+    const usa = (texto: string, clase: string) => new RegExp(`(^|[^\\w-])${clase}(?![\\w-])`).test(texto)
+    for (const clase of viejas) {
+      expect(usa(CSS, clase), `${clase} en global.css`).toBe(false)
+      expect(usa(PANTALLA_DEL_LINK, clase), `${clase} en JoinMesaScreen`).toBe(false)
+    }
+    expect(usa(CSS, 'link-round')).toBe(true)
+  })
+
+  it('Q5 · las duraciones van locales: no se declara ningún token --mo-*; control positivo: el patrón ve --sp-4', () => {
+    expect(CSS).not.toMatch(/^\s*--mo-[a-z-]+\s*:/m)
+    expect(CSS).toMatch(/^\s*--sp-4\s*:/m)
   })
 })
 
