@@ -163,4 +163,28 @@ describe('D379 · la memoria de las invitaciones sobrevive a cerrar y reabrir la
     expect(panel).toContain('memoria.oyentes.add(repintar);');
     expect(leer('src/screens/CreateMesaFlow.tsx')).toContain('<InviteFriends code={code} />');
   });
+
+  /**
+   * P-01 (revisión de V sobre 0.254.0) · `toggleGroup` espera la red: si en ese rato se cerró la hoja y el panel se
+   * desmontó, la respuesta no toca su estado. En node no hay DOM para desmontarlo de verdad, así que se fija por fuente:
+   * la guarda está después del `await` y en el `catch` y el `finally`, y la limpieza del efecto la apaga.
+   */
+  it('P-01 · la guarda `montado` de toggleGroup: después de esperar el grupo, nada toca el estado de un panel desmontado', () => {
+    const panel = readFileSync(join(RAIZ, 'src/components/InviteFriends.tsx'), 'utf8');
+    expect(panel).toMatch(/const montado = useRef\(true\);\s*useEffect\(\(\) => \{\s*montado\.current = true;\s*return \(\) => \{ montado\.current = false; \};\s*\}, \[\]\);/);
+    const inicio = panel.indexOf('async function toggleGroup(');
+    const cuerpo = panel.slice(inicio, panel.indexOf('\n  }\n', inicio));
+    const trasEsperar = cuerpo.slice(cuerpo.indexOf('await api.getGroup(g.id);'));
+    expect(trasEsperar).toMatch(/^await api\.getGroup\(g\.id\);\s*if \(!montado\.current\) return;/);
+    expect(trasEsperar).toMatch(/\} catch \{\s*if \(montado\.current\) setGroupError\(g\.id\);/);
+    expect(trasEsperar).toMatch(/\} finally \{\s*if \(montado\.current\) setLoadingGroup\(null\);/);
+    // Ningún set de estado después de la espera sin la guarda en su línea, salvo los que van dentro del camino feliz,
+    // que ya pasó por `if (!montado.current) return;`.
+    const caminoFeliz = trasEsperar.slice(0, trasEsperar.indexOf('} catch {'));
+    const resto = trasEsperar.slice(trasEsperar.indexOf('} catch {'));
+    expect(caminoFeliz).toContain('if (!montado.current) return;');
+    for (const linea of resto.split('\n').filter((l) => /\bset[A-Z]\w*\(/.test(l))) {
+      expect(linea, linea).toMatch(/if \(montado\.current\) set[A-Z]\w*\(/);
+    }
+  });
 });

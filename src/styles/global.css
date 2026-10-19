@@ -433,11 +433,12 @@ html.app-de-inicio-ios .app {
 .mesa-secondary-actions {
   /* D181 · «Copiar link» e «Invitar amigos» mitad y mitad, y debajo el panel de
      invitar cuando se abre. Desde D379 vive en la hoja del engranaje; «Cerrar
-     mesa» va aparte, al final de «Tu mesa» (`.mesa-cerrar`, D223). */
+     mesa» va aparte, al final de «Tu mesa» (`.mesa-cerrar`, D223). Sin margen
+     de arriba propio: sólo se dibuja dentro de la hoja, que lo fija en
+     `.hoja-de-la-mesa .mesa-secondary-actions` (seguimiento de 0.254.0). */
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  margin-top: var(--sp-3);
 }
 
 .mesa-acciones-fila {

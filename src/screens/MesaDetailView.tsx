@@ -854,13 +854,13 @@ export function MesaDetailView({
   };
   /**
    * D240 punto 8 · ¿este «Listo» cierra la mesa? Sólo sin garantía y abierta,
-   * con algo nuevo que guardar y con lo que el dueño publica de cada plato: en
-   * consumo el borrador se suma; en «igual», con la selección guardada ya leída,
-   * la reemplaza.
-   * En consumo, lo propio de un plato que el borrador toca es lo liberable, que
-   * el dueño suelta y vuelve a tomar (`propioEnConsumo`, con el fail-safe hacia
-   * mostrar la hoja), y el dueño escribe con cualquier borrador no vacío. Antes
-   * era siempre 0: con una respuesta perdida o dos pestañas, la mesa podía
+   * con algo nuevo que guardar y con lo que el dueño publica de cada plato. En
+   * «igual», con la selección guardada ya leída, el borrador la reemplaza. En
+   * consumo, en un plato que el borrador no toca queda lo que ya había; en uno
+   * que toca, el dueño suelta lo propio liberable y lo vuelve a tomar
+   * (`propioEnConsumo`, con el fail-safe hacia mostrar la hoja), y escribe con
+   * cualquier borrador no vacío. Hasta 0.253.1 lo propio era siempre 0 («el
+   * borrador se suma»): con una respuesta perdida o dos pestañas, la mesa podía
    * cerrarse sin la hoja.
    */
   const listoCierraLaMesa = mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo

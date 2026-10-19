@@ -118,7 +118,7 @@ export function joinLinkStage(state: {
 }
 
 /**
- * D372 · los textos pasan por `t()`: hasta 0.253.0 la pantalla los dibujaba en
+ * D372 · los textos pasan por `t()`: hasta 0.253.1 la pantalla los dibujaba en
  * español aunque la app estuviera en inglés. El parámetro se llama `t` y los
  * literales van entre comillas simples porque así los ve el censo de
  * `traduccion.test.ts`. Sin `t`, el español (lo que fijan los tests de

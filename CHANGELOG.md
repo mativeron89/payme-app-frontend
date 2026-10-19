@@ -1,3 +1,19 @@
+# 0.255.0 · 2026-10-19
+
+## Seguimiento de 0.254.0
+
+Lo que dejaron la revisión de V sobre 0.254.0 y la propia de AF sobre el merge. La entrada de 0.254.0 no se reescribe: lo que quedó viejo se corrige acá.
+
+- **La entrada de 0.254.0 se queda corta en dos lugares:**
+  - Dice «la custodia y el retorno a la mesa siguen igual». La custodia no cambia, y el registro del retorno (`{code, savedAt}`) tampoco. Pero hay un registro nuevo, el del modo (P02-a, `payme.app.retorno_mesa_modo.v1`), que vive y muere con el retorno.
+  - La marca de P02-b se borra también por `olvidarRetornoAMesa`, no sólo en los cuatro casos que nombra: al cerrarse la custodia, en un rechazo terminal y en `tomarRetornoAMesa`.
+- **A-02 · la pantalla de ingreso no se recarga sola mientras se ve el aviso de P02** («Parece que Google no terminó.»): `pantallaIntacta` suma `!avisoGoogle`, para que la recarga no se lleve un aviso que ya se consumió. Si hay una versión nueva, esa revisión no recarga; la siguiente es al volver a la pestaña (`visibilitychange` o el bfcache), y recarga si para entonces el aviso ya no está. Con la sesión iniciada sigue el cartel de siempre.
+- **Comentarios y CSS que quedaron viejos (no cambia nada visible):**
+  - el de `listoCierraLaMesa` (`MesaDetailView.tsx`) decía «en consumo el borrador se suma»; desde 0.253.1 el plato que el borrador toca reemplaza lo propio liberable (`propioEnConsumo`);
+  - el de `joinLinkView.ts` decía que los textos salían en español «hasta 0.253.0»; fue hasta 0.253.1;
+  - sale el `margin-top` de `.mesa-secondary-actions`: esa fila sólo se dibuja dentro de la hoja, que la deja en 0.
+- **P-01 · un test fija la guarda `montado` de `toggleGroup`** (`InviteFriends`): después de esperar el grupo, nada toca el estado de un panel desmontado.
+
 # 0.254.0 · 2026-10-18
 
 ## Invitación base (D372–D374) y P02
