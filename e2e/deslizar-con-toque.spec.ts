@@ -4,8 +4,9 @@ import { ingresar, irEnLaApp } from './_app';
 /**
  * D360-8 · en Mesas, a veces al deslizar una mesa a la izquierda no terminaba de
  * aparecer «Eliminar». El gesto ahora (`FilaDeslizable`):
- * - decidido el arrastre horizontal, el navegador ya no empieza un scroll (en el
- *   iPhone eso cancelaba el gesto y la tarjeta volvía sola);
+ * - decidido el arrastre horizontal, el navegador ya no empieza un scroll (un
+ *   scroll puede cancelar el gesto y la tarjeta volvía sola; que el iPhone lo
+ *   haga es probable, no medido);
  * - si el navegador igual lo cancela, la tarjeta queda según lo que se corrió;
  * - un deslizamiento rápido abre aunque no llegue a la mitad del botón.
  *
@@ -70,7 +71,7 @@ async function soltar(dedo: Dedo): Promise<void> {
   await dedo.cdp.detach();
 }
 
-/** Lo que hace el navegador cuando se queda con el gesto (en el iPhone, al empezar un scroll). */
+/** Lo que hace el navegador cuando se queda con el gesto (se cree que el iPhone lo hace al empezar un scroll; no medido). */
 async function cancelar(dedo: Dedo): Promise<void> {
   await dedo.cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   await dedo.cdp.detach();

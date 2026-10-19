@@ -122,8 +122,9 @@ test.describe('D181', () => {
       const caja = (el: Element) => el.getBoundingClientRect();
       const fila = document.querySelector('.mesa-acciones-fila')!;
       const [a, b] = [...fila.querySelectorAll('.btn')];
-      // Cerrar se centra en su propio bloque (`.mesa-cerrar`), al final de la pantalla.
-      const contenedor = caja(document.querySelector('.mesa-cerrar')!);
+      // Cerrar va al final de la pantalla, centrado en la PANTALLA: medido contra su propio bloque (`.mesa-cerrar`),
+      // un bloque corrido lo daba por bueno.
+      const pantalla = document.documentElement.clientWidth;
       const c = caja(document.querySelector('.btn-cerrar-mesa')!);
       const cortado = (el: Element) => (el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth;
       return {
@@ -131,7 +132,7 @@ test.describe('D181', () => {
         anchos: [caja(a!).width, caja(b!).width],
         filaAncho: caja(fila).width,
         dentro: caja(b!).right <= caja(fila).right + 0.5 && caja(a!).left >= caja(fila).left - 0.5,
-        centrado: Math.abs((c.left + c.width / 2) - (contenedor.left + contenedor.width / 2)),
+        centrado: Math.abs((c.left + c.width / 2) - pantalla / 2),
         cortados: [cortado(a!), cortado(b!), cortado(document.querySelector('.btn-cerrar-mesa')!)],
       };
     });

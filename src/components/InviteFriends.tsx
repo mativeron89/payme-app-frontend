@@ -33,8 +33,8 @@ import { arrobaCoincide, useUsernameCapability } from '../api/username';
  * revisa antes de tocar. Invitar de a uno hace que el error cueste una fila.
  *
  * **El guard sincrónico contra dobles envíos se conserva entero**, porque el
- * riesgo no cambió: `sentRef` reserva el `payme_id` ANTES de ceder el event
- * loop. La key del backend cubre replays, pero no dos taps simultáneos. Si el
+ * riesgo no cambió: `invitarConMemoria` reserva el `payme_id` en
+ * `memoria.reservados` ANTES de ceder el event loop. La key del backend cubre replays, pero no dos taps simultáneos. Si el
  * envío falla se libera el botón; ante ambigüedad se conserva la misma key.
  */
 /**
@@ -84,6 +84,30 @@ export interface MemoriaDeInvitaciones {
 
 export function crearMemoriaDeInvitaciones(mesa: string): MemoriaDeInvitaciones {
   return { mesa, claves: new Map(), reservados: new Set(), invitados: new Set(), oyentes: new Set() };
+}
+
+/** La memoria de una mesa para UNA identidad: la mesa, el token de invitado y la cuenta. */
+export interface MemoriaConIdentidad {
+  readonly code: string;
+  readonly guestToken: string | null;
+  readonly principal: string | null;
+  readonly memoria: MemoriaDeInvitaciones;
+}
+
+/**
+ * La memoria vigente para (mesa, token, cuenta): la misma si nada de eso
+ * cambió, una nueva si cambió algo. Se guarda como estado de quien la conserva
+ * (no en `useMemo` ni en un ref que se pisa durante el render): un render que
+ * React descarta no puede renovarla.
+ */
+export function memoriaParaIdentidad(
+  previa: MemoriaConIdentidad | null,
+  code: string,
+  guestToken: string | null,
+  principal: string | null,
+): MemoriaConIdentidad {
+  if (previa && previa.code === code && previa.guestToken === guestToken && previa.principal === principal) return previa;
+  return { code, guestToken, principal, memoria: crearMemoriaDeInvitaciones(code) };
 }
 
 function avisar(memoria: MemoriaDeInvitaciones): void {
@@ -159,10 +183,23 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
   const [members, setMembers] = useState<Record<string, Invitable[]>>({});
   const [loadingGroup, setLoadingGroup] = useState<string | null>(null);
   const [groupError, setGroupError] = useState<string | null>(null);
-  // Sin memoria de afuera, una propia por mesa: cambiar de mesa empieza de cero, como antes.
-  const memoriaPropia = useRef<MemoriaDeInvitaciones | null>(null);
-  if (!memoriaDeAfuera && memoriaPropia.current?.mesa !== code) memoriaPropia.current = crearMemoriaDeInvitaciones(code);
-  const memoria = memoriaDeAfuera ?? memoriaPropia.current!;
+  // Sin memoria de afuera, una propia por mesa: cambiar de mesa empieza de cero, como antes. Es estado, como la de
+  // `MesaScreen`: se reemplaza durante el render sólo si cambió la mesa.
+  const [memoriaPropia, setMemoriaPropia] = useState<MemoriaConIdentidad | null>(null);
+  let memoria: MemoriaDeInvitaciones;
+  if (memoriaDeAfuera) {
+    memoria = memoriaDeAfuera;
+  } else {
+    const vigente = memoriaParaIdentidad(memoriaPropia, code, null, null);
+    if (vigente !== memoriaPropia) setMemoriaPropia(vigente);
+    memoria = vigente.memoria;
+  }
+  // `toggleGroup` espera la red: si el panel se desmontó (se cerró la hoja), no se toca su estado.
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => { montado.current = false; };
+  }, []);
   const [, setVersion] = useState(0);
   useEffect(() => {
     const repintar = () => setVersion((v) => v + 1);
@@ -259,6 +296,7 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
     setLoadingGroup(g.id);
     try {
       const detail = await api.getGroup(g.id);
+      if (!montado.current) return;
       setMembers((prev) => ({
         ...prev,
         [g.id]: detail.members.map((m) => ({
@@ -270,9 +308,9 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
         })),
       }));
     } catch {
-      setGroupError(g.id);
+      if (montado.current) setGroupError(g.id);
     } finally {
-      setLoadingGroup(null);
+      if (montado.current) setLoadingGroup(null);
     }
   }
 

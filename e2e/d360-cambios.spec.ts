@@ -473,59 +473,98 @@ test.describe('D360-5a · sin «¿Compartieron un plato?» en el ticket de un vi
 // ─── D379 · la memoria de las invitaciones, entre cierres de la hoja ─────────
 
 test.describe('D379 · «Invitar amigos» en la hoja del engranaje conserva lo enviado', () => {
-  test('🔴 un error ambiguo, cerrar y reabrir: el reintento usa la MISMA key, y «Invitado ✓» queda', async ({ page }) => {
+  test('🔴 error ambiguo, cerrar y reabrir: el reintento reusa la key; en curso no se repite al reabrir; «Enviando…» e «Invitado ✓» los pinta la memoria', async ({ page }) => {
+    // El reloj de la página se instala antes de cargar y corre normal. Se pausa sólo mientras se mide lo que tiene que
+    // pintar la suscripción del panel a la memoria: con el reloj quieto no corren ni el tick de 1 s de MesaScreen ni su
+    // refresco de 10 s, que repintan todo y taparían una suscripción rota.
+    await page.clock.install();
     await ingresar(page);
     const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
     await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
     await expect(aviso).toHaveCount(0);
     await page.goto('/#/mesa/PA-2847');
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
-    // Se anota la Idempotency-Key de cada invitación; la primera falla sin respuesta (un error ambiguo: no se sabe
-    // si llegó), que es el caso en que el reintento tiene que reusarla.
+    // Se anota la Idempotency-Key de cada invitación. La primera falla sin respuesta (un error ambiguo: no se sabe si
+    // llegó), que es el caso en que el reintento tiene que reusarla. La segunda queda en vuelo hasta que el test la
+    // resuelve (sin timers: con el reloj quieto, una respuesta con demora no llegaría nunca).
     await page.evaluate(async () => {
       const ruta = '/src/api/index.ts';
       const { api } = await import(/* @vite-ignore */ ruta);
-      const original = api.inviteFriend.bind(api);
       const claves: string[] = [];
       Reflect.set(window, '__clavesDeInvitar', claves);
-      api.inviteFriend = async (code: string, paymeId: string, key: string) => {
+      api.inviteFriend = (_code: string, _paymeId: string, key: string) => {
         claves.push(key);
-        if (claves.length === 1) throw new Error('red caída');
-        return original(code, paymeId, key);
+        if (claves.length === 1) return Promise.reject(new Error('red caída'));
+        return new Promise((resolve) => {
+          Reflect.set(window, '__resolverInvitacion', () => resolve({
+            invitation: {
+              id: 'e2e-invitacion', invitation_type: 'in_app', status: 'pending',
+              expires_at: '2026-10-20T00:00:00.000Z', created_at: '2026-10-18T00:00:00.000Z',
+            },
+          }));
+        });
       };
     });
     const claves = () => page.evaluate(() => [...(Reflect.get(window, '__clavesDeInvitar') as string[])]);
+    // `pauseAt` no va hacia atrás, y el reloj sigue corriendo mientras se lee la hora: se pausa un segundo después
+    // (dispara una vez lo que vencía en ese segundo, antes de lo que se mide).
+    const pausar = async () => {
+      const ahora = await page.evaluate(() => Date.now());
+      await page.clock.pauseAt(ahora + 1_000);
+    };
     const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
     const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
     const abrirPanel = hoja.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true });
     const sofia = hoja.locator('.inv-row').filter({ hasText: 'Sofía Fernández' });
+    const boton = (nombre: string) => sofia.getByRole('button', { name: nombre, exact: true });
+    const toast = page.locator('.toast');
+    const cerrarYReabrir = async () => {
+      await page.keyboard.press('Escape');
+      await expect(hoja).toHaveCount(0);
+      await engranaje.click();
+      // Cerrar pliega el panel: al reabrir está «Invitar amigos», sin la lista.
+      await expect(abrirPanel).toBeVisible();
+      await expect(hoja.locator('.inv-row')).toHaveCount(0);
+      await abrirPanel.click();
+    };
 
     await engranaje.click();
     await abrirPanel.click();
-    await sofia.getByRole('button', { name: 'Invitar', exact: true }).click();
-    await expect(page.locator('.toast')).toHaveText('No pudimos confirmar la invitación a Sofía. Reintenta la misma: vamos a reutilizarla.');
+    await boton('Invitar').click();
+    await expect(toast).toHaveText('No pudimos confirmar la invitación a Sofía. Reintenta la misma: vamos a reutilizarla.');
     expect(await claves()).toHaveLength(1);
 
-    // Cerrar la hoja pliega el panel: al reabrirla está «Invitar amigos», sin la lista.
-    await page.keyboard.press('Escape');
-    await expect(hoja).toHaveCount(0);
-    await engranaje.click();
-    await expect(abrirPanel).toBeVisible();
-    await expect(hoja.locator('.inv-row')).toHaveCount(0);
-    await abrirPanel.click();
-    await sofia.getByRole('button', { name: 'Invitar', exact: true }).click();
-    await expect(page.locator('.toast')).toHaveText('Invitación enviada a Sofía ✓');
-    await expect(sofia.getByRole('button', { name: 'Invitado ✓', exact: true })).toBeDisabled();
+    await cerrarYReabrir();
+    await expect(boton('Invitar')).toBeEnabled();
+    // Con el reloj quieto, el reintento queda en vuelo y «Enviando…» sólo lo puede pintar la suscripción. `force`
+    // porque la espera de «estable» de Playwright mira cuadros, y con el reloj quieto no pasan.
+    await pausar();
+    await boton('Invitar').click({ force: true });
+    await expect(boton('Enviando…')).toBeDisabled();
+    expect(await claves()).toHaveLength(2);
+
+    // Con la invitación en vuelo se cierra la hoja y se reabre: el panel nuevo lee «Enviando…» de la memoria y no se
+    // puede volver a tocar (el reloj corre: la hoja anima al cerrarse).
+    await page.clock.resume();
+    await cerrarYReabrir();
+    await expect(boton('Enviando…')).toBeDisabled();
+    await boton('Enviando…').click({ force: true });
+    expect(await claves()).toHaveLength(2);
+
+    // Con el reloj quieto otra vez llega la respuesta: «Invitado ✓» lo pinta la suscripción del panel reabierto.
+    await pausar();
+    await page.evaluate(() => (Reflect.get(window, '__resolverInvitacion') as () => void)());
+    await expect(boton('Invitado ✓')).toBeDisabled();
+    await expect(toast).toHaveText('Invitación enviada a Sofía ✓');
     const enviadas = await claves();
     expect(enviadas).toHaveLength(2);
+    for (const k of enviadas) expect(k.length, 'una Idempotency-Key no vacía').toBeGreaterThan(0);
     expect(enviadas[1], 'el reintento después de reabrir reusa la Idempotency-Key').toBe(enviadas[0]);
 
     // Otra vez cerrar y reabrir: «Invitado ✓» sigue y no se manda nada más.
-    await page.keyboard.press('Escape');
-    await expect(hoja).toHaveCount(0);
-    await engranaje.click();
-    await abrirPanel.click();
-    await expect(sofia.getByRole('button', { name: 'Invitado ✓', exact: true })).toBeDisabled();
+    await page.clock.resume();
+    await cerrarYReabrir();
+    await expect(boton('Invitado ✓')).toBeDisabled();
     expect(await claves()).toHaveLength(2);
   });
 });

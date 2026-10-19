@@ -18,16 +18,18 @@ import { Icon } from './Icon';
  *
  * D360-8 · «a veces se bugea cuando se desplaza una mesa a la izquierda [...] y
  * no permite desplazarla lo suficiente para que termine de aparecer el botón»
- * (Mati). Tres causas, corregidas acá (el componente es compartido: arregla
- * también Amigos y el Balance del viaje):
- * 1. **El iPhone cancela el gesto** (`pointercancel`) cuando empieza a hacer
- *    scroll, y la tarjeta volvía a 0. Ahora, decidido el arrastre horizontal,
- *    un `touchmove` no pasivo le impide al navegador empezar el scroll; y si
- *    igual cancela, la tarjeta se queda donde corresponde según lo que se
- *    corrió (como al soltar), no vuelve sola.
- * 2. **El recorrido sigue al dedo y había que pasar la mitad** (probable, no
- *    medido: va a la prueba de Mati). Un deslizamiento rápido a la izquierda
- *    abre aunque no llegue a la mitad (`decidirAlSoltar`).
+ * (Mati). Tres cosas vistas en el código, corregidas acá (el componente es
+ * compartido: arregla también Amigos y el Balance del viaje). Que cada una haya
+ * provocado lo que vio Mati es probable, no medido: hace falta su iPhone (D63).
+ * 1. **Una cancelación del gesto (`pointercancel`) devolvía la tarjeta a 0.**
+ *    Que el iPhone cancele al empezar un scroll es probable, no medido (el e2e
+ *    lo simula con un `touchCancel` por CDP). Ahora, decidido el arrastre
+ *    horizontal, un `touchmove` no pasivo le impide al navegador empezar el
+ *    scroll; y si igual cancela, la tarjeta se queda donde corresponde según lo
+ *    que se corrió (como al soltar), no vuelve sola.
+ * 2. **El recorrido seguía al dedo 1:1, con tope en 96 px y sin contar la
+ *    velocidad: había que pasar la mitad.** Un deslizamiento rápido a la
+ *    izquierda abre aunque no llegue a la mitad (`decidirAlSoltar`).
  * 3. **La presión larga seleccionaba el texto** de la fila: el frente no se
  *    selecciona (CSS).
  */
@@ -130,7 +132,8 @@ export function FilaDeslizable({
   const [desplazamiento, setDesplazamiento] = useState<number | null>(null);
 
   // D360-8 · causa 1: decidido el arrastre horizontal, el navegador no empieza
-  // un scroll (en el iPhone eso mandaba `pointercancel` y la tarjeta volvía).
+  // un scroll (un scroll puede cancelar el gesto con `pointercancel`, y la
+  // tarjeta volvía; que el iPhone lo haga es probable, no medido).
   // No pasivo a propósito: es la única forma de que `preventDefault` cuente.
   // Antes de decidir, o si es un scroll, no se toca nada.
   useEffect(() => {
@@ -215,9 +218,10 @@ export function FilaDeslizable({
           inicio.current = null;
           arrastrando.current = false;
           setDesplazamiento(null);
-          // D360-8 · causa 1: si el navegador cancela en medio del arrastre (el
-          // iPhone lo hace al empezar un scroll), la tarjeta queda como si se
-          // hubiera soltado ahí, con lo que se corrió. Antes volvía a 0 sola.
+          // D360-8 · causa 1: si el navegador cancela en medio del arrastre
+          // (que el iPhone lo haga al empezar un scroll es probable, no medido),
+          // la tarjeta queda como si se hubiera soltado ahí, con lo que se
+          // corrió. Antes volvía a 0 sola.
           if (!habiaArrastre) return;
           if (decidirAlSoltar(ultimoDesplazamiento.current, velocidadAlSoltar(muestras.current, e.timeStamp)) === 'abrir') onAbrir();
           else onCerrar();

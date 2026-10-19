@@ -8,7 +8,7 @@ import type { CreateInvitationResponse } from '../api/types';
 let claves = 0;
 vi.mock('../api', () => ({ api: {}, newIdempotencyKey: () => `clave-${++claves}` }));
 
-const { crearMemoriaDeInvitaciones, invitacionEnCurso, invitarConMemoria } = await import('./InviteFriends');
+const { crearMemoriaDeInvitaciones, invitacionEnCurso, invitarConMemoria, memoriaParaIdentidad } = await import('./InviteFriends');
 const { HttpError } = await import('../api/http');
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -38,15 +38,46 @@ const ambiguo = () => Promise.reject(new Error('red caída'));
  * D379 · el panel de invitar vive en la hoja del engranaje y se desmonta al cerrarla. La memoria de la mesa
  * (claves, reservas y «Invitado ✓») vive afuera: cerrar y reabrir la hoja es volver a usar LA MISMA memoria.
  */
+describe('D379 · una memoria por mesa e identidad (memoriaParaIdentidad)', () => {
+  it('🔴 con la misma mesa, token y cuenta devuelve LA MISMA memoria: un render más no la renueva', () => {
+    const a = memoriaParaIdentidad(null, 'PA-2847', null, 'cuenta-1');
+    a.memoria.claves.set('PA-2847::payme_mx_sofi', 'clave-ambigua');
+    const b = memoriaParaIdentidad(a, 'PA-2847', null, 'cuenta-1');
+    expect(b).toBe(a);
+    expect(b.memoria.claves.get('PA-2847::payme_mx_sofi')).toBe('clave-ambigua');
+  });
+
+  it('control positivo: otra mesa, otro token o otra cuenta dan otra memoria, vacía', () => {
+    const a = memoriaParaIdentidad(null, 'PA-2847', null, 'cuenta-1');
+    a.memoria.invitados.add('payme_mx_sofi');
+    a.memoria.claves.set('PA-2847::payme_mx_luis', 'clave');
+    const cambios: Array<[string, string | null, string | null]> = [
+      ['PA-1111', null, 'cuenta-1'],
+      ['PA-2847', 'token-de-invitado', 'cuenta-1'],
+      ['PA-2847', null, 'cuenta-2'],
+      ['PA-2847', null, null],
+    ];
+    for (const [code, token, cuenta] of cambios) {
+      const b = memoriaParaIdentidad(a, code, token, cuenta);
+      expect(b.memoria).not.toBe(a.memoria);
+      expect(b.memoria.mesa).toBe(code);
+      expect(b.memoria.invitados.size).toBe(0);
+      expect(b.memoria.claves.size).toBe(0);
+    }
+  });
+});
+
 describe('D379 · la memoria de las invitaciones sobrevive a cerrar y reabrir la hoja', () => {
-  it('🔴 un error ambiguo y el reintento después de reabrir usan la MISMA Idempotency-Key', async () => {
+  it('🔴 un error ambiguo y el reintento sobre la misma memoria (la que recibe el panel al reabrir) usan la MISMA Idempotency-Key', async () => {
     const memoria = crearMemoriaDeInvitaciones('PA-2847');
     const { enviar, usadas } = envio(ambiguo, () => Promise.resolve(respuesta()));
     const primera = await invitarConMemoria(memoria, 'payme_mx_sofi', enviar);
     expect(primera).toMatchObject({ tipo: 'error', definitivo: false });
     // El botón se libera (se puede reintentar), la clave no.
     expect(memoria.reservados.has('payme_mx_sofi')).toBe(false);
-    // Se cierra la hoja (el panel se desmonta) y se reabre: la memoria es la misma.
+    // Al reabrir la hoja, el panel nuevo recibe LA MISMA memoria (la de MesaScreen: ver el cableado y
+    // `memoriaParaIdentidad`, abajo). Acá se invita otra vez sobre ella; el remonte de verdad, con React, lo prueba el
+    // e2e D379 de `d360-cambios` (en node no hay DOM para montar el panel).
     const segunda = await invitarConMemoria(memoria, 'payme_mx_sofi', enviar);
     expect(segunda).toEqual({ tipo: 'enviada' });
     expect(usadas).toHaveLength(2);
@@ -112,13 +143,24 @@ describe('D379 · la memoria de las invitaciones sobrevive a cerrar y reabrir la
     expect(new Set(usadas).size).toBe(3);
   });
 
-  it('🔴 el cableado: MesaScreen crea una memoria por mesa e identidad y la pasa al panel de la hoja; «Compartir la mesa» sigue con la suya', () => {
+  it('🔴 el cableado: MesaScreen guarda una memoria por mesa e identidad como ESTADO y la pasa al panel de la hoja, que la usa; «Compartir la mesa» sigue con la suya', () => {
     const leer = (ruta: string) => readFileSync(join(RAIZ, ruta), 'utf8');
     const mesaScreen = leer('src/screens/MesaScreen.tsx');
-    expect(mesaScreen).toContain('() => crearMemoriaDeInvitaciones(code),');
-    expect(mesaScreen).toContain('[code, guestToken, session?.principal_id],');
+    expect(mesaScreen).toContain('useState(() =>\n    memoriaParaIdentidad(null, code, guestToken ?? null, session?.principal_id ?? null));');
+    expect(mesaScreen).toContain('memoriaParaIdentidad(invitaciones, code, guestToken ?? null, session?.principal_id ?? null);');
+    expect(mesaScreen).toContain('if (invitacionesVigentes !== invitaciones) setInvitaciones(invitacionesVigentes);');
     expect(mesaScreen).toContain('memoriaDeInvitaciones={memoriaDeInvitaciones}');
-    expect(leer('src/screens/MesaDetailView.tsx')).toContain('<InviteFriends code={code} memoria={memoriaDeInvitaciones} />');
+    // No vuelve a un `useMemo`, que React puede descartar.
+    expect(mesaScreen).not.toMatch(/useMemo\(\s*\(\) =>\s*(crearMemoriaDeInvitaciones|memoriaParaIdentidad)/);
+    const detalle = leer('src/screens/MesaDetailView.tsx');
+    expect(detalle).toContain('<InviteFriends code={code} memoria={memoriaDeInvitaciones} />');
+    // El cierre sola de la hoja también pliega el panel, como el cierre a mano.
+    expect(detalle).toMatch(/if \(hojaDeLaMesa && !hayConfiguracion\) \{\s*setHojaDeLaMesa\(false\);\s*onCloseInvite\?\.\(\);/);
+    expect(detalle).toMatch(/const cerrarHojaDeLaMesa = \(\): void => \{\s*setHojaDeLaMesa\(false\);[\s\S]{0,240}onCloseInvite\?\.\(\);/);
+    // El panel usa la memoria que recibe y sólo sin ella una propia; y se suscribe para repintarse.
+    const panel = leer('src/components/InviteFriends.tsx');
+    expect(panel).toMatch(/if \(memoriaDeAfuera\) \{\s*memoria = memoriaDeAfuera;/);
+    expect(panel).toContain('memoria.oyentes.add(repintar);');
     expect(leer('src/screens/CreateMesaFlow.tsx')).toContain('<InviteFriends code={code} />');
   });
 });

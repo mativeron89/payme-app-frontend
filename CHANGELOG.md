@@ -1,3 +1,27 @@
+# 0.254.0 · 2026-10-18
+
+## Seguimiento de 0.253.0
+
+Lo que dejó la revisión de 0.253.0 (la de V y la propia de AF). La entrada de 0.253.0 no se reescribe: lo que quedó viejo se corrige acá.
+
+- **El preámbulo de 0.253.0** dice «Sin pagos, importes, idempotencia…» y «Nada se publica sin el OK de Mati (D63)». Las dos cosas quedaron viejas:
+  - 0.253.0 sí tocó idempotencia del lado del front: la memoria de las invitaciones conserva la `Idempotency-Key` de un reintento al cerrar y reabrir la hoja. El servidor no cambió.
+  - Desde D382, lo que está en verde se publica sin pedirle el OK a Mati, que lo prueba después (D63).
+- **Punto 8 de 0.253.0 (deslizar una fila).** En el código se ven las dos cosas: el recorrido seguía al dedo 1:1, con tope en 96 px y sin contar la velocidad, y una cancelación del gesto (`pointercancel`) devolvía la fila a 0. Que cada una haya provocado lo que vio Mati es probable, no medido: hace falta el iPhone. Que iOS cancele el gesto al empezar un scroll tampoco se midió (el e2e lo simula). Los comentarios de `FilaDeslizable` y de su e2e ahora dicen lo mismo.
+- **4b de 0.253.0:** con la hoja cerrada, mientras se guarda la propina la página dice «Guardando la propina…»; «Revisar» aparece sólo si falla.
+- **5b de 0.253.0:** que el aviso previo de la corrección del ticket del viaje (`corregirTicketView.ts`) muestre el plato con mayúscula inicial quedó fuera del lease de D360. V lo aceptó después.
+- **El test D327 «porciones reales»** (`guia-opcional-d326`) se arregló en 0.253.0 y esa entrada no lo nombra. Era una carrera del test, no de la guía: la guía salta sola al primer paso que queda, en el cuadro siguiente. El test ahora deja asentar dos cuadros y navega hasta «porcion».
+- **La memoria de las invitaciones** pasa de `useMemo` a estado de `MesaScreen` (`memoriaParaIdentidad`, por mesa, token de invitado y cuenta): React puede descartar un valor memoizado, y perderla es perder la key de un reintento. La propia del panel de «Compartir la mesa» también pasa a estado.
+  - Cuando la hoja se cierra sola (se quedó sin nada que mostrar), el panel se pliega, como al cerrarla a mano.
+  - Si se cierra la hoja mientras carga un grupo, la respuesta ya no toca el estado del panel desmontado.
+- **La hoja del engranaje:** el aire de 12 entre compartir y la propina va sólo si la propina está. Sin ella (una mesa con garantía, una que ya se está pagando o sin propina para fijar), la hoja termina con su relleno, sin 12 de más. Sale la regla muerta `.mesa-secondary-actions > .btn-cerrar-mesa`: desde D223 «Cerrar mesa» vive en `.mesa-cerrar`.
+- **Tests:**
+  - El e2e de D379 congela el reloj de la página (`page.clock`) para que «Enviando…» e «Invitado ✓» sólo los pinte la suscripción del panel. Prueba también que, con la invitación en vuelo, la hoja reabierta no deja volver a tocar, y exige claves no vacías.
+  - `memoriaParaIdentidad` tiene su unitario con control positivo, y el cableado afirma que el panel usa la memoria que recibe.
+  - En node no hay DOM: el remonte de verdad del panel lo prueba el e2e.
+  - «Cerrar mesa» (d181) se mide centrado contra la pantalla, no contra su bloque.
+  - «Escanear otro ticket» queda atado a su manejador en las dos pantallas que lo ofrecen.
+
 # 0.253.0 · 2026-10-18
 
 Los cambios que pidió Mati después de probar la app (D360, con D366, D368, D369, D370, D371 y D377) y la parte del front del tope de 50 personas (D375, owner-first: el dueño 2.187.0 está servido según lo midió el Bibliotecario V; acá no se midió). Sin pagos, importes, idempotencia, B-06 ni el censo P36. La «lectura de siempre» del OCR no se toca. Nada se publica sin el OK de Mati (D63).

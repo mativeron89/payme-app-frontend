@@ -52,7 +52,7 @@ import type {
 } from '../api/types';
 import { denominatorBps, originalParticipants, topePorcion } from '../api/mesaPresentation';
 import { useAuth } from '../auth/AuthContext';
-import { crearMemoriaDeInvitaciones } from '../components/InviteFriends';
+import { memoriaParaIdentidad } from '../components/InviteFriends';
 import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
@@ -497,12 +497,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * del engranaje y se desmonta al cerrarla: la memoria queda acá, así reabrir y
    * reintentar reutiliza la misma `Idempotency-Key`. Es una por mesa e
    * identidad: cambia con la mesa, el token de invitado o la cuenta.
+   *
+   * Es estado y no `useMemo`: React puede descartar un valor memoizado y
+   * recalcularlo, y perder la memoria es perder la key de un reintento. Cuando
+   * cambia la tupla (mesa, token, cuenta) se reemplaza durante el render, el
+   * patrón de «estado derivado de las props».
    */
-  const memoriaDeInvitaciones = useMemo(
-    () => crearMemoriaDeInvitaciones(code),
-    // `guestToken` y la cuenta no se leen adentro: están para renovarla cuando cambia la identidad.
-    [code, guestToken, session?.principal_id],
-  );
+  const [invitaciones, setInvitaciones] = useState(() =>
+    memoriaParaIdentidad(null, code, guestToken ?? null, session?.principal_id ?? null));
+  const invitacionesVigentes = memoriaParaIdentidad(invitaciones, code, guestToken ?? null, session?.principal_id ?? null);
+  if (invitacionesVigentes !== invitaciones) setInvitaciones(invitacionesVigentes);
+  const memoriaDeInvitaciones = invitacionesVigentes.memoria;
   const shareAttemptsRef = useRef<Map<string, string>>(new Map());
   const shareLinksRef = useRef<Map<string, string>>(new Map());
   const shareInFlightRef = useRef(createInFlightMutex());

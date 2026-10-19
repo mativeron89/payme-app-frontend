@@ -46,6 +46,12 @@ describe('D212 · la cámara nativa se abre dentro del toque', () => {
     // Control positivo: es la pantalla del botón, y el botón llama al manejador.
     expect(ticketNuevo).toContain("t('Escanear otro ticket')");
     expect(ticketNuevo).toContain('onClick={onEscanearOtro}');
+    // Las dos pantallas que lo ofrecen (el duplicado y el aviso de escaneo) reciben ESE manejador, no otro: un
+    // `navigate` sin cámara en cualquiera de las dos dejaba el test en verde.
+    const sinComentarios = ticketNuevo.replace(/\/\/[^\n]*/g, '');
+    expect(sinComentarios).toContain('onEscanearOtro={escanearOtro}');
+    expect(sinComentarios).toContain('onEscanear={escanearOtro}');
+    expect(sinComentarios).toMatch(/onClick=\{onEscanear\}>\s*\{aviso === 'sin_escaneo' \? t\('Escanear ticket'\) : t\('Escanear otro ticket'\)\}/);
     expect(llamadas(ticketNuevo)).toBe(1);
     expect(menus(ticketNuevo)).toBe(0);
     expect(ticketNuevo.replace(/\/\/[^\n]*/g, '')).toMatch(/const escanearOtro = \(\) => \{\s*abrirCamaraNativa\(\);\s*navigate\('scan', viajeId\);\s*\};/);

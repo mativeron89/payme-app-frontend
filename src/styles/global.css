@@ -431,16 +431,13 @@ html.app-de-inicio-ios .app {
 }
 
 .mesa-secondary-actions {
-  /* D181 · arriba, «Copiar link» e «Invitar amigos» mitad y mitad; debajo,
-     centrado, «Cerrar mesa». */
+  /* D181 · «Copiar link» e «Invitar amigos» mitad y mitad, y debajo el panel de
+     invitar cuando se abre. Desde D379 vive en la hoja del engranaje; «Cerrar
+     mesa» va aparte, al final de «Tu mesa» (`.mesa-cerrar`, D223). */
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   margin-top: var(--sp-3);
-}
-
-.mesa-secondary-actions > .btn-cerrar-mesa {
-  align-self: center;
 }
 
 .mesa-acciones-fila {
@@ -10707,10 +10704,16 @@ h1.pay-title-lbl {
 }
 
 /* D379 · en la hoja, 12 entre la fila de compartir (o su panel de invitar) y la
-   propina. En la pantalla ya no hay fila: la línea de la propina queda a 12 de la
+   propina, sólo si la propina está: sin ella (mesa con garantía, ya pagándose o
+   sin propina para fijar) la fila es lo último y la hoja termina con su propio
+   relleno. En la pantalla ya no hay fila: la línea de la propina queda a 12 de la
    tarjeta de arriba (su margen de abajo) y deja 12 abajo (el suyo). */
 .hoja-de-la-mesa .mesa-secondary-actions {
-  margin: 0 0 var(--sp-3);
+  margin-top: 0;
+}
+
+.hoja-de-la-mesa .mesa-secondary-actions + .propina-mesa {
+  margin-top: var(--sp-3);
 }
 
 .hoja-de-la-mesa .propina-mesa {

@@ -574,18 +574,23 @@ export function MesaDetailView({
   const [solicitudesAbierto, setSolicitudesAbierto] = useState<boolean | null>(null);
   const solicitudesAbiertoEfectivo = solicitudesAbierto ?? true;
   /**
-   * D360-4b · la hoja del engranaje de «Tu mesa»: el código para unirse y la
-   * propina de la mesa. Sólo el organizador, y sólo si hay algo que mostrar.
+   * D360-4b · la hoja del engranaje de «Tu mesa»: el código para unirse,
+   * «Copiar link» e «Invitar amigos» (D379) y la propina de la mesa. Sólo el
+   * organizador, y sólo si hay algo que mostrar.
    */
   const [hojaDeLaMesa, setHojaDeLaMesa] = useState(false);
   const engranajeRef = useRef<HTMLButtonElement | null>(null);
   const codigoParaUnirse = mesa.status === 'open' || mesa.status === 'partially_paid' ? code : null;
   const hayConfiguracion = esTitular && (codigoParaUnirse !== null || !!propinaDeLaMesa);
   // Si la hoja se queda sin nada (la mesa dejó de recibir gente y la propina ya
-  // no se puede cambiar), se cierra sola: nunca una hoja vacía.
+  // no se puede cambiar), se cierra sola: nunca una hoja vacía. Como al cerrarla
+  // a mano, el panel de invitar se pliega (D379).
   useEffect(() => {
-    if (hojaDeLaMesa && !hayConfiguracion) setHojaDeLaMesa(false);
-  }, [hojaDeLaMesa, hayConfiguracion]);
+    if (hojaDeLaMesa && !hayConfiguracion) {
+      setHojaDeLaMesa(false);
+      onCloseInvite?.();
+    }
+  }, [hojaDeLaMesa, hayConfiguracion, onCloseInvite]);
   const cerrarHojaDeLaMesa = (): void => {
     setHojaDeLaMesa(false);
     // D379 · el panel de invitar se pliega con la hoja: al reabrirla se ve «Invitar amigos», y lo enviado se conserva

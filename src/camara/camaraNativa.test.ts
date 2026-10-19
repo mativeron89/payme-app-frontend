@@ -128,7 +128,7 @@ describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () 
   /** El respaldo estricto del `accept` (antes de que cargue la configuración del OCR). */
   const ACCEPT_RESPALDO_ESTRICTO = 'image/jpeg,image/jpg,image/png';
 
-  it('🔴 abre la misma entrada SIN capture y con el accept del dueño', () => {
+  it('🔴 abre la misma entrada SIN capture y con el accept que recibe (acá, el respaldo estricto)', () => {
     const { doc, creadas } = documentoFalso();
     crearCamaraNativa(doc).abrirMenu(ACCEPT_RESPALDO_ESTRICTO);
     expect(creadas).toHaveLength(1);
