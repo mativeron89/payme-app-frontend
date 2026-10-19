@@ -2108,6 +2108,23 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
 }
 
 /**
+ * D389 · réplica del dueño 2.188.0: en una mesa SIN garantía, un plato de
+ * importe 0 cuenta como cubierto aunque nadie lo haya elegido (enmienda a
+ * D76/D81 sólo para el $0). Va en los tres lugares del dueño: el cierre por
+ * selección completa (`items/lock`), la cobertura informativa (`complete()`) y
+ * `assignment_complete` de `/mesas/open`. La mesa sin garantía del mock se
+ * reconoce por `guarantee_mode === false` (el dueño exige además su marca
+ * interna `sin_garantia`, que el mock no necesita: no tiene mesas legacy).
+ * Y, como el dueño, una mesa sin ningún plato con importe no se da por
+ * cubierta (`con_importe > 0`): el cierre por selección y la cobertura
+ * informativa lo piden aparte; `assignment_complete` ya lo exige con
+ * `total_cents > 0` y «líneas = total».
+ */
+function ceroCubierto(m: MockMesa, item: MockMesa['items'][number]): boolean {
+  return m.guarantee_mode === false && item.price_cents * item.quantity === 0;
+}
+
+/**
  * Decisión 76 · réplica de `avanceAsignadoPorMesa` del dueño v2.134.0 (wire §5):
  * Σ por plato de `fractionAmount(línea, 10000 − restante)`, con el MISMO
  * restante que publica el detalle de la mesa — consumo: `remaining_bps`;
@@ -2134,7 +2151,7 @@ function avanceAsignadoMock(m: MockMesa): {
   for (const item of m.items) {
     const linea = item.price_cents * item.quantity;
     const restante = restanteDe(item);
-    todo = todo && restante === 0;
+    todo = todo && (restante === 0 || ceroCubierto(m, item));
     totalLineas += linea;
     asignado += fractionAmount(linea, 10000 - restante);
   }
@@ -2461,7 +2478,8 @@ function informativePaymentsDisabled(): boolean {
  */
 function informativeCoverage(mesa: MockMesa): boolean {
   const restantes = restanteInformativoPorPlato(mesa);
-  return mesa.items.length > 0 && mesa.items.every((item) => restantes.get(item.id) === 0);
+  return mesa.items.some((item) => !ceroCubierto(mesa, item))
+    && mesa.items.every((item) => restantes.get(item.id) === 0 || ceroCubierto(mesa, item));
 }
 
 /**
@@ -3442,7 +3460,8 @@ export async function mockLockItems(
   const cerradaPorSeleccion = mesa.guarantee_mode === false
     && mesa.division_mode === 'consumo'
     && (mesa.status === 'open' || mesa.status === 'partially_paid')
-    && mesa.items.every((i) => i.claims
+    && mesa.items.some((i) => !ceroCubierto(mesa, i))
+    && mesa.items.every((i) => ceroCubierto(mesa, i) || i.claims
       .filter((cl) => cl.status === 'locked' || cl.status === 'paid')
       .reduce((suma, cl) => suma + cl.fraction_bps, 0) >= 10000);
   if (cerradaPorSeleccion) {

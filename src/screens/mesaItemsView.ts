@@ -135,7 +135,7 @@ export type ConfirmedConsumptionProgress =
  * afirmar «completo».
  */
 export function confirmedConsumptionProgress(
-  mesa: Pick<MesaDetail, 'total_cents' | 'items'>,
+  mesa: Pick<MesaDetail, 'total_cents' | 'items' | 'guarantee_mode'>,
   /**
    * Decisión 79 · de dónde sale «lo que queda» de cada plato. Por defecto el
    * `remaining_bps` de consumo; en «igual» con pagos apagados, el
@@ -149,6 +149,17 @@ export function confirmedConsumptionProgress(
   }
   if (!Array.isArray(mesa.items)) return { status: 'unknown', reason: 'invalid_item' };
 
+  /**
+   * D389 · en una mesa SIN garantía, un plato de importe 0 cuenta como cubierto
+   * aunque nadie lo haya elegido (enmienda a D76/D81 sólo para el $0, la misma
+   * regla del dueño en 2.188.0). Si no, la mesa quedaba en 99 % con «Por
+   * asignar $0.00» y no se cerraba sola. El plato sigue siendo elegible y su
+   * `remaining_bps` no cambia. El dueño exige además una marca interna que no
+   * publica (`sin_garantia`); acá se usa `guarantee_mode === false`, y las mesas
+   * legacy con ese valor no tienen platos de $0 (el OCR los descarta y el $0 a
+   * mano llegó con D371).
+   */
+  const ceroCubierto = mesa.guarantee_mode === false;
   const ids = new Set<string>();
   let assigned = 0n;
   let itemsTotal = 0n;
@@ -174,7 +185,7 @@ export function confirmedConsumptionProgress(
     if (itemsTotal > maxSafe) return { status: 'unknown', reason: 'overflow' };
 
     const takenBps = 10000 - restante;
-    allAssigned = allAssigned && takenBps === 10000;
+    allAssigned = allAssigned && (takenBps === 10000 || (ceroCubierto && line === 0n));
     try {
       assigned += BigInt(fractionAmount(Number(line), takenBps));
     } catch {
@@ -230,7 +241,7 @@ export function confirmedConsumptionProgress(
  * completarse. El borrador lo ve sólo quien lo elige; no viaja hasta «Listo».
  */
 export function progresoConBorrador(
-  mesa: Pick<MesaDetail, 'total_cents' | 'items'>,
+  mesa: Pick<MesaDetail, 'total_cents' | 'items' | 'guarantee_mode'>,
   restanteDe: (item: MesaItem) => unknown,
   propioRegistrado: (item: MesaItem) => number,
   borrador: ReadonlyMap<string, number>,

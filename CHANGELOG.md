@@ -1,6 +1,6 @@
 # 0.253.1 · 2026-10-18
 
-Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOOP-PAYME-004-A01-CODEX-DICTAMEN-01, sha256 15c4603e…).
+Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOOP-PAYME-004-A01-CODEX-DICTAMEN-01, sha256 15c4603e…), más la parte del front de D389, que se publica después del dueño 2.188.0.
 
 - **H01 · «Ver el ticket» tapaba el total** en la tarjeta del total de «¿Cómo dividen?». La fila no dejaba bajar de renglón al botón, y el importe se podía achicar sin que su texto se acomodara. Con $840 a 320 px, o con $1,250.50 a 375 y a 390 px, el texto quedaba debajo del botón.
   - Ahora, si el total y el botón no entran juntos, el botón baja de renglón, y el importe nunca se achica por debajo de su texto.
@@ -9,6 +9,19 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
   - Un e2e nuevo mide a 320, 375 y 390 px, con $840, $1,250.50 y $12,345.67, el rectángulo del texto del total (Range) contra el del botón. Los totales salen del ticket del mock, cambiando el precio de un plato. Exige que no haya intersección ni desborde, y que los dos queden dentro de la tarjeta.
   - Con el CSS de 0.253.0 da rojo en 320/$840, 375/$1,250.50 y 390/$1,250.50: es el control positivo.
   - El test de la tarjeta (`af-correcciones-visuales-01`) también mide el texto con Range, no su caja.
+- **D389 · un plato de $0 cuenta como elegido para cerrar la mesa (la parte del front).** Mati: «Que cuente como elegido». Es la enmienda a D76/D81 sólo para el $0, con el dueño primero (owner-first): **0.253.1 se publica sólo con App Backend 2.188.0 servido.** Resuelve lo que la entrada de 0.253.0 dejaba «para después» en P04.
+  - **La pantalla** (`confirmedConsumptionProgress` y la barra en vivo): en una mesa sin garantía, un plato de importe 0 cuenta como cubierto aunque nadie lo elija. Antes la mesa quedaba en «Asignado 99 %» con «Por asignar $0.00». Vale también para «igual» informativo. El plato se sigue pudiendo elegir y su `remaining_bps` no cambia.
+  - **La hoja «Con esto se cierra la mesa»** (D240-8, `seleccionCierraLaMesa`), con la misma regla. Lo encontró la revisión de App Backend: con 2.188.0 servido y el agua en $0 sin elegir, el último «Listo» cerraba la mesa sin la hoja y ya no se podía corregir lo elegido.
+    - Como el dueño, una mesa sin ningún plato con importe no se cierra por selección.
+    - «Ya no quedaba nada» se sigue midiendo sobre todos los platos, también los de $0. En una mesa abierta de antes de 2.188.0, con lo de importe elegido y el agua libre, elegir el agua la cierra, y la hoja sale.
+    - En «igual», soltar el agua guardada deja el borrador vacío, pero el PUT escribe y el dueño la cierra: la hoja también sale. Lo que no cierra es reenviar lo mismo, que el dueño sólo lee (`replace`, `previous === desired`). Esto reemplaza el corte por borrador vacío; en consumo no cambia nada.
+  - **El mock** replica las tres reglas del dueño con la misma guarda: el cierre por selección de `items/lock`, la cobertura informativa y `assignment_complete` de `/mesas/open`. También replica su «al menos un plato con importe».
+  - **Se declara la guarda:** el dueño exige además una marca interna que no publica (`sin_garantia`). El front usa `guarantee_mode === false`. Las mesas legacy con ese valor no tienen platos de $0, porque el OCR los descarta y el $0 a mano llegó con D371.
+  - **El espejo no cambia en esta entrega:** 2.188.0 no toca ningún contrato JSON. Su inventario cambia el commit y tres hashes (`routes/mesas.js`, `services/informativeSelections.js` y `services/ocultamientos.js`), que se adoptan en la entrega del espejo, con 2.188.0 servido.
+  - **Tests:**
+    - Unitarios de la pantalla, de la hoja y del mock, con control positivo: con garantía, o sin la regla, el mismo caso queda en 99 %, la hoja no sale y la mesa no se cierra. También un plato con precio sin elegir, un plato con precio elegido casi entero (9999 bps), el borrador del $0 que ya no entra, la mesa toda en $0 y la mesa abierta de antes de 2.188.0.
+    - e2e (`d360-cambios`): con el agua en $0 sin elegir, elegir los otros seis platos muestra la hoja; «Guardar y cerrar» cierra la mesa y queda al 100 %. Sin la regla de la hoja da rojo justo ahí: la hoja no aparece.
+    - 19 mutantes (pantalla, hoja y mock), todos rojos, cada uno en su test.
 - **Corrige el preámbulo de 0.253.0** (O01 de Codex), sin reescribir esa entrada:
   - «Nada se publica sin el OK de Mati (D63)» quedó viejo. Desde D382, lo que está en verde se publica sin pedirle el OK a Mati: el CI completo del PR sobre el SHA exacto y el GREEN de V. Mati lo prueba después (D63). Lo que el canon pide aprobar aparte (v2.51) sigue igual.
   - «Sin … idempotencia» tampoco vale: 0.253.0 sí tocó la idempotencia del lado del front (la memoria de las invitaciones), sin cambiar el servidor.

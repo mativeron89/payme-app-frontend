@@ -551,3 +551,87 @@ describe('progresoConBorrador · la barra en vivo', () => {
       .toEqual(confirmedConsumptionProgress(m));
   });
 });
+
+describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía', () => {
+  /** $0 sin elegir y $120 elegido entero: el dinero ya está todo asignado. */
+  const conCero = (over: Partial<MesaDetail> = {}) => mesa({
+    total_cents: 12000,
+    items: [
+      item({ id: 'cero', price_cents: 0, remaining_bps: 10000 }),
+      item({ id: 'b', price_cents: 12000, remaining_bps: 0 }),
+    ],
+    ...over,
+  });
+
+  it('🔴 sin garantía: completo, 100 % y nada por asignar', () => {
+    expect(confirmedConsumptionProgress(conCero({ guarantee_mode: false }))).toEqual({
+      status: 'known', assignedCents: 12000, differenceCents: 0,
+      itemsTotalCents: 12000, totalMatchesItems: true, complete: true, visualPercent: 100,
+    });
+  });
+
+  it('control positivo: sin la regla (con garantía, o un dueño que no publica guarantee_mode), el mismo caso queda en 99 %', () => {
+    for (const guarantee_mode of [true, undefined]) {
+      expect(confirmedConsumptionProgress(conCero({ guarantee_mode })), String(guarantee_mode)).toMatchObject({
+        status: 'known', assignedCents: 12000, differenceCents: 0, complete: false, visualPercent: 99,
+      });
+    }
+  });
+
+  it('el $0 no tapa lo que falta: con un plato con precio sin elegir, sigue incompleto', () => {
+    const r = confirmedConsumptionProgress(mesa({
+      guarantee_mode: false,
+      total_cents: 20000,
+      items: [
+        item({ id: 'cero', price_cents: 0 }),
+        item({ id: 'b', price_cents: 12000, remaining_bps: 0 }),
+        item({ id: 'c', price_cents: 8000 }),
+      ],
+    }));
+    expect(r).toMatchObject({ complete: false, differenceCents: 8000, visualPercent: 60 });
+  });
+
+  it('🔴 sólo el $0: un plato con precio elegido casi entero (9999 bps) no cuenta como cubierto, aunque su importe ya redondee al total', () => {
+    // fractionAmount(100, 9999) redondea a 100: lo asignado llega al total, pero ese plato no está entero.
+    const r = confirmedConsumptionProgress(mesa({
+      guarantee_mode: false,
+      total_cents: 12000,
+      items: [
+        item({ id: 'cero', price_cents: 0 }),
+        item({ id: 'casi', price_cents: 100, remaining_bps: 1 }),
+        item({ id: 'b', price_cents: 11900, remaining_bps: 0 }),
+      ],
+    }));
+    expect(r).toMatchObject({ assignedCents: 12000, differenceCents: 0, complete: false, visualPercent: 99 });
+  });
+
+  it('el $0 elegido también cuenta, como siempre (la regla no lo vuelve inelegible)', () => {
+    const r = confirmedConsumptionProgress(conCero({
+      guarantee_mode: false,
+      items: [
+        item({ id: 'cero', price_cents: 0, remaining_bps: 0 }),
+        item({ id: 'b', price_cents: 12000, remaining_bps: 0 }),
+      ],
+    }));
+    expect(r).toMatchObject({ complete: true, visualPercent: 100 });
+  });
+
+  it('igual informativo: la misma regla con informative_remaining_bps', () => {
+    const informativa = conCero({
+      guarantee_mode: false,
+      division_mode: 'igual',
+      items: [
+        item({ id: 'cero', price_cents: 0, informative_remaining_bps: 10000 }),
+        item({ id: 'b', price_cents: 12000, informative_remaining_bps: 0 }),
+      ],
+    });
+    expect(confirmedConsumptionProgress(informativa, (i) => i.informative_remaining_bps)).toMatchObject({ complete: true, visualPercent: 100 });
+    expect(confirmedConsumptionProgress({ ...informativa, guarantee_mode: undefined }, (i) => i.informative_remaining_bps))
+      .toMatchObject({ complete: false, visualPercent: 99 });
+  });
+
+  it('la barra en vivo (progresoConBorrador) también llega a 100 sin elegir el $0', () => {
+    const r = progresoConBorrador(conCero({ guarantee_mode: false }), (i) => i.remaining_bps, () => 0, new Map());
+    expect(r).toMatchObject({ complete: true, visualPercent: 100 });
+  });
+});

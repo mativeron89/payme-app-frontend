@@ -24,15 +24,38 @@ import { nombreDePlato } from '../utils/nombreDePlato';
  * el borrador tiene que dar 0. Un borrador que ya no entra no cuenta (el dueño
  * lo rechaza). Ante un dato desconocido, `false`: no avisa, y «La mesa se
  * cerró» sigue siendo la red.
+ *
+ * D389 · en una mesa SIN garantía, un plato de $0 (`price_cents === 0`) cuenta
+ * como cubierto aunque nadie lo elija, y una mesa sin ningún plato con importe
+ * no se cierra por selección. Es la regla del dueño 2.188.0
+ * (`LINEA_CON_IMPORTE_SQL`, en `items/lock` y en `complete()`), con la guarda
+ * de `confirmedConsumptionProgress`: `guarantee_mode === false`. Sin esto, con
+ * el agua en $0 sin elegir, el último «Listo» cerraba la mesa sin esta hoja y
+ * ya no se podía corregir lo elegido.
+ * - El $0 se puede seguir eligiendo: su borrador se valida igual (no puede
+ *   pedir más de lo que queda), pero no hace falta que lo complete.
+ * - «Ya no quedaba nada» se sigue midiendo sobre TODOS los platos, también los
+ *   de $0. Una mesa abierta de antes de 2.188.0, con todo lo de importe elegido
+ *   y el agua libre, la cierra el próximo pedido del dueño (el que elige el
+ *   agua), y este aviso tiene que salir.
+ * - Por la misma mesa, en «igual» un borrador VACÍO también puede cerrarla:
+ *   quien había guardado ½ del agua la suelta, y el PUT que reemplaza escribe y
+ *   el dueño la da por cubierta. Por eso ya no se corta por `borrador.size`: lo
+ *   que no cierra es reenviar lo mismo, que el dueño sólo lee
+ *   (`informativeSelections.replace`, `previous === desired`). En consumo lo
+ *   propio es 0, así que un borrador vacío sigue sin cerrar nada.
  */
 export function seleccionCierraLaMesa(
-  mesa: Pick<MesaDetail, 'items'>,
+  mesa: Pick<MesaDetail, 'items' | 'guarantee_mode'>,
   restanteDe: (item: MesaItem) => unknown,
   propioRegistrado: (item: MesaItem) => number,
   borrador: ReadonlyMap<string, number>,
 ): boolean {
-  if (!Array.isArray(mesa.items) || mesa.items.length === 0 || borrador.size === 0) return false;
+  if (!Array.isArray(mesa.items) || mesa.items.length === 0) return false;
+  const ceroCubierto = mesa.guarantee_mode === false;
   let yaCompleta = true;
+  let conImporte = false;
+  let cambia = false;
   for (const item of mesa.items) {
     const restante = restanteDe(item);
     const propio = propioRegistrado(item);
@@ -41,8 +64,15 @@ export function seleccionCierraLaMesa(
     const disponible = Math.min(10000, restante + propio);
     const nuevo = borrador.get(item.id) ?? 0;
     if (!bpsValido(nuevo) || nuevo > disponible) return false;
+    if (nuevo !== propio) cambia = true;
+    if (ceroCubierto && item.price_cents === 0) continue;
+    conImporte = true;
     if (disponible - nuevo !== 0) return false;
   }
+  // Reenviar lo mismo no escribe nada: el dueño no la cierra.
+  if (!cambia) return false;
+  // D389 · sin ningún plato con importe, el dueño no la cierra por selección.
+  if (!conImporte) return false;
   // Si ya no quedaba nada, la mesa no la cierra este pedido.
   return !yaCompleta;
 }

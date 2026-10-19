@@ -95,6 +95,101 @@ describe('D240 punto 8 · seleccionCierraLaMesa («igual»: el borrador reemplaz
   });
 });
 
+/**
+ * D389 · un plato de $0 cuenta como elegido para cerrar la mesa (la regla del
+ * dueño 2.188.0). Sin esto, el último «Listo» cerraba la mesa sin la hoja: el
+ * front predecía que no cerraba porque el agua en $0 seguía con 10000.
+ */
+describe('D389 · seleccionCierraLaMesa con un plato de $0 (mesa sin garantía)', () => {
+  const agua = (over: Partial<MesaItem> = {}) => item({ id: 'agua', name: 'Agua mineral', price_cents: 0, ...over });
+  const conGarantia = (guarantee_mode: boolean | undefined) => (items: MesaItem[], borrador: Array<[string, number]>) =>
+    seleccionCierraLaMesa({ items, guarantee_mode } as Parameters<typeof seleccionCierraLaMesa>[0], (i) => i.remaining_bps, () => 0, new Map(borrador));
+  const sinGarantia = conGarantia(false);
+
+  it('🔴 con el agua en $0 sin elegir, elegir el resto cierra: la hoja aparece', () => {
+    expect(sinGarantia([item({ id: 'a' }), agua()], [['a', 10000]])).toBe(true);
+  });
+
+  it('control positivo: con garantía, o sin el campo, el mismo caso no cierra (sin la regla, la hoja no aparece)', () => {
+    expect(conGarantia(true)([item({ id: 'a' }), agua()], [['a', 10000]])).toBe(false);
+    expect(conGarantia(undefined)([item({ id: 'a' }), agua()], [['a', 10000]])).toBe(false);
+  });
+
+  it('control positivo: un plato con precio sin elegir no cierra, aunque el resto esté elegido', () => {
+    expect(sinGarantia([item({ id: 'a' }), agua({ price_cents: 4000 })], [['a', 10000]])).toBe(false);
+  });
+
+  it('el $0 se puede seguir eligiendo: entero o a la mitad, cierra igual', () => {
+    expect(sinGarantia([item({ id: 'a' }), agua()], [['a', 10000], ['agua', 10000]])).toBe(true);
+    expect(sinGarantia([item({ id: 'a' }), agua()], [['a', 10000], ['agua', 5000]])).toBe(true);
+  });
+
+  it('un borrador del $0 que ya no entra (pide más de lo que queda) no avisa', () => {
+    expect(sinGarantia([item({ id: 'a' }), agua({ remaining_bps: 5000 })], [['a', 10000], ['agua', 10000]])).toBe(false);
+  });
+
+  it('elegir sólo el $0, con un plato con precio libre, no cierra', () => {
+    expect(sinGarantia([item({ id: 'a' }), agua()], [['agua', 10000]])).toBe(false);
+  });
+
+  it('una mesa sin ningún plato con importe no se cierra por selección (el dueño exige uno)', () => {
+    expect(sinGarantia([agua(), agua({ id: 'agua-2' })], [['agua', 10000], ['agua-2', 10000]])).toBe(false);
+  });
+
+  it('mesa abierta de antes de 2.188.0, con lo de importe ya elegido y el agua libre: elegir el agua cierra', () => {
+    expect(sinGarantia([item({ id: 'a', remaining_bps: 0 }), agua()], [['agua', 10000]])).toBe(true);
+  });
+
+  it('si ya no quedaba nada, ni el agua, este pedido no la cierra', () => {
+    expect(sinGarantia([item({ id: 'a', remaining_bps: 0 }), agua({ remaining_bps: 0 })], [['agua', 0]])).toBe(false);
+  });
+
+  /**
+   * La mesa «igual» abierta de antes de 2.188.0: el pescado lo declararon otros entero y la persona tiene guardada ½
+   * del agua. Soltar el agua deja el borrador VACÍO, pero el PUT escribe y el dueño la da por cubierta: la hoja sale.
+   */
+  const igualTrabada = (guarantee_mode: boolean, borrador: Array<[string, number]>, precioDelAgua = 0) => seleccionCierraLaMesa(
+    {
+      items: [
+        item({ id: 'pescado', informative_remaining_bps: 0 }),
+        agua({ price_cents: precioDelAgua, informative_remaining_bps: 5000 }),
+      ],
+      guarantee_mode,
+    },
+    (i) => i.informative_remaining_bps,
+    (i) => (i.id === 'agua' ? 5000 : 0),
+    new Map(borrador),
+  );
+
+  it('🔴 «igual»: soltar el agua en $0 guardada deja el borrador vacío y cierra igual: la hoja aparece', () => {
+    expect(igualTrabada(false, [])).toBe(true);
+  });
+
+  it('control positivo: el mismo borrador vacío con garantía, o con el agua con precio, no cierra', () => {
+    expect(igualTrabada(true, [])).toBe(false);
+    expect(igualTrabada(false, [], 4000)).toBe(false);
+  });
+
+  it('«igual»: reenviar lo mismo que estaba guardado no cierra (el dueño sólo lee)', () => {
+    expect(igualTrabada(false, [['agua', 5000]])).toBe(false);
+  });
+
+  it('consumo: un borrador vacío sigue sin cerrar nada, también con el agua en $0', () => {
+    expect(sinGarantia([item({ id: 'a', remaining_bps: 0 }), agua()], [])).toBe(false);
+  });
+
+  it('«igual»: con el agua en $0 sin declarar, declarar el resto cierra; con garantía, no', () => {
+    const igual = (guarantee_mode: boolean) => seleccionCierraLaMesa(
+      { items: [item({ id: 'a', informative_remaining_bps: 10000 }), agua({ informative_remaining_bps: 10000 })], guarantee_mode },
+      (i) => i.informative_remaining_bps,
+      () => 0,
+      new Map([['a', 10000]]),
+    );
+    expect(igual(false)).toBe(true);
+    expect(igual(true)).toBe(false);
+  });
+});
+
 describe('D240 punto 8 · lo que muestra la hoja', () => {
   const items = [
     item({ id: 't1', name: 'Tiramisú', price_cents: 7000, my_bps: 10000 }),
