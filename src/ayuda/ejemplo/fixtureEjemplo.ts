@@ -5,12 +5,14 @@
  * zip `0d97650b…`): «Restaurante Ejemplo», tres platos de cantidad 1 y $600 de
  * total, mesa `PA-1224`. **Son inventados**: no salen de ninguna cuenta.
  *
- * 🔴 **El código es imposible a propósito.** El dueño numera las mesas con cinco
- * cifras (`joinRequests.ts`, `/^PA-\d{5}$/`), así que `PA-1224` no puede existir
- * en el servidor. Aun así nada se apoya en eso: la fachada envuelta
- * (`apiEjemplo.ts`) y el guard de `App.tsx` comparan contra ESTA constante y
- * rechazan el código sin salir a la red, con el ejemplo apagado o encendido
- * (enmienda 1 de `d363_front`, punto 4).
+ * 🔴 **Nada se apoya en que el código no exista en el servidor.** La fachada
+ * envuelta (`apiEjemplo.ts`) y el guard de `App.tsx` comparan contra ESTA
+ * constante y rechazan el código sin salir a la red, con el ejemplo apagado o
+ * encendido (enmienda 1 de `d363_front`, punto 4). Que el servidor numere con
+ * cinco cifras es una INFERENCIA: `joinRequests.ts` (`/^PA-\d{5}$/`) es el
+ * decodificador del front, no el generador del dueño, que no está en este repo.
+ * El mock numera con cuatro y excluye `PA-1224` (`codigoDeMesaDelMock`,
+ * enmienda 6).
  */
 
 export const CODIGO_EJEMPLO = 'PA-1224';

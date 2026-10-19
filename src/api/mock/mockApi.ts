@@ -17,6 +17,7 @@ import {
   type StoredSession,
 } from '../storage';
 import { persistGoogleContinueResponse, persistSocialSessionResponse } from '../http';
+import { CODIGO_EJEMPLO } from '../../ayuda/ejemplo/fixtureEjemplo';
 import type {
   AcceptInvitationLinkResponse,
   AppConfig,
@@ -134,6 +135,20 @@ const LATENCY_MS = 350;
  * (0–5000). Las e2e de «pestañas sin parpadeo» la fijan a un lado y al otro del
  * umbral de 300 ms del esqueleto. Sin costura, los 350 ms de siempre.
  */
+/** El número de la mesa de ejemplo del tutorial (`PA-1224`). */
+const NUMERO_DEL_EJEMPLO = Number(/^PA-(\d{4})$/.exec(CODIGO_EJEMPLO)?.[1]);
+
+/**
+ * D363 · enmienda 6 de `d363_front` · el código de una mesa del mock: PA-1000…PA-9999 menos el de la mesa de ejemplo
+ * del tutorial. La fachada envuelta y `App.tsx` rechazan `PA-1224` sin salir a la red, así que una mesa del mock con
+ * ese código quedaba inalcanzable (1 en 9000 por mesa: un e2e o una demo intermitente). Uniforme sobre los 8999 que
+ * quedan. `azar` es `Math.random`; el test lo inyecta.
+ */
+export function codigoDeMesaDelMock(azar: () => number = Math.random): string {
+  const n = Math.floor(azar() * 8999) + 1000;
+  return `PA-${n >= NUMERO_DEL_EJEMPLO ? n + 1 : n}`;
+}
+
 export function latencia(): number {
   try {
     const valor = localStorage.getItem('payme.app.mock.latencia.v1');
@@ -3096,7 +3111,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     }
   }
 
-  const code = `PA-${Math.floor(Math.random() * 9000 + 1000)}`;
+  const code = codigoDeMesaDelMock();
   const now = new Date().toISOString();
   const mesa: MockMesa = {
     id: mockId('c'),
