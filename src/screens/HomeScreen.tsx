@@ -4,7 +4,6 @@ import { api } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
-import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { useMoneyRail } from '../api/moneyRail';
@@ -38,7 +37,7 @@ import { useHoyEnMexico, viajesDeInicio, viajesProximos } from './viajes/proximo
 import {
   hayRestaurantesPendientes, restaurantesPendientes, ViajesAbiertosEnInicio, type PendientesDeViajes,
 } from './viajes/ViajesEnInicio';
-import { AccesoGuia } from '../ayuda/AccesoGuia';
+import { useAperturaPendiente } from '../ayuda/aperturaPendiente';
 import { AvisoSinMesas } from './AvisoSinMesas';
 
 /**
@@ -153,19 +152,12 @@ export function HomeScreen() {
    * del journal (*«una sola intención viva por principal»*,
    * `idempotency.ts:104-107`), así que Inicio puede preguntar sin conocerlo.
    * Esto **sólo LEE**: no reenvía, no libera y no abre nada.
+   *
+   * D363 · la lectura pasó a `useAperturaPendiente` (la misma, en un solo
+   * lugar), porque también la usa la guía: con una apertura pendiente el ejemplo
+   * no arranca. Un journal ilegible sigue sin anunciarse como pendiente.
    */
-  const { actor } = useMoneyActor();
-  const [aperturaPendiente, setAperturaPendiente] = useState(false);
-  useEffect(() => {
-    if (!actor) return;
-    let alive = true;
-    void readUnconfirmed(scopeForActor(actor, 'mesa:pendiente'), 'create_mesa')
-      .then((attempt) => { if (alive) setAperturaPendiente(!!attempt); })
-      // Un journal ilegible NO se anuncia como «tenés algo pendiente»: se
-      // calla. Afirmarlo sin poder leerlo sería inventar una deuda.
-      .catch(() => { if (alive) setAperturaPendiente(false); });
-    return () => { alive = false; };
-  }, [actor]);
+  const aperturaPendiente = useAperturaPendiente();
   // OLA 5D · saldo y movimientos son riel saldo: los habilita el BACKEND.
   // Arranca apagado, así que ni siquiera se PIDEN mientras la capability viaja.
   const { walletRailEnabled, accountActivity } = useWalletRail();
@@ -649,7 +641,6 @@ export function HomeScreen() {
           </>
         )}
 
-        <AccesoGuia lugar="inicio" />
 
         {/* D277 · lo último del contenido: centrado en el espacio libre entre lo de arriba y el círculo de Nueva. */}
         {avisoSinMesas && <AvisoSinMesas />}

@@ -215,7 +215,7 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
-        <AccesoGuia lugar="ayuda" />
+        <AccesoGuia />
         {IS_MOCK && (
           <button
             className="btn btn-ghost config-reset"

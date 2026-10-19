@@ -57,7 +57,6 @@ export const EN: Record<string, string> = {
   'Siguiente': 'Next',
   // D327 · guía contextual voluntaria
   "Guía interactiva": "Interactive guide",
-  "¿Primera vez? Descubre qué hace cada control.": "First time? Discover what each control does.",
   "Toca la cámara para fotografiar un ticket y revisar sus datos.": "Tap the camera to photograph a receipt and review its details.",
   "Divide por consumo, en partes iguales o por el total.": "Split by item, equally or by paying the total.",
   "Elige tu porción": "Choose your portion",
@@ -87,7 +86,6 @@ export const EN: Record<string, string> = {
   "Toca un plato disponible para elegirlo. Si lo compartieron, después podrás indicar tu porción.": "Tap an available dish to select it. If you shared, you can then choose your portion.",
   "Aquí están los consumos del viaje. Abre uno para revisar su ticket y reparto.": "Here are the trip expenses. Open one to review its receipt and split.",
   "Esta pestaña muestra cuánto pagó cada persona, no cuánto le corresponde consumir.": "This tab shows how much each person paid, not their share of consumption.",
-  "No volver a mostrar": "Don’t show again",
   "Guía en pausa": "Guide paused",
   "Continúa cuando quieras": "Continue when ready",
   "Abre una mesa o un viaje": "Open a table or trip",
@@ -99,9 +97,10 @@ export const EN: Record<string, string> = {
 
   // D326 · guía voluntaria y ayuda para restaurantes y viajes existentes.
   "Ayuda": "Help",
-  "Ver guía": "View guide",
-  "Ocultar guía por ahora": "Hide guide for now",
   "Cómo usar PayMe": "How to use PayMe",
+  // D363 · Q9 · la fila de Ayuda en fechas de un viaje, y con una apertura sin confirmar.
+  "Disponible fuera de las fechas de un viaje": "Available outside trip dates",
+  "Primero resuelve la mesa que dejaste sin confirmar en Inicio.": "First, resolve the table you left unconfirmed on Home.",
   "Cerrar guía": "Close guide",
   "No pudimos abrir la guía. Puedes seguir usando PayMe.": "We couldn’t open the guide. You can keep using PayMe.",
   "Escanea y revisa": "Scan and review",

@@ -1,79 +1,109 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PreferenciaGuia } from './preferenciaGuia';
+import { MarcaDeGuia, noVolverAMostrar, tarjetaTutorialOculta } from './preferenciaGuia';
+
 function memoria() {
   const datos = new Map<string, string>();
   return { datos, getItem: (k: string) => datos.get(k) ?? null, setItem: (k: string, v: string) => { datos.set(k, v); }, removeItem: (k: string) => { datos.delete(k); } };
 }
-describe('D328 · exclusión explícita por cuenta y dispositivo', () => {
-  it('nace desmarcada; persiste sólo hash+1 y aísla otra cuenta/dispositivo', async () => {
-    const a = memoria(), p = new PreferenciaGuia();
-    expect(await p.noMostrar('cuenta-A', a)).toBe(false);
-    await p.elegir('cuenta-A', true, a);
-    expect([...a.datos.entries()]).toEqual([[expect.stringMatching(/^payme\.app\.guia\.optout\.v2\.(mock|real)\.[a-f0-9]{64}$/), '1']]);
-    expect(JSON.stringify([...a.datos])).not.toContain('cuenta-A');
-    expect(await new PreferenciaGuia().noMostrar('cuenta-A', a)).toBe(true);
-    expect(await p.noMostrar('cuenta-B', a)).toBe(false);
-    expect(await new PreferenciaGuia().noMostrar('cuenta-A', memoria())).toBe(false);
-  });
-  it('vista/Ahora no de v1 no se interpreta ni migra como consentimiento', async () => {
-    const a = memoria(), p = new PreferenciaGuia(async () => 'hash');
-    a.setItem('payme.app.guia.v1.mock.hash', '1'); a.setItem('payme.app.guia.v1.real.hash', '1');
-    expect(await p.noMostrar('A', a)).toBe(false); expect(a.datos.size).toBe(2);
-    expect([...a.datos.keys()].some((k) => k.includes('optout'))).toBe(false);
-  });
-  it('leer, cerrar o terminar sin elección no persiste exclusión para otro inicio', async () => {
+const PREFIJO = 'payme.app.guia.tarjeta.v1';
+
+describe('Q1 · D364 · las marcas de la guía, por cuenta y dispositivo', () => {
+  it('las dos claves: el «No volver a mostrar» de D328 y la tarjeta Tutorial oculta', async () => {
     const a = memoria();
-    expect(await new PreferenciaGuia().noMostrar('A', a)).toBe(false);
-    expect(await new PreferenciaGuia().noMostrar('A', a)).toBe(false);
+    await tarjetaTutorialOculta.fijar('cuenta-A', true, a);
+    expect([...a.datos.keys()]).toEqual([expect.stringMatching(/^payme\.app\.guia\.tarjeta\.v1\.(mock|real)\.[a-f0-9]{64}$/)]);
+    const clave = [...a.datos.keys()][0]!.replace('tarjeta.v1', 'optout.v2');
+    a.setItem(clave, '1');
+    expect(await new MarcaDeGuia('payme.app.guia.optout.v2').leer('cuenta-A', a)).toBe(true);
+    expect(await noVolverAMostrar.leer('cuenta-B', a)).toBe(false);
+  });
+
+  it('nace en «no»; persiste sólo hash+1 y aísla otra cuenta y otro dispositivo', async () => {
+    const a = memoria(), m = new MarcaDeGuia(PREFIJO);
+    expect(await m.leer('cuenta-A', a)).toBe(false);
+    await m.fijar('cuenta-A', true, a);
+    expect([...a.datos.values()]).toEqual(['1']);
+    expect(JSON.stringify([...a.datos])).not.toContain('cuenta-A');
+    expect(await new MarcaDeGuia(PREFIJO).leer('cuenta-A', a)).toBe(true);
+    expect(await m.leer('cuenta-B', a)).toBe(false);
+    expect(await new MarcaDeGuia(PREFIJO).leer('cuenta-A', memoria())).toBe(false);
+  });
+
+  it('leer no escribe nada; fijar en «no» borra el único indicador', async () => {
+    const a = memoria(), m = new MarcaDeGuia(PREFIJO);
+    expect(await m.leer('A', a)).toBe(false);
     expect(a.datos.size).toBe(0);
+    await m.fijar('A', true, a); await m.fijar('A', false, a);
+    expect(a.datos.size).toBe(0);
+    expect(await new MarcaDeGuia(PREFIJO).leer('A', a)).toBe(false);
   });
-  it('desmarcar elimina el único indicador y permite próximos inicios', async () => {
-    const a = memoria(), p = new PreferenciaGuia();
-    await p.elegir('A', true, a); await p.elegir('A', false, a);
-    expect(a.datos.size).toBe(0); expect(await p.noMostrar('A', a)).toBe(false);
-    expect(await new PreferenciaGuia().noMostrar('A', a)).toBe(false);
-  });
-  it('storage roto conserva sólo la elección en memoria, reversible y por cuenta', async () => {
-    const p = new PreferenciaGuia();
+
+  it('storage roto conserva el valor sólo en memoria, reversible y por cuenta', async () => {
+    const m = new MarcaDeGuia(PREFIJO);
     const roto = { getItem: () => { throw Error('denied'); }, setItem: () => { throw Error('quota'); }, removeItem: () => { throw Error('denied'); } };
-    expect(await p.noMostrar('A', roto)).toBe(false);
-    await expect(p.elegir('A', true, roto)).resolves.toBeUndefined();
-    expect(await p.noMostrar('A', roto)).toBe(true); expect(await p.noMostrar('B', roto)).toBe(false);
-    expect(await new PreferenciaGuia().noMostrar('A', roto)).toBe(false);
-    await p.elegir('A', false, roto); expect(await p.noMostrar('A', roto)).toBe(false);
+    expect(await m.leer('A', roto)).toBe(false);
+    await expect(m.fijar('A', true, roto)).resolves.toBeUndefined();
+    expect(await m.leer('A', roto)).toBe(true); expect(await m.leer('B', roto)).toBe(false);
+    expect(await new MarcaDeGuia(PREFIJO).leer('A', roto)).toBe(false);
+    await m.fijar('A', false, roto); expect(await m.leer('A', roto)).toBe(false);
   });
-  it('sin crypto o storage conserva la elección y el aislamiento en memoria', async () => {
-    const p = new PreferenciaGuia(async () => { throw Error('no crypto'); });
-    await p.elegir('A', true, memoria());
-    expect(await p.noMostrar('A', null)).toBe(true); expect(await p.noMostrar('B', null)).toBe(false);
+
+  it('sin crypto ni storage conserva el valor y el aislamiento en memoria', async () => {
+    const m = new MarcaDeGuia(PREFIJO, async () => { throw Error('no crypto'); });
+    await m.fijar('A', true, memoria());
+    expect(await m.leer('A', null)).toBe(true); expect(await m.leer('B', null)).toBe(false);
   });
-  it('una lectura demorada no pisa una elección posterior', async () => {
+
+  it('una lectura demorada no pisa un cambio posterior', async () => {
     const resolver: ((s: string) => void)[] = [];
-    const p = new PreferenciaGuia(() => new Promise<string>((r) => { resolver.push(r); }));
-    const a = memoria(), lectura = p.noMostrar('A', a), eleccion = p.elegir('A', true, a);
+    const m = new MarcaDeGuia(PREFIJO, () => new Promise<string>((r) => { resolver.push(r); }));
+    const a = memoria(), lectura = m.leer('A', a), cambio = m.fijar('A', true, a);
     resolver[0]!('hash'); expect(await lectura).toBe(true);
-    resolver[1]!('hash'); await eleccion;
+    resolver[1]!('hash'); await cambio;
   });
-  it('marcar/desmarcar rápidamente conserva la última elección aunque crypto resuelva en orden inverso', async () => {
+
+  it('dos cambios rápidos conservan el último aunque crypto resuelva en orden inverso', async () => {
     const resolver: ((s: string) => void)[] = [];
-    const p = new PreferenciaGuia(() => new Promise<string>((r) => { resolver.push(r); })), a = memoria();
-    const primera = p.elegir('A', true, a), ultima = p.elegir('A', false, a);
-    resolver[1]!('hash'); await ultima; resolver[0]!('hash'); await primera;
-    expect(a.datos.size).toBe(0); expect(await p.noMostrar('A', a)).toBe(false);
+    const m = new MarcaDeGuia(PREFIJO, () => new Promise<string>((r) => { resolver.push(r); })), a = memoria();
+    const primero = m.fijar('A', true, a), ultimo = m.fijar('A', false, a);
+    resolver[1]!('hash'); await ultimo; resolver[0]!('hash'); await primero;
+    expect(a.datos.size).toBe(0); expect(await m.leer('A', a)).toBe(false);
   });
+
   it('una escritura tardía usa la cuenta capturada y no contamina la siguiente', async () => {
     let resolver!: (s: string) => void;
-    const p = new PreferenciaGuia((s) => s === 'auth:A' ? new Promise<string>((r) => { resolver = r; }) : Promise.resolve('hashB'));
-    const a = memoria(), escritura = p.elegir('A', true, a);
-    expect(await p.noMostrar('B', a)).toBe(false); resolver('hashA'); await escritura;
+    const m = new MarcaDeGuia(PREFIJO, (s) => s === 'auth:A' ? new Promise<string>((r) => { resolver = r; }) : Promise.resolve('hashB'));
+    const a = memoria(), escritura = m.fijar('A', true, a);
+    expect(await m.leer('B', a)).toBe(false); resolver('hashA'); await escritura;
     expect([...a.datos.entries()]).toEqual([[expect.stringContaining('.hashA'), '1']]);
-    expect(await p.noMostrar('B', a)).toBe(false);
+    expect(await m.leer('B', a)).toBe(false);
   });
-  it('sin identidad no lee/escribe; valores desconocidos no excluyen', async () => {
-    const p = new PreferenciaGuia(async () => 'hash'), a = memoria();
-    await p.elegir('', true, a); expect(await p.noMostrar('', a)).toBe(false); expect(a.datos.size).toBe(0);
-    a.setItem('payme.app.guia.optout.v2.real.hash', 'otro');
-    a.setItem('payme.app.guia.optout.v2.mock.hash', 'otro');
-    expect(await p.noMostrar('A', a)).toBe(false);
+
+  it('sin identidad no lee ni escribe; un valor desconocido cuenta como «no»', async () => {
+    const m = new MarcaDeGuia(PREFIJO, async () => 'hash'), a = memoria();
+    await m.fijar('', true, a); expect(await m.leer('', a)).toBe(false); expect(a.datos.size).toBe(0);
+    a.setItem(`${PREFIJO}.real.hash`, 'otro');
+    a.setItem(`${PREFIJO}.mock.hash`, 'otro');
+    expect(await m.leer('A', a)).toBe(false);
+  });
+
+  it('D364 · el «No volver a mostrar» sólo se lee: nada en src/ lo escribe', () => {
+    const raiz = new URL('..', import.meta.url).pathname;
+    const archivos: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const nombre of readdirSync(dir)) {
+        const ruta = join(dir, nombre);
+        if (statSync(ruta).isDirectory()) recorrer(ruta);
+        else if (/\.tsx?$/.test(nombre) && !/\.test\.tsx?$/.test(nombre)) archivos.push(ruta);
+      }
+    };
+    recorrer(raiz);
+    expect(archivos.length).toBeGreaterThan(100);
+    const escriben = archivos.filter((ruta) => /noVolverAMostrar\.fijar\(/.test(readFileSync(ruta, 'utf8')));
+    expect(escriben).toEqual([]);
+    // Control: la tarjeta sí se escribe (desde el provider).
+    expect(archivos.some((ruta) => /tarjetaTutorialOculta\.fijar\(/.test(readFileSync(ruta, 'utf8')))).toBe(true);
   });
 });

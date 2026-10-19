@@ -8,7 +8,6 @@ import './guiaInteractiva.css';
 
 export interface GuiaContenidoProps {
   pagina: PageId; onCerrar: () => void; prioridad: boolean;
-  noMostrar: boolean; onNoMostrar: (valor: boolean) => void;
 }
 interface Paso { id: string; titulo: string; texto: string }
 type T = (s: string, ...args: unknown[]) => string;
@@ -51,7 +50,7 @@ interface Medida { objetivo: Caja | null; posicion: Posicion | null; espacio: Ca
 const inicial: Medida = { objetivo: null, posicion: null, espacio: { left: 12, top: 12, right: 360, bottom: 700 }, zoom: 1, modal: false };
 
 /** Sin API, router imperativo ni callbacks de negocio. Sólo DOM descriptivo y estado efímero del tutorial. */
-export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMostrar }: GuiaContenidoProps) {
+export function GuiaContenido({ pagina, onCerrar, prioridad }: GuiaContenidoProps) {
   const { t } = useIdioma();
   const pasos = catalogo(pagina, t);
   const [disponibles, setDisponibles] = useState<string[]>([]);
@@ -160,7 +159,6 @@ export function GuiaContenido({ pagina, onCerrar, prioridad, noMostrar, onNoMost
       style={{ left: left / zoom, top: top / zoom, width: Math.min(window.innerWidth > 600 ? 560 : 328, maxWidth), maxHeight }}>
       <div className="guia-cabeza">
         <span className="guia-progreso">{paso ? t('{0} de {1}', indice + 1, indices.length) : t('Guía en pausa')}</span>
-        <label className="guia-preferencia"><input type="checkbox" checked={noMostrar} onChange={(e) => onNoMostrar(e.currentTarget.checked)} /><span>{t('No volver a mostrar')}</span></label>
         <button type="button" className="guia-cerrar" onClick={onCerrar} aria-label={t('Cerrar guía')}><Icon name="x" size={18} /></button>
       </div>
       <div aria-live="polite" aria-atomic="true">

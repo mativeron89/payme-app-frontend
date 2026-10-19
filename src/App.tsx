@@ -451,7 +451,7 @@ function Shell() {
    * decisión de la pantalla**, que es donde el spec la pone: la posición del
    * círculo central cambia según dónde estás, y eso `App` no lo sabe.
    */
-  return <GuiaProvider key={`${session.principal_id}:${session.family_id}`} pagina={route.page} principal={session.principal_id} entrada={`${session.principal_id}:${session.family_id}`} habilitada={puerta.lista && puerta.estado.fase === 'abierta' && arroba.lista && arroba.estado.fase === 'abierta'}>{screen}</GuiaProvider>;
+  return <GuiaProvider key={`${session.principal_id}:${session.family_id}`} pagina={route.page} principal={session.principal_id} habilitada={puerta.lista && puerta.estado.fase === 'abierta' && arroba.lista && arroba.estado.fase === 'abierta'}>{screen}</GuiaProvider>;
 }
 
 export default function App() {
