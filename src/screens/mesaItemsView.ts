@@ -96,10 +96,11 @@ export const TOLERANCIA_DE_COMPLETAR = {
  *   faltante real (1 a 99 bps) no se ve: al bajar lo propio, el importe puede
  *   diferir en esos bps del que publique el dueño. La decisión de cierre no
  *   cambia, porque la diferencia queda en 100 o más.
- * - consumo: 0, porque el borrador suma a lo registrado. El dueño en realidad
- *   suelta lo propio liberable del plato que el pedido toca y lo vuelve a
- *   tomar. Sólo difiere si el borrador incluye un plato que esta cuenta ya
- *   registró (una respuesta perdida, dos pestañas): queda anotado, va aparte.
+ * - consumo, en la hoja: lo liberable del plato que el borrador toca
+ *   (`propioEnConsumo` de `antesDeCerrar`), como el dueño, que lo suelta y lo
+ *   vuelve a tomar. La barra en vivo todavía da 0 (el borrador suma): sólo
+ *   difiere si el borrador incluye un plato que esta cuenta ya registró (una
+ *   respuesta perdida, dos pestañas), y ahí es sólo lo que muestra.
  *
  * Lo usan la hoja «antes de cerrar» (`seleccionCierraLaMesa`) y la barra en
  * vivo (`progresoConBorrador`): una sola definición.

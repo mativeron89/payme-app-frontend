@@ -25,7 +25,7 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
   - **Tests:**
     - Unitarios de la pantalla, de la hoja y del mock, con control positivo: con garantía, o sin la regla, el mismo caso queda en 99 %, la hoja no sale y la mesa no se cierra. También un plato con precio sin elegir, un plato con precio elegido casi entero (9999 bps), el borrador del $0 que ya no entra, la mesa toda en $0 y la mesa abierta de antes de 2.188.0.
     - e2e (`d360-cambios`): con el agua en $0 sin elegir, elegir los otros seis platos muestra la hoja; «Guardar y cerrar» cierra la mesa y queda al 100 %. Sin la regla de la hoja da rojo justo ahí: la hoja no aparece.
-    - 29 mutantes (pantalla, hoja, mock, F1 y la procedencia), todos rojos, cada uno en su test. El artefacto (la lista, el log y el script) queda fuera del repo, en `~/.codex/runs/payme-af-d341-tutorial-propina-20261017/mutantes/hotfix-0.253.1/` (`mut-hotfix-final.json` 79ea09fc…, `mutantes-hotfix-final.log` df366031…).
+    - 36 mutantes (pantalla, hoja, mock, F1, la procedencia y lo propio en consumo), todos rojos, cada uno en su test. El artefacto (la lista, el log y el script) queda fuera del repo, en `~/.codex/runs/payme-af-d341-tutorial-propina-20261017/mutantes/hotfix-0.253.1/` (`mut-hotfix-final.json` a9bb0392…, `mutantes-hotfix-final.log` 8b83d0bb…).
 - **F1 · la hoja «antes de cerrar» con la tolerancia del dueño** (revisión interna de V sobre 0.253.1). Viene de 0.227.0, no de D389. El dueño da por completo un plato al que le faltan menos de 100 bps (`COMPLETING_TOLERANCE_BPS` de `services/itemClaims.js`):
   - en consumo, `effectiveBps` absorbe el remanente;
   - en «igual», `restanteDe` lo da por cubierto.
@@ -39,7 +39,6 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
     - Un test se pone rojo si el inventario adopta otra versión de cualquiera de las dos, para volver a medir.
     - Las dos réplicas del mock usan el mismo valor; la de consumo, además, se prueba por comportamiento.
   - **Queda igual, y se declara** (todo es anterior a F1):
-    - En consumo, el llamador da 0 como lo propio, porque el borrador suma a lo registrado. El dueño en realidad suelta lo propio liberable del plato que el pedido toca y lo vuelve a tomar. Sólo difiere si el borrador incluye un plato que esta cuenta ya registró, con una respuesta perdida o con dos pestañas. Va aparte: está en `MesaDetailView.tsx`, fuera de esta entrega.
     - En «igual», si lo publicado ya está en 0 por la tolerancia, el faltante real (1 a 99 bps) no se ve. Al bajar lo propio, la barra en vivo puede diferir en esos bps de lo que publique el dueño; la decisión de cierre no cambia.
     - `fractionPreview` estima «tu parte» comparando la porción con lo que queda, sin la tolerancia. Con ⅓ sobre 3334, muestra unos centavos menos de lo que le asigna el dueño (medido: 3 en un plato de $300, 10 en uno de $1,000, 0 en uno de $120). Es un estimado (el comprobante usa lo del dueño), y lo usa también el ticket de Viajes, que no está en esta entrega.
   - **Tests:**
@@ -47,6 +46,24 @@ Hotfix de 0.253.0 por el dictamen independiente de Codex (A01, D390; mensaje LOO
     - Un plato que el borrador no toca y quedó en 50 no se da por cubierto. En «igual», 9999 declarado cierra.
     - En el mock, el tercer ⅓ sobre 3334 se guarda como 3334 y cierra la mesa; con un faltante de 100 se guarda lo pedido y sigue abierta.
     - T3: un test nuevo llega a la última línea con «ya no quedaba nada» en true. Ninguno llegaba así, y el mutante `return true` sobrevivía.
+- **Lo propio en consumo, como el dueño** (decisión de V para 0.253.1: es de la misma clase que lo que bloqueó Codex, un cierre sin hoja que no se deshace). Viene de antes de F1.
+  - **El dueño** (`itemClaims.acquire`, medido en 66659eae) no suma: el pedido que toca un plato suelta mis claims `locked` liberables de ese plato y lo vuelve a tomar contra `10000 − Σ(los demás)`. El detalle publica esa misma suma como `my_releasable_bps`.
+  - **El front** daba siempre 0 como lo propio («el borrador suma»). Difería si el borrador incluía un plato que esta cuenta ya registró:
+    - con una respuesta perdida de `items/lock`, el borrador queda («No pudimos reservar lo que elegiste»);
+    - con dos pestañas.
+    - En un sentido, la mesa se cerraba sin la hoja. En el otro, la hoja salía de más.
+  - **Ahora** `listoCierraLaMesa` usa `propioEnConsumo` (`antesDeCerrar.ts`): en un plato que el borrador toca, lo propio es `my_releasable_bps`; en uno que no toca, 0. Y en consumo «cambia» es «hay borrador», porque el dueño escribe con cualquier pedido.
+  - **Fail-safe al revés:** sin un `my_releasable_bps` válido, la hoja se inclina por salir. Se supone lo propio justo para que el borrador entre, `max(0, nuevo − restante)`: si el cierre es posible con algún valor de lo liberable, avisa. Una hoja de más se deshace con «Revisar»; un cierre sin hoja, no. Un `remaining_bps` inválido sigue siendo «dato desconocido» (no avisa), porque esa fila no se puede elegir.
+  - **La lista de la hoja** (`elegidosAlGuardar`) reemplaza lo liberable del plato que el borrador repite, en vez de sumarlo. Sin el dato suma, como antes.
+  - **Queda igual, y se declara:** la barra en vivo (`progresoConBorrador`) sigue dando 0 como lo propio en consumo. En esos mismos casos raros puede mostrar de más lo asignado; es sólo lo que muestra.
+  - **Tests**, cada uno con su control positivo (como era antes, o con `my_releasable_bps` en 0):
+    - respuesta perdida, el sentido irreversible: el borrador repite A y B ya registrados y suma C, y la hoja sale;
+    - respuesta perdida, el otro sentido: A ½ repetida no cierra;
+    - dos pestañas: la otra ½ de A desde la otra pestaña, más B, cierra;
+    - sin `my_releasable_bps`, la hoja sale en los dos sentidos;
+    - «cambia» es «hay borrador»;
+    - la lista de la hoja;
+    - el cableado de `MesaDetailView`.
 - **Corrige el preámbulo de 0.253.0** (O01 de Codex), sin reescribir esa entrada:
   - «Nada se publica sin el OK de Mati (D63)» quedó viejo. Desde D382, lo que está en verde se publica sin pedirle el OK a Mati: el CI completo del PR sobre el SHA exacto y el GREEN de V. Mati lo prueba después (D63). Lo que el canon pide aprobar aparte (v2.51) sigue igual.
   - «Sin … idempotencia» tampoco vale: 0.253.0 sí tocó la idempotencia del lado del front (la memoria de las invitaciones), sin cambiar el servidor.

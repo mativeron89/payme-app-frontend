@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MesaItem } from '../api/types';
-import { elegidosAlGuardar, elegidosRegistrados, lineasElegidas, seleccionCierraLaMesa } from './antesDeCerrar';
+import { elegidosAlGuardar, elegidosRegistrados, lineasElegidas, propioEnConsumo, seleccionCierraLaMesa } from './antesDeCerrar';
 
 /**
  * D240 punto 8 · la hoja antes de que la mesa se cierre. Lo que se prueba acá:
@@ -250,6 +251,103 @@ describe('F1 · seleccionCierraLaMesa con la tolerancia del dueño', () => {
       (i) => (i.id === 'agua' ? 5000 : 0),
       new Map(),
     )).toBe(false);
+  });
+});
+
+/**
+ * Lo propio en consumo (decisión de V para 0.253.1). El dueño (`itemClaims.acquire`) suelta mis claims liberables del
+ * plato que el pedido toca y lo vuelve a tomar; el front daba siempre 0. Difiere sólo si el borrador incluye un plato
+ * que esta cuenta ya registró: una respuesta perdida de `items/lock` (el borrador queda) o dos pestañas.
+ */
+describe('lo propio en consumo · como el dueño, que suelta y vuelve a tomar', () => {
+  /** Como la llama MesaDetailView en consumo. */
+  const comoLaPantalla = (items: MesaItem[], borrador: Array<[string, number]>) => {
+    const b = new Map(borrador);
+    return seleccionCierraLaMesa(
+      { items, guarantee_mode: false },
+      (i) => i.remaining_bps,
+      (i) => propioEnConsumo(i, b),
+      b,
+      { escribeConCualquierBorrador: true },
+    );
+  };
+  /** Como era antes de 0.253.1: lo propio siempre 0. Es el control positivo de cada caso. */
+  const comoAntes = (items: MesaItem[], borrador: Array<[string, number]>) =>
+    seleccionCierraLaMesa({ items, guarantee_mode: false }, (i) => i.remaining_bps, () => 0, new Map(borrador));
+  const mio = (id: string, over: Partial<MesaItem> = {}) => item({ id, remaining_bps: 0, my_bps: 10000, my_releasable_bps: 10000, ...over });
+
+  it('🔴 respuesta perdida, el sentido irreversible: A y B ya quedaron registrados, el borrador los repite y suma C: cierra y la hoja aparece', () => {
+    const items = [mio('A'), mio('B'), item({ id: 'C' })];
+    const borrador: Array<[string, number]> = [['A', 10000], ['B', 10000], ['C', 10000]];
+    expect(comoLaPantalla(items, borrador)).toBe(true);
+    // Control positivo: con lo propio en 0, el borrador de A y B «no entraba» y la hoja no salía; el dueño cerraba igual.
+    expect(comoAntes(items, borrador)).toBe(false);
+  });
+
+  it('respuesta perdida, el otro sentido: A ½ ya quedó registrada y el borrador la repite: no cierra (antes la hoja salía de más)', () => {
+    const items = [mio('A', { remaining_bps: 5000, my_bps: 5000, my_releasable_bps: 5000 }), item({ id: 'B', remaining_bps: 0 })];
+    expect(comoLaPantalla(items, [['A', 5000]])).toBe(false);
+    expect(comoAntes(items, [['A', 5000]])).toBe(true);
+  });
+
+  it('🔴 dos pestañas: otra persona tiene ½ de A y yo, desde la otra pestaña, la otra ½; esta pestaña elige A ½ y B: cierra', () => {
+    const items = [mio('A', { remaining_bps: 0, my_bps: 5000, my_releasable_bps: 5000 }), item({ id: 'B' })];
+    const borrador: Array<[string, number]> = [['A', 5000], ['B', 10000]];
+    expect(comoLaPantalla(items, borrador)).toBe(true);
+    expect(comoAntes(items, borrador)).toBe(false);
+  });
+
+  it('🔴 sin my_releasable_bps se inclina por mostrar la hoja: el caso irreversible avisa', () => {
+    const items = [mio('A', { my_releasable_bps: undefined }), mio('B', { my_releasable_bps: 'x' as unknown as number }), item({ id: 'C' })];
+    expect(comoLaPantalla(items, [['A', 10000], ['B', 10000], ['C', 10000]])).toBe(true);
+  });
+
+  it('control positivo del fail-safe: con my_releasable_bps en 0 (válido: nada mío se suelta), el mismo borrador no entra y no avisa', () => {
+    const items = [mio('A', { my_releasable_bps: 0 }), mio('B', { my_releasable_bps: 0 }), item({ id: 'C' })];
+    expect(comoLaPantalla(items, [['A', 10000], ['B', 10000], ['C', 10000]])).toBe(false);
+  });
+
+  it('sin my_releasable_bps, en el otro sentido también avisa (una hoja de más se deshace)', () => {
+    const items = [mio('A', { remaining_bps: 5000, my_bps: 5000, my_releasable_bps: undefined }), item({ id: 'B', remaining_bps: 0 })];
+    expect(comoLaPantalla(items, [['A', 5000]])).toBe(true);
+  });
+
+  it('«cambia» en consumo es «hay borrador»: repetir lo mismo también escribe, y con el $0 libre (D389) la mesa se cierra', () => {
+    const items = [mio('A'), item({ id: 'agua', price_cents: 0 })];
+    expect(comoLaPantalla(items, [['A', 10000]])).toBe(true);
+    // Control positivo: sin la opción, «repetir lo mismo» no cambia nada y no avisa.
+    const b = new Map([['A', 10000]]);
+    expect(seleccionCierraLaMesa({ items, guarantee_mode: false }, (i) => i.remaining_bps, (i) => propioEnConsumo(i, b), b)).toBe(false);
+  });
+
+  it('un borrador vacío en consumo sigue sin cerrar nada', () => {
+    expect(comoLaPantalla([mio('A', { remaining_bps: 5000, my_bps: 5000, my_releasable_bps: 5000 })], [])).toBe(false);
+  });
+
+  it('propioEnConsumo: 0 si el borrador no toca el plato; lo liberable si lo toca; sin el dato, lo justo para que entre', () => {
+    const b = new Map([['A', 5000]]);
+    expect(propioEnConsumo(mio('B'), b)).toBe(0);
+    expect(propioEnConsumo(mio('A', { my_releasable_bps: 3333 }), b)).toBe(3333);
+    expect(propioEnConsumo(mio('A', { remaining_bps: 2000, my_releasable_bps: undefined }), b)).toBe(3000);
+    expect(propioEnConsumo(mio('A', { remaining_bps: 8000, my_releasable_bps: undefined }), b)).toBe(0);
+    // Con un restante inválido decide la función, que no avisa ante un dato desconocido.
+    expect(propioEnConsumo(mio('A', { remaining_bps: -1, my_releasable_bps: undefined }), b)).toBe(0);
+  });
+
+  it('la lista de la hoja: el plato que el borrador repite reemplaza lo liberable, no lo suma (A ½ sigue en ½)', () => {
+    const a = mio('A', { name: 'Pizza', remaining_bps: 5000, my_bps: 5000, my_releasable_bps: 5000 });
+    expect(elegidosAlGuardar({ items: [a] }, true, new Map([['A', 5000]])).map((e) => e.bps)).toEqual([5000]);
+    // Sin el dato se suma, como antes: es sólo la lista.
+    const sinDato = { ...a, my_releasable_bps: undefined };
+    expect(elegidosAlGuardar({ items: [sinDato] }, true, new Map([['A', 5000]])).map((e) => e.bps)).toEqual([10000]);
+  });
+
+  it('el cableado: MesaDetailView pasa lo propio de consumo y la opción de escritura a la hoja', () => {
+    const fuente = readFileSync(new URL('./MesaDetailView.tsx', import.meta.url), 'utf8');
+    const listo = fuente.slice(fuente.indexOf('const listoCierraLaMesa'), fuente.indexOf('const enfocarListo'));
+    expect(listo).toContain('(item) => propioEnConsumo(item, selected),');
+    expect(listo).toContain('{ escribeConCualquierBorrador: true },');
+    expect(listo).not.toContain('() => 0');
   });
 });
 
