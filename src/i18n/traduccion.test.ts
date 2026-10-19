@@ -312,6 +312,10 @@ function huerfanasDe(clavesEN: string[], usados: ReadonlySet<string>): string[] 
  *     `pwaInstallability.test.ts`), y varias son copy de garantía/banco: NO
  *     se tocan sin una orden que autorice esos paths.
  *
+ * 🔴 BAJÓ 12 el 2026-10-18 (D372, invitación base): los textos de
+ * `joinLinkMessage` (`joinLinkView.ts`) pasan por `t()`. El número del título
+ * del test se deriva de la lista.
+ *
  * Por eso el contador es FIJO, no vacío: si BAJA con intención (alguien
  * envolvió un sitio en `t()`, o borró un texto que quedó realmente muerto),
  * se achica esta lista. Si alguien más pierde su `t()` y por eso aparece acá
@@ -324,12 +328,10 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'El cierre y cualquier liquidación todavía requieren confirmación.',
   'El faltante, si existió, quedó registrado. Aún no podemos afirmar la entrega al restaurante.',
   'Entrega en proceso', 'Esa apertura terminó sin quedar en pie. Ya puedes abrir una nueva.',
-  'Esta mesa ya cerró', 'Estado de la mesa', 'Estadísticas',
+  'Estado de la mesa', 'Estadísticas',
   'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escríbenos para resolverlo.',
-  'Este link está incompleto',
   'Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.',
   'Garantía en confirmación', 'Garantía no confirmada',
-  'Habla con quien te invitó si crees que es un error.',
   'La garantía ya no está vigente.',
   'La liquidación sigue en proceso; todavía no está confirmada.',
   'La mesa se creó, pero su garantía quedó sin confirmar. No abrimos otra mesa.',
@@ -338,23 +340,19 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'Mesa cancelada', 'Mesa en liquidación', 'Mesa liquidada', 'Mesa vencida',
   'Modo demo:', 'Movimiento',
   'No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez.',
-  'No es que no sirva: no pudimos comprobarlo ahora. Prueba de nuevo en un momento.',
   'No podemos afirmar que exista un cobro o cierre de la mesa.',
   'No pudimos confirmar la respuesta de tu banco.', 'No pudimos guardar la tarjeta.',
-  'No pudimos leer la tarjeta.', 'No pudimos sumarte',
-  'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
-  'No pudimos verificar el link', 'No pudimos verificar esta invitación. Actualiza en un momento.',
+  'No pudimos leer la tarjeta.', 'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
+  'No pudimos verificar esta invitación. Actualiza en un momento.',
   'Pago de mesa', 'Pagos registrados', 'Propina (al mesero)', 'Propina enviada', 'Propina recibida',
-  'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.',
-  'Puede ser la conexión. Prueba de nuevo.', 'Pídele a quien te invitó que te comparta uno nuevo.',
   'Si tocas pagar de nuevo, cubres la parte de otro comensal.',
-  'Sumándote a la mesa…', 'Súmate a la mesa {0} en PayMe: {1}',
+  'Súmate a la mesa {0} en PayMe: {1}',
   'Todavía no podemos confirmar el cierre ni una entrega al restaurante.',
   'Todavía no podemos confirmar el resultado de la garantía.', 'Total',
   'Tu banco no autorizó la operación.',
   'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.',
-  'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.', 'Tu propina',
-  'Un segundo.', 'Ver mesa', 'Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.',
+  'Tu propina',
+  'Ver mesa', 'Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.',
   'acreditada', 'conflicto', 'entero', 'menos de 1 min', 'muerta', 'o Apple Pay',
   'por pagar.', 'reservado', '{0} h', '{0} min',
 ];
@@ -367,7 +365,7 @@ describe('🔴 entradas EN huérfanas · fijo y enumerado, no cero todavía', ()
       .toEqual(['Fantasma']);
   });
 
-  it('🔴 las huérfanas de EN son EXACTAMENTE las 72 ya clasificadas · el contador SÓLO BAJA con intención', () => {
+  it(`🔴 las huérfanas de EN son EXACTAMENTE las ${HUERFANAS_CONOCIDAS_SIN_ENVOLVER.length} ya clasificadas · el contador SÓLO BAJA con intención`, () => {
     const usados = new Set(envueltos().map(({ texto }) => texto));
     for (const valores of Object.values(familiasDinamicas())) {
       for (const v of valores) usados.add(v);

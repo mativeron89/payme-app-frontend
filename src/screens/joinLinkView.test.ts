@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
+import { entrarEnNaranja, formularioDeB, iconoDelResultado, joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
 
 const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
 
@@ -212,5 +215,74 @@ describe('§1.2-D · la mesa muerta con token genuino (v2.45.0)', () => {
   it('sin nombrar restaurante: la cautela de A se conserva', () => {
     const m = joinLinkMessage('mesa_cerrada');
     expect(`${m.title} ${m.body} ${m.nota}`).not.toMatch(/Parolaccia|Hanzo|restaurante/i);
+  });
+});
+
+describe('D372 · los textos del canje pasan por t()', () => {
+  it('🔴 con un t que marca, cada título, cuerpo y nota de los seis resultados sale marcado', () => {
+    const marca = (texto: string) => `EN:${texto}`;
+    for (const o of OUTCOMES) {
+      const m = joinLinkMessage(o, marca);
+      expect(m.title, o).toMatch(/^EN:/);
+      expect(m.body, o).toMatch(/^EN:/);
+      if (m.nota !== undefined) expect(m.nota, o).toMatch(/^EN:/);
+    }
+  });
+
+  it('🔴 el cableado: la pantalla le pasa su t (si no, los textos salen en español con la app en inglés)', () => {
+    const pantalla = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'JoinMesaScreen.tsx'), 'utf8')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(pantalla).toContain('joinLinkMessage(outcome, t)');
+    expect(pantalla).not.toMatch(/joinLinkMessage\(\s*outcome\s*\)/);
+  });
+
+  it('control positivo: sin t siguen en español, y retryable no depende del idioma', () => {
+    const marca = (texto: string) => `EN:${texto}`;
+    for (const o of OUTCOMES) {
+      expect(joinLinkMessage(o).title).not.toMatch(/^EN:/);
+      expect(joinLinkMessage(o, marca).retryable).toBe(joinLinkMessage(o).retryable);
+    }
+    expect(joinLinkMessage('mesa_cerrada').nota).toBe('Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.');
+  });
+});
+
+describe('D372 · el ícono de E y F', () => {
+  it('🔴 un solo ícono para los rechazos (sin pistas del motivo); la tienda para la mesa cerrada; reintentar para lo reintentable', () => {
+    expect(iconoDelResultado('rejected')).toBe('link-cortado');
+    expect(iconoDelResultado('invalid')).toBe('link-cortado');
+    expect(iconoDelResultado('mesa_cerrada')).toBe('tienda');
+    expect(iconoDelResultado('unavailable')).toBe('reintentar');
+    expect(iconoDelResultado('error')).toBe('reintentar');
+  });
+
+  it('coincide con la etapa: «reintentar» sí y sólo si la pantalla ofrece Reintentar', () => {
+    for (const o of ['rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'] as const) {
+      const etapa = joinLinkStage({ hasSession: true, hasJoined: false, outcome: o });
+      expect(iconoDelResultado(o) === 'reintentar', o).toBe(etapa === 'retry');
+    }
+  });
+});
+
+describe('D373 · «Entrar» en naranja sólo si no hay alta y ya se sabe', () => {
+  it.each([
+    [{ altaDisponible: true, capacidadPendiente: false, capacidadIntentada: true }, false],
+    [{ altaDisponible: true, capacidadPendiente: true, capacidadIntentada: false }, false],
+    [{ altaDisponible: false, capacidadPendiente: true, capacidadIntentada: false }, false],
+    [{ altaDisponible: false, capacidadPendiente: false, capacidadIntentada: false }, true],
+    [{ altaDisponible: false, capacidadPendiente: true, capacidadIntentada: true }, true],
+  ])('🔴 %o → %s', (estado, naranja) => {
+    expect(entrarEnNaranja(estado)).toBe(naranja);
+  });
+});
+
+describe('P02-a · B con el modo recordado', () => {
+  it.each([
+    [{ elegido: 'login', altaDisponible: false, capacidadPendiente: true, capacidadIntentada: false }, { montar: true, modo: 'login' }],
+    [{ elegido: 'register', altaDisponible: false, capacidadPendiente: true, capacidadIntentada: false }, { montar: false, modo: 'register' }],
+    [{ elegido: 'register', altaDisponible: true, capacidadPendiente: true, capacidadIntentada: false }, { montar: true, modo: 'register' }],
+    [{ elegido: 'register', altaDisponible: false, capacidadPendiente: false, capacidadIntentada: false }, { montar: true, modo: 'login' }],
+    [{ elegido: 'register', altaDisponible: false, capacidadPendiente: true, capacidadIntentada: true }, { montar: true, modo: 'login' }],
+  ] as const)('🔴 %o → %o', (estado, esperado) => {
+    expect(formularioDeB(estado)).toEqual(esperado);
   });
 });

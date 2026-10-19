@@ -117,12 +117,22 @@ export function joinLinkStage(state: {
   return joinLinkMessage(state.outcome).retryable ? 'retry' : 'blocked';
 }
 
-export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
+/**
+ * D372 · los textos pasan por `t()`: hasta 0.253.0 la pantalla los dibujaba en
+ * español aunque la app estuviera en inglés. El parámetro se llama `t` y los
+ * literales van entre comillas simples porque así los ve el censo de
+ * `traduccion.test.ts`. Sin `t`, el español (lo que fijan los tests de
+ * privacidad de abajo y `joinLinkStage`, que sólo mira `retryable`).
+ */
+type Traducir = (texto: string) => string;
+const enEspanol: Traducir = (texto) => texto;
+
+export function joinLinkMessage(outcome: JoinLinkOutcome, t: Traducir = enEspanol): JoinLinkMessage {
   switch (outcome) {
     case 'joining':
       return {
-        title: 'Sumándote a la mesa…',
-        body: 'Un segundo.',
+        title: t('Sumándote a la mesa…'),
+        body: t('Un segundo.'),
         retryable: false,
       };
     case 'rejected':
@@ -134,36 +144,79 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
       // funciona · Pedile a quien te invitó…", que además no nombra un rol de
       // la mesa: coherente con que esta pantalla no acredita que la mesa exista.
       return {
-        title: 'Este link ya no funciona',
-        body: 'Pídele a quien te invitó que te comparta uno nuevo.',
+        title: t('Este link ya no funciona'),
+        body: t('Pídele a quien te invitó que te comparta uno nuevo.'),
         retryable: false,
       };
     case 'invalid':
       return {
-        title: 'Este link está incompleto',
-        body: 'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.',
+        title: t('Este link está incompleto'),
+        body: t('Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.'),
         retryable: false,
       };
     case 'mesa_cerrada':
       // Copy de Diseño, textual (§1.2-D, 2026-08-06). Genérica, sin nombrar
       // restaurante —misma cautela que A—, pero sí dice que ES esta mesa.
       return {
-        title: 'Esta mesa ya cerró',
-        body: 'Habla con quien te invitó si crees que es un error.',
+        title: t('Esta mesa ya cerró'),
+        body: t('Habla con quien te invitó si crees que es un error.'),
         retryable: false,
-        nota: 'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.',
+        nota: t('Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.'),
       };
     case 'unavailable':
       return {
-        title: 'No pudimos verificar el link',
-        body: 'No es que no sirva: no pudimos comprobarlo ahora. Prueba de nuevo en un momento.',
+        title: t('No pudimos verificar el link'),
+        body: t('No es que no sirva: no pudimos comprobarlo ahora. Prueba de nuevo en un momento.'),
         retryable: true,
       };
     case 'error':
       return {
-        title: 'No pudimos sumarte',
-        body: 'Puede ser la conexión. Prueba de nuevo.',
+        title: t('No pudimos sumarte'),
+        body: t('Puede ser la conexión. Prueba de nuevo.'),
         retryable: true,
       };
   }
+}
+
+/**
+ * D372 · el ícono del cuadro de E y F (C lleva el aro; D, el tilde). Un solo
+ * ícono para los rechazos (E1 y E2): el link cortado, sin pistas del motivo.
+ * La mesa cerrada (E3) lleva la tienda. Lo reintentable (F), «reintentar».
+ */
+export function iconoDelResultado(outcome: Exclude<JoinLinkOutcome, 'joining'>): 'link-cortado' | 'tienda' | 'reintentar' {
+  if (outcome === 'mesa_cerrada') return 'tienda';
+  return joinLinkMessage(outcome).retryable ? 'reintentar' : 'link-cortado';
+}
+
+/**
+ * D373 · «Entrar» va en naranja sólo si NO hay alta y eso ya se sabe. Mientras
+ * la capability del alta está pendiente va con borde: con el alta abierta, si
+ * no, se vería un naranja («Entrar») y después otro («Crear cuenta gratis»), y
+ * D373 pide uno solo. No esconde ni demora ningún botón.
+ */
+export function entrarEnNaranja(s: {
+  readonly altaDisponible: boolean;
+  readonly capacidadPendiente: boolean;
+  readonly capacidadIntentada: boolean;
+}): boolean {
+  return !s.altaDisponible && (!s.capacidadPendiente || s.capacidadIntentada);
+}
+
+/**
+ * P02-a · B con el modo recordado. `LoginScreen` calcula su modo UNA vez al
+ * montarse: con «register» y la capability pendiente bajaría a «login» aunque
+ * el alta esté abierta. Por eso, con «register», B espera a saber si hay alta
+ * antes de montar el formulario; con «login» no hay nada que esperar. Sin alta,
+ * «register» baja a «login», como hace el formulario.
+ */
+export function formularioDeB(s: {
+  readonly elegido: 'register' | 'login';
+  readonly altaDisponible: boolean;
+  readonly capacidadPendiente: boolean;
+  readonly capacidadIntentada: boolean;
+}): { readonly montar: boolean; readonly modo: 'register' | 'login' } {
+  if (s.elegido === 'login') return { montar: true, modo: 'login' };
+  const sabido = s.altaDisponible || !s.capacidadPendiente || s.capacidadIntentada;
+  if (!sabido) return { montar: false, modo: 'register' };
+  return { montar: true, modo: s.altaDisponible ? 'register' : 'login' };
 }

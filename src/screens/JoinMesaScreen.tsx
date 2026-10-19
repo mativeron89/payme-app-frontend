@@ -404,7 +404,7 @@ export function JoinMesaScreen({
     );
   }
 
-  const message = joinLinkMessage(outcome);
+  const message = joinLinkMessage(outcome, t);
   return (
     <div className="link-screen">
       <AppHeader compact />
