@@ -20,10 +20,13 @@ import { pisoDe, type ModoUI } from '../../screens/divisionModo';
 
 /** Por dónde va la persona: Escanear, el ticket, ¿Cómo dividen?, Compartir, Tu mesa y el final en Inicio. */
 export type FaseEjemplo = 'foto' | 'ticket' | 'dividir' | 'compartir' | 'mesa' | 'listo';
+export type ExplicacionCompartir = 'copiar' | 'whatsapp' | 'amigo-lucia' | 'amigo-tomas' | 'amigo-ana';
 
 export interface EstadoDelEjemplo {
   readonly activo: boolean;
   readonly fase: FaseEjemplo;
+  /** D429 · sólo explica el control tocado; no genera ni envía invitaciones. */
+  readonly explicacionCompartir: ExplicacionCompartir | null;
   /** La forma de dividir que eligió en ¿Cómo dividen?; `null` hasta armar la mesa. */
   readonly division: ModoUI | null;
   /** El N del contador; `null` hasta armar la mesa. */
@@ -45,6 +48,7 @@ const SIN_SELECCION: ReadonlyMap<string, number> = new Map();
 export const EJEMPLO_APAGADO: EstadoDelEjemplo = {
   activo: false,
   fase: 'foto',
+  explicacionCompartir: null,
   division: null,
   personas: null,
   seleccion: SIN_SELECCION,
@@ -98,7 +102,13 @@ export class EjemploLocal {
   /** Mueve la fase. Con el ejemplo apagado no hace nada: nadie lo prende moviendo una fase. */
   irA(fase: FaseEjemplo): void {
     if (!this.estado.activo || this.estado.fase === fase) return;
-    this.fijar({ ...this.estado, fase });
+    this.fijar({ ...this.estado, fase, explicacionCompartir: null });
+  }
+
+  /** Una explicación local, sólo mientras está en Compartir. Cerrar conserva el paso de la guía. */
+  explicarCompartir(explicacionCompartir: ExplicacionCompartir | null): void {
+    if (!this.estado.activo || this.estado.fase !== 'compartir' || this.estado.explicacionCompartir === explicacionCompartir) return;
+    this.fijar({ ...this.estado, explicacionCompartir });
   }
 
   /**
@@ -112,7 +122,7 @@ export class EjemploLocal {
       throw new Error('ejemplo_personas_invalidas');
     }
     this.fijar({
-      ...this.estado, fase: 'compartir', division, personas, seleccion: new Map(), armadaEn: ahora, guardadaEn: null,
+      ...this.estado, fase: 'compartir', explicacionCompartir: null, division, personas, seleccion: new Map(), armadaEn: ahora, guardadaEn: null,
     });
   }
 

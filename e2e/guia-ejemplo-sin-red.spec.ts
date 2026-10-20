@@ -23,7 +23,7 @@ import {
  *    única diferencia admitida es la tarjeta Tutorial oculta, después de «Terminar guía» (Q1). Controles: esa clave
  *    misma (localStorage) y una sonda (sessionStorage), en el mismo caso; el estado del mock, en el test de la mesa
  *    real.
- * 4. **Lo que se ve.** Sin link, sin invitar, sin propina, sin engranaje, sin «Cerrar mesa». Control: el test de la
+ * 4. **Lo que se ve.** D429: copiar, WhatsApp y amigos inventados explican; sin link, propina, engranaje ni «Cerrar mesa». Control: el test de la
  *    mesa real, donde todo eso aparece.
  *
  * 🔴 **Esto corre contra el mock, no contra el servidor.** En modo mock la app no hace HTTP a la API: la cuenta de la
@@ -60,14 +60,15 @@ async function sinEscrituras(page: Page, antes: Awaited<ReturnType<typeof escrit
   expect(despues.store).toBe(antes.store);
 }
 
-/** 2d · Compartir sin link, sin invitar y sin propina; la mesa es PA-1224. */
+/** 2d · D429 muestra acciones explicativas y amigos inventados; sin link ni propina. */
 async function compartirDelEjemplo(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
   await expect(page.locator('.share-code-txt')).toHaveText('PA-1224');
   expect(await fase(page)).toBe('compartir');
-  for (const nombre of ['Copiar link', 'Reintentar el mismo link']) {
-    await expect(page.getByRole('button', { name: nombre })).toHaveCount(0);
-  }
+  await expect(page.getByRole('button', { name: 'Copiar link', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'WhatsApp', exact: true })).toBeEnabled();
+  await expect(page.getByRole('region', { name: 'Amigos de ejemplo' }).getByRole('button', { name: 'Invitar', exact: true })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Reintentar el mismo link' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'WhatsApp' })).toHaveCount(0);
   await expect(page.getByText('No pudimos generar el link')).toHaveCount(0);

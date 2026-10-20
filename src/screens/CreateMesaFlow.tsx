@@ -87,6 +87,7 @@ import { useCapacidadViajes } from '../api/viajes';
 import { formatMXN } from '../utils/format';
 import { centsToString, sumCents } from '../utils/money';
 import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
+import { AccionesDeCompartirEjemplo, AmigosDeEjemplo } from '../ayuda/ejemplo/CompartirEjemplo';
 import { CODIGO_EJEMPLO, PLATOS_DE_EJEMPLO, RESTAURANTE_DE_EJEMPLO, TOTAL_DE_EJEMPLO_CENTS } from '../ayuda/ejemplo/fixtureEjemplo';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 import { nombreDePlato } from '../utils/nombreDePlato';
@@ -3326,8 +3327,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             {/* La corrección visual del 2026-08-24 fija «Copiar link» primero y
                 WhatsApp segundo. El orden del DOM conserva ese mismo orden de
                 foco por teclado; ambas superficies transportan el link completo. */}
-            {/* D367 · en el ejemplo no hay link que copiar ni mandar. */}
-            {!ejemplo && (
+            {/* D429 · el ejemplo muestra las mismas acciones, que sólo explican. */}
+            {ejemplo ? <AccionesDeCompartirEjemplo t={t} /> : (
             <div className="share-actions">
               <button
                 type="button"
@@ -3380,7 +3381,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </button>
             </div>
           )}
-          {!ejemplo && <InviteFriends code={code} />}
+          {ejemplo ? <AmigosDeEjemplo t={t} /> : <InviteFriends code={code} />}
         </div>
         {/* Barra completa sin posición activa. Hasta el 2026-08-13 el círculo NO
             llevaba flecha, y el motivo estaba escrito: "no significa avanzar un

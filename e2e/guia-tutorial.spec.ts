@@ -227,8 +227,9 @@ test.describe('D363 · el recorrido', () => {
     await capturar(page, 'd363-2c-dividir');
 
     await hastaCompartir(page);
-    // V · en el ejemplo no aparece el panel de invitar debajo de la burbuja.
-    await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar' })).toHaveCount(0);
+    // D429 · acciones explicativas y amigos inventados, sin montar el panel real.
+    await expect(page.getByRole('region', { name: 'Amigos de ejemplo' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Copiar link', exact: true })).toBeEnabled();
     await expect(burbuja(page, 'Aquí invitarás a tus amigos a sumarse a la mesa.').getByText('1 de 2')).toBeVisible();
     await geometria(page, 'compartir');
     await capturar(page, 'd363-2d-invitar');

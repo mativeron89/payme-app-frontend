@@ -73,7 +73,7 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
   useEffect(() => { setSubpaso(0); }, [ejemplo.fase]);
   // Antes de empezar, la fase es la de la foto: la 2a sobre Escanear, con el ejemplo todavía apagado.
   const fase = ejemplo.activo ? ejemplo.fase : 'foto';
-  const donde = { fase, pagina, param, subpaso, division: ejemplo.division };
+  const donde = { fase, pagina, param, subpaso, division: ejemplo.division, explicacionCompartir: ejemplo.explicacionCompartir };
   const paso = ejemplo.activo || !empezado ? pasoDeLaGuia(donde, t) : null;
   const clave = paso ? `${paso.id}:${paso.ancla}` : '';
   const [medida, setMedida] = useState<Medida>(inicial);
@@ -89,6 +89,11 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
     if (paso?.id === 'ticket') ejemploLocal.irA('dividir');
     else if (paso?.id === 'invitar') setSubpaso(1);
   }, [paso?.id]);
+
+  const cerrarBurbuja = useCallback(() => {
+    if (paso?.id === 'explicacion-compartir') ejemploLocal.explicarCompartir(null);
+    else onSalir();
+  }, [paso?.id, onSalir]);
 
   useLayoutEffect(() => {
     if (!paso) { setMedida(inicial); setDestino(null); return undefined; }
@@ -204,11 +209,11 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
     const escape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !activa || !paso || paso.id === 'ticket') return;
       e.stopPropagation();
-      if (paso.pie === 'terminar') onTerminar(); else onSalir();
+      if (paso.pie === 'terminar') onTerminar(); else cerrarBurbuja();
     };
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
-  }, [activa, paso, onSalir, onTerminar]);
+  }, [activa, paso, cerrarBurbuja, onTerminar]);
 
   if (!paso || !destino || !destino.isConnected) return null;
   // Una sola burbuja por paso: mientras no está a la vista (una ventana encima, el scroll, la medida) se dibuja
@@ -225,7 +230,7 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
         ancho={medida.ancho || window.innerWidth - 32}
         t={t}
         burbujaRef={burbuja}
-        onSalir={onSalir}
+        onSalir={cerrarBurbuja}
         onSiguiente={siguiente}
         onTerminar={onTerminar}
       />

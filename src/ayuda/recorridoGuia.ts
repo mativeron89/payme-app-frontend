@@ -1,6 +1,6 @@
 import type { PageId } from '../router';
 import type { ModoUI } from '../screens/divisionModo';
-import type { FaseEjemplo } from './ejemplo/estadoEjemplo';
+import type { ExplicacionCompartir, FaseEjemplo } from './ejemplo/estadoEjemplo';
 import { esCodigoDeEjemplo } from './ejemplo/fixtureEjemplo';
 
 /**
@@ -18,7 +18,7 @@ import { esCodigoDeEjemplo } from './ejemplo/fixtureEjemplo';
  */
 type T = (s: string, ...args: unknown[]) => string;
 
-export type IdDePaso = 'apertura' | 'camara' | 'ticket' | 'invitar' | 'continuar' | 'consumos' | 'final';
+export type IdDePaso = 'apertura' | 'camara' | 'ticket' | 'invitar' | 'explicacion-compartir' | 'continuar' | 'consumos' | 'final';
 
 export interface Paso {
   readonly id: IdDePaso;
@@ -54,6 +54,7 @@ export interface DondeEsta {
   /** 2d tiene dos subpasos en la misma pantalla (Q2 de V). */
   readonly subpaso: 0 | 1;
   readonly division: ModoUI | null;
+  readonly explicacionCompartir?: ExplicacionCompartir | null;
 }
 
 /** El paso que corresponde, o `null` (2c no tiene burbuja: los «?» son de la app). */
@@ -74,8 +75,18 @@ export function pasoDeLaGuia(d: DondeEsta, t: T): Paso | null {
       textos: [t('Este es el ticket de ejemplo.'), t('Con el tuyo, aquí corriges un plato o agregas uno que falte.')] };
   }
   if (d.fase === 'compartir' && d.pagina === 'scan') {
+    if (d.explicacionCompartir) {
+      const accion = d.explicacionCompartir;
+      return { ...base, id: 'explicacion-compartir', ancla: `ejemplo-${accion}`, lado: 'arriba',
+        textos: [accion === 'copiar'
+          ? t('En tu mesa, Copiar link guarda la invitación para que la pegues donde quieras. Aquí sólo es un ejemplo.')
+          : accion === 'whatsapp'
+            ? t('En tu mesa, WhatsApp abre la invitación para que elijas a quién mandarla. Aquí no se abre ni se envía nada.')
+            : t('En tu mesa, Invitar manda una invitación a ese amigo de PayMe. Aquí los amigos son de ejemplo y no se invita a nadie.')] };
+    }
     return d.subpaso === 0
-      ? { ...base, id: 'invitar', ancla: 'compartir', lado: 'abajo', pie: 'siguiente', contador: [1, 2],
+      // D429 · arriba del bloque: debajo tapaba los botones de los amigos de ejemplo.
+      ? { ...base, id: 'invitar', ancla: 'compartir', lado: 'arriba', pie: 'siguiente', contador: [1, 2],
         textos: [t('Aquí invitarás a tus amigos a sumarse a la mesa.')] }
       : { ...base, id: 'continuar', ancla: 'continuar', lado: 'arriba', senal: 'flecha', pie: 'contador', contador: [2, 2],
         textos: [t('Toca Continuar para elegir lo tuyo.')] };

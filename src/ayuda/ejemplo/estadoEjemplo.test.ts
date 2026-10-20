@@ -2,6 +2,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { EJEMPLO_APAGADO, EjemploLocal, mesaArmada, mesaDeEjemploEnInicio } from './estadoEjemplo';
 
 describe('D363 · el estado de la mesa de ejemplo (en memoria)', () => {
+  it('D429 · las explicaciones sólo abren en Compartir y se descartan al avanzar, salir o empezar de nuevo', () => {
+    const ejemplo = new EjemploLocal();
+    ejemplo.explicarCompartir('copiar');
+    expect(ejemplo.leer()).toBe(EJEMPLO_APAGADO);
+    ejemplo.empezar();
+    ejemplo.explicarCompartir('whatsapp');
+    expect(ejemplo.leer().explicacionCompartir).toBeNull();
+    ejemplo.armarMesa('consumo', 2, 1_000);
+    for (const accion of ['copiar', 'whatsapp', 'amigo-lucia', 'amigo-tomas', 'amigo-ana'] as const) {
+      const antes = ejemplo.leer();
+      ejemplo.explicarCompartir(accion);
+      expect(ejemplo.leer()).toEqual({ ...antes, explicacionCompartir: accion });
+      ejemplo.explicarCompartir(null);
+      expect(ejemplo.leer()).toEqual(antes);
+    }
+    ejemplo.explicarCompartir('amigo-lucia');
+    ejemplo.irA('mesa');
+    expect(ejemplo.leer().explicacionCompartir).toBeNull();
+    ejemplo.armarMesa('consumo', 2, 1_000);
+    ejemplo.explicarCompartir('copiar');
+    ejemplo.empezar();
+    expect(ejemplo.leer().explicacionCompartir).toBeNull();
+    ejemplo.armarMesa('consumo', 2, 1_000);
+    ejemplo.explicarCompartir('copiar');
+    ejemplo.descartar();
+    expect(ejemplo.leer()).toBe(EJEMPLO_APAGADO);
+  });
   it('nace apagado y empezar() lo prende en Escanear, sin mesa ni selección', () => {
     const ejemplo = new EjemploLocal();
     expect(ejemplo.leer()).toBe(EJEMPLO_APAGADO);

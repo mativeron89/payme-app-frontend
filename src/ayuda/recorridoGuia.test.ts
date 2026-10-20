@@ -33,7 +33,7 @@ describe('D363 · el paso sale de la fase del ejemplo y de la ruta', () => {
 
   it('2d · dos subpasos: la tarjeta de invitar con «1 de 2» y Siguiente; después la flecha a Continuar con «2 de 2»', () => {
     expect(pasoDeLaGuia(en({ fase: 'compartir', pagina: 'scan' }), t)).toMatchObject({
-      id: 'invitar', ancla: 'compartir', lado: 'abajo', senal: 'punta', pie: 'siguiente', contador: [1, 2],
+      id: 'invitar', ancla: 'compartir', lado: 'arriba', senal: 'punta', pie: 'siguiente', contador: [1, 2],
     });
     expect(pasoDeLaGuia(en({ fase: 'compartir', pagina: 'scan', subpaso: 1 }), t)).toMatchObject({
       id: 'continuar', ancla: 'continuar', senal: 'flecha', pie: 'contador', contador: [2, 2],
