@@ -79,7 +79,9 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
   // AF2 (2026-09-25): 20 → 21 por `NotificacionesScreen` (Configuración › Notificaciones).
   // D177 (2026-10-05): 21 → 20. El paso 1 de `CreateMesaFlow` dejó de montar
   // `AppHeaderFlow`: es la cámara a pantalla completa, sin cabecera.
-  it('los 20 montajes autenticados pasan userName y los tres pre-sesión siguen anónimos', () => {
+  // D387: Join conserva dos cabeceras anónimas; el éxito intermedio y su
+  // AppHeader compact se retiraron al abrir directamente los consumos.
+  it('los 20 montajes autenticados pasan userName y los dos pre-sesión siguen anónimos', () => {
     const authenticated = Object.entries(SCREEN_SOURCES)
       .filter(([path]) => !path.endsWith('/JoinMesaScreen.tsx'))
       .flatMap(([, source]) => headerCalls(source));
@@ -88,7 +90,7 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
     expect(authenticated).toHaveLength(20);
     expect(authenticated.every((call) => /\buserName=/.test(call))).toBe(true);
     expect(authenticated.some((call) => /\bpaymeId=/.test(call))).toBe(false);
-    expect(preSession).toHaveLength(3);
+    expect(preSession).toHaveLength(2);
     expect(preSession.every((call) => !/\b(?:userName|paymeId)=/.test(call))).toBe(true);
   });
 });
