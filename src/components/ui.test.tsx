@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reservarDesbordeDelIngreso } from './ui';
+import { crearAnclajeDelIngreso, reservarDesbordeDelIngreso } from './ui';
 
 /** Geometría sintética: prueba cálculo/ciclo/limpieza; el layout y el
  * hit-test reales corresponden a Playwright en el CI oficial. */
@@ -82,5 +82,46 @@ describe('P3-DIS-01 · reserva del desborde antes de la primera acción', () => 
     s.reserva.medir(145);
     expect(s.altura).toBe(0);
     expect(s.activa).toBe(false);
+  });
+});
+
+describe('P3-DELTA-02 · anclaje vigente antes de medir', () => {
+  it('invalida antes de leer un rect retirado y ninguna entrega posterior lo revive', () => {
+    let conectada = true;
+    let lecturas = 0;
+    let invalidaciones = 0;
+    const posiciones: number[] = [];
+    const fila = { get isConnected() { return conectada; }, getBoundingClientRect() { lecturas += 1; return { bottom: 133 }; } } as unknown as Element;
+    const pantalla = { get isConnected() { return conectada; } } as unknown as Element;
+    const anclaje = crearAnclajeDelIngreso(fila, pantalla, (p) => posiciones.push(p), () => { invalidaciones += 1; });
+    expect(anclaje.medir()).toBe(true);
+    expect(posiciones).toEqual([145]);
+    conectada = false;
+    expect(anclaje.medir()).toBe(false);
+    expect(invalidaciones).toBe(1);
+    expect(lecturas).toBe(1);
+    conectada = true;
+    anclaje.medir();
+    expect(posiciones).toEqual([145]);
+    expect(invalidaciones).toBe(1);
+  });
+
+  it('tras cleanup, callbacks viejos no colocan ni invalidan un aviso nuevo', () => {
+    let lecturas = 0;
+    let invalidaciones = 0;
+    const nodo = { isConnected: true, getBoundingClientRect() { lecturas += 1; return { bottom: 133 }; } } as unknown as Element;
+    const anclaje = crearAnclajeDelIngreso(nodo, nodo, () => { throw new Error('colocación tardía'); }, () => { invalidaciones += 1; });
+    anclaje.limpiar();
+    expect(anclaje.medir()).toBe(false);
+    expect(lecturas).toBe(0);
+    expect(invalidaciones).toBe(0);
+  });
+
+  it('sin pantalla asociada invalida, aunque la fila siga conectada', () => {
+    let invalidaciones = 0;
+    const nodo = { isConnected: true, getBoundingClientRect() { throw new Error('no medir sin destino'); } } as unknown as Element;
+    const anclaje = crearAnclajeDelIngreso(nodo, null, () => { throw new Error('no colocar'); }, () => { invalidaciones += 1; });
+    expect(anclaje.medir()).toBe(false);
+    expect(invalidaciones).toBe(1);
   });
 });

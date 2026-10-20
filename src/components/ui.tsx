@@ -110,6 +110,25 @@ export function reservarDesbordeDelIngreso(contenedor: HTMLElement, aviso: HTMLE
   };
 }
 
+/** Una entrega tardía no puede medir un destino retirado ni modificar el
+ * aviso que lo reemplazó. La invalidación ocurre antes de leer el rect. */
+export function crearAnclajeDelIngreso(fila: Element | null, pantalla: Element | null, colocar: (arriba: number) => void, invalidar: () => void) {
+  let vigente = true;
+  return {
+    medir() {
+      if (!vigente) return false;
+      if (!fila?.isConnected || !pantalla?.isConnected) {
+        vigente = false;
+        invalidar();
+        return false;
+      }
+      colocar(fila.getBoundingClientRect().bottom + 12);
+      return true;
+    },
+    limpiar() { vigente = false; },
+  };
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useIdioma();
   const [msg, setMsg] = useState<string | null>(null);
@@ -129,6 +148,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     salida.current = null;
   }, []);
   useEffect(() => cancelarTimers, [cancelarTimers]);
+  const invalidarIngreso = useCallback(() => {
+    cancelarTimers();
+    gesto.current = null;
+    omitirClick.current = false;
+    setMsg(null);
+    setArriba(null);
+    setIngresoAMesa(false);
+    setSobreLaBarra(false);
+    setSaliendo(false);
+  }, [cancelarTimers]);
   const cerrarIngreso = useCallback(() => {
     cancelarTimers();
     gesto.current = null;
@@ -156,12 +185,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const pantalla = fila?.closest('.screen');
     const contenedor = pantalla?.querySelector<HTMLElement>('.mesa-selection-scroll');
     const reserva = contenedor && avisoRef.current ? reservarDesbordeDelIngreso(contenedor, avisoRef.current) : null;
-    const medir = () => {
-      const posicion = fila ? fila.getBoundingClientRect().bottom + 12 : null;
+    const anclaje = crearAnclajeDelIngreso(fila, pantalla ?? null, (posicion) => {
       setArriba(posicion);
-      if (posicion !== null) reserva?.medir(posicion);
-    };
-    medir();
+      reserva?.medir(posicion);
+    }, () => {
+      reserva?.limpiar();
+      invalidarIngreso();
+    });
+    const medir = anclaje.medir;
+    if (!medir()) return anclaje.limpiar;
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
     if (fila) {
       // El inset aumenta padding y alto a la vez: el content-box puede ser
@@ -174,19 +206,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       if (elemento) observer?.observe(elemento, { box: 'border-box' });
     }
     // Cambiar de destino desmonta el detalle sin desmontar el provider.
-    // La reserva pertenece a ese nodo y nunca se traslada a otra pantalla.
-    const cambios = reserva && pantalla?.parentElement ? new MutationObserver(medir) : null;
+    // El aviso pertenece a ese nodo, también cuando no necesita reserva.
+    const cambios = pantalla?.parentElement ? new MutationObserver(medir) : null;
     if (cambios && pantalla?.parentElement) cambios.observe(pantalla.parentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener('resize', medir);
     window.addEventListener('scroll', medir, { capture: true, passive: true });
     return () => {
+      anclaje.limpiar();
       observer?.disconnect();
       cambios?.disconnect();
       reserva?.limpiar();
       window.removeEventListener('resize', medir);
       window.removeEventListener('scroll', medir, true);
     };
-  }, [msg, ingresoAMesa]);
+  }, [msg, ingresoAMesa, invalidarIngreso]);
   const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : '', ingresoAMesa ? 'toast--ingreso-mesa' : '', saliendo ? 'toast--saliendo' : ''].filter(Boolean).join(' ');
   return (
     <ToastContext.Provider value={show}>

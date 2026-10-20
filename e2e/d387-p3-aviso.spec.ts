@@ -69,7 +69,7 @@ test('D387 · ToastProvider real: 3000/120, defaults 2400, timer/variante/gesto 
     const { ToastProvider, useToast } = await import(/* @vite-ignore */ uiPath) as typeof import('../src/components/ui');
     function Probe() {
       (window as unknown as { __p3Toast: ReturnType<typeof useToast> }).__p3Toast = useToast();
-      return React.createElement('div', { className: 'hdr-flow', style: { position: 'fixed', top: 0, left: 0, right: 0 } }, React.createElement('div', { className: 'hdr-row-2' }, 'Volver'));
+      return React.createElement('div', { className: 'screen' }, React.createElement('div', { className: 'hdr-flow', style: { position: 'fixed', top: 0, left: 0, right: 0 } }, React.createElement('div', { className: 'hdr-row-2' }, 'Volver')));
     }
     const host = document.createElement('div');
     host.id = 'p3-probe';
@@ -233,6 +233,83 @@ test('D387 · abandonar mientras llega el nombre descarta la respuesta, también
   await expect(aviso(page)).toHaveText('');
 });
 
+test('D387 · navegar con aviso activo retira posición, reserva y timers; callbacks tardíos no lo reviven', async ({ page }, testInfo) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 375, height: 667 });
+  await ingresar(page);
+  const mesa = await abrirMesaConLink(page, { modo: 'consumo' });
+  await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Scan', exact: true })).toBeVisible();
+  await instrumentar(page, 'normal');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(async () => {
+    const ruta = '/src/api/mock/store.ts';
+    const { state, persist } = await import(/* @vite-ignore */ ruta) as { state: { mesas: Array<{ restaurant: { name: string } }> }; persist: () => void };
+    state.mesas.forEach((m) => { m.restaurant.name = 'Restaurante de prueba Los Sabores del Parque y la Plaza Central'; });
+    persist();
+    // Conservar la entrega REAL que observó el toast para repetirla después
+    // del cleanup. Otros observers del recorrido mantienen sus callbacks.
+    const w = window as unknown as { __p3EntregasTardias: Array<() => void> };
+    w.__p3EntregasTardias = [];
+    const Original = window.ResizeObserver;
+    window.ResizeObserver = class extends Original {
+      constructor(callback: ResizeObserverCallback) {
+        super((entries, observer) => {
+          if (entries.some((e) => e.target.matches('.toast[role="status"]'))) w.__p3EntregasTardias.push(() => callback(entries, observer));
+          callback(entries, observer);
+        });
+      }
+    };
+  });
+  await alLink(page, mesa);
+  await expect(aviso(page)).toContainText('You joined ');
+  const visibleDesde = await page.evaluate(() => Date.now());
+  await page.addStyleTag({ content: '.toast-ingreso-contenido { font-size:24px; line-height:1.4 } .hdr-flow { padding-top:39px; height:179px }' });
+  await expect.poll(() => page.locator('.toast-ingreso-reserva').evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(0);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+  await expect(aviso(page)).toBeVisible();
+  await expect(aviso(page)).not.toHaveClass(/toast--saliendo/);
+  const antes = await page.evaluate((visibleDesde) => {
+    const espacio = document.querySelector<HTMLElement>('.toast-ingreso-reserva')!;
+    const contenedor = document.querySelector<HTMLElement>('.mesa-selection-scroll')!;
+    const aviso = document.querySelector<HTMLElement>('.toast[role="status"]')!;
+    (window as unknown as { __p3Destino: { espacio: HTMLElement; contenedor: HTMLElement; aviso: HTMLElement } }).__p3Destino = { espacio, contenedor, aviso };
+    return { reserva: espacio.getBoundingClientRect().height, top: aviso.style.top, mensaje: aviso.textContent, msDesdeVisible: Date.now() - visibleDesde, saliendo: aviso.classList.contains('toast--saliendo'), entregas: (window as unknown as { __p3EntregasTardias: Array<() => void> }).__p3EntregasTardias.length };
+  }, visibleDesde);
+  expect(antes.reserva).toBeGreaterThan(0);
+  expect(antes.msDesdeVisible).toBeLessThan(3000);
+  expect(antes.entregas).toBeGreaterThan(0);
+  await page.evaluate(async () => {
+    const ruta = '/src/router.ts';
+    const { navigate } = await import(/* @vite-ignore */ ruta) as { navigate: (page: string) => void };
+    navigate('home');
+  });
+  await expect(page.getByRole('button', { name: 'Scan', exact: true })).toBeVisible();
+  await expect(aviso(page)).toBeHidden();
+  await expect(aviso(page)).toHaveText('');
+  const leerRetirada = () => page.evaluate(() => {
+    const { espacio, contenedor, aviso } = (window as unknown as { __p3Destino: { espacio: HTMLElement; contenedor: HTMLElement; aviso: HTMLElement } }).__p3Destino;
+    return { reserva: espacio.getBoundingClientRect().height, alturaInline: espacio.style.height, atributoReserva: contenedor.hasAttribute('data-ingreso-con-reserva'), mensaje: aviso.textContent, top: aviso.style.top, variante: aviso.classList.contains('toast--ingreso-mesa'), saliendo: aviso.classList.contains('toast--saliendo'), sobreBarra: aviso.classList.contains('toast--sobre-barra'), mismoStatus: aviso === document.querySelector('.toast[role="status"]') };
+  });
+  const retirada = await leerRetirada();
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('scroll'));
+    (window as unknown as { __p3EntregasTardias: Array<() => void> }).__p3EntregasTardias.forEach((entregar) => entregar());
+  });
+  await page.clock.runFor(5000); // ni los plazos viejos ni las entregas reviven P-3
+  const despues = await leerRetirada();
+  const evidencia = { antes, retirada, despues, relojPausadoAlNavegar: true, sinDescarte: true, transcurridosDespues: 5000 };
+  await testInfo.attach('geometria-navegacion-activa', { body: JSON.stringify(evidencia, null, 2), contentType: 'application/json' });
+  console.log('P3_NAVEGACION_ACTIVA_JSON ' + JSON.stringify(evidencia));
+  const limpio = { reserva: 0, alturaInline: '', atributoReserva: false, mensaje: '', top: '', variante: false, saliendo: false, sobreBarra: false, mismoStatus: true };
+  expect(retirada).toEqual(limpio);
+  expect(despues).toEqual(limpio);
+  await expect(aviso(page)).toBeHidden();
+  await expect(page.locator('.toast-ingreso-reserva, [data-ingreso-con-reserva]')).toHaveCount(0);
+});
+
 for (const [idioma, width, height] of [['es', 390, 844], ['en', 375, 667]] as const) {
   test(`D387 · geometría ${idioma} ${width}×${height}, nombre largo, descarte y región persistente`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
@@ -272,10 +349,10 @@ for (const [idioma, width, height] of [['es', 390, 844], ['en', 375, 667]] as co
       const r = boton.getBoundingClientRect();
       const circulo = boton.querySelector('.qc-circulo')!.getBoundingClientRect();
       const puntos = [
-        { x: r.x + 3, y: r.y + 3 },
         { x: r.x + r.width / 2, y: r.y + 3 },
         { x: circulo.x + circulo.width / 2, y: circulo.y + circulo.height / 2 },
-        { x: r.x + r.width - 3, y: r.bottom - 3 },
+        { x: r.x + r.width / 2, y: r.y + r.height / 2 },
+        { x: r.right - 3, y: r.y + r.height / 2 },
       ].map((p) => ({ ...p, alcanzaBoton: boton.contains(document.elementFromPoint(p.x, p.y)) }));
       return { aviso: rect('.toast'), volver: rect('.hdr-row-2'), logo: rect('.hdr-row'), barra: rect('.appbar'), listo: rect('.appbar-fab'), primeraFila: rect('.qc-lista .qc-fila'), circulo: rect('.qc-lista .qc-fila .qc-circulo'), primeraEsBoton: boton.tagName === 'BUTTON', puntos, reserva: rect('.toast-ingreso-reserva').height, viewport: innerWidth, animation: getComputedStyle(document.querySelector('.toast')!).animationName };
     });
