@@ -139,6 +139,13 @@ async function confirmar(page: Page): Promise<void> {
   await hoja(page).getByRole('button', { name: 'Eliminar', exact: true }).click();
 }
 
+/** Deja pasar el frame de restauración y observa el siguiente, sin una espera por tiempo. */
+async function completarCicloDeFoco(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolver) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolver()));
+  }));
+}
+
 test.afterEach(async ({ page }) => {
   await page.evaluate(() => { (window as VentanaD388).__d388?.restaurar(); });
 });
@@ -242,10 +249,11 @@ for (const [seam, aviso, sigue] of [
   ['cerrado', 'El viaje ya no está abierto', true],
   ['prohibido', 'Sólo pueden eliminarlo quien lo cargó o quien lo pagó.', true],
 ] as const) {
-  test(`🔴 D256 · el dueño contesta «${seam}»: «${aviso}», y la lista se vuelve a pedir`, async ({ page }) => {
+  test(`🔴 D256 · el dueño contesta «${seam}»: «${aviso}», y la lista se vuelve a pedir`, async ({ page }, testInfo) => {
     await conViajes(page, { 'payme.app.mock.viajes.eliminar.v1': seam });
     await aConsumos(page);
     const bar = consumo(page, 'Bar La Ola');
+    const pedidosAntes = await page.evaluate(() => (window as VentanaD388).__d388!.pedidos.length);
     await deslizar(page, bar);
     await bar.getByRole('button', { name: 'Eliminar Bar La Ola', exact: true }).click();
     expect(await llamadas(page)).toEqual([]);
@@ -256,6 +264,19 @@ for (const [seam, aviso, sigue] of [
     await expect(consumo(page, 'Bar La Ola')).toHaveCount(sigue ? 1 : 0);
     await expect(page.locator('.deslizable--abierta')).toHaveCount(0);
     expect(await llamadas(page)).toHaveLength(1);
+    await expect.poll(() => page.evaluate(() => (window as VentanaD388).__d388!.pedidos.length)).toBeGreaterThan(pedidosAntes);
+    await completarCicloDeFoco(page);
+    await expect(page.locator('.deslizable--abierta')).toHaveCount(0);
+    const balance = page.locator('.screen.has-appbar[tabindex="-1"]');
+    await expect(balance).toBeFocused();
+    console.log('PAYME_D388_FOCO_NEGATIVO_V1 ' + JSON.stringify({
+      titulo: testInfo.title, proyecto: testInfo.project.name, retry: testInfo.retry, costura: seam,
+      filas_abiertas: await page.locator('.deslizable--abierta').count(),
+      foco_balance: await balance.evaluate((el) => el === document.activeElement),
+      llamadas_fachada: (await llamadas(page)).length,
+      pedidos_antes: pedidosAntes,
+      pedidos_despues: await page.evaluate(() => (window as VentanaD388).__d388!.pedidos.length),
+    }));
   });
 }
 
@@ -386,13 +407,22 @@ test('D388 · una respuesta pendiente no permite otra pregunta o envío', async 
   await conViajes(page); await aConsumos(page);
   await page.evaluate(() => { (window as VentanaD388).__d388!.demorar = true; });
   await preguntarBar(page); await confirmar(page);
+  await expect(hoja(page)).toHaveCount(0);
+  await completarCicloDeFoco(page);
+  await expect(page.locator('.screen.has-appbar[tabindex="-1"]')).toBeFocused();
+  await expect(page.locator('.deslizable--abierta')).toHaveCount(0);
+  expect(await llamadas(page)).toHaveLength(1);
   const boton = consumo(page, 'Bar La Ola').getByRole('button', { name: 'Eliminar Bar La Ola', exact: true });
   await boton.focus(); await boton.click();
   await expect(hoja(page)).toHaveCount(0);
   expect(await llamadas(page)).toHaveLength(1);
+  const otraAccion = page.getByRole('tab', { name: 'Miembros', exact: true });
+  await otraAccion.focus();
   await page.evaluate(() => { (window as VentanaD388).__d388!.resolver!(); });
   await expect(page.getByText('Ticket eliminado', { exact: true })).toBeVisible();
   expect(await llamadas(page)).toHaveLength(1);
+  await completarCicloDeFoco(page);
+  await expect(otraAccion).toBeFocused();
 });
 
 for (const cambio of ['retirado', 'permiso', 'cerrado'] as const) {
@@ -441,6 +471,8 @@ for (const resultado of ['éxito', 'rechazo'] as const) {
       dispatchEvent(new Event('d388-contexto'));
     });
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    const focoNuevo = page.getByRole('tab', { name: 'Miembros', exact: true });
+    await focoNuevo.focus();
     await page.evaluate((r) => {
       const i = (window as VentanaD388).__d388!;
       if (r === 'éxito') i.resolver!(); else i.rechazar!();
@@ -449,6 +481,8 @@ for (const resultado of ['éxito', 'rechazo'] as const) {
     expect(await llamadas(page)).toHaveLength(1);
     expect(await efectos(page)).toEqual({ mostrar: 0, refrescar: 0, noDisponible: 0 });
     await expect(page.locator('[role="status"]').filter({ hasText: /Ticket eliminado|El viaje ya no está abierto|No pudimos eliminarlo/ })).toHaveCount(0);
+    await completarCicloDeFoco(page);
+    await expect(focoNuevo).toBeFocused();
   });
 }
 
@@ -465,11 +499,15 @@ test('D388 · una respuesta del viaje anterior no actualiza el nuevo', async ({ 
   await preguntarBar(page); await confirmar(page);
   await ir(page, '/viaje-balance/d3880000-0000-4000-8000-000000000004');
   await expect(hoja(page)).toHaveCount(0);
+  const focoNuevo = page.getByRole('tab', { name: 'Miembros', exact: true });
+  await focoNuevo.focus();
   await page.evaluate(() => { (window as VentanaD388).__d388!.resolver!(); });
   await expect.poll(() => page.evaluate(() => (window as VentanaD388).__d388!.terminadas)).toBe(1);
   expect(await llamadas(page)).toHaveLength(1);
   expect(await efectos(page)).toEqual({ mostrar: 0, refrescar: 0, noDisponible: 0 });
   await expect(page.getByText('Ticket eliminado', { exact: true })).toHaveCount(0);
+  await completarCicloDeFoco(page);
+  await expect(focoNuevo).toBeFocused();
 });
 
 test('D388 · timeout sin retry automático; otro intento requiere confirmación humana', async ({ page }) => {
@@ -488,7 +526,7 @@ test('D388 · timeout sin retry automático; otro intento requiere confirmación
 });
 
 for (const [idioma, ancho] of [['es', 320], ['en', 375]] as const) {
-  test(`D388 · hoja ${idioma}${ancho}, teclado/inert y texto ampliado sin solapes`, async ({ page }) => {
+  test(`D388 · hoja ${idioma}${ancho}, teclado/inert y texto ampliado sin solapes`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: ancho, height: 667 });
     await conViajes(page);
     if (idioma === 'en') {
@@ -508,23 +546,42 @@ for (const [idioma, ancho] of [['es', 320], ['en', 375]] as const) {
     const cancelar = dialogo.getByRole('button', { name: idioma === 'es' ? 'Cancelar' : 'Cancel', exact: true });
     const eliminar = dialogo.getByRole('button', { name: idioma === 'es' ? 'Eliminar' : 'Remove', exact: true });
     await expect(cancelar).toBeFocused();
+    const focoInicialCancelar = await cancelar.evaluate((el) => el === document.activeElement);
     await expect(page.locator('.app')).toHaveAttribute('inert', '');
+    const atributoInert = await page.locator('.app').getAttribute('inert');
     await page.keyboard.press('Shift+Tab'); await expect(eliminar).toBeFocused();
+    const focoShiftTabEliminar = await eliminar.evaluate((el) => el === document.activeElement);
     await page.keyboard.press('Tab'); await expect(cancelar).toBeFocused();
+    const focoTabCancelar = await cancelar.evaluate((el) => el === document.activeElement);
+    const fuentesAntes = await dialogo.locator('h2, button').evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
     // Doble tamaño de texto de la hoja; no se presenta como zoom físico o safe-area real de iPhone.
     await dialogo.locator('h2, button').evaluateAll((els) => {
       for (const el of els) (el as HTMLElement).style.fontSize = `${parseFloat(getComputedStyle(el).fontSize) * 2}px`;
     });
+    const fuentesDespues = await dialogo.locator('h2, button').evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
     const c = await cancelar.boundingBox(); const e = await eliminar.boundingBox();
     expect(c).not.toBeNull(); expect(e).not.toBeNull();
     expect(c!.y + c!.height).toBeLessThanOrEqual(e!.y);
     await expect(cancelar).toBeInViewport({ ratio: 1 });
     await expect(eliminar).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const horizontal = await page.evaluate(() => ({ scroll_width: document.documentElement.scrollWidth, inner_width: innerWidth }));
     if (process.env.PAYME_D388_CAPTURAS) await page.screenshot({ path: `${process.env.PAYME_D388_CAPTURAS}/d388-${idioma}.png` });
     await page.keyboard.press('Escape');
     await expect(dialogo).toHaveCount(0);
     await expect(boton).toBeFocused();
     expect(await llamadas(page)).toEqual([]);
+    const viewport = page.viewportSize();
+    expect(viewport).toEqual({ width: ancho, height: 667 });
+    console.log('PAYME_D388_GEOMETRIA_V1 ' + JSON.stringify({
+      titulo: testInfo.title, idioma, viewport, proyecto: testInfo.project.name, retry: testInfo.retry,
+      cancelar: c, eliminar: e, horizontal,
+      foco_inicial_cancelar: focoInicialCancelar, inert: atributoInert,
+      foco_shift_tab_eliminar: focoShiftTabEliminar, foco_tab_cancelar: focoTabCancelar,
+      fuentes_antes_px: fuentesAntes, fuentes_despues_px: fuentesDespues,
+      dialogos_despues_escape: await dialogo.count(),
+      foco_disparador_despues_escape: await boton.evaluate((el) => el === document.activeElement),
+      llamadas_fachada: (await llamadas(page)).length,
+    }));
   });
 }

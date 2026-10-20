@@ -107,7 +107,8 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
     return a.carga.viaje.tickets.find((tk) => tk.id === s.ticketId && tk.puede_eliminar);
   }
 
-  function devolverFoco(s: SeleccionParaEliminar): void {
+  function devolverFoco(s: SeleccionParaEliminar, destino: 'disparador' | 'balance'): void {
+    if (!mismoContexto(s) || actual.current.opcion !== 'consumos' || seleccion.current) return;
     if (cuadroDeFoco.current !== null) cancelAnimationFrame(cuadroDeFoco.current);
     cuadroDeFoco.current = requestAnimationFrame(() => {
       cuadroDeFoco.current = null;
@@ -115,9 +116,11 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
         || document.querySelector<HTMLElement>('.app')?.inert) return;
       // No quitarle foco a una interacción posterior mientras respondía el dueño.
       const activo = document.activeElement;
-      if (activo !== document.body && activo !== s.disparador && activo !== balance.current) return;
+      if (activo !== document.body && activo !== balance.current
+        && (destino !== 'disparador' || activo !== s.disparador)) return;
       const boton = s.disparador;
-      if (ticketVigente(s) && boton?.isConnected && !boton.disabled && boton.getClientRects().length > 0) {
+      if (destino === 'disparador' && ticketVigente(s)
+        && boton?.isConnected && !boton.disabled && boton.getClientRects().length > 0) {
         boton.focus({ preventScroll: true });
       } else {
         balance.current?.focus({ preventScroll: true });
@@ -125,11 +128,15 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
     });
   }
 
-  function descartar(s: SeleccionParaEliminar): void {
-    if (seleccion.current !== s) return;
+  function cerrarPregunta(s: SeleccionParaEliminar): boolean {
+    if (seleccion.current !== s) return false;
     seleccion.current = null;
     setPregunta(null);
-    devolverFoco(s);
+    return true;
+  }
+
+  function descartar(s: SeleccionParaEliminar): void {
+    if (cerrarPregunta(s)) devolverFoco(s, 'disparador');
   }
 
   useEffect(() => {
@@ -151,7 +158,9 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
     if (seleccion.current !== s || eliminando.current) return;
     const tk = ticketVigente(s);
     // Consumir antes del primer await: otro Enter/toque/callback encolado no reenvía.
-    descartar(s);
+    if (!cerrarPregunta(s)) return;
+    // Eliminar abre la fila al recibir foco; confirmar vuelve al Balance, también mientras espera.
+    devolverFoco(s, 'balance');
     if (!tk) return;
     eliminando.current = true;
     setAbierta(null);
@@ -160,7 +169,6 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
       if (!mismoContexto(s)) return;
       mostrar(v);
       toast(tk.origen === 'manual' ? t('Gasto eliminado') : t('Ticket eliminado'), { sobreLaBarra: true });
-      devolverFoco(s);
     } catch (err) {
       if (!mismoContexto(s)) return;
       const e = errorAlEliminar(err);
@@ -179,6 +187,7 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
       );
     } finally {
       eliminando.current = false;
+      devolverFoco(s, 'balance');
     }
   }
 
