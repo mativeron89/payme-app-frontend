@@ -20,7 +20,7 @@ import { pisoDe, type ModoUI } from '../../screens/divisionModo';
 
 /** Por dónde va la persona: Escanear, el ticket, ¿Cómo dividen?, Compartir, Tu mesa y el final en Inicio. */
 export type FaseEjemplo = 'foto' | 'ticket' | 'dividir' | 'compartir' | 'mesa' | 'listo';
-export type ExplicacionCompartir = 'copiar' | 'whatsapp' | 'amigo-lucia' | 'amigo-tomas' | 'amigo-ana';
+export type ExplicacionCompartir = 'copiar' | 'whatsapp' | 'amigo-lucia' | 'amigo-diego' | 'amigo-ana';
 
 export interface EstadoDelEjemplo {
   readonly activo: boolean;

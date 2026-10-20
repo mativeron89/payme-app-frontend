@@ -20,7 +20,7 @@ export const CODIGO_EJEMPLO = 'PA-1224';
 /** D429 · personas inventadas; no son cuentas, ids de usuario ni fotos de la sesión. */
 export const AMIGOS_DE_EJEMPLO = [
   { id: 'amigo-lucia', nombre: 'Lucía Sol', iniciales: 'LS' },
-  { id: 'amigo-tomas', nombre: 'Tomás Luna', iniciales: 'TL' },
+  { id: 'amigo-diego', nombre: 'Diego Luna', iniciales: 'DL' },
   { id: 'amigo-ana', nombre: 'Ana Ríos', iniciales: 'AR' },
 ] as const;
 

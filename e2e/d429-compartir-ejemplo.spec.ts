@@ -33,11 +33,11 @@ test('D429 · copiar, WhatsApp y los amigos sólo explican en dos tamaños de te
     await page.setViewportSize(viewport);
     const amigos = page.getByRole('region', { name: 'Amigos de ejemplo' });
     await expect(amigos.getByRole('button', { name: 'Invitar', exact: true })).toHaveCount(3);
-    for (const nombre of ['Lucía Sol', 'Tomás Luna', 'Ana Ríos']) await expect(amigos.getByText(nombre, { exact: true })).toBeVisible();
+    for (const nombre of ['Lucía Sol', 'Diego Luna', 'Ana Ríos']) await expect(amigos.getByText(nombre, { exact: true })).toBeVisible();
     const acciones = [
       { boton: page.getByRole('button', { name: 'Copiar link', exact: true }), texto: /^En tu mesa, Copiar link/, ancla: 'ejemplo-copiar' },
       { boton: page.getByRole('button', { name: 'WhatsApp', exact: true }), texto: /^En tu mesa, WhatsApp/, ancla: 'ejemplo-whatsapp' },
-      ...['amigo-lucia', 'amigo-tomas', 'amigo-ana'].map((id) => ({
+      ...['amigo-lucia', 'amigo-diego', 'amigo-ana'].map((id) => ({
         boton: page.locator(`[data-guia="ejemplo-${id}"]`), texto: /^En tu mesa, Invitar/, ancla: `ejemplo-${id}`,
       })),
     ];

@@ -5,6 +5,7 @@
 - El ejemplo muestra Copiar link, WhatsApp y tres amigos inventados con el aspecto de las acciones y filas reales. Al tocarlos, la burbuja del tutorial explica qué hacen en una mesa real; la ✕ o Escape vuelve al mismo paso.
 - No copia, no abre links ni aplicaciones, no invita ni consulta contactos, grupos o fotos. Las explicaciones y los amigos viven sólo en el ejemplo y se descartan al salir. La rama de mesa real no cambia.
 - Pruebas focales del estado, controles, aislamiento de imports, red/escrituras en cero y control positivo de mesa real. CI completo oficial en el PR (D168). Textos ES sujetos al CEO y EN a Diseño antes del GREEN; D63 queda pendiente de la prueba de Mati.
+- El primer CI rechazó «Tomás», nombre inventado, como voseo. Se cambió a «Diego Luna» sin modificar la guarda de español mexicano. Las capturas locales previas conservan el nombre anterior; el CI del commit sucesor valida el nombre final.
 
 # 0.255.1 · 2026-10-19
 

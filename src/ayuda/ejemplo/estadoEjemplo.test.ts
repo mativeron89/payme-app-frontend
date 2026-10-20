@@ -10,7 +10,7 @@ describe('D363 · el estado de la mesa de ejemplo (en memoria)', () => {
     ejemplo.explicarCompartir('whatsapp');
     expect(ejemplo.leer().explicacionCompartir).toBeNull();
     ejemplo.armarMesa('consumo', 2, 1_000);
-    for (const accion of ['copiar', 'whatsapp', 'amigo-lucia', 'amigo-tomas', 'amigo-ana'] as const) {
+    for (const accion of ['copiar', 'whatsapp', 'amigo-lucia', 'amigo-diego', 'amigo-ana'] as const) {
       const antes = ejemplo.leer();
       ejemplo.explicarCompartir(accion);
       expect(ejemplo.leer()).toEqual({ ...antes, explicacionCompartir: accion });
