@@ -1,3 +1,10 @@
+## 0.257.1 · 2026-10-20 (D431 · fixture de Viajes)
+
+- La fixture de «dos viajes abiertos» invalida la memoria del mock inmediatamente después de editar su storage, en el mismo turno. Los casos originales a 375/390 conservan sus dos botones, geometría, hit targets y toque real hacia Tulum; no cambia producto.
+- Dos controles independientes a 390 usan la fachada real: la sonda de edición antigua observa la persistencia sin exigir conservar un defecto; el positivo usa la misma fixture atómica y exige persistencia, botones y URL. Edición, beforeCall, llamada real y medición inmediata no tienen await/import ni vuelta a Node entre sí.
+- Recibos acotados por identidad/intento para cotejo del CEO, después de assertions y conciliación de la promesa propia, con hash real del spec. Configuración, retries, timeouts, workflows, dependencias y los 14 casos originales se conservan. La causa exacta del fallo histórico 39345584494 sigue INCONCLUSA, sin trace recuperado ni mutación textual ejecutada.
+- Candidata estática: sin pruebas locales ejecutadas. Validación pendiente en CI oficial completo del candidato exacto; esta entrada no declara PASS, GREEN, publicación o cierre D63.
+
 ## 0.257.0 · 2026-10-20 (D388 / D431)
 
 - Balance › Consumos pide «¿Eliminar?» antes de borrar un ticket o gasto individual, también dentro de un lugar con varias visitas. Cancelar recibe foco inicial; confirmar conserva la operación y la cuenta calculada por el dueño.

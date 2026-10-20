@@ -1,4 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import type { DetalleViaje } from '../src/api/viajes';
 import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 
 /**
@@ -16,6 +19,137 @@ import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 const CANCUN = 'd1000000-0000-4000-8000-000000000001';
 const TULUM = 'd1000000-0000-4000-8000-0000000000f1';
 const ESTADO = 'payme.app.mock.viajes.estado.v1';
+
+type ModoDeFixture = 'atomic' | 'legacy-probe';
+interface FotoDeFixture {
+  total: number;
+  cancun: number;
+  tulum: number;
+  cancunSemilla: boolean;
+  tulumClonado: boolean;
+}
+interface TestigoDeDetalle {
+  id: string;
+  nombre: string;
+  estado: string;
+  miembros: number;
+  tickets: number;
+  transferencias: number;
+}
+interface MedidaDeLectura {
+  modo: ModoDeFixture;
+  seed: FotoDeFixture;
+  afterWarmup: FotoDeFixture;
+  afterEdit: FotoDeFixture;
+  beforeCall: FotoDeFixture;
+  immediatelyAfterCall: FotoDeFixture;
+  afterResolve: FotoDeFixture;
+  warmup: TestigoDeDetalle;
+  result: TestigoDeDetalle;
+  ownCalls: { warmup: number; probe: number };
+  pendingProbeSettled: true;
+}
+
+/**
+ * D431 · sólo esta fixture: el mock retiene otra copia del JSON en memoria. Una lectura posterior puede guardarla
+ * encima de la edición externa antes del reload. Importar ANTES de editar permite setItem+olvido sin ninguna espera.
+ * La sonda legacy sólo omite ese olvido; no reemplaza ni envuelve métodos de la fachada o del mock.
+ */
+async function editarDosViajes(page: Page, modo: ModoDeFixture, medir: boolean): Promise<MedidaDeLectura | null> {
+  return page.evaluate(async ({ k, cancun, tulum, modo: m, medir: conLectura }): Promise<MedidaDeLectura | null> => {
+    type ViajeFixture = Record<string, unknown> & {
+      id: string; nombre: string; estado: string; miembros: unknown[]; tickets: unknown[]; transferencias: unknown[];
+    };
+    const rutaMock = '/src/api/mock/viajes.ts';
+    const mock = await import(/* @vite-ignore */ rutaMock) as { olvidarViajesMockParaTests: () => void };
+    const leer = () => {
+      const e = JSON.parse(localStorage.getItem(k) ?? 'null') as { version: number; viajes: ViajeFixture[] } | null;
+      if (!e || e.version !== 1 || !Array.isArray(e.viajes)) throw new Error('D431: falta el estado sintético de Viajes');
+      return e;
+    };
+    const foto = (): FotoDeFixture => {
+      const e = leer();
+      const c = e.viajes.filter((v) => v.id === cancun);
+      const t = e.viajes.filter((v) => v.id === tulum);
+      const coincide = (v: ViajeFixture | undefined, nombre: string, tickets: number) => v !== undefined
+        && v.nombre === nombre && v.estado === 'abierto' && v.miembros.length === 4
+        && v.tickets.length === tickets && v.transferencias.length === 0;
+      return {
+        total: e.viajes.length, cancun: c.length, tulum: t.length,
+        cancunSemilla: coincide(c[0], 'Cancún 2026', 5), tulumClonado: coincide(t[0], 'Tulum 2026', 0),
+      };
+    };
+    const exigirSeed = (f: FotoDeFixture) => {
+      if (f.total !== 5 || f.cancun !== 1 || f.tulum !== 0 || !f.cancunSemilla) {
+        throw new Error('D431: la semilla no es Cancún abierto sin Tulum');
+      }
+    };
+    const testigo = (d: DetalleViaje): TestigoDeDetalle => ({
+      id: d.id, nombre: d.nombre, estado: d.estado,
+      miembros: d.miembros.length, tickets: d.tickets.length, transferencias: d.transferencias.length,
+    });
+    const seed = foto();
+    exigirSeed(seed);
+    let realGetViaje: ((id: string) => Promise<DetalleViaje>) | null = null;
+    let warmup: TestigoDeDetalle | null = null;
+    const ownCalls = { warmup: 0, probe: 0 };
+    if (conLectura) {
+      const rutaApi = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ rutaApi) as { api: { getViaje: (id: string) => Promise<DetalleViaje> } };
+      realGetViaje = api.getViaje.bind(api);
+      ownCalls.warmup += 1;
+      warmup = testigo(await realGetViaje(cancun));
+      if (warmup.id !== cancun || warmup.nombre !== 'Cancún 2026' || warmup.estado !== 'abierto'
+        || warmup.miembros !== 4 || warmup.tickets !== 5 || warmup.transferencias !== 0) {
+        throw new Error('D431: el warmup real no devolvió la semilla de Cancún');
+      }
+    }
+    const afterWarmup = foto();
+    exigirSeed(afterWarmup);
+
+    // Tramo crítico único: desde la edición hasta immediatelyAfterCall NO hay await/import/vuelta a Node.
+    const e = leer();
+    e.viajes.push({ ...structuredClone(e.viajes.find((v) => v.id === cancun)!), id: tulum, nombre: 'Tulum 2026', tickets: [], transferencias: [] });
+    localStorage.setItem(k, JSON.stringify(e));
+    if (m === 'atomic') mock.olvidarViajesMockParaTests();
+    const afterEdit = foto();
+    if (afterEdit.total !== 6 || afterEdit.cancun !== 1 || afterEdit.tulum !== 1
+      || !afterEdit.cancunSemilla || !afterEdit.tulumClonado) throw new Error('D431: no quedó el clon de Tulum');
+    if (!conLectura) return null;
+    if (realGetViaje === null || warmup === null) throw new Error('D431: falta el método real precalentado');
+    const beforeCall = foto();
+    ownCalls.probe += 1;
+    const pendingReal = realGetViaje(cancun);
+    // El guardar de mockDetalleViaje ocurre al invocar, antes de su delay. No se simula su resultado.
+    let immediatelyAfterCall: FotoDeFixture | null = null;
+    const errores: unknown[] = [];
+    try { immediatelyAfterCall = foto(); } catch (error) { errores.push(error); }
+    // Primer await posterior a la edición. Consumir la promesa aun si la lectura inmediata falló, sin tapar ese error.
+    let result: TestigoDeDetalle | null = null;
+    try { result = testigo(await pendingReal); } catch (error) { errores.push(error); }
+    if (errores.length) {
+      // Playwright transmite message/name/stack, pero no AggregateError.errors. Resumir aquí, después de consumir
+      // pendingReal: como máximo foto+respuesta, en orden, sin stack/payload/env ni inspección recursiva del error.
+      const resumen = errores.slice(0, 2).map((error, indice) => {
+        const acotar = (texto: string, max: number) => texto.replace(/[\u0000-\u001f\u007f|\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+        const nombre = error instanceof Error ? error.name : typeof error;
+        const mensaje = error instanceof Error ? error.message : typeof error === 'string' ? error : 'rechazo sin Error';
+        return `${indice + 1}. ${acotar(nombre, 24)}: ${acotar(mensaje, 64)}`;
+      });
+      throw new AggregateError(errores, `D431_READ_ERRORS[${resumen.join(' | ')}]`);
+    }
+    if (immediatelyAfterCall === null || result === null) throw new Error('D431: medición incompleta');
+    return {
+      modo: m, seed, afterWarmup, afterEdit, beforeCall, immediatelyAfterCall, afterResolve: foto(), warmup, result,
+      ownCalls, pendingProbeSettled: true,
+    };
+  }, { k: ESTADO, cancun: CANCUN, tulum: TULUM, modo, medir });
+}
+
+/** Los originales 375/390 y el control positivo llaman a este mismo helper, siempre atómico. */
+function prepararDosViajes(page: Page, medir = false): Promise<MedidaDeLectura | null> {
+  return editarDosViajes(page, 'atomic', medir);
+}
 
 async function conViajes(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -173,11 +307,7 @@ for (const ancho of [375, 390]) {
 
     test('dos viajes abiertos: cada uno con su cuadrado, y el de Tulum abre la carga de Tulum', async ({ page }) => {
       await conViajes(page);
-      await page.evaluate(({ k, cancun, tulum }) => {
-        const e = JSON.parse(localStorage.getItem(k)!) as { viajes: Array<Record<string, unknown> & { id: string }> };
-        e.viajes.push({ ...structuredClone(e.viajes.find((v) => v.id === cancun)!), id: tulum, nombre: 'Tulum 2026', tickets: [], transferencias: [] });
-        localStorage.setItem(k, JSON.stringify(e));
-      }, { k: ESTADO, cancun: CANCUN, tulum: TULUM });
+      await prepararDosViajes(page);
       await page.reload();
       await expect(tarjeta(page, 'Tulum 2026')).toBeVisible();
       await expect(page.locator('.viaje-tarjeta .viaje-gasto')).toHaveCount(2);
@@ -291,5 +421,110 @@ test.describe('🔴 D291 · adenda · el monto se vuelve a medir cuando llega la
     expect(m.tintaDerecha, JSON.stringify(m)).toBeLessThanOrEqual(m.limite + 0.5);
     expect(m.fontSize).toBeLessThan(26);
     expect(m.fontSize).toBeGreaterThanOrEqual(16);
+  });
+});
+
+/**
+ * D431 · dos contextos estándar independientes a 390. Legacy es una observación técnica: no exige conservar el bug.
+ * Aceptar el mecanismo exige cotejo CEO de LOSS_OBSERVED+PERSISTED_AND_UI_OK en retry0 y de los 14 originales.
+ * El vínculo con el fallo histórico 39345584494 sigue INCONCLUSO, aun si esta secuencia sintética lo discrimina.
+ */
+async function controlDeLectura(page: Page, info: TestInfo, modo: ModoDeFixture): Promise<void> {
+  let medida: MedidaDeLectura | null = null;
+  let uiOraclesPassed = false;
+  let assertionsPassed = false;
+  let observation = 'INVALID';
+  const errores: unknown[] = [];
+  const viewport = page.viewportSize();
+  try {
+    expect(viewport).toEqual({ width: 390, height: 844 });
+    await conViajes(page);
+    await expect(tarjeta(page, 'Cancún 2026')).toBeVisible();
+    await expect(page.locator('.viaje-pendiente').filter({ hasText: 'Mariscos El Faro' })).toBeVisible();
+    medida = modo === 'atomic' ? await prepararDosViajes(page, true) : await editarDosViajes(page, 'legacy-probe', true);
+    if (medida === null) throw new Error('D431: falta la medición de la llamada real');
+    const origen: FotoDeFixture = { total: 5, cancun: 1, tulum: 0, cancunSemilla: true, tulumClonado: false };
+    const clon: FotoDeFixture = { total: 6, cancun: 1, tulum: 1, cancunSemilla: true, tulumClonado: true };
+    const detalle: TestigoDeDetalle = {
+      id: CANCUN, nombre: 'Cancún 2026', estado: 'abierto', miembros: 4, tickets: 5, transferencias: 0,
+    };
+    expect(medida.modo).toBe(modo);
+    expect(medida.seed).toEqual(origen);
+    expect(medida.afterWarmup).toEqual(origen);
+    expect(medida.afterEdit).toEqual(clon);
+    expect(medida.beforeCall).toEqual(clon);
+    expect(medida.warmup).toEqual(detalle);
+    expect(medida.result).toEqual(detalle);
+    expect(medida.ownCalls).toEqual({ warmup: 1, probe: 1 });
+    expect(medida.pendingProbeSettled).toBe(true);
+    if (modo === 'legacy-probe') {
+      // Persistir sin invalidación es una observación válida si un cambio futuro del mock elimina la sobrescritura.
+      expect([origen, clon]).toContainEqual(medida.immediatelyAfterCall);
+      expect(medida.afterResolve).toEqual(medida.immediatelyAfterCall);
+      observation = medida.immediatelyAfterCall.tulum === 0 ? 'LOSS_OBSERVED' : 'PERSISTED_WITHOUT_INVALIDATION';
+    } else {
+      expect(medida.immediatelyAfterCall).toEqual(clon);
+      expect(medida.afterResolve).toEqual(clon);
+      await page.reload();
+      await expect(tarjeta(page, 'Tulum 2026')).toBeVisible();
+      await expect(page.locator('.viaje-tarjeta .viaje-gasto')).toHaveCount(2);
+      for (const nombre of ['Tulum 2026', 'Cancún 2026']) {
+        const m = await medirTarjeta(page, nombre);
+        expect(Math.round(m.g!.width), nombre).toBe(76);
+        expect(m.tocaG, nombre).toBe(true);
+      }
+      await tarjeta(page, 'Tulum 2026').getByRole('button', { name: 'Cargar un gasto a mano en Tulum 2026', exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${TULUM}$`));
+      uiOraclesPassed = true;
+      observation = 'PERSISTED_AND_UI_OK';
+    }
+    assertionsPassed = true;
+  } catch (error) {
+    errores.push(error);
+    observation = 'INVALID';
+  }
+  // No hay gate global, monkeypatch ni proceso propio que restaurar. La promesa probe fue consumida antes de retornar
+  // la medida; si no retornó (por ejemplo timeout), no se certifica su cese. El contexto sigue siendo del runner.
+  const cleanupOk = medida?.pendingProbeSettled === true;
+  try {
+    const publicId = (value: string | undefined) => value && /^\d{1,20}$/.test(value) ? value : null;
+    const githubSha = process.env.GITHUB_SHA;
+    const resumirError = (error: unknown) => {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      // El prefijo de page.evaluate o su stack no deben desplazar el primario fuera del corte del recibo.
+      const inicio = mensaje.indexOf('D431_READ_ERRORS[');
+      const fin = inicio >= 0 ? mensaje.indexOf(']', inicio) : -1;
+      const propio = inicio >= 0 && fin >= inicio && fin - inicio < 220 ? mensaje.slice(inicio, fin + 1) : null;
+      return { name: error instanceof Error ? error.name : typeof error, message: propio ?? mensaje.slice(0, 240) };
+    };
+    console.log('PAYME_D431_CAUSAL_V1 ' + JSON.stringify({
+      schema: 'payme.d431.causal/v1', phase: modo === 'atomic' ? 'atomic_positive' : 'legacy_probe',
+      project: info.project.name, titlePath: info.titlePath, test_retry: info.retry, viewport,
+      ci: {
+        run_id: publicId(process.env.GITHUB_RUN_ID), run_attempt: publicId(process.env.GITHUB_RUN_ATTEMPT),
+        github_sha: githubSha && /^[0-9a-f]{40}$/.test(githubSha) ? githubSha : null,
+      },
+      source: { path: 'e2e/boton-gasto-y-monto.spec.ts', sha256: createHash('sha256').update(readFileSync(info.file)).digest('hex') },
+      observation, assertions_passed: assertionsPassed, ui_oracles_passed: uiOraclesPassed, measurement: medida,
+      cleanup: { ok: cleanupOk, own_pending_probe: cleanupOk ? 0 : null, global_patches_created: 0, context_owner: 'runner' },
+      errors: errores.map(resumirError),
+    }));
+  } catch (error) {
+    // Incluso un error del recibo conserva el error de las assertions; nunca producir un PASS por capturarlo.
+    errores.push(error);
+  }
+  if (errores.length === 1) throw errores[0];
+  if (errores.length > 1) throw new AggregateError(errores, 'D431: error de prueba y/o recibo');
+}
+
+test.describe('D431 · fixture de dos viajes ante una lectura real tardía', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('sonda técnica de edición antigua, con recibo', async ({ page }, info) => {
+    await controlDeLectura(page, info, 'legacy-probe');
+  });
+
+  test('la fixture atómica conserva Tulum y sus dos botones ante una lectura tardía', async ({ page }, info) => {
+    await controlDeLectura(page, info, 'atomic');
   });
 });
