@@ -97,6 +97,7 @@ test('D387 · ToastProvider real: 3000/120, defaults 2400, timer/variante/gesto 
   await mostrar('Aviso común', { sobreLaBarra: true });
   await expect(status).toHaveClass(/toast--sobre-barra/);
   await expect(status).not.toHaveClass(/toast--ingreso-mesa|toast--saliendo/);
+  await expect(page.locator('[data-ingreso-con-reserva]')).toHaveCount(0);
   await page.clock.runFor(1200); // el timer viejo de P-3 ya habría vencido
   await expect(status).toHaveText('Aviso común');
   await page.clock.runFor(1199);
@@ -118,6 +119,7 @@ test('D387 · ToastProvider real: 3000/120, defaults 2400, timer/variante/gesto 
   expect(await nodo!.evaluate((el) => el === document.querySelector('#p3-probe .toast'))).toBe(true);
   await mostrar('Default inferior');
   await expect(status).not.toHaveClass(/toast--sobre-barra|toast--ingreso-mesa/);
+  await expect(page.locator('[data-ingreso-con-reserva]')).toHaveCount(0);
   await expect(status).toHaveCSS('bottom', '24px');
   await page.clock.runFor(2400);
   await expect(status).toBeHidden();
@@ -266,21 +268,59 @@ for (const [idioma, width, height] of [['es', 390, 844], ['en', 375, 667]] as co
         const r = document.querySelector(selector)!.getBoundingClientRect();
         return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right };
       };
-      return { aviso: rect('.toast'), volver: rect('.hdr-row-2'), logo: rect('.hdr-row'), barra: rect('.appbar'), listo: rect('.appbar-fab'), viewport: innerWidth, animation: getComputedStyle(document.querySelector('.toast')!).animationName };
+      const boton = document.querySelector<HTMLButtonElement>('.qc-lista .qc-fila')!;
+      const r = boton.getBoundingClientRect();
+      const circulo = boton.querySelector('.qc-circulo')!.getBoundingClientRect();
+      const puntos = [
+        { x: r.x + 3, y: r.y + 3 },
+        { x: r.x + r.width / 2, y: r.y + 3 },
+        { x: circulo.x + circulo.width / 2, y: circulo.y + circulo.height / 2 },
+        { x: r.x + r.width - 3, y: r.bottom - 3 },
+      ].map((p) => ({ ...p, alcanzaBoton: boton.contains(document.elementFromPoint(p.x, p.y)) }));
+      return { aviso: rect('.toast'), volver: rect('.hdr-row-2'), logo: rect('.hdr-row'), barra: rect('.appbar'), listo: rect('.appbar-fab'), primeraFila: rect('.qc-lista .qc-fila'), circulo: rect('.qc-lista .qc-fila .qc-circulo'), primeraEsBoton: boton.tagName === 'BUTTON', puntos, reserva: rect('.toast-ingreso-reserva').height, viewport: innerWidth, animation: getComputedStyle(document.querySelector('.toast')!).animationName };
     });
+    await testInfo.attach('geometria', { body: JSON.stringify(geometria, null, 2), contentType: 'application/json' });
+    // El workflow conserva logs, pero no sube el HTML/JSON de Playwright.
+    // Duplicar esta fixture sintética permite recuperar la medición del CI.
+    console.log('P3_GEOMETRIA_JSON ' + JSON.stringify({ idioma, ...geometria }));
     expect(geometria.aviso.x).toBe(16);
     expect(geometria.aviso.right).toBe(width - 16);
     expect(geometria.aviso.y - geometria.volver.bottom).toBeCloseTo(12, 0);
     expect(geometria.aviso.y).toBeGreaterThan(geometria.logo.bottom);
     expect(geometria.aviso.bottom).toBeLessThan(geometria.barra.y);
     expect(geometria.aviso.bottom).toBeLessThan(geometria.listo.y);
+    expect(geometria.primeraEsBoton).toBe(true);
+    expect(geometria.primeraFila.y).toBeGreaterThanOrEqual(geometria.aviso.bottom);
+    expect(geometria.circulo.y).toBeGreaterThanOrEqual(geometria.aviso.bottom);
+    expect(geometria.puntos.every((p) => p.alcanzaBoton)).toBe(true);
+    expect(geometria.reserva).toBe(Math.max(0, Math.ceil(geometria.aviso.bottom - (geometria.primeraFila.y - geometria.reserva))));
+    if (idioma === 'en') expect(geometria.reserva).toBeGreaterThan(0);
+    // Dos frames adicionales no pueden volver a sumar el ajuste ya aplicado.
+    const estable = await page.evaluate(() => new Promise<number>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(document.querySelector('.toast-ingreso-reserva')!.getBoundingClientRect().height)))));
+    expect(estable).toBe(geometria.reserva);
     expect(geometria.animation).toBe(idioma === 'en' ? 'toast-ingreso-opacity-in' : 'toast-ingreso-in');
-    await testInfo.attach('geometria', { body: JSON.stringify(geometria, null, 2), contentType: 'application/json' });
     if (process.env.PAYME_P3_CAPTURAS) await page.screenshot({ path: `${process.env.PAYME_P3_CAPTURAS}/p3-${process.env.PAYME_P3_RUN}-${idioma}-${width}.png` });
     const cerrar = aviso(page).getByRole('button');
     expect(await cerrar.evaluate((el) => el.contains(document.activeElement))).toBe(false);
     await cerrar.focus(); // sólo el test mueve foco; el producto no lo roba
     await page.keyboard.press(idioma === 'en' ? 'Space' : 'Enter');
     await expect(aviso(page)).toBeHidden();
+    await expect(page.locator('[data-ingreso-con-reserva]')).toHaveCount(0);
+    const trasDescarte = await page.evaluate(() => ({
+      reserva: document.querySelector('.toast-ingreso-reserva')!.getBoundingClientRect().height,
+      primeraY: document.querySelector('.qc-lista .qc-fila')!.getBoundingClientRect().top,
+    }));
+    expect(trasDescarte.reserva).toBe(0);
+    expect(trasDescarte.primeraY).toBeCloseTo(geometria.primeraFila.y - geometria.reserva, 1);
+    await page.evaluate(async () => {
+      const ruta = '/src/router.ts';
+      const { navigate } = await import(/* @vite-ignore */ ruta) as { navigate: (page: string) => void };
+      navigate('home');
+    });
+    await expect(page.getByRole('button', { name: idioma === 'en' ? 'Scan' : 'Escanear', exact: true })).toBeVisible();
+    await expect(page.locator('.toast-ingreso-reserva, [data-ingreso-con-reserva]')).toHaveCount(0);
+    const limpieza = { idioma, geometria, estable, trasDescarte, otraPantallaSinReserva: true };
+    await testInfo.attach('geometria-limpieza', { body: JSON.stringify(limpieza, null, 2), contentType: 'application/json' });
+    console.log('P3_GEOMETRIA_LIMPIEZA_JSON ' + JSON.stringify(limpieza));
   });
 }

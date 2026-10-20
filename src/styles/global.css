@@ -3055,6 +3055,11 @@ html.app-de-inicio-ios .app {
   cursor: pointer;
 }
 .toast-ingreso-contenido:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+/* P3-DIS-01: sólo el exceso de la tarjeta ampliada desplaza el contenido.
+   Sin aviso no hay alto; desactivar el anclaje durante la reserva evita que
+   el navegador compense el espacio cambiando el scroll por su cuenta. */
+.toast-ingreso-reserva { height: 0; overflow-anchor: none; }
+.mesa-selection-scroll[data-ingreso-con-reserva] { overflow-anchor: none; }
 .toast-ingreso-icono {
   display: grid;
   place-items: center;

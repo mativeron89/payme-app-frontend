@@ -85,6 +85,31 @@ type MostrarAviso = (msg: string, opciones?: OpcionesDelAviso) => void;
 
 const ToastContext = createContext<MostrarAviso>(() => undefined);
 
+/** Reserva sólo el desborde P-3. Descontar la altura ya aplicada evita medir
+ * nuestro propio desplazamiento como si fuera espacio natural de la lista. */
+export function reservarDesbordeDelIngreso(contenedor: HTMLElement, aviso: HTMLElement) {
+  const espacio = contenedor.querySelector<HTMLElement>('.toast-ingreso-reserva');
+  let retirada = false;
+  const limpiar = () => {
+    retirada = true;
+    espacio?.style.removeProperty('height');
+    contenedor.removeAttribute('data-ingreso-con-reserva');
+  };
+  return {
+    medir(arriba: number) {
+      if (retirada || !espacio) return;
+      if (!contenedor.isConnected) { limpiar(); return; }
+      const primera = contenedor.querySelector<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
+      const natural = primera ? primera.getBoundingClientRect().top - espacio.getBoundingClientRect().height : Infinity;
+      const desborde = Math.max(0, Math.ceil(arriba + aviso.getBoundingClientRect().height - natural));
+      const altura = `${desborde}px`;
+      if (espacio.style.height !== altura) espacio.style.height = altura;
+      contenedor.toggleAttribute('data-ingreso-con-reserva', desborde > 0);
+    },
+    limpiar,
+  };
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useIdioma();
   const [msg, setMsg] = useState<string | null>(null);
@@ -92,6 +117,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [ingresoAMesa, setIngresoAMesa] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
   const [arriba, setArriba] = useState<number | null>(null);
+  const avisoRef = useRef<HTMLDivElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const salida = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gesto = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -127,7 +153,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     // Tras el commit del detalle: el GET puede haber reemplazado la cabecera
     // de carga. La safe-area ya está en su geometría; no se suma otra vez.
     const fila = document.querySelector('.hdr-flow .hdr-row-2') ?? document.querySelector('.screen .top-bar');
-    const medir = () => setArriba(fila ? fila.getBoundingClientRect().bottom + 12 : null);
+    const pantalla = fila?.closest('.screen');
+    const contenedor = pantalla?.querySelector<HTMLElement>('.mesa-selection-scroll');
+    const reserva = contenedor && avisoRef.current ? reservarDesbordeDelIngreso(contenedor, avisoRef.current) : null;
+    const medir = () => {
+      const posicion = fila ? fila.getBoundingClientRect().bottom + 12 : null;
+      setArriba(posicion);
+      if (posicion !== null) reserva?.medir(posicion);
+    };
     medir();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
     if (fila) {
@@ -137,10 +170,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const cabecera = fila.closest('.hdr-flow');
       if (cabecera) observer?.observe(cabecera, { box: 'border-box' });
     }
+    for (const elemento of [avisoRef.current, contenedor, pantalla?.querySelector('.mesa-selection-title'), contenedor?.querySelector('button')]) {
+      if (elemento) observer?.observe(elemento, { box: 'border-box' });
+    }
+    // Cambiar de destino desmonta el detalle sin desmontar el provider.
+    // La reserva pertenece a ese nodo y nunca se traslada a otra pantalla.
+    const cambios = reserva && pantalla?.parentElement ? new MutationObserver(medir) : null;
+    if (cambios && pantalla?.parentElement) cambios.observe(pantalla.parentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener('resize', medir);
     window.addEventListener('scroll', medir, { capture: true, passive: true });
     return () => {
       observer?.disconnect();
+      cambios?.disconnect();
+      reserva?.limpiar();
       window.removeEventListener('resize', medir);
       window.removeEventListener('scroll', medir, true);
     };
@@ -151,7 +193,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Siempre montado (ver .toast-hidden en global.css): una región live que
           se inserta junto con su texto no la anuncian varios lectores. */}
-      <div className={clases} role="status" aria-live="polite" style={ingresoAMesa ? { top: arriba ?? 0, visibility: msg && arriba !== null ? undefined : 'hidden' } : undefined}>
+      <div ref={avisoRef} className={clases} role="status" aria-live="polite" style={ingresoAMesa ? { top: arriba ?? 0, visibility: msg && arriba !== null ? undefined : 'hidden' } : undefined}>
         {ingresoAMesa && msg ? (
           <button
             type="button"

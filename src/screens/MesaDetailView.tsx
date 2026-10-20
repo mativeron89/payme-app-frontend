@@ -1195,6 +1195,7 @@ export function MesaDetailView({
       </div>
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
+        <div className="toast-ingreso-reserva" aria-hidden="true" />
         {avisoPagoCongelado}
         {invitacionPendiente && (
           <div className="note note-orange" role="alert" style={{ marginBottom: 12 }}>
