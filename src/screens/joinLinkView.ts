@@ -100,18 +100,14 @@ export type JoinLinkStage =
   /** §1.2-B · terminal: el link no va a servir. Salida por el círculo. */
   | 'blocked'
   /** No terminal (503, red): la salida es Reintentar. */
-  | 'retry'
-  /** §1.2-C · canje exitoso. Es el único momento con permiso de nombrar la mesa. */
-  | 'joined';
+  | 'retry';
 
 export function joinLinkStage(state: {
   readonly hasSession: boolean;
-  readonly hasJoined: boolean;
   readonly outcome: JoinLinkOutcome;
 }): JoinLinkStage {
-  // El canje ya cerró: hay sesión y hay inscripción. Es lo único que habilita
-  // §1.2-C, y por eso va primero.
-  if (state.hasJoined) return 'joined';
+  // D387 · el éxito sale directamente al detalle; Join sólo presenta puertas
+  // y fallos. El nombre sigue reservado al detalle posterior al canje válido.
   if (!state.hasSession) return 'signup';
   if (state.outcome === 'joining') return 'joining';
   return joinLinkMessage(state.outcome).retryable ? 'retry' : 'blocked';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { GuiaProvider } from './ayuda/GuiaProvider';
 import { useEjemplo } from './ayuda/ejemplo/estadoEjemplo';
 import { enforceRutaDelEjemplo, esRutaDelEjemploSinEjemplo } from './ayuda/ejemplo/rutaDelEjemplo';
@@ -25,6 +25,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { InvitacionConSesion, InvitacionSinSesion } from './screens/RutaDeInvitacion';
 import { olvidarCodigoDeInvitacion } from './api/linkDeInvitacion';
 import { MesaScreen } from './screens/MesaScreen';
+import { crearAvisoDeIngresoAMesa } from './screens/avisoDeIngresoAMesa';
 import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
 import { RecoveryScreen } from './screens/RecoveryScreen';
@@ -76,6 +77,18 @@ function Shell() {
   const moneyRail = useMoneyRail();
   const { t } = useIdioma();
   const route = useRoute();
+  // P-3 · sobrevive al paso Join→Mesa, nunca a otra cuenta/familia o destino.
+  // El recibo sólo lleva mesa_code; no se agrega nada a URL ni storage.
+  const avisoDeIngreso = useRef(crearAvisoDeIngresoAMesa()).current;
+  const identidadDeIngreso = session ? `${session.principal_id}:${session.family_id}` : null;
+  avisoDeIngreso.contexto(
+    identidadDeIngreso,
+    route.page === 'mesa' ? route.param ?? null : null,
+  );
+  const alIngresarPorLink = useCallback(
+    (mesaCode: string) => avisoDeIngreso.preparar(mesaCode, identidadDeIngreso),
+    [avisoDeIngreso, identidadDeIngreso],
+  );
   // OLA 5D · quién puede alcanzar el riel saldo lo declara el BACKEND. Se pide
   // antes de cualquier return temprano (regla de hooks) y arranca APAGADO, así
   // que mientras la capability viaja las rutas del riel siguen bloqueadas.
@@ -278,6 +291,7 @@ function Shell() {
         puertaLista={puerta.lista && arroba.lista}
         onRequiereAceptacion={puerta.reconsultar}
         onRequiereArroba={arroba.reconsultar}
+        onIngreso={alIngresarPorLink}
       />
     );
   }
@@ -309,7 +323,7 @@ function Shell() {
           ? <CreateMesaFlow key={`viaje:${route.param}`} viajeId={route.param} />
           : <CreateMesaFlow />;
       case 'mesa':
-        return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
+        return route.param ? <MesaScreen key={route.param} code={route.param} avisoDeIngreso={avisoDeIngreso} /> : <MesasScreen />;
       /**
        * §1.9 · paso 6 · **la ruta VIVE, la pantalla se retiró.**
        *

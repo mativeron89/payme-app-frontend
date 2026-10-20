@@ -262,7 +262,7 @@ test.describe('A y B · sin sesión (390 × 844)', () => {
 });
 
 test.describe('C, D, E y F · con sesión (390 × 844)', () => {
-  test('🔴 C: el aro dentro del cuadro navy, sin controles ni naranja; al soltar el canje, D', async ({ page }) => {
+  test('🔴 C: el aro dentro del cuadro navy, sin controles ni naranja; al soltar el canje, consumos directos', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await espiarCanje(page, 'colgar');
@@ -280,7 +280,8 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
     await expect(barra(page)).toHaveCount(0);
     await capturar(page, 'd372-05-c');
     await soltarCanje(page);
-    await expect(titulo(page, '¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
   });
 
   test('C con «reducir movimiento»: el aro quieto (y sin reducir, gira)', async ({ page }) => {
@@ -297,37 +298,30 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
     expect(await page.locator('.link-screen > .title-card').evaluate((el) => getComputedStyle(el).animationName)).toBe('link-entra-quieta');
   });
 
-  test('🔴 D con restaurante: el cuadro verde, el nombre y la barra reducida con «Ver mis ítems»', async ({ page }) => {
+  test('🔴 D387 con restaurante: llega al detalle y muestra el aviso blanco sin confirmación intermedia', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
-    const t = tarjeta(page, '¡Te sumaste a la mesa!');
-    await expect(t.getByText('La Parolaccia', { exact: true })).toBeVisible();
-    await expect(t.locator('.title-card-cuadro')).toHaveCSS('background-color', EXITO);
-    await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'check');
-    const b = await medirBarra(page, 'Ver mis ítems', 64);
-    const ct = await caja(t);
-    expect(ct.y + ct.height).toBeLessThanOrEqual(b.y);
-    await expect(pantalla(page).getByRole('button')).toHaveCount(0);
-    expect((await colores(page)).naranjas).toEqual(['Ver mis ítems']);
-    await capturar(page, 'd372-06-d-con-nombre');
-    await page.getByRole('button', { name: 'Ver mis ítems', exact: true }).click();
-    await expect(titulo(page, '¡Te sumaste a la mesa!')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
+    const aviso = page.locator('.toast[role="status"]');
+    await expect(aviso).toHaveText('Te sumaste a La Parolaccia');
+    await expect(aviso).toHaveCSS('background-color', BLANCO);
+    await expect(aviso.locator('.toast-ingreso-icono')).toHaveCSS('background-color', EXITO);
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await capturar(page, 'd387-con-nombre');
   });
 
-  test('D sin restaurante: si no llegó, no se muestra nada debajo del título', async ({ page }) => {
+  test('D387 sin detalle: llega a la ruta y usa el aviso genérico, sin otro GET de Join', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await getMesaQueFalla(page);
     await alLink(page, mesa);
-    const t = tarjeta(page, '¡Te sumaste a la mesa!');
-    await expect(t).toBeVisible();
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __getMesa: { fallidas: number } }).__getMesa.fallidas))
-      .toBeGreaterThan(0);
-    await expect(t.locator('.link-restaurante')).toHaveCount(0);
-    await expect(t).not.toContainText('La Parolaccia');
-    await expect(page.getByRole('button', { name: 'Ver mis ítems', exact: true })).toBeVisible();
-    await capturar(page, 'd372-07-d-sin-nombre');
+    await expect(page.getByText('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
+    await expect(page.locator('.toast[role="status"]')).toHaveText('Te sumaste a la mesa');
+    expect(await page.evaluate(() => (window as unknown as { __getMesa: { fallidas: number } }).__getMesa.fallidas)).toBe(2);
+    await capturar(page, 'd387-sin-nombre');
   });
 
   for (const [id, ruta, tit, cuerpo] of [
@@ -397,7 +391,8 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
       const antes = await canje(page);
       await modoCanje(page, 'normal');
       await reintentar.click();
-      await expect(titulo(page, '¡Te sumaste a la mesa!')).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
       expect(await canje(page)).toBe(antes + 1);
     });
   }

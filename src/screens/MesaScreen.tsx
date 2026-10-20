@@ -82,6 +82,7 @@ import {
 } from './tipSelectorView';
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
+import { type AvisoDeIngresoAMesa } from './avisoDeIngresoAMesa';
 import { writeClipboardText } from '../utils/clipboard';
 import {
   readInformativeSelectionCapability,
@@ -358,7 +359,7 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
   };
 }
 
-export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
+export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string; guestToken?: string; avisoDeIngreso?: AvisoDeIngresoAMesa }) {
   const { t } = useIdioma();
   // D237 · acá pasan las acciones sobre una mesa (crear, elegir, pagar,
   // cerrar, aceptar a alguien): al salir, lo guardado de las mesas para Inicio y
@@ -380,6 +381,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor(guestToken);
   const toast = useToast();
+  // Sólo el recibo de ESTE montaje: una respuesta vieja no consume un ingreso
+  // posterior, aunque vuelva a tener el mismo código. El Shell valida contexto.
+  const reciboDeIngreso = useRef(avisoDeIngreso?.capturar(code) ?? null);
+  const avisoVivo = useRef(true);
+  useEffect(() => {
+    avisoVivo.current = true;
+    return () => { avisoVivo.current = false; };
+  }, []);
+  const resolverAviso = useRef<(nombre?: string | null) => void>(() => undefined);
+  resolverAviso.current = (nombre) => {
+    if (!avisoVivo.current || !avisoDeIngreso?.consumir(reciboDeIngreso.current)) return;
+    toast(nombre?.trim() ? t('Te sumaste a {0}', nombre) : t('Te sumaste a la mesa'), { ingresoAMesa: true });
+  };
   /**
    * ⚠️ OBSOLETO PERO NO BORRADO · `guestToken` no puede llegar nunca.
    *
@@ -645,6 +659,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       .then((r) => {
         if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
           setMesa(r.mesa); setNotFound(false);
+          resolverAviso.current(r.mesa.restaurant.name);
           if (r.mesa.division_mode !== 'igual' || guestToken) {
             setInformativeState('idle');
             return;
@@ -672,7 +687,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         }
       })
       .catch(() => {
-        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) setNotFound(true);
+        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
+          setNotFound(true);
+          resolverAviso.current();
+        }
       });
   }, [code, guestToken]);
 

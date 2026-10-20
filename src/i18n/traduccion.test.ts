@@ -352,6 +352,8 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'Tu banco no autorizó la operación.',
   'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.',
   'Tu propina',
+  // D387 retira la pantalla D; se conservan sus traducciones históricas (orden, EN sólo agrega dos claves).
+  'Ver mis ítems', '¡Te sumaste a la mesa!',
   'Ver mesa', 'Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.',
   'acreditada', 'conflicto', 'entero', 'menos de 1 min', 'muerta', 'o Apple Pay',
   'por pagar.', 'reservado', '{0} h', '{0} min',

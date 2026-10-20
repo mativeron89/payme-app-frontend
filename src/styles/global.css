@@ -3018,6 +3018,63 @@ html.app-de-inicio-ios .app {
   }
 }
 
+/* D387 / P-3 · variante de ingreso: anclaje medido bajo la fila real Volver.
+   Los defaults del toast y sobreLaBarra conservan su posición y duración. */
+.toast.toast--ingreso-mesa {
+  bottom: auto;
+  left: 16px;
+  right: 16px;
+  transform: none;
+  max-width: none;
+  min-height: 56px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--sh-2);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+.toast-ingreso-contenido {
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.toast-ingreso-contenido:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+.toast-ingreso-icono {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--success);
+  color: var(--white);
+}
+.toast.toast--ingreso-mesa:not(.toast-hidden) { animation: toast-ingreso-in 200ms ease-out both; }
+.toast.toast--ingreso-mesa.toast--saliendo { animation: toast-ingreso-out 120ms ease-in both; pointer-events: none; }
+@keyframes toast-ingreso-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-ingreso-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .toast.toast--ingreso-mesa:not(.toast-hidden) { animation-name: toast-ingreso-opacity-in; }
+  .toast.toast--ingreso-mesa.toast--saliendo { animation-name: toast-ingreso-opacity-out; }
+}
+@keyframes toast-ingreso-opacity-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes toast-ingreso-opacity-out { from { opacity: 1; } to { opacity: 0; } }
+
 /* ─── Estado vacío ─── */
 .empty {
   text-align: center;

@@ -121,6 +121,7 @@ export function JoinMesaScreen({
   puertaLista = true,
   onRequiereAceptacion,
   onRequiereArroba,
+  onIngreso,
 }: {
   code: string;
   token: string;
@@ -133,6 +134,8 @@ export function JoinMesaScreen({
    * dueño no lo emite.
    */
   onRequiereArroba?: () => void;
+  /** P-3 · señal de presentación, después de cerrar la custodia y antes de salir. */
+  onIngreso?: (mesaCode: string) => void;
 }) {
   const { t } = useIdioma();
   const { session } = useAuth();
@@ -155,14 +158,6 @@ export function JoinMesaScreen({
    * Google) ya no devuelve a A ni obliga a repetir el toque.
    */
   const [authMode, setAuthMode] = useState<ModoDeIngreso | null>(() => (session ? null : modoRecordadoParaMesa(code)));
-  /**
-   * Canje cerrado. Es lo ÚNICO que habilita §1.2-C, y con él el permiso de
-   * nombrar el restaurante: a esta altura ya hay sesión y quien mira es un
-   * participante inscripto de la mesa.
-   */
-  const [joined, setJoined] = useState<string | null>(null);
-  /** Nombre del restaurante, si el detalle llegó. Ver el efecto de abajo. */
-  const [restaurant, setRestaurant] = useState<string | null>(null);
   /**
    * El reintento va en las DEPENDENCIAS del efecto, no en un `setOutcome`
    * suelto. Volver el estado a 'joining' sin cambiar una dep repinta el cartel
@@ -256,15 +251,10 @@ export function JoinMesaScreen({
         // custodias —storage y URL—: si el round-trip había fallado, el token
         // sigue en el hash y éste es el momento en que ya no hace falta.
         closeInvitationCustody();
-        /**
-         * Antes acá se navegaba derecho a la mesa. Ahora se muestra §1.2-C, y
-         * el destino es el mismo —Mis ítems— a un toque del círculo naranja.
-         *
-         * El orden con la custodia NO cambió: la credencial se suelta acá,
-         * apenas el canje cierra, exactamente como antes. Lo único que cambió
-         * es que la navegación la dispara la persona.
-         */
-        setJoined(r.mesa_code);
+        // P-3 · el código devuelto manda. El detalle existente del destino
+        // resolverá el nombre; navegar no espera ni agrega un GET desde Join.
+        onIngreso?.(r.mesa_code);
+        salirAMisItems(r.mesa_code);
       })
       .catch((err: unknown) => {
         const { status, code: motivo } = extractApiError(err);
@@ -303,67 +293,12 @@ export function JoinMesaScreen({
     return () => {
       alive = false;
     };
-  }, [session, token, attempt, puertaLista, onRequiereAceptacion, onRequiereArroba]);
-
-  /**
-   * El nombre del restaurante para §1.2-C, y **sólo** después del canje.
-   *
-   * `accept-link` devuelve `{ joined, mesa_code }` y nada más, así que el
-   * nombre sale de `GET /mesas/:code` — que ahora exige sesión y que a esta
-   * altura contesta porque la persona quedó inscripta. No es un "preview
-   * público" por la puerta de atrás: sin canje este efecto no corre.
-   *
-   * Si falla, la pantalla se muestra **sin** el nombre. No se inventa un
-   * placeholder ni se bloquea el paso: el canje ya cerró y la salida a Mis
-   * ítems tiene que existir igual.
-   */
-  useEffect(() => {
-    if (!joined) return;
-    let alive = true;
-    api
-      .getMesa(joined)
-      .then((r) => {
-        if (alive) setRestaurant(r.mesa.restaurant.name);
-      })
-      .catch(() => {
-        /* Sin nombre se muestra igual. Ver el comentario de arriba. */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [joined]);
+  }, [session, token, attempt, puertaLista, onRequiereAceptacion, onRequiereArroba, onIngreso]);
 
   const stage = joinLinkStage({
     hasSession: Boolean(session),
-    hasJoined: joined !== null,
     outcome,
   });
-
-  /**
-   * §1.2-C · canje exitoso. Un solo destino: Mis ítems. D372: la tarjeta con el
-   * cuadro verde y el tilde, el restaurante debajo si llegó (si no, nada), y la
-   * barra reducida con el círculo.
-   *
-   * Las ramas D, A y la final devuelven un fragmento con el mismo primer hijo
-   * (`.link-screen` con la banda): de C a D, E o F la banda no se vuelve a montar.
-   */
-  if (stage === 'joined' && joined) {
-    return (
-      <>
-        <div className="link-screen link-screen--con-barra">
-          <AppHeader compact />
-          {/* Sin el código de mesa: no aporta nada en el momento de celebrar. */}
-          <TarjetaDeLink
-            key="joined"
-            cuadro={{ icono: 'check', exito: true }}
-            titulo={t('¡Te sumaste a la mesa!')}
-            restaurante={restaurant}
-          />
-        </div>
-        <BarraDeLink etiqueta={t('Ver mis ítems')} alTocar={() => salirAMisItems(joined)} />
-      </>
-    );
-  }
 
   /**
    * §1.2-A · 401. Sin sesión no se ve la mesa: se ve esto, con el token ya

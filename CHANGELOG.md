@@ -1,5 +1,12 @@
 # 0.255.2 · 2026-10-19
 
+## 0.256.0 · 2026-10-20 (D387 / D431)
+
+- Entrar por un link válido lleva directamente a los consumos de la mesa devuelta por el canje, después de cerrar la custodia; se retira la confirmación intermedia.
+- Aviso «Te sumaste a {restaurante}» (o «Te sumaste a la mesa»), de un solo uso y sin persistencia ni consultas adicionales: blanco, bajo Volver, tres segundos y descartable por toque, swipe hacia arriba o teclado. El resto de avisos conserva su aspecto y duración.
+- Copy inglés de la candidata: «You joined {0}» / «You joined the table», sujeto a revisión Diseño antes de GREEN. Inicio/Avisos conserva su texto separado con ✓. Puertas, permisos, pagos y tutorial voluntario se preservan. Cierre visible pendiente de Mati (D63).
+
+
 ## D429 · Compartir la mesa en el tutorial
 
 - El ejemplo muestra Copiar link, WhatsApp y tres amigos inventados con el aspecto de las acciones y filas reales. Al tocarlos, la burbuja del tutorial explica qué hacen en una mesa real; la ✕ o Escape vuelve al mismo paso.

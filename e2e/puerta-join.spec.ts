@@ -88,13 +88,14 @@ test.describe('la puerta legal antes de unirse por link', () => {
     // Sostenido: si el canje corriera por detrás, el mock ya lo habría anotado.
     await page.waitForTimeout(1500);
     expect(await unido(page, mesa.code), 'se unió a la mesa sin haber aceptado').toBe(false);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: PUERTA })).toBeVisible();
+    await expect(page.locator('.mesa-selection-title')).toHaveCount(0);
     // El token sigue custodiado (storage o URL) para retomar la unión.
     const custodiado = await page.evaluate(() => window.sessionStorage.getItem('payme_pending_invitation_link'));
     expect(custodiado !== null || tokenDeLaUrl(page.url()) === mesa.token).toBe(true);
 
     await aceptarPuerta(page);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     expect(await unido(page, mesa.code)).toBe(true);
     // Canje cerrado: la credencial se soltó de las dos custodias, como siempre.
     expect(tokenDeLaUrl(page.url())).toBeNull();
@@ -111,7 +112,7 @@ test.describe('la puerta legal antes de unirse por link', () => {
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 
     await abrirLinkEnFrio(page, mesa.code, mesa.token);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     await expect(page.getByRole('dialog', { name: PUERTA })).toHaveCount(0);
     expect(await unido(page, mesa.code)).toBe(true);
   });
@@ -120,7 +121,7 @@ test.describe('la puerta legal antes de unirse por link', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await abrirLinkEnFrio(page, mesa.code, mesa.token);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     await expect(page.getByRole('dialog', { name: PUERTA })).toHaveCount(0);
     expect(await unido(page, mesa.code)).toBe(true);
   });
@@ -140,7 +141,7 @@ test.describe('la puerta legal antes de unirse por link', () => {
     expect(await unido(page, mesa.code)).toBe(false);
 
     await aceptarPuerta(page);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     expect(await unido(page, mesa.code)).toBe(true);
   });
 

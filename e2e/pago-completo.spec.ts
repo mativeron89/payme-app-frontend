@@ -222,10 +222,10 @@ test.describe('el camino de pago completo', () => {
 
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
 
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
-    // §1.2-C es el único momento con permiso de nombrar el restaurante: a esta
-    // altura quien mira ya es un participante inscripto.
-    await expect(page.getByText('La Parolaccia')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
+    // D387 · el detalle posterior al canje acredita el restaurante autorizado;
+    // el aviso también lo nombra, así que se comprueba el texto exacto.
+    await expect(page.getByText('La Parolaccia', { exact: true })).toBeVisible();
 
     // ⭐ La credencial se soltó de las DOS custodias apenas cerró el canje.
     expect(tokenDeLaUrl(page.url())).toBeNull();
@@ -233,12 +233,14 @@ test.describe('el camino de pago completo', () => {
       await page.evaluate(() => window.sessionStorage.getItem('payme_pending_invitation_link')),
     ).toBeNull();
 
-    // La salida existe y está a un toque.
-    await expect(page.getByRole('button', { name: 'Ver mis ítems' })).toBeVisible();
+    // D387 · se llegó directamente, sin un toque de confirmación.
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
   });
 
   /**
    * ⭐ EL DEFECTO QUE ESTE RECORRIDO ENCONTRÓ, y que ahora acredita arreglado.
+   * D387 automatiza esta misma salida; exige llegar sin un toque intermedio.
    *
    * Estuvo un rato como `fixme`: **"Ver mis ítems" no hacía nada y la persona
    * quedaba encerrada en la pantalla de felicitación.** Al cerrar el canje la
@@ -258,9 +260,8 @@ test.describe('el camino de pago completo', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Ver mis ítems' }).click();
     // D223 · en el mock quien abre el link es el mismo titular: su lista vive
     // en «Tus consumos», cerrado. Quien se suma de verdad ve la lista abierta.
     await abrirTusConsumos(page);
@@ -268,7 +269,7 @@ test.describe('el camino de pago completo', () => {
     // Se llegó a Mis ítems: los ítems del ticket son botones de esta pantalla y
     // de ninguna otra del recorrido.
     await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese' })).toBeVisible();
-    // Y la felicitación se fue: no quedó montada abajo ni al lado.
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
+    expect(tokenDeLaUrl(page.url())).toBeNull();
   });
 });

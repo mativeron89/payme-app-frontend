@@ -426,12 +426,14 @@ describe('ORDEN 4B · la pantalla delega, no reimplementa', () => {
     const canjea = codigo.indexOf('.acceptInvitationLink(token)');
     const alCanjear = codigo.indexOf('.then(', canjea);
     const cierra = codigo.indexOf('closeInvitationCustody()');
+    const senal = codigo.indexOf('onIngreso?.(r.mesa_code)');
+    const sale = codigo.indexOf('salirAMisItems(r.mesa_code)');
     const alFallar = codigo.indexOf('.catch(', canjea);
     const resuelve = codigo.indexOf('settleInvitationFailure(status)');
     // Control positivo: las seis marcas están.
-    for (const [nombre, i] of Object.entries({ abre, canjea, alCanjear, cierra, alFallar, resuelve })) expect(i, nombre).toBeGreaterThan(-1);
-    expect([abre < canjea, canjea < alCanjear, alCanjear < cierra, cierra < alFallar, alFallar < resuelve])
-      .toEqual([true, true, true, true, true]);
+    for (const [nombre, i] of Object.entries({ abre, canjea, alCanjear, cierra, senal, sale, alFallar, resuelve })) expect(i, nombre).toBeGreaterThan(-1);
+    expect([abre < canjea, canjea < alCanjear, alCanjear < cierra, cierra < senal, senal < sale, sale < alFallar, alFallar < resuelve])
+      .toEqual([true, true, true, true, true, true, true]);
   });
 });
 

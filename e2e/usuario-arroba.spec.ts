@@ -421,7 +421,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · el link de invitación', () => 
     expect(custodiado !== null || tokenDeLaUrl(page.url()) === mesa.token).toBe(true);
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     expect(await unido(page, mesa.code)).toBe(true);
   });
 
@@ -461,7 +461,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · el link de invitación', () => 
     expect(await unido(page, mesa.code)).toBe(false);
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('¡Te sumaste a la mesa!')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     expect(await unido(page, mesa.code)).toBe(true);
   });
 });

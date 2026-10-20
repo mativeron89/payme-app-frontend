@@ -116,7 +116,7 @@ test.describe('AF-INICIO-TRAS-INGRESO · los enlaces de entrada van a su destino
     await entrarCon(page, 'invitada@payme.mx');
     await expect.poll(async () => (await ruta(page)).path).toBe(`/mesa/${mesa.code}`);
     expect(page.url()).not.toContain(mesa.token);
-    await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     await asentado(page);
     await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
   });

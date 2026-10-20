@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useIdioma } from '../i18n/idioma';
+import { Icon } from './Icon';
 
 /** Piezas chicas compartidas: top bar, toast y avatar con color estable. */
 
@@ -76,6 +77,8 @@ export function CardBrandChip({ brand }: { brand: string }) {
  */
 export interface OpcionesDelAviso {
   readonly sobreLaBarra?: boolean;
+  /** D387 · sólo el ingreso por link usa el aviso blanco bajo Volver. */
+  readonly ingresoAMesa?: boolean;
 }
 
 type MostrarAviso = (msg: string, opciones?: OpcionesDelAviso) => void;
@@ -83,23 +86,101 @@ type MostrarAviso = (msg: string, opciones?: OpcionesDelAviso) => void;
 const ToastContext = createContext<MostrarAviso>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useIdioma();
   const [msg, setMsg] = useState<string | null>(null);
   const [sobreLaBarra, setSobreLaBarra] = useState(false);
+  const [ingresoAMesa, setIngresoAMesa] = useState(false);
+  const [saliendo, setSaliendo] = useState(false);
+  const [arriba, setArriba] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const salida = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gesto = useRef<{ id: number; x: number; y: number } | null>(null);
+  const omitirClick = useRef(false);
+  const cancelarTimers = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (salida.current) clearTimeout(salida.current);
+    timer.current = null;
+    salida.current = null;
+  }, []);
+  useEffect(() => cancelarTimers, [cancelarTimers]);
+  const cerrarIngreso = useCallback(() => {
+    cancelarTimers();
+    gesto.current = null;
+    setSaliendo(true);
+    salida.current = setTimeout(() => {
+      setMsg(null);
+      setSaliendo(false);
+    }, 120);
+  }, [cancelarTimers]);
   const show = useCallback((m: string, opciones?: OpcionesDelAviso) => {
+    cancelarTimers();
+    gesto.current = null;
+    omitirClick.current = false;
+    setSaliendo(false);
     setMsg(m);
     setSobreLaBarra(opciones?.sobreLaBarra === true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setMsg(null), 2400);
-  }, []);
-  const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : ''].filter(Boolean).join(' ');
+    setIngresoAMesa(opciones?.ingresoAMesa === true);
+    timer.current = setTimeout(opciones?.ingresoAMesa ? cerrarIngreso : () => setMsg(null), opciones?.ingresoAMesa ? 3000 : 2400);
+  }, [cancelarTimers, cerrarIngreso]);
+  useLayoutEffect(() => {
+    if (!msg || !ingresoAMesa) return;
+    // Tras el commit del detalle: el GET puede haber reemplazado la cabecera
+    // de carga. La safe-area ya está en su geometría; no se suma otra vez.
+    const fila = document.querySelector('.hdr-flow .hdr-row-2') ?? document.querySelector('.screen .top-bar');
+    const medir = () => setArriba(fila ? fila.getBoundingClientRect().bottom + 12 : null);
+    medir();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
+    if (fila) {
+      // El inset aumenta padding y alto a la vez: el content-box puede ser
+      // idéntico mientras Volver se desplaza. Observar la caja exterior.
+      observer?.observe(fila, { box: 'border-box' });
+      const cabecera = fila.closest('.hdr-flow');
+      if (cabecera) observer?.observe(cabecera, { box: 'border-box' });
+    }
+    window.addEventListener('resize', medir);
+    window.addEventListener('scroll', medir, { capture: true, passive: true });
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', medir);
+      window.removeEventListener('scroll', medir, true);
+    };
+  }, [msg, ingresoAMesa]);
+  const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : '', ingresoAMesa ? 'toast--ingreso-mesa' : '', saliendo ? 'toast--saliendo' : ''].filter(Boolean).join(' ');
   return (
     <ToastContext.Provider value={show}>
       {children}
       {/* Siempre montado (ver .toast-hidden en global.css): una región live que
           se inserta junto con su texto no la anuncian varios lectores. */}
-      <div className={clases} role="status" aria-live="polite">
-        {msg}
+      <div className={clases} role="status" aria-live="polite" style={ingresoAMesa ? { top: arriba ?? 0, visibility: msg && arriba !== null ? undefined : 'hidden' } : undefined}>
+        {ingresoAMesa && msg ? (
+          <button
+            type="button"
+            className="toast-ingreso-contenido"
+            aria-label={`${msg}. ${t('Cerrar')}`}
+            onPointerDown={(e) => {
+              omitirClick.current = false;
+              gesto.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onPointerCancel={() => { gesto.current = null; }}
+            onPointerUp={(e) => {
+              const inicio = gesto.current;
+              gesto.current = null;
+              if (!inicio || inicio.id !== e.pointerId) return;
+              const dx = e.clientX - inicio.x;
+              const dy = e.clientY - inicio.y;
+              omitirClick.current = Math.abs(dx) > 12 || Math.abs(dy) > 12;
+              if (dy <= -24 && Math.abs(dy) > Math.abs(dx)) cerrarIngreso();
+            }}
+            onClick={() => {
+              if (!omitirClick.current) cerrarIngreso();
+              omitirClick.current = false;
+            }}
+          >
+            <span className="toast-ingreso-icono" aria-hidden="true"><Icon name="check" size={20} /></span>
+            <span>{msg}</span>
+          </button>
+        ) : msg}
       </div>
     </ToastContext.Provider>
   );

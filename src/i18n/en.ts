@@ -53,6 +53,8 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  'Te sumaste a {0}': 'You joined {0}',
+  'Te sumaste a la mesa': 'You joined the table',
   'Siguiente': 'Next',
   // D327 · guía contextual voluntaria
   // D363 · el tutorial «Tu turno» (textos de la ficha de Claude Design; los de 2d «2 de 2» y de 2e en «igual», de V).

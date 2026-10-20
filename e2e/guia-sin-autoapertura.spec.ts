@@ -61,7 +61,7 @@ test.describe('D364 · la guía no se abre sola', () => {
     await page.getByLabel('Email', { exact: true }).fill('invitada-d364@payme.test');
     await page.getByLabel(/^Contraseña$/).fill('sintetico-d364');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
     await expect.poll(() => pathname(page)).toBe(`/mesa/${mesa.code}`);
     await espiarElEjemplo(page);
     expect(await capaVista(page)).toBe(false);

@@ -106,14 +106,14 @@ const enInicio = async (page: Page) => {
 };
 
 async function sumadoALaMesa(page: Page, mesa: MesaAbierta): Promise<void> {
-  await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
   expect(page.url()).not.toContain(mesa.token);
   expect(await almacenado(page)).toEqual(VACIO);
 }
 
 test.describe('AF-INVITACION-TRAS-GOOGLE · con Google en la misma pestaña, el invitado cae en la mesa', () => {
-  test('🔴 (a) link → «Crear cuenta gratis» → casillas → Google → «¡Te sumaste a la mesa!»', async ({ page }) => {
+  test('🔴 (a) link → «Crear cuenta gratis» → casillas → Google → consumos directos', async ({ page }) => {
     const mesa = await invitadoAbreElLink(page, { altaRedirect: true, sinCuenta: true, legal: true });
     await page.getByRole('button', { name: 'Crear cuenta gratis' }).click();
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
@@ -122,7 +122,7 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · con Google en la misma pestaña, el 
     await sumadoALaMesa(page, mesa);
   });
 
-  test('🔴 (b) link → «Ya tengo cuenta · Entrar» → Google → puerta legal → «¡Te sumaste a la mesa!»', async ({ page }) => {
+  test('🔴 (b) link → «Ya tengo cuenta · Entrar» → Google → puerta legal → consumos directos', async ({ page }) => {
     const mesa = await invitadoAbreElLink(page, { legal: true });
     await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
@@ -165,7 +165,11 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · negativos: sin la marca de esa mesa,
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
     await google(page).click();
     await enInicio(page);
-    await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(async () => {
+      const ruta = '/src/api/mock/store.ts';
+      const { state } = await import(/* @vite-ignore */ ruta) as { state: { joinedMesaCodes: string[] } };
+      return state.joinedMesaCodes;
+    })).toEqual([]);
   });
 
   test('(c) la marca es de OTRA mesa que la invitación custodiada: Inicio', async ({ page }) => {
@@ -208,7 +212,11 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · negativos: sin la marca de esa mesa,
     expect(envejecida, 'la marca se escribió al elegir «Ya tengo cuenta»').toBe(true);
     await google(page).click();
     await enInicio(page);
-    await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(async () => {
+      const ruta = '/src/api/mock/store.ts';
+      const { state } = await import(/* @vite-ignore */ ruta) as { state: { joinedMesaCodes: string[] } };
+      return state.joinedMesaCodes;
+    })).toEqual([]);
   });
 });
 

@@ -126,18 +126,15 @@ describe('§1.2 · sin sesión no se ve NADA de la mesa', () => {
     // alguien sin sesión. Si esta rama se moviera debajo del switch de outcome,
     // un 403 pintaría el cartel de rechazo antes del alta.
     for (const outcome of OUTCOMES) {
-      expect(joinLinkStage({ hasSession: false, hasJoined: false, outcome })).toBe('signup');
+      expect(joinLinkStage({ hasSession: false, outcome })).toBe('signup');
     }
   });
 
-  it('el canje exitoso manda, y es el ÚNICO estado con permiso de nombrar la mesa', () => {
-    expect(joinLinkStage({ hasSession: true, hasJoined: true, outcome: 'joining' })).toBe('joined');
-  });
-
-  it('ninguna otra etapa es la del canje: el nombre del restaurante no se filtra', () => {
+  it('D387 · Join conserva sus etapas de puerta y fallo; el éxito ya navega al detalle', () => {
+    expect(joinLinkStage({ hasSession: true, outcome: 'joining' })).toBe('joining');
     for (const outcome of OUTCOMES) {
-      expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome })).not.toBe('joined');
-      expect(joinLinkStage({ hasSession: false, hasJoined: false, outcome })).not.toBe('joined');
+      expect(['joining', 'blocked', 'retry']).toContain(joinLinkStage({ hasSession: true, outcome }));
+      expect(joinLinkStage({ hasSession: false, outcome })).toBe('signup');
     }
   });
 });
@@ -149,20 +146,20 @@ describe('§1.2 · ninguna pantalla queda sin salida', () => {
    * lectura. Terminal → círculo de salida; reintentable → Reintentar.
    */
   it('los terminales van al bloque con círculo de salida', () => {
-    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'rejected' })).toBe('blocked');
-    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'invalid' })).toBe('blocked');
-    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'mesa_cerrada' })).toBe('blocked');
+    expect(joinLinkStage({ hasSession: true, outcome: 'rejected' })).toBe('blocked');
+    expect(joinLinkStage({ hasSession: true, outcome: 'invalid' })).toBe('blocked');
+    expect(joinLinkStage({ hasSession: true, outcome: 'mesa_cerrada' })).toBe('blocked');
   });
 
   it('los reintentables ofrecen reintentar, no una salida ciega', () => {
-    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'unavailable' })).toBe('retry');
-    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'error' })).toBe('retry');
+    expect(joinLinkStage({ hasSession: true, outcome: 'unavailable' })).toBe('retry');
+    expect(joinLinkStage({ hasSession: true, outcome: 'error' })).toBe('retry');
   });
 
   it('la etapa se deriva de `retryable`, no de una segunda tabla que se desincronice', () => {
     for (const outcome of OUTCOMES) {
       if (outcome === 'joining') continue;
-      const etapa = joinLinkStage({ hasSession: true, hasJoined: false, outcome });
+      const etapa = joinLinkStage({ hasSession: true, outcome });
       expect(etapa).toBe(joinLinkMessage(outcome).retryable ? 'retry' : 'blocked');
     }
   });
@@ -257,7 +254,7 @@ describe('D372 · el ícono de E y F', () => {
 
   it('coincide con la etapa: «reintentar» sí y sólo si la pantalla ofrece Reintentar', () => {
     for (const o of ['rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'] as const) {
-      const etapa = joinLinkStage({ hasSession: true, hasJoined: false, outcome: o });
+      const etapa = joinLinkStage({ hasSession: true, outcome: o });
       expect(iconoDelResultado(o) === 'reintentar', o).toBe(etapa === 'retry');
     }
   });

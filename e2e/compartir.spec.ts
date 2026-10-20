@@ -72,7 +72,7 @@ test('D170 · el link realmente copiado abre la misma mesa sin garantía, inclus
   await page.getByLabel('Email', { exact: true }).fill('invitado-d170@payme.test');
   await page.getByLabel('Contraseña', { exact: true }).fill('sintetico-d170');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
   await expect(page).toHaveURL(`${origen}/mesa/${creada.code}`);
   expect(page.url()).not.toContain(compartida.token);
   expect(salidasExternas, 'ninguna solicitud sale del servidor mock local').toEqual([]);
