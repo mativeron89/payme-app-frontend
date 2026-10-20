@@ -1,3 +1,9 @@
+## 0.257.0 · 2026-10-20 (D388 / D431)
+
+- Balance › Consumos pide «¿Eliminar?» antes de borrar un ticket o gasto individual, también dentro de un lugar con varias visitas. Cancelar recibe foco inicial; confirmar conserva la operación y la cuenta calculada por el dueño.
+- La selección es efímera: cancelar, Escape, velo o navegar no eliminan. Se revalida viaje/actor/ticket/permiso al confirmar, se evita el doble envío y se omiten resultados tardíos de otro contexto. Retorno al botón real o al Balance si ya no existe.
+- ES/EN: «¿Eliminar?» / «Remove?», con Cancelar/Eliminar existentes. Sin cambios de permisos, API, dinero, avisos ni borrados reales para comprobarlo. D63 sigue abierto.
+
 # 0.255.2 · 2026-10-19
 
 ## 0.256.0 · 2026-10-20 (D387 / D431)

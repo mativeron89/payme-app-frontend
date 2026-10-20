@@ -12,7 +12,7 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
-import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
+import { AvatarDeViaje, EstadoSinViaje, HojaModal, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
 import { circuloDelViaje } from './circuloDelViaje';
 import { agruparConsumos, type LugarConsumido } from './consumosPorLugar';
 import { fechaDelTicket } from './viajeView';
@@ -38,14 +38,22 @@ import './viaje.css';
  * D256 · en Consumos, deslizar a la izquierda un ticket o un gasto deja ver
  * «Eliminar» en rojo, como en Mesas (`FilaDeslizable`, D239), sólo donde el
  * dueño dice `puede_eliminar` (quien lo cargó o quien lo pagó, con el viaje
- * abierto). Se elimina sin otra confirmación (Mati descartó la extra) y la
- * pantalla se actualiza con el viaje de la respuesta.
+ * abierto). D388 · antes de eliminar pide «¿Eliminar?»; sólo al confirmar se
+ * actualiza la pantalla con el viaje de la respuesta.
  *
  * D281 · en Consumos, los tickets y gastos del mismo lugar se juntan en una fila con el lugar, cuántas veces y el
  * total, que al tocarla se abre y muestra cada uno con su fecha y su monto (`consumosPorLugar.ts`). Un lugar con una
  * sola visita queda como antes.
  */
 export type OpcionDeBalance = 'consumos' | 'miembros';
+
+interface SeleccionParaEliminar {
+  readonly viajeId: string;
+  readonly ticketId: string;
+  readonly contexto: symbol;
+  readonly vida: symbol;
+  readonly disparador: HTMLButtonElement | null;
+}
 
 export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const { t } = useIdioma();
@@ -57,22 +65,104 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const eliminando = useRef(false);
   const vivo = useRef(true);
+  const vida = useRef<symbol | null>(null);
+  const seleccion = useRef<SeleccionParaEliminar | null>(null);
+  const [pregunta, setPregunta] = useState<SeleccionParaEliminar | null>(null);
+  const inicial = useRef<HTMLButtonElement | null>(null);
+  const balance = useRef<HTMLDivElement | null>(null);
+  const cuadroDeFoco = useRef<number | null>(null);
+  const principal = session?.principal_id ?? null;
+  const familia = session?.family_id ?? null;
+  const miembro = carga.tipo === 'listo' ? carga.viaje.mi_miembro_id : null;
+  // Sólo identidad local, sin credenciales. La generación también distingue A→B→A.
+  const contexto = useRef({ principal, familia, miembro, viajeId, id: Symbol('balance') });
+  if (contexto.current.principal !== principal || contexto.current.familia !== familia
+    || contexto.current.miembro !== miembro || contexto.current.viajeId !== viajeId) {
+    contexto.current = { principal, familia, miembro, viajeId, id: Symbol('balance') };
+  }
+  const generacion = contexto.current.id;
+  const actual = useRef({ carga, opcion, contexto: generacion, principal, viajeId });
+  actual.current = { carga, opcion, contexto: generacion, principal, viajeId };
+
   useEffect(() => {
     vivo.current = true;
-    return () => { vivo.current = false; };
+    vida.current = Symbol('vida de Balance');
+    return () => {
+      vivo.current = false;
+      vida.current = null;
+      seleccion.current = null;
+      if (cuadroDeFoco.current !== null) cancelAnimationFrame(cuadroDeFoco.current);
+    };
   }, []);
 
-  async function eliminar(tk: TicketEnViaje) {
-    if (eliminando.current) return;
+  function mismoContexto(s: SeleccionParaEliminar): boolean {
+    return vivo.current && vida.current === s.vida && actual.current.contexto === s.contexto
+      && actual.current.viajeId === s.viajeId && actual.current.principal !== null;
+  }
+
+  function ticketVigente(s: SeleccionParaEliminar): TicketEnViaje | undefined {
+    const a = actual.current;
+    if (!mismoContexto(s) || a.opcion !== 'consumos' || a.carga.tipo !== 'listo'
+      || a.carga.viaje.id !== s.viajeId || a.carga.viaje.estado !== 'abierto') return undefined;
+    return a.carga.viaje.tickets.find((tk) => tk.id === s.ticketId && tk.puede_eliminar);
+  }
+
+  function devolverFoco(s: SeleccionParaEliminar): void {
+    if (cuadroDeFoco.current !== null) cancelAnimationFrame(cuadroDeFoco.current);
+    cuadroDeFoco.current = requestAnimationFrame(() => {
+      cuadroDeFoco.current = null;
+      if (!mismoContexto(s) || actual.current.opcion !== 'consumos' || seleccion.current
+        || document.querySelector<HTMLElement>('.app')?.inert) return;
+      // No quitarle foco a una interacción posterior mientras respondía el dueño.
+      const activo = document.activeElement;
+      if (activo !== document.body && activo !== s.disparador && activo !== balance.current) return;
+      const boton = s.disparador;
+      if (ticketVigente(s) && boton?.isConnected && !boton.disabled && boton.getClientRects().length > 0) {
+        boton.focus({ preventScroll: true });
+      } else {
+        balance.current?.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function descartar(s: SeleccionParaEliminar): void {
+    if (seleccion.current !== s) return;
+    seleccion.current = null;
+    setPregunta(null);
+    devolverFoco(s);
+  }
+
+  useEffect(() => {
+    const s = seleccion.current;
+    if (s && !ticketVigente(s)) descartar(s);
+  }, [carga, opcion, generacion]);
+
+  function preguntar(tk: TicketEnViaje, disparador: HTMLButtonElement | null): void {
+    if (eliminando.current || seleccion.current || !vida.current) return;
+    const s: SeleccionParaEliminar = { viajeId, ticketId: tk.id, contexto: actual.current.contexto, vida: vida.current, disparador };
+    if (!ticketVigente(s)) return;
+    if (cuadroDeFoco.current !== null) cancelAnimationFrame(cuadroDeFoco.current);
+    cuadroDeFoco.current = null;
+    seleccion.current = s;
+    setPregunta(s);
+  }
+
+  async function confirmar(s: SeleccionParaEliminar) {
+    if (seleccion.current !== s || eliminando.current) return;
+    const tk = ticketVigente(s);
+    // Consumir antes del primer await: otro Enter/toque/callback encolado no reenvía.
+    descartar(s);
+    if (!tk) return;
     eliminando.current = true;
     setAbierta(null);
     try {
-      const v = await api.eliminarTicketDeViaje(viajeId, tk.id);
-      if (!vivo.current) return;
+      const v = await api.eliminarTicketDeViaje(s.viajeId, tk.id);
+      if (!mismoContexto(s)) return;
       mostrar(v);
       toast(tk.origen === 'manual' ? t('Gasto eliminado') : t('Ticket eliminado'), { sobreLaBarra: true });
+      devolverFoco(s);
     } catch (err) {
-      if (!vivo.current) return;
+      if (!mismoContexto(s)) return;
       const e = errorAlEliminar(err);
       if (e.tipo === 'no_disponible') {
         noDisponible();
@@ -93,7 +183,7 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   }
 
   return (
-    <div className="screen has-appbar">
+    <div ref={balance} tabIndex={-1} className="screen has-appbar">
       <AppHeaderBack
         userName={fullName(session) ?? undefined}
         onBack={() => goBack('viaje', viajeId)}
@@ -106,10 +196,22 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
         onVerViajes={() => navigate('viajes', 'abiertos')}
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         fotoDe={fotoDe}
-        deslizar={{ abierta, onAbrir: setAbierta, onCerrar: () => setAbierta(null), onEliminar: (tk) => void eliminar(tk) }}
+        deslizar={{ abierta, onAbrir: setAbierta, onCerrar: () => setAbierta(null), onEliminar: preguntar }}
       />
       {/* D250 · desde Balance de un viaje abierto, el círculo escanea para ese viaje. */}
       <AppBottomBar active={null} center={circuloDelViaje(carga.tipo === 'listo' ? carga.viaje : null, t)} />
+      {pregunta && ticketVigente(pregunta) && (
+        <HojaModal etiqueta={t('¿Eliminar?')} inicial={inicial} onCerrar={() => descartar(pregunta)}>
+          <div className="vjv-hoja">
+            <span className="vjv-hoja-asa" aria-hidden="true" />
+            <h2 className="vjv-hoja-titulo">{t('¿Eliminar?')}</h2>
+            <div className="vjv-hoja-botones">
+              <button ref={inicial} type="button" className="btn btn-ghost" onClick={() => descartar(pregunta)}>{t('Cancelar')}</button>
+              <button type="button" className="btn btn-navy" onClick={() => void confirmar(pregunta)}>{t('Eliminar')}</button>
+            </div>
+          </div>
+        </HojaModal>
+      )}
     </div>
   );
 }
@@ -130,7 +232,7 @@ export interface DeslizarConsumo {
   readonly abierta: string | null;
   readonly onAbrir: (ticketId: string) => void;
   readonly onCerrar: () => void;
-  readonly onEliminar: (tk: TicketEnViaje) => void;
+  readonly onEliminar: (tk: TicketEnViaje, disparador: HTMLButtonElement | null) => void;
 }
 
 export function BalanceVista({
@@ -295,6 +397,7 @@ function ConGesto({ tk, deslizar, nombre, children }: {
   nombre: string;
   children: ReactNode;
 }) {
+  const refEliminar = useRef<HTMLButtonElement | null>(null);
   if (!deslizar || !tk.puede_eliminar) return <>{children}</>;
   return (
     <FilaDeslizable
@@ -302,7 +405,8 @@ function ConGesto({ tk, deslizar, nombre, children }: {
       onAbrir={() => deslizar.onAbrir(tk.id)}
       onCerrar={deslizar.onCerrar}
       nombre={nombre}
-      onEliminar={() => deslizar.onEliminar(tk)}
+      refEliminar={refEliminar}
+      onEliminar={() => deslizar.onEliminar(tk, refEliminar.current)}
     >
       {children}
     </FilaDeslizable>

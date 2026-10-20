@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { Icon } from './Icon';
 
@@ -106,6 +106,7 @@ export function FilaDeslizable({
   onCerrar,
   nombre,
   onEliminar,
+  refEliminar,
   className,
   children,
 }: {
@@ -115,6 +116,8 @@ export function FilaDeslizable({
   /** Lo que se borra, para el nombre accesible del botón («Eliminar {nombre}»). */
   nombre: string;
   onEliminar: () => void;
+  /** El consumidor puede guardar el disparador real para devolverle foco al cerrar su hoja. */
+  refEliminar?: Ref<HTMLButtonElement>;
   className?: string;
   children: ReactNode;
 }) {
@@ -247,6 +250,7 @@ export function FilaDeslizable({
         {children}
       </div>
       <button
+        ref={refEliminar}
         type="button"
         className="deslizable-eliminar"
         aria-label={t('Eliminar {0}', nombre)}
