@@ -1,3 +1,11 @@
+## 0.257.2 · 2026-10-21 (D433 · n423)
+
+- «Listo» relee mesa y selección propia antes de decidir la hoja y antes del guardado confirmado. Las lecturas antiguas de otra identidad/época se descartan; el borrador editado se conserva, también si cambia durante el GET. Son lecturas existentes, sin revisión atómica ni resolución de n422.
+- Un resultado ambiguo conserva el intento y bloquea otra escritura. «Actualizar estado» sólo lee; una selección contradictoria o un GET fallido no acreditan éxito. Un rechazo definitivo conserva su tratamiento separado, sin reenvío automático.
+- La selección informativa exacta recuperada con expired/all_items_selected converge al mismo cierre propio del éxito normal. En consumo se exige evidencia propia liberable exacta; una fracción absorbida por tolerancia puede seguir inconclusa, sin fabricar tokens ni cambiar aritmética.
+- Se agregan ocho identidades E2E a 390×844 con fixtures HTTP, barreras explícitas, transporte/decoder y componentes reales; cuatro unitarios de recuperación y el T3 discriminante de borrador vacío con A completo y agua $0. El T1 de interacción complementa las identidades existentes, que se conservan.
+- Etapa A estática: código y pruebas preparados, sin ejecutar producto, tests, typecheck, builds o navegador. Sin PASS/GREEN/publicación; validación focal y CI oficial exacto pendientes del CEO. D63 sigue abierto. Reutiliza los textos ES/EN existentes.
+
 ## 0.257.1 · 2026-10-20 (D431 · fixture de Viajes)
 
 - La fixture de «dos viajes abiertos» invalida la memoria del mock inmediatamente después de editar su storage, en el mismo turno. Los casos originales a 375/390 conservan sus dos botones, geometría, hit targets y toque real hacia Tulum; no cambia producto.

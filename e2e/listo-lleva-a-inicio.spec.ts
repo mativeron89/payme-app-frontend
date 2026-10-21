@@ -58,14 +58,42 @@ async function llamadas(page: Page, metodo: 'lockItems' | 'replaceInformativeSel
   return page.evaluate((k) => Number(localStorage.getItem(k) ?? '0'), `payme.app.e2e.d32.${metodo}`);
 }
 
-async function cambiarEstadoEnMemoria(page: Page, code: string, status: string): Promise<void> {
-  await page.evaluate(async ([c, st]) => {
+/**
+ * n423/D433 · la lectura previa debe seguir viendo la mesa abierta. Se vence
+ * sólo al INGRESAR en la mutación objetivo, antes de delegar al método original
+ * del mock. El rechazo lo produce ese método; no se sintetiza un throw.
+ */
+async function vencerAlEntrarEnMutacion(
+  page: Page, code: string, metodo: 'lockItems' | 'replaceInformativeSelection',
+): Promise<void> {
+  await page.evaluate(async ({ code: c, metodo: nombre }) => {
+    const apiPath = '/src/api/index.ts';
     const storePath = '/src/api/mock/store.ts';
-    const store = await import(/* @vite-ignore */ storePath) as { state: { mesas: Array<{ code: string; status: string }> } };
-    const mesa = store.state.mesas.find((m) => m.code === c);
-    if (!mesa) throw new Error(`mesa ${c} ausente en el mock`);
-    mesa.status = st;
-  }, [code, status] as const);
+    const { api } = await import(/* @vite-ignore */ apiPath) as typeof import('../src/api');
+    const { state } = await import(/* @vite-ignore */ storePath) as typeof import('../src/api/mock/store');
+    const key = `payme.app.e2e.d32.${nombre}`;
+    localStorage.setItem(key, '0');
+    const vencer = (codigo: string): void => {
+      if (codigo !== c) return;
+      const mesa = state.mesas.find((m) => m.code === c);
+      if (!mesa) throw new Error(`mesa ${c} ausente en el mock`);
+      localStorage.setItem(key, String(Number(localStorage.getItem(key) ?? '0') + 1));
+      mesa.status = 'expired';
+    };
+    if (nombre === 'lockItems') {
+      const original = api.lockItems.bind(api);
+      api.lockItems = (...args: Parameters<typeof original>) => {
+        vencer(args[0]);
+        return original(...args);
+      };
+    } else {
+      const original = api.replaceInformativeSelection.bind(api);
+      api.replaceInformativeSelection = (...args: Parameters<typeof original>) => {
+        vencer(args[0]);
+        return original(...args);
+      };
+    }
+  }, { code, metodo });
 }
 
 test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
@@ -131,15 +159,14 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    // La mesa vence EN MEMORIA del mock justo antes del lock: el dueño contesta
-    // 409 `mesa_not_active`, que el front dice con su toast genérico de reserva.
-    // AF-HIGIENE-2 · sin refresco en el medio: si relee la mesa vencida antes
-    // del lock, «Listo» ya no está y el test mediría otra cosa.
+    // El preflight lee abierto; el original de lockItems encuentra el
+    // vencimiento al ingresar y produce su 409 real `mesa_not_active`.
     await sinRefresco(page, async () => {
-      await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
+      await vencerAlEntrarEnMutacion(page, mesa.code, 'lockItems');
       await page.getByRole('button', { name: 'Listo', exact: true }).click();
       await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
       await sigueEnLaMesa(page, mesa.code);
+      expect(await llamadas(page, 'lockItems')).toBe(1);
     });
   });
 
@@ -173,13 +200,14 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    // AF-HIGIENE-2 · lo mismo en «igual»: sin refresco entre el vencimiento y el PUT.
+    // Igual: se vence al ingresar al PUT, después de ambas lecturas previas.
     await sinRefresco(page, async () => {
-      await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
+      await vencerAlEntrarEnMutacion(page, mesa.code, 'replaceInformativeSelection');
       await page.getByRole('button', { name: 'Listo', exact: true }).click();
       await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
       await page.waitForTimeout(600);
       expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);
+      expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
     });
   });
 });

@@ -320,6 +320,12 @@ describe('lo propio en consumo · como el dueño, que suelta y vuelve a tomar', 
     expect(seleccionCierraLaMesa({ items, guarantee_mode: false }, (i) => i.remaining_bps, (i) => propioEnConsumo(i, b), b)).toBe(false);
   });
 
+  it('T3 · borrador vacío con A propio completo y agua $0 libre no escribe ni cierra', () => {
+    expect(comoLaPantalla([mio('A'), item({ id: 'agua', price_cents: 0 })], [])).toBe(false);
+    // Control positivo con la MISMA foto: el borrador no vacío sí escribe.
+    expect(comoLaPantalla([mio('A'), item({ id: 'agua', price_cents: 0 })], [['A', 10000]])).toBe(true);
+  });
+
   it('un borrador vacío en consumo sigue sin cerrar nada', () => {
     expect(comoLaPantalla([mio('A', { remaining_bps: 5000, my_bps: 5000, my_releasable_bps: 5000 })], [])).toBe(false);
   });

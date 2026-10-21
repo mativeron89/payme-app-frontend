@@ -118,12 +118,25 @@ export default defineConfig({
       // el BUILD con la CSP obligatoria; no contra el servidor de desarrollo.
       // D292 · `splash.spec.ts` también: la pantalla de carga se prueba contra el
       // build, sin la marca que este servidor le pone (ver `webServer`).
-      testIgnore: /[\\/]csp[\\/]|[\\/]splash\.spec\.ts$/,
+      testIgnore: /[\\/]csp[\\/]|[\\/]splash\.spec\.ts$|[\\/]mesa-recuperacion-listo\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },
         isMobile: true,
         hasTouch: true,
+      },
+    },
+    // Propuesta n423/D433: fachada real, HTTP inventado debajo, sin backend.
+    {
+      name: 'mesa-recuperacion-http',
+      testMatch: /[\\/]mesa-recuperacion-listo\.spec\.ts$/,
+      retries: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        baseURL: 'http://127.0.0.1:5190',
       },
     },
     /**
@@ -197,6 +210,18 @@ export default defineConfig({
       // pantalla de carga misma se prueba en el proyecto `pantalla-de-carga`, contra el build, sin la marca.
       command: 'VITE_E2E_CARGA_SIN_MINIMO=1 npx --no-install vite --port 5176 --strictPort --mode mock',
       url: 'http://localhost:5176',
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    // Propuesta n423/D433: valores públicos sólo para este proceso local.
+    {
+      command: 'npx --no-install vite --host 127.0.0.1 --port 5190 --strictPort --mode mock',
+      env: {
+        VITE_MOCK: '0',
+        VITE_API_URL: 'http://127.0.0.1:5190',
+        VITE_E2E_CARGA_SIN_MINIMO: '1',
+      },
+      url: 'http://127.0.0.1:5190',
       reuseExistingServer: false,
       timeout: 60_000,
     },

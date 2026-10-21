@@ -44,6 +44,8 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
   LockFractionRequest,
+  InformativeSelectionResponse,
+  ReplaceInformativeSelectionRequest,
   MesaDetail,
   PayMesaRequest,
   PayMesaResponse,
@@ -93,6 +95,7 @@ import {
   showClosedInformativeSelection,
   type InformativeSelectionState,
 } from './informativeSelectionView';
+import { consumoConfirmado, lecturaCompatible, mismoBorrador, rechazoDefinitivoSeleccion, type PreparacionListo } from './mesaRecovery';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { leerParteDelDetalle, type TipSetting } from '../api/miParte';
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
@@ -115,6 +118,12 @@ import {
  */
 
 type View = 'detail' | 'pay' | 'confirm';
+type IntentoSeleccion = {
+  readonly selected: ReadonlyMap<string, number>;
+  readonly revision: number;
+} & ({ readonly modo: 'consumo' } | {
+  readonly modo: 'igual'; readonly request: ReplaceInformativeSelectionRequest;
+});
 
 /**
  * F-1 · cada cuánto se relee una mesa abierta mientras se mira. 10 s es lo que
@@ -582,12 +591,36 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   // de A no puede escribir mesa, error, tarjetas ni notFound de B.
   const identityEpochRef = useRef(new RequestEpoch());
   const mesaReadEpochRef = useRef(new RequestEpoch());
+  const seleccionRef = useRef(selected);
+  const denominadoresRef = useRef(selectedDenominators);
+  seleccionRef.current = selected;
+  denominadoresRef.current = selectedDenominators;
+  const revisionBorradorRef = useRef(0);
+  const borradorEditadoRef = useRef(false);
+  const intentoSeleccionRef = useRef<IntentoSeleccion | null>(null);
+  const [seleccionIncierta, setSeleccionIncierta] = useState(false);
+  const [leyendoListo, setLeyendoListo] = useState(false);
+  const listoEnVueloRef = useRef(false);
+  const identidadActual = JSON.stringify([code, guestToken ?? null, session?.principal_id ?? null]);
+  const identidadActualRef = useRef(identidadActual);
+  identidadActualRef.current = identidadActual;
+  const mesaActualRef = useRef(mesa);
+  mesaActualRef.current = mesa;
+
+  function editarBorrador(): void {
+    revisionBorradorRef.current += 1;
+    borradorEditadoRef.current = true;
+  }
 
   // Un token guest nuevo para el mismo código es otra identidad: ningún
   // estado visual o lock de A puede sobrevivir para B.
   useEffect(() => {
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
+    revisionBorradorRef.current += 1;
+    borradorEditadoRef.current = false;
+    intentoSeleccionRef.current = null;
+    setSeleccionIncierta(false); setLeyendoListo(false); listoEnVueloRef.current = false;
     setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
     setInformativasGuardadas(new Map()); setCierrePropio(false);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
@@ -602,7 +635,11 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     cardStateRef.current = emptyCard; setCardState(emptyCard);
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
     setRefundedNotice(false); setResult(null); setError(null); setBusy(false); setView('detail');
-  }, [guestToken, code]);
+    return () => {
+      identityEpochRef.current.next();
+      mesaReadEpochRef.current.next();
+    };
+  }, [guestToken, code, session?.principal_id]);
 
   async function copyInvitationLink() {
     if (!shareInFlightRef.current.tryEnter()) return;
@@ -651,48 +688,75 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     }
   }
 
-  const reload = useCallback(() => {
-    const requestEpoch = mesaReadEpochRef.current.next();
+  // Una sola lectura completa para carga, Listo y recuperación. La época
+  // invalida respuestas anteriores, incluida una lectura silenciosa en vuelo.
+  const leerMesaPropia = useCallback(async () => {
+    const readEpoch = mesaReadEpochRef.current.next();
     const identityEpoch = identityEpochRef.current.capture();
-    api
-      .getMesa(code, guestToken)
-      .then((r) => {
-        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
-          setMesa(r.mesa); setNotFound(false);
-          resolverAviso.current(r.mesa.restaurant.name);
-          if (r.mesa.division_mode !== 'igual' || guestToken) {
-            setInformativeState('idle');
-            return;
-          }
-          const capability = readInformativeSelectionCapability(r.mesa.informative_selection_capability);
-          if (!capability?.supported) {
-            setInformativeState('unsupported');
-            return;
-          }
-          setInformativeState('loading');
-          void api.getInformativeSelection(code).then((saved) => {
-            if (!mesaReadEpochRef.current.isCurrent(requestEpoch)
-                || !identityEpochRef.current.isCurrent(identityEpoch)) return;
-            setSelected(selectionMap(saved));
-            setInformativasGuardadas(selectionMap(saved));
-            setSelectedDenominators(new Map());
-            // `updated_at` sólo existe con filas guardadas; un vaciado deliberado
-            // recién confirmado conserva su `true` hasta la próxima edición.
-            setInformativeSaved((prev) => prev || saved.selection.updated_at !== null);
-            setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
-          }).catch(() => {
-            if (mesaReadEpochRef.current.isCurrent(requestEpoch)
-                && identityEpochRef.current.isCurrent(identityEpoch)) setInformativeState('error');
-          });
-        }
-      })
-      .catch(() => {
-        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
-          setNotFound(true);
-          resolverAviso.current();
-        }
-      });
-  }, [code, guestToken]);
+    const identidad = identidadActualRef.current;
+    const revision = revisionBorradorRef.current;
+    const vigente = () => mesaReadEpochRef.current.isCurrent(readEpoch)
+      && identityEpochRef.current.isCurrent(identityEpoch)
+      && identidadActualRef.current === identidad;
+    try {
+      const r = await api.getMesa(code, guestToken);
+      if (!vigente()) return null;
+      const capability = readInformativeSelectionCapability(r.mesa.informative_selection_capability);
+      let propia: InformativeSelectionResponse | null = null;
+      const lecturaPropiaFallida = () => {
+        if (!vigente() || intentoSeleccionRef.current) return;
+        // En la carga inicial se conserva la mesa sólo para presentar el error
+        // y su botón de lectura. No es un par utilizable por Listo.
+        if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
+        setInformativeState('error');
+      };
+      if (r.mesa.division_mode === 'igual' && !guestToken && capability?.supported) {
+        try { propia = await api.getInformativeSelection(code); }
+        catch { lecturaPropiaFallida(); return null; }
+      }
+      if (!vigente()) return null;
+      if (propia && !lecturaCompatible(r.mesa, propia)) { lecturaPropiaFallida(); return null; }
+      return { mesa: r.mesa, propia, readEpoch, identityEpoch, revision };
+    } catch (err) {
+      if (!vigente()) return null;
+      throw err;
+    }
+  }, [code, guestToken, session?.principal_id]);
+
+  type FotoPropia = NonNullable<Awaited<ReturnType<typeof leerMesaPropia>>>;
+  const aplicarFotoPropia = useCallback((foto: FotoPropia) => {
+    setMesa(foto.mesa); setNotFound(false);
+    resolverAviso.current(foto.mesa.restaurant.name);
+    if (foto.propia) {
+      const guardadas = selectionMap(foto.propia);
+      setInformativasGuardadas(guardadas);
+      // Nunca pisar una edición hecha antes o durante el GET, ni el intento
+      // retenido por una respuesta perdida. Lo guardado y el borrador difieren.
+      if (!borradorEditadoRef.current && !intentoSeleccionRef.current
+          && foto.revision === revisionBorradorRef.current) {
+        seleccionRef.current = guardadas;
+        denominadoresRef.current = new Map();
+        setSelected(guardadas); setSelectedDenominators(new Map());
+      }
+      setInformativeSaved(mismoBorrador(seleccionRef.current, guardadas)
+        && foto.propia.selection.updated_at !== null);
+      setInformativeState(foto.propia.mesa.mutable ? 'available' : 'readonly');
+    } else {
+      setInformativeState(foto.mesa.division_mode === 'igual' && !guestToken ? 'unsupported' : 'idle');
+    }
+  }, [guestToken]);
+
+  const reload = useCallback(() => {
+    const identityEpoch = identityEpochRef.current.capture();
+    const identidad = identidadActualRef.current;
+    void leerMesaPropia().then((foto) => {
+      if (foto) aplicarFotoPropia(foto);
+    }).catch(() => {
+      if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return;
+      if (!mesaActualRef.current) { setNotFound(true); resolverAviso.current(); }
+      else setInformativeState('error');
+    });
+  }, [leerMesaPropia, aplicarFotoPropia]);
 
   useEffect(() => {
     reload();
@@ -717,6 +781,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const estadoDeMesaRef = useRef<string | null>(null);
   useEffect(() => { estadoDeMesaRef.current = mesa?.status ?? null; }, [mesa?.status]);
   const refrescarMesa = useCallback(() => {
+    if (listoEnVueloRef.current || intentoSeleccionRef.current) return;
     const readEpoch = mesaReadEpochRef.current.capture();
     const identityEpoch = identityEpochRef.current.capture();
     const refrescoEpoch = refrescoEpochRef.current.next();
@@ -738,6 +803,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const puedeRefrescarRef = useRef(false);
   puedeRefrescarRef.current = view === 'detail'
     && !busy
+    && !leyendoListo
+    && !seleccionIncierta
     && !propinaGuardando
     && !cierrePropio
     && (mesa?.status === 'open' || mesa?.status === 'partially_paid')
@@ -989,6 +1056,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const tipChosen = tipIsChosen(tip);
 
   function toggleItem(id: string) {
+    if (seleccionIncierta || busy) return;
     // D344 · con la propina de la mesa en camino no se elige (la fila ya está apagada).
     if (propinaGuardando) return;
     // B-06: con un pago sin confirmar, cambiar la selección cambiaría el
@@ -1049,12 +1117,16 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       next.set(id, def);
       if (!CORTE.allowsPay && denominator !== null) nextDenominators.set(id, denominator);
     }
+    editarBorrador();
+    seleccionRef.current = next;
     setSelected(next);
+    denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
     setInformativeSaved(false);
   }
 
   function setFraction(id: string, bps: number) {
+    if (seleccionIncierta || propinaGuardando || busy) return;
     if (frozenRef.current) {
       toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
       return;
@@ -1070,14 +1142,18 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     if (limiteIgual !== null && bps > limiteIgual) return;
     const next = new Map(selected);
     next.set(id, bps);
+    editarBorrador();
+    seleccionRef.current = next;
     setSelected(next);
     const nextDenominators = new Map(selectedDenominators);
     nextDenominators.delete(id);
+    denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
     setInformativeSaved(false);
   }
 
   function setDenominator(id: string, denominator: number) {
+    if (seleccionIncierta || propinaGuardando || busy) return;
     if (frozenRef.current || CORTE.allowsPay) {
       if (frozenRef.current) toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
       return;
@@ -1091,8 +1167,11 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     // Decisión 79 · en «igual», tampoco por encima de lo que queda del plato.
     const limiteIgual = mesa?.division_mode === 'igual' ? limiteInformativo(item, informativasGuardadas) : null;
     if (limiteIgual !== null && denominatorBps(denominator) > limiteIgual) return;
-    setSelected(new Map(selected).set(id, denominatorBps(denominator)));
-    setSelectedDenominators(new Map(selectedDenominators).set(id, denominator));
+    editarBorrador();
+    seleccionRef.current = new Map(selected).set(id, denominatorBps(denominator));
+    denominadoresRef.current = new Map(selectedDenominators).set(id, denominator);
+    setSelected(seleccionRef.current);
+    setSelectedDenominators(denominadoresRef.current);
     setInformativeSaved(false);
   }
 
@@ -1109,7 +1188,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * y en los dos casos la mesa se recarga para mostrar lo que hay.
    */
   async function releaseItem(id: string) {
-    if (!mesa || soltandoRef.current) return;
+    if (!mesa || soltandoRef.current || intentoSeleccionRef.current) return;
     if (frozenRef.current) {
       toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
       return;
@@ -1145,7 +1224,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * el mismo frame ven el mismo estado). El resultado lo decide `resultadoDeCerrar`.
    */
   async function cerrarMesa(): Promise<void> {
-    if (!mesa || cerrandoRef.current) return;
+    if (!mesa || cerrandoRef.current || intentoSeleccionRef.current || listoEnVueloRef.current) return;
     cerrandoRef.current = true;
     setCerrando(true);
     try {
@@ -1182,8 +1261,121 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     navigate('home');
   }
 
-  async function goToPay() {
-    if (!mesa) return;
+  async function prepararListo(): Promise<PreparacionListo | null> {
+    if (listoEnVueloRef.current || intentoSeleccionRef.current || busy || propinaGuardando) return null;
+    listoEnVueloRef.current = true; setLeyendoListo(true);
+    const identityEpoch = identityEpochRef.current.capture();
+    try {
+      const foto = await leerMesaPropia();
+      if (!foto) return null;
+      aplicarFotoPropia(foto);
+      if (foto.mesa.status !== 'open' && foto.mesa.status !== 'partially_paid') {
+        toast(t(foto.mesa.division_mode === 'igual'
+          ? 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.'
+          : 'No pudimos reservar lo que elegiste'));
+        return null;
+      }
+      if (foto.mesa.division_mode === 'igual' && (!foto.propia || !foto.propia.mesa.mutable)) return null;
+      const guardadas = foto.propia ? selectionMap(foto.propia) : new Map<string, number>();
+      return {
+        mesa: foto.mesa, selected: new Map(seleccionRef.current), denominators: new Map(denominadoresRef.current),
+        informativasGuardadas: guardadas,
+        informativeSaved: !!foto.propia && foto.propia.selection.updated_at !== null
+          && mismoBorrador(seleccionRef.current, guardadas),
+        guardadaLeida: foto.propia !== null,
+        identityEpoch: foto.identityEpoch, readEpoch: foto.readEpoch, revision: revisionBorradorRef.current,
+      };
+    } catch {
+      if (identityEpochRef.current.isCurrent(identityEpoch)) {
+        setInformativeState('error');
+        toast(t('No pudimos leer tu selección guardada. Reintenta la lectura antes de guardar.'));
+      }
+      return null;
+    } finally {
+      if (identityEpochRef.current.isCurrent(identityEpoch)) {
+        listoEnVueloRef.current = false; setLeyendoListo(false);
+      }
+    }
+  }
+
+  function confirmarInformativa(saved: InformativeSelectionResponse, revision: number): void {
+    const guardadas = selectionMap(saved);
+    setInformativasGuardadas(guardadas);
+    const sinEdicionPosterior = revisionBorradorRef.current === revision;
+    if (sinEdicionPosterior) {
+      borradorEditadoRef.current = false;
+      seleccionRef.current = guardadas; denominadoresRef.current = new Map();
+      setSelected(guardadas); setSelectedDenominators(new Map());
+    }
+    setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+    setInformativeSaved(sinEdicionPosterior);
+    if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
+      setCierrePropio(true); reload();
+    } else if (sinEdicionPosterior) volverAInicio();
+  }
+
+  async function reconciliarSeleccion(): Promise<boolean> {
+    const intento = intentoSeleccionRef.current;
+    if (!intento) return false;
+    try {
+      const foto = await leerMesaPropia();
+      if (!foto || intentoSeleccionRef.current !== intento) return false;
+      const confirmada = intento.modo === 'consumo'
+        ? foto.mesa.division_mode === 'consumo' && consumoConfirmado(foto.mesa, intento.selected)
+        : foto.propia !== null && sameInformativeSelection(intento.request, foto.propia);
+      // Un GET contradictorio no borra la incertidumbre ni convierte el
+      // siguiente Listo en otro POST/PUT. Tampoco se reemplaza el borrador.
+      if (!confirmada) return false;
+      aplicarFotoPropia(foto);
+      intentoSeleccionRef.current = null; setSeleccionIncierta(false);
+      if (intento.modo === 'igual' && foto.propia) {
+        confirmarInformativa(foto.propia, intento.revision);
+      } else {
+        const sinEdicionPosterior = revisionBorradorRef.current === intento.revision;
+        if (sinEdicionPosterior) {
+          borradorEditadoRef.current = false;
+          setSelected(new Map()); setSelectedDenominators(new Map());
+        }
+        if (cerroPorSeleccion({ mesa_status: foto.mesa.status, closure_reason: foto.mesa.closure_reason })) {
+          setCierrePropio(true);
+        } else if (sinEdicionPosterior) volverAInicio();
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function actualizarSeleccionIncierta(): Promise<void> {
+    if (listoEnVueloRef.current) return;
+    listoEnVueloRef.current = true; setBusy(true);
+    const identityEpoch = identityEpochRef.current.capture();
+    try { await reconciliarSeleccion(); }
+    finally {
+      if (identityEpochRef.current.isCurrent(identityEpoch)) {
+        listoEnVueloRef.current = false; setBusy(false);
+      }
+    }
+  }
+
+  async function goToPay(preparada?: PreparacionListo) {
+    if (intentoSeleccionRef.current || busy || propinaGuardando) return;
+    // La rama de pagos conserva su camino. Con el corte sólo escribe una foto
+    // que salió del callsite real de Listo y sigue perteneciendo a esta época.
+    if (!CORTE.allowsPay && (!preparada
+        || !identityEpochRef.current.isCurrent(preparada.identityEpoch)
+        || !mesaReadEpochRef.current.isCurrent(preparada.readEpoch)
+        || revisionBorradorRef.current !== preparada.revision)) return;
+    const mesaDeLaVista = preparada?.mesa ?? mesaActualRef.current;
+    if (!mesaDeLaVista) return;
+    const mesa = mesaDeLaVista;
+    const selected = preparada?.selected ?? seleccionRef.current;
+    const selectedDenominators = preparada?.denominators ?? denominadoresRef.current;
+    const identityEpoch = identityEpochRef.current.capture();
+    const identidad = identidadActualRef.current;
+    const vigente = () => identityEpochRef.current.isCurrent(identityEpoch)
+      && identidadActualRef.current === identidad;
+    const revision = preparada?.revision ?? revisionBorradorRef.current;
     /**
      * 🔴 **D-R8 · dónde termina el recorrido con el corte, y por qué el lock
      * ahora SÍ ocurre.**
@@ -1219,7 +1411,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             ? { item_id, fraction_bps }
             : { item_id, fraction_denominator: fractionDenominator };
         });
+        if (!CORTE.allowsPay) intentoSeleccionRef.current = { modo: 'consumo', selected: new Map(selected), revision };
         const r = await api.lockItems(code, requests, guestToken);
+        if (!vigente()) return;
+        intentoSeleccionRef.current = null; setSeleccionIncierta(false); borradorEditadoRef.current = false;
         setLockTokens([r.lock_token]);
         // F-2 (decisión 80) · la última selección cerró la mesa: el dueño lo dice
         // en esta misma respuesta (`mesa_status`), y se muestra en vez de volver
@@ -1243,7 +1438,14 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); volverAInicio(); return; }
         setView('pay');
       } catch (err) {
-        const { code: ec, extra } = extractApiError(err);
+        if (!vigente()) return;
+        const { code: ec, extra, status } = extractApiError(err);
+        if (!CORTE.allowsPay && !rechazoDefinitivoSeleccion(ec, status)) {
+          setSeleccionIncierta(true);
+          if (!await reconciliarSeleccion() && vigente()) toast(t('No pudimos reservar lo que elegiste'));
+          return;
+        }
+        intentoSeleccionRef.current = null;
         if (esInvitacionNoAceptada(err)) {
           setInvitacionPendiente(true);
         } else if (ec === 'fraction_not_available') {
@@ -1253,9 +1455,11 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
           if (itemId) {
             const next = new Map(selected);
             next.delete(itemId);
+            seleccionRef.current = next;
             setSelected(next);
             const nextDenominators = new Map(selectedDenominators);
             nextDenominators.delete(itemId);
+            denominadoresRef.current = nextDenominators;
             setSelectedDenominators(nextDenominators);
           }
           reload();
@@ -1265,9 +1469,11 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
           if (itemId) {
             const next = new Map(selected);
             next.delete(itemId);
+            seleccionRef.current = next;
             setSelected(next);
             const nextDenominators = new Map(selectedDenominators);
             nextDenominators.delete(itemId);
+            denominadoresRef.current = nextDenominators;
             setSelectedDenominators(nextDenominators);
           }
           reload();
@@ -1284,7 +1490,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
           toast(t('No pudimos reservar lo que elegiste'));
         }
       } finally {
-        setBusy(false);
+        if (vigente()) setBusy(false);
       }
     } else {
       // Partes iguales (H-14, auditoría 2026-08-06): marcar lo consumido es
@@ -1300,104 +1506,70 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!CORTE.allowsPay) {
         // Decisión 32 · lo guardado sigue igual (ninguna edición desde el último
         // guardado acreditado): «Guardado» lleva a Inicio sin volver a enviar.
-        if (informativeSaved) { volverAInicio(); return; }
-        if (informativeState === 'unsupported' || informativeState === 'idle') {
+        if (preparada?.informativeSaved) { volverAInicio(); return; }
+        if (!preparada && (informativeState === 'unsupported' || informativeState === 'idle')) {
           toast(t('Guardar esta selección todavía no está disponible.'));
           return;
         }
-        if (informativeState === 'loading') {
+        if (!preparada && (informativeState === 'loading')) {
           toast(t('Estamos leyendo tu selección. Intenta de nuevo en un momento.'));
           return;
         }
-        if (informativeState === 'error') {
+        if (!preparada && informativeState === 'error') {
           toast(t('No pudimos leer tu selección guardada. Reintenta la lectura antes de guardar.'));
           reload();
           return;
         }
-        if (informativeState === 'readonly') {
+        if (!preparada && (informativeState === 'readonly')) {
           toast(t('Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.'));
           return;
         }
         const request = replaceInformativeSelectionRequest(selected);
         setBusy(true);
+        intentoSeleccionRef.current = { modo: 'igual', selected: new Map(selected), revision, request };
         try {
           const saved = await api.replaceInformativeSelection(code, request);
-          setSelected(selectionMap(saved));
-          setInformativasGuardadas(selectionMap(saved));
-          setSelectedDenominators(new Map());
-          // F-2 (decisión 80) · esta declaración completó la mesa y el dueño la
-          // cerró en la misma escritura: se dice, no se vuelve mudo al Inicio.
-          if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
-            setInformativeState('readonly');
-            setInformativeSaved(true);
-            setCierrePropio(true);
-            reload();
+          if (!vigente()) return;
+          intentoSeleccionRef.current = null; setSeleccionIncierta(false);
+          confirmarInformativa(saved, revision);
+        } catch (err) {
+          if (!vigente()) return;
+          const failure = extractApiError(err);
+          if (!rechazoDefinitivoSeleccion(failure.code, failure.status)) {
+            setSeleccionIncierta(true);
+            if (!await reconciliarSeleccion() && vigente()) {
+              toast(t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
+            }
             return;
           }
-          // Si sigue abierta, la recarga debe terminar antes de permitir otra
-          // edición: así su GET tardío no puede pisar un borrador posterior.
-          setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
-          // P1 · la confirmación es la nota fija de la vista al volver, no un
-          // toast de 2,4 s. Decisión 32 · con el guardado OK se vuelve a Inicio.
-          setInformativeSaved(true);
-          volverAInicio();
-        } catch (err) {
-          let reconciled = false;
-          try {
-            const saved = await api.getInformativeSelection(code);
-            setInformativasGuardadas(selectionMap(saved));
-            if (sameInformativeSelection(request, saved)) {
-              reconciled = true;
-              setSelected(selectionMap(saved));
-              setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
-              setInformativeSaved(true);
-              volverAInicio();
-            } else if (!saved.mesa.mutable) {
-              setInformativeState('readonly');
+          // Un rechazo definitivo no se convierte en éxito porque otra
+          // pestaña haya guardado el mismo contenido. Se conserva el borrador.
+          intentoSeleccionRef.current = null;
+          if (esInvitacionNoAceptada(err)) { setInvitacionPendiente(true); return; }
+          if (failure.status === 404) setInformativeState('unsupported');
+          if (failure.code === 'informative_fraction_exceeds_item') {
+            const rem = typeof failure.extra.remaining_bps === 'number' ? failure.extra.remaining_bps : 0;
+            toast(rem > 0 ? t('De ese plato queda solo {0}', bpsLabel(rem)) : t('Ese plato ya está completo'));
+            const itemId = typeof failure.extra.item_id === 'string' ? failure.extra.item_id : null;
+            if (itemId) {
+              const next = new Map(selected); next.delete(itemId);
+              const nextDenominators = new Map(selectedDenominators); nextDenominators.delete(itemId);
+              seleccionRef.current = next; denominadoresRef.current = nextDenominators;
+              setSelected(next); setSelectedDenominators(nextDenominators);
             }
-          } catch {
-            // La lectura propia tampoco pudo acreditar la mutación: se conserva el intento local.
+            refrescarMesa(); return;
           }
-          if (!reconciled) {
-            const failure = extractApiError(err);
-            if (esInvitacionNoAceptada(err)) {
-              setInvitacionPendiente(true);
-              return;
-            }
-            if (failure.status === 404) setInformativeState('unsupported');
-            // v2.124.0: los dos rechazos por N del dueño se dicen con su copy
-            // (la misma que consumo), nunca como un fallo genérico de red.
-            // Decisión 79 · el dueño v2.134.0 rechaza pasar del entero con el
-            // plato y lo que queda de él (sin contar lo propio). Se dice con
-            // los MISMOS textos que consumo, se saca ese plato del borrador y
-            // se relee la mesa para mostrar lo que queda; lo demás se conserva.
-            if (failure.code === 'informative_fraction_exceeds_item') {
-              const rem = typeof failure.extra.remaining_bps === 'number' ? failure.extra.remaining_bps : 0;
-              toast(rem > 0 ? t('De ese plato queda solo {0}', bpsLabel(rem)) : t('Ese plato ya está completo'));
-              const itemId = typeof failure.extra.item_id === 'string' ? failure.extra.item_id : null;
-              if (itemId) {
-                const next = new Map(selected);
-                next.delete(itemId);
-                setSelected(next);
-                const nextDenominators = new Map(selectedDenominators);
-                nextDenominators.delete(itemId);
-                setSelectedDenominators(nextDenominators);
-              }
-              refrescarMesa();
-              return;
-            }
-            toast(failure.status === 404
-              ? t('Guardar esta selección todavía no está disponible.')
-              : failure.code === 'informative_selection_read_only'
-                ? t('La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.')
-                : failure.code === 'fraction_not_allowed_for_original_participants'
-                  ? t('Esa porción no es válida para esta mesa.')
-                  : failure.code === 'original_participants_unknown'
-                    ? t('Esta mesa no guardó el número original de personas. Actualiza para usar las porciones disponibles de siempre.')
-                    : t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
-          }
+          toast(failure.status === 404
+            ? t('Guardar esta selección todavía no está disponible.')
+            : failure.code === 'informative_selection_read_only'
+              ? t('La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.')
+              : failure.code === 'fraction_not_allowed_for_original_participants'
+                ? t('Esa porción no es válida para esta mesa.')
+                : failure.code === 'original_participants_unknown'
+                  ? t('Esta mesa no guardó el número original de personas. Actualiza para usar las porciones disponibles de siempre.')
+                  : t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
         } finally {
-          setBusy(false);
+          if (vigente()) setBusy(false);
         }
         return;
       }
@@ -3147,7 +3319,17 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       mySlotsTaken={mySlotsTaken}
       frozenScope={frozenScope}
       frozenRequiresReconciliation={frozenRequiresReconciliation}
-      busy={busy}
+      busy={busy || seleccionIncierta}
+      leyendoListo={leyendoListo}
+      onPrepararListo={prepararListo}
+      recuperacion={seleccionIncierta ? (
+        <div className="card" role="status">
+          <p>{t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.')}</p>
+          <button className="btn btn-navy" disabled={busy} onClick={() => void actualizarSeleccionIncierta()}>
+            {t('Actualizar estado')}
+          </button>
+        </div>
+      ) : null}
       inviteOpen={inviteOpen}
       informativasGuardadas={informativasGuardadas}
       onToggleItem={toggleItem}

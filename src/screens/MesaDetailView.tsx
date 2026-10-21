@@ -51,6 +51,7 @@ import {
 } from './miParteView';
 import { textoDeLaPropinaDeLaMesa } from './propinaDeLaMesaView';
 import { montoDeDescuento } from './desgloseDelTicket';
+import type { PreparacionListo } from './mesaRecovery';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -215,7 +216,11 @@ export interface MesaDetailViewProps {
   cerrando: boolean;
   onSetFraction: (id: string, bps: number) => void;
   onSetDenominator: (id: string, denominator: number) => void;
-  onGoToPay: () => void;
+  onGoToPay: (preparada?: PreparacionListo) => void;
+  /** Lecturas completas antes de decidir hoja/guardado; opcional sólo para vistas inertes. */
+  onPrepararListo?: () => Promise<PreparacionListo | null>;
+  leyendoListo?: boolean;
+  recuperacion?: ReactNode;
   onRetryFrozenPay: () => void;
   onOpenInvite: () => void;
   /** D379 · al cerrar la hoja del engranaje, el panel de invitar se pliega. */
@@ -537,6 +542,9 @@ export function MesaDetailView({
   onSetFraction,
   onSetDenominator,
   onGoToPay,
+  onPrepararListo,
+  leyendoListo = false,
+  recuperacion = null,
   onRetryFrozenPay,
   onOpenInvite,
   onCloseInvite,
@@ -831,7 +839,6 @@ export function MesaDetailView({
   const faltaElegirConsumos = esConsumo && selected.size === 0;
   // Decisión 32 · en consumo, «registrado» vive en el dueño (`my_bps`): con algo
   // registrado y nada nuevo, «Listo» vuelve a Inicio en vez de quedarse mudo.
-  const tengoRegistrado = esConsumo && mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid');
   // Frena explicando, no apagado (§5 bis · E): toast + scroll + pulso, las
   // tres. Compartido por «Continuar» y «Listo»: nunca se avanza sin elegir.
   const frenarSinEleccion = (): void => {
@@ -870,7 +877,9 @@ export function MesaDetailView({
    * borrador se suma»): con una respuesta perdida o dos pestañas, la mesa podía
    * cerrarse sin la hoja.
    */
-  const listoCierraLaMesa = !ejemplo && mesa.guarantee_mode === false && mesa.status === 'open' && (esConsumo
+  const listoCierraLaMesa = ({
+    mesa, selected, informativasGuardadas, informativeSaved, guardadaLeida,
+  }: PreparacionListo): boolean => !ejemplo && mesa.guarantee_mode === false && mesa.status === 'open' && (mesa.division_mode === 'consumo'
     ? seleccionCierraLaMesa(
       mesa,
       (item) => item.remaining_bps,
@@ -889,6 +898,27 @@ export function MesaDetailView({
   const enfocarListo = (): void => {
     requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('.appbar-center')?.focus());
   };
+  const preparandoRef = useRef(false);
+  const intencionListoRef = useRef(0);
+  async function terminarListo(confirmado = false): Promise<void> {
+    if (preparandoRef.current || busy || propinaGuardando || !onPrepararListo) return;
+    preparandoRef.current = true;
+    const intencion = ++intencionListoRef.current;
+    try {
+      const foto = await onPrepararListo();
+      if (!foto || intencionListoRef.current !== intencion) return;
+      const esConsumoAhora = foto.mesa.division_mode === 'consumo';
+      const tieneRegistrado = foto.mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid');
+      if (esConsumoAhora && foto.selected.size === 0 && !tieneRegistrado) {
+        frenarSinEleccion(); return;
+      }
+      // El predictor recibe LAS lecturas recién terminadas, no las props de
+      // la clausura anterior al await. La confirmación vuelve a leer también.
+      if (listoCierraLaMesa(foto) && !confirmado) { setHojaCierre('seleccion'); return; }
+      setHojaCierre(null);
+      onGoToPay(foto);
+    } finally { preparandoRef.current = false; }
+  }
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
 
   /**
@@ -1195,6 +1225,7 @@ export function MesaDetailView({
       </div>
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
+        {recuperacion}
         <div className="toast-ingreso-reserva" aria-hidden="true" />
         {avisoPagoCongelado}
         {invitacionPendiente && (
@@ -1451,12 +1482,12 @@ export function MesaDetailView({
           mios={lineasElegidas(elegidosAlGuardar(mesa, esConsumo, selected))}
           sinGuardar={false}
           confirmar={t('Guardar y cerrar')}
-          cerrando={busy}
-          onRevisar={() => { setHojaCierre(null); llevarALaLista(true); }}
-          onSalir={() => { setHojaCierre(null); enfocarListo(); }}
+          cerrando={busy || leyendoListo}
+          onRevisar={() => { intencionListoRef.current += 1; setHojaCierre(null); llevarALaLista(true); }}
+          onSalir={() => { intencionListoRef.current += 1; setHojaCierre(null); enfocarListo(); }}
           // El guardado sigue su camino de siempre: el dueño cierra la mesa en el
           // mismo pedido y la pantalla pasa a «La mesa se cerró» (F-2).
-          onConfirmar={() => { setHojaCierre(null); onGoToPay(); }}
+          onConfirmar={() => { void terminarListo(true); }}
         />
       )}
       {/* Con pagos apagados, Listo es el único acto explícito de persistencia.
@@ -1481,15 +1512,8 @@ export function MesaDetailView({
            * de una lectura acreditada. Marcar el último ítem continúa siendo
            * local y nunca envía por sí mismo.
            */
-          onClick: () => {
-            // Decisión 32 · sin nada elegido ni registrado, la misma guarda
-            // que el círculo hacia el pago; nunca un retorno silencioso.
-            if (faltaElegirConsumos && !tengoRegistrado) { frenarSinEleccion(); return; }
-            // D240 punto 8 · si este guardado cierra la mesa, primero avisa.
-            if (listoCierraLaMesa) { setHojaCierre('seleccion'); return; }
-            onGoToPay();
-          },
-          disabled: busy || propinaGuardando || (!esConsumo && informativeEditingBlocked),
+          onClick: () => { void terminarListo(); },
+          disabled: busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked),
         } : {
           // Decisión 90 de Mati, definición 1: el círculo dice «Listo» también
           // cuando sigue al pago.
