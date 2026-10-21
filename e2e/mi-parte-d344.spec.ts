@@ -124,6 +124,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await capturar(page, 'd344-03-mi-parte-consumo-vista-previa');
 
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     expect(await filasDelDesglose(page)).toEqual([
@@ -159,6 +160,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
 
     await verComoParticipante(page, code);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();

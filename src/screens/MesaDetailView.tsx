@@ -719,7 +719,12 @@ export function MesaDetailView({
   const repartoCalculado = useMemo(() => (!corteDeclarado
     ? null
     : esConsumo
-      ? progresoConBorrador(mesa, (item) => item.remaining_bps, () => 0, selected)
+      ? progresoConBorrador(
+          mesa,
+          (item) => item.remaining_bps,
+          (item) => selected.has(item.id) && bpsValido(item.my_releasable_bps) ? item.my_releasable_bps : 0,
+          selected,
+        )
       : !informativoPublicado(mesa)
         ? null
         : guardadaLeida
@@ -980,10 +985,10 @@ export function MesaDetailView({
           // 1A.3 · 'indeterminado' bloquea igual que 'tomado'.
           const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
           const registrado = !sel && esMioElegido(i, esConsumo);
-          const soltableRegistrado = registrado && soltarDisponible && !frozenScope && !propinaGuardando
+          const soltableRegistrado = registrado && soltarDisponible && !frozenScope && !busy && !propinaGuardando
             && sePuedeSoltar(i, mesa, esConsumo);
           // D344 · mientras se guarda la propina de la mesa, tampoco se elige.
-          const editBloqueado = (!esConsumo && informativeEditingBlocked) || propinaGuardando;
+          const editBloqueado = busy || (!esConsumo && informativeEditingBlocked) || propinaGuardando;
           // Regla 4 · las porciones que caben en la mesa y en lo que queda.
           const restanteParaPorcion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
           const opciones = porcionesDisponibles(original, restanteParaPorcion);

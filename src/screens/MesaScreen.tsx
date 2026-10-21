@@ -711,6 +711,9 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         setInformativeState('error');
       };
       if (r.mesa.division_mode === 'igual' && !guestToken && capability?.supported) {
+        // Sólo presenta la mesa inicial; loading impide editar o guardar hasta
+        // recibir la propia. No devuelve una foto utilizable antes de ese GET.
+        if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
         try { propia = await api.getInformativeSelection(code); }
         catch { lecturaPropiaFallida(); return null; }
       }
@@ -747,6 +750,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   }, [guestToken]);
 
   const reload = useCallback(() => {
+    setInformativeState('loading');
     const identityEpoch = identityEpochRef.current.capture();
     const identidad = identidadActualRef.current;
     void leerMesaPropia().then((foto) => {

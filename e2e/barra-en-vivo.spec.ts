@@ -21,6 +21,19 @@ const C540 = '54000000-0000-4000-8000-000000008601';
 const PIZZA = 'a0000000-0000-4000-8000-000000008602';
 const PARRILLADA = 'b0000000-0000-4000-8000-000000008602';
 
+/** Estado de la fixture de este único caso; nunca configura el producto. */
+type VueloDeBarra = {
+  lecturas: number;
+  locks: number;
+  refrescoRetenido: boolean;
+  refrescoEntregado: boolean;
+  lockRetenido: boolean;
+  cuerpo: Parameters<(typeof import('../src/api'))['api']['lockItems']>[1] | null;
+  liberarRefresco: () => void;
+  liberarLock: () => void;
+};
+type VentanaDeBarra = typeof window & { __barraEnVuelo: VueloDeBarra };
+
 async function preparar(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
   await ingresar(page);
@@ -198,29 +211,70 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
   });
 
   test('🔴 nunca doble conteo mientras «Listo» viaja: un refresco que ya trae lo registrado no lo suma otra vez', async ({ page }) => {
-    await page.clock.install();
     await preparar(page);
     await sembrar(page, 'consumo');
-    const t0 = await page.evaluate(() => Date.now() + 5_000);
-    await page.clock.pauseAt(t0);
-    await page.goto(`/#/mesa/${CONSUMO}`);
-    await page.clock.runFor(1_500);
-    await enTuMesaConLaLista(page);
+    await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await renglon(page, 'Consumo de 300').getByRole('radio', { name: '½' }).click();
     await expect(barra(page)).toHaveText('$150 / $840 (18%)');
 
-    // Como el dueño real: la lectura del refresco llega DESPUÉS de que quedó
-    // registrada la media. Sale antes de «Listo» y aterriza mientras viaja.
     await claim(page, C300, 'user', 5000);
+    await page.evaluate(async (code) => {
+      const route = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ route) as typeof import('../src/api');
+      if (!module.IS_MOCK) throw new Error('esta fixture sólo admite el mock');
+      const getMesa = module.api.getMesa.bind(module.api);
+      const lockItems = module.api.lockItems.bind(module.api);
+      let liberarRefresco!: () => void;
+      let liberarLock!: () => void;
+      const esperaRefresco = new Promise<void>((resolve) => { liberarRefresco = resolve; });
+      const esperaLock = new Promise<void>((resolve) => { liberarLock = resolve; });
+      const control: VueloDeBarra = {
+        lecturas: 0, locks: 0, refrescoRetenido: false, refrescoEntregado: false,
+        lockRetenido: false, cuerpo: null, liberarRefresco, liberarLock,
+      };
+      (window as VentanaDeBarra).__barraEnVuelo = control;
+      module.api.getMesa = async (...args: Parameters<typeof getMesa>) => {
+        if (args[0] !== code) return getMesa(...args);
+        const ordinal = ++control.lecturas;
+        if (ordinal > 2) throw new Error('lectura de mesa fuera del censo de esta fixture');
+        const respuesta = await getMesa(...args);
+        if (ordinal === 1) {
+          control.refrescoRetenido = true;
+          await esperaRefresco;
+          control.refrescoEntregado = true;
+        }
+        return respuesta;
+      };
+      module.api.lockItems = async (...args: Parameters<typeof lockItems>) => {
+        if (args[0] !== code) return lockItems(...args);
+        if (++control.locks !== 1) throw new Error('lock repetido en esta fixture');
+        control.cuerpo = args[1].map((item) => ({ ...item }));
+        const respuesta = await lockItems(...args);
+        control.lockRetenido = true;
+        await esperaLock;
+        return respuesta;
+      };
+    }, CONSUMO);
+    // El primer GET salió antes de Listo; el segundo es su preflight real.
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await page.clock.runFor(100);
+    await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.refrescoRetenido)).toBe(true);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await page.clock.runFor(300);
-    // El refresco ya aterrizó (350 ms) y «Listo» todavía viaja (hasta los 450).
+    await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.lockRetenido)).toBe(true);
+    expect(await page.evaluate(() => {
+      const c = (window as VentanaDeBarra).__barraEnVuelo;
+      return { lecturas: c.lecturas, locks: c.locks, cuerpo: c.cuerpo };
+    })).toEqual({ lecturas: 2, locks: 1, cuerpo: [{ item_id: C300, fraction_bps: 5000 }] });
+    // La respuesta del refresco cruza al consumidor mientras el lock sigue
+    // retenido. Dos cuadros permiten medir la barra después de ese turno.
+    await page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.liberarRefresco());
+    await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.refrescoEntregado)).toBe(true);
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
     await expect(barra(page)).toHaveText('$150 / $840 (18%)');
-    await page.clock.runFor(200);
+    await page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.liberarLock());
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   });
 });

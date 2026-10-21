@@ -315,6 +315,10 @@ test.describe('Listo · selección informativa v2', () => {
       let getCalls = 0;
       module.api.getInformativeSelection = async (...args: Parameters<typeof originalGet>) => {
         getCalls += 1;
+        localStorage.setItem('payme.app.e2e.r3.get.calls', String(getCalls));
+        // El segundo GET es el preflight obligatorio de Listo, no el reingreso.
+        if (getCalls === 2) return originalGet(...args);
+        if (getCalls > 3) throw new Error('GET propio fuera del censo inicial/preflight/reingreso');
         const phase = getCalls === 1 ? 'initial' : 'reload';
         localStorage.setItem(`payme.app.e2e.r3.${phase}.waiting`, '1');
         return new Promise((resolve, reject) => {
@@ -366,6 +370,7 @@ test.describe('Listo · selección informativa v2', () => {
       items: [expect.objectContaining({ declared_fraction_bps: 10000 })],
       confirm_closure: true,
     });
+    expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.get.calls'))).toBe('3');
   });
 
   /**
