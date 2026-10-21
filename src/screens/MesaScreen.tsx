@@ -1270,9 +1270,9 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!foto) return null;
       aplicarFotoPropia(foto);
       if (foto.mesa.status !== 'open' && foto.mesa.status !== 'partially_paid') {
-        toast(t(foto.mesa.division_mode === 'igual'
-          ? 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.'
-          : 'No pudimos reservar lo que elegiste'));
+        toast(foto.mesa.division_mode === 'igual'
+          ? t('La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.')
+          : t('No pudimos reservar lo que elegiste'));
         return null;
       }
       if (foto.mesa.division_mode === 'igual' && (!foto.propia || !foto.propia.mesa.mutable)) return null;

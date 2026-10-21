@@ -544,27 +544,39 @@ describe('🔴 corte · MesaScreen frena ANTES de api.lockItems', () => {
     );
     expect(goToPay, 'no se encontró goToPay').toBeDefined();
 
-    // Cada `setView('pay')` de goToPay tiene que estar precedido, dentro de la
-    // función, por una salida gobernada por el predicado del corte.
-    const guardas = [...recorrer(goToPay!)].filter(
-      (n): n is ts.IfStatement => ts.isIfStatement(n) && n.expression.getText(sf) === '!CORTE.allowsPay',
-    );
-    expect(guardas.length, 'goToPay dejó de gobernar sus salidas con el corte').toBeGreaterThanOrEqual(2);
-    for (const g of guardas) {
-      expect(g.thenStatement.getText(sf), 'una guarda del corte no retorna').toContain('return');
-    }
-    const transicionesEnGoToPay = [...recorrer(goToPay!)].filter(
+    // Censar las salidas reales: otro if del corte registra el intento antes
+    // del lock y no es una salida. Cada pay exige SU guarda, en el mismo bloque
+    // e inmediatamente antes, con return incondicional como última sentencia.
+    const transiciones = [...recorrer(goToPay!)].filter(
       (n) => ts.isCallExpression(n) && n.getText(sf) === "setView('pay')",
     );
-    for (const tr of transicionesEnGoToPay) {
-      const protegida = guardas.some((g) => g.getEnd() < tr.getStart(sf));
-      expect(protegida, `una transición a pay quedó sin guarda del corte: ${tr.getText(sf)}`).toBe(true);
+    expect(transiciones).toHaveLength(2);
+    const guardas = new Set<ts.IfStatement>();
+    for (const tr of transiciones) {
+      const sentencia = tr.parent;
+      if (!ts.isExpressionStatement(sentencia) || !ts.isBlock(sentencia.parent)) {
+        throw new Error('pay no es una sentencia directa de su bloque');
+      }
+      const bloque = sentencia.parent;
+      const g = bloque.statements[bloque.statements.indexOf(sentencia) - 1];
+      if (!g || !ts.isIfStatement(g) || !ts.isBlock(g.thenStatement)) {
+        throw new Error('pay perdió su guarda inmediatamente anterior');
+      }
+      expect(g.expression.getText(sf)).toBe('!CORTE.allowsPay');
+      expect(g.elseStatement).toBeUndefined();
+      const salida = g.thenStatement.statements[g.thenStatement.statements.length - 1];
+      if (!salida || !ts.isReturnStatement(salida)) {
+        throw new Error('la guarda de pay no termina con un return directo');
+      }
+      expect(salida.expression).toBeUndefined();
+      guardas.add(g);
     }
+    expect(guardas.size).toBe(2);
 
-    const lock = [...recorrer(goToPay!)].find(
+    const locks = [...recorrer(goToPay!)].filter(
       (n) => ts.isCallExpression(n) && n.expression.getText(sf) === 'api.lockItems',
     );
-    expect(lock, 'goToPay dejó de llamar a api.lockItems: se borró en vez de cerrar').toBeDefined();
+    expect(locks, 'el lock sigue existiendo una sola vez').toHaveLength(1);
   });
 
   it('las TRES transiciones a `pay` quedan bajo el predicado, y son tres', () => {
@@ -572,22 +584,31 @@ describe('🔴 corte · MesaScreen frena ANTES de api.lockItems', () => {
     const goToPay = [...recorrer(sf)].find(
       (n): n is ts.FunctionDeclaration => ts.isFunctionDeclaration(n) && n.name?.text === 'goToPay',
     )!;
-    // D-R8 · la guarda ya no es la primera sentencia: se busca por su predicado.
-    const guarda = [...recorrer(goToPay)].find(
-      (n): n is ts.IfStatement => ts.isIfStatement(n) && n.expression.getText(sf) === '!CORTE.allowsPay',
-    )!;
     const retry = [...recorrer(sf)].find(
       (n): n is ts.JsxAttribute => ts.isJsxAttribute(n) && n.name.getText(sf) === 'onRetryFrozenPay',
     );
     expect(retry, 'no se encontró onRetryFrozenPay').toBeDefined();
-    expect(retry!.initializer!.getText(sf)).toContain('CORTE.allowsPay');
+    const handler = retry!.initializer;
+    if (!handler || !ts.isJsxExpression(handler) || !handler.expression
+        || !ts.isArrowFunction(handler.expression) || !ts.isBlock(handler.expression.body)) {
+      throw new Error('el reintento no tiene el callback esperado');
+    }
+    const pasos = handler.expression.body.statements;
+    expect(pasos).toHaveLength(1);
+    const gate = pasos[0];
+    if (!gate || !ts.isIfStatement(gate) || !ts.isExpressionStatement(gate.thenStatement)) {
+      throw new Error('el reintento perdió su if directo');
+    }
+    expect(gate.expression.getText(sf)).toBe('CORTE.allowsPay');
+    expect(gate.elseStatement).toBeUndefined();
+    expect(gate.thenStatement.expression.getText(sf)).toBe("setView('pay')");
 
     const transiciones = [...recorrer(sf)].filter(
       (n) => ts.isCallExpression(n) && n.getText(sf) === "setView('pay')",
     );
     expect(transiciones.length, 'cambió la población de transiciones a pay').toBe(3);
     for (const tr of transiciones) {
-      const enGoToPay = tr.getStart(sf) > guarda.getEnd() && tr.getEnd() <= goToPay.getEnd();
+      const enGoToPay = tr.getStart(sf) > goToPay.getStart(sf) && tr.getEnd() <= goToPay.getEnd();
       const enRetry = tr.getStart(sf) >= retry!.getStart(sf) && tr.getEnd() <= retry!.getEnd();
       expect(enGoToPay || enRetry, `una transición quedó fuera del predicado: ${tr.getText(sf)}`).toBe(true);
     }

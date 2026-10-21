@@ -380,15 +380,19 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
       .filter(ts.isCallExpression)
       .filter((call) => call.expression.getText(mesaAst) === 'useEffect')
       .filter((call) => call.arguments[1] && ts.isArrayLiteralExpression(call.arguments[1]))
-      .filter((call) => call.arguments[1].getText(mesaAst) === '[guestToken, code]')
+      .filter((call) => call.arguments[1].getText(mesaAst) === '[guestToken, code, session?.principal_id]')
       .filter((call) => call.arguments[0].getText(mesaAst).includes('identityEpochRef.current.next()'));
     expect(identityEffects).toHaveLength(1);
+    const effect = identityEffects[0].arguments[0];
+    if (!ts.isArrowFunction(effect) || !ts.isBlock(effect.body)) throw new Error('reset de identidad sin cuerpo directo');
     const resetSetters = descendants(identityEffects[0].arguments[0])
       .filter((node): node is ts.CallExpression => ts.isCallExpression(node)
         && ts.isIdentifier(node.expression)
         && node.expression.text === 'setPayType');
     expect(resetSetters).toHaveLength(1);
     expect(isSetter(resetSetters[0], 'card')).toBe(true);
+    expect(effect.body.statements.some((st) => ts.isExpressionStatement(st) && st.expression === resetSetters[0]),
+      'card se resetea al entrar al efecto, no sólo en un callback o cleanup').toBe(true);
   });
 
   it.each([

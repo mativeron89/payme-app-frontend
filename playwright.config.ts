@@ -219,7 +219,6 @@ export default defineConfig({
       env: {
         VITE_MOCK: '0',
         VITE_API_URL: 'http://127.0.0.1:5190',
-        VITE_E2E_CARGA_SIN_MINIMO: '1',
       },
       url: 'http://127.0.0.1:5190',
       reuseExistingServer: false,
