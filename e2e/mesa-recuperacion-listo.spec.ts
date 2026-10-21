@@ -30,7 +30,7 @@ const CONFIG: AppConfig = {
     viajes: { supported: true, enabled: false }, username: { supported: true, enabled: false } },
 };
 interface LecturaObservada { body: number; checkpoint: number; render: number; restaurante: string | null }
-type FixtureWindow = Window & {
+type FixtureWindow = typeof window & {
   __n423Lecturas: Record<string, LecturaObservada>;
   __n423FachadaIntacta?: () => boolean;
 };
