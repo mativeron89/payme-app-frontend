@@ -15,7 +15,7 @@ const C = '33333333-3333-4333-8333-333333333333';
 const contrato = 'payme.app.informative-selections/v2' as const;
 const SESION: StoredSession = {
   principal_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', family_id: 'familia-inventada-a',
-  access_token: 'acceso-inventado-a', refresh_token: 'refresh-inventado-a',
+  access_token: 'fake-a', refresh_token: 'fake-ra',
   user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', payme_id: 'payme_fixture_a',
     email: 'fixture-a@example.invalid', first_name: 'Cuenta', last_name: 'Inventada',
     birth_date: '1990-01-01', birth_date_set: true, is_adult: true, avatar: null },
@@ -164,7 +164,7 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
       await responder(route, { error: 'not_found' }, 404); return;
     }
     const authorization = req.headers().authorization ?? '';
-    if (![SESION.access_token, 'acceso-inventado-b'].some((t) => authorization === `Bearer ${t}`)) {
+    if (![SESION.access_token, 'fake-b'].some((t) => authorization === `Bearer ${t}`)) {
       await rechazar('IDENTIDAD_NO_PREVISTA'); return;
     }
     if (method === 'GET') {
@@ -236,7 +236,7 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
     const locked = (body as { items: Array<{ item_id: string }> }).items.map((i) => i.item_id);
     const response: LockItemsResponse = { locked, claims: locked.map((id) => ({ item_id: id,
       fraction_bps: mesa.items.find((i) => i.id === id)!.my_bps })),
-      lock_token: 'token-inventado', lock_expires_at: null,
+      lock_token: 'fake-l', lock_expires_at: null,
       ...(mesa.status === 'expired' ? { mesa_status: mesa.status, closure_reason: mesa.closure_reason } : {}) };
     await responder(route, response);
   });
@@ -324,7 +324,7 @@ test('GET de otra identidad resuelto tarde no pisa la cuenta nueva ni dispara un
     const s = await import(/* @vite-ignore */ path) as typeof import('../src/api/storage');
     const actual = s.loadSession(); if (!actual) throw new Error('fixture sin sesión');
     s.saveSession({ ...actual, user: actual.user ? { ...actual.user, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } : undefined, principal_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      family_id: actual.family_id, access_token: 'acceso-inventado-b', refresh_token: 'refresh-inventado-b' });
+      family_id: actual.family_id, access_token: 'fake-b', refresh_token: 'fake-rb' });
   });
   await expect(page.getByText('Cuenta B', { exact: true })).toBeVisible();
   b.abrir();
