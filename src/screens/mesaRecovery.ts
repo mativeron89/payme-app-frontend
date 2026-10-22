@@ -45,6 +45,8 @@ export function consumoConfirmado(mesa: MesaDetail, intento: ReadonlyMap<string,
 export function rechazoDefinitivoSeleccion(code: string, status: number | null): boolean {
   if (isDefinitiveMutationError(code, status)) return true;
   return status === 409 && [
+    'selection_closure_confirmation_required',
+    'selection_closure_state_changed',
     'informative_selection_read_only',
     'informative_fraction_exceeds_item',
     'informative_selection_requires_payments_disabled',

@@ -1,3 +1,5 @@
+import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
+import { CLOSURE_CHANGED, CLOSURE_REQUIRED } from '../selectionClosure';
 import type {
   GoogleContinueLinkRequest,
   GoogleContinueRequest,
@@ -2552,6 +2554,45 @@ export async function mockGetInformativeSelection(code: string): Promise<Informa
   return delay(informativeResponse(mesa));
 }
 
+// Versión sólo en memoria del mock: release/reacquire no recicla un desafío.
+const mockSelectionVersions = new WeakMap<MockMesa, number>();
+const advanceMockSelection = (mesa: MockMesa): void => { mockSelectionVersions.set(mesa, (mockSelectionVersions.get(mesa) ?? 0) + 1); };
+/** D450: sólo estado sintético. No simula candados ni acredita atomicidad SQL. */
+function mockClosureSnapshot(mesa: MockMesa, requests: unknown, identity: MockIdentity): string {
+  const selections = Object.entries(state.informativeSelections)
+    .filter(([key]) => key.startsWith(`${mesa.id}:`)).sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify({ actor: [state.user.id, identity], mesa, selections, requests, version: mockSelectionVersions.get(mesa) ?? 0 });
+}
+function validMockClosureConfirmation(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return Object.keys(v).sort().join(',') === 'confirmed,contract,revision'
+    && v.contract === SELECTION_CLOSURE_CONTRACT && v.confirmed === true
+    && typeof v.revision === 'string' && /^[0-9a-f]{64}$/.test(v.revision);
+}
+async function requireMockClosure(
+  mesa: MockMesa, requests: unknown, identity: MockIdentity, wouldClose: boolean,
+  confirmation?: SelectionClosureConfirmation,
+): Promise<string> {
+  const snapshot = mockClosureSnapshot(mesa, requests, identity);
+  if (!validMockClosureConfirmation(confirmation)) return fail(400, 'validation_error');
+  if (!confirmation && !wouldClose) return snapshot;
+  const revision = await sha256Hex(snapshot);
+  if (snapshot !== mockClosureSnapshot(mesa, requests, identity)) return fail(409, CLOSURE_CHANGED);
+  const limits = [mesa.expires_at, ...mesa.items
+    .filter((i) => i.lock_expires_at && Date.parse(i.lock_expires_at) > Date.now())
+    .map((i) => i.lock_expires_at!)].sort();
+  const validUntil = limits[0]; const valid = Date.parse(validUntil) > Date.now();
+  const extra = valid && wouldClose ? { closure_confirmation: {
+    contract: SELECTION_CLOSURE_CONTRACT, revision, mesa_code: mesa.code,
+    division_mode: mesa.division_mode, would_close: true, valid_until: validUntil,
+  } } : {};
+  if (confirmation && (confirmation.revision !== revision || !valid || !wouldClose)) return fail(409, CLOSURE_CHANGED, extra);
+  if (!confirmation) return fail(409, valid ? CLOSURE_REQUIRED : CLOSURE_CHANGED, extra);
+  return snapshot;
+}
+
 export async function mockReplaceInformativeSelection(
   code: string,
   req: ReplaceInformativeSelectionRequest,
@@ -2561,7 +2602,9 @@ export async function mockReplaceInformativeSelection(
   if (!mesa) return fail(404, 'mesa_not_found');
   settleIfExpired(mesa);
   if (!req || typeof req !== 'object' || Array.isArray(req)
-      || Object.keys(req).length !== 2 || !Object.hasOwn(req, 'items') || !Object.hasOwn(req, 'confirm_closure')
+      || Object.keys(req).some((key) => !['items', 'confirm_closure', 'closure_confirmation'].includes(key))
+      || !Object.hasOwn(req, 'items') || !Object.hasOwn(req, 'confirm_closure')
+      || !validMockClosureConfirmation(req.closure_confirmation)
       || req.confirm_closure !== true || !Array.isArray(req.items) || req.items.length > 100) {
     return fail(400, 'validation_error');
   }
@@ -2614,6 +2657,14 @@ export async function mockReplaceInformativeSelection(
   const exceso = excesoInformativo(mesa, items, guardadas);
   if (exceso) return fail(409, 'informative_fraction_exceeds_item', exceso);
   if (!exactReplay) {
+    const desired = new Map(items.map((item) => [item.item_id, item.declared_fraction_bps]));
+    const others = Object.entries(state.informativeSelections)
+      .filter(([key]) => key.startsWith(`${mesa.id}:`) && key !== informativeKey(mesa));
+    const wouldClose = mesa.items.some((item) => !ceroCubierto(mesa, item)) && mesa.items.every((item) =>
+      ceroCubierto(mesa, item) || (desired.get(item.id) ?? 0) + others.reduce((sum, [, selection]) =>
+        sum + selection.items.filter((i) => i.item_id === item.id).reduce((n, i) => n + i.declared_fraction_bps, 0), 0) >= 10000);
+    const snapshot = await requireMockClosure(mesa, items, 'user', wouldClose, req.closure_confirmation);
+    if (snapshot !== mockClosureSnapshot(mesa, items, 'user')) return fail(409, CLOSURE_CHANGED);
     if (items.length === 0) delete state.informativeSelections[informativeKey(mesa)];
     else {
       state.informativeSelections[informativeKey(mesa)] = {
@@ -2621,6 +2672,7 @@ export async function mockReplaceInformativeSelection(
         updated_at: new Date().toISOString(),
       };
     }
+    advanceMockSelection(mesa);
     if (informativeCoverage(mesa)) {
       mesa.status = 'expired';
       mesa.closure_reason = 'all_items_selected';
@@ -3401,11 +3453,13 @@ export async function mockLockItems(
   code: string,
   requests: LockFractionRequest[],
   identity: MockIdentity,
+  closureConfirmation?: SelectionClosureConfirmation,
 ): Promise<LockItemsResponse> {
   if (invitacionPendienteMock(code)) return fail(403, 'invitation_not_accepted');
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_active');
+  if (!validMockClosureConfirmation(closureConfirmation)) return fail(400, 'validation_error');
   const original = originalParticipants(mesa.original_participants);
   // Validar y calcular efectivos ANTES de mutar (como la tx del backend).
   const claims: Array<{ item_id: string; fraction_bps: number }> = [];
@@ -3455,6 +3509,18 @@ export async function mockLockItems(
    * el dueño exige además `metadata.sin_garantia` porque tiene mesas legacy con
    * `false`, y el mock no las tiene.
    */
+  if (mesa.guarantee_mode === false && mesa.division_mode === 'consumo') {
+    const projected = mesa.items.map((item) => {
+      const claim = claims.find((c) => c.item_id === item.id);
+      return claim ? { ...item, claims: [...item.claims.filter((c) => !(c.who === identity && c.status === 'locked')),
+        { who: identity, fraction_bps: claim.fraction_bps, amount_cents: null, status: 'locked' as const }] } : item;
+    });
+    const wouldClose = projected.some((i) => !ceroCubierto(mesa, i)) && projected.every((i) =>
+      ceroCubierto(mesa, i) || i.claims.filter((c) => c.status === 'locked' || c.status === 'paid')
+        .reduce((sum, c) => sum + c.fraction_bps, 0) >= 10000);
+    const snapshot = await requireMockClosure(mesa, requests, identity, wouldClose, closureConfirmation);
+    if (snapshot !== mockClosureSnapshot(mesa, requests, identity)) return fail(409, CLOSURE_CHANGED);
+  }
   const dineroVivo = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true;
   const sinVencimiento = mesa.guarantee_mode === false || !dineroVivo;
   const expires = sinVencimiento ? null : new Date(Date.now() + 10 * 60_000).toISOString();
@@ -3483,6 +3549,7 @@ export async function mockLockItems(
     mesa.status = 'expired';
     mesa.closure_reason = 'all_items_selected';
   }
+  if (claims.length > 0) advanceMockSelection(mesa);
   return delay({
     locked: claims.map((c) => c.item_id),
     claims,
@@ -3540,6 +3607,7 @@ export async function mockReleaseItems(
       item.lock_expires_at = null;
     }
   }
+  if (released.length > 0) advanceMockSelection(mesa);
   return delay({ released });
 }
 

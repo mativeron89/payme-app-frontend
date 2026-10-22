@@ -119,7 +119,7 @@ describe('D363 · reservar y soltar en «por lo que pidió cada uno»', () => {
     expect([...segunda.seleccion]).toEqual([[TAGLIATELLE, 10000]]);
   });
 
-  it('punto 2 · sin la bandera, elegir los tres platos abriría «Con esto se cierra la mesa»; por eso va primera', () => {
+  it('punto 2 · la estimación no autoriza cierre; la foto fresca pasa al servidor y el ejemplo no adopta desafíos', () => {
     const { mesa } = detalleDeEjemplo(armada('consumo', 1));
     const borrador = new Map(PLATOS_DE_EJEMPLO.map((p) => [p.id, 10000]));
     expect(seleccionCierraLaMesa(
@@ -132,52 +132,48 @@ describe('D363 · reservar y soltar en «por lo que pidió cada uno»', () => {
       for (const h of n.getChildren()) yield* recorrer(h);
     }
     const nodos = [...recorrer(sf)];
-    const declaraciones = nodos.filter((n): n is ts.VariableDeclaration =>
-      ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'listoCierraLaMesa');
-    expect(declaraciones).toHaveLength(1);
-    const predictor = declaraciones[0].initializer;
-    if (!predictor || !ts.isArrowFunction(predictor) || !ts.isBinaryExpression(predictor.body)) {
-      throw new Error('el predictor no es la función de conjunción esperada');
-    }
-    let primero: ts.Expression = predictor.body;
-    while (ts.isBinaryExpression(primero) && primero.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      primero = primero.left;
-    }
-    expect(ts.isPrefixUnaryExpression(primero) && primero.operator === ts.SyntaxKind.ExclamationToken
-      && ts.isIdentifier(primero.operand) && primero.operand.text === 'ejemplo').toBe(true);
-
-    const llamadas = nodos.filter((n): n is ts.CallExpression =>
-      ts.isCallExpression(n) && n.expression.getText(sf) === 'listoCierraLaMesa');
-    expect(llamadas).toHaveLength(1);
-    expect(llamadas[0].arguments.map((a) => a.getText(sf))).toEqual(['foto']);
-    const condicion = llamadas[0].parent;
-    if (!ts.isBinaryExpression(condicion) || condicion.left !== llamadas[0]
-        || condicion.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken
-        || condicion.right.getText(sf) !== '!confirmado'
-        || !ts.isIfStatement(condicion.parent) || condicion.parent.expression !== condicion
-        || !ts.isBlock(condicion.parent.thenStatement)) {
-      throw new Error('la única llamada no gobierna la hoja con la foto recién leída');
-    }
-    const apertura = nodos.filter((n): n is ts.CallExpression =>
-      ts.isCallExpression(n) && n.expression.getText(sf) === 'setHojaCierre'
-      && n.arguments.length === 1 && ts.isStringLiteral(n.arguments[0]) && n.arguments[0].text === 'seleccion');
-    expect(apertura).toHaveLength(1);
-    const pasos = condicion.parent.thenStatement.statements;
-    expect(pasos).toHaveLength(2);
-    expect(ts.isExpressionStatement(pasos[0]) && pasos[0].expression === apertura[0]).toBe(true);
-    expect(ts.isReturnStatement(pasos[1]) && pasos[1].expression === undefined).toBe(true);
+    expect(nodos.filter((n) => ts.isCallExpression(n)
+      && ['listoCierraLaMesa', 'seleccionCierraLaMesa'].includes(n.expression.getText(sf)))).toHaveLength(0);
+    expect(nodos.filter((n) => ts.isCallExpression(n) && n.expression.getText(sf) === 'setHojaCierre'
+      && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'seleccion'))).toHaveLength(0);
     const terminar = nodos.find((n): n is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(n) && n.name?.text === 'terminarListo');
     expect(terminar).toBeDefined();
-    expect(condicion.getStart(sf) > terminar!.getStart(sf) && condicion.getEnd() < terminar!.getEnd()).toBe(true);
-    const fotos = [...recorrer(terminar!)].filter((n): n is ts.VariableDeclaration =>
+    const pasos = [...recorrer(terminar!)];
+    const fotos = pasos.filter((n): n is ts.VariableDeclaration =>
       ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'foto');
     expect(fotos).toHaveLength(1);
     const lectura = fotos[0].initializer;
     expect(lectura && ts.isAwaitExpression(lectura) && ts.isCallExpression(lectura.expression)
       && lectura.expression.expression.getText(sf) === 'onPrepararListo'
       && lectura.expression.arguments.length === 0).toBe(true);
-    expect(fotos[0].getEnd() < condicion.getStart(sf)).toBe(true);
+    const envios = pasos.filter((n): n is ts.CallExpression => ts.isCallExpression(n) && n.expression.getText(sf) === 'onGoToPay');
+    expect(envios).toHaveLength(1);
+    expect(envios[0].arguments.map((a) => a.getText(sf))).toEqual(['foto']);
+    expect(fotos[0].getEnd() < envios[0].getStart(sf)).toBe(true);
+    const confirms = nodos.filter((n): n is ts.CallExpression =>
+      ts.isCallExpression(n) && n.expression.getText(sf) === 'onConfirmarCierreSeleccion');
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0].arguments).toHaveLength(0);
+    const callback = confirms[0].parent;
+    expect(ts.isArrowFunction(callback) && ts.isJsxExpression(callback.parent)
+      && ts.isJsxAttribute(callback.parent.parent) && callback.parent.parent.name.getText(sf) === 'onConfirmar').toBe(true);
+
+    const pantalla = readFileSync(new URL('../../screens/MesaScreen.tsx', import.meta.url), 'utf8');
+    const screen = ts.createSourceFile('MesaScreen.tsx', pantalla, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const procesar = [...recorrer(screen)].find((n): n is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(n) && n.name?.text === 'procesarRechazoCierre');
+    expect(procesar).toBeDefined();
+    const internos = [...recorrer(procesar!)];
+    const guarda = internos.find((n): n is ts.IfStatement => ts.isIfStatement(n)
+      && [...recorrer(n.expression)].some((x) => ts.isIdentifier(x) && x.text === 'ejemplo'));
+    expect(guarda).toBeDefined();
+    expect([...recorrer(guarda!.thenStatement)].some((n) => ts.isReturnStatement(n)
+      && n.expression?.kind === ts.SyntaxKind.TrueKeyword)).toBe(true);
+    const adopciones = internos.filter((n): n is ts.CallExpression => ts.isCallExpression(n)
+      && n.expression.getText(screen) === 'setSolicitudCierre');
+    expect(adopciones).toHaveLength(1);
+    expect(guarda!.getEnd() < adopciones[0].getStart(screen)).toBe(true);
   });
 
   it('nunca dice que la selección cerró la mesa, aunque cubra los tres platos', () => {

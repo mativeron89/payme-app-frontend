@@ -31,11 +31,18 @@
       "409": [
         "original_participants_unknown",
         "fraction_not_available",
-        "mesa_not_active"
+        "mesa_not_active",
+        "selection_closure_confirmation_required",
+        "selection_closure_state_changed"
       ]
     },
     "known_original": "Legacy bps requests must also be a unit fraction1/n for n<=N. item_ids remains whole. No bypass via old request format.",
     "unknown_original": "Explicit denominators rejected409; legacy bps contract retained to preserve historical operation/claims. UI must not infer N or offer Otro without reliable original.",
-    "preserved": "Existing per-mesa/item locks, own claim replacement, availability, canonical residual absorption <100bps and integer cent pricing. Response claims[].fraction_bps is effective and may include residual. No rewrite of historical assignments. Equal and pay request schemas retain old fraction set."
+    "preserved": "Existing per-mesa/item locks, own claim replacement, availability, canonical residual absorption <100bps and integer cent pricing. Response claims[].fraction_bps is effective and may include residual. No rewrite of historical assignments. Equal and pay request schemas retain old fraction set.",
+    "closure_confirmation": {
+      "contract": "payme.app.selection-closure/v1",
+      "schema": "selection-closure-v1.schema.json#/$defs/confirmation",
+      "optional_until_completing": "Non-completing legacy saves remain compatible. Completing selection requires current-state confirmation before any writes; no forced reload or automatic /close fallback."
+    }
   }
 }

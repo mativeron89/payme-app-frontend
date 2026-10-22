@@ -1,3 +1,4 @@
+import type { SelectionClosureConfirmation } from './types';
 import {
   httpGoogleContinue,
   httpGuestRequest,
@@ -475,7 +476,7 @@ export interface Api {
     clientSecret: string,
     connectedAccountId?: string,
   ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
-  lockItems(code: string, items: LockFractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
+  lockItems(code: string, items: LockFractionRequest[], guestToken?: string, closureConfirmation?: SelectionClosureConfirmation): Promise<LockItemsResponse>;
   /** AF-25 · n80 · suelta lo propio no pagado; `[]` si no había nada que soltar. */
   releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
   /** AF-34 · n98 · el organizador cierra la mesa sin garantía. La confirmación la pide la pantalla. */
@@ -1048,16 +1049,16 @@ const realApi: Api = {
     }
     return { status: 'pending_auth', outcome: 'ambiguous', error: 'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.' };
   },
-  lockItems: (code, items, guestToken) =>
+  lockItems: (code, items, guestToken, closureConfirmation) =>
     guestToken
       ? httpGuestRequest<LockItemsResponse>(
           'POST',
           `/mesas/${encodeURIComponent(code)}/items/lock`,
           guestToken,
-          { items },
+          { items, ...(closureConfirmation && { closure_confirmation: closureConfirmation }) },
         )
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
-          items,
+          items, ...(closureConfirmation && { closure_confirmation: closureConfirmation }),
         }),
   getMesaParticipants: async (code) =>
     decodeParticipantes(await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/participants`)),
@@ -1655,7 +1656,7 @@ const mockApi: Api = {
     const result = await mock.mockConfirmGuarantee3ds(code);
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
   },
-  lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
+  lockItems: (code, items, guestToken, closureConfirmation) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user', closureConfirmation),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
   closeMesa: async (code) => decodeMesaCerrada(await mock.mockCloseMesa(code, 'user')),
   fijarPropinaDeLaMesa: async (code, setting) => leerRespuestaDelPutDePropina(

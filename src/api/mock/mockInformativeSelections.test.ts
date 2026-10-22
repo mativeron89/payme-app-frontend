@@ -1,3 +1,6 @@
+import { CLOSURE_CHANGED, CLOSURE_REQUIRED, decodeSelectionClosureRejection, selectionClosureConfirmation } from '../selectionClosure';
+import type { ReplaceInformativeSelectionRequest } from '../types';
+import type { MockMesa } from './store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 function storage() {
@@ -21,6 +24,23 @@ async function subject() {
   mesa.guarantee_method = 'none';
   mesa.closure_reason = null;
   return { mock, state, mesa };
+}
+
+/** Lee y comprueba el rechazo; jamás reenvía ni confirma por el test. */
+async function desafioSinEscritura(mesa: MockMesa, intentar: () => Promise<unknown>) {
+  const { state } = await import('./store');
+  const antes = JSON.stringify({ mesa, selections: state.informativeSelections });
+  const persisted = localStorage.getItem('payme_mock_state_v1');
+  let error: unknown;
+  try { await intentar(); } catch (err) { error = err; }
+  expect(error).toMatchObject({ status: 409, message: CLOSURE_REQUIRED });
+  expect(JSON.stringify({ mesa, selections: state.informativeSelections })).toBe(antes);
+  expect(localStorage.getItem('payme_mock_state_v1')).toBe(persisted);
+  const failure = error as { message: string; status: number; extra: Record<string, unknown> };
+  const parsed = decodeSelectionClosureRejection(failure.message, failure.status, failure.extra,
+    { mesaCode: mesa.code, mode: mesa.division_mode });
+  expect(parsed?.challenge).not.toBeNull();
+  return selectionClosureConfirmation(parsed!.challenge!);
 }
 
 describe('mock selección informativa v2', () => {
@@ -58,7 +78,8 @@ describe('mock selección informativa v2', () => {
       items: mesa.items.map((item) => ({ item_id: item.id, declared_fraction_bps: 10000 as const })),
       confirm_closure: true as const,
     };
-    const closed = await mock.mockReplaceInformativeSelection(mesa.code, request);
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockReplaceInformativeSelection(mesa.code, request));
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, { ...request, closure_confirmation: confirmation });
     expect(closed.mesa).toMatchObject({ status: 'expired', mutable: false, closure_reason: 'all_items_selected' });
     expect((await mock.mockReplaceInformativeSelection(mesa.code, request)).selection.items).toEqual(closed.selection.items);
     await expect(mock.mockReplaceInformativeSelection(mesa.code, { items: [], confirm_closure: true }))
@@ -112,13 +133,14 @@ describe('mock selección informativa v2', () => {
     });
     expect(sinCompletar.coverage.all_items_selected).toBe(false);
     expect(sinCompletar.mesa.status).toBe('open');
-    const closed = await mock.mockReplaceInformativeSelection(mesa.code, {
+    const request: ReplaceInformativeSelectionRequest = {
       items: [
         ...firstItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 5000 as const })),
         ...secondItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 10000 as const })),
-      ],
-      confirm_closure: true,
-    });
+      ], confirm_closure: true,
+    };
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockReplaceInformativeSelection(mesa.code, request));
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, { ...request, closure_confirmation: confirmation });
     expect(closed.coverage.all_items_selected).toBe(true);
     expect(closed.mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
     expect(closed.selection.items.map((item) => item.item_id)).toEqual(mesa.items.map((item) => item.id).sort());
@@ -322,7 +344,9 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (
 
   it('🔴 consumo: elegir sólo el plato con precio cierra la mesa (all_items_selected)', async () => {
     const { mock, mesa, pescado } = await conCero('consumo', false);
-    const r = await mock.mockLockItems(mesa.code, [{ item_id: pescado.id, fraction_bps: 10000 }], 'user');
+    const items = [{ item_id: pescado.id, fraction_bps: 10000 }];
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockLockItems(mesa.code, items, 'user'));
+    const r = await mock.mockLockItems(mesa.code, items, 'user', confirmation);
     expect(r).toMatchObject({ mesa_status: 'expired', closure_reason: 'all_items_selected' });
     expect(mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
   });
@@ -343,10 +367,9 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (
 
   it('🔴 igual informativo: declarar sólo el plato con precio da la cobertura completa y cierra', async () => {
     const { mock, mesa, pescado } = await conCero('igual', false);
-    const r = await mock.mockReplaceInformativeSelection(mesa.code, {
-      items: [{ item_id: pescado.id, declared_fraction_bps: 10000 }],
-      confirm_closure: true,
-    });
+    const request: ReplaceInformativeSelectionRequest = { items: [{ item_id: pescado.id, declared_fraction_bps: 10000 }], confirm_closure: true };
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockReplaceInformativeSelection(mesa.code, request));
+    const r = await mock.mockReplaceInformativeSelection(mesa.code, { ...request, closure_confirmation: confirmation });
     expect(r.coverage.all_items_selected).toBe(true);
     expect(r.mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
   });
@@ -403,7 +426,9 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (
 
   it('🔴 F1 · consumo: el tercer ⅓ sobre los 3334 que quedan se guarda como 3334 y cierra la mesa', async () => {
     const { mock, mesa, pescado } = await tercio([3333, 3333]);
-    const r = await mock.mockLockItems(mesa.code, [{ item_id: pescado.id, fraction_bps: 3333 }], 'user');
+    const items = [{ item_id: pescado.id, fraction_bps: 3333 }];
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockLockItems(mesa.code, items, 'user'));
+    const r = await mock.mockLockItems(mesa.code, items, 'user', confirmation);
     expect(pescado.claims.filter((c) => c.who === 'user').map((c) => c.fraction_bps)).toEqual([3334]);
     expect(r).toMatchObject({ mesa_status: 'expired', closure_reason: 'all_items_selected' });
   });
@@ -427,4 +452,45 @@ describe('D389 · un plato de $0 cuenta como cubierto en la mesa sin garantía (
       expect(abierta, `garantía ${garantia}`).toMatchObject({ assigned_cents: 12000, assignment_complete: !garantia });
     }
   });
+});
+
+describe('n422 · rechazo antes de mutar el mock', () => {
+  beforeEach(() => { vi.resetModules(); vi.unstubAllGlobals(); storage(); });
+  for (const mode of ['consumo', 'igual'] as const) {
+    it(`${mode}: la revisión obsoleta renueva desafío sin guardar`, async () => {
+      const { mock, state } = await subject();
+      const mesa = state.mesas.find((m) => m.division_mode === mode)!;
+      mesa.status = 'open'; mesa.guarantee_mode = false; mesa.closure_reason = null;
+      mesa.items = [{ ...mesa.items[0]!, claims: [], lock_expires_at: null }];
+      const id = mesa.items[0]!.id;
+      const lock = [{ item_id: id, fraction_bps: 10000 }];
+      const equal: ReplaceInformativeSelectionRequest = { items: [{ item_id: id, declared_fraction_bps: 10000 }], confirm_closure: true };
+      const request = () => mode === 'consumo' ? mock.mockLockItems(mesa.code, lock, 'user') : mock.mockReplaceInformativeSelection(mesa.code, equal);
+      const first = await desafioSinEscritura(mesa, request);
+      mesa.items[0]!.name += ' actualizado';
+      const before = JSON.stringify({ mesa, selections: state.informativeSelections });
+      const rejected = mode === 'consumo' ? mock.mockLockItems(mesa.code, lock, 'user', first)
+        : mock.mockReplaceInformativeSelection(mesa.code, { ...equal, closure_confirmation: first });
+      await expect(rejected).rejects.toMatchObject({ status: 409, message: CLOSURE_CHANGED,
+        extra: { closure_confirmation: { mesa_code: mesa.code, division_mode: mode } } });
+      expect(JSON.stringify({ mesa, selections: state.informativeSelections })).toBe(before);
+      expect(mesa.status).toBe('open');
+    });
+    it(`${mode}: confirmación malformada nunca guarda`, async () => {
+      const { mock, state } = await subject();
+      const mesa = state.mesas.find((m) => m.division_mode === mode)!;
+      mesa.status = 'open'; mesa.guarantee_mode = false; mesa.closure_reason = null;
+      mesa.items = [{ ...mesa.items[0]!, claims: [], lock_expires_at: null }];
+      const id = mesa.items[0]!.id;
+      const lock = [{ item_id: id, fraction_bps: 10000 }];
+      const equal: ReplaceInformativeSelectionRequest = { items: [{ item_id: id, declared_fraction_bps: 10000 }], confirm_closure: true };
+      const first = await desafioSinEscritura(mesa, () => mode === 'consumo' ? mock.mockLockItems(mesa.code, lock, 'user') : mock.mockReplaceInformativeSelection(mesa.code, equal));
+      const malformed = { ...first, confirmed: false } as never;
+      await expect(mode === 'consumo' ? mock.mockLockItems(mesa.code, lock, 'user', malformed)
+        : mock.mockReplaceInformativeSelection(mesa.code, { ...equal, closure_confirmation: malformed }))
+        .rejects.toMatchObject({ status: 400, message: 'validation_error' });
+      expect(mesa.items[0]!.claims).toEqual([]);
+      expect(state.informativeSelections[`${mesa.id}:${state.user.id}`]).toBeUndefined();
+    });
+  }
 });

@@ -831,9 +831,25 @@ export interface InformativeSelectionResponse {
   coverage: { all_items_selected: boolean };
 }
 
+export const SELECTION_CLOSURE_CONTRACT = 'payme.app.selection-closure/v1' as const;
+export interface SelectionClosureConfirmation {
+  readonly contract: typeof SELECTION_CLOSURE_CONTRACT;
+  readonly revision: string;
+  readonly confirmed: true;
+}
+export interface SelectionClosureChallenge {
+  readonly contract: typeof SELECTION_CLOSURE_CONTRACT;
+  readonly revision: string;
+  readonly mesa_code: string;
+  readonly division_mode: 'consumo' | 'igual';
+  readonly would_close: true;
+  readonly valid_until: string;
+}
+
 export interface ReplaceInformativeSelectionRequest {
   items: InformativeSelectionItem[];
   confirm_closure: true;
+  closure_confirmation?: SelectionClosureConfirmation;
 }
 
 /** POST /api/mesas — request (schemas.createMesa, A-1 + D4 v2.16). */
