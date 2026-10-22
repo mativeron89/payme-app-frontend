@@ -1,3 +1,9 @@
+## 0.257.3 · 2026-10-21 (D443 · claridad de Estadísticas)
+
+- El gráfico por cocina explica que agrupa importes por el tipo de cocina del restaurante, tanto para lo elegido como para lo pagado neto de reembolsos. El detalle aparece abierto al entrar con nombres, porcentajes, montos y visitas; conserva el control para plegar y reabrir y una lista accesible nombrada.
+- ES/EN: subtítulos explícitos y título inglés de selecciones separado del gasto pagado. Se mantienen categorías, cálculo, porcentajes, colores, períodos y contratos existentes, incluido el vacío real y los fallbacks «Otros» / «Otra cocina».
+- Regresión sintética propuesta para lectura inicial, plegado/reapertura, cero/una/varias categorías, ambas bases, inglés y teclado. Sin runtime ni pruebas locales de producto; validación oficial completa pendiente en el CI del PR del SHA exacto (D168). Sin GREEN/publicación en esta etapa; D63 sigue abierto.
+
 ## 0.257.2 · 2026-10-21 (D433 · n423)
 
 - «Listo» relee mesa y selección propia antes de decidir la hoja y antes del guardado confirmado. Las lecturas antiguas de otra identidad/época se descartan; el borrador editado se conserva, también si cambia durante el GET. Son lecturas existentes, sin revisión atómica ni resolución de n422.

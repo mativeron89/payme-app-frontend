@@ -931,8 +931,8 @@ export const EN: Record<string, string> = {
   "Cuenta eliminada": "Deleted account",
   "Soltar todavía no está disponible.": "Releasing isn't available yet.",
   // AF-26 · «Mis estadísticas» 2a · inicio con anillo.
-  "Lo que elegiste en tus mesas": "What you chose at your tables",
-  "Lo que pagaste, descontando reembolsos": "What you paid, minus refunds",
+  "Importe de lo que elegiste, agrupado por tipo de cocina del restaurante.": "Value of your selections, grouped by the restaurant's type of cuisine.",
+  "Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.": "Amount paid, minus refunds, grouped by the restaurant's type of cuisine.",
   "de consumo": "consumed",
   "de gasto": "spent",
   "Consumo por tipo de cocina: {0}": "Consumption by type of cuisine: {0}",
@@ -1258,7 +1258,7 @@ export const EN: Record<string, string> = {
   "Sacar foto": "Take photo",
   "Preparando la foto…": "Preparing the photo…",
   // AF-E173-4-E176 · E173-4 · Estadísticas de Claude Design.
-  "Tu consumo por tipo de cocina": "Your spending by type of cuisine",
+  "Tu consumo por tipo de cocina": "Your selections by type of cuisine",
   "Tu gasto por tipo de cocina": "Your spending by type of cuisine",
   "Sin consumo": "No spending",
   "cocina": "cuisine",

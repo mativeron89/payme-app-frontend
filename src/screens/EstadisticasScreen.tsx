@@ -389,13 +389,13 @@ const FORMA_E173: FormaAnillo = { tamano: 168, caja: 168, radio: GEOMETRIA_E173.
 /**
  * E173-4 · «Tu consumo por tipo de cocina» (§3). El centro dice cuántas cocinas
  * hubo, sin montos: el total vive sólo en la burbuja. El reparto (visitas,
- * monto y %) va en «Detalle por cocina», cerrado por defecto. El rótulo sale de
+ * monto y %) va en «Detalle por cocina», abierto por defecto. El rótulo sale de
  * `basis` —«consumo» con los pagos apagados, «gasto» con pagos—. **Nunca el
  * color solo**: el anillo lleva cada cocina con su % en el `aria-label`.
  */
 function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(true);
   const esConsumo = consumo.basis === 'consumption';
   // `decodeConsumoDelMes` exige que las cocinas sumen el total y que ninguna
   // venga en 0: sin cocinas es lo mismo que total 0. Una sola condición.
@@ -413,7 +413,9 @@ function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: C
       <div className="est-cocinas-cabeza">
         <h2 id="est-cocinas-titulo" className="est-cocinas-titulo">{titulo}</h2>
         <div className="est-cocinas-sub">
-          {esConsumo ? t('Lo que elegiste en tus mesas') : t('Lo que pagaste, descontando reembolsos')}
+          {esConsumo
+            ? t('Importe de lo que elegiste, agrupado por tipo de cocina del restaurante.')
+            : t('Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.')}
         </div>
       </div>
       <AnilloSvg
@@ -444,7 +446,7 @@ function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: C
             <Icon name="chevron-down" size={18} className={`rest-chev${abierto ? ' abierto' : ''}`} />
           </button>
           {abierto && (
-            <ul id="est-detalle-lista" className="est-detalle-lista">
+            <ul id="est-detalle-lista" className="est-detalle-lista" role="list" aria-label={t('Detalle por cocina')}>
               {consumo.categories.map((c, i) => (
                 <li key={c.category} className="est-detalle-fila">
                   <span className="est-detalle-color" style={{ background: colorEnPaleta(i, GEOMETRIA_E173.colores) }} aria-hidden="true" />

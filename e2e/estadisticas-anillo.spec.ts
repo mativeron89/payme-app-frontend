@@ -13,8 +13,8 @@ const MESES = mesesDeMexico(new Date(), 'es');
  * - Las filas: «{n} lugares distintos», «{plato} es lo más elegido · {n}
  *   platos», «Promedio mensual de los últimos 6 meses: {monto}».
  * - «Tu consumo por tipo de cocina»: anillo de 168 px, grosor 20, con su pista;
- *   el centro dice cuántas cocinas, sin montos; «Detalle por cocina» cerrado
- *   por defecto.
+ *   el centro dice cuántas cocinas, sin montos; «Detalle por cocina» abierto
+ *   por defecto, con nombres, importes, visitas y porcentajes visibles.
  *
  * `consumption_month` sigue siendo OPCIONAL: ausente o inválido ⇒ la pantalla
  * de siempre. Costura del mock `payme.app.mock.stats.v1`: `una`, `cuatro`,
@@ -43,10 +43,10 @@ const filas = (page: Page) => tarjeta(page).getByRole('listitem');
 const fila = (page: Page, nombre: RegExp) => page.getByRole('button', { name: nombre });
 
 test.describe('E173-4 · Estadísticas (Claude Design)', () => {
-  test('🔴 consumo: burbuja con el total solo, centro con las cocinas y detalle cerrado que se abre', async ({ page }) => {
+  test('🔴 consumo: reparto visible al entrar y detalle que se puede cerrar y reabrir', async ({ page }) => {
     await preparar(page, { costura: 'cuatro', sinDinero: true });
     await expect(tarjeta(page)).toBeVisible();
-    await expect(page.getByText('Lo que elegiste en tus mesas', { exact: true })).toBeVisible();
+    await expect(page.getByText('Importe de lo que elegiste, agrupado por tipo de cocina del restaurante.', { exact: true })).toBeVisible();
 
     // La burbuja: el mes y el total, sin visitas ni promedio.
     await expect(burbuja(page)).toContainText(MESES.actual);
@@ -62,18 +62,56 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(tarjeta(page).locator('circle')).toHaveCount(5);
     await expect(tarjeta(page).locator('circle.anillo-pista')).toHaveCount(1);
 
-    // El detalle, cerrado por defecto; se abre y se cierra.
+    // El reparto se entiende sin abrir nada; el control sigue permitiendo ocultarlo.
+    await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(tarjeta(page).getByRole('list', { name: 'Detalle por cocina', exact: true })).toBeVisible();
+    await expect(filas(page)).toHaveCount(4);
+    await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310.*40%/);
+    await expect(filas(page).nth(3)).toHaveText(/Mexicana.*1 visita.*\$86\.50.*11%/);
+    await expect(filas(page).first()).toBeVisible();
+    await expect(filas(page).last()).toBeVisible();
+    await detalle(page).click();
     await expect(detalle(page)).toHaveAttribute('aria-expanded', 'false');
     await expect(filas(page)).toHaveCount(0);
     await detalle(page).click();
     await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
     await expect(filas(page)).toHaveCount(4);
-    await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310.*40%/);
-    await expect(filas(page).nth(3)).toHaveText(/Mexicana.*1 visita.*\$86\.50.*11%/);
-    await detalle(page).click();
-    await expect(filas(page)).toHaveCount(0);
+    await expect(filas(page).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeAttached();
   });
+
+  for (const [sinDinero, titulo, subtitulo] of [
+    [true, 'Your selections by type of cuisine', "Value of your selections, grouped by the restaurant's type of cuisine."],
+    [false, 'Your spending by type of cuisine', "Amount paid, minus refunds, grouped by the restaurant's type of cuisine."],
+  ] as const) {
+    test(`inglés y teclado: ${sinDinero ? 'selecciones' : 'pagos'} con reparto visible desde la entrada`, async ({ page }) => {
+      await preparar(page, { costura: 'una', sinDinero });
+      // Ingresar usa la fixture sintética en español; la preferencia de idioma se relee al recargar.
+      await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+      await page.reload();
+      const cocina = page.getByRole('region', { name: titulo, exact: true });
+      const lista = cocina.getByRole('list', { name: 'Breakdown by cuisine', exact: true });
+      const control = cocina.getByRole('button', { name: 'Breakdown by cuisine', exact: true });
+      await expect(cocina).toBeVisible();
+      await expect(cocina.getByText(subtitulo, { exact: true })).toBeVisible();
+      await expect(lista).toBeVisible();
+      await expect(lista.getByRole('listitem')).toHaveCount(1);
+      await expect(lista.getByRole('listitem')).toContainText('Italian');
+      await expect(lista.getByRole('listitem')).toContainText('100%');
+      await expect(lista.getByRole('listitem')).toContainText('3 visits');
+      await control.focus();
+      await expect(control).toBeFocused();
+      await control.press('Enter');
+      await expect(control).toHaveAttribute('aria-expanded', 'false');
+      await expect(lista).toHaveCount(0);
+      await expect(control).toBeFocused();
+      await control.press('Space');
+      await expect(control).toHaveAttribute('aria-expanded', 'true');
+      await expect(lista).toBeVisible();
+      await expect(lista.getByRole('listitem')).toContainText('100%');
+      await expect(control).toBeFocused();
+    });
+  }
 
   test('las tres filas con sus subtítulos de la especificación', async ({ page }) => {
     await preparar(page, { costura: 'cuatro', sinDinero: true });
@@ -94,16 +132,18 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
   test('con pagos es «gasto»', async ({ page }) => {
     await preparar(page, {});
     await expect(page.getByRole('heading', { name: 'Tu gasto por tipo de cocina', exact: true })).toBeVisible();
-    await expect(page.getByText('Lo que pagaste, descontando reembolsos', { exact: true })).toBeVisible();
+    await expect(page.getByText('Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.', { exact: true })).toBeVisible();
     await expect(page.getByRole('img', { name: /^Gasto por tipo de cocina: / })).toBeVisible();
+    await expect(filas(page).first()).toBeVisible();
   });
 
   test('una sola cocina: anillo entero, «1 cocina» y 100 %', async ({ page }) => {
     await preparar(page, { costura: 'una', sinDinero: true });
     await expect(tarjeta(page).locator('.stat-anillo-centro')).toHaveText(/^1\s*cocina$/);
     await expect(tarjeta(page).locator('circle')).toHaveCount(2);
-    await detalle(page).click();
+    await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
     await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toBeVisible();
     await expect(filas(page).first()).toHaveText(/Italiana.*100%/);
   });
 
@@ -114,8 +154,12 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(tarjeta(page).locator('circle')).toHaveCount(5);
     const colores = await tarjeta(page).locator('g circle').evaluateAll((cs) => cs.map((c) => c.getAttribute('stroke')));
     expect(colores).toEqual(['#12A5B4', '#101E3B', '#6FD3DE', '#64748B']);
-    await detalle(page).click();
     await expect(filas(page)).toHaveCount(7);
+    // Los grupos desconocidos mantienen su fallback y su importe; other sigue siendo Otros.
+    await expect(filas(page).nth(4)).toHaveText(/Otra cocina.*1 visita.*\$62.*7%/);
+    await expect(filas(page).nth(5)).toHaveText(/Otra cocina.*1 visita.*\$44.*5%/);
+    await expect(filas(page).nth(6)).toHaveText(/Otros.*1 visita.*\$21.*2%/);
+    await expect(filas(page).nth(6)).toBeVisible();
   });
 
   test('🔴 mes vacío: $0, las filas dicen qué falta y el anillo queda con su pista', async ({ page }) => {
@@ -131,6 +175,8 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(page.getByRole('img', { name: 'Consumo por tipo de cocina: Sin consumo' })).toBeVisible();
     await expect(tarjeta(page).getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
     await expect(detalle(page)).toHaveCount(0);
+    await expect(filas(page)).toHaveCount(0);
+    await expect(tarjeta(page).getByRole('list', { name: 'Detalle por cocina', exact: true })).toHaveCount(0);
   });
 
   for (const costura of ['ausente', 'raro'] as const) {
@@ -187,8 +233,7 @@ test.describe('E173-4 · las medidas de la especificación', () => {
 });
 
 test.describe('E173-4 · capturas para Mati', () => {
-  // Captura quieta: sin esto la flecha de «Detalle por cocina» sale a mitad de su giro de 0,2 s
-  // (la regla de `prefers-reduced-motion` lo apaga).
+  // Capturas quietas con el reparto abierto desde la entrada.
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
@@ -202,7 +247,6 @@ test.describe('E173-4 · capturas para Mati', () => {
       await expect(burbuja(page)).toContainText(MESES.anterior);
       await expect(page.locator('.est-total')).toHaveText('$1,320');
       await capturar(page, `e173-estadisticas-${ancho}-${MESES.anterior.toLowerCase()}`);
-      await detalle(page).click();
       await expect(filas(page).first()).toBeVisible();
       await page.locator('.est-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
       await expect(filas(page).last()).toBeInViewport();
