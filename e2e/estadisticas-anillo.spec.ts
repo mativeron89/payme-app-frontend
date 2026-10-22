@@ -5,24 +5,17 @@ import { mesesDeMexico } from '../src/utils/meses';
 const MESES = mesesDeMexico(new Date(), 'es');
 
 /**
- * E173-4 · decisión 173 · Estadísticas según la especificación de Claude Design
- * (`ops/…/claude-design-estadisticas-20261004/…/PANTALLA-estadisticas.md`).
- *
- * - La burbuja: el período y el total, sin visitas ni promedio; un mes sin
- *   consumo dice $0.
- * - Las filas: «{n} lugares distintos», «{plato} es lo más elegido · {n}
- *   platos», «Promedio mensual de los últimos 6 meses: {monto}».
- * - «Tu consumo por tipo de cocina»: anillo de 168 px, grosor 20, con su pista;
- *   el centro dice cuántas cocinas, sin montos; «Detalle por cocina» abierto
- *   por defecto, con nombres, importes, visitas y porcentajes visibles.
- *
- * `consumption_month` sigue siendo OPCIONAL: ausente o inválido ⇒ la pantalla
- * de siempre. Costura del mock `payme.app.mock.stats.v1`: `una`, `cuatro`,
- * `siete`, `vacio`, `ausente`, `raro`. Con el dinero del mock apagado es
- * «consumo»; encendido (default `sandbox`), «gasto».
+ * D449 conserva las 16 identidades históricas E173-4, incluidos sus títulos.
+ * Sus oráculos visuales se trasladan del anillo a barras por cocina: 0/1/4/7,
+ * colores, proporción, lista accesible, detalle inicial/reapertura, teclado,
+ * fallback y móvil. El total ahora vive una sola vez en el resumen.
+ * D448: 14 fixtures de presentación a 0 ms; dos medidas a 350 ms.
  */
-async function preparar(page: Page, opciones: { costura?: string; sinDinero?: boolean }): Promise<void> {
-  await page.addInitScript(({ costura, sinDinero }) => {
+async function preparar(page: Page, opciones: { costura?: string; sinDinero?: boolean; latencia?: 0 | 350 }): Promise<void> {
+  await page.addInitScript(({ costura, sinDinero, latencia = 0 }) => {
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+    // D448: opt-in de esta fixture; setTimeout(0) conserva la respuesta asíncrona.
+    localStorage.setItem('payme.app.mock.latencia.v1', String(latencia));
     if (costura) localStorage.setItem('payme.app.mock.stats.v1', costura);
     if (sinDinero) localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
   }, opciones);
@@ -48,19 +41,20 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(tarjeta(page)).toBeVisible();
     await expect(page.getByText('Importe de lo que elegiste, agrupado por tipo de cocina del restaurante.', { exact: true })).toBeVisible();
 
-    // La burbuja: el mes y el total, sin visitas ni promedio.
+    // Cabecera con período y estado; el total sólo en el resumen.
     await expect(burbuja(page)).toContainText(MESES.actual);
     await expect(page.locator('.est-total')).toHaveText('$770');
     await expect(burbuja(page)).not.toContainText(/visita|promedio/);
 
-    // El anillo: el reparto en su aria-label; el centro sin montos.
-    await expect(page.getByRole('img', { name: 'Consumo por tipo de cocina: Italiana 40%, Japonesa 32%, Café 17%, Mexicana 11%' })).toBeVisible();
-    const centro = tarjeta(page).locator('.stat-anillo-centro');
+    // Texto accesible además de las barras decorativas; nunca sólo color.
+    await expect(tarjeta(page).getByRole('list', { name: 'Detalle por cocina' })).toContainText('Italiana');
+    const centro = tarjeta(page).locator('.est-cocinas-cantidad');
     await expect(centro).toHaveText(/^4\s*cocinas$/);
     await expect(centro).not.toContainText('$');
-    // La pista y una porción por cocina.
-    await expect(tarjeta(page).locator('circle')).toHaveCount(5);
-    await expect(tarjeta(page).locator('circle.anillo-pista')).toHaveCount(1);
+    await expect(tarjeta(page).locator('.est-cocina-barra')).toHaveCount(4);
+    await expect(tarjeta(page).locator('.est-cocina-barra[aria-hidden="true"]')).toHaveCount(4);
+    await expect(filas(page).nth(1)).toHaveText(/Japonesa.*32%/);
+    await expect(filas(page).nth(2)).toHaveText(/Café.*17%/);
 
     // El reparto se entiende sin abrir nada; el control sigue permitiendo ocultarlo.
     await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
@@ -133,14 +127,16 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await preparar(page, {});
     await expect(page.getByRole('heading', { name: 'Tu gasto por tipo de cocina', exact: true })).toBeVisible();
     await expect(page.getByText('Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.', { exact: true })).toBeVisible();
-    await expect(page.getByRole('img', { name: /^Gasto por tipo de cocina: / })).toBeVisible();
+    await expect(tarjeta(page).getByRole('list', { name: 'Detalle por cocina' })).toBeVisible();
+    await expect(tarjeta(page).locator('.est-cocina-barra').first()).toBeVisible();
     await expect(filas(page).first()).toBeVisible();
   });
 
   test('una sola cocina: anillo entero, «1 cocina» y 100 %', async ({ page }) => {
     await preparar(page, { costura: 'una', sinDinero: true });
-    await expect(tarjeta(page).locator('.stat-anillo-centro')).toHaveText(/^1\s*cocina$/);
-    await expect(tarjeta(page).locator('circle')).toHaveCount(2);
+    await expect(tarjeta(page).locator('.est-cocinas-cantidad')).toHaveText(/^1\s*cocina$/);
+    await expect(tarjeta(page).locator('.est-cocina-barra')).toHaveCount(1);
+    await expect(tarjeta(page).locator('.est-cocina-barra > span')).toHaveAttribute('style', /width: 100%/);
     await expect(detalle(page)).toHaveAttribute('aria-expanded', 'true');
     await expect(filas(page)).toHaveCount(1);
     await expect(filas(page).first()).toBeVisible();
@@ -149,11 +145,11 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
 
   test('🔴 siete cocinas: el anillo junta de la cuarta en adelante (cuatro colores), el detalle las muestra todas', async ({ page }) => {
     await preparar(page, { costura: 'siete', sinDinero: true });
-    await expect(tarjeta(page).locator('.stat-anillo-centro')).toHaveText(/^7\s*cocinas$/);
-    // La pista y cuatro porciones.
-    await expect(tarjeta(page).locator('circle')).toHaveCount(5);
-    const colores = await tarjeta(page).locator('g circle').evaluateAll((cs) => cs.map((c) => c.getAttribute('stroke')));
-    expect(colores).toEqual(['#12A5B4', '#101E3B', '#6FD3DE', '#64748B']);
+    await expect(tarjeta(page).locator('.est-cocinas-cantidad')).toHaveText(/^7\s*cocinas$/);
+    // Las siete barras mantienen la paleta; cada grupo tiene su barra propia.
+    await expect(tarjeta(page).locator('.est-cocina-barra')).toHaveCount(7);
+    const colores = await tarjeta(page).locator('.est-cocina-barra > span').evaluateAll((cs) => cs.map((c) => getComputedStyle(c).backgroundColor));
+    expect(colores).toEqual(['rgb(18, 165, 180)', 'rgb(16, 30, 59)', 'rgb(111, 211, 222)', ...Array(4).fill('rgb(100, 116, 139)')]);
     await expect(filas(page)).toHaveCount(7);
     // Los grupos desconocidos mantienen su fallback y su importe; other sigue siendo Otros.
     await expect(filas(page).nth(4)).toHaveText(/Otra cocina.*1 visita.*\$62.*7%/);
@@ -170,9 +166,9 @@ test.describe('E173-4 · Estadísticas (Claude Design)', () => {
     await expect(fila(page, /^Qué comes/)).toContainText(`Sin platos en ${mes}`);
     // Evolución no depende del mes: igual que siempre.
     await expect(fila(page, /^Evolución/)).toContainText('Promedio mensual de los últimos 6 meses:');
-    await expect(tarjeta(page).locator('circle')).toHaveCount(1);
-    await expect(tarjeta(page).locator('.stat-anillo-centro')).toHaveText(/^—\s*Sin consumo$/);
-    await expect(page.getByRole('img', { name: 'Consumo por tipo de cocina: Sin consumo' })).toBeVisible();
+    await expect(tarjeta(page).locator('.est-cocina-barra')).toHaveCount(0);
+    await expect(tarjeta(page).locator('.est-cocinas-cantidad')).toHaveText(/^—\s*Sin consumo$/);
+    await expect(tarjeta(page).getByText('Sin consumo', { exact: true })).toBeVisible();
     await expect(tarjeta(page).getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
     await expect(detalle(page)).toHaveCount(0);
     await expect(filas(page)).toHaveCount(0);
@@ -194,22 +190,23 @@ test.describe('E173-4 · las medidas de la especificación', () => {
   for (const [ancho, alto, total] of [[390, 844, '26px'], [320, 568, '21px']] as const) {
     test(`a ${ancho} px: burbuja de 83, total de ${total}, filas de 64, anillo de 168 y el «+» sin tapar la última tarjeta`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
-      await preparar(page, { costura: 'cuatro', sinDinero: true });
+      // Las medidas leen accesos cargados en paralelo: conservan la latencia original.
+      await preparar(page, { costura: 'cuatro', sinDinero: true, latencia: 350 });
       await expect(tarjeta(page)).toBeVisible();
-      await expect(page.locator('.est-total')).toHaveCSS('font-size', total);
+      await expect(page.locator('.est-total')).toHaveCSS('font-size', ancho === 390 ? '34px' : '28px');
       await expect(page.locator('.est-total')).toHaveCSS('font-weight', '800');
       const medidas = await page.evaluate(() => {
         const caja = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
-        const svg = document.querySelector('.est-cocinas svg')!;
+        const barra = caja('.est-cocina-barra');
+        const relleno = caja('.est-cocina-barra > span');
         const filas = [...document.querySelectorAll('.stat-acceso')].map((f) => f.getBoundingClientRect().height);
-        const anillo = svg.querySelector('g circle')!;
         return {
           burbuja: caja('.est-burbuja').height,
           selector: caja('.est-burbuja .stat-burbuja-periodo').height,
           detalle: caja('.est-detalle').height,
           filas,
-          svg: { ancho: svg.getBoundingClientRect().width, caja: svg.getAttribute('viewBox') },
-          anillo: { r: anillo.getAttribute('r'), grosor: anillo.parentElement!.getAttribute('stroke-width') },
+          barra: { ancho: barra.width, alto: barra.height, proporcion: relleno.width / barra.width },
+          resumen: caja('.est-resumen').width,
           desborde: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         };
       });
@@ -217,8 +214,10 @@ test.describe('E173-4 · las medidas de la especificación', () => {
       expect(medidas.selector).toBeGreaterThanOrEqual(44);
       expect(medidas.detalle).toBeGreaterThanOrEqual(44);
       for (const h of medidas.filas) expect(h).toBeGreaterThanOrEqual(64);
-      expect(medidas.svg).toEqual({ ancho: 168, caja: '0 0 168 168' });
-      expect(medidas.anillo).toEqual({ r: '74', grosor: '20' });
+      expect(medidas.barra.ancho).toBeGreaterThan(200);
+      expect(medidas.barra.alto).toBe(8);
+      expect(medidas.barra.proporcion).toBeCloseTo(310 / 770, 3);
+      expect(medidas.resumen).toBe(ancho - 32);
       expect(medidas.desborde).toBe(0);
 
       // Al final del scroll, el «+» no tapa la última tarjeta.

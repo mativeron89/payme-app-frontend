@@ -53,6 +53,23 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  // D444/D449 · resumen y meses completos.
+  "Mes completo": "Complete month",
+  "Tu consumo registrado": "Your recorded selections",
+  "Tu gasto registrado": "Your recorded spending",
+  "MXN · Período elegido": "MXN · Selected period",
+  "No disponible": "Unavailable",
+  "Meses completos": "Complete months",
+  "Últimos dos meses completos, independientemente del período elegido.": "The last two complete months, regardless of the selected period.",
+  "Consumo registrado · MXN": "Recorded selections · MXN",
+  "Gasto pagado neto de reembolsos · MXN": "Spending minus refunds · MXN",
+  "Cambio de {0} respecto a {1}": "Change in {0} compared with {1}",
+  "Consumo registrado": "Recorded selections",
+  "Gasto registrado": "Recorded spending",
+  "Sin porcentaje de cambio: el mes de referencia tiene importe cero.": "No percentage change: the reference month has a zero amount.",
+  "Cargando comparación…": "Loading comparison…",
+  "No hay datos comparables para estos dos meses completos.": "Comparable data is unavailable for these two complete months.",
+  "El promedio mensual divide el total entre seis meses calendario, incluido el mes en curso y los meses sin actividad.": "The monthly average divides the total by six calendar months, including the current month and months with no activity.",
   'Te sumaste a {0}': 'You joined {0}',
   'Te sumaste a la mesa': 'You joined the table',
   'Siguiente': 'Next',
@@ -935,8 +952,6 @@ export const EN: Record<string, string> = {
   "Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.": "Amount paid, minus refunds, grouped by the restaurant's type of cuisine.",
   "de consumo": "consumed",
   "de gasto": "spent",
-  "Consumo por tipo de cocina: {0}": "Consumption by type of cuisine: {0}",
-  "Gasto por tipo de cocina: {0}": "Spending by type of cuisine: {0}",
   "Otra cocina": "Other cuisine",
   // AF-29 · lo mío pagado y elegido (cierra G-40).
   "Pagaste {0} · elegiste {1} más": "You paid {0} · chose {1} more",

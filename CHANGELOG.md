@@ -1,3 +1,10 @@
+## 0.258.0 · 2026-10-21 (D444/D449 · resumen de Estadísticas)
+
+- Resumen del período con consumo o gasto registrado, visitas y promedio por visita; el total aparece una sola vez. La cabecera conserva el selector y señala el período en curso o el mes completo.
+- Compara los dos últimos meses completos de México con la misma base y MXN, excluyendo el actual. Expone importes, visitas, promedios y diferencias; no convierte datos ausentes en cero ni calcula porcentajes sobre una base cero. Conserva el truncado de centavos del dueño y explica los seis meses del promedio mensual.
+- Cocinas con barras, nombres, importes, porcentajes y visitas. Detalle inicial, teclado, accesos y compatibilidad anterior conservados; textos ES/EN y geometría 320/390. Pruebas sintéticas unitarias y E2E añadidas. D448 limita latencia cero a 14 fixtures de presentación; las dos medidas conservan 350 ms, sin prometer ahorro ni cambiar cobertura.
+- Candidata preparada sin runtime local. Validación oficial completa pendiente del CI del SHA exacto; sin GREEN, integración ni publicación en esta etapa. D63 sigue abierto.
+
 ## 0.257.3 · 2026-10-21 (D443 · claridad de Estadísticas)
 
 - El gráfico por cocina explica que agrupa importes por el tipo de cocina del restaurante, tanto para lo elegido como para lo pagado neto de reembolsos. El detalle aparece abierto al entrar con nombres, porcentajes, montos y visitas; conserva el control para plegar y reabrir y una lista accesible nombrada.

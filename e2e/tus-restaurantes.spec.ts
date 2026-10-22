@@ -31,7 +31,7 @@ const tarjeta = (page: Page, nombre: string) => page.getByRole('region', { name:
 test.describe('AF-29 · Tus restaurantes (2b)', () => {
   test('se abre desde Mis estadísticas, con el mismo total que 2a, y vuelve', async ({ page }) => {
     await preparar(page, { sinDinero: true });
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
+    await expect(page.locator('.est-total')).toHaveText('$2,165');
     // E173-4 · el subtítulo de Claude Design: sólo los lugares.
     await expect(acceso(page)).toContainText('3 lugares distintos');
     // Con el acceso nuevo, la sección vieja de barras no está.

@@ -405,14 +405,18 @@ test('estadísticas · con consumo', async ({ page }) => {
   await ir(page, '/estadisticas');
   await expect(page.locator('.est-total')).toBeVisible();
   await medir(page, '26', tarjeta(page), ESPERADO['26']!);
-  // Estadísticas: sin título visible (queda para lectores de pantalla); el período junto al cuadro y el total a la derecha.
+  // D449 · el estado acompaña al período; el total se muestra una sola vez en el resumen.
   await expect(tarjeta(page).locator('h1.stat-oculto')).toHaveText('Mis estadísticas');
   const periodo = (await pieza(tarjeta(page), '.stat-burbuja-periodo'))!;
   expect(periodo.izquierda).toBeCloseTo(48 + 14, 0);
   expect([periodo.tamano, periodo.peso]).toEqual(['18px', '700']);
-  const totalEst = (await pieza(tarjeta(page), '.est-total'))!;
-  expect(totalEst.derecha).toBeCloseTo(18 + 1, 0);
-  expect([totalEst.tamano, totalEst.peso]).toEqual(['26px', '800']);
+  const estado = (await pieza(tarjeta(page), '.est-periodo-estado'))!;
+  expect(estado.derecha).toBeCloseTo(18 + 1, 0);
+  expect([estado.tamano, estado.peso]).toEqual(['13px', '700']);
+  await expect(tarjeta(page).locator('.est-total')).toHaveCount(0);
+  await expect(page.locator('.est-resumen .est-total')).toHaveCount(1);
+  await expect(page.locator('.est-resumen .est-total')).toHaveCSS('font-size', '34px');
+  await expect(page.locator('.est-resumen .est-total')).toHaveCSS('font-weight', '800');
 });
 
 test('estadísticas · sin consumo del mes publicado', async ({ page }) => {

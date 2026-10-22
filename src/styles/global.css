@@ -10441,43 +10441,40 @@ h1.pay-title-lbl {
   outline-offset: 2px;
 }
 
-/* ─── E173-4 · Estadísticas, la pantalla de Claude Design ───────────────────
-   `ops/…/claude-design-estadisticas-20261004/…/PANTALLA-estadisticas.md`.
-   Clases propias: las de 2a (`.stat-anillo-*`, `.stat-burbuja-*`) las siguen
-   usando las pantallas de detalle, que esta entrega no toca. */
-
-/* §1 · la burbuja: el período a la izquierda, el total a la derecha. */
+/* ─── D444/D449 · resumen y comparación de Estadísticas ───────────────── */
 .title-card.est-burbuja {
   padding: 16px 18px;
 }
-
+.est-burbuja .stat-burbuja-periodo {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.est-periodo-estado {
+  margin-left: auto;
+  flex: none;
+  max-width: 72px;
+  text-align: right;
+  color: #0e7c8a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
 .est-total {
   min-width: 0;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 34px;
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.02em;
   color: var(--navy);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
-
-@media (max-width: 359px) {
-  .est-total {
-    font-size: 21px;
-  }
-}
-
-/* Margen 16, aire de 14 bajo la burbuja, y abajo lo que tapan la barra y el «+»
-   que sobresale (26), más aire: 104 en Safari (barra de 64). En la app de
-   inicio la barra suma el indicador (56 + 34): el mismo cálculo sigue la barra. */
 .has-appbar .scroll.est-scroll {
   padding: 14px 16px calc(96px + var(--appbar-pie));
 }
-
-/* §3 · «Tu consumo por tipo de cocina». */
-.est-cocinas {
+.est-panel, .est-cocinas {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -10486,47 +10483,141 @@ h1.pay-title-lbl {
   background: #fff;
   box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
 }
-
-.est-cocinas-cabeza {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.est-panel {
+  margin-bottom: 12px;
 }
-
-.est-cocinas-titulo {
+.est-panel h2, .est-cocinas-titulo {
   margin: 0;
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 700;
   color: var(--navy);
 }
-
-.est-cocinas-sub {
-  font-size: 14px;
+.est-nota, .est-cocinas-sub, .est-evolucion-nota {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
   color: #64748b;
 }
-
-/* El centro: cuántas cocinas, sin montos. Cabe en el hueco de 128 px. */
+.est-resumen {
+  gap: 10px;
+  border-top: 3px solid #12a5b4;
+}
+.est-resumen-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 4px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+.est-resumen-datos > div {
+  min-width: 0;
+}
+.est-resumen-datos dt {
+  font-size: 13px;
+  color: #64748b;
+}
+.est-resumen-datos dd {
+  margin: 6px 0 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.est-comparacion-base {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0e7c8a;
+}
+.est-meses {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.est-mes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.est-mes:last-child {
+  background: #ecf9fa;
+}
+.est-mes h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.est-mes strong {
+  font-size: 19px;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.est-mes > span {
+  font-size: 12px;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+.est-diferencias {
+  margin: 0;
+}
+.est-diferencias > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 9px 0;
+  border-top: 1px solid #e2e8f0;
+}
+.est-diferencias dt {
+  font-size: 13px;
+  color: #475569;
+}
+.est-diferencias dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.est-evolucion-nota {
+  margin: -4px 4px 16px;
+}
+.est-cocinas-cabeza {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.est-cocinas-cantidad {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
 .est-cocinas-num {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.1;
   color: var(--navy);
 }
-
 .est-cocinas-txt {
   font-size: 13px;
   color: #64748b;
 }
-
 .est-cocinas-vacio {
   margin: 0;
-  text-align: center;
   font-size: 14px;
   color: #64748b;
 }
-
 .est-detalle {
   display: flex;
   align-items: center;
@@ -10544,22 +10635,13 @@ h1.pay-title-lbl {
   text-align: left;
   cursor: pointer;
 }
-
 .est-detalle > span {
   flex: 1;
 }
-
 .est-detalle .rest-chev {
   color: #0e7c8a;
   transition: transform 0.2s;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .est-detalle .rest-chev {
-    transition: none;
-  }
-}
-
 .est-detalle-lista {
   display: flex;
   flex-direction: column;
@@ -10567,57 +10649,69 @@ h1.pay-title-lbl {
   padding: 0;
   list-style: none;
 }
-
 .est-detalle-fila {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   min-height: 52px;
-  padding: 8px 0;
+  padding: 12px 0;
   border-top: 1px solid #f1f5f9;
 }
-
-.est-detalle-color {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 4px;
-}
-
-.est-detalle-izq,
-.est-detalle-der {
+.est-detalle-izq, .est-detalle-der {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-}
-
-.est-detalle-izq {
-  flex: 1;
+  gap: 2px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
-
 .est-detalle-der {
   align-items: flex-end;
 }
-
 .est-detalle-nombre {
   font-size: 15px;
   font-weight: 500;
   color: var(--navy);
 }
-
-.est-detalle-visitas,
-.est-detalle-pct {
+.est-detalle-visitas, .est-detalle-pct {
   font-size: 13px;
   color: #64748b;
 }
-
 .est-detalle-monto {
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
   color: var(--navy);
   font-variant-numeric: tabular-nums;
+}
+.est-cocina-barra {
+  display: block;
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: #e4f7f8;
+  overflow: hidden;
+}
+.est-cocina-barra > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+@media (max-width: 359px) {
+  .est-total {
+    font-size: 28px;
+  }
+  .est-mes {
+    padding: 10px;
+  }
+  .est-mes strong, .est-resumen-datos dd {
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .est-detalle .rest-chev {
+    transition: none;
+  }
 }
 
 /* ─── D176 · la guía «Agregar a inicio» ───────────────────────────────────
