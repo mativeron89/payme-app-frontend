@@ -1,9 +1,10 @@
 ## D450 · confirmación de cierre por selección · 0.259.0
 
-Inventario íntegro de 148 entradas del dueño candidato
-`8b3baafed48f351ea92a97663b9e4928d3559caa` (backend 2.191.0), con pin de contenido
-`67cf3f1b1734beb50ddfa8fcab563661a33ee39a`: **16 JSON físicos y 132 fuentes sólo
-por hash**, conforme D268. Los cuatro JSON nuevos/distintos y los hechos sintéticos
+Contenido vigente: `67cf3f1b1734beb50ddfa8fcab563661a33ee39a`.
+Inventario íntegro de 148 entradas publicado en el repositorio del dueño candidato
+`8b3baafed48f351ea92a97663b9e4928d3559caa` (backend 2.191.0).
+**16 archivos espejados**, todos JSON de `contract/`; **132 fuentes sólo por hash**,
+conforme D268. Los cuatro JSON nuevos/distintos y los hechos sintéticos
 se adoptan sin copiar código del servidor. Los nueve deltas heredados siguen como
 evidencia contractual o hashes, sin activar auth, sugerencias ni análisis.
 
@@ -38,7 +39,7 @@ y no se reescribe.
 
 ## Procedencia congelada
 
-### D375 · una mesa de hasta 50 personas · App Backend v2.187.0 (trae 2.186.1) · 2026-10-18
+### Refresh anterior · D375 · una mesa de hasta 50 personas · App Backend v2.187.0 (trae 2.186.1) · 2026-10-18
 
 Decisiones D375 (tope de 50 personas, owner-first) y D378 (publicar el dueño 2.187.0), dentro de la entrega D360 del
 front. Según el Bibliotecario V, el dueño 2.187.0 está servido (Railway sobre `0099eb9`, `/ready` con 78/78).
