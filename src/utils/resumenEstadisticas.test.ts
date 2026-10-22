@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ConsumoDelMes } from '../api/consumoDelMes';
 import type { Evolucion } from '../api/evolucion';
 import { compararMesesCompletos, promedioDelResumen, promedioPorVisita } from './resumenEstadisticas';
@@ -84,5 +84,36 @@ describe('D444/D449 · dos meses completos de México', () => {
     for (const n of [-1, 0.5, NaN, Number.MAX_SAFE_INTEGER + 1]) {
       expect(compararMesesCompletos(cambiarMes(serie(), 3, { totalCents: n }), 'consumption', AHORA)).toBeNull();
     }
+  });
+});
+
+describe('D449 · Intl no disponible no bloquea el arranque', () => {
+  it('importa sin consultar Intl y MX no soportado no inventa una comparación', async () => {
+    const Original = Intl.DateTimeFormat;
+    const ctor = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (...args: Parameters<typeof Intl.DateTimeFormat>) {
+      if (args[1]?.timeZone === 'America/Mexico_City') throw new RangeError('synthetic MX unsupported');
+      return new Original(...args);
+    });
+    try {
+      vi.resetModules();
+      const fresh = await import('./resumenEstadisticas');
+      expect(ctor).not.toHaveBeenCalled();
+      expect(fresh.compararMesesCompletos(serie(), 'consumption', AHORA)).toBeNull();
+      expect(ctor).toHaveBeenCalledTimes(1);
+      expect(fresh.promedioPorVisita(10001, 3)).toBe(3333);
+    } finally {
+      ctor.mockRestore();
+      vi.resetModules();
+    }
+    expect(compararMesesCompletos(serie(), 'consumption', AHORA)?.diferenciaCents).toBe(5004);
+  });
+
+  it('un fallo al obtener las partes tampoco acredita comparación', () => {
+    const parts = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts').mockImplementation(() => {
+      throw new RangeError('synthetic parts unavailable');
+    });
+    try {
+      expect(compararMesesCompletos(serie(), 'consumption', AHORA)).toBeNull();
+    } finally { parts.mockRestore(); }
   });
 });

@@ -21,6 +21,8 @@ async function preparar(page: Page, modo: Modo = 'normal', ingles = false): Prom
     const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
     const rutaHttp = '/src/api/http.ts';
     const { HttpError } = await import(/* @vite-ignore */ rutaHttp) as typeof import('../src/api/http');
+    const rutaPeriodo = '/src/api/periodoEstadisticas.ts';
+    const { periodoActual } = await import(/* @vite-ignore */ rutaPeriodo) as typeof import('../src/api/periodoEstadisticas');
     const original = api.getStats.bind(api);
     api.getStats = async (period) => {
       const datos = await original(period);
@@ -32,9 +34,11 @@ async function preparar(page: Page, modo: Modo = 'normal', ingles = false): Prom
         categories: total ? [{ category: 'italian', amount_cents: total, visits: visitas }] : [],
       } };
     };
-    let llamadas = 0;
+    let retenerMesPasado = false;
+    if (modo === 'tardia') {
+      (window as unknown as { armarRetencionD449: () => void }).armarRetencionD449 = () => { retenerMesPasado = true; };
+    }
     api.getStatsEvolution = async () => {
-      llamadas += 1;
       if (modo === 'ausente') throw new HttpError(404, null);
       if (modo === 'error') throw new Error('fixture_comparacion_no_disponible');
       const months = Array.from({ length: 6 }, (_, i) => {
@@ -48,8 +52,10 @@ async function preparar(page: Page, modo: Modo = 'normal', ingles = false): Prom
       if (modo === 'fecha-invalida') months[3].monthStart = '2026-08-01T00:00:00.000Z';
       const totalCents = months.reduce((n, m) => n + m.totalCents, 0);
       const datos: Evolucion = { basis: modo === 'otra-base' ? 'payments' : 'consumption', months, totalCents, avgPerMonthCents: Math.floor(totalCents / 6) };
-      if (modo === 'tardia' && llamadas === 2) {
-        // Una respuesta válida pero distinta del período anterior queda retenida.
+      if (modo === 'tardia' && retenerMesPasado && periodoActual() === 'last_month') {
+        retenerMesPasado = false;
+        // Se arma tras la carga inicial: retiene sólo la próxima respuesta de Mes pasado.
+        // Los efectos dobles de montaje de StrictMode conservan sus respuestas normales.
         const tardia = { ...datos, months: months.map((m, i) => i === 4 ? { ...m, totalCents: 888800, categories: [{ category: 'italian', amountCents: 888800, visits: m.visits }] } : m) };
         const suma = tardia.months.reduce((n, m) => n + m.totalCents, 0);
         return new Promise<Evolucion>((resolve) => {
@@ -157,6 +163,9 @@ test('D449 · inglés y teclado conservan rótulos, resumen y comparación', asy
 test('D449 · respuesta antigua de evolución no pisa la tanda del nuevo período', async ({ page }) => {
   await preparar(page, 'tardia');
   await expect(comparacion(page).locator('.est-mes strong')).toHaveText(['$100', '$150']);
+  await page.evaluate(() => {
+    (window as unknown as { armarRetencionD449: () => void }).armarRetencionD449();
+  });
   await periodo(page, 'Mes pasado');
   await expect(page.locator('.est-periodo-estado')).toHaveText('Mes completo');
   await expect(comparacion(page)).toHaveAttribute('aria-busy', 'true');

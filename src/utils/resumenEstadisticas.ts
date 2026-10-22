@@ -13,15 +13,20 @@ export function promedioDelResumen(consumo: ConsumoDelMes): number | null {
   return esperado !== null && consumo.avgPerVisitCents === esperado ? esperado : null;
 }
 
-const calendario = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Mexico_City', year: 'numeric', month: 'numeric', day: 'numeric',
-  hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23',
-});
-
+/** No consultar Intl al importar: una zona no soportada no puede impedir el login. */
 function fechaMexico(fecha: Date): Record<string, number> | null {
   if (!Number.isFinite(fecha.getTime())) return null;
-  return Object.fromEntries(calendario.formatToParts(fecha)
-    .filter((p) => p.type !== 'literal').map((p) => [p.type, Number(p.value)]));
+  try {
+    const calendario = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Mexico_City', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23',
+    });
+    return Object.fromEntries(calendario.formatToParts(fecha)
+      .filter((p) => p.type !== 'literal').map((p) => [p.type, Number(p.value)]));
+  } catch {
+    // Sin calendario mexicano acreditado no hay comparación; nunca sustituirlo por UTC.
+    return null;
+  }
 }
 
 export interface ComparacionCompleta {
