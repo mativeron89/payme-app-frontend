@@ -2660,9 +2660,13 @@ export async function mockReplaceInformativeSelection(
     const desired = new Map(items.map((item) => [item.item_id, item.declared_fraction_bps]));
     const others = Object.entries(state.informativeSelections)
       .filter(([key]) => key.startsWith(`${mesa.id}:`) && key !== informativeKey(mesa));
-    const wouldClose = mesa.items.some((item) => !ceroCubierto(mesa, item)) && mesa.items.every((item) =>
-      ceroCubierto(mesa, item) || (desired.get(item.id) ?? 0) + others.reduce((sum, [, selection]) =>
-        sum + selection.items.filter((i) => i.item_id === item.id).reduce((n, i) => n + i.declared_fraction_bps, 0), 0) >= 10000);
+    const wouldClose = mesa.items.some((item) => !ceroCubierto(mesa, item)) && mesa.items.every((item) => {
+      if (ceroCubierto(mesa, item)) return true;
+      const declared = (desired.get(item.id) ?? 0) + others.reduce((sum, [, selection]) =>
+        sum + selection.items.filter((i) => i.item_id === item.id).reduce((n, i) => n + i.declared_fraction_bps, 0), 0);
+      // Misma tolerancia que la cobertura posterior: tres tercios también requieren revisión antes de escribir.
+      return restanteDeDeclarado(declared) === 0;
+    });
     const snapshot = await requireMockClosure(mesa, items, 'user', wouldClose, req.closure_confirmation);
     if (snapshot !== mockClosureSnapshot(mesa, items, 'user')) return fail(409, CLOSURE_CHANGED);
     if (items.length === 0) delete state.informativeSelections[informativeKey(mesa)];
