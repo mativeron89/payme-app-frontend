@@ -494,3 +494,93 @@ describe('n422 · rechazo antes de mutar el mock', () => {
     });
   }
 });
+
+describe('C16 · tolerancia del cierre informativo antes de escribir', () => {
+  beforeEach(() => { vi.resetModules(); vi.unstubAllGlobals(); storage(); });
+
+  type PorcionInformativa = ReplaceInformativeSelectionRequest['items'][number]['declared_fraction_bps'];
+
+  async function igualConOtros(porciones: readonly PorcionInformativa[], personas = 20) {
+    const { mock, state, mesa } = await subject();
+    mesa.original_participants = personas;
+    mesa.expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const plato = { ...mesa.items[0]!, price_cents: 12000, quantity: 1, claims: [], lock_expires_at: null };
+    mesa.items = [plato];
+    mesa.total_cents = 12000;
+    state.informativeSelections = {};
+    const otras = porciones.map((declared_fraction_bps, index) => {
+      const clave = `${mesa.id}:e0000000-0000-4000-8000-${String(990 + index).padStart(12, '0')}`;
+      state.informativeSelections[clave] = {
+        items: [{ item_id: plato.id, declared_fraction_bps }], updated_at: new Date().toISOString(),
+      };
+      return clave;
+    });
+    return { mock, state, mesa, plato, otras };
+  }
+
+  it('tres tercios: rechaza sin escribir, confirma 9999 declarados y el replay conserva respuesta, estado y bytes', async () => {
+    const { mock, state, mesa, plato, otras } = await igualConOtros([3333, 3333], 3);
+    const request: ReplaceInformativeSelectionRequest = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 3333 }], confirm_closure: true,
+    };
+    const before = JSON.stringify(state);
+    const writes = vi.spyOn(localStorage, 'setItem');
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockReplaceInformativeSelection(mesa.code, request));
+    expect(JSON.stringify(state)).toBe(before);
+    expect(writes).not.toHaveBeenCalled();
+
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, { ...request, closure_confirmation: confirmation });
+    expect(closed.mesa).toMatchObject({ status: 'expired', mutable: false, closure_reason: 'all_items_selected' });
+    expect(closed.coverage.all_items_selected).toBe(true);
+    expect(closed.selection.items).toEqual(request.items);
+    expect([...otras, `${mesa.id}:${state.user.id}`].map((key) => state.informativeSelections[key]!.items[0]!.declared_fraction_bps))
+      .toEqual([3333, 3333, 3333]);
+    expect(writes).toHaveBeenCalledTimes(1);
+
+    const committed = JSON.stringify(state);
+    const persisted = localStorage.getItem('payme_mock_state_v1');
+    // delay vuelve a persistir: el replay debe conservar la respuesta, el estado y los bytes.
+    const replay = await mock.mockReplaceInformativeSelection(mesa.code, request);
+    expect(replay).toEqual(closed);
+    expect(JSON.stringify(state)).toBe(committed);
+    expect(localStorage.getItem('payme_mock_state_v1')).toBe(persisted);
+  });
+
+  it('control: dos tercios se guardan sin desafío y dejan la mesa abierta', async () => {
+    const { mock, mesa, plato } = await igualConOtros([3333], 3);
+    const request: ReplaceInformativeSelectionRequest = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 3333 }], confirm_closure: true,
+    };
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, request);
+    expect(saved.selection.items).toEqual(request.items);
+    expect(saved.coverage.all_items_selected).toBe(false);
+    expect(saved.mesa).toMatchObject({ status: 'open', mutable: true, closure_reason: null });
+    const detail = await mock.mockGetMesa(mesa.code, 'user');
+    expect(detail.mesa.items.find((item) => item.id === plato.id)?.informative_remaining_bps).toBe(3334);
+  });
+
+  it('borde de 100 bps: 1111 + 1111 + 1250 + 1428 + 5000 no exige desafío ni cierra', async () => {
+    const { mock, mesa, plato } = await igualConOtros([1111, 1111, 1250, 1428]);
+    const request: ReplaceInformativeSelectionRequest = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], confirm_closure: true,
+    };
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, request);
+    expect(saved.selection.items).toEqual(request.items);
+    expect(saved.coverage.all_items_selected).toBe(false);
+    expect(saved.mesa).toMatchObject({ status: 'open', mutable: true, closure_reason: null });
+    const detail = await mock.mockGetMesa(mesa.code, 'user');
+    expect(detail.mesa.items.find((item) => item.id === plato.id)?.informative_remaining_bps).toBe(100);
+  });
+
+  it('borde de 99 bps: 526 + 625 + 1250 + 2500 + 5000 exige revisión antes de cerrar', async () => {
+    const { mock, mesa, plato } = await igualConOtros([526, 625, 1250, 2500]);
+    const request: ReplaceInformativeSelectionRequest = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], confirm_closure: true,
+    };
+    const confirmation = await desafioSinEscritura(mesa, () => mock.mockReplaceInformativeSelection(mesa.code, request));
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, { ...request, closure_confirmation: confirmation });
+    expect(closed.selection.items).toEqual(request.items);
+    expect(closed.coverage.all_items_selected).toBe(true);
+    expect(closed.mesa).toMatchObject({ status: 'expired', mutable: false, closure_reason: 'all_items_selected' });
+  });
+});
