@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.selection-closure/v1",
+  "$ref": "#/$defs/error",
+  "description": "D450: confirmation of the current selection plan, not authentication or cryptographic evidence of a human gesture. Auth and visibility remain authoritative. No challenge persistence.",
+  "endpoints": [
+    "POST /api/mesas/:code/items/lock",
+    "PUT /api/mesas/:code/informative-selection"
+  ],
+  "compatibility": {
+    "scope": "Only consumo marked sin_garantia=true and guarantee_mode=false, or eligible informative igual with payments disabled.",
+    "legacy": "No field or only confirm_closure:true can save a non-completing selection; a completing mutation is rejected before all business writes.",
+    "success": "Existing 200 bodies and GET/capability envelopes unchanged. Equal exact replay remains read-only, even with an outdated well-formed confirmation.",
+    "errors": "400 for malformed field; existing permission, availability and terminal errors win. required/changed return 409, private,no-store and Vary:Authorization. changed has a challenge only while the valid current plan still closes.",
+    "client": "Never auto-confirm or retry. Freeze operation and challenge together; state_changed requires a fresh explicit human action. Old tabs can remain and receive 409. Voluntary update policy unchanged."
+  },
+  "revision": {
+    "algorithm": "SHA-256 of UTF-8 JSON with recursively sorted object keys. Row arrays ordered by item UUID, then claim UUID/user UUID; requests and projection ordered by item UUID. UUIDs lowercase. Integer DB bigint fields are exact decimal strings; SQL integer fields remain numbers; null remains null.",
+    "bindings": [
+      "protocol",
+      "actor from authenticated session",
+      "operation consumo-lock or igual-replace",
+      "mesa id/status/division/guarantee/sin_garantia/expires_at/total_cents/original_participants/tip_setting",
+      "items id/name/price_cents/quantity/status",
+      "live claims id/item/user/bps/status/payment_attempt_id/attempt_status/expiry/created_at/paid_at/expired_at_tx OR all informative item/user/bps/created_at/updated_at",
+      "canonical requested fractions including denominator when provided",
+      "projected coverage and amounts in bps only",
+      "would_close and valid_until"
+    ],
+    "timestamps": "UTC strings from PostgreSQL with six decimal places (microseconds), never JS Date truncation. Claim expiration semantics use transaction NOW(), with server clock_timestamp() enforcing the acceptance deadline after lock waits and in the closing UPDATE.",
+    "valid_until": "Minimum of mesa expires_at and non-expired-at-transaction locked claim deadlines; null locks add no deadline. No arbitrary TTL or extension.",
+    "not_a_history_counter": "Semantically identical state gives an identical digest. Release/reacquire IDs and informative write timestamps normally invalidate. No vector/claim IDs/actor/lock tokens returned or logged."
+  },
+  "$defs": {
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "revision",
+        "confirmed"
+      ],
+      "properties": {
+        "contract": {
+          "const": "payme.app.selection-closure/v1"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "confirmed": {
+          "const": true
+        }
+      }
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "revision",
+        "mesa_code",
+        "division_mode",
+        "would_close",
+        "valid_until"
+      ],
+      "properties": {
+        "contract": {
+          "const": "payme.app.selection-closure/v1"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mesa_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "division_mode": {
+          "enum": [
+            "consumo",
+            "igual"
+          ]
+        },
+        "would_close": {
+          "const": true
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error",
+            "closure_confirmation"
+          ],
+          "properties": {
+            "error": {
+              "const": "selection_closure_confirmation_required"
+            },
+            "closure_confirmation": {
+              "$ref": "#/$defs/challenge"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "selection_closure_state_changed"
+            },
+            "closure_confirmation": {
+              "$ref": "#/$defs/challenge"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

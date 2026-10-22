@@ -1,3 +1,10 @@
+## 0.259.0 · 2026-10-22 (D450 · cierre seguro por selección)
+
+- «Listo» conserva las lecturas frescas y solicita al servidor guardar la selección. Si completaría la mesa, el rechazo sin escritura abre la confirmación accesible ES/EN. Sólo «Guardar y cerrar» envía la revisión recibida con el pedido original congelado; «Revisar», Escape o una edición descartan el desafío.
+- La revisión vive sólo en memoria, ligada a identidad, mesa, época y borrador. Un estado obsoleto renueva la lectura y requiere un gesto nuevo; los datos inválidos fallan cerrado. Una respuesta perdida después de confirmar conserva la recuperación n423 por lectura, sin reenviar la mutación.
+- Mock y fixtures reproducen rechazo antes de mutar y confirmación explícita en ambos modos. Se agregan controles de obsolescencia, identidad tardía, cancelación, edición, recarga, payload inválido, respuesta ambigua, inglés y teclado; se conservan cierre manual, tutorial y cálculos de fracciones.
+- Espejo pasivo D268: 148 entradas, 16 JSON físicos y 132 fuentes sólo por hash; 43 hechos de 14 fuentes regenerados sin cambio de valores y paridad acreditada con el pin 67cf3f1b. El dueño 2.191.0 aún no está servido. La validación completa corresponde al CI oficial del SHA exacto; esta candidata no autoriza publicación antes de servir y reemplazar todas las instancias del backend. D63 permanece abierto.
+
 ## 0.258.0 · 2026-10-21 (D444/D449 · resumen de Estadísticas)
 
 - Resumen del período con consumo o gasto registrado, visitas y promedio por visita; el total aparece una sola vez. La cabecera conserva el selector y señala el período en curso o el mes completo.

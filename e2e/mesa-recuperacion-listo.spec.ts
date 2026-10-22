@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import type { AppConfig, InformativeSelectionResponse, LockItemsResponse, MesaDetail, MesaItem } from '../src/api/types';
 import type { StoredSession } from '../src/api/storage';
 
 // Fachada real seleccionada por el proyecto oficial mesa-recuperacion-http.
 // Sólo HTTP/almacenamiento sintético debajo de la app; ningún método api.X sustituido.
-// No acredita concurrencia SQL, Safari físico ni n422.
+// Verifica el consumidor n422; no acredita concurrencia SQL ni Safari físico.
 test.describe.configure({ retries: 0 });
 test.use({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
 const ORIGEN = 'http://127.0.0.1:5190';
@@ -86,6 +87,9 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
   let mesaGets = 0;
   let propiaGets = 0;
   let writes = 0;
+  let mutations = 0;
+  let invalidChallenge = false;
+  let holdRejection: { entrada: ReturnType<typeof barrera>; salida: ReturnType<typeof barrera>; marca: string } | null = null;
   let barreras = 0;
   const cuerpos: unknown[] = [];
   const ordinalPorIdentidad = new Map<string, number>();
@@ -209,8 +213,38 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
     }
     writes += 1;
     const body: unknown = req.postDataJSON(); cuerpos.push(body);
+    const selection = body as { items: Array<{ item_id: string; fraction_bps?: number;
+      fraction_denominator?: number; declared_fraction_bps?: number }>;
+      closure_confirmation?: { contract: string; revision: string; confirmed: boolean } };
+    const revision = createHash('sha256').update(JSON.stringify({ mesa, propia, updated,
+      items: selection.items, authorization })).digest('hex');
+    const wouldClose = mesa.items.some((i) => i.price_cents > 0) && mesa.items.every((i) => {
+      if (i.price_cents === 0) return true;
+      const desired = selection.items.find((x) => x.item_id === i.id);
+      if (modo === 'consumo') return desired
+        ? (desired.fraction_bps ?? Math.floor(10000 / desired.fraction_denominator!))
+          + 10000 - i.remaining_bps - i.my_bps >= 10000 : i.remaining_bps === 0;
+      const own = propia.find((x) => x.item_id === i.id)?.declared_fraction_bps ?? 0;
+      return (desired?.declared_fraction_bps ?? 0) + 10000 - Number(i.informative_remaining_bps) - own >= 10000;
+    });
+    const challenge = { contract: 'payme.app.selection-closure/v1', revision,
+      mesa_code: invalidChallenge ? 'PA-ajena' : CODE, division_mode: modo,
+      would_close: true, valid_until: mesa.expires_at };
+    const confirmation = selection.closure_confirmation;
+    const changed = !!confirmation && (confirmation.revision !== revision || !wouldClose);
+    if (changed || (!confirmation && wouldClose)) {
+      const rejected = { error: changed ? 'selection_closure_state_changed' : 'selection_closure_confirmation_required',
+        ...(wouldClose && { closure_confirmation: challenge }) };
+      const held = holdRejection; holdRejection = null;
+      if (held) { held.entrada.abrir(); await held.salida.espera; }
+      await responder(route, rejected, 409, held ? { 'x-fixture-n423-body': held.marca } : {}); return;
+    }
+    if (confirmation && (confirmation.contract !== 'payme.app.selection-closure/v1' || confirmation.confirmed !== true)) {
+      await responder(route, { error: 'validation_error' }, 400); return;
+    }
     if (comportamiento === 'rechazo') { await responder(route, { error: 'validation_error' }, 400); return; }
     if (comportamiento === 'incierto') { await responder(route, { error: 'unavailable' }, 503); return; }
+    mutations += 1;
     if (method === 'PUT') {
       const request = body as { items: InformativeSelectionResponse['selection']['items'] };
       const previa = new Map(propia.map((i) => [i.item_id, i.declared_fraction_bps]));
@@ -242,6 +276,13 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
   });
   return {
     mesa, cuerpos,
+    get mutations() { return mutations; },
+    malformarDesafio() { invalidChallenge = true; },
+    retenerRechazo() {
+      const entrada = barrera(); const salida = barrera(); const marca = `rechazo-${++barreras}`;
+      holdRejection = { entrada, salida, marca };
+      return { abrir: salida.abrir, entrado: entrada.espera, marca };
+    },
     get mesaGets() { return mesaGets; }, get propiaGets() { return propiaGets; }, get writes() { return writes; },
     guardarEnOtraPestana(items: typeof propia) { propia = structuredClone(items); updated = '2026-10-21T15:00:00Z'; },
     retener(authorization = `Bearer ${SESION.access_token}`) {
@@ -280,7 +321,7 @@ async function elegir(page: Page, nombre = 'Plato A') {
   await fila(page, nombre).locator('.qc-libre').click();
 }
 
-// T1: quitar la llamada REAL al predictor/recovery debe fallar aunque quede su comentario.
+// T1: las lecturas reales preceden al pedido; el desafío del servidor precede a la confirmación.
 test('T1 · propia obsoleta de otra pestaña: lee antes de decidir hoja y no escribe sin confirmar', async ({ page }) => {
   const f = await fixture(page, 'igual');
   f.mesa.items = f.mesa.items.slice(0, 2);
@@ -296,9 +337,9 @@ test('T1 · propia obsoleta de otra pestaña: lee antes de decidir hoja y no esc
   await listo(page).click();
   await expect(hoja(page)).toBeVisible();
   expect(f.mesaGets).toBeGreaterThan(antesMesa); expect(f.propiaGets).toBeGreaterThan(antesPropia);
-  expect(f.writes).toBe(0);
+  expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
   await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-  await expect.poll(() => f.writes).toBe(1);
+  await expect.poll(() => f.writes).toBe(2); await expect.poll(() => f.mutations).toBe(1);
 });
 
 test('GET atrasado conserva una edición posterior y usa el borrador vigente', async ({ page }) => {
@@ -365,7 +406,7 @@ test('PUT informativo guardado y cerrado con respuesta perdida converge al éxit
   await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
   await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
   await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
-  expect(f.writes).toBe(1); await expect(page).toHaveURL(new RegExp(`/mesa/${CODE}$`));
+  expect(f.writes).toBe(2); expect(f.mutations).toBe(1); await expect(page).toHaveURL(new RegExp(`/mesa/${CODE}$`));
 });
 
 test('selección contradictoria tras resultado ambiguo mantiene bloqueo aun tras otro GET exitoso', async ({ page }) => {
@@ -387,7 +428,7 @@ test('T3 · A propio completo + agua $0 libre + borrador vacío: Listo no escrib
   await expect(page).toHaveURL(/\/home$/); expect(f.writes).toBe(0); await expect(hoja(page)).toHaveCount(0);
 });
 
-test('consumo propio repetido: el callback de lo liberable exige hoja antes de otro lock', async ({ page }) => {
+test('consumo propio repetido: el servidor exige hoja antes de registrar otro lock', async ({ page }) => {
   const f = await fixture(page, 'consumo'); await entrar(page);
   await elegir(page, 'Plato A'); await elegir(page, 'Plato B'); await elegir(page, 'Plato C');
   // Otra pestaña registró A/B: el borrador local los repite y además pide C.
@@ -397,8 +438,79 @@ test('consumo propio repetido: el callback de lo liberable exige hoja antes de o
   }
   const antes = f.mesaGets; await listo(page).click();
   await expect(hoja(page)).toBeVisible(); expect(f.mesaGets).toBeGreaterThan(antes);
-  expect(f.writes).toBe(0);
-  // Con () => 0, A/B no entrarían y faltaría esta hoja. Revisar sigue sin POST.
+  expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
+  // El desafío aún no registró A/B/C. Revisar no confirma ni modifica lo propio.
   await hoja(page).getByRole('button', { name: 'Revisar', exact: true }).click();
-  await expect(hoja(page)).toHaveCount(0); expect(f.writes).toBe(0);
+  await expect(hoja(page)).toHaveCount(0); expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
+});
+
+for (const mode of ['consumo', 'igual'] as const) {
+  test(`n422 ${mode}: desafío obsoleto exige otro gesto y conserva exactamente el pedido`, async ({ page }) => {
+    const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!];
+    await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+    expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
+    const initial = f.cuerpos[0] as { items: unknown[] };
+    f.mesa.restaurant.name = 'Mesa actualizada';
+    await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
+    await expect(page.getByText('Mesa actualizada', { exact: true })).toBeVisible();
+    await expect(hoja(page)).toBeVisible();
+    expect(f.writes).toBe(2); expect(f.mutations).toBe(0);
+    const previous = f.cuerpos[1] as { items: unknown[]; closure_confirmation: { revision: string; confirmed: boolean } };
+    expect(previous.items).toEqual(initial.items); expect(previous.closure_confirmation.confirmed).toBe(true);
+    await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
+    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
+    expect(f.writes).toBe(3); expect(f.mutations).toBe(1);
+    const current = f.cuerpos[2] as typeof previous;
+    expect(current.items).toEqual(initial.items);
+    expect(current.closure_confirmation.revision).not.toBe(previous.closure_confirmation.revision);
+  });
+
+  test(`n422 ${mode}: desafío malformado falla cerrado sin incertidumbre ni reenvío`, async ({ page }) => {
+    const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!]; f.malformarDesafio();
+    await entrar(page); await elegir(page); await listo(page).click();
+    await expect(page.getByRole('status').filter({ hasText: 'No pudimos verificar la confirmación de cierre.' })).toBeVisible();
+    await expect(hoja(page)).toHaveCount(0); await expect(listo(page)).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Actualizar estado', exact: true })).toHaveCount(0);
+    expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
+  });
+
+  test(`n422 ${mode}: 503 tras confirmar se reconcilia sólo por lectura`, async ({ page }) => {
+    const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!];
+    await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+    f.comportamiento('incierto');
+    await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
+    const actualizar = page.getByRole('button', { name: 'Actualizar estado', exact: true });
+    await expect(actualizar).toBeEnabled(); await expect(listo(page)).toBeDisabled();
+    expect(f.writes).toBe(2); expect(f.mutations).toBe(0);
+    await actualizar.click(); await expect(actualizar).toBeEnabled();
+    expect(f.writes).toBe(2); expect(f.mutations).toBe(0); await expect(hoja(page)).toHaveCount(0);
+  });
+}
+
+test('n422 changed sin desafío conserva borrador, no finge cierre ni reenvía', async ({ page }) => {
+  const f = await fixture(page, 'consumo'); f.mesa.items = [f.mesa.items[0]!];
+  await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+  f.mesa.items.push(item(B, 'Plato B'));
+  await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
+  await expect(fila(page, 'Plato B')).toBeVisible(); await expect(hoja(page)).toHaveCount(0);
+  await expect(fila(page, 'Plato A').locator('[data-estado="mio"]')).toBeVisible();
+  await expect(listo(page)).toBeEnabled(); expect(f.writes).toBe(2); expect(f.mutations).toBe(0);
+});
+
+test('n422 rechazo tardío de otra identidad no abre una hoja para la nueva cuenta', async ({ page }) => {
+  const f = await fixture(page, 'consumo'); f.mesa.items = [f.mesa.items[0]!];
+  await entrar(page); await elegir(page); const held = f.retenerRechazo();
+  await listo(page).click(); await held.entrado;
+  f.mesa.restaurant.name = 'Cuenta B';
+  await page.evaluate(async () => {
+    const path = '/src/api/storage.ts'; const storage = await import(/* @vite-ignore */ path) as typeof import('../src/api/storage');
+    const actual = storage.loadSession(); if (!actual) throw new Error('fixture sin sesión');
+    storage.saveSession({ ...actual, principal_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      user: actual.user ? { ...actual.user, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } : undefined,
+      access_token: 'fake-b', refresh_token: 'fake-rb' });
+  });
+  await expect(page.getByText('Cuenta B', { exact: true })).toBeVisible(); held.abrir();
+  await expect.poll(() => page.evaluate((marca) => (window as FixtureWindow).__n423Lecturas[marca] ?? null, held.marca))
+    .toEqual({ body: 1, checkpoint: 1, render: 1, restaurante: 'Cuenta B' });
+  await expect(hoja(page)).toHaveCount(0); expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
 });

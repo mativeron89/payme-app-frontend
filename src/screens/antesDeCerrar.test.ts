@@ -348,12 +348,17 @@ describe('lo propio en consumo · como el dueño, que suelta y vuelve a tomar', 
     expect(elegidosAlGuardar({ items: [sinDato] }, true, new Map([['A', 5000]])).map((e) => e.bps)).toEqual([10000]);
   });
 
-  it('el cableado: MesaDetailView pasa lo propio de consumo y la opción de escritura a la hoja', () => {
+  it('el cableado: sólo el desafío del dueño abre la hoja, que muestra la foto congelada y confirma por gesto', () => {
     const fuente = readFileSync(new URL('./MesaDetailView.tsx', import.meta.url), 'utf8');
-    const listo = fuente.slice(fuente.indexOf('const listoCierraLaMesa'), fuente.indexOf('const enfocarListo'));
-    expect(listo).toContain('(item) => propioEnConsumo(item, selected),');
-    expect(listo).toContain('{ escribeConCualquierBorrador: true },');
-    expect(listo).not.toContain('() => 0');
+    expect(fuente).not.toContain('listoCierraLaMesa');
+    expect(fuente).not.toContain('seleccionCierraLaMesa(');
+    expect(fuente).not.toContain('terminarListo(true)');
+    expect(fuente).toContain('{cierreSeleccion && (');
+    expect(fuente).toContain('elegidosAlGuardar(cierreSeleccion.mesa, cierreSeleccion.mesa.division_mode');
+    expect(fuente).toContain('cierreSeleccion.selected)');
+    expect(fuente).toContain('onConfirmar={() => onConfirmarCierreSeleccion?.()}');
+    expect(fuente).toContain('onCancelarCierreSeleccion?.(); llevarALaLista(true)');
+    expect(fuente).toContain('onCancelarCierreSeleccion?.(); enfocarListo()');
   });
 });
 

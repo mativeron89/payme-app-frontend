@@ -1,3 +1,17 @@
+## D450 · confirmación de cierre por selección · 0.259.0
+
+Inventario íntegro de 148 entradas del dueño candidato
+`8b3baafed48f351ea92a97663b9e4928d3559caa` (backend 2.191.0), con pin de contenido
+`67cf3f1b1734beb50ddfa8fcab563661a33ee39a`: **16 JSON físicos y 132 fuentes sólo
+por hash**, conforme D268. Los cuatro JSON nuevos/distintos y los hechos sintéticos
+se adoptan sin copiar código del servidor. Los nueve deltas heredados siguen como
+evidencia contractual o hashes, sin activar auth, sugerencias ni análisis.
+
+**Dueño NO SERVIDO al preparar este consumidor.** Integridad y paridad no acreditan
+publicación. Backend endurecido y reemplazo de sus instancias deben verificarse
+antes de publicar este front. Este pin supersede los antecedentes siguientes sólo
+como procedencia de la copia actual.
+
 # contract-mirror — App Backend → App Frontend
 
 Espejo **de solo lectura** del contrato que el App Frontend consume. La fuente
