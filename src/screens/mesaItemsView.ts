@@ -58,12 +58,11 @@ export function bpsValido(valor: unknown): valor is number {
  * que dejaría menos de 100 se queda con todo lo que queda) e
  * `informativeSelections.restanteDe` en «igual», que la importa.
  *
- * Procedencia: las dos fuentes, con el sha256 que declara
- * `scripts/mirror-inventory.json` (el de c8432e7, el mismo en 0099eb93, que es
- * 2.187.0 servido). El espejo no copia esos archivos (D268): el test ata el valor
- * a esos sha y se pone rojo si el inventario adopta otro, para volver a medir.
- * `itemClaims.js` es el mismo también en 66659eae (2.188.0);
- * `informativeSelections.js` cambia en 2.188.0 (D389), con `restanteDe` igual.
+ * Procedencia: inventario adoptado de 67cf3f1b (candidato backend 2.191.0,
+ * todavía NO SERVIDO). D450 cambia ambas fuentes para proyectar y confirmar el
+ * cierre. Cotejo estático contra c8432e7: la constante, effectiveBps y restanteDe
+ * conservan exactamente sus bytes y el borde < 100. El espejo no copia código
+ * del servidor (D268); el test conserva los hashes completos de ambas fuentes.
  */
 export const TOLERANCIA_DE_COMPLETAR = {
   bps: 100,
@@ -71,12 +70,12 @@ export const TOLERANCIA_DE_COMPLETAR = {
     {
       ruta: 'services/itemClaims.js',
       donde: '`COMPLETING_TOLERANCE_BPS` (:51) y `effectiveBps` (:59-66)',
-      sha256: '85d6f8575d4fdee16383f0e336751fabde17fde2f0412d0ec47219e01c558214',
+      sha256: '21656a4b25993e884755dedfd31044ee8a9c4a83c9d50ccfc2ec4ba7283a1013',
     },
     {
       ruta: 'services/informativeSelections.js',
-      donde: '`restanteDe` (:64-65), que importa la constante',
-      sha256: '6b9daba7dd5620d79c5ee541419d7199a70a23ca69289f242fa7e2e1cad20c6d',
+      donde: '`restanteDe` (:67-68), que importa la constante',
+      sha256: '577ef083abd5b4d3cb9910ab1bcffc0b64dd2dc708d91871245c42de91aa9c3f',
     },
   ],
 } as const;
