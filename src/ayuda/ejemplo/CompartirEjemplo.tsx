@@ -31,6 +31,7 @@ export function AmigosDeEjemplo({ t }: { t: T }) {
             <span className="avatar avatar-marca" aria-hidden="true">{amigo.iniciales}</span>
             <div className="fr-name"><div className="n">{amigo.nombre}</div></div>
             <button type="button" className="btn btn-sm btn-fit btn-outline" data-guia={`ejemplo-${amigo.id}`}
+              aria-label={t('Invitar a {0}', amigo.nombre)}
               onClick={() => ejemploLocal.explicarCompartir(amigo.id)}>
               {t('Invitar')}
             </button>

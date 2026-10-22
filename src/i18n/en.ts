@@ -378,6 +378,7 @@ export const EN: Record<string, string> = {
   "Invitación enviada a {0} ✓": "Invitation sent to {0} ✓",
   "Invitado ✓": "Invited ✓",
   "Invitar": "Invite",
+  "Invitar a {0}": "Invite {0}",
   "Invitar amigos de PayMe": "Invite PayMe friends",
   "Ir a Cuenta": "Go to Account",
   "Ir a Inicio": "Go to Home",

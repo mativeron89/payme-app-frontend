@@ -65,8 +65,12 @@ async function ir(page: Page, ruta: string): Promise<void> {
  * Cancún con 21 miembros y «Mariscos El Faro» con 20 renglones de más. Los casos cortos de los paneles: con `soloYo`,
  * Cancún sólo conmigo (los demás salieron); con `ticketCorto`, «Mariscos El Faro» con sus 4 primeros renglones. El mock
  * lee su estado al cargar: se recarga.
+ * D451 · la latencia de presentación es optativa y se aplica sólo después de la recarga y su testigo.
  */
-async function sembrar(page: Page, { soloYo = false, ticketCorto = false }: { soloYo?: boolean; ticketCorto?: boolean } = {}): Promise<void> {
+async function sembrar(
+  page: Page,
+  { soloYo = false, ticketCorto = false, latenciaPresentacion }: { soloYo?: boolean; ticketCorto?: boolean; latenciaPresentacion?: 0 } = {},
+): Promise<void> {
   await ir(page, `/viaje/${CANCUN}`);
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
   const ok = await page.evaluate(({ viajeId, ticketId, soloYo: corto, ticketCorto: pocos }) => {
@@ -104,6 +108,10 @@ async function sembrar(page: Page, { soloYo = false, ticketCorto = false }: { so
   expect(ok).toBe(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Cancún 2026' })).toBeVisible();
+  if (latenciaPresentacion !== undefined) {
+    // Sólo estas fixtures: setTimeout(0) sigue siendo asíncrono. La semilla y su recarga usan los 350 ms originales.
+    await page.evaluate((ms) => localStorage.setItem('payme.app.mock.latencia.v1', String(ms)), latenciaPresentacion);
+  }
 }
 
 interface Medida {
@@ -155,10 +163,13 @@ function seAlcanza(m: Medida): void {
 /** D263 · «¿Quién pagó?» también tiene casillas con los nombres: la de «¿Quiénes estuvieron?», por su grupo. */
 const presentes = (page: Page) => page.getByRole('group', { name: '¿Quiénes estuvieron?', exact: true });
 
-const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => Promise<void> }> = [
+// D451 · opt-in sólo donde el testigo espera los datos de toda la vista antes de medir.
+// Crear viaje carga amigos por separado; Ticket nuevo conserva completo el recorrido cámara/OCR.
+const PANTALLAS: Array<{ nombre: string; largo: boolean; latenciaPresentacion?: 0; abrir: (page: Page) => Promise<void> }> = [
   {
     nombre: 'Carga manual con 21 miembros',
     largo: true,
+    latenciaPresentacion: 0,
     abrir: async (page) => {
       await ir(page, `/viaje/${CANCUN}`);
       await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
@@ -168,6 +179,7 @@ const PANTALLAS: Array<{ nombre: string; largo: boolean; abrir: (page: Page) => 
   {
     nombre: 'un ticket largo ya cargado («Te toca / Listo»)',
     largo: true,
+    latenciaPresentacion: 0,
     abrir: async (page) => {
       await ir(page, `/viaje-balance/${CANCUN}`);
       await page.locator('.vjb-consumo').filter({ hasText: 'Mariscos El Faro' }).click();
@@ -208,7 +220,7 @@ for (const desfase of DESFASES_MEDIDOS) {
       for (const p of PANTALLAS) {
         test(`${p.nombre}: el último elemento se alcanza arriba del pie y se toca`, async ({ page }) => {
           await comoAppDeInicio(page, desfase);
-          await sembrar(page);
+          await sembrar(page, { latenciaPresentacion: p.latenciaPresentacion });
           await p.abrir(page);
           const m = await alFinal(page);
           seAlcanza(m);
@@ -236,7 +248,7 @@ test.describe('🔴 D256 · los casos de los paneles de Mati: 393 × 852, insets
       });
     }
     await comoAppDeInicio(page, 59);
-    await sembrar(page, { soloYo: true });
+    await sembrar(page, { soloYo: true, latenciaPresentacion: 0 });
     await ir(page, `/viaje/${CANCUN}`);
     await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
     await expect(presentes(page).getByRole('checkbox')).toHaveCount(1);
@@ -256,13 +268,14 @@ test.describe('🔴 D256 · los casos de los paneles de Mati: 393 × 852, insets
       });
     }
     await comoAppDeInicio(page, 59);
-    await sembrar(page, { ticketCorto: true });
+    await sembrar(page, { ticketCorto: true, latenciaPresentacion: 0 });
     await ir(page, `/viaje-ticket/${CANCUN}.${MARISCOS}`);
     await expect(page.locator('.qc-fila')).toHaveCount(4);
     seAlcanza(await alFinal(page));
   });
 });
 
+// D451 · los cuatro controles conservan también la latencia original después de sembrar.
 test.describe('control · sin desfase (Safari, o la app de inicio ya acomodada), a 390 × 844', () => {
   test.use({ viewport: { width: 390, height: 844 } });
   for (const p of PANTALLAS) {

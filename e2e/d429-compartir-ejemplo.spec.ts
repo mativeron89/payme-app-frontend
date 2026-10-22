@@ -28,17 +28,28 @@ test('D429 · copiar, WhatsApp y los amigos sólo explican en dos tamaños de te
   await hastaDividir(page);
   await hastaCompartir(page);
   const url = page.url();
+  const amigosEsperados = [
+    { id: 'amigo-lucia', nombre: 'Lucía Sol' },
+    { id: 'amigo-diego', nombre: 'Diego Luna' },
+    { id: 'amigo-ana', nombre: 'Ana Ríos' },
+  ];
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 375, height: 667 }]) {
     await page.setViewportSize(viewport);
     const amigos = page.getByRole('region', { name: 'Amigos de ejemplo' });
-    await expect(amigos.getByRole('button', { name: 'Invitar', exact: true })).toHaveCount(3);
-    for (const nombre of ['Lucía Sol', 'Diego Luna', 'Ana Ríos']) await expect(amigos.getByText(nombre, { exact: true })).toBeVisible();
+    await expect(amigos.getByRole('button')).toHaveCount(3);
+    for (const { nombre } of amigosEsperados) {
+      await expect(amigos.getByText(nombre, { exact: true })).toBeVisible();
+      const boton = amigos.getByRole('button', { name: `Invitar a ${nombre}`, exact: true });
+      await expect(boton).toHaveCount(1);
+      await expect(boton).toHaveText('Invitar');
+      await expect(boton).toBeEnabled();
+    }
     const acciones = [
       { boton: page.getByRole('button', { name: 'Copiar link', exact: true }), texto: /^En tu mesa, Copiar link/, ancla: 'ejemplo-copiar' },
       { boton: page.getByRole('button', { name: 'WhatsApp', exact: true }), texto: /^En tu mesa, WhatsApp/, ancla: 'ejemplo-whatsapp' },
-      ...['amigo-lucia', 'amigo-diego', 'amigo-ana'].map((id) => ({
-        boton: page.locator(`[data-guia="ejemplo-${id}"]`), texto: /^En tu mesa, Invitar/, ancla: `ejemplo-${id}`,
+      ...amigosEsperados.map(({ id, nombre }) => ({
+        boton: amigos.getByRole('button', { name: `Invitar a ${nombre}`, exact: true }), texto: /^En tu mesa, Invitar/, ancla: `ejemplo-${id}`,
       })),
     ];
     for (const [i, accion] of acciones.entries()) {
@@ -70,6 +81,12 @@ test('D429 · copiar, WhatsApp y los amigos sólo explican en dos tamaños de te
   await page.getByRole('button', { name: 'Copiar link', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(burbuja(page, /^En tu mesa, Copiar link/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(segundo).toBeVisible();
+  await page.getByRole('button', { name: 'Invitar a Lucía Sol', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(burbuja(page, /^En tu mesa, Invitar/)).toBeVisible();
+  await geometria(page, 'ejemplo-amigo-lucia');
   await page.keyboard.press('Escape');
   await expect(segundo).toBeVisible();
   expect(await efectos()).toEqual([]);

@@ -67,7 +67,11 @@ async function compartirDelEjemplo(page: Page): Promise<void> {
   expect(await fase(page)).toBe('compartir');
   await expect(page.getByRole('button', { name: 'Copiar link', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'WhatsApp', exact: true })).toBeEnabled();
-  await expect(page.getByRole('region', { name: 'Amigos de ejemplo' }).getByRole('button', { name: 'Invitar', exact: true })).toHaveCount(3);
+  const amigos = page.getByRole('region', { name: 'Amigos de ejemplo' });
+  await expect(amigos.getByRole('button')).toHaveCount(3);
+  for (const nombre of ['Lucía Sol', 'Diego Luna', 'Ana Ríos']) {
+    await expect(amigos.getByRole('button', { name: `Invitar a ${nombre}`, exact: true })).toBeEnabled();
+  }
   await expect(page.getByRole('button', { name: 'Reintentar el mismo link' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'WhatsApp' })).toHaveCount(0);

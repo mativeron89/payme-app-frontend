@@ -229,6 +229,7 @@ test.describe('D363 · el recorrido', () => {
     await hastaCompartir(page);
     // D429 · acciones explicativas y amigos inventados, sin montar el panel real.
     await expect(page.getByRole('region', { name: 'Amigos de ejemplo' })).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copiar link', exact: true })).toBeEnabled();
     await expect(burbuja(page, 'Aquí invitarás a tus amigos a sumarse a la mesa.').getByText('1 de 2')).toBeVisible();
     await geometria(page, 'compartir');
@@ -430,5 +431,26 @@ test.describe('D363 · 375 × 667 y en inglés', () => {
     await expect(a2.getByRole('button', { name: 'Do the tutorial another time' })).toBeVisible();
     await geometria(page, 'camara');
     await capturar(page, 'd363-en-2a');
+
+    // D451 · el mismo recorrido en inglés llega a las acciones con nombre propio.
+    await page.getByRole('button', { name: 'Scan', exact: true }).click();
+    await expect(burbuja(page, 'Take or choose a photo: we’ll show you a sample receipt.')).toBeVisible();
+    await sacarFoto(page, undefined, { usar: false });
+    const ticket = burbuja(page, 'This is the sample receipt.');
+    await expect(ticket).toBeVisible();
+    await ticket.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('radio', { name: /By what each person ordered/ }).click();
+    await page.getByRole('button', { name: 'One more diner', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(burbuja(page, 'This is where you’ll invite your friends to join the table.')).toBeVisible();
+    const amigos = page.getByRole('region', { name: 'Sample friends', exact: true });
+    await expect(amigos.getByRole('button')).toHaveCount(3);
+    for (const nombre of ['Lucía Sol', 'Diego Luna', 'Ana Ríos']) {
+      const boton = amigos.getByRole('button', { name: `Invite ${nombre}`, exact: true });
+      await expect(boton).toHaveCount(1);
+      await expect(boton).toHaveText('Invite');
+      await expect(boton).toBeEnabled();
+    }
+    await expect(page.getByRole('tablist', { name: 'Choose who to invite', exact: true })).toHaveCount(0);
   });
 });

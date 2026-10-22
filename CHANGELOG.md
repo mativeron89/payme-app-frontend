@@ -1,3 +1,10 @@
+## 0.258.1 · 2026-10-22 (D451 · accesibilidad del tutorial y fixtures de Inicio)
+
+- Los tres botones de amigos del tutorial tienen un nombre accesible único: «Invitar a <nombre>» / «Invite <name>». Conservan el texto visible, el aspecto y la explicación local de cada acción.
+- La regresión conserva las 17 identidades del tutorial y amplía los controles de nombres ES/EN, activación por teclado y ausencia del panel de invitaciones real. Se mantienen los controles de efectos, red y almacenamiento.
+- Inicio admite latencia sintética cero después de sembrar y recargar en 14 de sus 30 casos de presentación. Los otros 16 conservan 350 ms; las identidades, aserciones y esperas visuales de 150 ms se mantienen. Sin medición ni promesa de ahorro.
+- Integración estática sobre 0.258.0, sin runtime local. Validación oficial completa pendiente en CI del SHA exacto; sin GREEN ni publicación en esta etapa. D63 sigue abierto.
+
 ## 0.258.0 · 2026-10-21 (D444/D449 · resumen de Estadísticas)
 
 - Resumen del período con consumo o gasto registrado, visitas y promedio por visita; el total aparece una sola vez. La cabecera conserva el selector y señala el período en curso o el mes completo.
