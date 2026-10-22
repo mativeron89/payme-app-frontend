@@ -33,8 +33,6 @@ import {
   elegidosAlGuardar,
   elegidosRegistrados,
   lineasElegidas,
-  propioEnConsumo,
-  seleccionCierraLaMesa,
 } from './antesDeCerrar';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { HojaDeLaMesa } from '../components/HojaDeLaMesa';
@@ -219,6 +217,9 @@ export interface MesaDetailViewProps {
   onGoToPay: (preparada?: PreparacionListo) => void;
   /** Lecturas completas antes de decidir hoja/guardado; opcional sólo para vistas inertes. */
   onPrepararListo?: () => Promise<PreparacionListo | null>;
+  cierreSeleccion?: { mesa: MesaDetail; selected: ReadonlyMap<string, number> } | null;
+  onConfirmarCierreSeleccion?: () => void;
+  onCancelarCierreSeleccion?: () => void;
   leyendoListo?: boolean;
   recuperacion?: ReactNode;
   onRetryFrozenPay: () => void;
@@ -543,6 +544,9 @@ export function MesaDetailView({
   onSetDenominator,
   onGoToPay,
   onPrepararListo,
+  cierreSeleccion = null,
+  onConfirmarCierreSeleccion,
+  onCancelarCierreSeleccion,
   leyendoListo = false,
   recuperacion = null,
   onRetryFrozenPay,
@@ -564,9 +568,9 @@ export function MesaDetailView({
   const [itemsPulse, setItemsPulse] = useState(false);
   /**
    * AF-34 · D240 punto 8 · la hoja antes del cierre (distinta de la de D-R20):
-   * `cerrar` la abre «Cerrar mesa»; `seleccion`, el «Listo» que completa la mesa.
+   * `cerrar` la abre «Cerrar mesa»; la selección llega del desafío del dueño.
    */
-  const [hojaCierre, setHojaCierre] = useState<null | 'cerrar' | 'seleccion'>(null);
+  const [hojaCierre, setHojaCierre] = useState<null | 'cerrar'>(null);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const pantallaRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
@@ -871,41 +875,15 @@ export function MesaDetailView({
     }
     setItemsPulse(true);
   };
-  /**
-   * D240 punto 8 · ¿este «Listo» cierra la mesa? Sólo sin garantía y abierta,
-   * con algo nuevo que guardar y con lo que el dueño publica de cada plato. En
-   * «igual», con la selección guardada ya leída, el borrador la reemplaza. En
-   * consumo, en un plato que el borrador no toca queda lo que ya había; en uno
-   * que toca, el dueño suelta lo propio liberable y lo vuelve a tomar
-   * (`propioEnConsumo`, con el fail-safe hacia mostrar la hoja), y escribe con
-   * cualquier borrador no vacío. Hasta 0.253.1 lo propio era siempre 0 («el
-   * borrador se suma»): con una respuesta perdida o dos pestañas, la mesa podía
-   * cerrarse sin la hoja.
-   */
-  const listoCierraLaMesa = ({
-    mesa, selected, informativasGuardadas, informativeSaved, guardadaLeida,
-  }: PreparacionListo): boolean => !ejemplo && mesa.guarantee_mode === false && mesa.status === 'open' && (mesa.division_mode === 'consumo'
-    ? seleccionCierraLaMesa(
-      mesa,
-      (item) => item.remaining_bps,
-      (item) => propioEnConsumo(item, selected),
-      selected,
-      { escribeConCualquierBorrador: true },
-    )
-    : guardadaLeida && !informativeSaved && informativoPublicado(mesa)
-      && seleccionCierraLaMesa(
-        mesa,
-        (item) => item.informative_remaining_bps,
-        (item) => informativasGuardadas.get(item.id) ?? 0,
-        selected,
-      ));
+  // D450: sólo el rechazo atómico del servidor abre la hoja de selección.
+  // La estimación local sigue sirviendo para mostrar avance, nunca para confirmar.
   /** Vuelve el foco al círculo «Listo» (el de esta pantalla). */
   const enfocarListo = (): void => {
     requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('.appbar-center')?.focus());
   };
   const preparandoRef = useRef(false);
   const intencionListoRef = useRef(0);
-  async function terminarListo(confirmado = false): Promise<void> {
+  async function terminarListo(): Promise<void> {
     if (preparandoRef.current || busy || propinaGuardando || !onPrepararListo) return;
     preparandoRef.current = true;
     const intencion = ++intencionListoRef.current;
@@ -917,9 +895,6 @@ export function MesaDetailView({
       if (esConsumoAhora && foto.selected.size === 0 && !tieneRegistrado) {
         frenarSinEleccion(); return;
       }
-      // El predictor recibe LAS lecturas recién terminadas, no las props de
-      // la clausura anterior al await. La confirmación vuelve a leer también.
-      if (listoCierraLaMesa(foto) && !confirmado) { setHojaCierre('seleccion'); return; }
       setHojaCierre(null);
       onGoToPay(foto);
     } finally { preparandoRef.current = false; }
@@ -1477,22 +1452,21 @@ export function MesaDetailView({
           onConfirmar={() => { void onCerrarMesa().finally(() => setHojaCierre(null)); }}
         />
       )}
-      {hojaCierre === 'seleccion' && (
+      {cierreSeleccion && (
         <HojaAntesDeCerrar
           titulo={t('Con esto se cierra la mesa')}
           renglones={[
             t('Con tu selección ya se eligió todo lo de la mesa.'),
             t('Al guardar, la mesa se cierra para todos.'),
           ]}
-          mios={lineasElegidas(elegidosAlGuardar(mesa, esConsumo, selected))}
+          mios={lineasElegidas(elegidosAlGuardar(cierreSeleccion.mesa, cierreSeleccion.mesa.division_mode === 'consumo', cierreSeleccion.selected))}
           sinGuardar={false}
           confirmar={t('Guardar y cerrar')}
           cerrando={busy || leyendoListo}
-          onRevisar={() => { intencionListoRef.current += 1; setHojaCierre(null); llevarALaLista(true); }}
-          onSalir={() => { intencionListoRef.current += 1; setHojaCierre(null); enfocarListo(); }}
-          // El guardado sigue su camino de siempre: el dueño cierra la mesa en el
-          // mismo pedido y la pantalla pasa a «La mesa se cerró» (F-2).
-          onConfirmar={() => { void terminarListo(true); }}
+          onRevisar={() => { intencionListoRef.current += 1; onCancelarCierreSeleccion?.(); llevarALaLista(true); }}
+          onSalir={() => { intencionListoRef.current += 1; onCancelarCierreSeleccion?.(); enfocarListo(); }}
+          // Gesto nuevo sobre el desafío vigente y el pedido congelado en memoria.
+          onConfirmar={() => onConfirmarCierreSeleccion?.()}
         />
       )}
       {/* Con pagos apagados, Listo es el único acto explícito de persistencia.

@@ -1,9 +1,15 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "c8432e745741188cf88b3a0babb2f0f41856e6e9",
-  "total": 144,
+  "commit": "67cf3f1b1734beb50ddfa8fcab563661a33ee39a",
+  "total": 148,
   "archivos": [
+    {
+      "origen": "contract/account-consents-v1.schema.json",
+      "destino": "contract/account-consents-v1.schema.json",
+      "sha256": "aeee0e13e83d0123c50fc860e569d73358bf7f930954490f0523fc7fbd680444",
+      "bytes": 15644
+    },
     {
       "origen": "contract/create-mesa-identity-vectors.json",
       "destino": "contract/create-mesa-identity-vectors.json",
@@ -13,8 +19,8 @@
     {
       "origen": "contract/informative-selections-v2.schema.json",
       "destino": "contract/informative-selections-v2.schema.json",
-      "sha256": "2c6ea8c8b4b8894ab7c54fa20fe644c582f6e33a96fc6feeff2b59441db2417b",
-      "bytes": 10080
+      "sha256": "115c0e5902bb63f42cc9a9229b2c4fffd328cec34a4f66f52aa055bc4705ee88",
+      "bytes": 10332
     },
     {
       "origen": "contract/invitacion-personal-v1.json",
@@ -49,8 +55,8 @@
     {
       "origen": "contract/mesa-presentation-v1.json",
       "destino": "contract/mesa-presentation-v1.json",
-      "sha256": "38a600d547da3fff395a3c313b42500ee3e3694127e27a90adedecc89a8548b8",
-      "bytes": 2998
+      "sha256": "ae4a129f7d455791afdee233928d30403ba3b26961bec55d4281754accf3beeb",
+      "bytes": 3460
     },
     {
       "origen": "contract/notification-preferences-v1.schema.json",
@@ -75,6 +81,12 @@
       "destino": "contract/restaurant-resolution-v1.json",
       "sha256": "da16ca9240098ce8019031a8cc2bf325b75f4a5a45d422ed2687aa36b5dafd59",
       "bytes": 576
+    },
+    {
+      "origen": "contract/selection-closure-v1.schema.json",
+      "destino": "contract/selection-closure-v1.schema.json",
+      "sha256": "163f76fcfd34f03077200f8a5891d5ac63383761d1e723b86a1464d8c8b4f203",
+      "bytes": 5123
     },
     {
       "origen": "contract/social-auth-v1.json",
@@ -451,8 +463,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "81b8012c9ceb2cbc2b74ee029d5885d12f4e5f8929ad758818f552644e3c5698",
-      "bytes": 13142
+      "sha256": "1715b2043abead0b7a60df5adf494f2aae5e4f252f4e328425c33f6b6f586c80",
+      "bytes": 13657
     },
     {
       "origen": "routes/connect.js",
@@ -463,8 +475,8 @@
     {
       "origen": "routes/consent.js",
       "destino": "routes/consent.js",
-      "sha256": "d3e2b4b55c85152e9bc655bd87b9f362055ad643b8ea3eb85cc2ba3c602ad615",
-      "bytes": 9486
+      "sha256": "10df6762bd824a600ef87bba947d2c4cb09ee6c23ab8bcd5ebb2d9c822d66ff0",
+      "bytes": 9764
     },
     {
       "origen": "routes/friends.js",
@@ -493,8 +505,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "8238526701437d50ca05f7893476b12cc66c50116355c00436af0d964202a1f4",
-      "bytes": 209128
+      "sha256": "742427f8369980c6f63410f2fe5c969dbfd431608e8b95b049ac2b0cb913c539",
+      "bytes": 211708
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -577,8 +589,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "9e3bfa788f81d3fd9ac80c7b160ae5659c68d6a521a8c1fe25f26cf8b5d96fe2",
-      "bytes": 34077
+      "sha256": "b3931d497f947a185cefed0f92fc5dc38a8aead08c20b0f0441881038a99b730",
+      "bytes": 34377
     },
     {
       "origen": "services/authRecovery.js",
@@ -613,8 +625,8 @@
     {
       "origen": "services/consent.js",
       "destino": "services/consent.js",
-      "sha256": "678f2e3cd039964e88f098f177581802d971650579477d94615e6c9eaf857981",
-      "bytes": 9548
+      "sha256": "36d6c87938017093aee05c51a4fde3a68a08900aeb7941522be03ab53a034ff9",
+      "bytes": 19976
     },
     {
       "origen": "services/externalIdentities.js",
@@ -649,8 +661,8 @@
     {
       "origen": "services/informativeSelections.js",
       "destino": "services/informativeSelections.js",
-      "sha256": "6b9daba7dd5620d79c5ee541419d7199a70a23ca69289f242fa7e2e1cad20c6d",
-      "bytes": 12543
+      "sha256": "577ef083abd5b4d3cb9910ab1bcffc0b64dd2dc708d91871245c42de91aa9c3f",
+      "bytes": 15928
     },
     {
       "origen": "services/invitationAuthority.js",
@@ -661,8 +673,8 @@
     {
       "origen": "services/itemClaims.js",
       "destino": "services/itemClaims.js",
-      "sha256": "85d6f8575d4fdee16383f0e336751fabde17fde2f0412d0ec47219e01c558214",
-      "bytes": 21407
+      "sha256": "21656a4b25993e884755dedfd31044ee8a9c4a83c9d50ccfc2ec4ba7283a1013",
+      "bytes": 22966
     },
     {
       "origen": "services/joinRequests.js",
@@ -721,8 +733,8 @@
     {
       "origen": "services/ocultamientos.js",
       "destino": "services/ocultamientos.js",
-      "sha256": "7e028b0895cb2c431193bcd6b6a310fb5f42046f731594c007ea46ea15b27cb6",
-      "bytes": 10363
+      "sha256": "a10e100772dcd4bfaf32bf6e0194ea16c9243fb67b33c6b74b5aaeb9f9ee0a8e",
+      "bytes": 10598
     },
     {
       "origen": "services/parteDeMesa.js",
@@ -763,14 +775,20 @@
     {
       "origen": "services/referidos.js",
       "destino": "services/referidos.js",
-      "sha256": "15d7e3a9d0fad0391574ee258754014204c520316dd02da48f45fb9031790294",
-      "bytes": 8985
+      "sha256": "1775e38c4f0f85d948b9a3957de5bee38f0d2e595e667a2f60d1171b0dd878e4",
+      "bytes": 9239
     },
     {
       "origen": "services/savedCards.js",
       "destino": "services/savedCards.js",
       "sha256": "07fa9c4ba8d40d4b1ade75f45fb0f7fe1ce1895b2dc75a095f7a0f39e32ec973",
       "bytes": 21493
+    },
+    {
+      "origen": "services/selectionClosure.js",
+      "destino": "services/selectionClosure.js",
+      "sha256": "7a4a4797c1a5fa52babc9ee5821c27de6d79d31888ff94788b7e5de053cdc862",
+      "bytes": 5803
     },
     {
       "origen": "services/shortfallDetails.js",
@@ -801,6 +819,12 @@
       "destino": "services/staffCatalog.js",
       "sha256": "13e32b4b2dc59b857ed085bc5c24a9da8462a634a7628d72c58ad640296d0ef6",
       "bytes": 5588
+    },
+    {
+      "origen": "services/sugerencias.js",
+      "destino": "services/sugerencias.js",
+      "sha256": "a9f66296e93c666e21690b3a7042bb9f13512c45b3850cf40541488cc2e91d38",
+      "bytes": 301
     },
     {
       "origen": "services/topupProcessor.js",

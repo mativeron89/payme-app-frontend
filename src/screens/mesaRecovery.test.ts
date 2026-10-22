@@ -60,3 +60,11 @@ describe('n423 · evidencia de recuperación', () => {
     expect(rechazoDefinitivoSeleccion('desconocido', 409)).toBe(false);
   });
 });
+
+describe('n422 · rechazo atómico antes de recuperación ambigua', () => {
+  it.each(['selection_closure_confirmation_required', 'selection_closure_state_changed'])('%s sólo es definitivo en 409', (code) => {
+    expect(rechazoDefinitivoSeleccion(code, 409)).toBe(true);
+    expect(rechazoDefinitivoSeleccion(code, 503)).toBe(false);
+    expect(rechazoDefinitivoSeleccion(code, null)).toBe(false);
+  });
+});

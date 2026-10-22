@@ -1,3 +1,5 @@
+import { CLOSURE_CHANGED, closureDeadlineValid, decodeSelectionClosureRejection, freezeSelectionRequest, isSelectionClosureRejection, selectionClosureConfirmation } from '../api/selectionClosure';
+import type { SelectionClosureChallenge } from '../api/types';
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { olvidarLoDeMesas } from '../api/ultimoVisto';
 import { useIdioma } from '../i18n/idioma';
@@ -118,6 +120,13 @@ import {
  */
 
 type View = 'detail' | 'pay' | 'confirm';
+type SolicitudCierre = {
+  readonly challenge: SelectionClosureChallenge;
+  readonly preparada: PreparacionListo;
+  readonly identidad: string;
+  readonly operacion: { modo: 'consumo'; request: { items: LockFractionRequest[] } }
+    | { modo: 'igual'; request: ReplaceInformativeSelectionRequest };
+};
 type IntentoSeleccion = {
   readonly selected: ReadonlyMap<string, number>;
   readonly revision: number;
@@ -598,6 +607,12 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const revisionBorradorRef = useRef(0);
   const borradorEditadoRef = useRef(false);
   const intentoSeleccionRef = useRef<IntentoSeleccion | null>(null);
+  const solicitudCierreRef = useRef<SolicitudCierre | null>(null);
+  const [solicitudCierre, setSolicitudCierre] = useState<SolicitudCierre | null>(null);
+  function descartarSolicitudCierre(): void {
+    solicitudCierreRef.current = null;
+    setSolicitudCierre(null);
+  }
   const [seleccionIncierta, setSeleccionIncierta] = useState(false);
   const [leyendoListo, setLeyendoListo] = useState(false);
   const listoEnVueloRef = useRef(false);
@@ -608,6 +623,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   mesaActualRef.current = mesa;
 
   function editarBorrador(): void {
+    descartarSolicitudCierre();
     revisionBorradorRef.current += 1;
     borradorEditadoRef.current = true;
   }
@@ -619,6 +635,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     mesaReadEpochRef.current.next();
     revisionBorradorRef.current += 1;
     borradorEditadoRef.current = false;
+    descartarSolicitudCierre();
     intentoSeleccionRef.current = null;
     setSeleccionIncierta(false); setLeyendoListo(false); listoEnVueloRef.current = false;
     setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
@@ -636,6 +653,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
     setRefundedNotice(false); setResult(null); setError(null); setBusy(false); setView('detail');
     return () => {
+      solicitudCierreRef.current = null;
       identityEpochRef.current.next();
       mesaReadEpochRef.current.next();
     };
@@ -1192,6 +1210,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * y en los dos casos la mesa se recarga para mostrar lo que hay.
    */
   async function releaseItem(id: string) {
+    descartarSolicitudCierre();
     if (!mesa || soltandoRef.current || intentoSeleccionRef.current) return;
     if (frozenRef.current) {
       toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
@@ -1362,7 +1381,69 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     }
   }
 
-  async function goToPay(preparada?: PreparacionListo) {
+  function solicitudCierreVigente(solicitud: SolicitudCierre): boolean {
+    return solicitud.identidad === identidadActualRef.current
+      && identityEpochRef.current.isCurrent(solicitud.preparada.identityEpoch)
+      && mesaReadEpochRef.current.isCurrent(solicitud.preparada.readEpoch)
+      && revisionBorradorRef.current === solicitud.preparada.revision
+      && mesaActualRef.current?.code === solicitud.challenge.mesa_code
+      && mesaActualRef.current.division_mode === solicitud.challenge.division_mode;
+  }
+
+  async function procesarRechazoCierre(
+    err: unknown, preparada: PreparacionListo | undefined,
+    operacion: SolicitudCierre['operacion'], identidad: string,
+  ): Promise<boolean> {
+    const failure = extractApiError(err);
+    if (!isSelectionClosureRejection(failure.code, failure.status)) return false;
+    // Ambos códigos son rechazos SIN escritura, incluso si el body está roto.
+    intentoSeleccionRef.current = null; setSeleccionIncierta(false); descartarSolicitudCierre();
+    borradorEditadoRef.current = true;
+    const rechazo = decodeSelectionClosureRejection(failure.code, failure.status, failure.extra,
+      { mesaCode: code, mode: operacion.modo });
+    if (!rechazo || !preparada || ejemplo || isGuest || preparada.mesa.guarantee_mode !== false) {
+      toast(t('No pudimos verificar la confirmación de cierre. Revisa tu selección y toca Listo de nuevo.'));
+      return true;
+    }
+    let fotoParaConfirmar = preparada;
+    if (rechazo.code === CLOSURE_CHANGED) {
+      // Sólo GET: ni reenvío automático ni éxito deducido de un rechazo.
+      try {
+        const foto = await leerMesaPropia();
+        if (!foto || identidadActualRef.current !== identidad
+            || !identityEpochRef.current.isCurrent(preparada.identityEpoch)) return true;
+        aplicarFotoPropia(foto);
+        if (foto.mesa.status !== 'open' && foto.mesa.status !== 'partially_paid') {
+          toast(t('La mesa cambió. Conservamos tu selección; revísala antes de continuar.'));
+          return true;
+        }
+        fotoParaConfirmar = { ...preparada, mesa: foto.mesa, readEpoch: foto.readEpoch };
+      } catch {
+        if (identidadActualRef.current === identidad) toast(t('No pudimos leer tu selección guardada. Reintenta la lectura antes de guardar.'));
+        return true;
+      }
+      toast(t('La mesa cambió. Revisa la selección y confirma de nuevo si quieres cerrarla.'));
+    }
+    if (rechazo.challenge) {
+      const nueva: SolicitudCierre = Object.freeze({ challenge: rechazo.challenge, identidad, operacion,
+        preparada: { ...fotoParaConfirmar, selected: new Map(preparada.selected), denominators: new Map(preparada.denominators) } });
+      if (solicitudCierreVigente(nueva)) { solicitudCierreRef.current = nueva; setSolicitudCierre(nueva); }
+    }
+    return true;
+  }
+
+  function confirmarCierreSeleccion(): void {
+    const solicitud = solicitudCierreRef.current;
+    if (!solicitud || busy || propinaGuardando) return;
+    descartarSolicitudCierre(); // Consume antes del await: doble toque no duplica el pedido.
+    if (!solicitudCierreVigente(solicitud) || !closureDeadlineValid(solicitud.challenge.valid_until, Date.now())) {
+      toast(t('La confirmación venció. Revisa tu selección y toca Listo de nuevo.'));
+      return;
+    }
+    void goToPay(solicitud.preparada, solicitud);
+  }
+
+  async function goToPay(preparada?: PreparacionListo, cierre?: SolicitudCierre) {
     if (intentoSeleccionRef.current || busy || propinaGuardando) return;
     // La rama de pagos conserva su camino. Con el corte sólo escribe una foto
     // que salió del callsite real de Listo y sigue perteneciendo a esta época.
@@ -1370,6 +1451,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         || !identityEpochRef.current.isCurrent(preparada.identityEpoch)
         || !mesaReadEpochRef.current.isCurrent(preparada.readEpoch)
         || revisionBorradorRef.current !== preparada.revision)) return;
+    if (cierre && !solicitudCierreVigente(cierre)) return;
     const mesaDeLaVista = preparada?.mesa ?? mesaActualRef.current;
     if (!mesaDeLaVista) return;
     const mesa = mesaDeLaVista;
@@ -1406,17 +1488,18 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) volverAInicio();
         return;
       }
+      const request = cierre?.operacion.modo === 'consumo' ? cierre.operacion.request : freezeSelectionRequest({
+        items: [...selected.entries()].map(([item_id, fraction_bps]): LockFractionRequest => {
+          const denominator = selectedDenominators.get(item_id);
+          return denominator === undefined ? { item_id, fraction_bps } : { item_id, fraction_denominator: denominator };
+        }),
+      });
       setBusy(true);
       try {
-        // Contrato: lock primero (POST /:code/items/lock), después pagar.
-        const requests: LockFractionRequest[] = [...selected.entries()].map(([item_id, fraction_bps]) => {
-          const fractionDenominator = selectedDenominators.get(item_id);
-          return fractionDenominator === undefined
-            ? { item_id, fraction_bps }
-            : { item_id, fraction_denominator: fractionDenominator };
-        });
+        // El segundo pedido conserva exactamente los ítems del que fue rechazado.
+        const requests = request.items;
         if (!CORTE.allowsPay) intentoSeleccionRef.current = { modo: 'consumo', selected: new Map(selected), revision };
-        const r = await api.lockItems(code, requests, guestToken);
+        const r = await api.lockItems(code, requests, guestToken, cierre ? selectionClosureConfirmation(cierre.challenge) : undefined);
         if (!vigente()) return;
         intentoSeleccionRef.current = null; setSeleccionIncierta(false); borradorEditadoRef.current = false;
         setLockTokens([r.lock_token]);
@@ -1442,6 +1525,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); volverAInicio(); return; }
         setView('pay');
       } catch (err) {
+        if (!vigente()) return;
+        if (!CORTE.allowsPay && await procesarRechazoCierre(err, preparada, { modo: 'consumo', request }, identidad)) return;
         if (!vigente()) return;
         const { code: ec, extra, status } = extractApiError(err);
         if (!CORTE.allowsPay && !rechazoDefinitivoSeleccion(ec, status)) {
@@ -1528,15 +1613,18 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
           toast(t('Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.'));
           return;
         }
-        const request = replaceInformativeSelectionRequest(selected);
+        const request = cierre?.operacion.modo === 'igual' ? cierre.operacion.request : freezeSelectionRequest(replaceInformativeSelectionRequest(selected));
         setBusy(true);
         intentoSeleccionRef.current = { modo: 'igual', selected: new Map(selected), revision, request };
         try {
-          const saved = await api.replaceInformativeSelection(code, request);
+          const saved = await api.replaceInformativeSelection(code, cierre
+            ? { ...request, closure_confirmation: selectionClosureConfirmation(cierre.challenge) } : request);
           if (!vigente()) return;
           intentoSeleccionRef.current = null; setSeleccionIncierta(false);
           confirmarInformativa(saved, revision);
         } catch (err) {
+          if (!vigente()) return;
+          if (await procesarRechazoCierre(err, preparada, { modo: 'igual', request }, identidad)) return;
           if (!vigente()) return;
           const failure = extractApiError(err);
           if (!rechazoDefinitivoSeleccion(failure.code, failure.status)) {
@@ -3371,6 +3459,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       informativeUnsupported={!!informativePersistenceActive && informativeState === 'unsupported'}
       informativeLoadError={!!informativePersistenceActive && informativeState === 'error'}
       onRetryInformative={reload}
+      cierreSeleccion={solicitudCierre && solicitudCierreVigente(solicitudCierre)
+        ? { mesa: solicitudCierre.preparada.mesa, selected: solicitudCierre.preparada.selected } : null}
+      onConfirmarCierreSeleccion={confirmarCierreSeleccion}
+      onCancelarCierreSeleccion={descartarSolicitudCierre}
       onOpenInvite={() => setInviteOpen(true)}
       onCloseInvite={() => setInviteOpen(false)}
       memoriaDeInvitaciones={memoriaDeInvitaciones}

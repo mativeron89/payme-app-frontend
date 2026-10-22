@@ -334,7 +334,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await expect(page.getByText('La cerraste tú.')).toBeVisible();
   });
 
-  test('el «Listo» que completa la mesa avisa ANTES de enviar; «Revisar» no envía nada; «Guardar y cerrar» la cierra', async ({ page }) => {
+  test('el «Listo» que completa la mesa recibe rechazo sin escritura; «Revisar» no confirma; «Guardar y cerrar» la cierra', async ({ page }) => {
     await abrirMesa(page);
     await contarLlamadas(page, 'lockItems');
     await elegirTodo(page);
@@ -346,19 +346,19 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
       'Tagliatelle Bolognese', 'Risotto ai Funghi', 'Pizza Margherita', '2 × Tiramisú', 'y 2 más',
     ]);
     await expect(hoja.getByRole('button', { name: 'Revisar', exact: true })).toBeFocused();
-    expect(await llamadas(page, 'lockItems')).toBe(0);
+    expect(await llamadas(page, 'lockItems')).toBe(1);
     await capturar(page, '08-listo-que-cierra');
 
     await hoja.getByRole('button', { name: 'Revisar', exact: true }).click();
     await expect(hoja).toHaveCount(0);
     await expect(page.locator('.qc-lista :focus')).toHaveCount(1);
     await expect(page).toHaveURL(/\/mesa\//);
-    expect(await llamadas(page, 'lockItems')).toBe(0);
+    expect(await llamadas(page, 'lockItems')).toBe(1);
 
     await listo(page).click();
     await hoja.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
-    expect(await llamadas(page, 'lockItems')).toBe(1);
+    expect(await llamadas(page, 'lockItems')).toBe(3);
     // La mesa quedó cerrada de verdad (no sólo la pantalla que lee la respuesta):
     // al volver a verla, el dueño (acá el mock) la da por cerrada.
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
@@ -366,7 +366,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await expect(page).toHaveURL(/\/mesa\//);
   });
 
-  test('Escape en la hoja del «Listo» vuelve el foco a «Listo», sin enviar nada', async ({ page }) => {
+  test('Escape en la hoja del «Listo» vuelve el foco a «Listo», sin confirmar', async ({ page }) => {
     await abrirMesa(page);
     await contarLlamadas(page, 'lockItems');
     await elegirTodo(page);
@@ -375,7 +375,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(listo(page)).toBeFocused();
-    expect(await llamadas(page, 'lockItems')).toBe(0);
+    expect(await llamadas(page, 'lockItems')).toBe(1);
   });
 
   test('un «Listo» que no completa la mesa guarda y vuelve a Inicio sin ninguna hoja', async ({ page }) => {

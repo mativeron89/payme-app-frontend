@@ -1312,6 +1312,10 @@ export const EN: Record<string, string> = {
   "Con esto se cierra la mesa": "This closes the table",
   "Con tu selección ya se eligió todo lo de la mesa.": "With your selection, everything on the table has been chosen.",
   "Al guardar, la mesa se cierra para todos.": "When you save, the table closes for everyone.",
+  "No pudimos verificar la confirmación de cierre. Revisa tu selección y toca Listo de nuevo.": "We could not verify the closing confirmation. Review your selection and tap Done again.",
+  "La mesa cambió. Conservamos tu selección; revísala antes de continuar.": "The table changed. We kept your selection; review it before continuing.",
+  "La mesa cambió. Revisa la selección y confirma de nuevo si quieres cerrarla.": "The table changed. Review your selection and confirm again if you want to close it.",
+  "La confirmación venció. Revisa tu selección y toca Listo de nuevo.": "The confirmation expired. Review your selection and tap Done again.",
   "Guardar y cerrar": "Save and close",
   // AF-BORRAR-MESAS · D238/D239 · borrar de la app.
   "Eliminar {0}": "Delete {0}",

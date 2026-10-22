@@ -1,0 +1,612 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.account-consents/v1",
+  "title": "Consentimientos opcionales de la cuenta · propietario App Backend",
+  "description": "AB-1 dormido: ambos mínimos null, SUGERENCIAS_DIVIDIR_ENABLED ausente/false por defecto. No cálculo ni lectura de historial. Par del Aviso completo mostrado obligatorio sólo para grants de sugerencias/analisis_interno. Permisos independientes. Campañas conserva su interfaz histórica. No agrega campos al JSON servido.",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/account/consents",
+      "success": 200,
+      "response": "list"
+    },
+    {
+      "method": "GET",
+      "path": "/api/account/consents/:purpose",
+      "success": 200,
+      "response": "single"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/consents/:purpose/grant",
+      "success": 201,
+      "request": {
+        "sugerencias": "optionalGrant",
+        "analisis_interno": "optionalGrant",
+        "perfilado_campanas": "campaignGrant"
+      },
+      "response": "single"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/consents/:purpose/revoke",
+      "success": 200,
+      "request": "revoke",
+      "response": "single"
+    }
+  ],
+  "error_statuses": {
+    "400": [
+      "unknown_channel",
+      "validation_error"
+    ],
+    "401": [
+      "auth_required",
+      "invalid_token",
+      "invalid_issuer",
+      "invalid_audience",
+      "token_not_yet_valid",
+      "session_not_found",
+      "session_revoked",
+      "session_expired",
+      "session_subject_mismatch",
+      "user_not_found"
+    ],
+    "403": [
+      "user_suspended",
+      "age_verification_required"
+    ],
+    "404": [
+      "unknown_purpose"
+    ],
+    "409": [
+      "purpose_not_available",
+      "notice_version_too_old",
+      "legal_version_mismatch"
+    ],
+    "428": [
+      "legal_acceptance_required",
+      "username_required"
+    ],
+    "503": [
+      "legal_text_missing"
+    ]
+  },
+  "new_error_uses": {
+    "validation_error": "400 después de capacidad → mínimo/Aviso → edad: par ausente/malformado o cuerpo con claves no admitidas en grants opcionales.",
+    "legal_version_mismatch": "409 después de esos gates: versión o hash mostrado difiere del vigente leído bajo lock legal, registrado sin segunda lectura."
+  },
+  "behavior": {
+    "availability": "features.<purpose> contiene exactamente supported y enabled. enabled es disponibilidad global para nuevos grants (capacidad y Aviso/mínimo), sin titular/edad/granted. Error legal apaga sólo estos bloques.",
+    "listing": "Lista si puede otorgarse globalmente O está granted. Con supported true el consumidor puede leer la lista aunque enabled sea false y permitir revocar grants previos. Sin granted y sin disponibilidad no hay oferta nueva.",
+    "consumer": "Descartar finalidades desconocidas ANTES de validar las entradas conocidas de forma estricta. purpose_key debe coincidir con la clave del mapa.",
+    "revocation": "Sin par mostrado obligatorio ni gates de capacidad/mínimo/edad del servicio. Conserva auth 401/403/428 y 503 sin Aviso vigente. No hay exenciones nuevas.",
+    "cache": "Respuestas de /api/account/consents y sus hijos: Cache-Control private, no-store y Vary Authorization, incluidos errores de auth. /api/config sigue pública.",
+    "metadata": "channel omitido usa app; app_version omitido usa x-app-version si está presente, luego null. Clientes limitan app_version/header a 30 caracteres. El 500 heredado por valor más largo sigue como deuda; no se endurece aquí. Campañas/revoke conservan tolerancia histórica a campos ignorados.",
+    "order": "Capacidad → mínimo/Aviso → edad → validación del cuerpo/par. unknown_purpose y unknown_channel conservan su prioridad previa. requireAuth corre antes del handler.",
+    "atomicity": "Grants opcionales con mínimo definido toman payme/legal-sync/aviso_privacidad/v1 en una transacción. Aviso y evento usan el mismo cliente/par. Campañas/revoke mantienen su registro histórico.",
+    "state": "never implica granted false y fecha/par null. granted/revoked llevan fecha y par registrados. Revoked gana empates de created_at; UUID sólo desempata mismo estado.",
+    "limits": "No resuelve AB-2, F1/OPS ni A12-O01. No cambia legal/auth/exp/variables productivas ni AB-0."
+  },
+  "$defs": {
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose_key",
+        "granted",
+        "state",
+        "since",
+        "notice_version",
+        "notice_hash"
+      ],
+      "properties": {
+        "purpose_key": {
+          "type": "string",
+          "enum": [
+            "perfilado_campanas",
+            "analisis_interno",
+            "sugerencias"
+          ]
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "never",
+            "granted",
+            "revoked"
+          ]
+        },
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "notice_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notice_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": {
+              "const": "never"
+            },
+            "granted": {
+              "const": false
+            },
+            "since": {
+              "const": null
+            },
+            "notice_version": {
+              "const": null
+            },
+            "notice_hash": {
+              "const": null
+            }
+          }
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "granted"
+            },
+            "granted": {
+              "const": true
+            },
+            "since": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "notice_version": {
+              "type": "string"
+            },
+            "notice_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+            }
+          }
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "revoked"
+            },
+            "granted": {
+              "const": false
+            },
+            "since": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "notice_version": {
+              "type": "string"
+            },
+            "notice_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+            }
+          }
+        }
+      ]
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consents"
+      ],
+      "properties": {
+        "consents": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "perfilado_campanas"
+          ],
+          "properties": {
+            "perfilado_campanas": {
+              "$ref": "#/$defs/state"
+            },
+            "analisis_interno": {
+              "$ref": "#/$defs/state"
+            },
+            "sugerencias": {
+              "$ref": "#/$defs/state"
+            }
+          }
+        }
+      }
+    },
+    "single": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consent"
+      ],
+      "properties": {
+        "consent": {
+          "$ref": "#/$defs/state"
+        }
+      }
+    },
+    "optionalGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "notice_version",
+        "notice_hash"
+      ],
+      "properties": {
+        "notice_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$(?![\\s\\S])"
+        },
+        "notice_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "app",
+            "web",
+            "soporte"
+          ]
+        },
+        "app_version": {
+          "type": "string",
+          "maxLength": 30
+        }
+      }
+    },
+    "campaignGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "app",
+            "web",
+            "soporte"
+          ]
+        },
+        "app_version": {
+          "type": "string",
+          "maxLength": 30
+        }
+      }
+    },
+    "revoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "app",
+            "web",
+            "soporte"
+          ]
+        },
+        "app_version": {
+          "type": "string",
+          "maxLength": 30
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supported",
+        "enabled"
+      ],
+      "properties": {
+        "supported": {
+          "const": true
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sugerencias",
+        "analisis_interno"
+      ],
+      "properties": {
+        "sugerencias": {
+          "$ref": "#/$defs/capability"
+        },
+        "analisis_interno": {
+          "$ref": "#/$defs/capability"
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "unknown_channel"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "validation_error"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "auth_required"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "invalid_token"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "invalid_issuer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "invalid_audience"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "token_not_yet_valid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "session_not_found"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "session_revoked"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "session_expired"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "session_subject_mismatch"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "user_not_found"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "user_suspended"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error",
+            "detail"
+          ],
+          "properties": {
+            "error": {
+              "const": "age_verification_required"
+            },
+            "detail": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "unknown_purpose"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "purpose_not_available"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "notice_version_too_old"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "legal_version_mismatch"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "legal_acceptance_required"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "const": "username_required"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error",
+            "detail"
+          ],
+          "properties": {
+            "error": {
+              "const": "legal_text_missing"
+            },
+            "detail": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

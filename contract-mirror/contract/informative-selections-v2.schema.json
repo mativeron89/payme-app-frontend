@@ -184,7 +184,11 @@
           }
         },
         "confirm_closure": {
-          "const": true
+          "const": true,
+          "description": "Historical required literal; does not authorize closure without closure_confirmation for the current state."
+        },
+        "closure_confirmation": {
+          "$ref": "payme.app.selection-closure/v1#/$defs/confirmation"
         }
       }
     },
