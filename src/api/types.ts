@@ -262,6 +262,8 @@ export interface AppConfig {
     google_redirect_binding?: unknown;
     /** AF-USUARIO-ARROBA · v2.137.0 · el @usuario; se decodifica en `username.ts`. */
     username?: unknown;
+    /** D457 · ausencia/malformación cierra grants; revocar es independiente. */
+    foto_perfil_no_amigos?: unknown;
     /**
      * AF-BORRAR-MESAS · D238/D239 · v2.169.0 · «borrar de la app» (ocultar por
      * persona). Se decodifica cerrado en `ocultar.ts`; ausente = sin gesto.

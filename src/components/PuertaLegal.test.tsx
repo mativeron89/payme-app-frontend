@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { IdiomaProvider } from '../i18n/idioma';
 import { claveDelPar, parCambio, PuertaLegalView, puertaLista } from './PuertaLegal';
+import { FOTO_NOTICE } from '../api/fotoPerfilNoAmigos';
 import type { StoredSession } from '../api/storage';
 
 function render(aceptaMayor: boolean, aceptaTerminos: boolean, busy = false, error: string | null = null): string {
@@ -114,4 +115,20 @@ describe('AF-01 · el gesto queda atado al par versión+hash', () => {
     // Ya aceptado en otro lado: la puerta se abre, no hay aviso.
     expect(parCambio(cerradaA, s1, { required: false, aviso: null, terminos: null })).toBe(false);
   });
+});
+
+// D457 · vista futura: aceptar documentos no es conceder la finalidad opcional.
+it('D457 conserva dos casillas vacías y un acceso acotado a privacidad con el par nuevo', () => {
+  const html = renderToStaticMarkup(<IdiomaProvider><PuertaLegalView
+    fotoOpcional aceptaMayor={false} aceptaTerminos={false} busy={false} error={null}
+    privacidadFoto={<button type="button">Consultar permiso de foto</button>}
+    onAceptaMayor={() => undefined} onAceptaTerminos={() => undefined}
+    onContinuar={() => undefined} onCerrarSesion={() => undefined} /></IdiomaProvider>);
+  expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(2);
+  expect(html).not.toContain('checked=""');
+  expect(html).toContain('Aceptar estos documentos no activa el permiso');
+  expect(html).toContain('Consultar permiso de foto');
+  expect(html).toContain('Aviso de Privacidad Simplificado');
+  const anterior = { required: true, aviso: { version: '3.0.0', hash: 'a'.repeat(64) }, terminos: { version: '1.0.0', hash: 'b'.repeat(64) } };
+  expect(claveDelPar({ ...anterior, aviso: FOTO_NOTICE })).not.toBe(claveDelPar(anterior));
 });

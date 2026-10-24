@@ -53,6 +53,26 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  // D457 · UI del permiso opcional (documentos legales en español).
+  "Privacidad": "Privacy",
+  "Mostrar mi foto a personas que no son mis amigos": "Show my photo to people who are not my friends",
+  "Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.": "Allow other users to see your photo in searches, invitations, and shared tables or trips. Your friends can still see it if you turn this off.",
+  "Puedes consultar o desactivar este permiso antes de aceptar los documentos. Para activarlo, primero debes aceptarlos.": "You can check or turn off this permission before accepting the documents. To turn it on, you must accept them first.",
+  "Activar": "Turn on",
+  "Desactivar": "Turn off",
+  "Consultando o guardando el permiso…": "Checking or saving permission…",
+  "Permiso activado": "Permission is on",
+  "Permiso desactivado": "Permission is off",
+  "No pudimos confirmar el estado del permiso.": "We could not confirm the permission status.",
+  "Este permiso no está disponible para activarlo en este momento.": "This permission cannot be turned on right now.",
+  "Consultar estado": "Check status",
+  "Aviso de Privacidad Integral": "Full Privacy Notice",
+  "Aviso de Privacidad Simplificado": "Simplified Privacy Notice",
+  "No pudimos leer el documento. Prueba de nuevo.": "We could not read the document. Try again.",
+  "No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.": "We could not confirm the permission status. You can check again.",
+  "No se confirmó el cambio. Consulta el estado antes de volver a intentarlo.": "The change was not confirmed. Check the status before trying again.",
+  "No recibimos la confirmación del cambio. El estado mostrado corresponde a una nueva consulta.": "We did not receive confirmation of the change. The status shown comes from a new check.",
+  "Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.": "Accepting these documents does not turn on permission to show your photo to people who are not your friends. You can choose this in Privacy. The Notice’s rules for your friends still apply.",
   // D444/D449 · resumen y meses completos.
   "Mes completo": "Complete month",
   "Tu consumo registrado": "Your recorded selections",

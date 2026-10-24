@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+import { PrivacidadFotoPanel } from './PrivacidadFotoPanel';
+import { AvisoSimplificado } from './AvisoSimplificado';
+import { FOTO_NOTICE } from '../api/fotoPerfilNoAmigos';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
@@ -123,6 +127,8 @@ export function usePuertaLegal(session: StoredSession | null): {
 }
 
 export function PuertaLegalView({
+  privacidadFoto,
+  fotoOpcional = false,
   aceptaMayor,
   aceptaTerminos,
   busy,
@@ -132,6 +138,8 @@ export function PuertaLegalView({
   onContinuar,
   onCerrarSesion,
 }: {
+  readonly privacidadFoto?: ReactNode;
+  readonly fotoOpcional?: boolean;
   readonly aceptaMayor: boolean;
   readonly aceptaTerminos: boolean;
   readonly busy: boolean;
@@ -164,11 +172,15 @@ export function PuertaLegalView({
           <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
         </p>
         <p className="body-text puerta-legal-nota">
-          {t('Al continuar, si tienes una foto de perfil, se mostrará a tus amigos y a quien organice una mesa en la que participes, como explica el Aviso de Privacidad.')}
+          {fotoOpcional
+            ? t('Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.')
+            : t('Al continuar, si tienes una foto de perfil, se mostrará a tus amigos y a quien organice una mesa en la que participes, como explica el Aviso de Privacidad.')}
         </p>
         <p className="body-text puerta-legal-nota">
           {t('PayMe es sólo para personas de 18 años o más. Si no cumples con este requisito, no puedes seguir usando la app.')}
         </p>
+        <AvisoSimplificado />
+        {privacidadFoto}
         {error && <div className="ingreso-error" role="alert">{error}</div>}
         <button type="button" className="ingreso-entrar" onClick={onContinuar} disabled={busy || !listo}>
           {busy ? t('Un segundo…') : t('Continuar')}
@@ -247,6 +259,8 @@ export function PuertaLegal({
 
   return (
     <PuertaLegalView
+      fotoOpcional={aceptacion.aviso?.version === FOTO_NOTICE.version && aceptacion.aviso.hash === FOTO_NOTICE.hash}
+      privacidadFoto={<PrivacidadFotoPanel session={session} soloRevocar />}
       aceptaMayor={aceptaMayor}
       aceptaTerminos={aceptaTerminos}
       busy={busy}

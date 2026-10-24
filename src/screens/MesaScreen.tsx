@@ -982,7 +982,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   /**
    * AF-32 · las fotos de quienes se sumaron (dueño v2.110.0). Una
    * `FotosDeParticipantes` por mesa: pide sólo con `has_avatar`, una vez por
-   * persona y sin reintentos. E173-3 · decisión 175: la foto queda en el caché
+   * persona por lectura de participantes y sin sondeo propio. E173-3 · decisión 175: la foto queda en el caché
    * en memoria de la sesión; volver a la mesa la muestra al instante y
    * desmontar ya no revoca. La sesión se lee por ref para no recrear —y
    * re-pedir— en cada render.
@@ -1007,7 +1007,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   useEffect(() => {
     // Sólo el organizador, y sólo desde la lista que el dueño le dio a él.
     if (!esOrganizador || quienes.estado !== 'lista') return;
-    fotosRef.current?.cargar(quienes.lista);
+    fotosRef.current?.cargar(quienes.lista, true);
   }, [esOrganizador, quienes]);
 
   useEffect(() => {

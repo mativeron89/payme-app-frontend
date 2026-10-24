@@ -7,8 +7,8 @@ import type { StoredSession } from './storage';
  *
  * - Se pide SÓLO con `has_avatar: true` (la regla n164 del dueño: un menor
  *   nunca); con `has_avatar: false`, la guardada se retira.
- * - **Un pedido por miembro cada vez que se entra, sin reintentos.** Un 404 la
- *   retira; un error deja lo que había (o las iniciales), sin mensaje.
+ * - **Un pedido por miembro al entrar o recibir una lectura nueva, sin sondeo propio.** Un 404 la
+ *   retira; D457 también retira ante error (quedan las iniciales), sin mensaje.
  * - La foto vive en el caché en memoria de la sesión (`fotosEnMemoria`), con
  *   clave por viaje y miembro: nunca una `<img src>` a la ruta, nunca
  *   almacenamiento del navegador. `dispose` no revoca: eso es del caché.
@@ -16,6 +16,7 @@ import type { StoredSession } from './storage';
 export class FotosDeMiembrosDeViaje {
   private readonly pedidos = new Set<string>();
   private vivo = true;
+  private ultimaLista: ReadonlyArray<{ readonly id: string; readonly has_avatar: boolean }> | null = null;
 
   constructor(
     private readonly viajeId: string,
@@ -25,10 +26,14 @@ export class FotosDeMiembrosDeViaje {
     private readonly cache: FotosEnMemoria = fotosEnMemoria,
   ) {}
 
-  cargar(miembros: ReadonlyArray<{ readonly id: string; readonly has_avatar: boolean }>): void {
+  cargar(miembros: ReadonlyArray<{ readonly id: string; readonly has_avatar: boolean }>, revalidar = false): void {
     if (!this.vivo) return;
     const sesion = this.sesion();
     if (!sesion) return;
+    const nuevaLectura = revalidar && this.ultimaLista !== miembros;
+    const sustituirEnCurso = nuevaLectura && this.ultimaLista !== null;
+    if (nuevaLectura) this.pedidos.clear();
+    this.ultimaLista = miembros;
     for (const m of miembros) {
       const clave = claveMiembroDeViaje(this.viajeId, m.id);
       if (!m.has_avatar) {
@@ -38,7 +43,7 @@ export class FotosDeMiembrosDeViaje {
       }
       if (this.pedidos.has(m.id)) continue;
       this.pedidos.add(m.id);
-      void this.cache.cargar(sesion, clave, () => this.pedir(m.id, sesion))
+      void this.cache.cargar(sesion, clave, () => this.pedir(m.id, sesion), { retirarAnteError: true, sustituirEnCurso })
         .then((resultado) => {
           if (this.vivo && (resultado === 'guardada' || resultado === 'retirada')) this.alCambiar();
         });

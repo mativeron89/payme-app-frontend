@@ -19,12 +19,15 @@ import { Avatar } from './ui';
  */
 export function FotoDeQuienInvita({
   clave,
+  revision,
   pedir,
   nombre,
   size,
   className = 'foto-quien-invita',
 }: {
   clave: string;
+  /** Identidad del resultado de la última lectura del listado. */
+  revision?: object;
   pedir: (sesion: StoredSession) => Promise<Blob>;
   nombre: string;
   size: number;
@@ -33,6 +36,7 @@ export function FotoDeQuienInvita({
 }) {
   const { session } = useAuth();
   const url = useFotoEnMemoria(session, clave);
+  const revisionPrevia = useRef(revision);
   const sesionRef = useRef(session);
   sesionRef.current = session;
   // El pedido cambia de identidad en cada render; la foto, no.
@@ -45,8 +49,10 @@ export function FotoDeQuienInvita({
     if (!origen) return;
     const expected = currentSamePrincipalSession(origen, loadSession());
     if (!expected || !isCurrentSession(expected)) return;
-    void fotosEnMemoria.cargar(expected, clave, () => pedirRef.current(expected));
-  }, [clave, familyId, principalId]);
+    const sustituirEnCurso = revisionPrevia.current !== revision;
+    revisionPrevia.current = revision;
+    void fotosEnMemoria.cargar(expected, clave, () => pedirRef.current(expected), { retirarAnteError: true, sustituirEnCurso });
+  }, [clave, revision, familyId, principalId]);
   return url
     ? <img className={className} src={url} alt="" aria-hidden="true" style={{ width: size, height: size }} />
     : <Avatar name={nombre} size={size} />;

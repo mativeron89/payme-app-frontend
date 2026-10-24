@@ -131,7 +131,7 @@ export function useDetalleViaje(viajeId: string): {
 /**
  * D245 · las fotos de los miembros (App Backend 2.172.0): una
  * `FotosDeMiembrosDeViaje` por viaje, que pide sólo con `has_avatar` y una vez
- * por miembro. Devuelve la URL en memoria de cada uno, o `null` (iniciales).
+ * por miembro por lectura nueva. Devuelve la URL en memoria de cada uno, o `null` (iniciales).
  * La sesión se lee por ref para no recrear —y re-pedir— en cada render.
  */
 export function useFotosDeMiembros(
@@ -158,7 +158,7 @@ export function useFotosDeMiembros(
     };
   }, [viajeId]);
   useEffect(() => {
-    if (miembros) fotosRef.current?.cargar(miembros);
+    if (miembros) fotosRef.current?.cargar(miembros, true);
   }, [miembros]);
   return (miembroId) => fotosRef.current?.url(miembroId) ?? null;
 }

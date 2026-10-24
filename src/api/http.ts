@@ -477,6 +477,7 @@ export async function httpPrivateJsonMutationRequest<T>(
   timeoutMs = REQUEST_TIMEOUT_MS,
   /** AF2 · `PUT` para las preferencias de notificaciones (E1); `POST` sigue siendo el default. */
   method: 'POST' | 'PUT' = 'POST',
+  policy: { readonly forbidEtag?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
     method, path, body, session.access_token, timeoutMs,
@@ -488,7 +489,7 @@ export async function httpPrivateJsonMutationRequest<T>(
       }
       const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
       if (!vary.includes('authorization')) throw new Error('private_json_vary_invalid');
-      if (response.headers.has('etag')) throw new Error('private_json_etag_forbidden');
+      if (policy.forbidEtag !== false && response.headers.has('etag')) throw new Error('private_json_etag_forbidden');
       if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
         throw new Error('private_json_media_type_invalid');
       }

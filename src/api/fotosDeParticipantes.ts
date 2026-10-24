@@ -8,8 +8,8 @@ import type { StoredSession } from './storage';
  *
  * - Se pide SÓLO con `has_avatar: true` y un `participant_id`: nunca a ciegas.
  *   Con `has_avatar: false`, la guardada se retira.
- * - **Un pedido por persona cada vez que se entra a la mesa, sin reintentos.**
- *   Un 404 la retira; un error o una respuesta rara dejan lo que había (o las
+ * - **Un pedido por persona al entrar o recibir una lectura nueva, sin sondeo propio.**
+ *   D457: un 404, error o respuesta rara retiran lo que había (quedan las
  *   iniciales), sin mensaje y sin volver a pedir: un bucle de reintentos sobre
  *   una foto que no está es ruido y costo.
  * - E173-3 · decisión 175: la foto vive en el caché en memoria de la sesión
@@ -23,6 +23,7 @@ import type { StoredSession } from './storage';
 export class FotosDeParticipantes {
   private readonly pedidos = new Set<string>();
   private vivo = true;
+  private ultimaLista: readonly Participante[] | null = null;
 
   constructor(
     private readonly mesaCode: string,
@@ -32,10 +33,14 @@ export class FotosDeParticipantes {
     private readonly cache: FotosEnMemoria = fotosEnMemoria,
   ) {}
 
-  cargar(lista: readonly Participante[]): void {
+  cargar(lista: readonly Participante[], revalidar = false): void {
     if (!this.vivo) return;
     const sesion = this.sesion();
     if (!sesion) return;
+    const nuevaLectura = revalidar && this.ultimaLista !== lista;
+    const sustituirEnCurso = nuevaLectura && this.ultimaLista !== null;
+    if (nuevaLectura) this.pedidos.clear();
+    this.ultimaLista = lista;
     for (const p of lista) {
       const id = p.participantId;
       if (id === null) continue;
@@ -47,7 +52,7 @@ export class FotosDeParticipantes {
       }
       if (this.pedidos.has(id)) continue;
       this.pedidos.add(id);
-      void this.cache.cargar(sesion, clave, () => this.pedir(id, sesion))
+      void this.cache.cargar(sesion, clave, () => this.pedir(id, sesion), { retirarAnteError: true, sustituirEnCurso })
         .then((resultado) => {
           if (this.vivo && (resultado === 'guardada' || resultado === 'retirada')) this.alCambiar();
         });

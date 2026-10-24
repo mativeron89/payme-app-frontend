@@ -6,6 +6,7 @@ import {
 } from './friendAvatarNotice';
 
 const HASH = '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5';
+const HASH_310 = '51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc';
 const HASH_300 = 'f5251653514f7616ac2700ebacee106b9fbaee48b4c42fda35708b28aa95f949';
 const HASH_256_RETIRADO = 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e';
 const state = {
@@ -40,7 +41,9 @@ describe('U05 · acuse del Aviso para foto entre amigos', () => {
     [{ ...state, notice_hash: 'a'.repeat(64) }, 'hash distinto'],
     [{ ...state, acknowledged: true }, 'acusado sin fecha'],
     [{ ...state, acknowledged_at: '2026-09-20' }, 'fecha sin acuse'],
-    // Pin tolerante: sólo los DOS pares exactos (2.5.5 y 3.0.0).
+    // Pares exactos: también se rechazan los cruces del sucesor 3.1.0.
+    [{ ...state, notice_version: '3.1.0', notice_hash: HASH_300 }, '3.1.0 con hash anterior'],
+    [{ ...state, notice_version: '3.0.0', notice_hash: HASH_310 }, '3.0.0 con hash futuro'],
     [{ ...state, notice_version: '3.0.0' }, '3.0.0 con la huella de 2.5.5 (par cruzado)'],
     [{ ...state, notice_hash: HASH_300 }, '2.5.5 con la huella de 3.0.0 (par cruzado)'],
     [{ ...state, notice_version: '2.5.7', notice_hash: 'c'.repeat(64) }, 'par ajeno'],
@@ -56,10 +59,11 @@ describe('U05 · acuse del Aviso para foto entre amigos', () => {
    * con sus huellas exactas, para que el dueño publique 3.0.0 sin apagar el
    * cartel. Rojo contra 0.191.0 en el par 3.0.0.
    */
-  it('acepta exactamente los dos pares publicados y acusa con el par que devolvió el servidor', () => {
+  it('acepta exactamente los tres pares admitidos y acusa con el par que devolvió el servidor', () => {
     const PARES = [
       { version: '2.5.5', hash: HASH },
       { version: '3.0.0', hash: HASH_300 },
+      { version: '3.1.0', hash: HASH_310 },
     ] as const;
     // Primero la CONDUCTA (rojo contra 0.191.0: 3.0.0 tiraba `malformed`)…
     for (const pair of PARES) {

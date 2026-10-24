@@ -530,6 +530,7 @@ export function AvisosScreen() {
                   {inv.fotoDelInvitador ? (
                     <FotoDeQuienInvita
                       clave={claveInvitadorDeInvitacion(inv.id)}
+                            revision={inv}
                       pedir={async (s) => (await api.getInvitationInviterAvatar(inv.id, s)).blob}
                       nombre={inv.invitadorCompleto ?? inv.invitador ?? ''}
                       size={40}
@@ -637,6 +638,7 @@ export function AvisosScreen() {
                         ? (
                           <FotoDeQuienInvita
                             clave={claveInvitador(n.id)}
+                            revision={n}
                             pedir={async (s) => (await api.getInviterAvatar(n.id, s)).blob}
                             nombre={inviterName}
                             size={40}

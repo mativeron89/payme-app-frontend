@@ -224,6 +224,7 @@ export function InvitacionEnInicio() {
         foto={elegida.principal.fotoDelInvitador ? (
           <FotoDeQuienInvita
             clave={claveInvitadorDeInvitacion(elegida.principal.id)}
+                            revision={elegida.principal}
             pedir={async (s) => (await api.getInvitationInviterAvatar(elegida.principal.id, s)).blob}
             nombre={elegida.principal.invitadorCompleto ?? elegida.principal.invitador ?? ''}
             size={28}

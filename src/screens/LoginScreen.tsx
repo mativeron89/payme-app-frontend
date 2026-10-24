@@ -1,3 +1,5 @@
+import { AvisoSimplificado } from '../components/AvisoSimplificado';
+import { TextoLegal } from '../components/TextoLegal';
 import {
   useEffect,
   useLayoutEffect,
@@ -1636,6 +1638,8 @@ export function LoginScreen({
         {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
         <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
       </p>
+      <p className="ingreso-legal" lang="es">Al registrarte, tu nombre de usuario (@), nombre y apellido podrán ser visibles para otros usuarios registrados mediante la función de búsqueda, aun cuando no formen parte de tus contactos.</p>
+      {paquete.status === 'ready' && <AvisoSimplificado texto={paquete.simplificado} />}
     </div>
   ) : null;
 
@@ -2159,17 +2163,6 @@ export function LoginScreen({
           {mode === 'register' && legal.status === 'ready' && paquete.status === 'ready' && (
             <>
               {!casillasEnRanura && casillasLegales}
-              <section className="legal-notice" aria-label="Aviso de Privacidad Simplificado">
-                {idioma === 'en' && (
-                  <p className="legal-notice-language" lang="en">
-                    This document is only available in Spanish for now.
-                  </p>
-                )}
-                <pre lang="es">{paquete.simplificado.body}</pre>
-                <div className="legal-notice-meta" lang="es">
-                  Versión {paquete.simplificado.version} · {paquete.simplificado.effective_from.slice(0, 10)}
-                </div>
-              </section>
             </>
           )}
           {mode === 'register' && legal.status === 'ready' && paquete.status !== 'ready' && (
@@ -2179,7 +2172,7 @@ export function LoginScreen({
                   This document is only available in Spanish for now.
                 </p>
               )}
-              <pre lang="es">{legal.value.body}</pre>
+              <pre lang="es"><TextoLegal texto={legal.value.body} /></pre>
               <div className="legal-notice-meta" lang="es">
                 Versión {legal.value.version} · {legal.value.effective_from.slice(0, 10)}
               </div>

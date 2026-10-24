@@ -1,3 +1,9 @@
+## 0.260.0 · 2026-10-23 (D456/D457 · paquete legal 3.1.0, foto opcional y textos públicos)
+
+- Consumidor tolerante del permiso opcional de foto ante no-amigos: control en Configuración (apagado por defecto, revocable), revocación desde la puerta legal sin reaceptar y retiro/revalidación de fotos contextuales (invitaciones, participantes, miembros y notas de Viajes). Con un backend sin la finalidad, el control no aparece y el resto conserva su contrato.
+- Textos legales 3.1.0 exactos (Aviso integral y simplificado, Términos) con enlaces cerrados; páginas públicas y links en la landing; alta con la frase literal y las dos casillas desmarcadas.
+- Integración de la preparación D457 de Codex (base f9c9718) sobre 0.259.0 por Claude VI (D462): 35 archivos sin cambios en main copiados del candidato, 4 fusionados en tres vías (sólo `src/api/index.ts` con un conflicto de imports, resuelto conservando ambos). Las pruebas escritas por la preparación corren por primera vez en el CI oficial del SHA exacto (D168). Orden de publicación: este frontend servido antes del backend 2.192.0. D63 sigue abierto.
+
 ## 0.259.0 · 2026-10-22 (D450 · cierre seguro por selección)
 
 - «Listo» conserva las lecturas frescas y solicita al servidor guardar la selección. Si completaría la mesa, el rechazo sin escritura abre la confirmación accesible ES/EN. Sólo «Guardar y cerrar» envía la revisión recibida con el pedido original congelado; «Revisar», Escape o una edición descartan el desafío.

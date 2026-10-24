@@ -22,6 +22,8 @@ import { loadSession, subscribeSession, type StoredSession } from './storage';
  *   sigue mostrando mientras tanto. Un 200 con los mismos bytes no toca nada;
  *   con bytes nuevos, reemplaza. **Sólo un 404 retira la foto.** Un error de red
  *   o un 5xx dejan la guardada: no prueban que la foto ya no se pueda ver.
+ * - D457: los canales contextuales optan por retirar también ante error de
+ *   revalidación; amigos, propia y foto grupal conservan la política anterior.
  * - **Un `blob:` se revoca sólo al salir del caché** —por reemplazo, retiro,
  *   poda, límite o al vaciarlo—, nunca porque un componente se desmonte. Por
  *   eso volver a una pantalla la muestra al instante.
@@ -114,9 +116,14 @@ export class FotosEnMemoria {
    * Pide la foto y actualiza el caché según la respuesta. Un pedido en curso
    * para la misma clave se comparte. Si la sesión ya no es la vigente, no pide.
    */
-  cargar(sesion: IdentidadDeSesion, clave: string, pedir: () => Promise<Blob>): Promise<ResultadoFoto> {
+  cargar(
+    sesion: IdentidadDeSesion, clave: string, pedir: () => Promise<Blob>,
+    policy: { readonly retirarAnteError?: boolean; readonly sustituirEnCurso?: boolean } = {},
+  ): Promise<ResultadoFoto> {
     const dueno = duenoDeSesion(sesion);
     if (!this.adoptar(dueno)) return Promise.resolve('descartada');
+    // D457 · una lectura de contexto nueva puede sustituir el pedido anterior.
+    if (policy.sustituirEnCurso) this.invalidar(clave);
     const previo = this.enCurso.get(clave);
     if (previo) return previo;
     const generacion = this.generacion;
@@ -127,7 +134,8 @@ export class FotosEnMemoria {
         (blob) => this.alLlegar(clave, blob, dueno, generacion, deClave),
         (error: unknown): ResultadoFoto => {
           if (!this.sigue(dueno, generacion, clave, deClave)) return 'descartada';
-          if (extractApiError(error).status !== 404) return 'conservada';
+          if (!policy.retirarAnteError && extractApiError(error).status !== 404) return 'conservada';
+          this.invalidar(clave);
           this.quitar(clave);
           return 'retirada';
         },

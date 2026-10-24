@@ -41,6 +41,9 @@ export type ClaseDelMetodo = 'local' | 'cortado' | 'pasa';
 export const CLASIFICACION_DEL_EJEMPLO = {
   // Configuración, legales, sesión y cuenta.
   getConfig: 'pasa',
+  getFotoPerfilNoAmigos: 'pasa',
+  grantFotoPerfilNoAmigos: 'pasa',
+  revokeFotoPerfilNoAmigos: 'pasa',
   getPrivacyNotice: 'pasa',
   getLegalText: 'pasa',
   getLegalAcceptance: 'pasa',

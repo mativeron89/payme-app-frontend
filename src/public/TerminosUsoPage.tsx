@@ -1,3 +1,4 @@
+import { TextoLegal } from '../components/TextoLegal';
 import { useCallback, useEffect, useState } from 'react';
 import { leerTextoLegal } from '../api/publicLegal';
 import type { EstadoAviso } from './PrivacyNoticePage';
@@ -43,7 +44,7 @@ export function TerminosUsoView(
             Versión {estado.aviso.version} · vigente desde{' '}
             {soloFecha(estado.aviso.effective_from)}
           </p>
-          <div className="pub-cuerpo">{estado.aviso.body}</div>
+          <div className="pub-cuerpo" lang="es"><TextoLegal texto={estado.aviso.body} /></div>
         </>
       )}
     </section>

@@ -1,3 +1,4 @@
+import { PrivacidadFotoPanel } from '../components/PrivacidadFotoPanel';
 import { useRef, useState } from 'react';
 import { IS_MOCK } from '../api';
 import { SelectorIdioma } from '../components/SelectorIdioma';
@@ -215,6 +216,7 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
+        {session && <PrivacidadFotoPanel session={session} />}
         <AccesoGuia />
         {IS_MOCK && (
           <button

@@ -2,7 +2,7 @@ import type { LegalTextResponse } from './types';
 
 /**
  * Pares {versión, huella} del Aviso que este front acepta del dueño en
- * `/friends/avatar-notice`: **exactamente estos dos y ningún otro**. Un par
+ * `/friends/avatar-notice`: **exactamente estos tres y ningún otro**. Un par
  * cruzado (versión de uno con huella del otro) o ajeno falla cerrado.
  *
  * Regla del incidente `dish_count`: el consumidor tolerante se publica ANTES
@@ -19,6 +19,8 @@ import type { LegalTextResponse } from './types';
 export const FRIEND_AVATAR_NOTICE_PAIRS: readonly { readonly version: string; readonly hash: string }[] = [
   { version: '2.5.5', hash: '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5' },
   { version: '3.0.0', hash: 'f5251653514f7616ac2700ebacee106b9fbaee48b4c42fda35708b28aa95f949' },
+  // D457 owner-first-v2 · hash del cuerpo integral sellado; conservar los históricos.
+  { version: '3.1.0', hash: '51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc' },
 ];
 
 /** El par que sirve producción hoy; es el que presenta el riel mock. */

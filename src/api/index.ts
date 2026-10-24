@@ -1,4 +1,5 @@
 import type { SelectionClosureConfirmation } from './types';
+import { FOTO_PATH, capacidadFoto, decodePermisoFoto, confirmarMutacionFoto, verificarAvisoFoto, type PermisoFoto } from './fotoPerfilNoAmigos';
 import {
   httpGoogleContinue,
   httpGuestRequest,
@@ -321,6 +322,9 @@ export interface Api {
    * ignoraría, y volvería a enseñar el comportamiento que se eliminó.
    */
   getConfig(): Promise<AppConfig>;
+  getFotoPerfilNoAmigos(expectedSession: StoredSession): Promise<PermisoFoto>;
+  grantFotoPerfilNoAmigos(aviso: LegalTextResponse['legal_text'], expectedSession: StoredSession): Promise<PermisoFoto>;
+  revokeFotoPerfilNoAmigos(expectedSession: StoredSession): Promise<PermisoFoto>;
   /** Aviso vigente que debe ponerse a disposición antes del alta. Público. */
   getPrivacyNotice(): Promise<LegalTextResponse>;
   /**
@@ -743,6 +747,22 @@ function creacionDesdeError(err: unknown): MesaCreationLookup {
 }
 
 const realApi: Api = {
+  getFotoPerfilNoAmigos: async (s) => decodePermisoFoto(await httpPrivateJsonRequest<unknown>(
+    FOTO_PATH, s, undefined, { requireAuthorizationVary: true },
+  )),
+  grantFotoPerfilNoAmigos: async (aviso, s) => {
+    // Revalidar disponibilidad al gesto. El backend vuelve a validar edad, puertas y par bajo lock.
+    if (!capacidadFoto(await realApi.getConfig()).enabled || !await verificarAvisoFoto(aviso)) {
+      throw new Error('foto_consent_grant_unavailable');
+    }
+    return confirmarMutacionFoto(await httpPrivateJsonMutationRequest<unknown>(
+      `${FOTO_PATH}/grant`, { notice_version: aviso.version, notice_hash: aviso.hash, channel: 'app' }, s,
+      undefined, 'POST', { forbidEtag: false },
+    ), true);
+  },
+  revokeFotoPerfilNoAmigos: async (s) => confirmarMutacionFoto(await httpPrivateJsonMutationRequest<unknown>(
+    `${FOTO_PATH}/revoke`, {}, s, undefined, 'POST', { forbidEtag: false },
+  ), false),
   // AF-USUARIO-ARROBA · cada config que llega alimenta la capability del @:
   // así el @ no agrega una request propia (`./username.ts`).
   getConfig: async () => {
@@ -1510,6 +1530,11 @@ const realApi: Api = {
 };
 
 const mockApi: Api = {
+  // El mock base representa al backend anterior: no anuncia ni fabrica grants D457.
+  // Las pruebas de la transición inyectan respuestas exactas en esta misma fachada.
+  getFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(404, 'unknown_purpose'); },
+  grantFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(409, 'purpose_not_available'); },
+  revokeFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(404, 'unknown_purpose'); },
   getConfig: async () => {
     // AF-VIAJES · con el seam de Viajes encendido, sus avisos (1t) se siembran
     // ANTES de cualquier lectura de la bandeja: si se sembraran al volver la

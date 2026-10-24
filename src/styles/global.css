@@ -11002,3 +11002,10 @@ h1.pay-title-lbl {
   font-weight: 700;
   color: var(--text);
 }
+
+/* D457 · control de privacidad dentro de las tarjetas existentes. */
+.privacidad-foto { margin-bottom: 12px; padding: 16px; }
+.privacidad-foto p { margin: 10px 0; }
+.privacidad-foto .btn { margin: 6px 0; }
+.legal-notice summary { cursor: pointer; padding: 10px 0; }
+.legal-notice a { overflow-wrap: anywhere; }

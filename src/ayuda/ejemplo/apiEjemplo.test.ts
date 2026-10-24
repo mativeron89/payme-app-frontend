@@ -80,7 +80,7 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
   });
 
   it('revisión de V sobre ff5dec7 · la lista «pasa» está fijada: un método nuevo o reclasificado se decide a mano', () => {
-    // Literal, no un snapshot: `-u` no lo reescribe. Los 117 que pasan tal cual a la fachada con el ejemplo activo.
+    // Literal, no un snapshot: `-u` no lo reescribe. Los métodos que pasan tal cual a la fachada con el ejemplo activo.
     const pasa = (Object.keys(CLASIFICACION_DEL_EJEMPLO) as Array<keyof typeof CLASIFICACION_DEL_EJEMPLO>)
       .filter((m) => CLASIFICACION_DEL_EJEMPLO[m] === 'pasa').sort();
     expect(pasa).toEqual([
@@ -91,7 +91,7 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
       'deleteAllNotifications', 'deleteGroup', 'deleteNotification', 'deleteProfileAvatar', 'editarNotaDeViaje',
       'editarViaje', 'elegirEnTicketDeViaje', 'eliminarTicketDeViaje', 'facebookLoginComplete', 'facebookLoginStart',
       'facebookRegisterComplete', 'facebookRegisterStart', 'getAvatarDeMiembroDeViaje', 'getCierreDeViaje',
-      'getConfig', 'getFotoDeViaje', 'getFriendAvatar', 'getFriendAvatarNotice', 'getFriends', 'getGroup',
+      'getConfig', 'getFotoDeViaje', 'getFotoPerfilNoAmigos', 'getFriendAvatar', 'getFriendAvatarNotice', 'getFriends', 'getGroup',
       'getGroups', 'getHistory', 'getIncomingFriendRequests', 'getInvitacionesAViajes', 'getInvitationInviterAvatar',
       'getInviterAvatar', 'getLegalAcceptance', 'getLegalText', 'getLinkDeInvitacion', 'getLinkedProviders', 'getMe',
       'getMovement', 'getMyMesas', 'getNotasDeViaje', 'getNotificationPreferences', 'getNotifications',
@@ -100,12 +100,12 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
       'getStatsEvolution', 'getStatsIngredients', 'getStatsRestaurants', 'getTicketDeViaje', 'getUnreadCount',
       'getUsername', 'getUsernameAvatar', 'getUsernameSuggestion', 'getViaje', 'getViajes', 'getVisitasDeViajes',
       'googleContinue', 'googleContinueLink', 'googleLink', 'googleLinkRedirectComplete', 'googleLinkRedirectStart',
-      'googleLogin', 'googleRedirectRedeem', 'googleRedirectSignup', 'googleRegister', 'invitarAlViaje', 'login',
+      'googleLogin', 'googleRedirectRedeem', 'googleRedirectSignup', 'googleRegister', 'grantFotoPerfilNoAmigos', 'invitarAlViaje', 'login',
       'logout', 'marcarPresentesEnTicket', 'marcarTransferenciaDeViaje', 'markAllNotificationsRead',
       'markNotificationRead', 'mostrarPago', 'ocultarPago', 'onLegalAcceptanceRequired', 'onSessionExpired',
       'onUsernameRequired', 'ordenarNotasDeViaje', 'putNotificationPreferences', 'putProfileAvatar', 'putUsername',
       'quitarFotoDeViaje', 'rechazarViaje', 'register', 'rejectFriendRequest', 'removeFriend', 'removeGroupMember',
-      'requestRecovery', 'restoreSession', 'revisarTicketDeViaje', 'salirDeViaje', 'searchUsernames',
+      'requestRecovery', 'restoreSession', 'revisarTicketDeViaje', 'revokeFotoPerfilNoAmigos', 'salirDeViaje', 'searchUsernames',
       'subirFotoDeViaje', 'tildarItemDeNota', 'unblockUser', 'updateProfileIdentity',
     ]);
   });
