@@ -46,6 +46,14 @@ const esLanding = artifact === 'landing';
 const paths = ['/privacy', '/facebook-data-deletion/:code'];
 
 /**
+ * D457 · los Términos de Uso públicos (`src/public/publicRoute.ts`, PATH_TERMINOS).
+ * La app ya los enlazaba (puerta legal) y el paquete 3.1.0 y la landing también,
+ * pero sin rewrite daban 404 en el edge. Va aparte de `paths`: NO es una superficie
+ * Meta y no lleva sus cabeceras; es una ruta exacta de la app como las de abajo.
+ */
+const RUTAS_LEGALES_APP = ['/terminos'];
+
+/**
  * n130 · AF-HISTORY-N130 · las rutas normales de la app (History API).
  *
  * Una por página, EXACTAS. No es un catch-all a propósito: las guardas de
@@ -137,7 +145,7 @@ const headers = [
  *
  * Artefacto desconocido: NINGUNA cabecera, igual que rewrites y headers.
  */
-const HASH_SCRIPT_IDIOMA_LANDING = "'sha256-0q+B8AZ70OFIwdyvViSs6/v+EDiwpZvDJ86Uf9Aiupc='";
+const HASH_SCRIPT_IDIOMA_LANDING = "'sha256-AWsch9cCLyknCUXXxJxRT51mMmxb8GNLqZrqlTp4wW4='";
 const HASH_STYLE_SPLASH_APP = "'sha256-y5elns5JA/JsnAsq5gWU51sZzXWlo2tTb7yIX8VP6q0='";
 /** El `<style>` que inyecta `gsi/client` (medido el 2026-09-26, igual al de producción; re-medido el 2026-09-28). */
 const HASH_STYLE_GIS = "'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='";
@@ -234,7 +242,7 @@ export const config = {
   git: { deploymentEnabled: { main: false } },
   rewrites: esApp
     ? [
-        ...[...paths, ...rutasApp].map((source) => ({ source, destination: '/index.html' })),
+        ...[...paths, ...RUTAS_LEGALES_APP, ...rutasApp].map((source) => ({ source, destination: '/index.html' })),
         REWRITE_GOOGLE_REDIRECT,
       ]
     : [],

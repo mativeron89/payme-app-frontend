@@ -2,7 +2,8 @@ import type { LegalTextResponse } from './types';
 
 /** D457 · owner-first-v2, manifest 702105ad…; sin inferir permisos del alta/foto. */
 export const FOTO_PURPOSE = 'foto_perfil_no_amigos';
-export const FOTO_PATH = `/account/consents/${FOTO_PURPOSE}`;
+// Literal y no interpolado: la guarda C-03 exige que ninguna ruta de la fachada interpole sin escapar.
+export const FOTO_PATH = '/account/consents/foto_perfil_no_amigos';
 export const FOTO_NOTICE = {
   version: '3.1.0',
   hash: '51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc',

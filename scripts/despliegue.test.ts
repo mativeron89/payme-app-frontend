@@ -634,8 +634,10 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     // D252 · el link de invitación, `/invitacion/<código>`.
     'invitacion',
   ] as const;
+  /** D457 · los Términos públicos: ruta exacta de la app, sin las cabeceras Meta. */
+  const RUTAS_LEGALES = ['/terminos'] as const;
   const RUTAS_APP = [...PAGES.map((p) => `/${p}`), ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`)];
-  const TODAS = [...PATHS_PUBLICOS, ...RUTAS_APP];
+  const TODAS = [...PATHS_PUBLICOS, ...RUTAS_LEGALES, ...RUTAS_APP];
   /**
    * 🔴 AF-GOOGLE-REDIRECT · decisiones 92 y 94 · la ÚNICA excepción registrada
    * a «todo rewrite va a /index.html»: el `login_uri` del ingreso con Google
@@ -710,7 +712,9 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     const fuentes = new Set((V.rewrites ?? []).map((r) => r.source));
     for (const p of PAGES) expect(fuentes.has(`/${p}`), `/${p} sin rewrite`).toBe(true);
     const deApp = [...fuentes].filter((f) => !(PATHS_PUBLICOS as readonly string[]).includes(f)
+      && !(RUTAS_LEGALES as readonly string[]).includes(f)
       && f !== REWRITE_GOOGLE_REDIRECT.source);
+    for (const r of RUTAS_LEGALES) expect(fuentes.has(r), `${r} sin rewrite`).toBe(true);
     expect(deApp.map((f) => f.split('/')[1]).every((p) => PAGES.includes(p!))).toBe(true);
   });
 

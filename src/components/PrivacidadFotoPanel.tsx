@@ -43,7 +43,11 @@ export function PrivacidadFotoView({ estado, soloRevocar, onCambiar, onConsultar
       : permiso ? (permiso.granted ? t('Permiso activado') : t('Permiso desactivado'))
         : t('No pudimos confirmar el estado del permiso.')}</p>
     {!ocupado && permiso && !permiso.granted && !soloRevocar && !habilitado && <p>{t('Este permiso no está disponible para activarlo en este momento.')}</p>}
-    {error && <p role="alert">{t(error)}</p>}
+    {error && <p role="alert">{error === ERROR_LECTURA
+      ? t('No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.')
+      : error === ERROR_CAMBIO
+        ? t('No se confirmó el cambio. Consulta el estado antes de volver a intentarlo.')
+        : t('No recibimos la confirmación del cambio. El estado mostrado corresponde a una nueva consulta.')}</p>}
     {aviso && <details className="legal-notice">
       <summary>{t('Aviso de Privacidad Integral')}</summary>
       {idioma === 'en' && <p lang="en">This document is only available in Spanish for now.</p>}

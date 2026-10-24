@@ -400,23 +400,16 @@
  },
  {
   "archivo": "src/screens/LoginScreen.tsx",
-  "texto": "Aviso de Privacidad Simplificado",
+  "texto": "This document is only available in Spanish for now.",
   "grupo": "c",
   "veces": 1,
   "motivo": "legal: aviso, términos o eliminación de datos"
  },
  {
   "archivo": "src/screens/LoginScreen.tsx",
-  "texto": "This document is only available in Spanish for now.",
-  "grupo": "c",
-  "veces": 2,
-  "motivo": "legal: aviso, términos o eliminación de datos"
- },
- {
-  "archivo": "src/screens/LoginScreen.tsx",
   "texto": "Versión",
   "grupo": "c",
-  "veces": 2,
+  "veces": 1,
   "motivo": "legal: aviso, términos o eliminación de datos"
  },
  {
@@ -782,5 +775,40 @@
   "grupo": "b",
   "veces": 1,
   "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/components/AvisoSimplificado.tsx",
+  "texto": "This document is only available in Spanish for now.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/components/AvisoSimplificado.tsx",
+  "texto": "Versión",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/components/PrivacidadFotoPanel.tsx",
+  "texto": "This document is only available in Spanish for now.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/components/PrivacidadFotoPanel.tsx",
+  "texto": "Versión",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Al registrarte, tu nombre de usuario (@), nombre y apellido podrán ser visibles para otros usuarios registrados mediante la función de búsqueda, aun cuando no formen parte de tus contactos.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: frase literal del alta del paquete legal 3.1.0 (D456/D457); no se traduce"
  }
 ]

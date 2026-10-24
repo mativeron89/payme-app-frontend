@@ -799,3 +799,6 @@ a { color: inherit; }
     margin-top: 28px;
   }
 }
+
+/* D457 · pie con los documentos legales públicos (clase y no `style`: la allowlist de atributos de la landing no admite `style`). */
+.legal-footer { padding: 24px; text-align: center; }

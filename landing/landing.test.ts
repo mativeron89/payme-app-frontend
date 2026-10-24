@@ -68,6 +68,16 @@ const DESTINOS_AUTORIZADOS = [
 ] as const;
 
 /**
+ * D457 · los dos documentos legales públicos del pie, como URL EXACTAS (no por
+ * origen): un path nuevo hacia la app no entra solo. Ambos se sirven en App
+ * (`/privacy` y `/terminos`, ver `vercel.ts`).
+ */
+const LEGALES_AUTORIZADOS = [
+  'https://app.paymemx.com/privacy',
+  'https://app.paymemx.com/terminos',
+] as const;
+
+/**
  * 🔴 Hosts de terceros que alguna vez estuvieron en el camino del dominio.
  * Prohibidos como enlace. **Renombrado y re-fundado el 2026-08-10.**
  *
@@ -375,10 +385,11 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     return { es: registro['es'], en: registro['en'] };
   }
 
-  it('🔴 las 40 claves del DOM coinciden exactamente con ES y EN', () => {
+  it('🔴 las 42 claves del DOM coinciden exactamente con ES y EN', () => {
     // `step2.p` se partió en `p_before`/`p_after` para que el glifo de WhatsApp
     // quede FIJO en el HTML entre las dos mitades. El censo vigente baja a 40
-    // al retirar el CTA de restaurante y el caption del panel.
+    // al retirar el CTA de restaurante y el caption del panel. D457 suma 2: los
+    // dos enlaces legales del pie (`legal.privacy`, `legal.terms`).
     // 🔴 El motivo es medido, no estético: `applyLang` asigna con `textContent`,
     // así que un `<svg>` dentro del string del diccionario se escaparía y se
     // vería como texto crudo. La alternativa era pasar esa inserción a
@@ -388,7 +399,7 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     const dict = leerDiccionario();
     const esperadas = [...new Set(dom)].sort();
     expect(dom, 'hay claves data-i18n duplicadas').toHaveLength(esperadas.length);
-    expect(esperadas).toHaveLength(40);
+    expect(esperadas).toHaveLength(42);
     expect(Object.keys(dict.es).sort()).toEqual(esperadas);
     expect(Object.keys(dict.en).sort()).toEqual(esperadas);
     expect(Object.values(dict.es).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
@@ -420,7 +431,7 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
       .filter((h) => !h.startsWith('#'));
     expect(externos.length, 'no quedó ningún acceso navegable').toBeGreaterThan(0);
     for (const h of externos) {
-      expect(DESTINOS_AUTORIZADOS as readonly string[], `destino no autorizado: ${h}`).toContain(h);
+      expect([...DESTINOS_AUTORIZADOS, ...LEGALES_AUTORIZADOS] as readonly string[], `destino no autorizado: ${h}`).toContain(h);
     }
   });
 
@@ -476,6 +487,8 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
     // App conserva CTA + fila; Panel queda sólo en la fila del desplegable.
     expect(Object.fromEntries([...porDestino].sort())).toEqual({
       'https://app.paymemx.com': 2,
+      'https://app.paymemx.com/privacy': 1,
+      'https://app.paymemx.com/terminos': 1,
       'https://panel.paymemx.com': 1,
     });
     const hero = build.htmlSinScript.match(/<section class="hero"[\s\S]*?<\/section>/)?.[0] ?? '';
