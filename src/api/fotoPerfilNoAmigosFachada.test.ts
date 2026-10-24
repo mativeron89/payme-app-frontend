@@ -4,7 +4,7 @@ import type { Api } from './index';
 import type { StoredSession } from './storage';
 import { FOTO_NOTICE } from './fotoPerfilNoAmigos';
 
-const session: StoredSession = { access_token: 'test-token', refresh_token: 'test-refresh', family_id: 'test-family', principal_id: 'test-person' };
+const session: StoredSession = { access_token: 'tok', refresh_token: 'r', family_id: 'test-family', principal_id: 'test-person' };
 const never = { purpose_key: 'foto_perfil_no_amigos', granted: false, state: 'never', since: null, notice_version: null, notice_hash: null };
 const grant = { ...never, granted: true, state: 'granted', since: '2026-10-23T00:00:00.000Z', notice_version: FOTO_NOTICE.version, notice_hash: FOTO_NOTICE.hash };
 const aviso = { kind: 'aviso_privacidad' as const, ...FOTO_NOTICE, effective_from: '2026-10-23T00:00:00.000Z',
@@ -37,7 +37,7 @@ describe('D457 · rutas reales por el transporte autenticado existente', () => {
     expect(String(url)).toMatch(/\/api\/account\/consents\/foto_perfil_no_amigos\/grant$/);
     expect(options?.method).toBe('POST');
     expect(options?.cache).toBe('no-store');
-    expect(new Headers(options?.headers).get('authorization')).toBe('Bearer test-token');
+    expect(new Headers(options?.headers).get('authorization')).toBe('Bearer tok');
     expect(JSON.parse(options?.body as string)).toEqual({ notice_version: FOTO_NOTICE.version, notice_hash: FOTO_NOTICE.hash, channel: 'app' });
   });
   it('backend viejo o config fallida: cero POST', async () => {
