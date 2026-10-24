@@ -127,7 +127,10 @@ for (const modo of ['ausente', 'error', 'otra-base', 'fecha-invalida'] as const)
     await preparar(page, modo);
     const c = comparacion(page);
     await expect(c).toHaveAttribute('aria-busy', 'false');
-    await expect(c).toContainText('No hay datos comparables para estos dos meses completos.');
+    // v0.260.1 · un fallo de lectura tiene su propio texto; ausencia y datos no comparables conservan el de siempre.
+    await expect(c).toContainText(modo === 'error'
+      ? 'No pudimos cargar la comparación. Intenta de nuevo más tarde.'
+      : 'No hay datos comparables para estos dos meses completos.');
     await expect(c.locator('.est-mes')).toHaveCount(0);
     await expect(c).not.toContainText('$0');
     await expect(resumen(page).locator('.est-total')).toHaveText('$100.01');

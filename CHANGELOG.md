@@ -1,3 +1,9 @@
+## 0.260.1 · 2026-10-24 (auditoría D462 · menores de Estadísticas)
+
+- «Meses completos»: si la lectura de la evolución falla, dice «No pudimos cargar la comparación. Intenta de nuevo más tarde.» / «We couldn't load the comparison. Try again later.». El 404 de un backend anterior y los datos no comparables conservan «No hay datos comparables…».
+- La diferencia de visitas usa el signo menos «−», como los importes (`enteroConSigno`).
+- Documentación: la entrada 0.258.1 aclara que después quedó publicada. Unitaria del signo y E2E del modo error. Sin cambios de cálculo ni de contrato. D63 sigue abierto.
+
 ## 0.260.0 · 2026-10-23 (D456/D457 · paquete legal 3.1.0, foto opcional y textos públicos)
 
 - Consumidor tolerante del permiso opcional de foto ante no-amigos: control en Configuración (apagado por defecto, revocable), revocación desde la puerta legal sin reaceptar y retiro/revalidación de fotos contextuales (invitaciones, participantes, miembros y notas de Viajes). Con un backend sin la finalidad, el control no aparece y el resto conserva su contrato.
@@ -17,6 +23,7 @@
 - La regresión conserva las 17 identidades del tutorial y amplía los controles de nombres ES/EN, activación por teclado y ausencia del panel de invitaciones real. Se mantienen los controles de efectos, red y almacenamiento.
 - Inicio admite latencia sintética cero después de sembrar y recargar en 14 de sus 30 casos de presentación. Los otros 16 conservan 350 ms; las identidades, aserciones y esperas visuales de 150 ms se mantienen. Sin medición ni promesa de ahorro.
 - Integración estática sobre 0.258.0, sin runtime local. Validación oficial completa pendiente en CI del SHA exacto; sin GREEN ni publicación en esta etapa. D63 sigue abierto.
+- Estado posterior: quedó publicada en producción después de esta etapa (lo constató la auditoría D462); el texto de arriba describe la preparación.
 
 ## 0.258.0 · 2026-10-21 (D444/D449 · resumen de Estadísticas)
 

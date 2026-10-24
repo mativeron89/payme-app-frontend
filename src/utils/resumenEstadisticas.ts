@@ -4,6 +4,11 @@ import type { Evolucion, MesDeEvolucion } from '../api/evolucion';
 const natural = (n: number): boolean => Number.isSafeInteger(n) && n >= 0;
 
 /** El dueño trunca centavos. Cero visitas no acredita un promedio por visita. */
+/** Un entero con su signo: «+3», «−2» (U+2212, el mismo menos de los importes) o «0». */
+export function enteroConSigno(n: number): string {
+  return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0';
+}
+
 export function promedioPorVisita(total: number, visitas: number): number | null {
   return natural(total) && natural(visitas) && visitas > 0 ? Math.floor(total / visitas) : null;
 }

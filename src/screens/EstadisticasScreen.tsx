@@ -27,7 +27,7 @@ import {
 import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { colorEnPaleta, GEOMETRIA_E173, porcentajesEnteros } from '../utils/anillo';
-import { compararMesesCompletos, promedioDelResumen } from '../utils/resumenEstadisticas';
+import { compararMesesCompletos, enteroConSigno, promedioDelResumen } from '../utils/resumenEstadisticas';
 import { nombreDelPeriodo } from '../utils/meses';
 import { useTandaVigente } from './useTandaVigente';
 import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
@@ -403,12 +403,14 @@ function ComparacionDeMeses({ acceso, base }: { acceso: Sondeo<Evolucion>; base:
           <p className="est-nota">{t('Cambio de {0} respecto a {1}', mes(comparacion.reciente.monthStart), mes(comparacion.anterior.monthStart))}</p>
           <dl className="est-diferencias">
             <div><dt>{base === 'consumption' ? t('Consumo registrado') : t('Gasto registrado')}</dt><dd>{importeConSigno(comparacion.diferenciaCents)}{porcentajeTexto !== null && <span> ({porcentajeTexto})</span>}</dd></div>
-            <div><dt>{t('Visitas')}</dt><dd>{comparacion.diferenciaVisitas > 0 ? '+' : ''}{comparacion.diferenciaVisitas}</dd></div>
+            <div><dt>{t('Visitas')}</dt><dd>{enteroConSigno(comparacion.diferenciaVisitas)}</dd></div>
             <div><dt>{t('Promedio por visita')}</dt><dd>{comparacion.diferenciaPromedioCents === null ? t('No disponible') : importeConSigno(comparacion.diferenciaPromedioCents)}</dd></div>
           </dl>
           {porcentajeTexto === null && <p className="est-nota">{t('Sin porcentaje de cambio: el mes de referencia tiene importe cero.')}</p>}
         </>
-      ) : <p className="est-nota">{acceso.estado === 'cargando' ? t('Cargando comparación…') : t('No hay datos comparables para estos dos meses completos.')}</p>}
+      ) : <p className="est-nota">{acceso.estado === 'cargando' ? t('Cargando comparación…')
+        : acceso.estado === 'sin_resumen' ? t('No pudimos cargar la comparación. Intenta de nuevo más tarde.')
+          : t('No hay datos comparables para estos dos meses completos.')}</p>}
     </section>
   );
 }

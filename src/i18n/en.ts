@@ -89,6 +89,7 @@ export const EN: Record<string, string> = {
   "Sin porcentaje de cambio: el mes de referencia tiene importe cero.": "No percentage change: the reference month has a zero amount.",
   "Cargando comparación…": "Loading comparison…",
   "No hay datos comparables para estos dos meses completos.": "Comparable data is unavailable for these two complete months.",
+  "No pudimos cargar la comparación. Intenta de nuevo más tarde.": "We couldn't load the comparison. Try again later.",
   "El promedio mensual divide el total entre seis meses calendario, incluido el mes en curso y los meses sin actividad.": "The monthly average divides the total by six calendar months, including the current month and months with no activity.",
   'Te sumaste a {0}': 'You joined {0}',
   'Te sumaste a la mesa': 'You joined the table',

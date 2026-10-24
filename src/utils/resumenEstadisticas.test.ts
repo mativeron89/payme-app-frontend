@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsumoDelMes } from '../api/consumoDelMes';
 import type { Evolucion } from '../api/evolucion';
-import { compararMesesCompletos, promedioDelResumen, promedioPorVisita } from './resumenEstadisticas';
+import { compararMesesCompletos, enteroConSigno, promedioDelResumen, promedioPorVisita } from './resumenEstadisticas';
 
 const AHORA = new Date('2026-10-21T18:00:00Z');
 function serie(actual = 9, year = 2026): Evolucion {
@@ -115,5 +115,14 @@ describe('D449 · Intl no disponible no bloquea el arranque', () => {
     try {
       expect(compararMesesCompletos(serie(), 'consumption', AHORA)).toBeNull();
     } finally { parts.mockRestore(); }
+  });
+});
+
+describe('enteroConSigno · diferencia de visitas', () => {
+  it('positivo con «+», negativo con el menos U+2212 y cero sin signo', () => {
+    expect(enteroConSigno(3)).toBe('+3');
+    expect(enteroConSigno(-2)).toBe('\u22122');
+    expect(enteroConSigno(-2)).not.toContain('-');
+    expect(enteroConSigno(0)).toBe('0');
   });
 });
