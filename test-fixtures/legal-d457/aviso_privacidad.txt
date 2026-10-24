@@ -1,0 +1,263 @@
+AVISO DE PRIVACIDAD INTEGRAL DE PAYME
+
+En cumplimiento de la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y demás disposiciones aplicables, Matías Miguel Verón, por su propio derecho y como responsable de la operación de PayMe (en adelante, el “Responsable”), pone a disposición de los usuarios el presente Aviso de Privacidad.
+
+Para cualquier asunto relacionado con el tratamiento de tus datos personales, puedes comunicarte al correo electrónico soporte@paymemx.com. 
+
+1. PayMe
+
+PayMe es una plataforma digital diseñada para facilitar la organización y distribución de los consumos realizados por varias personas en una misma mesa de un restaurante, cafetería, bar u otro establecimiento de alimentos y bebidas.
+
+Actualmente, PayMe permite a los usuarios crear una cuenta, conectarse con otros usuarios, localizarlos mediante nombres de usuario (@), participar en mesas compartidas, registrar consumos y calcular la parte de la cuenta que corresponde a cada participante.
+
+Asimismo, PayMe permite utilizar herramientas de lectura automatizada de tickets, mediante las cuales se identifica y extrae información necesaria para facilitar el registro y distribución de los consumos.
+
+Actualmente, PayMe no procesa pagos, no recibe ni custodia fondos y no solicita ni almacena información de tarjetas de crédito o débito.
+
+En caso de que PayMe incorpore nuevas funcionalidades que impliquen el tratamiento de datos personales adicionales o nuevas finalidades, el presente Aviso será actualizado antes de iniciar dicho tratamiento y, cuando resulte legalmente necesario, se solicitará el consentimiento correspondiente.
+
+2. Datos personales que tratamos
+
+Dependiendo de la forma en que utilices PayMe, podremos tratar los siguientes datos personales:
+
+● nombre y apellido;
+
+● correo electrónico;
+
+● nombre de usuario (@), único y obligatorio dentro de PayMe;
+
+● identificador interno de usuario de PayMe;
+
+● método de registro y autenticación;
+
+● identificador proporcionado por Google cuando utilices dicha cuenta para registrarte, iniciar sesión o vincularla a tu cuenta de PayMe;
+
+● fecha de registro y de última actividad;
+
+● información relacionada con invitaciones enviadas o recibidas;
+
+● foto de perfil, únicamente cuando decidas agregarla;
+
+● información sobre tus conexiones dentro de PayMe, incluyendo amigos y solicitudes de amistad;
+
+● información relacionada con las mesas en las que participes, incluyendo consumos registrados, selección o asignación de productos y distribución de la cuenta;
+
+● información extraída de tickets y comprobantes de consumo necesaria para el funcionamiento de las mesas compartidas;
+
+● registros temporales de intentos fallidos de autenticación utilizados para proteger la seguridad de las cuentas; y
+
+● información necesaria para acreditar la versión de este Aviso de Privacidad, los Términos de Uso u otros avisos que hayan sido puestos a tu disposición.
+
+Cuando utilices Google para registrarte, PayMe podrá recibir tu nombre, apellido, correo electrónico verificado y el identificador necesario para autenticar tu cuenta. PayMe no obtiene tus contactos de Google ni utiliza la información de tu cuenta de Google para finalidades publicitarias.
+
+Si inicias el registro mediante Google y no completas la creación de tu cuenta, PayMe conservará temporalmente la información recibida para permitirte concluir dicho procedimiento, el cual dejará de ser válido transcurridos diez (10) minutos. La caducidad del procedimiento no implicará necesariamente la eliminación inmediata de los datos temporales, los cuales estarán sujetos a los mecanismos periódicos de depuración de PayMe. Si completas el registro, los datos temporales que ya no resulten necesarios serán eliminados conforme a dichos mecanismos, sin perjuicio de aquellos que deban incorporarse a tu cuenta para su administración y autenticación.
+
+Cuando vincules una cuenta de Google a una cuenta existente de PayMe, el identificador utilizado temporalmente durante el proceso de verificación de contraseña dejará de ser válido transcurridos nueve (9) minutos, independientemente de que el procedimiento haya concluido. Dicho identificador será objeto de los procesos periódicos de eliminación de datos temporales implementados por PayMe, sin que su caducidad implique necesariamente su supresión inmediata. Lo anterior no afecta la conservación del identificador que resulte necesario para mantener una vinculación efectivamente realizada.
+
+Para prevenir accesos no autorizados, PayMe podrá registrar los intentos fallidos de autenticación, sin conservar en dichos registros el identificador de Google utilizado durante la vinculación. Estos registros se conservarán durante el periodo que resulte necesario para prevenir accesos indebidos, detectar actividades irregulares y aplicar los mecanismos de seguridad correspondientes, y serán eliminados conforme a los procedimientos periódicos de depuración establecidos para tales finalidades.
+
+Cuando utilices una contraseña propia de PayMe, ésta no será almacenada en texto claro, sino mediante mecanismos criptográficos destinados a protegerla.
+
+PayMe no solicita datos personales sensibles para prestar sus servicios.
+
+Asimismo, en su operación actual, PayMe no requiere tu domicilio particular, número telefónico, datos bancarios ni información de tarjetas de crédito o débito.
+
+3. Usuarios mayores de edad
+
+PayMe está dirigido exclusivamente a personas de 18 años o más.
+
+Para registrarte podremos solicitarte que declares que cumples con este requisito. PayMe no necesita recabar ni conservar tu fecha completa de nacimiento o una identificación oficial únicamente para verificar esta condición.
+
+4. Finalidades del tratamiento
+
+PayMe tratará tus datos personales para las siguientes finalidades necesarias para prestar sus servicios:
+
+a) crear, identificar y administrar tu cuenta;
+
+b) autenticar tu acceso a PayMe, incluyendo el registro y vinculación de cuentas mediante Google;
+
+c) permitir que otros usuarios registrados puedan localizarte e identificarte mediante la búsqueda de tu nombre de usuario, conforme a las reglas de visibilidad de la plataforma;
+
+d) administrar invitaciones, solicitudes de amistad y conexiones entre usuarios;
+
+e) permitir la creación, administración y funcionamiento de mesas compartidas;
+
+f) registrar los consumos incorporados a una mesa y calcular su distribución entre los participantes;
+
+g) mostrar a los participantes de una mesa la información necesaria para identificar a quienes forman parte de ella y conocer la distribución correspondiente;
+
+h) mostrar tu foto de perfil, cuando voluntariamente decidas incorporarla, a tus amigos aceptados, de conformidad con las condiciones de visibilidad de la plataforma;
+
+i) procesar automáticamente información contenida en tickets o comprobantes de consumo para identificar productos, conceptos, importes y demás información necesaria para el funcionamiento de las mesas compartidas;
+
+j) identificar establecimientos comerciales y, cuando corresponda, distinguir sus diferentes sucursales;
+
+k) atender consultas y solicitudes relacionadas con tu cuenta;
+
+l) brindar soporte técnico y administrar el funcionamiento y seguridad de PayMe;
+
+m) prevenir usos no autorizados, abusivos o contrarios a los Términos de Uso; y
+
+n) mantener evidencia de las versiones de los documentos legales y avisos que te hayan sido puestos a disposición y, cuando corresponda, de las acciones mediante las cuales hayas manifestado tu aceptación o consentimiento.
+
+Actualmente PayMe no utiliza tus datos personales para publicidad, mercadotecnia personalizada, elaboración de perfiles comerciales ni campañas promocionales. Tampoco vende tus datos personales.
+
+De manera adicional y exclusivamente cuando otorgues tu autorización expresa mediante las funcionalidades habilitadas para tal efecto, PayMe podrá mostrar tu fotografía de perfil a otros usuarios registrados que no formen parte de tus amigos aceptados, cuando te localicen mediante la función de búsqueda o reciban una invitación tuya para participar en una mesa compartida.
+
+Esta finalidad será opcional y no constituirá una condición para crear o mantener tu cuenta ni para utilizar las demás funcionalidades de PayMe. Podrás negar o revocar tu autorización en cualquier momento, sin que ello afecte la visualización de tu fotografía por tus amigos aceptados.
+
+Actualmente no existen otras finalidades secundarias. Si PayMe decide incorporar en el futuro una finalidad que no sea necesaria para la prestación del servicio, ésta se identificará expresamente y se habilitarán los mecanismos correspondientes para que puedas aceptarla o rechazarla cuando resulte necesario.
+
+5. Información visible para otros usuarios
+
+Algunas funcionalidades de PayMe requieren que determinada información sea visible para otros usuarios.
+
+Para utilizar PayMe deberás elegir un nombre de usuario único, identificado mediante el símbolo @, que podrás modificar una vez cada treinta (30) días.
+
+Cualquier usuario registrado podrá localizarte mediante la función de búsqueda de amigos, introduciendo al menos tres caracteres de tu nombre de usuario. Los resultados mostrarán tu nombre de usuario, nombre y apellido y, cuando corresponda y hayas autorizado dicha visibilidad, tu fotografía de perfil. Tu correo electrónico no será visible en los resultados de búsqueda.
+
+Tus amigos aceptados podrán ver tu nombre, apellido, nombre de usuario y, cuando corresponda, tu foto de perfil.
+
+La eliminación de una conexión de amistad no impedirá necesariamente que dicha persona pueda localizarte mediante tu nombre de usuario. Podrás impedirlo mediante las funciones de bloqueo disponibles en PayMe.
+
+Cuando participes en una mesa compartida, el organizador y los demás participantes podrán acceder a la información necesaria para identificar a quienes forman parte de la mesa y conocer los consumos y su distribución.
+
+Tu foto de perfil es opcional. Cuando decidas incorporarla, PayMe podrá mostrarla a tus amigos aceptados. Su visualización por usuarios registrados que no formen parte de tus amigos aceptados, incluyendo aquellos que te localicen mediante la función de búsqueda o reciban una invitación tuya para participar en una mesa compartida, estará sujeta a una autorización adicional, específica y voluntaria, independiente de la aceptación general del presente Aviso de Privacidad.
+
+La opción correspondiente permanecerá desactivada de manera predeterminada y únicamente podrá habilitarse mediante una acción afirmativa de tu parte. Podrás modificar o revocar dicha autorización en cualquier momento a través de las configuraciones de privacidad disponibles en PayMe, sin necesidad de eliminar tu fotografía de perfil ni afectar su visualización por tus amigos aceptados.
+
+Una vez revocada la autorización, PayMe dejará de mostrar tu fotografía a usuarios que no formen parte de tus amigos aceptados, sin perjuicio de aquellas visualizaciones que se hubieran realizado legítimamente con anterioridad a la revocación.
+
+Podrás sustituir o eliminar tu fotografía conforme a las funciones disponibles en tu cuenta.
+
+Las personas bloqueadas no podrán acceder a tu fotografía mediante las funciones de búsqueda o conexión de usuarios, sin perjuicio de la información que deba mantenerse disponible en mesas compartidas conforme a las funcionalidades de la plataforma.
+
+En la operación actual de PayMe, los establecimientos no reciben los datos personales de los usuarios ni cuentan con un panel mediante el cual puedan consultar dicha información.
+
+6. Información de tickets
+
+PayMe permite registrar consumos mediante la captura manual de información o la lectura automatizada de tickets y comprobantes de consumo.
+
+Para esta última funcionalidad, PayMe utiliza Amazon Web Services (AWS Textract), servicio tecnológico mediante el cual se procesan imágenes para identificar y extraer información contenida en los comprobantes de consumo.
+
+La información extraída comprende los productos, conceptos, precios y, cuando se encuentren disponibles, el nombre y RFC del establecimiento comercial. Cuando se habilite dicha funcionalidad, también podrá extraerse la dirección del establecimiento para distinguir sus diferentes sucursales.
+
+Las imágenes originales de los tickets no se conservarán como parte del historial de mesas de PayMe una vez concluido su procesamiento, sin perjuicio del tratamiento técnico temporal que realice el proveedor tecnológico conforme a las condiciones contractuales y medidas de protección aplicables.
+
+La información correspondiente a productos, conceptos e importes podrá incorporarse a la mesa compartida y ser consultada por sus participantes. Los datos utilizados exclusivamente para la identificación interna del establecimiento no serán visibles para otros usuarios, salvo que resulten necesarios para las funcionalidades expresamente informadas.
+
+Cuando el RFC corresponda a una persona física, su tratamiento estará sujeto a las disposiciones aplicables en materia de protección de datos personales y se limitará a las finalidades de identificación del establecimiento.
+
+PayMe procurará limitar la extracción, conservación y utilización de información a los datos estrictamente necesarios para prestar sus servicios. En particular, no incorporará al historial de las mesas información personal de empleados de los establecimientos, como el nombre de meseros, cuando resulte ajena a las finalidades del tratamiento.
+
+7. Proveedores de servicios
+
+PayMe podrá utilizar proveedores tecnológicos para prestar servicios de alojamiento, infraestructura, autenticación, almacenamiento, seguridad, soporte, procesamiento automatizado de información y otras funciones necesarias para operar la plataforma.
+
+Para la funcionalidad de lectura automatizada de tickets, PayMe utiliza servicios de Amazon Web Services, incluyendo AWS Textract, mediante los cuales se procesan temporalmente imágenes y datos contenidos en comprobantes de consumo para extraer la información necesaria para el funcionamiento de la plataforma.
+
+Cuando dichos proveedores traten datos personales por cuenta y siguiendo las instrucciones de PayMe, actuarán como encargados del tratamiento y estarán sujetos a las obligaciones de confidencialidad, seguridad y tratamiento que correspondan.
+
+Algunos de estos proveedores podrán encontrarse fuera de México. Cuando el tratamiento se realice exclusivamente por cuenta del Responsable, la comunicación de los datos al encargado se sujetará a las reglas aplicables a las remisiones y al contrato o instrumento jurídico correspondiente.
+
+8. Transferencias de datos personales
+
+PayMe podrá comunicar determinados datos a otros usuarios cuando dicha comunicación sea necesaria para prestar las funcionalidades de la plataforma, particularmente al participar en una mesa compartida, establecer una conexión con otro usuario o utilizar las funciones de búsqueda e identificación de usuarios descritas en este Aviso.
+
+Estas comunicaciones se limitarán a los datos y finalidades descritos en este Aviso y se realizarán únicamente en la medida necesaria para prestar las funcionalidades correspondientes.
+
+Asimismo, PayMe podrá realizar transferencias sin consentimiento cuando se actualice alguno de los supuestos expresamente previstos por la legislación aplicable, incluyendo cuando sean necesarias para el cumplimiento de una relación jurídica con el titular o sean legalmente exigidas.
+
+Actualmente PayMe no transfiere tus datos personales a restaurantes, anunciantes u otros terceros para que éstos los utilicen con fines publicitarios o comerciales propios.
+
+Si en el futuro se prevén otras transferencias que requieran tu consentimiento, éste será solicitado antes de realizarlas.
+
+9. Conservación de los datos
+
+PayMe conservará tus datos personales únicamente durante el tiempo necesario para cumplir las finalidades descritas en este Aviso y atender las obligaciones o responsabilidades que, en su caso, deriven del tratamiento.
+
+Los datos utilizados temporalmente durante los procesos de registro y vinculación mediante Google estarán sujetos a los periodos de validez y mecanismos de depuración establecidos en el apartado 2 del presente Aviso, distinguiéndose expresamente entre la caducidad de los procedimientos de autenticación y la eliminación efectiva de los datos almacenados. Los registros temporales de intentos fallidos de autenticación se conservarán únicamente durante el tiempo necesario para cumplir sus finalidades de seguridad y serán eliminados mediante los procedimientos de depuración correspondientes, sin perjuicio de los periodos de bloqueo o conservación que legalmente resulten aplicables.
+
+Los datos extraídos de tickets y comprobantes de consumo se conservarán únicamente durante el tiempo necesario para administrar las mesas compartidas y cumplir las finalidades informadas, sujeto a los periodos de conservación o bloqueo que legalmente correspondan.
+
+Cuando los datos personales hayan dejado de ser necesarios, serán suprimidos previo periodo de bloqueo cuando éste resulte aplicable.
+
+10. Eliminación de cuenta
+
+Puedes solicitar la cancelación de tus datos personales y la eliminación de tu cuenta conforme al procedimiento señalado en este Aviso.
+
+Cuando la solicitud resulte procedente, PayMe desactivará el acceso a la cuenta y procederá a eliminar o desvincular los datos personales que permitan identificarte, sujeto a los periodos de bloqueo o conservación que resulten legalmente aplicables.
+
+Las mesas que hayas compartido con otras personas podrán conservarse en la medida necesaria para mantener los registros de los demás participantes. En esos casos, se desvinculará tu cuenta y se eliminarán los identificadores personales que ya no sea necesario conservar, pudiendo mostrarse una referencia genérica como “Cuenta eliminada”.
+
+La cancelación legal de datos puede dar lugar primero a un periodo de bloqueo y posteriormente a su supresión.
+
+11. Derechos ARCO
+
+Tienes derecho a solicitar en cualquier momento el Acceso, Rectificación, Cancelación u Oposición respecto de tus datos personales.
+
+También podrás solicitar la revocación de tu consentimiento cuando resulte procedente y pedir la limitación del uso o divulgación de tus datos personales.
+
+Para ejercer cualquiera de estos derechos deberás enviar tu solicitud a:
+
+soporte@paymemx.com 
+
+La solicitud deberá contener, cuando menos:
+
+a) tu nombre y un domicilio o cualquier otro medio para recibir notificaciones;
+
+b) los documentos o elementos necesarios para acreditar tu identidad y, en su caso, la identidad y representación de la persona que actúe en tu nombre;
+
+c) una descripción clara y precisa de los datos personales respecto de los cuales deseas ejercer el derecho correspondiente;
+
+d) el derecho ARCO que deseas ejercer o aquello que solicitas; y
+
+e) cualquier otro elemento que facilite la localización de los datos personales.
+
+Cuando se trate de una solicitud de rectificación, deberás indicar además la modificación solicitada y acompañar, cuando corresponda, la documentación que sustente tu petición.
+
+PayMe te comunicará su determinación dentro de un plazo máximo de veinte (20) días, contado desde la fecha en que se reciba la solicitud para el ejercicio de derechos ARCO. Si la solicitud resulta procedente, se hará efectiva dentro de los quince (15) días siguientes a la fecha en que se comunique la respuesta.
+
+Estos plazos podrán ampliarse una sola vez por un periodo igual cuando las circunstancias del caso lo justifiquen.
+
+El ejercicio de los derechos ARCO es gratuito, sin perjuicio de los costos de reproducción, copias o envío que, en su caso, resulten aplicables conforme a la legislación.
+
+12. Revocación del consentimiento
+
+Cuando el tratamiento dependa de tu consentimiento, podrás revocarlo en cualquier momento enviando una solicitud a soporte@paymemx.com, indicando los datos necesarios para identificar tu cuenta y el tratamiento respecto del cual deseas revocar tu consentimiento.
+
+Tratándose de la autorización para mostrar tu fotografía de perfil a usuarios que no formen parte de tus amigos aceptados, podrás otorgarla, modificarla o revocarla directamente mediante las configuraciones de privacidad de PayMe. La revocación de esta autorización no afectará tu acceso a la plataforma, la conservación de tu fotografía de perfil ni su visualización por tus amigos aceptados.
+
+La revocación no tendrá efectos retroactivos y podrá estar sujeta a las limitaciones derivadas de obligaciones legales o de tratamientos que no dependan del consentimiento.
+
+13. Limitación del uso o divulgación
+
+Puedes solicitar que PayMe limite determinados usos o divulgaciones de tus datos personales enviando tu solicitud a soporte@paymemx.com. 
+
+Cuando la solicitud resulte procedente, PayMe adoptará las medidas correspondientes de acuerdo con la naturaleza del tratamiento solicitado.
+
+Actualmente PayMe no utiliza datos personales para publicidad o mercadotecnia personalizada.
+
+14. Seguridad y confidencialidad
+
+PayMe mantendrá medidas administrativas, técnicas y físicas razonables para proteger los datos personales contra daño, pérdida, alteración, destrucción, uso, acceso o tratamiento no autorizado.
+
+El acceso a datos personales por parte del equipo de PayMe estará limitado a las personas que razonablemente necesiten acceder a ellos para operar, administrar, mantener, proteger o brindar soporte al servicio, y estará sujeto a obligaciones de confidencialidad.
+
+En caso de que ocurra una vulneración de seguridad que afecte significativamente tus derechos patrimoniales o morales, PayMe te informará de conformidad con la legislación aplicable para que puedas adoptar las medidas necesarias para la defensa de tus derechos.
+
+15. Cambios al Aviso de Privacidad
+
+PayMe podrá modificar este Aviso de Privacidad como consecuencia de cambios legales, técnicos, operativos o en las funcionalidades del servicio.
+
+La versión vigente estará disponible en:
+
+https://app.paymemx.com/privacy
+
+Cuando se realice una modificación relevante, ésta será comunicada mediante la plataforma, por correo electrónico o por cualquier otro medio razonablemente disponible.
+
+Cuando una modificación implique nuevas finalidades de tratamiento o una ampliación relevante de la visibilidad de los datos personales, PayMe informará oportunamente los cambios y solicitará nuevamente el consentimiento correspondiente cuando resulte legalmente necesario, antes de iniciar el tratamiento que lo requiera.
+
+Última actualización: 22 de octubre de 2026
+
+Domicilio del Responsable: Calle Nicolás Gogol número 190-A, Colonia Colinas de San Jerónimo, C.P. 64630, Monterrey, Nuevo León, México.

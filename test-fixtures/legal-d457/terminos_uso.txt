@@ -1,0 +1,237 @@
+TÉRMINOS DE USO DE PAYME
+
+Los presentes Términos de Uso regulan el acceso y utilización de PayMe, plataforma digital operada actualmente por Matías Miguel Verón (en adelante, el “Operador”).
+
+Al crear una cuenta o utilizar PayMe, aceptas estos Términos de Uso. Si no estás de acuerdo con ellos, no deberás utilizar la plataforma.
+
+1. ¿Qué es PayMe?
+
+PayMe es una plataforma digital que permite a los usuarios organizar y distribuir los consumos realizados por varias personas en una misma mesa de un restaurante, cafetería, bar u otro establecimiento de alimentos y bebidas.
+
+Entre otras funcionalidades, PayMe permite crear una cuenta, conectarse con otros usuarios, localizarlos mediante nombres de usuario (@), gestionar solicitudes de amistad e invitaciones, crear o participar en mesas compartidas, registrar consumos y calcular qué parte de una cuenta corresponde a cada participante.
+
+Asimismo, PayMe permite utilizar herramientas de lectura automatizada de tickets para facilitar el registro de los productos e importes correspondientes a los consumos de una mesa.
+
+Actualmente, PayMe no procesa pagos, no recibe ni custodia fondos, no solicita información de tarjetas bancarias y no actúa como institución financiera, transmisor de dinero o proveedor de servicios de pago.
+
+PayMe se encuentra actualmente en una versión beta o de prueba, por lo que sus funcionalidades pueden contener errores, experimentar interrupciones o ser modificadas durante su desarrollo.
+
+Cuando se incorporen nuevas funcionalidades, estos Términos podrán actualizarse según corresponda.
+
+2. Requisitos para utilizar PayMe
+
+Para crear una cuenta y utilizar PayMe debes:
+
+a) tener 18 años o más;
+
+b) proporcionar información verdadera, actual y completa;
+
+c) mantener actualizada la información de tu cuenta; y
+
+d) utilizar PayMe únicamente para fines lícitos y de conformidad con estos Términos.
+
+Al registrarte declaras que cumples con estos requisitos.
+
+3. Registro y cuenta
+
+Puedes registrarte utilizando tu correo electrónico y una contraseña o mediante un proveedor externo de autenticación, como Google. También podrás vincular tu cuenta de Google a una cuenta existente de PayMe, conforme a los procedimientos de autenticación y verificación de seguridad habilitados por la plataforma.
+
+Para utilizar PayMe deberás seleccionar un nombre de usuario único (@), mediante el cual otros usuarios registrados podrán localizarte e identificarte dentro de la plataforma, aun cuando no formen parte de tus contactos. Podrás modificar dicho nombre de usuario una vez cada treinta (30) días.
+
+Eres responsable de mantener la confidencialidad de tus credenciales de acceso y de las actividades realizadas desde tu cuenta.
+
+No deberás compartir tus credenciales con terceros ni permitir que otra persona utilice tu cuenta.
+
+Si detectas un acceso no autorizado o cualquier situación que pueda comprometer la seguridad de tu cuenta, deberás comunicarlo a soporte@paymemx.com. 
+
+El Operador podrá solicitar las medidas razonablemente necesarias para verificar la titularidad de una cuenta.
+
+4. Uso de mesas compartidas
+
+PayMe permite que varios usuarios participen en una misma mesa y registren o asignen consumos.
+
+Al participar en una mesa, aceptas que determinada información necesaria para el funcionamiento de esa mesa sea visible para los demás participantes, de conformidad con el Aviso de Privacidad.
+
+Cada usuario es responsable de verificar que los productos, cantidades, importes, porcentajes, propinas y demás información registrada en una mesa correspondan a lo efectivamente consumido o acordado entre sus participantes.
+
+Las funcionalidades de cálculo y distribución proporcionadas por PayMe constituyen una herramienta de apoyo. Antes de utilizar un resultado para liquidar una cuenta o realizar cualquier pago por medios externos a PayMe, los usuarios deberán verificar los montos correspondientes.
+
+5. Información proporcionada por los usuarios
+
+Eres responsable de la información que registres, cargues o compartas mediante PayMe.
+
+Te comprometes a no incorporar información que:
+
+a) sea falsa o deliberadamente engañosa;
+
+b) vulnere derechos de terceros;
+
+c) contenga información ilícita;
+
+d) afecte la seguridad o funcionamiento de PayMe; o
+
+e) incluya datos personales de terceros cuando no cuentes con autorización o una base legítima para utilizarlos.
+
+Cuando cargues información relacionada con una mesa o un ticket, deberás hacerlo únicamente para utilizar las funcionalidades de PayMe.
+
+6. Fotografías e información de perfil
+
+La incorporación de una foto de perfil es opcional.
+
+Si decides agregar una fotografía, autorizas al Operador, a través de PayMe, a almacenarla y mostrarla conforme a las funcionalidades y condiciones de visibilidad descritas en el Aviso de Privacidad, incluyendo su visualización por tus amigos aceptados y, únicamente cuando hayas otorgado una autorización adicional, específica y voluntaria, por otros usuarios que te localicen mediante la función de búsqueda o reciban una invitación tuya para participar en una mesa compartida.
+
+La autorización para mostrar tu fotografía a usuarios que no formen parte de tus amigos aceptados será independiente de la aceptación general de estos Términos de Uso y del Aviso de Privacidad. Dicha autorización permanecerá desactivada de manera predeterminada y podrá ser otorgada o revocada en cualquier momento mediante las configuraciones de privacidad habilitadas por PayMe, sin que su negativa o revocación limite el acceso a las demás funcionalidades de la plataforma ni afecte la visualización de tu fotografía por tus amigos aceptados.
+
+Declaras que tienes derecho a utilizar cualquier fotografía o contenido que incorpores a tu perfil y que su utilización no vulnera derechos de terceros.
+
+Puedes sustituir o eliminar tu fotografía conforme a las funciones disponibles en tu cuenta.
+
+7. Tickets y consumos
+
+PayMe permite registrar manualmente o mediante herramientas tecnológicas información contenida en tickets o comprobantes de consumo.
+
+Para la lectura automatizada de tickets, PayMe utiliza servicios tecnológicos de terceros, incluyendo Amazon Web Services (AWS Textract), con la finalidad de identificar y procesar la información necesaria para registrar y distribuir los consumos de una mesa. El tratamiento de dicha información se sujetará a lo establecido en el Aviso de Privacidad.
+
+Eres responsable de verificar que la información incorporada corresponda al ticket y a los consumos de la mesa.
+
+El Operador no garantiza que cualquier herramienta de reconocimiento, lectura o captura automática reproduzca sin errores la información contenida en un ticket.
+
+La información obtenida mediante el procesamiento automatizado deberá utilizarse exclusivamente para las funcionalidades autorizadas de PayMe, sin perjuicio de las obligaciones aplicables en materia de protección de datos personales y derechos de terceros.
+
+8. Conductas prohibidas
+
+No podrás utilizar PayMe para:
+
+a) realizar actividades ilícitas, fraudulentas o engañosas;
+
+b) acceder o intentar acceder sin autorización a cuentas, sistemas, servidores o información de terceros;
+
+c) interferir con la operación o seguridad de la plataforma;
+
+d) introducir virus, código malicioso o cualquier tecnología destinada a afectar el funcionamiento de PayMe;
+
+e) obtener información de otros usuarios mediante mecanismos automatizados no autorizados;
+
+f) suplantar la identidad de otra persona;
+
+g) utilizar PayMe de manera que vulnere derechos de propiedad intelectual, privacidad u otros derechos de terceros; o
+
+h) utilizar la plataforma para una finalidad distinta de aquélla para la cual fue diseñada cuando dicho uso pueda afectar su funcionamiento, seguridad o a otros usuarios.
+
+9. Disponibilidad y funcionamiento
+
+PayMe se encuentra en desarrollo continuo y sus funcionalidades pueden ser modificadas, suspendidas, ampliadas o eliminadas.
+
+Aunque el Operador procurará mantener la plataforma disponible y funcionando adecuadamente, no garantiza que PayMe opere de manera ininterrumpida o libre de errores.
+
+El Operador podrá realizar tareas de mantenimiento, actualizaciones o modificaciones que ocasionen interrupciones temporales.
+
+10. Cálculos y distribución de consumos
+
+El Operador procurará que las funcionalidades de cálculo y distribución de PayMe operen correctamente con base en la información registrada por los usuarios. Sin embargo, los usuarios deberán verificar los importes antes de utilizarlos.
+
+PayMe no sustituye el ticket, factura, cuenta o comprobante emitido por el establecimiento.
+
+En caso de discrepancia, deberá verificarse la información directamente con el establecimiento o con los demás participantes de la mesa.
+
+11. Restaurantes y terceros
+
+El Operador, a través de PayMe, no vende los alimentos o servicios consumidos, no fija sus precios y no interviene en la relación comercial entre el usuario y el establecimiento, salvo que expresamente se indique lo contrario.
+
+Cada restaurante, cafetería, bar u otro establecimiento es responsable de los productos y servicios que proporciona, de la exactitud de su cuenta y del cumplimiento de sus propias obligaciones legales.
+
+El Operador tampoco controla ni es responsable de los servicios proporcionados directamente por terceros, incluyendo proveedores externos de autenticación, infraestructura u otros servicios tecnológicos, salvo en aquellos casos en que la legislación aplicable disponga lo contrario.
+
+12. Propiedad intelectual
+
+El software, diseño, interfaces, bases de datos, elementos gráficos, textos, marcas, logotipos y demás elementos que integran PayMe pertenecen al Operador o son utilizados por éste con la autorización correspondiente y se encuentran protegidos por la legislación aplicable en materia de propiedad intelectual.
+
+El acceso a PayMe no implica la transmisión de derecho de propiedad alguno.
+
+El Operador te concede únicamente un derecho personal, limitado, revocable, no exclusivo y no transferible para utilizar PayMe conforme a estos Términos.
+
+No podrás copiar, modificar, distribuir, vender, licenciar, realizar ingeniería inversa o explotar de cualquier otra manera el software o los elementos de PayMe, salvo en los casos expresamente permitidos por la legislación aplicable.
+
+13. Contenido proporcionado por el usuario
+
+Conservas los derechos que te correspondan sobre la información o contenido que incorpores a PayMe.
+
+Al cargar contenido, otorgas al Operador una autorización limitada, no exclusiva y únicamente por el tiempo y en la medida necesarios para almacenarlo, procesarlo, reproducirlo técnicamente y mostrarlo con el propósito de prestar las funcionalidades que hayas solicitado.
+
+Esta autorización no permite al Operador vender tu contenido ni utilizarlo para finalidades publicitarias ajenas a las previstas en estos Términos y en el Aviso de Privacidad.
+
+14. Suspensión o terminación de cuentas
+
+El Operador podrá restringir, suspender o cancelar una cuenta cuando existan razones razonables para considerar que:
+
+a) se han incumplido estos Términos;
+
+b) la cuenta está siendo utilizada de manera fraudulenta o ilícita;
+
+c) existe un riesgo para otros usuarios o para la seguridad de PayMe;
+
+d) sea necesario cumplir una obligación legal o requerimiento de autoridad competente; o
+
+e) resulte necesario proteger la integridad de la plataforma.
+
+Cuando las circunstancias lo permitan, el Operador procurará informar previamente al usuario.
+
+También podrás solicitar la eliminación de tu cuenta conforme al procedimiento previsto en el Aviso de Privacidad.
+
+15. Limitación de responsabilidad
+
+El Operador realizará esfuerzos razonables para mantener PayMe disponible y procurar que sus funcionalidades operen correctamente.
+
+Sin embargo, en la medida permitida por la legislación aplicable, el Operador no será responsable por daños derivados exclusivamente de:
+
+a) errores en la información introducida por los propios usuarios;
+
+b) decisiones o pagos realizados sin verificar previamente los importes calculados;
+
+c) interrupciones temporales razonablemente necesarias para mantenimiento o actualización;
+
+d) fallas de servicios o infraestructura proporcionados por terceros que se encuentren fuera del control razonable del Operador; o
+
+e) el uso de PayMe contrario a estos Términos.
+
+Nada de lo establecido en estos Términos pretende excluir o limitar derechos o responsabilidades que, conforme a la legislación aplicable, no puedan ser válidamente excluidos o limitados.
+
+16. Privacidad
+
+El tratamiento de tus datos personales se rige por el Aviso de Privacidad de PayMe, el cual forma parte de la información legal aplicable al uso de la plataforma.
+
+El Aviso de Privacidad puede consultarse en https://app.paymemx.com/privacy.
+
+17. Modificaciones a PayMe
+
+El Operador podrá incorporar, modificar, suspender o eliminar funcionalidades de PayMe conforme evolucione el servicio.
+
+Cuando una modificación implique cambios relevantes en estos Términos, el Operador publicará una nueva versión y te informará mediante la plataforma, el correo asociado a tu cuenta o cualquier otro medio razonablemente disponible.
+
+Cuando la naturaleza del cambio requiera una nueva aceptación, ésta será solicitada antes de que continúes utilizando las funcionalidades afectadas.
+
+18. Modificaciones a estos Términos
+
+El Operador podrá modificar estos Términos para reflejar cambios en PayMe, en su operación o en la legislación aplicable.
+
+La versión vigente estará disponible permanentemente en:
+
+https://app.paymemx.com/terminos
+
+La fecha de la última actualización aparecerá al inicio o al final del documento.
+
+El uso continuado de PayMe después de la entrada en vigor de una modificación estará sujeto a la nueva versión, siempre que ésta haya sido puesta a tu disposición y se haya obtenido nuevamente tu aceptación cuando resulte necesario.
+
+19. Legislación aplicable y jurisdicción
+
+Estos Términos se regirán por las leyes de los Estados Unidos Mexicanos.
+
+Para cualquier controversia relacionada con su interpretación o cumplimiento, las partes se someten a la jurisdicción de los tribunales competentes de la Ciudad de México, sin perjuicio de cualquier derecho o competencia irrenunciable que resulte aplicable conforme a la legislación de protección al consumidor u otras disposiciones de orden público.
+
+20. Contacto
+
+Para cualquier consulta relacionada con estos Términos puedes escribir a:
+
+soporte@paymemx.com 
+
+Última actualización: 22 de octubre de 2026
