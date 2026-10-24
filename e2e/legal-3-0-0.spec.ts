@@ -59,7 +59,9 @@ test.describe('alta con correo', () => {
     await expect(terminos).not.toBeChecked();
     await expect(page.getByRole('link', { name: 'Términos de Uso' })).toHaveAttribute('href', '/terminos');
     await expect(page.getByRole('link', { name: 'Aviso de Privacidad', exact: true })).toHaveAttribute('href', '/privacy');
-    await expect(page.getByLabel('Aviso de Privacidad Simplificado')).toContainText('AVISO SIMPLIFICADO DE DEMOSTRACIÓN');
+    // D457 · el Simplificado es un desplegable común al alta y a la puerta: se abre y se lee.
+    await page.getByText('Aviso de Privacidad Simplificado', { exact: true }).click();
+    await expect(page.locator('details.legal-notice pre')).toContainText('AVISO SIMPLIFICADO DE DEMOSTRACIÓN');
     await expect(page.getByLabel('Aviso de privacidad', { exact: true })).toHaveCount(0);
     const registrarme = page.getByRole('button', { name: 'Registrarme', exact: true });
     await expect(registrarme).toBeDisabled();

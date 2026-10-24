@@ -12,7 +12,7 @@ import { ingresar, irEnLaApp } from './_app';
  * Se espía la fachada en la página: cuántas veces se pide cada foto, y si se
  * cuelga hasta que el test la suelte.
  */
-interface Espia { llamadas: Record<string, number>; colgar: boolean; pendientes: Array<() => void> }
+interface Espia { llamadas: Record<string, number>; lecturas: number; colgar: boolean; pendientes: Array<() => void> }
 
 async function espiar(page: Page, opciones: { pistaForzada?: boolean; invitadorDe?: string } = {}): Promise<void> {
   await page.evaluate(async ({ pistaForzada, invitadorDe }) => {
@@ -27,15 +27,17 @@ async function espiar(page: Page, opciones: { pistaForzada?: boolean; invitadorD
       };
       state.pendingInvitations = state.pendingInvitations.map((i) => ({ ...i, inviter_payme_id: invitadorDe }));
     }
-    if (pistaForzada !== undefined) {
-      const traer = api.getPendingInvitations!.bind(api);
-      api.getPendingInvitations = async () => {
-        const r = await traer() as { invitations: Array<Record<string, unknown>> };
-        return { invitations: r.invitations.map((i) => ({ ...i, has_inviter_avatar: pistaForzada })) };
-      };
-    }
     const w = window as unknown as { __inv: Espia };
-    w.__inv = { llamadas: {}, colgar: false, pendientes: [] };
+    w.__inv = { llamadas: {}, lecturas: 0, colgar: false, pendientes: [] };
+    // D457 · cada lectura NUEVA del listado revalida la foto (un permiso revocado
+    // la retira). Se cuentan las lecturas para acotar los pedidos por lectura.
+    const traer = api.getPendingInvitations!.bind(api);
+    api.getPendingInvitations = async () => {
+      w.__inv.lecturas += 1;
+      const r = await traer() as { invitations: Array<Record<string, unknown>> };
+      return pistaForzada === undefined ? r
+        : { invitations: r.invitations.map((i) => ({ ...i, has_inviter_avatar: pistaForzada })) };
+    };
     const original = api.getInvitationInviterAvatar!.bind(api);
     api.getInvitationInviterAvatar = (...args: unknown[]) => {
       const id = args[0] as string;
@@ -48,6 +50,17 @@ async function espiar(page: Page, opciones: { pistaForzada?: boolean; invitadorD
 
 const espia = (page: Page) => page.evaluate(() => (window as unknown as { __inv: Espia }).__inv);
 const totalPedidos = async (page: Page) => Object.values((await espia(page)).llamadas).reduce((a, b) => a + b, 0);
+/**
+ * D457 · como mucho un pedido por lectura del listado, más uno de la burbuja de
+ * Inicio, que quedó montada antes del espía y puede revalidar una vez. Nunca
+ * pedidos duplicados para una misma lectura, y al menos uno.
+ */
+async function pedidosAcotados(page: Page): Promise<void> {
+  const { lecturas } = await espia(page);
+  const total = await totalPedidos(page);
+  expect(total).toBeGreaterThanOrEqual(1);
+  expect(total).toBeLessThanOrEqual(lecturas + 1);
+}
 const colgar = (page: Page, v: boolean) => page.evaluate((x) => { (window as unknown as { __inv: Espia }).__inv.colgar = x; }, v);
 const soltar = (page: Page) => page.evaluate(() => {
   (window as unknown as { __inv: Espia }).__inv.pendientes.splice(0).forEach((f) => f());
@@ -69,7 +82,7 @@ test.describe('E174-3B · la foto de quien invita en las invitaciones', () => {
     await expect(tarjeta(page).locator('.foto-quien-invita')).toBeVisible();
     await expect(tarjeta(page).locator('.foto-quien-invita')).toHaveAttribute('src', /^blob:/);
     await expect(tarjeta(page).locator('[data-icono]')).toHaveCount(0);
-    expect(await totalPedidos(page)).toBe(1);
+    await pedidosAcotados(page);
   });
 
   test('🔴 sin la pista (dueño anterior o sin foto): el ícono de siempre y ni un pedido', async ({ page }) => {
@@ -86,8 +99,9 @@ test.describe('E174-3B · la foto de quien invita en las invitaciones', () => {
     // La pista dice true, pero quien invita no tiene foto visible: la ruta da 404.
     await espiar(page, { pistaForzada: true, invitadorDe: 'payme_mx_maru' });
     await abrirAvisos(page);
-    await expect.poll(() => totalPedidos(page)).toBe(1);
+    await expect.poll(() => totalPedidos(page)).toBeGreaterThanOrEqual(1);
     await expect(tarjeta(page).locator('.avatar')).toBeVisible();
+    await pedidosAcotados(page);
     await expect(tarjeta(page).locator('.foto-quien-invita')).toHaveCount(0);
   });
 
@@ -97,7 +111,7 @@ test.describe('E174-3B · la foto de quien invita en las invitaciones', () => {
     await colgar(page, true);
     await abrirAvisos(page);
     await expect(tarjeta(page).locator('.avatar')).toBeVisible();
-    await expect.poll(async () => (await espia(page)).pendientes.length).toBe(1);
+    await expect.poll(async () => (await espia(page)).pendientes.length).toBeGreaterThanOrEqual(1);
     await soltar(page);
     await expect(tarjeta(page).locator('.foto-quien-invita')).toBeVisible();
   });
