@@ -1,14 +1,14 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "67cf3f1b1734beb50ddfa8fcab563661a33ee39a",
-  "total": 148,
+  "commit": "a6712fd64964bb602e592f5ec89be0cc80522bf7",
+  "total": 157,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
       "destino": "contract/account-consents-v1.schema.json",
-      "sha256": "aeee0e13e83d0123c50fc860e569d73358bf7f930954490f0523fc7fbd680444",
-      "bytes": 15644
+      "sha256": "92e94ee76c72113a5c32da2ed0e8d4734828de3c103a8ba6ad2dd99d96c4afdc",
+      "bytes": 17199
     },
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -31,8 +31,8 @@
     {
       "origen": "contract/mesa-acceso-v1.json",
       "destino": "contract/mesa-acceso-v1.json",
-      "sha256": "b0900bcac1e8975bfd4d574a9d2379a8049ce792db2f8bf7f635dac7e9f28ed2",
-      "bytes": 4538
+      "sha256": "63ca774ff97faee39f1d5303cfacb649d81e610d33cceebb1359f45c51635ee7",
+      "bytes": 4708
     },
     {
       "origen": "contract/mesa-join-requests-v1.json",
@@ -95,10 +95,16 @@
       "bytes": 34465
     },
     {
+      "origen": "contract/ticket-image-v1.json",
+      "destino": "contract/ticket-image-v1.json",
+      "sha256": "b4ffaedcb1925c62ea17fec9ea459a788b41b4e94b7600037be0a9ddc3973097",
+      "bytes": 5866
+    },
+    {
       "origen": "contract/viajes-v1.json",
       "destino": "contract/viajes-v1.json",
-      "sha256": "269b9b56aeb49f61108e2edc6b105a1592d8a19c202b6db609628e410ca8c443",
-      "bytes": 77241
+      "sha256": "695090d4f0af0194742702a9ba816c414b81cef8ab27968cd273f60148ae9702",
+      "bytes": 77987
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -335,6 +341,12 @@
       "bytes": 11937
     },
     {
+      "origen": "db/migrate_ticket_images_v2.193.0.sql",
+      "destino": "db/migrate_ticket_images_v2.193.0.sql",
+      "sha256": "f98bb0185f42174b7af250f99a0a46b8b7b049d298fa896392e904c60c2732ba",
+      "bytes": 7854
+    },
+    {
       "origen": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "destino": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "sha256": "6567d33603c0ecc871054ddad56152bcf4069e07736b0b174b3ca0476353a3ac",
@@ -443,10 +455,34 @@
       "bytes": 1018
     },
     {
+      "origen": "legal/vigencia-3.1.0/aviso_privacidad_simplificado.md",
+      "destino": "legal/vigencia-3.1.0/aviso_privacidad_simplificado.md",
+      "sha256": "e5240f607a52b25ab1eb00f68c36831c87784ebf0d9d5e2ad4d69b6eb9896b14",
+      "bytes": 1572
+    },
+    {
+      "origen": "legal/vigencia-3.1.0/aviso_privacidad.md",
+      "destino": "legal/vigencia-3.1.0/aviso_privacidad.md",
+      "sha256": "bfc4e2fe6868c4e53c103184291f14c2c07a98307b052f6d14c9338a993a35de",
+      "bytes": 23066
+    },
+    {
+      "origen": "legal/vigencia-3.1.0/inventario_datos_personales.json",
+      "destino": "legal/vigencia-3.1.0/inventario_datos_personales.json",
+      "sha256": "8bb06e3a61516a36941f9672f7c3404a8f4bf353178348f4975102e1e54b25db",
+      "bytes": 5629
+    },
+    {
+      "origen": "legal/vigencia-3.1.0/terminos_uso.md",
+      "destino": "legal/vigencia-3.1.0/terminos_uso.md",
+      "sha256": "a5939958bac844fd64737e141266678aa96773fc1c5f823463cc420beef2ee2d",
+      "bytes": 14694
+    },
+    {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "043d3fb5bbb1ae997eaae5c85919c633a2f4ddf2adc3a0ff149d544e7a667ac6",
-      "bytes": 15723
+      "sha256": "457ccba82d0ffe6ce8e9b1703c66b17cab84dc940c5374f309572a833548727c",
+      "bytes": 16151
     },
     {
       "origen": "routes/account.js",
@@ -463,8 +499,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "1715b2043abead0b7a60df5adf494f2aae5e4f252f4e328425c33f6b6f586c80",
-      "bytes": 13657
+      "sha256": "fafb27abf492ce8a75ee4864a4742128adc1355abe2ac063bb37a2196887742e",
+      "bytes": 14358
     },
     {
       "origen": "routes/connect.js",
@@ -493,8 +529,8 @@
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "0b6171d0b388f45b9882c7b310c6897afcca708f9da8c00d2571fad3761f4591",
-      "bytes": 18237
+      "sha256": "55bea64ff9a14275b795332c83b94da4e40718f824140e7b34ed5807ad2d0336",
+      "bytes": 18260
     },
     {
       "origen": "routes/joinRequests.js",
@@ -505,8 +541,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "742427f8369980c6f63410f2fe5c969dbfd431608e8b95b049ac2b0cb913c539",
-      "bytes": 211708
+      "sha256": "08ad099673065d1e383494672f623b8655e3689460562d8fa32a2884cd9b69f2",
+      "bytes": 214333
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -517,14 +553,14 @@
     {
       "origen": "routes/notifications.js",
       "destino": "routes/notifications.js",
-      "sha256": "cd069d53a137d091408a6beb018ed3f9e4c7e78bd2af733e13f8cd528097e607",
-      "bytes": 5278
+      "sha256": "3624799fcbe1ed35013fc177b800dcc0f0cb496a8bc12fd52355b7b8da17b978",
+      "bytes": 5352
     },
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "fe550379c57c252298bb872bb8461e5b13eb37e20e418cd3e4deefb57c9b8877",
-      "bytes": 19853
+      "sha256": "d0f7230ac2cc00b3d4a89fc0a67734d77c5fa75536134362a8f0e7b56fa93f5a",
+      "bytes": 20946
     },
     {
       "origen": "routes/payment-methods.js",
@@ -577,8 +613,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "d102a5924c9f5eec67ebc5cdd0c09140a6b4d9bd8d10c2e2a0f9a30ba3bbee36",
-      "bytes": 13478
+      "sha256": "c7cebb1964ca9425e5832c925f385dc2ea3e4e8b8a239ade240340d73fff3f71",
+      "bytes": 16046
     },
     {
       "origen": "routes/webhooks.js",
@@ -625,14 +661,14 @@
     {
       "origen": "services/consent.js",
       "destino": "services/consent.js",
-      "sha256": "36d6c87938017093aee05c51a4fde3a68a08900aeb7941522be03ab53a034ff9",
-      "bytes": 19976
+      "sha256": "be3489511454ddbeb824721bc5d1f60b00637767a03c320c6b45bd4cc346d8b9",
+      "bytes": 23741
     },
     {
       "origen": "services/externalIdentities.js",
       "destino": "services/externalIdentities.js",
-      "sha256": "2507dc218464a675c0e941a80c7e544bdf2b7d03b46f95e5e7442757249d9a84",
-      "bytes": 37113
+      "sha256": "3988aab7d19f227e55163aff1e6e3f136702d90d1e1001a9ae518281e88942e3",
+      "bytes": 40498
     },
     {
       "origen": "services/facebookDataRights.js",
@@ -645,6 +681,12 @@
       "destino": "services/facebookIdentity.js",
       "sha256": "b5daa1302d56863db5923596da9313958ca2aea0d6cca511028d661139c9eab5",
       "bytes": 6970
+    },
+    {
+      "origen": "services/fotoPerfilNoAmigos.js",
+      "destino": "services/fotoPerfilNoAmigos.js",
+      "sha256": "8e507ad1bbc852710bc09f3a5760c4221874844630c2d18e2e8fccdcd4931edd",
+      "bytes": 1478
     },
     {
       "origen": "services/googleIdentity.js",
@@ -667,8 +709,8 @@
     {
       "origen": "services/invitationAuthority.js",
       "destino": "services/invitationAuthority.js",
-      "sha256": "e5d5a7c22dc77a8c1562973aa40a0248a6eb34f044db721e10339313aa4dd0d3",
-      "bytes": 15973
+      "sha256": "c409e030c428afd52fb02b84e3cc233990e7c115c2a74e4d56baa0384102a00b",
+      "bytes": 15987
     },
     {
       "origen": "services/itemClaims.js",
@@ -715,8 +757,8 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "195aef6bb8915c2d17b3cd3291e453a4ac695b57d48593b29c1c94f1e7d563e0",
-      "bytes": 13291
+      "sha256": "5894310b25f4a3ff8b810d44963bc90752e7c2d636673c3a18c3f42c9ae663af",
+      "bytes": 14026
     },
     {
       "origen": "services/ocrRail.js",
@@ -769,14 +811,14 @@
     {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
-      "sha256": "af1cefd6285df96035e79b95e01ea195af69e6f97b9db72f236914eaab37ce21",
-      "bytes": 16470
+      "sha256": "eab20892b8bf3b8d4f90ed4437b0589b568ac5a8f30347798feb39b55bd8693d",
+      "bytes": 16555
     },
     {
       "origen": "services/referidos.js",
       "destino": "services/referidos.js",
-      "sha256": "1775e38c4f0f85d948b9a3957de5bee38f0d2e595e667a2f60d1171b0dd878e4",
-      "bytes": 9239
+      "sha256": "991d53ae29ace3c48ef3944417dca82e874faf8e42a5b7ef5fae8162de95db7f",
+      "bytes": 9422
     },
     {
       "origen": "services/savedCards.js",
@@ -827,6 +869,18 @@
       "bytes": 301
     },
     {
+      "origen": "services/ticketImageConfig.js",
+      "destino": "services/ticketImageConfig.js",
+      "sha256": "07f145daa773d122dfd741ac9d7659b07d77d24cfc385ff9532c435132177bde",
+      "bytes": 8291
+    },
+    {
+      "origen": "services/ticketImages.js",
+      "destino": "services/ticketImages.js",
+      "sha256": "9974ccc8ead6fd43082caf0205d573b41cad73ee9f197edef46e65e264c9360f",
+      "bytes": 16394
+    },
+    {
       "origen": "services/topupProcessor.js",
       "destino": "services/topupProcessor.js",
       "sha256": "da32fe8359024a232eb02756bfca41f96849d777f64e432ec15f188c3cc8d33f",
@@ -835,8 +889,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "ac68531c3a5576a4a08297094e45456a2fcd5220cdde42283cc69bfcc63b3536",
-      "bytes": 152528
+      "sha256": "d63fabe43e7e931ba1e97a222a67636fd88b4c02a67b95d096256b7d0d38f1bc",
+      "bytes": 153480
     },
     {
       "origen": "services/viajesCalculo.js",

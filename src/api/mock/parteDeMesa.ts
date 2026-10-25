@@ -49,9 +49,9 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  *   · Que Σ p + U = P: no se comprueba (el dueño tampoco). La coherencia de la entrada es de quien llama.
  */
 
-// D450: pin adoptado; parteDeMesa.js, money.js y vectores puros siguen byte-idénticos.
+// D450 · D466: pin adoptado; parteDeMesa.js, money.js y vectores puros siguen byte-idénticos (sha256 del inventario).
 export const PROCEDENCIA = {
-  commit: '67cf3f1b1734beb50ddfa8fcab563661a33ee39a',
+  commit: 'a6712fd64964bb602e592f5ec89be0cc80522bf7',
   ruta: 'services/parteDeMesa.js',
   sha256: '447ea41a867edd808dc7f2e0fcf79571d743b98f3e13a1cc25608fd478c75fdd',
   dinero: { ruta: 'utils/money.js', sha256: '86542329793934a1866a7d101d0c21002f99cf838ca7aef2cf2dcf5a2a432891' },

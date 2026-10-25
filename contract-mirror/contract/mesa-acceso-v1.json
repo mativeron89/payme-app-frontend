@@ -37,7 +37,8 @@
     "POST /api/mesas/:code/close": { "desde": "v2.173.1 (n333)" },
     "POST /api/mesas/:code/pay": { "desde": "v2.173.1 (n333)" },
     "POST /api/mesas/:code/invitations": { "desde": "v2.173.2 (T-02 de la auditoría Codex total)" },
-    "PUT /api/mesas/:code/tip": { "desde": "v2.186.0 (D344, contract/mesa-mi-parte-v1.json)" }
+    "PUT /api/mesas/:code/tip": { "desde": "v2.186.0 (D344, contract/mesa-mi-parte-v1.json)" },
+    "GET /api/mesas/:code/ticket-image/:tipo(thumb|full)": { "desde": "v2.193.0 (D464, contract/ticket-image-v1.json; apagada por defecto)", "tipo": ["thumb", "full"] }
   },
   "no_cambia": {
     "sin_sesion": "401, antes de mirar la mesa.",

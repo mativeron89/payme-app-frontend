@@ -1,4 +1,24 @@
-## D450 · confirmación de cierre por selección · 0.259.0
+## D464 · D466 · la foto del ticket (A + E), apagada · 0.261.0
+
+Contenido vigente: `a6712fd64964bb602e592f5ec89be0cc80522bf7`.
+Inventario íntegro de 157 entradas tomado del PR del dueño (App Backend PR72, rama
+`claude/ab-foto-ticket-d464-20261025`, punta `0c5b5d0b3b2d44025d45d461fbf05847a1a8936b`,
+backend 2.193.0; `contract/mirror-inventory.json`, sha256 `3690c406fa34580b3897f3c18ccef3b5b6bd1ff66ebcc8adcf011912bc117977`), adoptado con
+`--adoptar-inventario` sin editarlo: la punta sólo mueve un pin de versión de un test,
+así que el inventario declara `a6712fd`. **17 archivos espejados**, todos JSON de
+`contract/`; **140 fuentes sólo por hash**, conforme D268. Nuevo
+`contract/ticket-image-v1.json` (sha256 `b4ffaedcb1925c62ea17fec9ea459a788b41b4e94b7600037be0a9ddc3973097`); cambian
+`mesa-acceso-v1.json` y `viajes-v1.json` (las rutas de la foto) y, por arrastre de
+2.192.x, `account-consents-v1.schema.json`. Los hechos del dueño se regeneraron en local
+contra `a6712fd`: cambian sólo los sha256 de sus fuentes, ningún valor.
+
+**Dueño NO SERVIDO y SIN MERGEAR al preparar este consumidor** (PR72 en borrador, con
+su constante `HABILITADO = false`). El front tampoco enciende nada: sin la capacidad
+`features.ticket_image` en `/api/config`, no negocia ni muestra nada nuevo. Publicar
+exige primero el dueño mergeado y servido (owner-first), el Aviso nuevo de la abogada
+publicado y aceptado, y la aprobación de Mati.
+
+### Refresh anterior · D450 · confirmación de cierre por selección · 0.259.0
 
 Contenido vigente: `67cf3f1b1734beb50ddfa8fcab563661a33ee39a`.
 Inventario íntegro de 148 entradas publicado en el repositorio del dueño candidato

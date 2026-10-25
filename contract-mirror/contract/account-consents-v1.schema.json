@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "payme.app.account-consents/v1",
   "title": "Consentimientos opcionales de la cuenta · propietario App Backend",
-  "description": "AB-1 dormido: ambos mínimos null, SUGERENCIAS_DIVIDIR_ENABLED ausente/false por defecto. No cálculo ni lectura de historial. Par del Aviso completo mostrado obligatorio sólo para grants de sugerencias/analisis_interno. Permisos independientes. Campañas conserva su interfaz histórica. No agrega campos al JSON servido.",
+  "description": "D457: permiso opcional de foto ante no-amigos, inicialmente apagado e independiente del paquete legal. Sugerencias y análisis mantienen mínimos null y capacidades apagadas; campañas conserva su interfaz.",
   "routes": [
     {
       "method": "GET",
@@ -23,7 +23,8 @@
       "request": {
         "sugerencias": "optionalGrant",
         "analisis_interno": "optionalGrant",
-        "perfilado_campanas": "campaignGrant"
+        "perfilado_campanas": "campaignGrant",
+        "foto_perfil_no_amigos": "optionalGrant"
       },
       "response": "single"
     },
@@ -80,13 +81,13 @@
     "availability": "features.<purpose> contiene exactamente supported y enabled. enabled es disponibilidad global para nuevos grants (capacidad y Aviso/mínimo), sin titular/edad/granted. Error legal apaga sólo estos bloques.",
     "listing": "Lista si puede otorgarse globalmente O está granted. Con supported true el consumidor puede leer la lista aunque enabled sea false y permitir revocar grants previos. Sin granted y sin disponibilidad no hay oferta nueva.",
     "consumer": "Descartar finalidades desconocidas ANTES de validar las entradas conocidas de forma estricta. purpose_key debe coincidir con la clave del mapa.",
-    "revocation": "Sin par mostrado obligatorio ni gates de capacidad/mínimo/edad del servicio. Conserva auth 401/403/428 y 503 sin Aviso vigente. No hay exenciones nuevas.",
+    "revocation": "D457: sólo foto_perfil_no_amigos consulta/revoca con sesión válida antes de reaceptar documentos (rutas/métodos exactos). Sin gate de edad/capacidad/paquete actual para revoke. Usa el par real previo del grant; never o revoked no agrega evento. Username, sesión y estado de cuenta conservan sus gates. Otras finalidades conservan 428/503.",
     "cache": "Respuestas de /api/account/consents y sus hijos: Cache-Control private, no-store y Vary Authorization, incluidos errores de auth. /api/config sigue pública.",
     "metadata": "channel omitido usa app; app_version omitido usa x-app-version si está presente, luego null. Clientes limitan app_version/header a 30 caracteres. El 500 heredado por valor más largo sigue como deuda; no se endurece aquí. Campañas/revoke conservan tolerancia histórica a campos ignorados.",
     "order": "Capacidad → mínimo/Aviso → edad → validación del cuerpo/par. unknown_purpose y unknown_channel conservan su prioridad previa. requireAuth corre antes del handler.",
-    "atomicity": "Grants opcionales con mínimo definido toman payme/legal-sync/aviso_privacidad/v1 en una transacción. Aviso y evento usan el mismo cliente/par. Campañas/revoke mantienen su registro histórico.",
+    "atomicity": "Grants opcionales con mínimo definido toman payme/legal-sync/aviso_privacidad/v1 en una transacción. Aviso y evento usan el mismo cliente/par. Campañas/revoke mantienen su registro histórico. Foto serializa grant/revoke por titular, usa clock_timestamp y conserva revoked ante empate.",
     "state": "never implica granted false y fecha/par null. granted/revoked llevan fecha y par registrados. Revoked gana empates de created_at; UUID sólo desempata mismo estado.",
-    "limits": "No resuelve AB-2, F1/OPS ni A12-O01. No cambia legal/auth/exp/variables productivas ni AB-0."
+    "limits": "Sólo D457. No habilita sugerencias, análisis, pagos, cambios de proveedor ni migraciones."
   },
   "$defs": {
     "state": {
@@ -106,7 +107,8 @@
           "enum": [
             "perfilado_campanas",
             "analisis_interno",
-            "sugerencias"
+            "sugerencias",
+            "foto_perfil_no_amigos"
           ]
         },
         "granted": {
@@ -225,6 +227,9 @@
             },
             "sugerencias": {
               "$ref": "#/$defs/state"
+            },
+            "foto_perfil_no_amigos": {
+              "$ref": "#/$defs/state"
             }
           }
         }
@@ -333,13 +338,17 @@
       "additionalProperties": false,
       "required": [
         "sugerencias",
-        "analisis_interno"
+        "analisis_interno",
+        "foto_perfil_no_amigos"
       ],
       "properties": {
         "sugerencias": {
           "$ref": "#/$defs/capability"
         },
         "analisis_interno": {
+          "$ref": "#/$defs/capability"
+        },
+        "foto_perfil_no_amigos": {
           "$ref": "#/$defs/capability"
         }
       }
@@ -608,5 +617,28 @@
         }
       ]
     }
+  },
+  "photo_policy": {
+    "activation": "Misma bandera LEGAL_3_0_0_VIGENTE. Apagada conserva modo previo; encendida exige el gate en todos los canales de no-amigos. enabled exige aviso integral 3.1.0 y hash/cuerpo exactos.",
+    "notice_version": "3.1.0",
+    "notice_hash": "51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc",
+    "exempt_routes": [
+      "GET /api/account/consents/foto_perfil_no_amigos",
+      "POST /api/account/consents/foto_perfil_no_amigos/revoke"
+    ],
+    "unchanged": [
+      "foto propia",
+      "foto grupal",
+      "amigos con predicados de cada canal"
+    ],
+    "channels": [
+      "busqueda username",
+      "invitacion",
+      "notificacion de invitacion",
+      "participantes de mesa (sólo organizador)",
+      "miembros de Viajes",
+      "autores de notas de Viajes"
+    ],
+    "visibility": "Cada hint y acceso a bytes se recalcula con owner/viewer reales. Never/revoked de no-amigo: hint false y 404. Error: fail-closed. Grant no sustituye pertenencia, edad, status ni bloqueos del canal. No URLs públicas ni cache de autorización."
   }
 }

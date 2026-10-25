@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "id": "payme.app.ticket_image/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de la foto del ticket, v2.193.0 · D464. Mati: «Necesito que trabajes toda la noche en varios diseños distintos para mostrar la foto del ticket y desarrollar el back para que a partir de ahora se almacene la imagen del ticket con distintas propuestas en base al costo que pueda implicar éste almacenamiento.»",
+    "🔴 APAGADO. El interruptor principal es una constante de código (services/ticketImageConfig.js, HABILITADO = false): con ella en false las rutas de lectura no existen (el router las saltea: el 404 de siempre), el modo efectivo es off aunque el entorno diga otra cosa y ninguna respuesta suma claves. Detrás, las variables operativas (TICKET_IMAGE_STORAGE, por defecto off, y el driver), inertes mientras la constante esté en false. El Aviso 3.1.0 vigente dice que las imágenes originales de los tickets no se conservan: encender un modo espera el Aviso nuevo con la abogada, la aprobación específica v2.51 de Mati (privacidad/retención, proveedor y gasto) y la elección de diseño. Con el modo en off no existe ninguna clave nueva en ninguna respuesta y las rutas de lectura responden el 404 uniforme.",
+    "Owner-first: todo es opt-in con `ticket_image_version=1` (la cadena exacta; repetida llega como lista y no negocia). Un cliente que no lo pide recibe la respuesta de siempre, byte por byte, y su escaneo NO guarda la foto: su pantalla no le dice a la persona que se conserva.",
+    "La variante «sólo en el teléfono» sería del frontend y hoy no es viable (sus tests prohíben guardar fotos en IndexedDB, localStorage o Cache API): no se anuncia hasta que haya una decisión."
+  ],
+  "capacidad": {
+    "ruta": "GET /api/config",
+    "path": "features.ticket_image",
+    "claves": ["supported", "enabled", "mode", "stores_thumb", "stores_full", "full_retention_days", "negotiation_param", "negotiation_value", "accepted_mime_types", "thumb_max_side_px", "full_max_side_px"],
+    "valor_apagado": {
+      "supported": true,
+      "enabled": false,
+      "mode": "off",
+      "stores_thumb": false,
+      "stores_full": false,
+      "full_retention_days": null,
+      "negotiation_param": "ticket_image_version",
+      "negotiation_value": "1",
+      "accepted_mime_types": ["image/jpeg", "image/png", "image/webp"],
+      "thumb_max_side_px": 320,
+      "full_max_side_px": 1600
+    },
+    "modos": {
+      "off": "no se guarda nada (el comportamiento de hoy)",
+      "thumb": "sólo la miniatura (WebP, ≤ 320 px, ≤ 40 KB)",
+      "full": "la foto comprimida (WebP, ≤ 1600 px, ≤ 600 KB) y la miniatura, mientras exista la mesa o el ticket",
+      "full_retained": "como full; la foto completa se borra a los `full_retention_days` días y queda la miniatura"
+    }
+  },
+  "captura": {
+    "ruta": "POST /api/ocr?contract_version=2&receipt_version=1&ticket_image_version=1",
+    "regla": "Con el modo encendido y la negociación, después de leer el ticket la imagen que ya llegó se procesa (EXIF/GPS fuera, re-codificada en WebP) y queda pendiente, atada al recibo (`receipt`) y a quien escaneó. HEIC no se procesa (`unsupported_format`). La lectura del ticket nunca falla por la foto.",
+    "respuesta_extra": {
+      "clave": "ticket_image",
+      "guardada": { "stored": true, "thumb": true, "full": "boolean (false en modo thumb)" },
+      "no_guardada": { "stored": false, "reason": ["no_receipt", "pending_limit", "unsupported_format", "invalid_image", "too_large", "busy", "storage_unavailable"] }
+    },
+    "tope_pendientes": "20 fotos sin ligar por cuenta; la 21ª responde pending_limit y no se guarda.",
+    "vinculo": "POST /api/mesas o POST /api/viajes/:id/tickets con ese `ocr_receipt` aceptado ligan la foto, en la misma transacción y sin campos nuevos en el cuerpo. Sin ligar, la foto vence a los 130 minutos (la vida del recibo, 2 h, más un margen) y se borra. Un recibo liga a lo primero que lo use."
+  },
+  "listados": {
+    "negociacion": "ticket_image_version=1",
+    "clave": "ticket_image",
+    "valor": { "thumb": "boolean", "full": "boolean (false si no se guardó o si ya venció en full_retained)" },
+    "rutas": [
+      "GET /api/mesas/open → mesas[].ticket_image",
+      "GET /api/mesas/mine → mesas[].ticket_image",
+      "GET /api/mesas/:code → mesa.ticket_image",
+      "GET /api/viajes/:id → viaje.tickets[].ticket_image",
+      "GET /api/viajes/:id/tickets/:tid y POST /api/viajes/:id/tickets → ticket.ticket_image",
+      "GET /api/viajes/visitas → visitas[].ticket_image"
+    ]
+  },
+  "lectura": {
+    "rutas": [
+      "GET /api/mesas/:code/ticket-image/thumb | full — mismas puertas que GET /api/mesas/:code (privateMesaVisibility + requireMesaParticipant; contract/mesa-acceso-v1.json)",
+      "GET /api/viajes/:id/tickets/:tid/ticket-image/thumb | full — el mismo acceso que el detalle del ticket (miembro activo que ve ese ticket; el personal de otro es el 404 de siempre)"
+    ],
+    "apagada": "con la constante en false, las dos rutas no existen: el 404 genérico de la app.",
+    "respuesta": "200 con los bytes (Content-Type image/webp), ETag fuerte y `Cache-Control: private, max-age=0, must-revalidate`, `Vary: Authorization`; 304 con If-None-Match. Sin foto, vencida, tipo desconocido o modo off: 404 {\"error\":\"ticket_image_not_found\"} sin ETag (en Viajes, sin acceso: el 404 propio del ticket).",
+    "sin_url_publica": true
+  },
+  "borrado": [
+    "con la mesa y con el ticket de viaje (CASCADE en la base)",
+    "con la cuenta que escaneó (anonimización: `efectos.se_borra.fotos_de_tickets`)",
+    "en el vaciado de datos de prueba",
+    "full_retained: la foto completa a los N días, por el timer",
+    "los objetos del almacenamiento: por la cola `ticket_image_object_deletions` (trigger), vaciada por lotes por el timer"
+  ]
+}

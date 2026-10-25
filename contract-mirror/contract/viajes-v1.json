@@ -412,6 +412,14 @@
         "409": { "error": "viaje_not_open", "claves": ["error", "estado"] }
       }
     },
+    "GET /api/viajes/:id/tickets/:tid/ticket-image/:tipo(thumb|full)": {
+      "since": "2.193.0 (D464, contract/ticket-image-v1.json; APAGADA por defecto)",
+      "respuestas": {
+        "200": { "cuerpo": "los bytes de la foto del ticket (image/webp)", "cabeceras": { "Cache-Control": "private, max-age=0, must-revalidate", "ETag": "fuerte", "Vary": "Authorization" } },
+        "304": { "cuando": "If-None-Match con el ETag vigente" },
+        "404": { "cuerpo": { "error": "viaje_not_found | viaje_ticket_not_found | ticket_image_not_found" }, "cuando": "el mismo acceso que el detalle del ticket (miembro activo que lo ve, en cualquier estado del viaje); con acceso y sin foto (o modo off), ticket_image_not_found sin ETag" }
+      }
+    },
     "GET /api/viajes/:id/foto": {
       "since": "2.174.0 (D255)",
       "respuestas": {
