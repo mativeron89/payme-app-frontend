@@ -1684,6 +1684,21 @@ html.app-de-inicio-ios .app {
 .puerta-legal .h2 { margin-bottom: 8px; }
 .puerta-legal-nota { color: var(--gray-txt); font-size: var(--fs-legacy-sm); }
 .puerta-legal .ingreso-entrar { margin-top: 12px; }
+/* 0.260.2 · la puerta se desplaza sola: alto fijo de la pantalla, scroll propio y la
+   tarjeta centrada con márgenes automáticos (si no entra, arranca arriba en vez de
+   cortarse por encima, que es lo que hace `justify-content: center`). */
+.puerta-legal-pantalla {
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  justify-content: flex-start;
+}
+.puerta-legal-pantalla > .puerta-legal { margin-block: auto; }
+.puerta-legal-mas { margin-top: 8px; }
+.puerta-legal-mas > summary { cursor: pointer; padding: 8px 0; color: var(--gray-txt); font-size: var(--fs-legacy-sm); }
+.puerta-legal-mas[open] > summary { margin-bottom: 4px; }
+.puerta-legal-mas > .legal-notice,
+.puerta-legal-mas > .privacidad-foto { margin-top: 8px; }
 .casillas-legales { margin: 8px 0 12px; }
 /* AF-USUARIO-ARROBA · decisión 93 · el campo del @ (puerta, Configuración y
    búsqueda en Amigos). Mismo borde, radio y 16 px que `.input`: 16 px evita el

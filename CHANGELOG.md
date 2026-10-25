@@ -1,3 +1,10 @@
+## 0.260.2 · 2026-10-24 (puerta legal que entra en pantalla)
+
+- Mati: «El aviso legal en chrome rompe la pantalla, no deja scrollear y ademas es muy grande». Con el panel de foto (D457) la puerta medía ~890 px y, centrada con `justify-content: center`, quedaba cortada arriba y abajo sin poder desplazarse (reproducido en 1280×720 y 390×844).
+- La pantalla de la puerta tiene su propio scroll y la tarjeta se centra con márgenes automáticos: si no entra, arranca arriba.
+- A la vista quedan el título, las dos casillas, el Aviso de Privacidad, «Continuar» y «Cerrar sesión». Las dos notas, el Aviso Simplificado y el permiso de foto pasan a «Más información» / «More information», sin cambiar ningún texto; revocar la foto antes de aceptar (D457) sigue a un toque.
+- E2E nuevo en Chrome 1280×720 y celular 390×844 (falla sin el arreglo de CSS); el de D457 abre «Más información» antes del permiso. D63 sigue abierto.
+
 ## 0.260.1 · 2026-10-24 (auditoría D462 · menores de Estadísticas)
 
 - «Meses completos»: si la lectura de la evolución falla, dice «No pudimos cargar la comparación. Intenta de nuevo más tarde.» / «We couldn't load the comparison. Try again later.». El 404 de un backend anterior y los datos no comparables conservan «No hay datos comparables…».

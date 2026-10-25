@@ -129,6 +129,8 @@ test('D457 · revoca desde PuertaLegal sin aceptar, navegar ni habilitar grant',
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   const puerta = page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' });
   await expect(puerta).toBeVisible();
+  // 0.260.2 · el permiso de foto vive en «Más información», a un toque.
+  await puerta.getByText('Más información', { exact: true }).click();
   const control = puerta.getByRole('switch', { name: ETIQUETA, exact: true });
   await expect(control).toBeEnabled();
   await control.click();
@@ -141,3 +143,35 @@ test('D457 · revoca desde PuertaLegal sin aceptar, navegar ni habilitar grant',
   expect((await espia(page)).grants).toBe(0);
   expect((await espia(page)).revokes).toBe(1);
 });
+
+for (const vp of [{ nombre: 'Chrome 1280×720', width: 1280, height: 720 }, { nombre: 'celular 390×844', width: 390, height: 844 }]) {
+  test(`0.260.2 · la puerta entra en pantalla y se desplaza (${vp.nombre})`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await omitirGuiaEnFixture(page);
+    await page.goto('/');
+    await instrumentar(page, { puerta: true, concedido: true, enabled: false });
+    await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+    await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+    const puerta = page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' });
+    await expect(puerta).toBeVisible();
+    const continuar = puerta.getByRole('button', { name: 'Continuar', exact: true });
+    // Plegada, la tarjeta entra entera: nada cortado arriba y «Continuar» a la vista.
+    const caja = await puerta.boundingBox();
+    expect(caja!.y).toBeGreaterThanOrEqual(0);
+    await expect(continuar).toBeInViewport();
+    // Desplegada (panel de foto y Simplificado abiertos) es más alta que la pantalla:
+    // no se corta por arriba y la rueda la desplaza hasta el final.
+    await puerta.getByText('Más información', { exact: true }).click();
+    await puerta.getByText('Aviso de Privacidad Simplificado', { exact: true }).click();
+    const abierta = await puerta.boundingBox();
+    expect(abierta!.y).toBeGreaterThanOrEqual(0);
+    expect(abierta!.height).toBeGreaterThan(vp.height);
+    const control = puerta.getByRole('switch', { name: ETIQUETA, exact: true });
+    await page.mouse.move(vp.width / 2, vp.height / 2);
+    await page.mouse.wheel(0, 5000);
+    await expect(control).toBeInViewport();
+    await page.mouse.wheel(0, -5000);
+    await expect(puerta.getByRole('heading', { name: 'Actualizamos nuestros documentos' })).toBeInViewport();
+  });
+}

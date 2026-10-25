@@ -152,7 +152,10 @@ export function PuertaLegalView({
   const { t } = useIdioma();
   const listo = aceptaMayor && aceptaTerminos;
   return (
-    <div className="login-screen">
+    // 0.260.2 · la pantalla de la puerta tiene su propio scroll y la tarjeta arranca
+    // arriba si no entra: con el panel de foto (D457) medía ~890 px y quedaba
+    // cortada arriba y abajo, sin poder desplazarla.
+    <div className="login-screen puerta-legal-pantalla">
       <section className="login-card puerta-legal" role="dialog" aria-modal="true" aria-labelledby="puerta-legal-titulo">
         <h1 id="puerta-legal-titulo" className="h2">{t('Actualizamos nuestros documentos')}</h1>
         <p className="body-text">{t('Para seguir usando PayMe, confirma lo siguiente:')}</p>
@@ -171,16 +174,6 @@ export function PuertaLegalView({
           {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
           <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
         </p>
-        <p className="body-text puerta-legal-nota">
-          {fotoOpcional
-            ? t('Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.')
-            : t('Al continuar, si tienes una foto de perfil, se mostrará a tus amigos y a quien organice una mesa en la que participes, como explica el Aviso de Privacidad.')}
-        </p>
-        <p className="body-text puerta-legal-nota">
-          {t('PayMe es sólo para personas de 18 años o más. Si no cumples con este requisito, no puedes seguir usando la app.')}
-        </p>
-        <AvisoSimplificado />
-        {privacidadFoto}
         {error && <div className="ingreso-error" role="alert">{error}</div>}
         <button type="button" className="ingreso-entrar" onClick={onContinuar} disabled={busy || !listo}>
           {busy ? t('Un segundo…') : t('Continuar')}
@@ -188,6 +181,21 @@ export function PuertaLegalView({
         <button type="button" className="login-toggle" onClick={onCerrarSesion} disabled={busy}>
           {t('Cerrar sesión')}
         </button>
+        {/* 0.260.2 · lo complementario va plegado: los mismos textos, el Simplificado y el
+            permiso de foto (revocable antes de aceptar, D457) siguen a un toque. */}
+        <details className="puerta-legal-mas">
+          <summary>{t('Más información')}</summary>
+          <p className="body-text puerta-legal-nota">
+            {fotoOpcional
+              ? t('Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.')
+              : t('Al continuar, si tienes una foto de perfil, se mostrará a tus amigos y a quien organice una mesa en la que participes, como explica el Aviso de Privacidad.')}
+          </p>
+          <p className="body-text puerta-legal-nota">
+            {t('PayMe es sólo para personas de 18 años o más. Si no cumples con este requisito, no puedes seguir usando la app.')}
+          </p>
+          <AvisoSimplificado />
+          {privacidadFoto}
+        </details>
       </section>
     </div>
   );
