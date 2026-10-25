@@ -1405,6 +1405,22 @@ export const EN: Record<string, string> = {
   "Cómo quedan el IVA ({0}) y el cargo por servicio ({1}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa": "How VAT ({0}) and the service charge ({1}) fit into what each person pays shows in «My share» once the table is created",
   "Cómo quedan el cargo por servicio ({0}) y el descuento ({1}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa": "How the service charge ({0}) and the discount ({1}) fit into what each person pays shows in «My share» once the table is created",
   "Cómo quedan el IVA ({0}), el cargo por servicio ({1}) y el descuento ({2}) en lo que paga cada uno se ve en «Mi parte» al crear la mesa": "How VAT ({0}), the service charge ({1}) and the discount ({2}) fit into what each person pays shows in «My share» once the table is created",
+  // D464 · D466 · la foto del ticket: la miniatura en Mesas (A), el visor (E) y el aviso provisorio del escaneo.
+  "Ver la foto del ticket de {0}": "See the receipt photo from {0}",
+  "Ver la foto del ticket": "See the receipt photo",
+  "Ticket {0} de {1} · {2}": "Receipt {0} of {1} · {2}",
+  "Foto del ticket de {0}": "Receipt photo from {0}",
+  "Cargando la foto…": "Loading the photo…",
+  "Esta foto ya no está disponible.": "This photo is no longer available.",
+  "No pudimos cargar la foto.": "We couldn't load the photo.",
+  "Ticket anterior": "Previous receipt",
+  "Ticket siguiente": "Next receipt",
+  "Pellizca o toca dos veces para hacer zoom.": "Pinch or double-tap to zoom.",
+  "Ver consumos": "See items",
+  "La foto completa se borró a los {0} días.": "The full photo was deleted after {0} days.",
+  "La foto completa ya se borró.": "The full photo has already been deleted.",
+  "De este ticket sólo se guardó una foto chica.": "Only a small photo of this receipt was saved.",
+  "PayMe guarda la foto de este ticket para que la veas después en Mesas.": "PayMe saves this receipt's photo so you can see it later in Tables.",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.

@@ -269,9 +269,32 @@ export const fotosEnMemoria = new FotosEnMemoria({
   },
 });
 
-/** Engancha el caché de la app a los cambios de sesión. Devuelve cómo soltarlo. */
+/**
+ * D464 · D466 · las fotos de los TICKETS, en su propio caché en memoria: pesan
+ * más que un avatar (la completa, hasta 600 KB), así que tienen un tope propio
+ * y no desplazan las fotos de las personas. Las mismas reglas: sólo memoria,
+ * dueño = la sesión, se vacía al cerrar sesión.
+ */
+export const MAXIMO_FOTOS_DE_TICKETS_EN_MEMORIA = 60;
+
+export const fotosDeTicketsEnMemoria = new FotosEnMemoria({
+  crearUrl: (blob) => URL.createObjectURL(blob),
+  revocarUrl: (url) => URL.revokeObjectURL(url),
+  duenoVigente: () => {
+    const sesion = loadSession();
+    return sesion ? duenoDeSesion(sesion) : null;
+  },
+  maximo: MAXIMO_FOTOS_DE_TICKETS_EN_MEMORIA,
+});
+
+/** Engancha los cachés de la app a los cambios de sesión. Devuelve cómo soltarlos. */
 export function vigilarFotosConLaSesion(): () => void {
-  return fotosEnMemoria.vigilarSesion(subscribeSession);
+  const soltarPersonas = fotosEnMemoria.vigilarSesion(subscribeSession);
+  const soltarTickets = fotosDeTicketsEnMemoria.vigilarSesion(subscribeSession);
+  return () => {
+    soltarPersonas();
+    soltarTickets();
+  };
 }
 
 export const claveAmigo = (friendId: string): string => `amigo:${friendId}`;

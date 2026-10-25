@@ -24,6 +24,7 @@ import type {
   TicketAdjustment,
   TicketTotals,
 } from './types';
+import { decodeFotoDelEscaneo } from './fotoDelTicket';
 import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
@@ -458,12 +459,18 @@ function ticketDatetimeOf(value: unknown): { date: string; time: string | null }
  */
 export function ocrResponse(
   value: unknown,
-  opciones: { readonly viaje?: boolean; readonly nombres?: boolean } = {},
+  opciones: { readonly viaje?: boolean; readonly nombres?: boolean; readonly fotoDelTicket?: boolean } = {},
 ): OcrResponse {
   const body = record(value);
   const version2 = body?.contract_version === 2;
+  // D464 · D466 · `ticket_image` sólo si se negoció `ticket_image_version=1`
+  // (la capacidad encendida); sin negociar, una clave de más sigue rompiendo.
   const allowed = version2
-    ? (opciones.viaje === true ? [...OCR_V2_KEYS, 'ticket_datetime'] : OCR_V2_KEYS)
+    ? [
+      ...OCR_V2_KEYS,
+      ...(opciones.viaje === true ? ['ticket_datetime'] : []),
+      ...(opciones.fotoDelTicket === true ? ['ticket_image'] : []),
+    ]
     : OCR_V1_KEYS;
   if (!body || (version2 && Object.keys(body).some((key) => !allowed.includes(key)))
       || (!version2 && body.contract_version !== undefined)
@@ -536,6 +543,10 @@ export function ocrResponse(
   }
 
   const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
+  // D464 · la foto del escaneo: ausente se tolera (un dueño anterior o el modo
+  // `off` no la publican); presente, con la forma exacta de cada rama.
+  const fotoDelEscaneo = version2 && body.ticket_image !== undefined ? decodeFotoDelEscaneo(body.ticket_image) : undefined;
+  if (fotoDelEscaneo === null) throw new ContractResponseError('ocr');
   const ticketDatetime = version2 && opciones.viaje === true ? ticketDatetimeOf(body.ticket_datetime) : undefined;
   if (ticketDatetime === null) throw new ContractResponseError('ocr');
   // En v1 las claves ni siquiera están permitidas (arriba).
@@ -579,6 +590,7 @@ export function ocrResponse(
     warnings: [...body.warnings] as OcrWarning[],
     mock: body.mock,
     ...(receipt !== undefined ? { receipt } : {}),
+    ...(fotoDelEscaneo ? { ticket_image: fotoDelEscaneo } : {}),
   };
 }
 

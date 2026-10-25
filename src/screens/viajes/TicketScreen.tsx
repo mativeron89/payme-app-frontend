@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { denominatorBps } from '../../api/mesaPresentation';
 import {
@@ -53,6 +53,10 @@ import './viajes.css';
 import './ticket.css';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 import { nombreDePlato } from '../../utils/nombreDePlato';
+import { tieneFoto, useCapacidadFotoDelTicket } from '../../api/fotoDelTicket';
+import { useFotoDelTicket, type OrigenDeFoto } from '../../api/fotosDeTickets';
+import type { StoredSession } from '../../api/storage';
+import { VisorDelTicket } from '../../components/VisorDelTicket';
 
 /**
  * AF-VIAJES · D242 · un ticket del viaje: elegir lo que consumí (1i), «Pagar
@@ -113,6 +117,16 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
 
   const ticket = estado.fase === 'listo' ? estado.ticket : null;
   const viaje = estado.fase === 'listo' ? estado.viaje : null;
+  // D466 · si la capacidad de la foto se enciende después de cargar (la config llegó tarde), se pide de nuevo.
+  const capacidadFoto = useCapacidadFotoDelTicket();
+  const sinNegociarFoto = ticket !== null && ticket.ticket_image === undefined;
+  const fotoReintentada = useRef(false);
+  useEffect(() => {
+    // Una sola vez: un dueño que no la publica aun negociada no provoca un bucle.
+    if (!capacidadFoto || !sinNegociarFoto || fotoReintentada.current) return;
+    fotoReintentada.current = true;
+    cargar(true);
+  }, [capacidadFoto, sinNegociarFoto, cargar]);
   const candidatos = useMemo(
     () => (ticket && viaje ? candidatosDelTicket(ticket.personas, viaje.miembros, t) : []),
     [ticket, viaje, t],
@@ -298,6 +312,7 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
           onGuardarPresentes={() => void guardarPresentes()}
           origen={origen}
           onCorregir={() => setCorrigiendo(true)}
+          foto={<FotoDelTicketDelViaje session={session} viajeId={viajeId} ticket={ticket} miembros={viaje.miembros} />}
         />
       ) : (
         <TicketEstadoVista
@@ -387,6 +402,8 @@ export interface TicketVistaProps {
   /** D278-3 · escaneado o gasto a mano (del ticket del viaje); sin saberlo, no se ofrece corregir. */
   origen?: OrigenTicket | null;
   onCorregir?: () => void;
+  /** D466 · E · la foto del ticket debajo del título (con la capacidad encendida y si hay); la arma la pantalla. */
+  foto?: ReactNode;
 }
 
 export function TicketVista(props: TicketVistaProps) {
@@ -399,6 +416,7 @@ export function TicketVista(props: TicketVistaProps) {
           <h1 className="title-card-title">{nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t)}</h1>
           <div className="title-card-sub">{subtituloDelTicket(ticket, miembros, idioma, t)}</div>
         </FilaDeTitulo>
+        {props.foto}
       </div>
       {ticket.forma === 'consumo' ? (
         <ConsumoVista {...props} />
@@ -797,5 +815,62 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
         );
       })}
     </div>
+  );
+}
+
+/**
+ * D466 · E · la foto del ticket de un viaje: con la capacidad encendida y si el
+ * dueño dice que hay miniatura, un botón con la miniatura debajo del título que
+ * abre el visor. Sin la capacidad (hoy) o sin foto, nada: la pantalla de siempre.
+ */
+function FotoDelTicketDelViaje({ session, viajeId, ticket, miembros }: {
+  session: StoredSession | null;
+  viajeId: string;
+  ticket: TicketDelViaje;
+  miembros: readonly MiembroViaje[];
+}) {
+  const { t, idioma } = useIdioma();
+  const capacidad = useCapacidadFotoDelTicket();
+  const visible = capacidad !== null && tieneFoto(ticket.ticket_image);
+  const origen = useMemo<OrigenDeFoto>(() => ({ tipo: 'viaje', viajeId, ticketId: ticket.id }), [viajeId, ticket.id]);
+  const miniatura = useFotoDelTicket(session, visible ? origen : null, 'thumb');
+  const [abierto, setAbierto] = useState(false);
+  const boton = useRef<HTMLButtonElement | null>(null);
+  if (!visible || !ticket.ticket_image || miniatura.estado === 'sin_foto') return null;
+  const lugar = nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t);
+  return (
+    <>
+      <button
+        ref={boton}
+        type="button"
+        className="vjt-foto-del-ticket"
+        aria-haspopup="dialog"
+        onClick={() => setAbierto(true)}
+      >
+        <span className="hist-foto vjt-foto-miniatura" aria-hidden="true">
+          {miniatura.url ? <img src={miniatura.url} alt="" draggable={false} /> : <Icon name="receipt" size={18} />}
+        </span>
+        <span>{t('Ver la foto del ticket')}</span>
+      </button>
+      {abierto && (
+        <VisorDelTicket
+          session={session}
+          tickets={[{
+            clave: ticket.id,
+            origen,
+            foto: ticket.ticket_image,
+            titulo: lugar,
+            monto: formatMXN(ticket.total_cents),
+            detalle: [subtituloDelTicket(ticket, miembros, idioma, t)],
+          }]}
+          indiceInicial={0}
+          titulo={() => t('Foto del ticket')}
+          onCerrar={() => setAbierto(false)}
+          // Los consumos están en esta misma pantalla: «Ver consumos» cierra el visor.
+          onVerConsumos={() => setAbierto(false)}
+          returnFocusRef={boton}
+        />
+      )}
+    </>
   );
 }

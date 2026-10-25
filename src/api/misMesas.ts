@@ -13,6 +13,8 @@
  * omite ese dato; nunca pinta «undefined».
  */
 
+import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
+
 export interface TuMesa {
   readonly id: string;
   readonly code: string;
@@ -36,6 +38,12 @@ export interface TuMesa {
    * objeto, `amountCents` queda en `null` y no se afirma un monto.
    */
   readonly eleccionInformativa: boolean;
+  /**
+   * D464 · D466 · la foto del ticket (`ticket_image: { thumb, full }`), sólo si
+   * se negoció `ticket_image_version=1` con la capacidad encendida. Ausente o
+   * rara ⇒ `null`: la fila muestra el ícono de siempre.
+   */
+  readonly fotoDelTicket?: FotoDelTicket | null;
 }
 
 export interface ItemPropioDeMesa {
@@ -124,6 +132,7 @@ function fila(raw: unknown): TuMesa | null {
   const eleccionInformativa = informativos !== null;
   const itemsCount = eleccionInformativa ? informativos : enteroNoNegativo(mine.items_count);
   const amountCents = eleccionInformativa ? null : enteroNoNegativo(mine.amount_cents);
+  const foto = decodeFotoDelTicket(raw.ticket_image);
   return {
     id,
     code,
@@ -141,6 +150,8 @@ function fila(raw: unknown): TuMesa | null {
     amountCents,
     items: itemsPropios(mine.items, divisionMode, itemsCount, amountCents),
     eleccionInformativa,
+    // Sólo si vino bien formada: sin la negociación la fila es la de siempre, byte por byte.
+    ...(foto ? { fotoDelTicket: foto } : {}),
   };
 }
 

@@ -99,6 +99,7 @@ import { leerParteDelDetalle, type ParteDelDetalle, type TipSetting } from '../a
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
 import { mensajeDeRechazo, mismaPropina, rechazoOcultaElSelector } from './propinaDeLaMesaView';
+import { useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -195,6 +196,8 @@ function lineTotalCents(it: EditItem): number | null {
 export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string | null } = {}) {
   const enViaje = viajeId !== null;
   const { t } = useIdioma();
+  // D464 · D466 · con la capacidad de la foto del ticket encendida (hoy, apagada), el escaneo avisa que se guarda.
+  const capacidadFoto = useCapacidadFotoDelTicket();
   /**
    * D363 · D367 · la mesa de ejemplo del tutorial pasa por acá (2a → 2d). Con el
    * ejemplo activo la foto no se lee, el ticket es el del ejemplo, «Continuar»
@@ -1983,6 +1986,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   ? t('Ajusta el marco para dejar sólo el ticket')
                   : t('Saca la foto del ticket completo, de cerca y con luz')}
           </div>
+          {/* D464 · D466 · 🔴 TEXTO PROVISORIO: se reemplaza por el que apruebe la abogada antes de encender. Sólo con
+              la capacidad encendida, que es cuando el escaneo negocia `ticket_image_version=1` y el dueño guarda la
+              foto; sin ella (hoy), nada nuevo. */}
+          {capacidadFoto && (
+            <p className="camara-sub captura-foto-guardada">
+              {t('PayMe guarda la foto de este ticket para que la veas después en Mesas.')}
+            </p>
+          )}
         </div>
         <div className="camara-foto-slot">
           {recortando ? (

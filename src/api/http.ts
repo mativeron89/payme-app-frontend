@@ -203,6 +203,7 @@ function rawOcrUploadRequest<T>(
   token: string,
   onProgress?: UploadProgressListener,
   viaje = false,
+  fotoDelTicket = false,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -218,7 +219,10 @@ function rawOcrUploadRequest<T>(
     // AF-VIAJES · D242 · `trip_version=1` sólo dentro de un viaje: el dueño firma
     // en el recibo la huella del ticket (el duplicado, 1k) y publica la fecha
     // impresa. Sin el viaje, el pedido de siempre, byte a byte.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}`);
+    // D464 · D466 · `ticket_image_version=1` SÓLO con la capacidad encendida: el
+    // dueño guarda la foto únicamente si el cliente lo pide, porque esta pantalla
+    // es la que avisa que se conserva. Sin la capacidad, el pedido de siempre.
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket ? '&ticket_image_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -356,10 +360,10 @@ export async function httpRequest<T>(
 export async function httpOcrUploadRequest<T>(
   body: FormData,
   onProgress?: UploadProgressListener,
-  opciones: { readonly viaje?: boolean } = {},
+  opciones: { readonly viaje?: boolean; readonly fotoDelTicket?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(undefined, (session) => (
-    rawOcrUploadRequest<T>(body, session.access_token, onProgress, opciones.viaje === true)
+    rawOcrUploadRequest<T>(body, session.access_token, onProgress, opciones.viaje === true, opciones.fotoDelTicket === true)
   ));
 }
 
@@ -433,6 +437,63 @@ export async function httpPrivateAvatarRequest(
       return validatePrivateAvatarBlob(blob);
     },
     { Accept: 'image/jpeg' },
+    'no-store',
+  ));
+}
+
+/**
+ * D464 · D466 · el tope de bytes que se acepta de una foto del ticket. El dueño
+ * publica hasta 40 KB la miniatura y 600 KB la completa
+ * (`contract/ticket-image-v1.json`, `capacidad.modos`); se deja holgura, pero
+ * no tanta como para que una respuesta rara llene la memoria.
+ */
+export const MAX_FOTO_DEL_TICKET_BYTES = { thumb: 64 * 1024, full: 1024 * 1024 } as const;
+
+/**
+ * D464 · D466 · `GET …/ticket-image/thumb|full` (App Backend 2.193.0, apagada):
+ * los bytes WebP de la foto del ticket, con la sesión que la pidió.
+ *
+ * - El dueño responde `private, max-age=0, must-revalidate`, con ETag y
+ *   `Vary: Authorization`. Se exige `private` y `Vary: Authorization`; sin
+ *   `private` la respuesta podría guardarse en una caché compartida.
+ * - El pedido va con `cache: 'no-store'`: la foto no queda en la caché HTTP del
+ *   navegador, sólo en la memoria de la sesión (`fotosDeTicketsEnMemoria`). Por
+ *   eso no se revalida con `If-None-Match`: cada entrada la vuelve a bajar.
+ * - Sólo `image/webp`, con su firma (`RIFF····WEBP`) y dentro del tope.
+ * - Un 404 (`ticket_image_not_found`, o el 404 propio de la mesa o el ticket)
+ *   llega como `HttpError` 404: «sin foto».
+ */
+export async function httpPrivateTicketImageRequest(
+  path: string,
+  tamano: 'thumb' | 'full',
+  expectedSession: StoredSession,
+  timeoutMs = 20_000,
+): Promise<Blob> {
+  const maximo = MAX_FOTO_DEL_TICKET_BYTES[tamano];
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<Blob>(
+    'GET', path, undefined, session.access_token, timeoutMs,
+    async (response) => {
+      const cacheControl = (response.headers.get('cache-control')?.toLowerCase() ?? '').split(',').map((p) => p.trim());
+      if (!cacheControl.includes('private')) throw new Error('ticket_image_cache_policy_invalid');
+      const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
+      if (!vary.includes('authorization')) throw new Error('ticket_image_vary_invalid');
+      if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'image/webp') {
+        throw new Error('ticket_image_media_type_invalid');
+      }
+      const contentLength = response.headers.get('content-length');
+      if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) < 1 || Number(contentLength) > maximo)) {
+        throw new Error('ticket_image_size_invalid');
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length < 12 || bytes.length > maximo
+          || (contentLength !== null && bytes.length !== Number(contentLength))) {
+        throw new Error('ticket_image_size_invalid');
+      }
+      const firma = String.fromCharCode(...bytes.subarray(0, 4)) + String.fromCharCode(...bytes.subarray(8, 12));
+      if (firma !== 'RIFFWEBP') throw new Error('ticket_image_signature_invalid');
+      return new Blob([bytes], { type: 'image/webp' });
+    },
+    { Accept: 'image/webp' },
     'no-store',
   ));
 }

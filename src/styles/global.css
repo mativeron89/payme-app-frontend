@@ -11024,3 +11024,275 @@ h1.pay-title-lbl {
 .privacidad-foto .btn { margin: 6px 0; }
 .legal-notice summary { cursor: pointer; padding: 10px 0; }
 .legal-notice a { overflow-wrap: anywhere; }
+
+/* ─── D466 · A · la miniatura del ticket en la fila de Mesas ───────────────
+   Donde va el ícono de la cocina va la foto, con la misma altura de fila: un
+   hueco del ancho de la miniatura dentro del botón de la fila y, encima, el
+   botón de la foto (dos botones hermanos: uno no puede ir dentro del otro).
+   Sin foto, la fila de siempre, sin este envoltorio. */
+.hist-row-con-foto {
+  position: relative;
+}
+
+.hist-foto-hueco {
+  flex: 0 0 34px;
+  height: 44px;
+}
+
+.hist-foto {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: var(--sp-4);
+  width: 34px;
+  height: 44px;
+  padding: 0;
+  overflow: hidden;
+  transform: translateY(-50%);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: zoom-in;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hist-foto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.hist-foto:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* ─── D466 · E · el visor del ticket, a pantalla completa ──────────────── */
+.visor-ticket {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--navy);
+  color: var(--white);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.visor-ticket-cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.visor-ticket-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: none;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.visor-ticket-titulo {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  text-align: center;
+  padding-right: var(--tap-min);
+}
+
+.visor-ticket-escenario {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  padding: var(--sp-4);
+}
+
+/* La foto llena el escenario sin deformarse (una de 320 px también): `contain`
+   sobre una caja del tamaño disponible, con tope de ancho para el escritorio. */
+.visor-ticket-foto {
+  width: 100%;
+  max-width: 560px;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+  transform-origin: center;
+  transition: transform 0.12s ease-out;
+  cursor: zoom-in;
+  -webkit-user-drag: none;
+}
+
+.visor-ticket-estado {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: center;
+  max-width: 280px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.visor-ticket-estado p {
+  margin: 0;
+}
+
+.visor-ticket-flecha {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--r-full);
+  /* Oscura y opaca: va encima del papel blanco del ticket. */
+  background: rgba(16, 30, 59, 0.82);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.visor-ticket-flecha--antes {
+  left: var(--sp-2);
+}
+
+.visor-ticket-flecha--despues {
+  right: var(--sp-2);
+}
+
+.visor-ticket-x:focus-visible,
+.visor-ticket-flecha:focus-visible,
+.visor-ticket-boton:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
+
+.visor-ticket-puntos {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--sp-2) 0;
+}
+
+.visor-ticket-puntos span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.visor-ticket-puntos span.on {
+  background: var(--white);
+}
+
+.visor-ticket-pie {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.visor-ticket-aviso {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.12);
+  font-size: var(--fs-sm);
+}
+
+.visor-ticket-resumen {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.visor-ticket-resumen b {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.visor-ticket-resumen small {
+  font-size: var(--fs-sm);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.visor-ticket-acciones {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--sp-3);
+}
+
+.visor-ticket-boton {
+  min-height: var(--tap-min);
+  border: none;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visor-ticket-foto {
+    transition: none;
+  }
+}
+
+/* D466 · el aviso provisorio de que la foto se guarda, junto a la captura
+   (hereda el color y la letra de `.camara-sub`). */
+.captura-foto-guardada {
+  margin-bottom: 0;
+}
+
+/* D466 · E · en el ticket de un viaje, la foto debajo del título (alineada a la
+   izquierda, como lo que va adentro de la tarjeta de título, D285). */
+.vjt-foto-del-ticket {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: zoom-in;
+}
+
+.vjt-foto-del-ticket .vjt-foto-miniatura {
+  position: static;
+  flex: 0 0 34px;
+  transform: none;
+}
+
+.vjt-foto-del-ticket:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}

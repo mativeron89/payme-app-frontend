@@ -136,6 +136,13 @@ import {
 } from './linkDeInvitacion';
 import * as mockLink from './mock/linkDeInvitacion';
 import {
+  aplicarConfigFotoDelTicket,
+  fotoDelTicketHabilitada,
+  PARAMETRO_FOTO_DEL_TICKET,
+  VALOR_FOTO_DEL_TICKET,
+} from './fotoDelTicket';
+import { conFotoDelTicketDeViajeMock } from './mock/fotoDelTicketMock';
+import {
   applyUsernameConfig,
   decodeEstadoUsername,
   decodeResultadosArroba,
@@ -774,6 +781,8 @@ const realApi: Api = {
     aplicarConfigViajes(config);
     // AF-LINK-DE-INVITACION · la capacidad del link de invitación, igual.
     aplicarConfigLinkDeInvitacion(config);
+    // D464 · D466 · la capacidad de la foto del ticket, igual (apagada hoy).
+    aplicarConfigFotoDelTicket(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -950,6 +959,8 @@ const realApi: Api = {
     if (params?.limit != null) qs.set('limit', String(params.limit));
     if (params?.cursor) qs.set('cursor', params.cursor);
     if (params?.detail) qs.set('detail', params.detail);
+    // D464 · D466 · la foto del ticket de cada mesa, sólo con la capacidad encendida.
+    if (fotoDelTicketHabilitada()) qs.set(PARAMETRO_FOTO_DEL_TICKET, VALOR_FOTO_DEL_TICKET);
     const s = qs.toString();
     return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`));
   },
@@ -991,8 +1002,13 @@ const realApi: Api = {
     // AF-VIAJES · el viaje sólo se pide con la capacidad encendida (el dueño lo ignora si no).
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
+    // D464 · D466 · la foto del ticket se negocia sólo con la capacidad encendida.
+    const fotoDelTicket = fotoDelTicketHabilitada();
     // AF-NOMBRES-CORREGIDOS · el pedido siempre negocia `names_version=1`.
-    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje }), { viaje, nombres: true });
+    return ocrResponse(
+      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket }),
+      { viaje, nombres: true, fotoDelTicket },
+    );
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -1444,9 +1460,12 @@ const realApi: Api = {
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
+    // D464 · D466 · la foto del ticket, sólo con la capacidad encendida (strings fijos, sin interpolar).
+    const foto = fotoDelTicketHabilitada();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`,
-    ));
+      'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`
+        + (foto ? '&ticket_image_version=1' : ''),
+    ), 'viajes.ticket', foto);
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();
@@ -1546,6 +1565,7 @@ const mockApi: Api = {
     aplicarConfigOcultar(config);
     aplicarConfigViajes(config);
     aplicarConfigLinkDeInvitacion(config);
+    aplicarConfigFotoDelTicket(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1648,7 +1668,9 @@ const mockApi: Api = {
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
   getHistory: (params) => mock.mockHistory(params),
-  getMyMesas: async (params) => decodeMisMesas(await mock.mockMisMesas(params)),
+  getMyMesas: async (params) => decodeMisMesas(await mock.mockMisMesas(
+    fotoDelTicketHabilitada() ? { ...params, ticketImage: true } : params,
+  )),
   getMovement: async (id) => decodeMovementDetailResponse(await mock.mockMovement(id)),
 
   getOpenMesas: () => mock.mockOpenMesas(),
@@ -1660,7 +1682,8 @@ const mockApi: Api = {
   scanTicket: async (_image, _onUploadProgress, opciones) => {
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
-    return ocrResponse(await mock.mockScanTicket({ viaje, nombres: true }), { viaje, nombres: true });
+    const fotoDelTicket = fotoDelTicketHabilitada();
+    return ocrResponse(await mock.mockScanTicket({ viaje, nombres: true, fotoDelTicket }), { viaje, nombres: true, fotoDelTicket });
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -1883,7 +1906,9 @@ const mockApi: Api = {
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
-    return decodeTicketDelViaje(await mockViajes.mockVerTicket(id, ticketId, { version: 11 }));
+    const foto = fotoDelTicketHabilitada();
+    const raw = await mockViajes.mockVerTicket(id, ticketId, { version: 11 });
+    return decodeTicketDelViaje(foto ? conFotoDelTicketDeViajeMock(raw) : raw, 'viajes.ticket', foto);
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();

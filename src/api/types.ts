@@ -3,6 +3,7 @@
  * Fuente de verdad: contract-mirror/ (schemas/index.js + routes/*.js).
  * Regla: NO inventar campos. Cada tipo cita la ruta de la que sale.
  */
+import type { FotoDelEscaneo } from './fotoDelTicket';
 
 // ─── Auth (routes/auth.js) ─────────────────────────────────
 
@@ -271,6 +272,8 @@ export interface AppConfig {
     hide_from_app?: unknown;
     /** AF-VIAJES · D242 · v2.171.0 · `{ supported, enabled }`; se decodifica cerrado en `viajes.ts`. */
     viajes?: unknown;
+    /** D464 · D466 · v2.193.0 · la foto del ticket; se decodifica cerrada en `fotoDelTicket.ts`. Hoy, ausente. */
+    ticket_image?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *
@@ -1130,6 +1133,12 @@ export interface OcrResponse {
    * impresa del ticket y, si se leyó, la hora. Sin fecha leída, ausente.
    */
   ticket_datetime?: { date: string; time: string | null };
+  /**
+   * D464 · sólo con `ticket_image_version=1` (la capacidad de la foto del
+   * ticket encendida): si la foto quedó guardada, pendiente de la mesa, o por
+   * qué no. Ausente con la capacidad apagada.
+   */
+  ticket_image?: FotoDelEscaneo;
   warnings: OcrWarning[];
   mock: boolean;
   /**

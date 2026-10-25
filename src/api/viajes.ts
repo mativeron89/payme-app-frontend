@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { extractApiError } from './errors';
+import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
 
 /**
  * AF-VIAJES · decisión 242 de Mati, D240 punto 17, Roadmap n338 · App Backend
@@ -357,6 +358,12 @@ export interface TicketDelViaje {
    * Es la misma condición que `puedo_marcar_presentes` desde la 6.
    */
   readonly puedo_corregir: boolean;
+  /**
+   * D464 · D466 · la foto del ticket, sólo en `GET …/tickets/:tid` y sólo si se
+   * negoció `ticket_image_version=1` (la capacidad encendida). Sin negociar, o
+   * con un dueño que no la publica, `null`.
+   */
+  readonly ticket_image?: FotoDelTicket | null;
 }
 
 /** Quién cargó (y pagó) un ticket que ya estaba en el viaje (diseño 1k). */
@@ -832,11 +839,21 @@ function presentesDe(raw: unknown, e: string): readonly string[] {
   return ids;
 }
 
-function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
-  const t = objeto(raw, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
-    'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
-    'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal', 'servicio_cents', 'descuentos_cents',
-    'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents', 'puedo_corregir'], e);
+const CLAVES_TICKET_DETALLE = ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
+  'monto_cents', 'pagado_por', 'pagaste_tu', 'items', 'personas', 'te_toca_cents', 'sin_repartir_cents',
+  'puedo_elegir', 'puedo_marcar_presentes', 'pagadores', 'personal', 'servicio_cents', 'descuentos_cents',
+  'iva_aparte_cents', 'total_cents', 'te_toca_platos_cents', 'puedo_corregir'] as const;
+
+/**
+ * D464 · D466 · con `conFoto` (se negoció `ticket_image_version=1`) el ticket
+ * PUEDE traer `ticket_image` con la forma exacta `{ thumb, full }`; sin
+ * negociar, esa clave de más rompe como cualquier otra.
+ */
+function ticketDetalle(raw: unknown, e: string, conFoto = false): TicketDelViaje {
+  const conClave = conFoto && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
+  const t = objeto(raw, conClave ? [...CLAVES_TICKET_DETALLE, 'ticket_image'] : CLAVES_TICKET_DETALLE, e);
+  const foto = conClave ? decodeFotoDelTicket(t.ticket_image) : null;
+  exigir(!conClave || foto !== null, e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
     && textoONull(t.pagado_por) && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents)
@@ -861,13 +878,18 @@ function ticketDetalle(raw: unknown, e: string): TicketDelViaje {
   }, 40);
   // D278-2 · con la 9, los pagadores suman el total impreso.
   const pagadores = pagadoresDe(t.pagadores, t.total_cents as number, t.pagado_por, e);
-  return { ...(t as unknown as TicketDelViaje), items, personas, pagadores };
+  const base = { ...(t as unknown as TicketDelViaje), items, personas, pagadores };
+  if (!conClave) return base;
+  return { ...base, ticket_image: foto };
 }
 
-/** `GET …/tickets/:tid`, `PUT …/seleccion`, `PUT …/presentes` → `{ contract, ticket }`. */
-export function decodeTicketDelViaje(raw: unknown, endpoint = 'viajes.ticket'): TicketDelViaje {
+/**
+ * `GET …/tickets/:tid`, `PUT …/seleccion`, `PUT …/presentes` → `{ contract, ticket }`.
+ * D464 · `conFoto` sólo en el GET que negoció `ticket_image_version=1`.
+ */
+export function decodeTicketDelViaje(raw: unknown, endpoint = 'viajes.ticket', conFoto = false): TicketDelViaje {
   const b = cuerpo(raw, ['ticket'], endpoint);
-  return ticketDetalle(b.ticket, endpoint);
+  return ticketDetalle(b.ticket, endpoint, conFoto);
 }
 
 /** D278-3 · `PATCH …/tickets/:tid` → `{ contract, ticket }`, con la forma de `GET …/tickets/:tid`. */

@@ -1,4 +1,5 @@
 import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
+import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock } from '../fotoDelTicket';
 import { CLOSURE_CHANGED, CLOSURE_REQUIRED } from '../selectionClosure';
 import type {
   GoogleContinueLinkRequest,
@@ -982,6 +983,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
       viajes: { supported: true, enabled: viajesMockEncendido() },
       // AF-LINK-DE-INVITACION · v2.173.0 · el bloque se sirve siempre, como el dueño; `enabled` sólo con el seam.
       invite_link: { supported: true, enabled: linkDeInvitacionMockEncendido() },
+      // D464 · D466 · v2.193.0 (PR72) · seam `payme.app.mock.ticket_image.v1`: sin él, el bloque no existe (el
+      // backend de hoy); `apagado`, el del dueño con su constante en `false`; `encendido`, 90 días + miniatura (D465).
+      ...(capacidadFotoDelTicketMock() === undefined ? {} : { ticket_image: capacidadFotoDelTicketMock() }),
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -2242,7 +2246,9 @@ function mineDeMockMesa(m: MockMesa, withItems: boolean): {
   return { items_count: items, amount_cents: monto, ...(withItems ? { items: detail } : {}) };
 }
 
-export async function mockMisMesas(params?: { cursor?: string; limit?: number; detail?: 'items' }): Promise<unknown> {
+export async function mockMisMesas(
+  params?: { cursor?: string; limit?: number; detail?: 'items'; ticketImage?: boolean },
+): Promise<unknown> {
   const seam = leerSeam(CLAVE_MIS_MESAS);
   if (seam === 'error') return fail(500, 'internal_error');
   // AF-BORRAR-MESAS · la mesa borrada de la app (M o MH) no se lista.
@@ -2250,9 +2256,27 @@ export async function mockMisMesas(params?: { cursor?: string; limit?: number; d
   const todas = todasMisMesasMock(params?.detail === 'items').filter((m) => !(m.code in ocultas.mesas));
   const limit = Math.min(Math.max(params?.limit ?? 20, 1), 50);
   const desde = params?.cursor ? Number(atob(params.cursor)) || 0 : 0;
-  const pagina = todas.slice(desde, desde + limit);
+  // D464 · como el dueño 2.193.0: `ticket_image` sólo con la negociación y el modo encendido.
+  const conFoto = params?.ticketImage === true && fotoDelTicketMockEncendida();
+  const pagina = todas.slice(desde, desde + limit)
+    .map((m) => (conFoto ? { ...m, ticket_image: fotoDeMesaMock(m.code) } : m));
   const siguiente = desde + limit < todas.length ? btoa(String(desde + limit)) : null;
   return delay({ mesas: pagina, page: { limit, next_cursor: siguiente } });
+}
+
+/**
+ * D464 · D466 · las fotos de los tickets del mock, para ver los tres estados con
+ * el seam `mis_mesas = sin_cobro`: Café Tacuba con la foto completa, Tacos El
+ * Güero sólo con la miniatura (la completa «se borró a los 90 días») y las
+ * mesas del seed sin foto (cargadas a mano: el ícono de siempre).
+ */
+const FOTOS_DE_MESAS_MOCK: Readonly<Record<string, { thumb: boolean; full: boolean }>> = {
+  'PA-6604': { thumb: true, full: true },
+  'PA-7310': { thumb: true, full: false },
+};
+
+export function fotoDeMesaMock(code: string): { thumb: boolean; full: boolean } {
+  return FOTOS_DE_MESAS_MOCK[code] ?? { thumb: false, full: false };
 }
 
 /** Todas las mesas de `/mesas/mine` (con los fixtures del seam), sin filtrar lo oculto ni paginar. */
@@ -2753,7 +2777,26 @@ function nombresCorregidosMock(): boolean {
   return leerSeam('payme.app.mock.ocr.nombres.v1') === 'corregidos';
 }
 
+/**
+ * D464 · D466 · con `fotoDelTicket` (la capacidad encendida, seam
+ * `payme.app.mock.ticket_image.v1 = encendido`) la respuesta suma
+ * `ticket_image`, como el dueño 2.193.0: guardada si hubo recibo; sin recibo,
+ * `no_receipt` (la foto se ata al recibo). La lectura nunca falla por la foto.
+ */
 export async function mockScanTicket(
+  opciones: { readonly viaje?: boolean; readonly nombres?: boolean; readonly fotoDelTicket?: boolean } = {},
+): Promise<OcrResponse> {
+  const lectura = await mockScanTicketSinFoto(opciones);
+  if (opciones.fotoDelTicket !== true || lectura.contract_version !== 2) return lectura;
+  return {
+    ...lectura,
+    ticket_image: lectura.receipt !== undefined
+      ? { stored: true, thumb: true, full: true }
+      : { stored: false, reason: 'no_receipt' },
+  };
+}
+
+async function mockScanTicketSinFoto(
   opciones: { readonly viaje?: boolean; readonly nombres?: boolean } = {},
 ): Promise<OcrResponse> {
   // El ticket de LA PAROLACCIA del mock del backend (`routes/ocr.js`), con UNA
