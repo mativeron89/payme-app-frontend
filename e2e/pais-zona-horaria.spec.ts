@@ -224,7 +224,9 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
             const formatter = new Intl.DateTimeFormat('en-US', { timeZone: z, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset' });
             const parts = formatter.formatToParts(new Date(reloj.getAttribute('datetime')!));
             return {
-              oracle: { offset: parts.find((part) => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC').replace('-', '−'),
+              // 0.260.2 · desfase cero: Intl puede decir «GMT» o «GMT+0» (Atlantic/Canary en invierno);
+              // la app muestra «UTC» a propósito (`utcOffsetLabel`), así que el oráculo normaliza igual.
+              oracle: { offset: parts.find((part) => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC').replace('-', '−').replace(/^UTC[+−]0$/, 'UTC'),
                 time: parts.find((part) => part.type === 'hour')!.value + ':' + parts.find((part) => part.type === 'minute')!.value },
               offset: el.querySelector('strong')!.textContent,
               time: reloj.textContent,

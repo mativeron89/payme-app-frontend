@@ -4,6 +4,7 @@
 - La pantalla de la puerta tiene su propio scroll y la tarjeta se centra con márgenes automáticos: si no entra, arranca arriba.
 - A la vista quedan el título, las dos casillas, el Aviso de Privacidad, «Continuar» y «Cerrar sesión». Las dos notas, el Aviso Simplificado y el permiso de foto pasan a «Más información» / «More information», sin cambiar ningún texto; revocar la foto antes de aceptar (D457) sigue a un toque.
 - E2E nuevo en Chrome 1280×720 y celular 390×844 (falla sin el arreglo de CSS); el de D457 abre «Más información» antes del permiso. D63 sigue abierto.
+- Prueba de zonas horarias (D169): con el fin del horario de verano europeo (25/10) Canarias pasó a UTC+0 e `Intl` lo nombra «GMT+0»; el oráculo ahora normaliza el desfase cero a «UTC», como la app. Sin cambios de producto.
 
 ## 0.260.1 · 2026-10-24 (auditoría D462 · menores de Estadísticas)
 
