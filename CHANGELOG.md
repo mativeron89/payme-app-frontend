@@ -1,3 +1,8 @@
+## 0.261.1 · 2026-10-25 (D468 · Configuración sin el permiso de foto)
+
+- Mati: «Quitalo, después vemos cómo lo incorporamos y dónde, pero queda horrible.» Configuración deja de mostrar «Mostrar mi foto a personas que no son mis amigos» (`MOSTRAR_PERMISO_FOTO_EN_CONFIGURACION = false` en MasScreen). El componente, su lógica, la puerta legal y el backend quedan intactos para reincorporarlo. El error «No pudimos confirmar el estado del permiso» era CORS y lo corrige el backend 2.193.1.
+- E2E: se quitan los cuatro casos que entraban por Configuración (quedan en el historial; la guarda del repo no admite skips permanentes); uno nuevo fija que el bloque no está y que no se consulta el permiso. El panel sigue cubierto por sus unitarias y por la puerta legal.
+
 ## 0.261.0 · 2026-10-25 (D464/D465/D466 · foto del ticket: miniatura en Mesas y visor, APAGADO)
 
 - Mati eligió guardar la foto completa 90 días más una miniatura (D465) y, para mostrarla, «Vamos por AE» (D466): la miniatura del ticket en lugar del ícono de la cocina en la fila de Mesas (A) y un visor a pantalla completa (E).

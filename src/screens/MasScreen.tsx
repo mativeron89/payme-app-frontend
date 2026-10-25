@@ -23,6 +23,9 @@ import { pedirInstalacion, tieneGuia, type PlataformaConGuia } from '../instalar
 import { AccesoGuia } from '../ayuda/AccesoGuia';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 
+/** D468 · el permiso de foto (D457) no se muestra en Configuración hasta decidir dónde va. */
+export const MOSTRAR_PERMISO_FOTO_EN_CONFIGURACION = false;
+
 /**
  * **`Configuración`** — la quinta posición de la barra.
  *
@@ -216,7 +219,8 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
-        {session && <PrivacidadFotoPanel session={session} />}
+        {/* D468 · Mati: «Quitalo, después vemos cómo lo incorporamos y dónde». El componente y su lógica quedan. */}
+        {session && MOSTRAR_PERMISO_FOTO_EN_CONFIGURACION && <PrivacidadFotoPanel session={session} />}
         <AccesoGuia />
         {IS_MOCK && (
           <button

@@ -58,68 +58,6 @@ async function instrumentar(page: Page, opciones: { enabled?: boolean; concedido
   }, { aviso, opciones });
 }
 
-async function configuracion(page: Page, opciones: Parameters<typeof instrumentar>[1] = {}) {
-  await ingresar(page);
-  const acuse = page.getByLabel('Actualización del Aviso de Privacidad');
-  await acuse.getByRole('button', { name: 'Entendido', exact: true }).click();
-  await expect(acuse).toHaveCount(0);
-  await instrumentar(page, opciones);
-  await irEnLaApp(page, '/mas');
-  await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-}
-
-test('D457 · off inicial, acción por teclado y estado confirmado; doble gesto no duplica el POST', async ({ page }) => {
-  await configuracion(page);
-  const control = page.getByRole('switch', { name: ETIQUETA, exact: true });
-  await expect(control).toBeEnabled();
-  await expect(control).toHaveAttribute('aria-checked', 'false');
-  expect((await espia(page)).grants).toBe(0);
-  await page.evaluate(() => { (window as unknown as { __d457: Espia }).__d457.modo = 'pendiente'; });
-  await control.focus();
-  await page.keyboard.press('Space');
-  await expect(control).toBeDisabled();
-  await expect(control).toHaveAttribute('aria-checked', 'false');
-  await page.keyboard.press('Space');
-  await expect.poll(async () => (await espia(page)).grants).toBe(1);
-  await page.evaluate(() => { (window as unknown as { __d457: Espia }).__d457.soltar?.(); });
-  await expect(control).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByText('Permiso activado', { exact: true })).toBeVisible();
-  await control.click();
-  await expect(control).toHaveAttribute('aria-checked', 'false');
-  expect((await espia(page)).revokes).toBe(1);
-});
-
-test('D457 · backend viejo mantiene Configuración accesible y no ofrece grants', async ({ page }) => {
-  await configuracion(page, { viejo: true });
-  await expect.poll(async () => (await espia(page)).lecturas).toBeGreaterThan(0);
-  await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
-  await expect(page.getByRole('switch', { name: ETIQUETA, exact: true })).toHaveCount(0);
-  expect((await espia(page)).grants).toBe(0);
-});
-
-test('D457 · capability apagada no impide revocar un grant previo', async ({ page }) => {
-  await configuracion(page, { enabled: false, concedido: true });
-  const control = page.getByRole('switch', { name: ETIQUETA, exact: true });
-  await expect(control).toBeEnabled();
-  await control.click();
-  await expect(control).toHaveAttribute('aria-checked', 'false');
-  await expect(control).toBeDisabled();
-  expect((await espia(page)).grants).toBe(0);
-});
-
-test('D457 · respuesta ambigua se concilia con una lectura, sin repetir el cambio', async ({ page }) => {
-  await configuracion(page);
-  const control = page.getByRole('switch', { name: ETIQUETA, exact: true });
-  await expect(control).toBeEnabled();
-  const antes = (await espia(page)).lecturas;
-  await page.evaluate(() => { (window as unknown as { __d457: Espia }).__d457.modo = 'ambiguo'; });
-  await control.click();
-  await expect(page.getByRole('alert')).toContainText('El estado mostrado corresponde a una nueva consulta.');
-  await expect(control).toHaveAttribute('aria-checked', 'true');
-  expect((await espia(page)).grants).toBe(1);
-  expect((await espia(page)).lecturas).toBe(antes + 1);
-});
-
 test('D457 · revoca desde PuertaLegal sin aceptar, navegar ni habilitar grant', async ({ page }) => {
   await omitirGuiaEnFixture(page);
   await page.goto('/');
@@ -175,3 +113,17 @@ for (const vp of [{ nombre: 'Chrome 1280×720', width: 1280, height: 720 }, { no
     await expect(puerta.getByRole('heading', { name: 'Actualizamos nuestros documentos' })).toBeInViewport();
   });
 }
+
+// D468 · los cuatro casos que entraban por Configuración se quitaron con el bloque (están en el historial de git,
+// 0.261.0); el panel sigue cubierto por PrivacidadFotoPanel.test.tsx y por los casos de la puerta legal.
+test('D468 · Configuración no muestra el permiso de foto (el componente queda para reincorporarlo)', async ({ page }) => {
+  await ingresar(page);
+  const acuse = page.getByLabel('Actualización del Aviso de Privacidad');
+  if (await acuse.count()) await acuse.getByRole('button', { name: 'Entendido', exact: true }).click();
+  await instrumentar(page, {});
+  await irEnLaApp(page, '/mas');
+  await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await expect(page.getByRole('switch', { name: ETIQUETA, exact: true })).toHaveCount(0);
+  await expect(page.getByText('No pudimos confirmar el estado del permiso.')).toHaveCount(0);
+  expect((await espia(page)).lecturas).toBe(0);
+});
