@@ -48,9 +48,14 @@ async function capturar(page: Page, nombre: string, mostrar?: ReturnType<Page['l
 }
 
 const MENOS = '−';
-const desglose = (page: Page) => page.getByRole('region', { name: 'Cómo se arma tu parte' });
+/** D469 · el desglose es el desplegable «Tu parte» (antes la tarjeta «Cómo se arma tu parte»). */
+const desglose = (page: Page) => page.getByRole('region', { name: 'Tu parte', exact: true });
 
+/** D469 · «Tu parte» arranca cerrado: lo abre si hace falta y lee sus renglones. */
 async function filasDelDesglose(page: Page): Promise<string[]> {
+  const cabecera = desglose(page).locator('.desplegable-cabecera');
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
   return desglose(page).locator('.mi-parte-desglose-fila').evaluateAll((filas) =>
     filas.map((f) => (f as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
 }
@@ -80,8 +85,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
-    // D360-4b · en la página, lo que quedó fijado; el selector, en el engranaje.
-    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toBeVisible();
+    // D360-4b · el selector, en el engranaje. D469 · la línea «Propina de la mesa» ya no está en la página.
+    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toHaveCount(0);
     await expect(selectorDePropina(page)).toHaveCount(0);
     await abrirConfiguracionDeLaMesa(page);
     // En «Tu mesa» el mismo selector, con lo que quedó guardado.
@@ -92,7 +97,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       'Tus platos $210',
       'Descuento y cargos del ticket $8.75',
       'Propina (10 % de la mesa) $19.75',
-      'Tu parte $238.50',
+      'Total $238.50',
     ]);
     // D360 · P47 · la propina en negrita, rótulo y monto. Control positivo: «Tus platos», en el mismo desglose, no lo
     // está (la medición distingue).
@@ -131,7 +136,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       'Tus platos $195',
       `Descuento ${MENOS}$11.61`,
       'Propina (15 % de la mesa) $27.51',
-      'Tu parte $210.90',
+      'Total $210.90',
     ]);
     await capturar(page, 'd344-04-mi-parte-consumo', desglose(page));
 
@@ -144,7 +149,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     expect(await filasDelDesglose(page)).toEqual([
       'Tus platos $195',
       'Propina (15 % de la mesa) $29.25',
-      'Tu parte $224.25',
+      'Total $224.25',
     ]);
     await capturar(page, 'd344-05-aviso-mesa-corregida');
     await capturar(page, 'd344-05b-mesa-corregida-desglose', desglose(page));
@@ -173,7 +178,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       'Tus platos $195',
       `Descuento ${MENOS}$11.61`,
       'Propina (15 % de la mesa) $27.51',
-      'Tu parte $210.90',
+      'Total $210.90',
     ]);
     await capturar(page, 'd344-06-no-organizador');
   });

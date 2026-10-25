@@ -1386,7 +1386,6 @@ export const EN: Record<string, string> = {
   "Esta mesa ya no está disponible.": "This table is no longer available.",
   "No pudimos guardar ese monto. Revisa la propina.": "We couldn't save that amount. Check the tip.",
   "No pudimos guardar la propina.": "We couldn't save the tip.",
-  "Cómo se arma tu parte": "How your share adds up",
   "Descuento y cargos del ticket": "Discount and receipt charges",
   "Redondeo": "Rounding",
   "Como la mesa se corrigió, los ajustes del ticket no se aplicaron y la propina va sobre los platos.": "Because the table was corrected, the receipt adjustments weren't applied and the tip is on the dishes.",

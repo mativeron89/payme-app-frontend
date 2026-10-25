@@ -53,7 +53,9 @@ for (const mode of ['consumo', 'igual'] as const) {
 test('n422 inglés: Escape devuelve foco y Enter confirma sólo desde Save and close', async ({ page }) => {
   const code = await preparar(page, 'consumo');
   await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
-  await page.reload(); await expect(page.locator('.qc-renglon').first()).toBeVisible();
+  // D469 · «My items» arranca cerrado: se abre por su cabecera (el helper espera los títulos en español).
+  await page.reload(); await page.locator('.desplegable.tus-consumos .desplegable-cabecera').click();
+  await expect(page.locator('.qc-renglon').first()).toBeVisible();
   await elegirTodo(page); const done = page.getByRole('button', { name: 'Done', exact: true });
   await done.click(); const dialog = page.getByRole('dialog', { name: 'This closes the table' });
   await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Review', exact: true })).toBeFocused();

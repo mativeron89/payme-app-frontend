@@ -66,7 +66,8 @@ test.describe('Continuar en la mesa (H-14)', () => {
 
     // Sin tocar ningún ítem: la fila ya dice "Mi parte" con el casillero.
     await expect(page.getByText('Mi parte')).toBeVisible();
-    await expect(page.getByText('$155').first()).toBeVisible();
+    // D469 · el monto de la barra de abajo (en «Tu parte», cerrado al abrir, también está, oculto).
+    await expect(page.locator('.mi-parte').getByText('$155').first()).toBeVisible();
 
     // 🔴 CORTE · el círculo es «Listo», habilitado, y el vacío también viaja
     // como reemplazo explícito. Con el guardado OK vuelve a Inicio (decisión

@@ -141,8 +141,8 @@ const ESPERADO: Record<string, Esperado> = {
   '03': { icono: 'escudo', titulo: 'Garantiza la mesa' },
   '04': { icono: 'banco', titulo: 'Tu banco pide confirmar' },
   '05': { icono: 'compartir', titulo: 'Compartir la mesa' },
-  // D360-4b · el organizador ve el engranaje en lugar de la tienda (excepción a la fila 6).
-  '06': { icono: 'engranaje', titulo: 'Tu mesa' },
+  // D469 · el cuadro vuelve a ser la tienda (fila 6); el engranaje del organizador pasó arriba a la derecha.
+  '06': { icono: 'tienda', titulo: 'Tu mesa' },
   '07': { icono: 'cubiertos', titulo: '¿Qué consumiste?' },
   '08': { icono: 'tarjeta', titulo: 'Pagar mi parte' },
   '09': { icono: 'check', fondo: NARANJA, titulo: '¡Listo!' },

@@ -3,6 +3,7 @@ import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { hastaCompartir, pedidosDePropina, selectorDePropina } from './fixtures/mi-parte-d344';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * D360 · los cambios que pidió Mati después de probar la app (0.253.0). Acá van
@@ -236,6 +237,8 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    // D469 · «Tus consumos» arranca cerrado.
+    await abrirTusConsumos(page);
     // Se eligen todos los platos con precio; el agua ($0) queda sin elegir. Control: son los seis con precio.
     const conPrecio = page.locator('.qc-lista .qc-renglon').filter({ hasNotText: 'Agua mineral' });
     await expect(conPrecio).toHaveCount(6);
@@ -301,6 +304,8 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
     await platosEnMayusculas(page);
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+    // D469 · «Tus consumos» arranca cerrado.
+    await abrirTusConsumos(page);
     const nombre = (crudo: string) => page.locator(`.qc-renglon[data-plato="${crudo}"] .qc-nombre`);
     // `data-plato` sigue con lo guardado; lo que se ve, con mayúscula inicial.
     await expect(nombre('100 HUGEL COPA')).toHaveText('100 Hugel copa');
@@ -422,7 +427,7 @@ test.describe('D368 · el «Escanear» de la barra abre el menú del teléfono',
 // ─── D360-4b · el engranaje de «Tu mesa» ────────────────────────────────────
 
 test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina', () => {
-  test('🔴 el organizador ve el engranaje arriba a la izquierda; abre la hoja con el código y la propina, y se cierra con Escape o la ✕', async ({ page }) => {
+  test('🔴 el organizador ve el engranaje arriba a la derecha (D469); abre la hoja con el código y la propina, y se cierra con Escape o la ✕', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
     await selectorDePropina(page).getByRole('radio', { name: '10%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
@@ -432,20 +437,22 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
 
     const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
     const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
-    // El engranaje es el cuadro de la tarjeta de título, a la izquierda del título.
+    // D469 · el engranaje va en la tarjeta de título, arriba a la derecha (antes era el cuadro de la izquierda).
     await expect(page.locator('.title-card').getByRole('button', { name: 'Configuración de la mesa', exact: true })).toBeVisible();
     await expect(engranaje).toHaveAttribute('aria-haspopup', 'dialog');
     await expect(engranaje).toHaveAttribute('aria-expanded', 'false');
-    const [caja, titulo] = await Promise.all([
+    const [caja, titulo, tarjeta] = await Promise.all([
       engranaje.boundingBox(),
       page.getByRole('heading', { name: 'Tu mesa', exact: true }).boundingBox(),
+      page.locator('.mesa-selection-title').boundingBox(),
     ]);
-    expect(caja!.x + caja!.width, 'el engranaje va a la izquierda del título').toBeLessThanOrEqual(titulo!.x);
+    expect(caja!.x + caja!.width / 2, 'el engranaje va a la derecha').toBeGreaterThan(tarjeta!.x + tarjeta!.width * 0.75);
+    expect(caja!.y + caja!.height / 2, 'arriba: a la altura del título').toBeLessThan(titulo!.y + titulo!.height);
     expect(Math.min(caja!.width, caja!.height), 'se toca con 44 px').toBeGreaterThanOrEqual(44);
-    // En la página: lo que se fijó de propina (D380, «Sí, que se vea»). Ni el
-    // código, ni «Copiar link» ni «Invitar amigos» (D379, «Pasarlos al
-    // engranaje»), ni el selector.
-    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toBeVisible();
+    // En la página: ni la línea de la propina (D469 la quitó: «es duplicar
+    // información»; D380 la había puesto a la vista), ni el código, ni «Copiar
+    // link» ni «Invitar amigos» (D379, «Pasarlos al engranaje»), ni el selector.
+    await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toHaveCount(0);
     await expect(page.locator('.screen .mesa-codigo-para-unirse')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Invitar amigos de PayMe' })).toHaveCount(0);
@@ -487,7 +494,12 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     await expect(hoja).toHaveCount(0);
     await expect(engranaje).toBeFocused();
     await expect(engranaje).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByText('Propina de la mesa: 15 %', { exact: true })).toBeVisible();
+    await expect(page.getByText('Propina de la mesa: 15 %', { exact: true })).toHaveCount(0);
+    await engranaje.click();
+    await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })
+      .getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(hoja).toHaveCount(0);
 
     // La ✕ también la cierra, con el foco de vuelta en el engranaje.
     await engranaje.click();

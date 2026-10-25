@@ -6,8 +6,8 @@ import { abrirQuienes } from './_mesa';
  * AF-UNIRSE-CODIGO · D223 · «Tu mesa», la mesa del titular reorganizada
  * («Todo junto, como el diseño», turno 2 · 2.9–2.11): quiénes están,
  * solicitudes para unirse (sólo si hay), compartir, tus consumos y cerrar mesa.
- * D360-4a · «Quiénes» arranca cerrado y sin la cantidad de personas; D360-7 ·
- * «Tus consumos» arranca abierto; D360-5a y D369 · sin subtítulo. Los casos
+ * D360-4a · «Quiénes» arranca cerrado y sin la cantidad de personas; D469 ·
+ * «Tus consumos» también arranca cerrado (antes abierto, D360-7); D360-5a y D369 · sin subtítulo. Los casos
  * T01–T19 y los negativos de privacidad de las pruebas de aceptación de Codex
  * (`PRUEBAS_ACEPTACION_UNIRME.md`).
  *
@@ -223,9 +223,13 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.getByText(/quiere unirse/)).toHaveCount(0);
   });
 
-  test('🔴 T16 · tus consumos: abierto por defecto (D360-7) y sin subtítulo (D360-5a, D369); elegir, cerrar y no se pierde nada', async ({ page }) => {
+  test('🔴 T16 · tus consumos: cerrado por defecto (D469) y sin subtítulo (D360-5a, D369); elegir, cerrar y no se pierde nada', async ({ page }) => {
     await tuMesa(page);
     const tc = cabecera(consumos(page));
+    // D469 · arranca cerrado (deja sin efecto el «abierto» de D360-7).
+    await expect(tc).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('.qc-lista')).toBeHidden();
+    await tc.click();
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.qc-lista')).toBeVisible();
     // La cabecera es sólo el título, en un renglón: no dice nada al elegir.
@@ -251,9 +255,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
 
   test('🔴 «Listo» sin nada elegido abre «Tus consumos» (si se cerró) y lleva a la lista', async ({ page }) => {
     await tuMesa(page);
-    // Arranca abierto (D360-7): se cierra para probar que «Listo» lo vuelve a abrir.
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
-    await cabecera(consumos(page)).click();
+    // D469 · arranca cerrado: «Listo» sin nada elegido lo abre y lleva a la lista.
     await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.locator('.toast:not(.toast-hidden)')).toHaveText('Elige lo que consumiste para continuar');
@@ -267,9 +269,11 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/mesa/${mesa.code}`);
     const tc = cabecera(consumos(page));
-    // Abierta desde el principio y sin subtítulo (D360-7, D360-5a y D369).
-    await expect(tc).toHaveAttribute('aria-expanded', 'true');
+    // Cerrada al abrir (D469) y sin subtítulo (D360-5a y D369).
+    await expect(tc).toHaveAttribute('aria-expanded', 'false');
     await expect(tc).toHaveText('Tus consumos');
+    await tc.click();
+    await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await page.locator('.qc-renglon .qc-fila').first().click();
     await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 plato');
     await expect(tc).toHaveText('Tus consumos');
@@ -301,11 +305,11 @@ test.describe('D223 · «Tu mesa» del titular', () => {
   test('🔴 T19 · las tres tarjetas se abren y cierran con su estado accesible', async ({ page }) => {
     await costura(page, { solicitudes: 1 });
     await tuMesa(page);
-    // Las solicitudes YA cargadas. Quiénes arranca cerrado y tus consumos abierto
-    // (D360-4a y D360-7).
+    // Las solicitudes YA cargadas. Quiénes y tus consumos arrancan cerrados
+    // (D360-4a y D469); las solicitudes, abiertas.
     await expect(cabecera(solicitudes(page))).toContainText('1 pendiente');
     await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
     for (const region of [quienes(page), solicitudes(page), consumos(page)]) {
       const c = cabecera(region);
       const antes = await c.getAttribute('aria-expanded');
@@ -314,10 +318,10 @@ test.describe('D223 · «Tu mesa» del titular', () => {
       const caja = (await c.boundingBox())!;
       expect(caja.height).toBeGreaterThanOrEqual(44);
     }
-    // Con el teclado también: el bucle la dejó cerrada, Enter la abre.
+    // Con el teclado también: el bucle la dejó abierta, Enter la cierra.
     await cabecera(consumos(page)).focus();
     await page.keyboard.press('Enter');
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('🔴 quien no es titular ve la pantalla de siempre: «¿Qué consumiste?», la lista abierta y nada de esto', async ({ page }) => {

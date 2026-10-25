@@ -34,7 +34,7 @@ import {
   elegidosRegistrados,
   lineasElegidas,
 } from './antesDeCerrar';
-import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { HojaDeLaMesa } from '../components/HojaDeLaMesa';
 import { leerParteDelDetalle, type MyShare, type ShareTotals, type TipSetting } from '../api/miParte';
 import {
@@ -457,25 +457,30 @@ function HojaAntesDeCerrar({
 }
 
 /**
- * D344 · «Cómo se arma tu parte»: los montos que publica el dueño en `my_share`
+ * D344 · el desglose de «Mi parte»: los montos que publica el dueño en `my_share`
  * (lo que vale). Platos, el renglón de ajustes con el rótulo del contrato, la
  * propina y el total. Nunca la parte de nadie más (R5).
+ * D469 · ya no es una tarjeta con el título «Cómo se arma tu parte»: es el
+ * desplegable «Tu parte», cerrado al abrir la mesa, y adentro va esto. El
+ * renglón final dice «Total» (dentro de «Tu parte», repetir el rótulo sobraba).
  */
 function DesgloseDeMiParte({
   totales,
   mia,
   tipSetting,
+  abierto,
+  onToggle,
 }: {
   readonly totales: ShareTotals;
   readonly mia: MyShare;
   readonly tipSetting: TipSetting | null;
+  readonly abierto: boolean;
+  readonly onToggle: () => void;
 }) {
   const { t } = useIdioma();
-  const tituloId = useId();
   const renglon = renglonDeAjustes(totales, mia);
   return (
-    <section className="card mi-parte-desglose" aria-labelledby={tituloId}>
-      <div className="mi-parte-desglose-titulo" id={tituloId}>{t('Cómo se arma tu parte')}</div>
+    <Desplegable className="mi-parte-desglose" titulo={t('Tu parte')} abierto={abierto} onToggle={onToggle}>
       <dl>
         <div className="mi-parte-desglose-fila">
           <dt>{t('Tus platos')}</dt>
@@ -493,11 +498,11 @@ function DesgloseDeMiParte({
           <dd>{formatMXN(mia.tip_cents)}</dd>
         </div>
         <div className="mi-parte-desglose-fila mi-parte-desglose-total">
-          <dt>{t('Tu parte')}</dt>
+          <dt>{t('Total')}</dt>
           <dd>{formatMXN(mia.total_cents)}</dd>
         </div>
       </dl>
-    </section>
+    </Desplegable>
   );
 }
 
@@ -580,10 +585,13 @@ export function MesaDetailView({
    */
   const esTitular = !isGuest && mesa.my_role === 'opener';
   /**
-   * D360-7 · «Tus consumos» arranca ABIERTO (deja sin efecto el «cerrado» de
-   * D223, turno 2 · 2.9). Se puede cerrar igual.
+   * D469 · «Tus consumos» arranca CERRADO, como «Quiénes están en la mesa» y
+   * «Tu parte» (deja sin efecto el «abierto» de D360-7). La excepción es la mesa
+   * de ejemplo de la guía: su paso «consumos» señala la lista para elegir.
    */
-  const [consumosAbierto, setConsumosAbierto] = useState(true);
+  const [consumosAbierto, setConsumosAbierto] = useState(ejemplo);
+  /** D469 · «Tu parte» (el desglose de D344) arranca cerrado. */
+  const [miParteAbierta, setMiParteAbierta] = useState(false);
   /**
    * D360-4a · «Quiénes están en la mesa» arranca CERRADO siempre, haya o no
    * solicitudes (revisa la disposición de D223, turno 2 · 2.10–2.11). Las
@@ -601,7 +609,24 @@ export function MesaDetailView({
   const [hojaDeLaMesa, setHojaDeLaMesa] = useState(false);
   const engranajeRef = useRef<HTMLButtonElement | null>(null);
   const codigoParaUnirse = mesa.status === 'open' || mesa.status === 'partially_paid' ? code : null;
-  const hayConfiguracion = esTitular && (codigoParaUnirse !== null || !!propinaDeLaMesa) && !ejemplo;
+  /**
+   * D469 · la propina de la mesa como se lee (sin el selector). Ya no va suelta
+   * en la página del organizador: está en «Tu parte» y, cuando no se puede
+   * cambiar, en la hoja del engranaje.
+   */
+  const parteDelDueno = useMemo(() => leerParteDelDetalle(mesa), [mesa]);
+  const propinaLeida = mesa.guarantee_mode === false && parteDelDueno.tipSetting !== undefined
+    ? textoDeLaPropinaDeLaMesa(parteDelDueno.tipSetting, t)
+    : null;
+  /**
+   * D469 · el engranaje se ve también después de «Listo». Antes salía sólo si la
+   * mesa recibía gente o la propina se podía cambiar: con la mesa que ya no
+   * recibe gente y la propina fija, la página mostraba «Propina de la mesa» y el
+   * engranaje desaparecía. Ahora la hoja muestra la propina aunque no se pueda
+   * cambiar, así que siempre tiene algo y el engranaje queda.
+   */
+  const hayConfiguracion = esTitular && !ejemplo
+    && (codigoParaUnirse !== null || !!propinaDeLaMesa || propinaLeida !== null);
   // Si la hoja se queda sin nada (la mesa dejó de recibir gente y la propina ya
   // no se puede cambiar), se cierra sola: nunca una hoja vacía. Como al cerrarla
   // a mano, el panel de invitar se pliega (D379).
@@ -659,18 +684,20 @@ export function MesaDetailView({
    * todo como antes. La vista previa antes de «Listo» es SÓLO por consumo; en
    * partes iguales va la parte del servidor, o lo de antes si no la publica.
    */
-  const parteDelDueno = useMemo(() => leerParteDelDetalle(mesa), [mesa]);
   const totales = totalesDeLaMesa(parteDelDueno, mesa.guarantee_mode);
   const mia = miParteDelDueno(parteDelDueno, mesa.guarantee_mode);
   const montoDeMiParte = esConsumo
     ? (totales ? vistaPreviaPorConsumo(itemsAmount, totales) ?? itemsAmount : itemsAmount)
     : (totales && mia ? mia.total_cents : itemsAmount);
-  const propinaLeida = mesa.guarantee_mode === false && parteDelDueno.tipSetting !== undefined
-    ? textoDeLaPropinaDeLaMesa(parteDelDueno.tipSetting, t)
-    : null;
   const avisoOmitidos = totales ? avisoDeAjustesOmitidos(totales, t) : null;
   const desgloseDeMiParte = totales && muestraElDesglose(mia, esConsumo) ? (
-    <DesgloseDeMiParte totales={totales} mia={mia} tipSetting={parteDelDueno.tipSetting ?? null} />
+    <DesgloseDeMiParte
+      totales={totales}
+      mia={mia}
+      tipSetting={parteDelDueno.tipSetting ?? null}
+      abierto={miParteAbierta}
+      onToggle={() => setMiParteAbierta((a) => !a)}
+    />
   ) : null;
   const original = originalParticipants(mesa.original_participants);
   /** AF-QUE-CONSUMISTE · el renglón propio que muestra el selector, o ninguno. */
@@ -1138,29 +1165,32 @@ export function MesaDetailView({
     <div ref={pantallaRef} className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
-        {/* D360-4b · para el organizador, el cuadro de arriba a la izquierda es
-            el engranaje (en lugar de la tienda, excepción a la fila 6 de D285):
-            abre la hoja con el código y la propina. Quien no organiza sigue con
-            los cubiertos. */}
+        {/* D469 · el engranaje del organizador va ARRIBA A LA DERECHA de la
+            tarjeta («la configuración de la mesa debe ir en la burbuja del
+            encabezado arriba a la derecha como un engranaje», Mati). Hasta acá
+            ocupaba el cuadro de la izquierda (D360-4b); el cuadro vuelve a ser la
+            tienda (D285). Quien no organiza sigue con los cubiertos y sin engranaje. */}
         <FilaDeTitulo
           icono={esTitular ? 'tienda' : 'cubiertos'}
-          cuadro={hayConfiguracion ? (
+          derecha={hayConfiguracion ? (
             <button
               ref={engranajeRef}
               type="button"
-              className="title-card-boton"
+              className="title-card-engranaje"
               data-guia="configurar-mesa"
               aria-label={t('Configuración de la mesa')}
               aria-haspopup="dialog"
               aria-expanded={hojaDeLaMesa}
               onClick={() => setHojaDeLaMesa(true)}
             >
-              <CuadroDeTarjeta icono="engranaje" />
+              <Icon name="settings" size={22} />
             </button>
           ) : undefined}
         >
           {/* D223-4 · «Tu mesa» para el titular; para los demás, como siempre. */}
-          <h1 className="title-card-title">{esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}</h1>
+          <h1 className={`title-card-title${hayConfiguracion ? ' title-card-title--con-engranaje' : ''}`}>
+            {esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}
+          </h1>
           <div className="title-card-sub mesa-selection-context">
             {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
                 abiertas— y en UNA línea, restaurante · modalidad. */}
@@ -1263,10 +1293,11 @@ export function MesaDetailView({
         )}
         {esTitular ? (
           <>
-            {/* D223 · «Tu mesa» (turno 2 · 2.9–2.11), en este orden: quiénes
-                están (cerrado y sin la cantidad, D360-4a), solicitudes (sólo si
-                hay), compartir, tus consumos (abierto, D360-7) y cerrar mesa. Cambia la DISPOSICIÓN: cómo
-                se elige, se suelta, se divide y se paga es lo de siempre. */}
+            {/* D223 · «Tu mesa», en este orden (D469): quiénes están, solicitudes
+                (sólo si hay), «Tu parte» y «Tus consumos» —los tres desplegables
+                cerrados al abrir— y cerrar mesa. Compartir y la propina viven en
+                el engranaje (D379). Cambia la DISPOSICIÓN: cómo se elige, se
+                suelta, se divide y se paga es lo de siempre. */}
             {quienesSeSumaron.estado !== 'oculto' && (
               <Desplegable
                 className="quienes"
@@ -1370,9 +1401,10 @@ export function MesaDetailView({
                 amigos» pasaron a la hoja del engranaje, junto al código y la
                 propina (`compartirDeLaMesa`, abajo). */}
             {/* D344 · la propina de la mesa. D360-4b · el selector pasó a la hoja
-                del engranaje; en la página queda lo que se fijó (como lo ve quien
-                no organiza) y, si hace falta, que se está guardando o que falló. */}
-            {propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>}
+                del engranaje. D469 · la línea «Propina de la mesa: X %» se quitó
+                de la página (Mati: «es duplicar información»): está en «Tu parte»
+                y en el engranaje. Queda, si hace falta, que se está guardando o
+                que falló. */}
             {propinaGuardando && !hojaDeLaMesa && (
               <p className="propina-mesa-estado propina-mesa-estado--pagina" role="status">{t('Guardando la propina…')}</p>
             )}
@@ -1426,7 +1458,12 @@ export function MesaDetailView({
         )}
       </div>
       {hojaDeLaMesa && hayConfiguracion && (
-        <HojaDeLaMesa codigo={codigoParaUnirse} compartir={compartirDeLaMesa} propina={propinaDeLaMesa} onCerrar={cerrarHojaDeLaMesa} />
+        <HojaDeLaMesa
+          codigo={codigoParaUnirse}
+          compartir={compartirDeLaMesa}
+          propina={propinaDeLaMesa ?? (propinaLeida !== null ? <p className="propina-mesa-lectura">{propinaLeida}</p> : null)}
+          onCerrar={cerrarHojaDeLaMesa}
+        />
       )}
       {hojaCierre === 'cerrar' && onCerrarMesa && (
         <HojaAntesDeCerrar

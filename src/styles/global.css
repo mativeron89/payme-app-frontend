@@ -10908,23 +10908,37 @@ h1.pay-title-lbl {
   margin: 0 0 var(--sp-3);
 }
 
-/* D360-4b · el engranaje de «Tu mesa»: el mismo cuadro de 48 de la tarjeta de
-   título (D285), hecho botón. Sin relleno ni borde propios: lo que se ve es el
-   cuadro; el toque es de 48 × 48. */
-.title-card-boton {
-  flex: none;
+/* D469 · el engranaje de «Tu mesa», arriba a la derecha de la tarjeta. Un
+   ícono, sin cuadro: el cuadro de la izquierda vuelve a ser la tienda. Va en
+   absoluto (la tarjeta es `position: relative`) y a la altura del título, para
+   no quitarle ancho a la línea «restaurante · modo»: en el flujo le sacaba 48 px
+   y a 390 px el nombre del restaurante quedaba en 85 px (la guarda pide 120).
+   44 × 44 de toque; el título deja lugar al ícono. */
+.title-card-engranaje {
+  position: absolute;
+  top: 6px;
+  right: 6px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: transparent;
+  color: var(--text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.title-card-boton:focus-visible {
+.title-card-title--con-engranaje {
+  padding-right: 32px;
+}
+
+.title-card-engranaje:focus-visible {
   outline: 2px solid var(--action);
-  outline-offset: 2px;
+  outline-offset: -3px;
 }
 
 /* La hoja del engranaje: el código arriba; después «Copiar link» e «Invitar
@@ -10971,25 +10985,18 @@ h1.pay-title-lbl {
   flex: 1;
 }
 
-/* Quien no es el organizador lee la propina de la mesa, sin poder cambiarla. */
+/* Quien no es el organizador lee la propina de la mesa, sin poder cambiarla.
+   D469 · el organizador la lee en la hoja del engranaje cuando ya no se puede
+   cambiar. */
 .propina-mesa-lectura {
   margin: 0 0 12px;
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
-/* «Cómo se arma tu parte»: platos, ajustes, propina y el total del dueño. */
-.mi-parte-desglose {
-  margin-bottom: var(--sp-3);
-  padding: 14px var(--sp-4);
-  border-radius: var(--r-lg);
-}
-.mi-parte-desglose-titulo {
-  font-size: 15.5px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 6px;
-}
+/* D469 · el desplegable «Tu parte» (antes la tarjeta «Cómo se arma tu parte»):
+   platos, ajustes, propina y el total del dueño. La tarjeta, la cabecera y el
+   margen son los de `.desplegable`; acá sólo el renglón. */
 .mi-parte-desglose dl {
   margin: 0;
 }

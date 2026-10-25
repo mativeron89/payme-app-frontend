@@ -348,7 +348,8 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'Si tocas pagar de nuevo, cubres la parte de otro comensal.',
   'Súmate a la mesa {0} en PayMe: {1}',
   'Todavía no podemos confirmar el cierre ni una entrega al restaurante.',
-  'Todavía no podemos confirmar el resultado de la garantía.', 'Total',
+  // D469 · 'Total' salió de la lista: lo usa el renglón final de «Tu parte».
+  'Todavía no podemos confirmar el resultado de la garantía.',
   'Tu banco no autorizó la operación.',
   'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.',
   'Tu propina',

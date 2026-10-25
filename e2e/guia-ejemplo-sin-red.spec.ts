@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
+import { abrirTusConsumos } from './_mesa';
 import {
   abrirDesdeLaTarjeta, burbuja, CLAVE_TARJETA_OCULTA, contarLaRed, entrar, escrito, espiarLaFachada, fase,
   hastaElTicket, hastaLaCamara, hastaTuMesa, llamadas, pathname, SONDAS_DE_RED, sondearLaRed, tarjeta, TEXTO_2D, type Llamada,
@@ -288,6 +289,8 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar' })).toBeVisible();
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
+    // D469 · con una mesa de verdad «Tus consumos» arranca cerrado (en el ejemplo, abierto para el paso de la guía).
+    await abrirTusConsumos(page);
     await expect(page.locator('.qc-lista')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Configuración de la mesa' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar mesa' })).toBeVisible();

@@ -6,7 +6,7 @@ import { useHojaModal } from './useHojaModal';
 /**
  * D360-4b · «En la burbuja de la mesa, arriba a la izquierda tiene que haber un
  * engranaje de configuración, eso abre el código para unirse y la propina (para
- * poder modificarla)» (literal de Mati).
+ * poder modificarla)» (literal de Mati). D469 lo pasó arriba a la derecha.
  *
  * La hoja que abre el engranaje de «Tu mesa» (sólo el organizador): el código
  * para unirse, como texto para dictarlo; «Copiar link» e «Invitar amigos»
@@ -28,7 +28,10 @@ export function HojaDeLaMesa({
   codigo: string | null;
   /** D379 · «Copiar link» e «Invitar amigos» (con su panel), o `null` si la mesa ya no recibe gente. */
   compartir: ReactNode;
-  /** El selector de la propina de la mesa, o `null` si no se puede cambiar. */
+  /**
+   * El selector de la propina de la mesa; si ya no se puede cambiar, la propina
+   * leída (D469: así el engranaje queda después de «Listo»); o `null`.
+   */
   propina: ReactNode;
   onCerrar: () => void;
 }) {
