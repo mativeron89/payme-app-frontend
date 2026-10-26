@@ -43,10 +43,12 @@
     <!-- D300 · las imágenes de arranque del iPhone: con la app instalada, iOS
          muestra la que coincide con el tamaño del teléfono hasta que la página
          pinta. Sin ellas, la apertura se veía en negro antes de la pantalla de
-         carga. Cada una ES la pantalla de carga de abajo (D286), dibujada por
+         carga. Cada una ES la pantalla de carga de abajo (D475), dibujada por
          `scripts/imagenes-de-arranque.mjs` desde este archivo, con la franja de
-         la barra de estado de ese iPhone: del arranque a la página no cambia
-         nada. Una por tamaño, en vertical. La guarda vive en
+         la barra de estado de ese iPhone. D476 (opción A): la imagen va SIN la
+         palabra «PayMe» —el fondo, la franja y las dos puntas—, y la palabra
+         entra en la página con su fundido: aparece una sola vez, sin parpadeo.
+         Una por tamaño, en vertical. La guarda vive en
          `src/arranque/imagenesDeArranque.test.ts`. -->
     <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/arranque/arranque-750x1334.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/arranque/arranque-828x1792.png" />
@@ -79,21 +81,24 @@
 
          Los tiempos (espejados en `src/splash.ts`, y hay un test que impide que
          las dos copias se separen):
-         · se ve desde el primer cuadro: sin retardo y sin fundido de entrada;
-         · D300: el ícono, entero desde el primer cuadro (sin la entrada de
-           240 ms que tenía), con o sin «reducir movimiento»;
+         · se ve desde el primer cuadro: sin retardo y sin fundido de entrada
+           del `#splash`;
+         · D476 (opción A, «lo que se armó con Claude Design»; enmienda D300
+           punto 3): la palabra entra con un fundido mientras sube 16 px, a los
+           80 ms y durante 600 ms. Con «reducir movimiento», entera desde el
+           primer cuadro. La imagen de arranque del iPhone va sin la palabra,
+           así que no parpadea: aparece una sola vez;
          · 12 s de rendición — si el grafo de módulos muere (ya pasó:
            ERR_NETWORK_CHANGED, 2026-08-10), el splash se retira solo en vez
            de quedar eterno tapando una app muerta con cara de viva. Vuelve
            al blanco de hoy, que es feo pero no miente.
 
-         D286 (revisión 6, aprobada) · lo que se ve, según
-         `PANTALLA-pantalla-de-carga.md` (d03f38b4…), que manda: cuatro
-         triángulos metálicos (D330: navy arriba, cian a la izquierda, teal a la
-         derecha, celeste abajo) que se juntan en el centro de la zona debajo de
-         la barra de estado, y el ícono navy de 128 px en el punto de
-         encuentro. Sin imágenes, sin tipografías, sin texto. Los tonos de
-         brillo y sombra son mezclas de la paleta, no tokens. */
+         D475 · lo que se ve, según `PANTALLA-pantalla-de-carga.md` (4ef1274b…,
+         «PayMe entre dos puntas», 7a), que manda: fondo navy, dos puntas teal →
+         cian en esquinas opuestas de la zona debajo de la barra de estado y la
+         palabra «PayMe» en contornos en el centro. Reemplaza los cuatro
+         triángulos metálicos y el ícono navy de D286 (revisión 6); D330 queda
+         sin objeto. Sin imágenes, sin tipografías, sin texto. */
       #splash {
         position: fixed;
         inset: 0;
@@ -103,9 +108,8 @@
       }
       /* La franja de la barra de estado: con la app instalada, la hora y la
          batería van en blanco encima (`black-translucent` y `viewport-fit=cover`
-         ya están arriba). En el navegador mide 0. D345 (Mati, «hay que modificar
-         el color para que se una»): ya no se ve; el triángulo oscuro de arriba
-         sube por detrás de la barra y la tapa, así el degradé llega al borde. */
+         ya están arriba). En el navegador mide 0. D476 (enmienda D353): navy
+         lisa, fundida con el fondo; la punta de arriba empieza debajo de ella. */
       #splash .carga__franja {
         position: absolute;
         top: 0;
@@ -121,43 +125,51 @@
         right: 0;
         bottom: 0;
       }
-      /* Cada triángulo es la zona entera recortada: el degradé se calcula sobre
-         el rectángulo de la zona, no sobre el triángulo. */
-      #splash .t {
+      /* Cada punta es la zona entera recortada: el degradé se calcula sobre el
+         rectángulo de la zona, no sobre el triángulo (con estos valores el cian
+         llega justo al corte). No se animan. */
+      #splash .carga__punta {
         position: absolute;
         inset: 0;
       }
-      /* D345 · sube el alto de la barra de estado (en el navegador, 0): el
-         rectángulo de la franja más el triángulo de siempre, con el vértice en el
-         mismo centro de la zona (50% de la caja alta + la mitad de la barra). */
-      #splash .t-arriba {
-        top: calc(-1 * env(safe-area-inset-top));
-        clip-path: polygon(0 0, 100% 0, 100% env(safe-area-inset-top), 50% calc(50% + env(safe-area-inset-top) / 2), 0 env(safe-area-inset-top));
-        background: linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%);
+      #splash .carga__punta--arriba {
+        clip-path: polygon(0 0, 56% 0, 0 19.2%);
+        background: linear-gradient(135deg, #0a7b80 0%, #0fb5c9 17.1%);
       }
-      #splash .t-izq {
-        clip-path: polygon(0 0, 50% 50%, 0 100%);
-        background: linear-gradient(170deg, #a1dbe4 0%, #1493b1 30%, #82d0dc 52%, #0fb5c9 66%, #1b6b8f 100%);
+      #splash .carga__punta--abajo {
+        clip-path: polygon(100% 100%, 44% 100%, 100% 80.8%);
+        background: linear-gradient(315deg, #0a7b80 0%, #0fb5c9 17.1%);
       }
-      #splash .t-der {
-        clip-path: polygon(100% 0, 100% 100%, 50% 50%);
-        background: linear-gradient(190deg, #016274 0%, #66a2a5 30%, #04596e 55%, #428e92 72%, #0d415d 100%);
-      }
-      #splash .t-abajo {
-        clip-path: polygon(0 100%, 50% 50%, 100% 100%);
-        background: linear-gradient(100deg, #abc7ce 0%, #ffffff 24%, #cfe8eb 42%, #f4fdfe 60%, #97b4be 100%);
-      }
-      /* El ícono: 128 × 128 fijo (igual de 375 a 430), centrado en el punto de
-         encuentro. D300: aparece entero desde el primer cuadro, sin animación;
-         es el mismo cuadro que las imágenes de arranque del iPhone
-         (`public/arranque/`), así que del arranque a la página no cambia. */
-      #splash .carga__icono {
+      /* La palabra: 126 × 40 fijo (igual de 375 a 430), centrada en la zona. La
+         animación va en el `<svg>`, no acá: así el `translate(-50%, -50%)` del
+         centrado y el `translateY` de la entrada no se pisan. */
+      #splash .carga__palabra {
         position: absolute;
         left: 50%;
         top: 50%;
-        width: 128px;
-        height: 128px;
+        width: 126px;
+        height: 40px;
         transform: translate(-50%, -50%);
+      }
+      #splash .carga__palabra svg {
+        display: block;
+        width: 126px;
+        height: 40px;
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        #splash .carga__palabra svg {
+          animation: carga-palabra 600ms cubic-bezier(.2, .8, .2, 1) 80ms both;
+        }
+      }
+      /* 🔴 Nace en 0.001, no en 0 como la especificación (R1 del informe D475):
+         a la vista es igual, pero con 0 el navegador no anota
+         `first-contentful-paint` en el primer cuadro (las puntas son degradés,
+         no cuentan como contenido) y `src/splash.ts` contaría los 2 s de D300
+         desde que monta la app, no desde que se ve. */
+      @keyframes carga-palabra {
+        from { opacity: 0.001; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
       }
       @keyframes splash-rendirse {
         to { opacity: 0; visibility: hidden; }
@@ -166,24 +178,24 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- D286 (revisión 6) · la pantalla de carga de `PANTALLA-pantalla-de-carga.md`:
-         la franja de la barra de estado, los cuatro triángulos y el ícono navy
-         (flecha izquierda cian, derecha blanca), inline para que pinte sin
-         ninguna request. La lógica de aparición y retiro (`src/splash.ts`) no
-         conoce lo que se dibuja. `aria-hidden`: es decorativo y transitorio, un
-         lector de pantalla no gana nada anunciándolo. -->
+    <!-- D475 · la pantalla de carga de `PANTALLA-pantalla-de-carga.md` (7a):
+         la franja de la barra de estado, las dos puntas y la palabra «PayMe» en
+         contornos («Pay» blanco, «Me» cian), inline para que pinte sin ninguna
+         request. La lógica de aparición y retiro (`src/splash.ts`) no conoce lo
+         que se dibuja. `aria-hidden`: es decorativo y transitorio, un lector de
+         pantalla no gana nada anunciándolo (por eso no lleva el
+         `role="status"` que propone el paquete). -->
     <div id="splash" aria-hidden="true">
       <div class="carga__franja"></div>
       <div class="carga__zona">
-        <div class="t t-arriba"></div>
-        <div class="t t-izq"></div>
-        <div class="t t-der"></div>
-        <div class="t t-abajo"></div>
-        <!-- El SVG de la sección 4 de la especificación, sin xmlns a propósito:
-             inline en HTML el parser ya lo pone en el namespace SVG, y la URL del
-             atributo (aunque jamás se pide por red) dispara la guarda de
-             destinos — que tiene razón en no distinguir. -->
-        <svg class="carga__icono" viewBox="0 0 128 128" role="img" aria-label="PayMe"><rect width="128" height="128" rx="36" fill="#101E3B"/><g transform="scale(1.6842)"><path fill="#0FB5C9" d="M18.5 21L27.5 21L36.5 38L27.5 55L18.5 55L27.5 38Z"/><path fill="#FFFFFF" d="M39.5 21L48.5 21L57.5 38L48.5 55L39.5 55L48.5 38Z"/></g></svg>
+        <div class="carga__punta carga__punta--arriba"></div>
+        <div class="carga__punta carga__punta--abajo"></div>
+        <!-- Los dos `<path>` de `assets/payme-palabra-contornos.svg`, con sus `d`
+             tal cual y nada más: sin xmlns (inline en HTML el parser ya lo pone
+             en el namespace SVG, y una URL en un atributo, aunque jamás se pide
+             por red, dispara la guarda de destinos), sin los metadatos que trae
+             el archivo y sin texto. -->
+        <div class="carga__palabra"><svg viewBox="0 0 240 76" role="img" aria-label="PayMe"><path fill="#FFFFFF" d="M10.67 58.45L0 58.45L0 0.00L21.81 0.00Q27.78 0.00 32.37 2.16Q36.96 4.32 39.54 8.43Q42.13 12.55 42.13 18.44L42.13 18.44Q42.13 24.24 39.51 28.36Q36.88 32.48 32.33 34.68Q27.78 36.88 21.81 36.88L21.81 36.88L10.67 36.88L10.67 58.45ZM10.67 9.42L10.67 27.46L21.97 27.46Q24.87 27.46 26.99 26.32Q29.11 25.19 30.29 23.15Q31.46 21.11 31.46 18.44L31.46 18.44Q31.46 15.69 30.29 13.69Q29.11 11.69 26.99 10.55Q24.87 9.42 21.97 9.42L21.97 9.42L10.67 9.42ZM58.10 59.40L58.10 59.40Q53.62 59.40 50.33 57.90Q47.03 56.41 45.23 53.63Q43.42 50.84 43.42 47.16L43.42 47.16Q43.42 43.62 44.99 40.84Q46.56 38.05 49.86 36.17Q53.15 34.29 58.18 33.50L58.18 33.50L72.14 31.23L72.14 39.07L60.14 41.11Q57.08 41.66 55.59 43.08Q54.10 44.49 54.10 46.76L54.10 46.76Q54.10 48.96 55.78 50.25Q57.47 51.55 59.98 51.55L59.98 51.55Q63.20 51.55 65.67 50.18Q68.14 48.80 69.51 46.37Q70.89 43.94 70.89 41.04L70.89 41.04L70.89 30.05Q70.89 27.30 68.73 25.46Q66.57 23.62 63.04 23.62L63.04 23.62Q59.74 23.62 57.19 25.38Q54.64 27.15 53.47 30.05L53.47 30.05L45.07 25.97Q46.33 22.60 49.03 20.13Q51.74 17.65 55.43 16.24Q59.12 14.83 63.43 14.83L63.43 14.83Q68.69 14.83 72.69 16.75Q76.69 18.67 78.93 22.09Q81.17 25.50 81.17 30.05L81.17 30.05L81.17 58.45L71.44 58.45L71.44 51.16L73.63 51.00Q71.99 53.75 69.71 55.59Q67.43 57.43 64.53 58.41Q61.63 59.40 58.10 59.40ZM93.52 75.72L93.52 75.72Q91.79 75.72 90.15 75.44Q88.50 75.17 87.16 74.46L87.16 74.46L87.16 65.91Q88.18 66.14 89.64 66.38Q91.09 66.61 92.34 66.61L92.34 66.61Q95.87 66.61 97.48 65.01Q99.09 63.40 100.35 60.73L100.35 60.73L103.17 54.14L103.01 62.77L84.42 15.77L95.48 15.77L108.51 50.45L104.58 50.45L117.53 15.77L128.67 15.77L110.07 62.77Q108.43 66.85 106.07 69.75Q103.72 72.66 100.62 74.19Q97.52 75.72 93.52 75.72Z"/><path fill="#0FB5C9" d="M143.53 58.45L132.86 58.45L132.86 0.00L143.06 0.00L164.95 29.74L160.09 29.74L181.51 0.00L191.71 0.00L191.71 58.45L180.96 58.45L180.96 12.16L185.12 13.18L162.91 42.76L161.66 42.76L140.00 13.18L143.53 12.16L143.53 58.45ZM219.99 59.40L219.99 59.40Q213.40 59.40 208.46 56.41Q203.52 53.43 200.77 48.33Q198.02 43.23 198.02 37.03L198.02 37.03Q198.02 30.60 200.81 25.62Q203.59 20.64 208.42 17.73Q213.24 14.83 219.21 14.83L219.21 14.83Q224.23 14.83 228.03 16.48Q231.84 18.12 234.51 21.03Q237.18 23.93 238.59 27.66Q240.00 31.38 240.00 35.70L240.00 35.70Q240.00 36.80 239.88 37.98Q239.76 39.15 239.45 40.02L239.45 40.02L206.50 40.02L206.50 32.17L233.64 32.17L228.78 35.86Q229.49 32.25 228.43 29.42Q227.37 26.60 224.97 24.95Q222.58 23.30 219.21 23.30L219.21 23.30Q215.99 23.30 213.48 24.91Q210.97 26.52 209.67 29.62Q208.38 32.72 208.69 37.11L208.69 37.11Q208.38 41.04 209.75 44.06Q211.13 47.08 213.83 48.72Q216.54 50.37 220.07 50.37L220.07 50.37Q223.60 50.37 226.07 48.88Q228.54 47.39 229.96 44.88L229.96 44.88L238.27 48.96Q237.02 52.02 234.35 54.37Q231.68 56.73 228.03 58.06Q224.39 59.40 219.99 59.40Z"/></svg></div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

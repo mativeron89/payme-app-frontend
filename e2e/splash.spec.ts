@@ -4,8 +4,9 @@
  * recarga, también por un link o un QR de mesa, desde el primer cuadro, y queda al menos 2 s. Si la app tarda más, sigue
  * hasta que monte. Después, el fundido.
  *
- * 🔴 D300 · los 2 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación; el ícono está entero
- * desde ese cuadro (sin animación); y cada imagen de arranque del iPhone es esta misma pantalla, en su tamaño.
+ * 🔴 D300 · los 2 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación; y cada imagen de
+ * arranque del iPhone es esta misma pantalla, en su tamaño. D476 (opción A, enmienda D300 punto 3): la palabra «PayMe»
+ * entra con un fundido mientras sube (quieta con «reducir movimiento»), y la imagen de arranque va sin ella.
  *
  * 🔴 Corre en el proyecto `pantalla-de-carga`, contra el BUILD mock con la CSP real (`e2e/csp/servidor.mjs`, 5188): ahí
  * no está la marca de la e2e (`VITE_E2E_CARGA_SIN_MINIMO`, que sólo pone el servidor de desarrollo de las demás
@@ -32,17 +33,16 @@ interface Muestra {
   readonly t: number;
   readonly opacidad: number;
 }
-interface Icono {
+interface Palabra {
   readonly opacidad: string;
-  readonly transform: string;
   readonly animacion: string;
 }
 interface Carga {
   readonly muestras: Muestra[];
   /** El primer cuadro con el `#splash` en el árbol. */
   readonly vistoEn: number | null;
-  /** D300 · el ícono en ese primer cuadro. */
-  readonly iconoAlAparecer: Icono | null;
+  /** D476 · la palabra (su `<svg>`, que es lo que se anima) en ese primer cuadro. */
+  readonly palabraAlAparecer: Palabra | null;
   readonly montoEn: number | null;
   readonly retiradoEn: number | null;
 }
@@ -50,8 +50,8 @@ interface Carga {
 /** El muestreo, antes que la página: cada cuadro, la opacidad del `#splash`, el montaje y el retiro. */
 async function medirLaCarga(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number }>; vistoEn: number | null; iconoAlAparecer: Icono | null; montoEn: number | null; retiradoEn: number | null } };
-    w.__carga = { muestras: [], vistoEn: null, iconoAlAparecer: null, montoEn: null, retiradoEn: null };
+    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number }>; vistoEn: number | null; palabraAlAparecer: Palabra | null; montoEn: number | null; retiradoEn: number | null } };
+    w.__carga = { muestras: [], vistoEn: null, palabraAlAparecer: null, montoEn: null, retiradoEn: null };
     const cuadro = () => {
       const t = performance.now();
       const el = document.getElementById('splash');
@@ -60,10 +60,10 @@ async function medirLaCarga(page: Page): Promise<void> {
       if (el) {
         if (w.__carga.vistoEn === null) {
           w.__carga.vistoEn = t;
-          const icono = el.querySelector('.carga__icono');
-          if (icono) {
-            const cs = getComputedStyle(icono);
-            w.__carga.iconoAlAparecer = { opacidad: cs.opacity, transform: cs.transform, animacion: cs.animationName };
+          const palabra = el.querySelector('.carga__palabra svg');
+          if (palabra) {
+            const cs = getComputedStyle(palabra);
+            w.__carga.palabraAlAparecer = { opacidad: cs.opacity, animacion: cs.animationName };
           }
         }
         w.__carga.muestras.push({ t, opacidad: Number(getComputedStyle(el).opacity) });
@@ -232,27 +232,60 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 
-  test('con «reducir movimiento»: el ícono quieto, y el mismo mínimo entero', async ({ page }) => {
+  test('con «reducir movimiento»: la palabra quieta, y el mismo mínimo entero', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await medirLaCarga(page);
     await page.goto('/');
-    const icono = page.locator('#splash .carga__icono');
-    await expect(icono).toBeVisible();
-    expect(await icono.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+    const palabra = page.locator('#splash .carga__palabra svg');
+    await expect(palabra).toBeVisible();
+    expect(await palabra.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+    expect(await palabra.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     esperarElMinimoEntero(await laCarga(page));
   });
 
-  for (const movimiento of ['no-preference', 'reduce'] as const) {
-    test(`🔴 D300 · el ícono, entero desde el primer cuadro (sin animación), con «reducir movimiento» en ${movimiento}`, async ({ page }) => {
-      await page.emulateMedia({ reducedMotion: movimiento });
-      await medirLaCarga(page);
-      await page.goto('/');
-      const c = await laCarga(page);
-      // En el primer cuadro con la pantalla: opacidad 1, sin escala (la traslación del centrado y nada más), sin animación.
-      expect(c.iconoAlAparecer).toEqual({ opacidad: '1', transform: 'matrix(1, 0, 0, 1, -64, -64)', animacion: 'none' });
-      esperarElMinimoEntero(c);
-    });
-  }
+  /**
+   * 🔴 D476 (opción A; enmienda D300 punto 3) · con «reducir movimiento», la palabra entera y quieta desde el primer cuadro.
+   * Sin preferencia, nace en 0.001 (no en 0: R1) con su entrada `carga-palabra`, y termina entera y en su lugar antes del
+   * mínimo. El `#splash` en sí, entero desde el primer cuadro en los dos casos.
+   */
+  test('🔴 D476 · con «reducir movimiento», la palabra entera y quieta desde el primer cuadro', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    expect(c.palabraAlAparecer).toEqual({ opacidad: '1', animacion: 'none' });
+    esperarElMinimoEntero(c);
+  });
+
+  test('🔴 D476 · sin «reducir movimiento», la palabra entra (nace en 0.001) y termina entera, antes del mínimo', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await medirLaCarga(page);
+    await page.goto('/');
+    const palabra = page.locator('#splash .carga__palabra svg');
+    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 1_500 }).toBe('1');
+    expect(await palabra.evaluate((el) => getComputedStyle(el).transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
+    const c = await laCarga(page);
+    expect(c.palabraAlAparecer).toEqual({ opacidad: '0.001', animacion: 'carga-palabra' });
+    esperarElMinimoEntero(c);
+  });
+
+  /**
+   * 🔴 R1 (informe D475) · la palabra nace casi transparente y las puntas son degradés (no cuentan como contenido): el
+   * navegador igual tiene que anotar `first-contentful-paint` con la pantalla de carga, ANTES de que monte la app. Si no,
+   * `src/splash.ts` contaría los 2 s de D300 desde el montaje. La app se demora para que las dos cosas no coincidan.
+   */
+  test('🔴 R1 · `first-contentful-paint` se anota con la pantalla de carga, antes de que monte la app', async ({ page }) => {
+    await demorarLaApp(page, 1_500);
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    const fcp = await page.evaluate(() => performance.getEntriesByType('paint').find((e) => e.name === 'first-contentful-paint')?.startTime ?? null);
+    expect(fcp, 'el build no anotó first-contentful-paint').not.toBeNull();
+    expect(c.montoEn!).toBeGreaterThanOrEqual(1_500);
+    expect(fcp!, 'el primer cuadro con contenido fue el de la app, no el de la pantalla de carga').toBeLessThan(c.montoEn!);
+    expect(fcp! - c.vistoEn!, 'first-contentful-paint llegó lejos del primer cuadro con la pantalla').toBeLessThan(500);
+    esperarElMinimoEntero(c);
+  });
 
   test('🔴 la marca de la e2e no llegó al build: el módulo de entrada no la nombra', async ({ page }) => {
     const src = await moduloDeEntrada(page);
@@ -263,25 +296,25 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
 });
 
 /**
- * 🔴 D286 (revisión 6) · la pantalla de carga de `PANTALLA-pantalla-de-carga.md`, medida en el navegador a 375, 390 y
- * 430: los cuatro triángulos sobre la zona entera, el ícono de 128 px centrado en el punto de encuentro, la franja de la
- * barra de estado (en el navegador `env(safe-area-inset-top)` vale 0) y ningún texto.
+ * 🔴 D475 · la pantalla de carga de `PANTALLA-pantalla-de-carga.md` (7a), medida en el navegador a 375, 390 y 430: las dos
+ * puntas sobre la zona entera, la palabra de 126 × 40 centrada en la zona, la franja de la barra de estado (en el
+ * navegador `env(safe-area-inset-top)` vale 0) y ningún texto.
  */
 for (const ancho of [375, 390, 430] as const) {
-  test(`D286 · a ${ancho}: cuatro triángulos, el ícono centrado, la franja y sin texto`, async ({ page }) => {
+  test(`D475 · a ${ancho}: dos puntas, la palabra centrada, la franja y sin texto`, async ({ page }) => {
     await page.setViewportSize({ width: ancho, height: ancho === 375 ? 667 : ancho === 390 ? 844 : 932 });
     await demorarLaApp(page, 2_500);
     await page.goto('/');
-    const icono = page.locator('#splash .carga__icono');
-    await expect(icono).toBeVisible();
-    // D300 · entero desde el primer cuadro: opacidad 1 y sin escala.
-    expect(await icono.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    const palabra = page.locator('#splash .carga__palabra svg');
+    await expect(palabra).toBeVisible();
+    // Terminada la entrada: entera y en su lugar.
+    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 1_500 }).toBe('1');
     const medida = await page.evaluate(() => {
       const caja = (sel: string) => {
         const r = document.querySelector(sel)!.getBoundingClientRect();
         return { x: r.x, y: r.y, w: r.width, h: r.height };
       };
-      const triangulos = Array.from(document.querySelectorAll<HTMLElement>('#splash .t')).map((el) => ({
+      const puntas = Array.from(document.querySelectorAll<HTMLElement>('#splash .carga__punta')).map((el) => ({
         clase: el.className,
         recorte: getComputedStyle(el).clipPath,
         fondo: getComputedStyle(el).backgroundImage,
@@ -289,26 +322,31 @@ for (const ancho of [375, 390, 430] as const) {
       }));
       return {
         zona: caja('#splash .carga__zona'),
-        icono: caja('#splash .carga__icono'),
+        palabra: caja('#splash .carga__palabra'),
+        svg: caja('#splash .carga__palabra svg'),
         franja: caja('#splash .carga__franja'),
         franjaFondo: getComputedStyle(document.querySelector('#splash .carga__franja')!).backgroundColor,
-        triangulos,
+        puntas,
+        paths: Array.from(document.querySelectorAll('#splash .carga__palabra svg path')).map((p) => p.getAttribute('fill')),
         texto: (document.getElementById('splash')!.textContent ?? '').trim(),
         tieneText: document.querySelectorAll('#splash text, #splash tspan').length,
       };
     });
-    expect(medida.triangulos.map((t) => t.clase)).toEqual(['t t-arriba', 't t-izq', 't t-der', 't t-abajo']);
-    for (const t of medida.triangulos) {
+    expect(medida.puntas.map((t) => t.clase)).toEqual(['carga__punta carga__punta--arriba', 'carga__punta carga__punta--abajo']);
+    for (const t of medida.puntas) {
       expect(t.recorte, t.clase).toMatch(/^polygon\(/);
       expect(t.fondo, t.clase).toMatch(/^linear-gradient\(/);
-      // Cada triángulo es la zona entera recortada (el degradé se calcula sobre la zona).
+      // Cada punta es la zona entera recortada (el degradé se calcula sobre la zona).
       expect([t.x, t.y, t.w, t.h], t.clase).toEqual([medida.zona.x, medida.zona.y, medida.zona.w, medida.zona.h]);
     }
     expect(medida.zona).toMatchObject({ x: 0, w: ancho });
-    expect(medida.icono.w).toBeCloseTo(128, 0);
-    expect(medida.icono.h).toBeCloseTo(128, 0);
-    expect(medida.icono.x + medida.icono.w / 2).toBeCloseTo(medida.zona.x + medida.zona.w / 2, 0);
-    expect(medida.icono.y + medida.icono.h / 2).toBeCloseTo(medida.zona.y + medida.zona.h / 2, 0);
+    for (const caja of [medida.palabra, medida.svg]) {
+      expect(caja.w).toBeCloseTo(126, 0);
+      expect(caja.h).toBeCloseTo(40, 0);
+      expect(caja.x + caja.w / 2).toBeCloseTo(medida.zona.x + medida.zona.w / 2, 0);
+      expect(caja.y + caja.h / 2).toBeCloseTo(medida.zona.y + medida.zona.h / 2, 0);
+    }
+    expect(medida.paths).toEqual(['#FFFFFF', '#0FB5C9']);
     // La franja existe, navy, con el alto de la barra de estado (0 en el navegador).
     expect(medida.franja.h).toBe(0);
     expect(medida.franjaFondo).toBe('rgb(16, 30, 59)');
@@ -320,7 +358,8 @@ for (const ancho of [375, 390, 430] as const) {
 /**
  * 🔴 D300 · cada imagen de arranque del iPhone ES la pantalla de carga servida, en su tamaño: el build con la CSP real,
  * con el ancho, el alto y la densidad del iPhone, y la franja de su barra de estado (`Emulation.setSafeAreaInsetsOverride`,
- * como el generador). Se compara píxel por píxel con la imagen que sirve el mismo build.
+ * como el generador). Se compara píxel por píxel con la imagen que sirve el mismo build. D476 (opción A): la imagen va sin
+ * la palabra, así que antes de capturar se oculta igual que en el generador (`visibility: hidden`); el resto, idéntico.
  *
  * Tolerancia declarada: un píxel cuenta como distinto si algún canal difiere en más de 2 (de 255); se admite hasta el
  * 0,1 % de píxeles distintos. Lo dibuja el mismo Chromium con los mismos estilos: medido el 2026-10-13, 0 píxeles
@@ -368,7 +407,9 @@ test.describe('🔴 D300 · las imágenes de arranque son la pantalla de carga s
         // espera al módulo demorado, y la captura saldría con la app montada.
         await demorarLaApp(page, 6_000);
         await page.goto('/', { waitUntil: 'commit' });
-        await expect(page.locator('#splash .carga__icono')).toBeVisible();
+        const palabra = page.locator('#splash .carga__palabra');
+        await expect(palabra).toBeVisible();
+        await palabra.evaluate((el) => { (el as HTMLElement).style.visibility = 'hidden'; });
         expect(await page.locator('#splash .carga__franja').evaluate((el) => el.getBoundingClientRect().height)).toBe(d.barra);
         const pantalla = leerPng(await page.screenshot());
         const imagen = leerPng(await (await page.request.get(hrefDe(d))).body());

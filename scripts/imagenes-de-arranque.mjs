@@ -3,8 +3,10 @@
  *
  * Mati vio la app instalada abrir en negro antes de la pantalla de carga. iOS, al abrir la app desde la pantalla de
  * inicio, muestra la imagen de arranque que coincide con el tamaño del teléfono hasta que la página pinta; sin ella, un
- * fondo vacío. Cada imagen es la pantalla de carga misma (D286), dibujada desde el `index.html` del repo: así, del
- * arranque a la página no cambia nada.
+ * fondo vacío. Cada imagen es la pantalla de carga misma (D475), dibujada desde el `index.html` del repo, con una
+ * diferencia a propósito: D476 (opción A) la quiere SIN la palabra «PayMe» —el fondo, la franja y las dos puntas—,
+ * porque la palabra entra en la página con su fundido. Así aparece una sola vez: si la imagen la trajera, la palabra
+ * desaparecería al pintar la página (nace casi transparente) y volvería, el parpadeo que D300 vino a evitar.
  *
  * Uso: `node scripts/imagenes-de-arranque.mjs` (escribe `public/arranque/`). Importarlo no dibuja nada: la tabla y los
  * nombres los leen las pruebas (`src/arranque/imagenesDeArranque.test.ts` y `e2e/splash.spec.ts`).
@@ -14,11 +16,13 @@
  * - el `index.html` sin su `<script>` y SIN RED: todo pedido se aborta (la pantalla de carga no pide nada);
  * - la franja de la barra de estado con el alto de ese iPhone, por `Emulation.setSafeAreaInsetsOverride` (en un
  *   navegador `env(safe-area-inset-top)` vale 0);
+ * - la palabra (`#splash .carga__palabra`) oculta con `visibility: hidden` antes de capturar, explícito: no depende de
+ *   que la captura caiga dentro de los 80 ms de su retardo;
  * - la captura, en píxeles del dispositivo.
  *
  * ⚠️ Lo que no está medido: el alto de cada barra de estado (`barra`) es el que conozco de cada modelo, no medido en un
- * iPhone. Si es otro, la franja y el centro de los triángulos se corren unos píxeles respecto de la página; la imagen
- * igual es la pantalla de carga, no negro. Los iPhone posteriores a esta tabla no tienen imagen hasta sumarlos.
+ * iPhone. Si es otro, la franja y las puntas se corren unos píxeles respecto de la página; la imagen igual es la
+ * pantalla de carga, no negro. Los iPhone posteriores a esta tabla no tienen imagen hasta sumarlos.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -204,6 +208,8 @@ async function generar() {
       const cdp = await contexto.newCDPSession(pagina);
       await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: d.barra, topMax: d.barra } });
       await pagina.setContent(html, { waitUntil: 'load' });
+      // D476 (opción A): la imagen de arranque no lleva la palabra; la palabra entra en la página.
+      await pagina.evaluate(() => { document.querySelector('#splash .carga__palabra').style.visibility = 'hidden'; });
       await pagina.evaluate(() => new Promise((listo) => requestAnimationFrame(() => requestAnimationFrame(listo))));
       // La franja tiene que medir la barra de ese iPhone: si el override no tomó, la imagen no sería la de ese tamaño.
       const franja = await pagina.evaluate(() => document.querySelector('#splash .carga__franja').getBoundingClientRect().height);

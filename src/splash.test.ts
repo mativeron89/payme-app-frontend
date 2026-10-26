@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   MINIMO_DE_ESTE_BUILD_MS,
@@ -16,6 +17,10 @@ const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx', '/src/styles/gl
 const INDEX = CRUDOS['/index.html'];
 const MAIN = CRUDOS['/src/main.tsx'];
 const GLOBAL = CRUDOS['/src/styles/global.css']!;
+
+/** SHA-256 de los dos `d` de `payme-palabra-contornos.svg` (0cb870e7…), «Pay» y «Me», medidos sobre el archivo del paquete. */
+const SHA_D_PAY = '061bf10a227083856a56fbe2b39066cc185ae9bcdef80d71762c8c602eaa5a35';
+const SHA_D_ME = 'a39fab261f3df3acf428feab038429c9f2ad5b9d6ac55429bd5105ce76061be0';
 
 /** Las fuentes que podrían nombrar la marca de la e2e: el código, las pruebas, los scripts y la configuración. */
 const FUENTES = import.meta.glob(
@@ -151,50 +156,57 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
   });
 
   /**
-   * 🔴 D286 (revisión 6) · `PANTALLA-pantalla-de-carga.md` (d03f38b4…), que manda: cuatro triángulos con su recorte y su
-   * degradado «pulido», la franja de la barra de estado con `env(safe-area-inset-top)`, y el ícono navy del paquete, tal
-   * cual, sin `xmlns` ni metadatos. Sin texto.
+   * 🔴 D475 · `PANTALLA-pantalla-de-carga.md` (4ef1274b…, «PayMe entre dos puntas», 7a), que manda: dos puntas con su
+   * recorte y su degradé teal → cian, la franja de la barra de estado con `env(safe-area-inset-top)`, y la palabra «PayMe»
+   * con los dos `<path>` de `payme-palabra-contornos.svg` (0cb870e7…), tal cual, sin `xmlns` ni metadatos. Sin texto.
+   * Reemplaza los cuatro triángulos metálicos y el ícono navy de D286 (revisión 6).
    */
-  describe('🔴 D286 · los triángulos metálicos y el ícono navy', () => {
+  describe('🔴 D475 · las dos puntas y la palabra «PayMe»', () => {
     const splash = INDEX.slice(INDEX.indexOf('<div id="splash"'), INDEX.indexOf('<script type="module"'));
-    const regla = (selector: string) => INDEX.match(new RegExp(`${selector.replace('.', '\\.')}\\s*{([^}]*)}`))?.[1] ?? '';
+    const regla = (selector: string) => INDEX.match(new RegExp(`${selector.replace(/\./g, '\\.')}\\s*{([^}]*)}`))?.[1] ?? '';
+    const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-    it('cuatro triángulos, con los degradados superior e inferior intercambiados por D330', () => {
-      const triangulos = [
-        // D345 · el de arriba sube por detrás de la barra de estado: la franja más el triángulo, con el vértice en el centro.
-        ['t-arriba', 'polygon(0 0, 100% 0, 100% env(safe-area-inset-top), 50% calc(50% + env(safe-area-inset-top) / 2), 0 env(safe-area-inset-top))', 'linear-gradient(80deg, #101e3b 0%, #3d4a63 30%, #101e3b 50%, #2c3954 72%, #101e3b 100%)'],
-        ['t-izq', 'polygon(0 0, 50% 50%, 0 100%)', 'linear-gradient(170deg, #a1dbe4 0%, #1493b1 30%, #82d0dc 52%, #0fb5c9 66%, #1b6b8f 100%)'],
-        ['t-der', 'polygon(100% 0, 100% 100%, 50% 50%)', 'linear-gradient(190deg, #016274 0%, #66a2a5 30%, #04596e 55%, #428e92 72%, #0d415d 100%)'],
-        ['t-abajo', 'polygon(0 100%, 50% 50%, 100% 100%)', 'linear-gradient(100deg, #abc7ce 0%, #ffffff 24%, #cfe8eb 42%, #f4fdfe 60%, #97b4be 100%)'],
+    it('dos puntas en esquinas opuestas, cada una la zona entera recortada, con el degradé teal → cian', () => {
+      const puntas = [
+        ['arriba', 'polygon(0 0, 56% 0, 0 19.2%)', 'linear-gradient(135deg, #0a7b80 0%, #0fb5c9 17.1%)'],
+        ['abajo', 'polygon(100% 100%, 44% 100%, 100% 80.8%)', 'linear-gradient(315deg, #0a7b80 0%, #0fb5c9 17.1%)'],
       ] as const;
-      for (const [clase, recorte, degrade] of triangulos) {
-        expect(splash, clase).toContain(`<div class="t ${clase}"></div>`);
-        const r = regla(`#splash .${clase}`);
-        expect(r, clase).toContain(`clip-path: ${recorte};`);
-        expect(r, clase).toContain(`background: ${degrade};`);
+      for (const [lado, recorte, degrade] of puntas) {
+        expect(splash, lado).toContain(`<div class="carga__punta carga__punta--${lado}"></div>`);
+        const r = regla(`#splash .carga__punta--${lado}`);
+        expect(r, lado).toContain(`clip-path: ${recorte};`);
+        expect(r, lado).toContain(`background: ${degrade};`);
+        expect(r, lado).not.toMatch(/animation|top:/);
       }
-      expect(splash.match(/class="t t-/g)).toHaveLength(4);
-      expect(regla('#splash .t')).toMatch(/position: absolute;\s*inset: 0;/);
+      expect(splash.match(/class="carga__punta /g)).toHaveLength(2);
+      expect(regla('#splash .carga__punta')).toMatch(/position: absolute;\s*inset: 0;/);
+      // Lo de D286 ya no está: ni triángulos ni ícono.
+      expect(INDEX).not.toMatch(/class="t |\.t-arriba|\.t-izq|\.t-der|\.t-abajo|carga__icono/);
     });
 
-    it('la franja y la zona arrancan debajo de la barra de estado; D345 · el triángulo de arriba sube y tapa la franja', () => {
+    it('🔴 D476 · la franja navy lisa y la zona debajo de la barra de estado; la punta de arriba ya no sube detrás', () => {
       expect(splash).toContain('<div class="carga__franja"></div>');
       expect(regla('#splash .carga__franja')).toContain('height: env(safe-area-inset-top);');
+      expect(regla('#splash .carga__franja')).toContain('background: #101e3b;');
       expect(regla('#splash .carga__zona')).toContain('top: env(safe-area-inset-top);');
-      // Sube exactamente el alto de la barra, y va después de la franja en el DOM: la pinta encima.
-      expect(regla('#splash .t-arriba')).toContain('top: calc(-1 * env(safe-area-inset-top));');
-      expect(splash.indexOf('class="carga__franja"')).toBeLessThan(splash.indexOf('class="t t-arriba"'));
+      // D353 enmendado: nada sube por detrás de la barra.
+      expect(estilo).not.toContain('calc(-1 * env(safe-area-inset-top))');
       expect(INDEX).toContain('viewport-fit=cover');
       expect(INDEX).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />');
     });
 
-    it('el ícono es el SVG de la sección 4, sin xmlns y sin metadatos, de 128 px y centrado', () => {
-      expect(splash).toContain('<svg class="carga__icono" viewBox="0 0 128 128" role="img" aria-label="PayMe"><rect width="128" height="128" rx="36" fill="#101E3B"/><g transform="scale(1.6842)"><path fill="#0FB5C9" d="M18.5 21L27.5 21L36.5 38L27.5 55L18.5 55L27.5 38Z"/><path fill="#FFFFFF" d="M39.5 21L48.5 21L57.5 38L48.5 55L39.5 55L48.5 38Z"/></g></svg>');
+    it('la palabra: los dos `<path>` del paquete, sin xmlns y sin metadatos, de 126 × 40 y centrada', () => {
+      const svg = splash.match(/<div class="carga__palabra">(<svg[\s\S]*?<\/svg>)<\/div>/)?.[1] ?? '';
+      expect(svg).toMatch(/^<svg viewBox="0 0 240 76" role="img" aria-label="PayMe"><path fill="#FFFFFF" d="M[^"]+"\/><path fill="#0FB5C9" d="M[^"]+"\/><\/svg>$/);
+      // Los `d`, tal cual los del archivo del paquete (medidos al implementar: SHA-256 de cada uno, sobre sus bytes).
+      const d = [...svg.matchAll(/ d="([^"]+)"/g)].map((m) => m[1]!);
+      expect(d.map((x) => createHash('sha256').update(x, 'utf8').digest('hex'))).toEqual([SHA_D_PAY, SHA_D_ME]);
       // Se barre el marcado, no los comentarios (uno explica por qué no lleva `xmlns`).
       const marcado = splash.replace(/<!--[\s\S]*?-->/g, '');
       expect(marcado).not.toContain('xmlns');
-      expect(marcado).not.toMatch(/<metadata|<title|<desc|sodipodi|inkscape/i);
-      expect(regla('#splash .carga__icono')).toMatch(/left: 50%;\s*top: 50%;\s*width: 128px;\s*height: 128px;\s*transform: translate\(-50%, -50%\);/);
+      expect(marcado).not.toMatch(/<metadata|<title|<desc|c2pa|sodipodi|inkscape|width="240"|height="76"/i);
+      expect(regla('#splash .carga__palabra')).toMatch(/left: 50%;\s*top: 50%;\s*width: 126px;\s*height: 40px;\s*transform: translate\(-50%, -50%\);/);
+      expect(regla('#splash .carga__palabra svg')).toMatch(/display: block;\s*width: 126px;\s*height: 40px;\s*opacity: 1;/);
     });
 
     it('sin texto: ni <text>, ni palabras', () => {
@@ -203,18 +215,30 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
     });
 
     /**
-     * 🔴 D300 · el ícono aparece entero de una vez: opacidad 1 y escala 1 desde el primer cuadro, con o sin «reducir
-     * movimiento». Salió la entrada de 240 ms (nacía en opacidad 0 y escala 0,92). Se barre el `<style>` entero, sin
-     * comentarios: ninguna animación, `@keyframes` ni `@media` de movimiento, salvo la rendición de 12 s.
+     * 🔴 D476 (opción A; enmienda D300 punto 3) · la palabra entra con el fundido del diseño, y sólo ella: UNA keyframe extra,
+     * `carga-palabra`, dentro de `prefers-reduced-motion: no-preference` (con «reducir», entera desde el primer cuadro). Nace en
+     * opacidad 0.001, no en 0: con 0 el navegador no anota `first-contentful-paint` en el primer cuadro y el conteo de D300 se
+     * correría al montaje (R1). La rendición sigue siendo la única animación del `#splash`.
      */
-    it('🔴 D300 · el ícono, entero desde el primer cuadro: sin animación, con o sin «reducir movimiento»', () => {
-      const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    it('🔴 D476 · la palabra entra con su fundido, sólo sin «reducir movimiento», y nace en 0.001 (no en 0)', () => {
       expect(estilo.length).toBeGreaterThan(500);
-      expect(regla('#splash .carga__icono')).not.toMatch(/animation|opacity|scale/);
-      expect(estilo).not.toMatch(/carga-entra|prefers-reduced-motion/);
-      expect([...estilo.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1])).toEqual(['splash-rendirse']);
-      expect([...estilo.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]!.trim())).toEqual(['splash-rendirse 400ms ease 12s forwards']);
-      expect(estilo).not.toMatch(/@media/);
+      expect([...estilo.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1])).toEqual(['carga-palabra', 'splash-rendirse']);
+      expect([...estilo.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]!.trim())).toEqual([
+        'splash-rendirse 400ms ease 12s forwards',
+        'carga-palabra 600ms cubic-bezier(.2, .8, .2, 1) 80ms both',
+      ]);
+      // Un solo @media, el de «sin preferencia», y adentro sólo la palabra.
+      const medias = [...estilo.matchAll(/@media\s*([^{]+){\s*([^{}]+){([^}]*)}\s*}/g)];
+      expect(medias.map((m) => [m[1]!.trim(), m[2]!.trim()])).toEqual([['(prefers-reduced-motion: no-preference)', '#splash .carga__palabra svg']]);
+      expect(estilo.match(/@media/g)).toHaveLength(1);
+      expect(estilo).not.toMatch(/prefers-reduced-motion: reduce/);
+      const entrada = estilo.match(/@keyframes carga-palabra\s*{\s*from\s*{([^}]*)}\s*to\s*{([^}]*)}\s*}/);
+      expect(entrada).not.toBeNull();
+      expect(entrada![1]!.trim()).toBe('opacity: 0.001; transform: translateY(16px);');
+      expect(entrada![2]!.trim()).toBe('opacity: 1; transform: translateY(0);');
+      // Ni el #splash, ni la palabra fuera del @media, ni las puntas se animan.
+      expect(regla('#splash .carga__palabra')).not.toMatch(/animation|opacity/);
+      expect(estilo).not.toMatch(/carga-entra|splash-aparecer/);
     });
   });
 
