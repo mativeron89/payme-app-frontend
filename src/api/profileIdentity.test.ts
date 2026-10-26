@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { api } from './index';
 import {
@@ -609,6 +610,58 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
       });
     } finally {
       restore();
+    }
+  });
+});
+
+/**
+ * 🔴 D457 · la foto de perfil de Mati (DIAGNOSTICO_FOTO_PERFIL_20261026).
+ *
+ * El dueño sirve `notice_version: '3.1.0'` desde 2.192.0 y el front no lo
+ * presentaba: la capacidad quedaba en `notice_unavailable`, sin foto ni edición.
+ * Nada lo cazó porque el mock presenta 2.5.5. Ahora:
+ *   · la forma EXACTA que sirvió producción (2.197.0, `GET /api/config` del
+ *     2026-10-26) enciende la capacidad;
+ *   · el Aviso vigente que el front adoptó del dueño —las carpetas
+ *     `legal/vigencia-*` de su inventario— tiene que ser presentable: si el dueño
+ *     sube de versión y el front no la agrega, esto falla ANTES de llegar a Mati.
+ */
+describe('D457 · el Aviso que sirve el dueño enciende la foto y la edición del perfil', () => {
+  const PRODUCCION_2_197_0 = {
+    supported: true,
+    enabled: true,
+    notice_version: '3.1.0',
+    notice_required: true,
+    activation_blocker: null,
+    payme_id_mutable: false,
+    avatar_public_url: false,
+  };
+
+  it('🔴 la forma exacta servida por 2.197.0, con 3.1.0, enciende la capacidad', () => {
+    expect(readProfileIdentityCapability(config(PRODUCCION_2_197_0)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '3.1.0' });
+  });
+
+  it('🔴 el Aviso vigente del inventario del dueño es presentable', () => {
+    const inventario = JSON.parse(
+      readFileSync(new URL('../../scripts/mirror-inventory.json', import.meta.url), 'utf8'),
+    ) as { archivos: ReadonlyArray<{ origen: string }> };
+    const vigencias = [...new Set(inventario.archivos
+      .map((a) => /^legal\/vigencia-([^/]+)\//.exec(a.origen)?.[1])
+      .filter((v): v is string => v !== undefined))];
+    // Control positivo: sin vigencias el recorrido mediría en vacío.
+    expect(vigencias.length, 'el inventario no trae ninguna carpeta legal/vigencia-*').toBeGreaterThan(0);
+    for (const v of vigencias) {
+      expect(readProfileIdentityCapability(config({ ...PRODUCCION_2_197_0, notice_version: v })),
+        `el dueño sirve el Aviso ${v} y el front no lo presenta: la foto y la edición del perfil se apagan`)
+        .toEqual({ enabled: true, status: 'authoritative', noticeVersion: v });
+    }
+  });
+
+  it('🔴 y sin near-miss de 3.1.0: un dígito o un sufijo de más no se presentan', () => {
+    for (const v of ['3.1.00', '3.1.0-rc', '3.1', '3.10.0']) {
+      expect(readProfileIdentityCapability(config({ ...PRODUCCION_2_197_0, notice_version: v })).status, v)
+        .toBe('notice_unavailable');
     }
   });
 });
