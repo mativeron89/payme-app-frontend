@@ -60,7 +60,14 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // va ANTES que el dueño, porque si App Backend publicara `notice_version:
 // '3.0.0'` sin esta línea, la edición de nombre y foto se apagaría con
 // `notice_unavailable`. Se AGREGA: 2.5.5 es lo que sirve producción hoy.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2', '2.5.3', '2.5.4', '2.5.5', '3.0.0']);
+//
+// 2026-10-26 (D457, foto de perfil): se PRESENTA 3.1.0, el paquete legal de la
+// abogada que el dueño sirve desde 2.192.0 (`services/profileIdentity.js`). Esta
+// vez el front llegó DESPUÉS: la 0.260.0 lo agregó a `friendAvatarNotice.ts` y
+// a `fotoPerfilNoAmigos.ts` pero no acá, y con `notice_unavailable` Mati dejó
+// de ver su foto y de poder editarla (DIAGNOSTICO_FOTO_PERFIL_20261026). Ahora
+// un test falla si el Aviso vigente del espejo del dueño no está en este set.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2', '2.5.3', '2.5.4', '2.5.5', '3.0.0', '3.1.0']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');
