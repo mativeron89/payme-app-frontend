@@ -102,6 +102,32 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 4 segundos (Mati, 
   });
 
   /**
+   * 🔴 D498 · 2 · sobre 0.264.3 asomaba en esos 59 pt la barra de pestañas de la app (video de Mati): `.app` mide
+   * `100lvh` en la app de inicio y el `#splash`, fijo con `inset: 0`, sólo el viewport corto. En la app instalada el
+   * `#splash` mide `100lvh` desde arriba, `absolute` y no `fixed` (en 0.210.5 una capa fija estirada a 852 se pintó sólo
+   * hasta 793 en el iPhone). Por `display-mode` antes del JS y por la misma clase que estira `.app` después. En Safari
+   * sigue fijo con `inset: 0`.
+   */
+  it('🔴 D498 · 2 · en la app instalada el #splash cubre el alto grande, como `.app`', () => {
+    const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const alto = /^\s*position: absolute;\s*bottom: auto;\s*height: 100vh;\s*height: 100lvh;\s*$/;
+    const enMedia = estilo.match(/@media \(display-mode: standalone\)\s*{\s*#splash\s*{([^}]*)}\s*}/)?.[1];
+    expect(enMedia, 'falta el #splash de 100lvh dentro de @media (display-mode: standalone)').toMatch(alto);
+    const conClase = estilo.match(/\n\s*html\.app-de-inicio-ios #splash\s*{([^}]*)}/)?.[1];
+    expect(conClase, 'falta el #splash de 100lvh con la clase app-de-inicio-ios').toMatch(alto);
+    // La clase es la misma que estira `.app` en global.css.
+    expect(CRUDOS['/src/styles/global.css']).toMatch(/html\.app-de-inicio-ios \.app\s*{[^}]*height: 100lvh;/);
+    // Fuera de la app instalada, el #splash sigue fijo al viewport.
+    const base = INDEX.match(/\n\s*#splash\s*{([^}]*)}/)?.[1] ?? '';
+    expect(base).toMatch(/position: fixed;\s*inset: 0;/);
+    expect(base).not.toMatch(/lvh|vh/);
+    // Ninguna regla deja el #splash fijo con un alto de pantalla: así lo recortó WebKit en 0.210.5.
+    for (const m of estilo.matchAll(/([^{}]*#splash)\s*{([^}]*)}/g)) {
+      if (/height: 100l?vh/.test(m[2]!)) expect(m[2], m[1]!.trim()).toContain('position: absolute;');
+    }
+  });
+
+  /**
    * 🔴 La marca de la e2e no es un atajo de producción: sólo vale con `DEV` (en un `vite build` es `false` constante), y
    * sólo la nombran `splash.ts` (que la lee) y `playwright.config.ts` (que la pone en el servidor de desarrollo de la e2e).
    * Si alguien la nombra en otro lado —Vercel, el CI, un script— esto se pone rojo.
@@ -240,10 +266,14 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 4 segundos (Mati, 
         'splash-rendirse 400ms ease 12s forwards',
         'carga-palabra 1200ms cubic-bezier(.4, 0, .2, 1) 300ms both',
       ]);
-      // Un solo @media, el de «sin preferencia», y adentro sólo la palabra.
+      // Dos @media: el de «sin preferencia», con sólo la palabra, y el de la app instalada (D498 · 2), con sólo el
+      // `#splash`. Ninguno anima otra cosa.
       const medias = [...estilo.matchAll(/@media\s*([^{]+){\s*([^{}]+){([^}]*)}\s*}/g)];
-      expect(medias.map((m) => [m[1]!.trim(), m[2]!.trim()])).toEqual([['(prefers-reduced-motion: no-preference)', '#splash .carga__palabra svg']]);
-      expect(estilo.match(/@media/g)).toHaveLength(1);
+      expect(medias.map((m) => [m[1]!.trim(), m[2]!.trim()])).toEqual([
+        ['(display-mode: standalone)', '#splash'],
+        ['(prefers-reduced-motion: no-preference)', '#splash .carga__palabra svg'],
+      ]);
+      expect(estilo.match(/@media/g)).toHaveLength(2);
       expect(estilo).not.toMatch(/prefers-reduced-motion: reduce/);
       const entrada = estilo.match(/@keyframes carga-palabra\s*{\s*from\s*{([^}]*)}\s*to\s*{([^}]*)}\s*}/);
       expect(entrada).not.toBeNull();

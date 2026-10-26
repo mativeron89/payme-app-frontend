@@ -116,6 +116,30 @@
         background: #101e3b;
         animation: splash-rendirse 400ms ease 12s forwards;
       }
+      /* D498 · 2 (0.264.4) · lo que asomaba en esos 59 pt sobre 0.264.3 ya no era
+         el fondo sino la barra de pestañas de la app (video de Mati, 2 o 3
+         cuadros por ingreso): `.app` mide `100lvh` (852) y el `#splash`, fijo con
+         `inset: 0`, sólo el viewport corto (793). En la app instalada el `#splash`
+         mide lo mismo que `.app`. Va `absolute` y no `fixed` a propósito: en
+         0.210.5 una capa fija estirada a 852 se pintó sólo hasta 793 en el
+         iPhone, y `.app`, en el flujo, se pinta hasta 852 (es lo que se ve en el
+         video). Dos condiciones: `display-mode` vale antes de que cargue el JS;
+         la clase de `src/appDeInicio.ts` es la misma que estira `.app`. En
+         Safari no aplica: ahí `100lvh` taparía la punta de abajo con su barra. */
+      @media (display-mode: standalone) {
+        #splash {
+          position: absolute;
+          bottom: auto;
+          height: 100vh;
+          height: 100lvh;
+        }
+      }
+      html.app-de-inicio-ios #splash {
+        position: absolute;
+        bottom: auto;
+        height: 100vh;
+        height: 100lvh;
+      }
       /* La franja de la barra de estado: con la app instalada, la hora y la
          batería van en blanco encima (`black-translucent` y `viewport-fit=cover`
          ya están arriba). En el navegador mide 0. D476 (enmienda D353): navy

@@ -316,6 +316,61 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada ap
   });
 
   /**
+   * 🔴 D498 · 2 · sobre 0.264.3, en esos 59 pt asomaba la barra de pestañas de la app: `.app` mide `100lvh` en la app de
+   * inicio y el `#splash`, fijo con `inset: 0`, sólo el viewport corto. Con la app de inicio simulada como en
+   * `barra-app-de-inicio.spec.ts` (`navigator.standalone`), mientras la pantalla de carga sigue arriba de la app ya
+   * montada: el `#splash` es `absolute`, mide lo mismo que una sonda de `100lvh` y cubre `.app` entera. En Safari, fijo
+   * al viewport como siempre.
+   *
+   * 🔴 Lo que esto NO prueba: en Chromium `100lvh` vale el viewport, así que acá no hay 59 pt de diferencia; tampoco
+   * emula `display-mode: standalone` (medido en `barra-inferior-viewport.spec.ts`), así que ejercita la regla de la
+   * clase y no la del `@media`. Que en el iPhone ya no asome la barra lo dice la prueba de Mati (D63).
+   */
+  for (const enApp of [true, false]) {
+    test(`🔴 D498 · 2 · ${enApp ? 'en la app de inicio, el #splash cubre el alto grande y la app entera' : 'en Safari, el #splash sigue fijo al viewport'}`, async ({ page }) => {
+      await page.addInitScript((standalone) => {
+        if (standalone) Object.defineProperty(Navigator.prototype, 'standalone', { configurable: true, get: () => true });
+      }, enApp);
+      await page.goto('/');
+      await expect(page.locator('.app')).toBeAttached();
+      const m = await page.evaluate(() => {
+        const splash = document.getElementById('splash');
+        const app = document.querySelector('.app');
+        if (!splash || !app) return null;
+        const sonda = document.createElement('div');
+        sonda.style.cssText = 'position:absolute;visibility:hidden;height:100lvh';
+        document.body.appendChild(sonda);
+        const lvh = sonda.getBoundingClientRect().height;
+        sonda.remove();
+        const s = splash.getBoundingClientRect();
+        const a = app.getBoundingClientRect();
+        return {
+          clase: document.documentElement.classList.contains('app-de-inicio-ios'),
+          posicion: getComputedStyle(splash).position,
+          lvh,
+          viewport: window.innerHeight,
+          splash: { top: s.top, bottom: s.bottom, left: s.left, right: s.right, alto: s.height },
+          app: { top: a.top, bottom: a.bottom, left: a.left, right: a.right },
+        };
+      });
+      expect(m, 'la pantalla de carga ya no estaba cuando montó la app (el mínimo de 4 s no la sostuvo)').not.toBeNull();
+      expect(m!.clase).toBe(enApp);
+      if (enApp) {
+        expect(m!.posicion, 'en la app de inicio el #splash no es absolute (fijo, WebKit lo recorta en el viewport corto)').toBe('absolute');
+        expect(m!.splash.alto, 'el #splash no mide 100lvh, como .app').toBeCloseTo(m!.lvh, 0);
+      } else {
+        expect(m!.posicion).toBe('fixed');
+        expect(m!.splash.alto).toBeCloseTo(m!.viewport, 0);
+      }
+      // Sea como sea, la app queda entera debajo de la pantalla de carga.
+      expect(m!.splash.top).toBeLessThanOrEqual(m!.app.top);
+      expect(m!.splash.bottom, 'la app asoma por debajo de la pantalla de carga').toBeGreaterThanOrEqual(m!.app.bottom);
+      expect(m!.splash.left).toBeLessThanOrEqual(m!.app.left);
+      expect(m!.splash.right).toBeGreaterThanOrEqual(m!.app.right);
+    });
+  }
+
+  /**
    * 🔴 R1 (informe D475) · la palabra nace casi transparente y las puntas son degradés (no cuentan como contenido): el
    * navegador igual tiene que anotar `first-contentful-paint` con la pantalla de carga, ANTES de que monte la app. Si no,
    * `src/splash.ts` contaría los 4 s de D300 desde el montaje. La app se demora para que las dos cosas no coincidan.
