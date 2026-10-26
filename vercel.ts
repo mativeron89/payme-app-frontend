@@ -146,7 +146,7 @@ const headers = [
  * Artefacto desconocido: NINGUNA cabecera, igual que rewrites y headers.
  */
 const HASH_SCRIPT_IDIOMA_LANDING = "'sha256-AWsch9cCLyknCUXXxJxRT51mMmxb8GNLqZrqlTp4wW4='";
-const HASH_STYLE_SPLASH_APP = "'sha256-uaOJwoY1y/UwYJpwtBB75wezx/fi34KLguL/YtJBQpQ='";
+const HASH_STYLE_SPLASH_APP = "'sha256-L7+lcR3JlAV6Z2v5gQ/d7/GxkB7hdjVr+eRUaCBr3Y4='";
 /** El `<style>` que inyecta `gsi/client` (medido el 2026-09-26, igual al de producción; re-medido el 2026-09-28). */
 const HASH_STYLE_GIS = "'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='";
 

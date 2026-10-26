@@ -28,14 +28,15 @@ const FUENTES = import.meta.glob(
   { query: '?raw', import: 'default', eager: true },
 ) as Record<string, string>;
 
-describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 2026-10-12, adenda 2)', () => {
+describe('🔴 D292 · la pantalla de carga siempre, al menos 4 segundos (Mati, 2026-10-12; D498, 2026-10-26)', () => {
   /** La decisión entera está en esta función: lo que falta para completar el mínimo desde el primer cuadro pintado. */
   it('la app monta antes del mínimo: espera lo que falta', () => {
-    expect(SPLASH_MINIMO_MS).toBe(2_000);
-    expect(demoraDeRetiro(0)).toBe(2_000);
-    expect(demoraDeRetiro(120)).toBe(1_880);
-    expect(demoraDeRetiro(1_000)).toBe(1_000);
-    expect(demoraDeRetiro(1_999)).toBe(1);
+    // D498 · 4 s (Mati: «dejala dos segundos mas luego»; antes 2 s).
+    expect(SPLASH_MINIMO_MS).toBe(4_000);
+    expect(demoraDeRetiro(0)).toBe(4_000);
+    expect(demoraDeRetiro(120)).toBe(3_880);
+    expect(demoraDeRetiro(1_000)).toBe(3_000);
+    expect(demoraDeRetiro(3_999)).toBe(1);
   });
 
   it('la app tarda más: ya cumplió el mínimo, se funde enseguida (nunca una demora negativa)', () => {
@@ -50,7 +51,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
   });
 
   /**
-   * 🔴 D300 · los 2 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación. Con una página que
+   * 🔴 D300 · los 4 s (D498) se cuentan desde el primer cuadro pintado, no desde que empezó la navegación. Con una página que
    * tardó 3 s en llegar y una app que monta enseguida, contarlos desde la navegación retiraba la pantalla al montar.
    */
   describe('🔴 D300 · desde el primer cuadro pintado', () => {
@@ -58,10 +59,10 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
 
     it('cuenta desde `first-contentful-paint`', () => {
       expect(desdeElPrimerCuadro([fcp(3_100)], 3_300)).toBe(3_100);
-      // La navegación tardó 3 s y la app montó 200 ms después del primer cuadro: faltan 1,8 s, no 0.
-      expect(demoraDeRetiro(3_300 - desdeElPrimerCuadro([fcp(3_100)], 3_300))).toBe(1_800);
+      // La navegación tardó 3 s y la app montó 200 ms después del primer cuadro: faltan 3,8 s, no 0.
+      expect(demoraDeRetiro(3_300 - desdeElPrimerCuadro([fcp(3_100)], 3_300))).toBe(3_800);
       // Con la página rápida, lo mismo que antes: el primer cuadro casi al empezar.
-      expect(demoraDeRetiro(400 - desdeElPrimerCuadro([fcp(60)], 400))).toBe(1_660);
+      expect(demoraDeRetiro(400 - desdeElPrimerCuadro([fcp(60)], 400))).toBe(3_660);
     });
 
     it('ignora otras entradas: `first-paint` no es el cuadro del ícono', () => {
@@ -80,12 +81,24 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
     });
 
     it('la app tardó más que el mínimo desde el primer cuadro: se funde enseguida', () => {
-      expect(demoraDeRetiro(6_000 - desdeElPrimerCuadro([fcp(3_100)], 6_000))).toBe(0);
+      expect(demoraDeRetiro(8_000 - desdeElPrimerCuadro([fcp(3_100)], 8_000))).toBe(0);
     });
   });
 
-  it('🔴 en este build (sin la marca), el mínimo son los 2 s', () => {
-    expect(MINIMO_DE_ESTE_BUILD_MS).toBe(2_000);
+  it('🔴 en este build (sin la marca), el mínimo son los 4 s (D498)', () => {
+    expect(MINIMO_DE_ESTE_BUILD_MS).toBe(4_000);
+  });
+
+  /**
+   * 🔴 D498 · la barra blanca de abajo: en la app de inicio de iOS asoman 59 pt de fondo de página debajo del
+   * `#splash` (viewport corto, D179). Mientras el `#splash` exista, el fondo de la página es navy, y la regla depende
+   * de que exista: cuando la app lo saca, vuelve el fondo de siempre.
+   */
+  it('🔴 D498 · mientras exista el #splash, el fondo de la página es su navy', () => {
+    const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(estilo).toMatch(/html:has\(> body > #splash\)\s*{\s*background: #101e3b;\s*}/);
+    // Y es el mismo navy del `#splash`.
+    expect(INDEX.match(/\n\s*#splash\s*{([^}]*)}/)?.[1]).toContain('background: #101e3b;');
   });
 
   /**

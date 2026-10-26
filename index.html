@@ -69,8 +69,9 @@
       /* Splash de carga · D292 (Mati, 2026-10-12, «Siempre al abrir
          (Recomendada)», con la adenda 2 «Aumenta a dos segundos el icono de
          carga inicial»): aparece en cada apertura o recarga, también por un
-         link o un QR de mesa, desde el primer cuadro, y queda al menos 2 s.
-         D300: los 2 s se cuentan desde el primer cuadro pintado, no desde que
+         link o un QR de mesa, desde el primer cuadro, y queda al menos 4 s
+         (D498, Mati: «dejala dos segundos mas luego»; antes 2 s).
+         D300: los 4 s se cuentan desde el primer cuadro pintado, no desde que
          empezó la navegación (lo cuenta `src/splash.ts`). Reemplaza «B sólo
          cuando tarda» (2026-08-19), que lo mostraba sólo si la app tardaba
          más de 300 ms.
@@ -84,8 +85,8 @@
          · se ve desde el primer cuadro: sin retardo y sin fundido de entrada
            del `#splash`;
          · D476 (opción A, «lo que se armó con Claude Design»; enmienda D300
-           punto 3): la palabra entra con un fundido mientras sube 16 px, a los
-           80 ms y durante 600 ms. Con «reducir movimiento», entera desde el
+           punto 3): la palabra entra con un fundido mientras sube 16 px. D491:
+           a los 300 ms y durante 1200 ms. Con «reducir movimiento», entera desde el
            primer cuadro. La imagen de arranque del iPhone va sin la palabra,
            así que no parpadea: aparece una sola vez;
          · 12 s de rendición — si el grafo de módulos muere (ya pasó:
@@ -99,6 +100,15 @@
          palabra «PayMe» en contornos en el centro. Reemplaza los cuatro
          triángulos metálicos y el ícono navy de D286 (revisión 6); D330 queda
          sin objeto. Sin imágenes, sin tipografías, sin texto. */
+      /* D498 · la barra blanca de abajo. La app de inicio de iOS arranca con el
+         viewport corto (793 de 852 pt, medido en D179): lo que queda debajo,
+         59 pt, no es del `#splash` sino el fondo de la página, que era claro.
+         Medido en el video de Mati sobre 0.264.2: 59,0 pt, de 1,20 a 1,35 s.
+         Mientras exista el `#splash`, el fondo de la página es su mismo navy;
+         cuando la app lo saca del árbol, vuelve el de siempre. */
+      html:has(> body > #splash) {
+        background: #101e3b;
+      }
       #splash {
         position: fixed;
         inset: 0;
@@ -165,7 +175,7 @@
       /* 🔴 Nace en 0.001, no en 0 como la especificación (R1 del informe D475):
          a la vista es igual, pero con 0 el navegador no anota
          `first-contentful-paint` en el primer cuadro (las puntas son degradés,
-         no cuentan como contenido) y `src/splash.ts` contaría los 2 s de D300
+         no cuentan como contenido) y `src/splash.ts` contaría los 4 s de D300
          desde que monta la app, no desde que se ve. */
       @keyframes carga-palabra {
         from { opacity: 0.001; transform: translateY(16px); }

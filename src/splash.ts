@@ -20,8 +20,11 @@
  * separen. D300 sacó la entrada del ícono (240 ms): el ícono está entero desde el primer cuadro.
  */
 
-/** D292 · el mínimo visible, desde el primer cuadro pintado (D300). La adenda 2: 2 s; la 1 lo había dejado en 1 s. */
-export const SPLASH_MINIMO_MS = 2_000;
+/**
+ * D292 · el mínimo visible, desde el primer cuadro pintado (D300). La adenda 1 lo dejó en 1 s y la 2 en 2 s.
+ * D498 (Mati, sobre 0.264.2: «dejala dos segundos mas luego»): 4 s.
+ */
+export const SPLASH_MINIMO_MS = 4_000;
 
 /** Duración del fundido de salida. */
 export const SPLASH_FUNDIDO_MS = 160;
@@ -30,7 +33,7 @@ export const SPLASH_FUNDIDO_MS = 160;
 export const SPLASH_RENDICION_MS = 12_000;
 
 /**
- * El mínimo de ESTE build. Siempre 2 s, salvo en el servidor de desarrollo de la e2e, que arranca con
+ * El mínimo de ESTE build. Siempre 4 s (D498), salvo en el servidor de desarrollo de la e2e, que arranca con
  * `VITE_E2E_CARGA_SIN_MINIMO=1` (`playwright.config.ts`): ahí las ~1300 pruebas de siempre no esperan el mínimo en cada
  * carga. 🔴 Con `DEV` delante (condición del Bibliotecario, 2026-10-12T13:40:42Z): en un `vite build` `DEV` es `false`
  * constante, así que aunque alguien ponga la variable en Vercel o en el CI, el build que se publica aplica el mínimo. La
