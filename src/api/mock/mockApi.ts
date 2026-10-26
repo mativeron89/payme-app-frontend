@@ -2287,9 +2287,11 @@ export function fotoDeMesaMock(code: string): { thumb: boolean; full: boolean } 
 
 /**
  * D484 · D486 · cuántas fotos tiene el ticket de cada mesa del mock, con las
- * varias fotos encendidas: Café Tacuba se sacó en tres partes; las demás, en una.
+ * varias fotos encendidas: Café Tacuba se sacó en tres partes y Tacos El Güero
+ * en dos (así hay un ticket con partes que NO es el último del visor); las
+ * demás, en una.
  */
-export const PARTES_DE_MESAS_MOCK: Readonly<Record<string, number>> = { 'PA-6604': 3 };
+export const PARTES_DE_MESAS_MOCK: Readonly<Record<string, number>> = { 'PA-6604': 3, 'PA-7310': 2 };
 
 export function partesDeMesaMock(code: string): number {
   const foto = fotoDeMesaMock(code);

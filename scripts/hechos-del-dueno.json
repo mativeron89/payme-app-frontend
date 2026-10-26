@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-hechos-del-dueno.mjs, SÓLO EN LOCAL, con el repo del dueño en el commit del inventario. No se edita a mano. D268.",
   "version": 1,
-  "commit": "154bd06324177feef57ccab2c7272279092a1a66",
+  "commit": "9bb11ac9cdb0daf35d6daf9873c008b6b3d6c547",
   "fuentes": {
     "routes/account.js": "f57d9f34cb5de7537978d5c5af6caedfd99e941ebe7da93b251d55b6739f291b",
     "routes/config.js": "2bba626c21472623fc24517fd4e2088a7aef3aebe5637918b83296365cc13513",

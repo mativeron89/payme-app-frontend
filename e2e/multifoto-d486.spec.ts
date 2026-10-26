@@ -245,8 +245,10 @@ for (const idioma of ['es', 'en'] as const) {
       const es = idioma === 'es';
       const fila = page.locator('.tu-mesa').filter({ hasText: 'Café Tacuba' });
       await expect(fila.locator('.miniatura-ticket-partes')).toHaveText(es ? '3 fotos' : '3 photos');
-      // Una sola parte: sin marca.
-      await expect(page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' }).locator('.miniatura-ticket-partes')).toHaveCount(0);
+      await expect(page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' }).locator('.miniatura-ticket-partes'))
+        .toHaveText(es ? '2 fotos' : '2 photos');
+      // Una sola parte (la del seed, sin foto): sin marca.
+      await expect(page.locator('.tu-mesa').filter({ hasText: 'La Parolaccia' }).locator('.miniatura-ticket-partes')).toHaveCount(0);
       await capturar(page, `${idioma}-fila-tres-fotos`);
       await fila.locator('button.fila-ticket-foto').click();
       const visor = page.getByRole('dialog');
@@ -280,13 +282,43 @@ for (const idioma of ['es', 'en'] as const) {
       await visor.getByRole('button', { name: es ? 'Parte anterior' : 'Previous part', exact: true }).click();
       await expect(parte).toHaveText(de(2));
 
-      // Pasar de ticket va por la flecha de la franja: el otro ticket tiene una sola foto y no muestra partes.
+      // Pasar de ticket va por la flecha de la franja: el otro ticket tiene sus propias partes, desde la primera.
       await visor.getByRole('button', { name: es ? 'Ticket anterior' : 'Previous receipt', exact: true }).click();
       await expect(titulo).not.toHaveText(tituloAntes!);
-      await expect(visor.locator('.visor-ticket-partes')).toHaveCount(0);
+      await expect(parte).toHaveText(es ? 'Parte 1 de 2' : 'Part 1 of 2');
       // Y al volver, la primera parte.
       await visor.getByRole('button', { name: es ? 'Ticket siguiente' : 'Next receipt', exact: true }).click();
       await expect(parte).toHaveText(de(1));
+    });
+
+    test(`🔴 en la última parte de un ticket que NO es el último, deslizar no salta al ticket siguiente (${idioma})`, async ({ page }) => {
+      const es = idioma === 'es';
+      // Tacos El Güero (2 partes) va antes que Café Tacuba en el visor: hay un ticket siguiente al que se podría saltar.
+      await page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' }).locator('button.fila-ticket-foto').click();
+      const visor = page.getByRole('dialog');
+      const titulo = visor.locator('#visor-ticket-titulo');
+      const parte = visor.locator('.visor-ticket-partes-texto');
+      const escenario = visor.locator('.visor-ticket-escenario');
+      const siguiente = visor.getByRole('button', { name: es ? 'Ticket siguiente' : 'Next receipt', exact: true });
+      // Control: este ticket tiene uno siguiente.
+      await expect(siguiente).toBeVisible();
+      await expect(parte).toHaveText(es ? 'Parte 1 de 2' : 'Part 1 of 2');
+      await imagenCargada(visor.locator('img.visor-ticket-foto'));
+      const tituloAntes = (await titulo.textContent())!;
+      await deslizar(page, escenario, 'izquierda');
+      await expect(parte).toHaveText(es ? 'Parte 2 de 2' : 'Part 2 of 2');
+      await imagenCargada(visor.locator('img.visor-ticket-foto'));
+      // En la última parte, dos deslizamientos más: se queda en la última parte del MISMO ticket.
+      await deslizar(page, escenario, 'izquierda');
+      await deslizar(page, escenario, 'izquierda');
+      await expect(parte).toHaveText(es ? 'Parte 2 de 2' : 'Part 2 of 2');
+      await expect(titulo).toHaveText(tituloAntes);
+      await expect(siguiente).toBeVisible();
+      await expect(visor.locator('img.visor-ticket-foto')).toHaveAttribute('data-parte', '1');
+      // Control positivo: la flecha sí pasa al ticket siguiente.
+      await siguiente.click();
+      await expect(titulo).not.toHaveText(tituloAntes);
+      await expect(parte).toHaveText(es ? 'Parte 1 de 3' : 'Part 1 of 3');
     });
   });
 }

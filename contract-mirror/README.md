@@ -1,19 +1,19 @@
 ## D484 · D486 · varias fotos de un ticket largo · 0.264.0
 
-Contenido vigente: `154bd06324177feef57ccab2c7272279092a1a66`.
-Inventario íntegro de 159 entradas tomado del PR del dueño (App Backend PR77, rama
-`claude/ab-multifoto-d486-20261025`, punta `03035830502e34c9abec5587d170c2bdad4b3941`, backend 2.196.0, ya en `main`
-y servido; `contract/mirror-inventory.json`, sha256 `31fd0aa86a29ae3aec9bcc2e8656e1bd2993ce61d31ed7e4453922fa797a78cf`), adoptado con
-`--adoptar-inventario` sin editarlo. **18 archivos espejados**, todos JSON de `contract/`;
-**141 fuentes sólo por hash**, conforme D268. Nuevo `contract/ocr-pages-v1.json`
-(sha256 `96c5d62bac5b25602762231fed39ca7f5395be81cc0f96af0c3e30b243436b06`); cambian `ticket-image-v1.json`
-(la sección `paginas`, sha256 `469fd2b3369e1bc4563d7f05b150fdb53f4263e86eb9167c9d9b461bbadb098f`),
-`mesa-acceso-v1.json` y `viajes-v1.json`. Los hechos del dueño se regeneraron en local contra
-`154bd06`: cambian sólo los sha256 de sus fuentes, ningún valor.
+Contenido vigente: `9bb11ac9cdb0daf35d6daf9873c008b6b3d6c547`.
+Inventario íntegro de 161 entradas tomado del `main` del dueño, el servido (App Backend
+2.197.0, `main` en `5ca1c0a1b3f245c3817234cdcdeff1265ffbed0a`; `contract/mirror-inventory.json`,
+sha256 `935a5b9f1168699bb61d27e8acd08f1cbd7707756f337ca2cd17f5ba08b331de`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `9bb11ac`. **19 archivos espejados**, todos JSON de `contract/`;
+**142 fuentes sólo por hash**, conforme D268. Nuevos `contract/ocr-pages-v1.json`
+(2.196.0, PR77; sha256 `96c5d62bac5b25602762231fed39ca7f5395be81cc0f96af0c3e30b243436b06`) y, por arrastre de 2.197.0,
+`contract/sugerencias-dividir-v1.schema.json` (D490): queda como documentación del contrato, sin
+consumidor en esta entrega. Cambian `ticket-image-v1.json` (la sección `paginas`, sha256
+`469fd2b3369e1bc4563d7f05b150fdb53f4263e86eb9167c9d9b461bbadb098f`), `mesa-acceso-v1.json` y `viajes-v1.json`. Los
+hechos del dueño se regeneraron en local contra `9bb11ac`: cambian sólo el commit y los sha256 de
+sus fuentes, ningún valor.
 
-Se adopta el inventario del PR77 y no el de `main` (2.197.0): ése además trae
-`contract/sugerencias-dividir-v1.schema.json` (D490), ajeno a esta entrega. El front
-negocia `pages_version=1` y `ticket_image_version=2` sólo con `features.ocr_pages`
+El front negocia `pages_version=1` y `ticket_image_version=2` sólo con `features.ocr_pages`
 encendida; sin ella, los pedidos y las pantallas son los de antes.
 
 ### Refresh anterior · D464 · D466 · la foto del ticket (A + E), apagada · 0.261.0

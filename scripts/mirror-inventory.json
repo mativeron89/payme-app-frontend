@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "154bd06324177feef57ccab2c7272279092a1a66",
-  "total": 159,
+  "commit": "9bb11ac9cdb0daf35d6daf9873c008b6b3d6c547",
+  "total": 161,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
@@ -99,6 +99,12 @@
       "destino": "contract/social-auth-v1.json",
       "sha256": "f1b6e8d3a2b42a96be3cecd3e6cd4312076dc80ef9618d029c1aeab8b8ac6fa4",
       "bytes": 34465
+    },
+    {
+      "origen": "contract/sugerencias-dividir-v1.schema.json",
+      "destino": "contract/sugerencias-dividir-v1.schema.json",
+      "sha256": "413cbc69e8810a0bfc10b103bef1b6cec58a6c79e64defdd31d2c8197359b19b",
+      "bytes": 11431
     },
     {
       "origen": "contract/ticket-image-v1.json",
@@ -611,6 +617,12 @@
       "bytes": 4813
     },
     {
+      "origen": "routes/sugerencias.js",
+      "destino": "routes/sugerencias.js",
+      "sha256": "daa35fe86acb6c2cae55eba9100106f106a3c26822286ed260bdd97349ac04da",
+      "bytes": 2474
+    },
+    {
       "origen": "routes/topup.js",
       "destino": "routes/topup.js",
       "sha256": "e51616055bf82366e6d100bf09194d4b962896535215aab7ffc30932f3c9f7e7",
@@ -673,8 +685,8 @@
     {
       "origen": "services/consent.js",
       "destino": "services/consent.js",
-      "sha256": "be3489511454ddbeb824721bc5d1f60b00637767a03c320c6b45bd4cc346d8b9",
-      "bytes": 23741
+      "sha256": "cfb28ef5f0343cf8fbae356796ffdbde00b2381218bb02a6a96d02b9c617ef43",
+      "bytes": 23756
     },
     {
       "origen": "services/externalIdentities.js",
@@ -877,8 +889,8 @@
     {
       "origen": "services/sugerencias.js",
       "destino": "services/sugerencias.js",
-      "sha256": "a9f66296e93c666e21690b3a7042bb9f13512c45b3850cf40541488cc2e91d38",
-      "bytes": 301
+      "sha256": "6b7764020853780c0df471558c174ce964fdd2a1b978ad2e970707ce92be55a5",
+      "bytes": 9475
     },
     {
       "origen": "services/ticketImageConfig.js",
@@ -889,8 +901,8 @@
     {
       "origen": "services/ticketImages.js",
       "destino": "services/ticketImages.js",
-      "sha256": "ec62ffd71719da0b48f37e934887763cb875e66d5fe765e774fa3368e2b4b02c",
-      "bytes": 20249
+      "sha256": "17c7f07bd84c878cb4a7248927598e75274b7782dc3e4608ed741a5336a562c7",
+      "bytes": 22682
     },
     {
       "origen": "services/topupProcessor.js",

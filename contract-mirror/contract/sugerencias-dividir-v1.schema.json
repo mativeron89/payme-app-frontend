@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.sugerencias-dividir/v1",
+  "title": "GET /api/sugerencias/dividir · «dividir como siempre» (AB-2 · D490) · publicado APAGADO",
+  "description": "Contrato propietario de App Backend 2.197.0 para App Frontend. La validación raíz describe sólo el 200. Apagado por dos lados: SUGERENCIAS_DIVIDIR_ENABLED ausente/false → 404 not_found sin leer historial; con el interruptor encendido, el mínimo del Aviso de sugerencias sigue en null → 409 sin leer historial. Encender requiere Aviso (D407–D409), front e interruptores (D411–D418) y purga P1-11 atestada, cada uno con su OK.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/abstencion"
+    },
+    {
+      "$ref": "#/$defs/consumo"
+    },
+    {
+      "$ref": "#/$defs/igual"
+    }
+  ],
+  "request": {
+    "method": "GET",
+    "path": "/api/sugerencias/dividir",
+    "authentication": "requireAuth existente, sin guests",
+    "query_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "restaurant_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "query_serialization": "Cada clave una vez, sólo string escalar; sin arrays, objetos o duplicados. UUID se valida sintácticamente, no se busca en restaurants. Sin body. Sin user_id/ventana/fecha/umbral.",
+    "other_methods": {
+      "HEAD": {
+        "status": 405,
+        "wire_body": null,
+        "logical_error": "method_not_allowed",
+        "headers": {
+          "Allow": "GET"
+        }
+      },
+      "OPTIONS": "Preflight CORS heredado; sin cómputo",
+      "other": "405 method_not_allowed; sin cómputo"
+    }
+  },
+  "headers": {
+    "all_exact_path_responses": {
+      "Cache-Control": "private, no-store"
+    },
+    "placement": "Header temprano en server.js acotado al path de cálculo y sus aliases de mayúsculas/trailing slash que acepte Express; antes de CORS/parser/limiter. Router vuelve a fijarlo antes de requireAuth. No cambia CORS/limiter ni otros paths."
+  },
+  "own_error_statuses": {
+    "400": [
+      "validation_error"
+    ],
+    "403": [
+      "age_verification_required",
+      "account_not_eligible",
+      "permiso_requerido"
+    ],
+    "404": [
+      "not_found"
+    ],
+    "405": [
+      "method_not_allowed"
+    ],
+    "409": [
+      "notice_version_too_old"
+    ],
+    "428": [
+      "legal_acceptance_required",
+      "username_required"
+    ],
+    "503": [
+      "legal_text_missing"
+    ]
+  },
+  "inherited_errors": {
+    "401": [
+      "auth_required",
+      "invalid_token",
+      "invalid_issuer",
+      "invalid_audience",
+      "token_not_yet_valid",
+      "session_not_found",
+      "session_revoked",
+      "session_expired",
+      "session_subject_mismatch",
+      "user_not_found"
+    ],
+    "403": [
+      "user_suspended",
+      "cors_origin_forbidden"
+    ],
+    "428": [
+      "legal_acceptance_required",
+      "username_required"
+    ],
+    "500": [
+      {
+        "error": "auth_error"
+      },
+      {
+        "error": "internal_error",
+        "message": "Internal error",
+        "correlation_id": "string"
+      }
+    ],
+    "429": "apiLimiter existente; body opaco posiblemente no JSON; no redefinido por este contrato",
+    "other_parser_transport": "Pipeline existente. AF conserva flujo normal ante cualquier estado/formato desconocido; no renderiza body de error."
+  },
+  "error_precedence": [
+    "CORS/parser/limiter públicos heredados pueden anteceder",
+    "requireAuth existente",
+    "flag off:404 sin historial",
+    "query inválido:400",
+    "mínimo null/inválido/aviso anterior:409; con mínimo definido y falta Aviso:503",
+    "snapshot propio revalida active/par/@, edad, baja, último permiso y prueba; ningún historial al algoritmo si falla"
+  ],
+  "rule": {
+    "min_mesas": 5,
+    "dominant_mode": "5 * votos >= 4 * total; sin redondear",
+    "window": "[T - 12 meses calendario UTC,T); T único servidor; TIMESTAMPTZ",
+    "valid_statuses": [
+      "open",
+      "partially_paid",
+      "fully_paid",
+      "expired",
+      "settling",
+      "settled",
+      "dispersing",
+      "completed",
+      "dispersed"
+    ],
+    "modes": [
+      "consumo",
+      "igual"
+    ],
+    "identity": "mesas.opener_user_id=req.user.id; una por mesas.id; cero join a participantes",
+    "restaurant": "local primero; si no hay sugerencia utilizable, TODO conjunto propio elegible incluido local; UUID desconocido/no propio no genera oráculo. El UUID se compara sin distinguir mayúsculas.",
+    "hidden": "H-OC adoptado (D490): una fila de mesas_ocultas de la propia persona excluye la mesa, con include_history true o false; el ocultamiento de otra persona no afecta. Exportación y análisis interno sin cambios.",
+    "examples": "H-EX opción A (D490): sólo cuentan las mesas abiertas desde un ticket escaneado de verdad, metadata.origin_receipt.status='accepted' y metadata.origin_receipt.mode='real'. No cuentan las armadas a mano (origin_receipt none o ausente), las de recibo rechazado ni las de ejemplo (mode='mock'). Una mesa que no cuenta queda fuera del universo; no vuelve incierto el ámbito. Sin columna ni dato nuevo.",
+    "n_source": "metadata.original_participants: JSON number entero2..50; no coerción ni expected_participants",
+    "n_rule": "Moda entre N válidos de igual en el mismo ámbito; inválidos no votan N pero siguen en denominador/modo. Sin N válido abstener. Empate de moda: más reciente entre empatados; timestamps máximos exactos iguales con N distintos abstienen. No segundo umbral5/80 para N.",
+    "uncertain_scope": "Una fila contada con modo o instante ilegible vuelve incierto su ámbito: abstención, no se descarta."
+  },
+  "gates": {
+    "purpose": "sugerencias, fijo",
+    "independent_from": [
+      "analisis_interno",
+      "EXPORTACION_AGENTE",
+      "RESULTADOS_AGENTE"
+    ],
+    "per_query": [
+      "flag estricto",
+      "mínimo publicado definido y Aviso vigente que alcance",
+      "cuenta activa, sin baja pending",
+      "edad por helper propietario",
+      "par vigente legal y @ según flags propietarios",
+      "último consent_event de sugerencias granted; revoked gana empate",
+      "constancia de grant para aviso_privacidad, versión publicada >=mínimo y par histórico acreditado"
+    ],
+    "snapshot": "Fresco por consulta; sin caché. Revocación confirmada antes de siguiente consulta bloquea; no se promete cancelar respuesta previa en vuelo."
+  },
+  "af_mirror": {
+    "capability": "AB1 features.sugerencias supported/enabled; enabled global para otorgar, no granted",
+    "display": {
+      "consumo": "Como siempre",
+      "igual": "Como siempre; entre N"
+    },
+    "rules": [
+      "Sin nuevos controles, conteos, soporte, scope, motivos o texto",
+      "N no completa contador ni altera elección",
+      "No pedir permiso desde crear mesa",
+      "Discard respuestas en vuelo al cambiar restaurante/permiso/sesión; quitar marca al apagar/ante error",
+      "No persistencia ni telemetría; error sólo suprime marca, servicio principal sigue"
+    ]
+  },
+  "prohibited_reads": [
+    "mesa_items",
+    "mesa_item_claims",
+    "mesa_informative_selections",
+    "mesa_participants",
+    "payment_attempts",
+    "restaurants",
+    "viajes",
+    "amistades",
+    "outbox",
+    "perfil persistente",
+    "metadata completa",
+    "expected_participants para N",
+    "metadata.origin_receipt.id/reason, origin_summary, item_origins"
+  ],
+  "status": "IMPLEMENTED_2_197_0_SERVED_OFF; H-EX resuelto opción A (D490); H-OC adoptado (D490)",
+  "$defs": {
+    "abstencion": {
+      "type": "object",
+      "required": [
+        "sugerencia"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sugerencia": {
+          "type": "null"
+        }
+      }
+    },
+    "consumo": {
+      "type": "object",
+      "required": [
+        "sugerencia"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sugerencia": {
+          "type": "object",
+          "required": [
+            "division_mode",
+            "personas_esperadas"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "division_mode": {
+              "const": "consumo"
+            },
+            "personas_esperadas": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
+    "igual": {
+      "type": "object",
+      "required": [
+        "sugerencia"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sugerencia": {
+          "type": "object",
+          "required": [
+            "division_mode",
+            "personas_esperadas"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "division_mode": {
+              "const": "igual"
+            },
+            "personas_esperadas": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 50
+            }
+          }
+        }
+      }
+    },
+    "ownError": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "enum": [
+            "validation_error",
+            "age_verification_required",
+            "account_not_eligible",
+            "permiso_requerido",
+            "not_found",
+            "method_not_allowed",
+            "notice_version_too_old",
+            "legal_acceptance_required",
+            "username_required",
+            "legal_text_missing"
+          ]
+        }
+      }
+    },
+    "inheritedAuthError": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "enum": [
+            "auth_required",
+            "invalid_token",
+            "invalid_issuer",
+            "invalid_audience",
+            "token_not_yet_valid",
+            "session_not_found",
+            "session_revoked",
+            "session_expired",
+            "session_subject_mismatch",
+            "user_not_found",
+            "user_suspended",
+            "auth_error",
+            "cors_origin_forbidden"
+          ]
+        }
+      }
+    },
+    "global500": {
+      "type": "object",
+      "required": [
+        "error",
+        "message",
+        "correlation_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "const": "internal_error"
+        },
+        "message": {
+          "const": "Internal error"
+        },
+        "correlation_id": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "implementation": {
+    "version": "2.197.0",
+    "route": "routes/sugerencias.js",
+    "service": "services/sugerencias.js",
+    "own_snapshot_errors": {
+      "account_not_eligible": "cuenta no activa al calcular, o baja pending",
+      "legal_acceptance_required": "con el paquete 3.0.0 vigente, el par vigente ya no está aceptado al calcular",
+      "username_required": "con USERNAME_ENABLED, la cuenta ya no tiene @ al calcular",
+      "age_verification_required": "el helper propietario consent.edadConocida no devuelve true",
+      "permiso_requerido": "último evento de sugerencias no granted, constancia de otro aviso, versión debajo del mínimo o par no acreditado en legal_texts"
+    },
+    "decision_sources": [
+      "D400–D406",
+      "D411–D413",
+      "D490 (H-EX A, H-OC)"
+    ]
+  }
+}
