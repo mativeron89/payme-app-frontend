@@ -95,6 +95,12 @@ describe('🔴 D479/D482 · AF-2 · `dishes_version=2`: platos agrupados entre r
     expect(r.dishes[0]!.restaurants).toHaveLength(1);
   });
 
+  it('🔴 la forma de siempre se lee IGUAL con o sin negociar (también vacía y en base gasto)', () => {
+    for (const vieja of [BUENO, { ...BUENO, distinct_dishes: 0, dishes: [] }, { ...BUENO, basis: 'payments' }]) {
+      expect(decodePlatos(vieja, { negociado: true })).toEqual(decodePlatos(vieja));
+    }
+  });
+
   it('🔴 sin negociar, la forma agrupada se rechaza', () => {
     expect(() => decodePlatos(V2)).toThrow('stats_dishes_response_malformed');
   });

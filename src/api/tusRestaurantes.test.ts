@@ -134,6 +134,12 @@ describe('🔴 D479/D482 · AF-2 · `stats_version=3`: la cantidad de la línea 
     expect(r.restaurants[0].visits[0].items[0]!.quantity).toBeNull();
   });
 
+  it('🔴 la forma de la 2 se lee IGUAL con o sin negociar (también el mes vacío y en base gasto)', () => {
+    for (const vieja of [BUENO, { ...BUENO, total_cents: 0, restaurants: [] }, { ...BUENO, basis: 'payments' }]) {
+      expect(decodeTusRestaurantes(vieja, { negociado: true })).toEqual(decodeTusRestaurantes(vieja));
+    }
+  });
+
   it('🔴 sin negociar, un ítem con `quantity` se rechaza: no lo pidió nadie', () => {
     expect(() => decodeTusRestaurantes(conCantidad(2))).toThrow('stats_restaurants_response_malformed');
   });
