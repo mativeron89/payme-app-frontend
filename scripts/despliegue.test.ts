@@ -1733,7 +1733,8 @@ function fallasDelCenso(yml: string): string[] {
     // archivo propio y nada más.
     'actions/upload-artifact@v4': {
       name: '${{ steps.marca.outputs.nombre }}',
-      path: '.ci-probado',
+      // Sin punto adelante: upload-artifact@v4 no sube archivos ocultos (corrida 40392476002).
+      path: 'ci-probado.json',
       'retention-days': 30,
       'if-no-files-found': 'error',
       overwrite: true,

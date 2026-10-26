@@ -232,14 +232,14 @@ describe('D493 · ci-marcar-probado: la marca sale del merge ref del PR', () => 
       expect(r.code, r.out).toBe(0);
       const nombre = `ci-probado-arbol-${arbol(merge)}-base-${base}`;
       expect(r.salida).toBe(`nombre=${nombre}\n`);
-      expect(JSON.parse(readFileSync(join(repo, '.ci-probado'), 'utf8'))).toEqual({ arbol: arbol(merge), base, merge });
+      expect(JSON.parse(readFileSync(join(repo, 'ci-probado.json'), 'utf8'))).toEqual({ arbol: arbol(merge), base, merge });
 
       // Ida y vuelta: esa misma marca, en la corrida del PR, habilita el salteo.
       git(repo, 'checkout', '-q', '--detach', head);
       preparar([runPr()], { 77: [{ name: nombre, expired: false }] });
       expect((await decidir()).salida).toBe('probado=true\n');
     } finally {
-      rmSync(join(repo, '.ci-probado'), { force: true });
+      rmSync(join(repo, 'ci-probado.json'), { force: true });
       git(repo, 'checkout', '-q', '--detach', head);
     }
   });

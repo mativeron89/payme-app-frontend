@@ -6,7 +6,7 @@
  * needs y del build. En un PR el checkout es el merge ref
  * (`refs/pull/N/merge`): su árbol es lo que se probó y su primer padre es la
  * base contra la que se probó. Escribe `nombre=ci-probado-arbol-<árbol>-base-<base>`
- * en `$GITHUB_OUTPUT` y el mismo dato en `.ci-probado`, que el paso siguiente
+ * en `$GITHUB_OUTPUT` y el mismo dato en `ci-probado.json`, que el paso siguiente
  * sube como artefacto con ese nombre.
  *
  * El push a main lo lee por API (`ci-ya-probado.mjs`) y sólo saltea la suite si
@@ -35,7 +35,7 @@ if (!HEX40.test(arbol)) {
   process.exit(1);
 }
 const nombre = `ci-probado-arbol-${arbol}-base-${base}`;
-writeFileSync('.ci-probado', `${JSON.stringify({ arbol, base, merge: padres[0] })}\n`);
+writeFileSync('ci-probado.json', `${JSON.stringify({ arbol, base, merge: padres[0] })}\n`);
 const salida = process.env.GITHUB_OUTPUT;
 if (!salida) {
   console.error('🔴 no hay GITHUB_OUTPUT');

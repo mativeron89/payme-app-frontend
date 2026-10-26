@@ -251,7 +251,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.marca.outputs.nombre }}
-          path: .ci-probado
+          # Sin punto adelante: upload-artifact@v4 excluye los archivos ocultos
+          # (`include-hidden-files: false`), y con `.ci-probado` la corrida 40392476002
+          # falló en este paso con todas las pruebas en verde.
+          path: ci-probado.json
           retention-days: 30
           if-no-files-found: error
           # Relanzar la corrida del PR vuelve a subir la marca con el mismo nombre.
