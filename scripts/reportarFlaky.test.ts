@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
+import { load } from 'js-yaml';
 
 const ejecutar = promisify(execFile);
 
@@ -115,7 +116,9 @@ describe('POR LECTURA · el paso que GATEA no se tocó', () => {
   it('🔴 `npx playwright test` sigue pelado · sin pipe, sin redirección', () => {
     const linea = yml.split('\n').find((l) => l.includes('npx playwright test'));
     expect(linea, 'desapareció el paso de playwright').toBeDefined();
-    expect(linea!.trim()).toBe('- run: npx playwright test');
+    // D493 · el shard es el único argumento, y viaja por `env` (`$SHARD`). Su
+    // denominador y la matriz los fija `fallasDelGrafo` en `despliegue.test.ts`.
+    expect(linea!.trim()).toBe('- run: npx playwright test --shard "$SHARD/4"');
     // Un `| tee` acá se comería el exit code: el shell de un `run:` es `bash -e`
     // SIN `pipefail`. La compuerta quedaría abierta sin que nadie lo note.
     expect(linea).not.toContain('|');
@@ -136,6 +139,19 @@ describe('POR LECTURA · el paso que GATEA no se tocó', () => {
     const pub = yml.indexOf('publicar-vercel.sh');
     expect(pw).toBeLessThan(rep);
     expect(rep).toBeLessThan(pub);
+    /**
+     * 🔴 D493 · con cuatro jobs, «más abajo en el archivo» no es «después». Lo
+     * que se afirma por estructura: el reporte va en el MISMO job que Playwright
+     * (uno por shard) y el publicador está en `build`, que espera a `playwright`.
+     */
+    const jobs = (load(yml) as { jobs: Record<string, { steps?: Array<Record<string, unknown>>; needs?: unknown }> }).jobs;
+    const conRun = (frag: string) => Object.entries(jobs)
+      .filter(([, j]) => (j.steps ?? []).some((st) => typeof st['run'] === 'string' && (st['run'] as string).includes(frag)))
+      .map(([n]) => n);
+    expect(conRun('npx playwright test')).toEqual(['playwright']);
+    expect(conRun('scripts/reportar-flaky.sh')).toEqual(['playwright']);
+    expect(conRun('publicar-vercel.sh')).toEqual(['build']);
+    expect(jobs['build']?.needs).toContain('playwright');
   });
 });
 

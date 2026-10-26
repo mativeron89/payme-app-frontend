@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { load } from 'js-yaml';
-import { leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlWorkflow';
+import { esperaA, leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlWorkflow';
 import ts from 'typescript';
 
 /**
@@ -1172,8 +1172,16 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   typecheck: {},
   build: { VITE_API_URL: 'https://payme-app-backend-production.up.railway.app' },
   'playwright-install': {},
-  playwright: {},
+  // D493 · el shard viaja por `env` y se consume como `"$SHARD"`: nada se
+  // interpola en el shell. La matriz que lo alimenta la fija `fallasDelGrafo`.
+  playwright: { SHARD: '${{ matrix.shard }}' },
   reporter: {},
+  // D493 · `decidir` consulta las corridas con el token del job (`actions: read`
+  // sólo en su job) y el verificador lee el resultado de los needs.
+  decidir: { GH_TOKEN: '${{ github.token }}' },
+  'verificar-needs': { NEEDS: '${{ toJSON(needs) }}' },
+  marca: {},
+  'subir-marca': {},
   publicador: {
     HOOK_APP: '${{ secrets.VERCEL_HOOK_APP }}',
     HOOK_LANDING: '${{ secrets.VERCEL_HOOK_LANDING }}',
@@ -1203,6 +1211,11 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
 const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   [/^actions\/checkout@/, 'checkout'],
   [/^actions\/setup-node@/, 'setup'],
+  // D493 · la marca del árbol probado (sólo en PR) y su artefacto.
+  [/^actions\/upload-artifact@/, 'subir-marca'],
+  [/^node scripts\/ci-ya-probado\.mjs$/, 'decidir'],
+  [/^node scripts\/ci-verificar-needs\.mjs$/, 'verificar-needs'],
+  [/^node scripts\/ci-marcar-probado\.mjs$/, 'marca'],
   [/^bash scripts\/auditar-secretos\.sh$/, 'scanner'],
   [/^npm ci$/, 'instalacion'],
   [/^node scripts\/verificar-mirror\.mjs$/, 'espejo'],
@@ -1245,6 +1258,26 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
  * que venir a declararlo, y ahí se decide si de verdad no bloquea.
  */
 const ROLES_QUE_NO_BLOQUEAN: ReadonlySet<string> = new Set(['reporter']);
+
+/**
+ * 🔴 D493 · LAS ÚNICAS CONDICIONES ADJUDICADAS FUERA DEL REPORTER, y son exactas.
+ *
+ * P55 decía «un gate con CUALQUIER `if:` es rojo», y sigue diciéndolo para los
+ * pasos. Mati eligió (D493) que un push a main con el árbol ya probado en su PR
+ * no repita la suite; eso pide TRES condiciones nuevas, y ninguna se interpreta:
+ * se comparan contra el texto canónico y cualquier otra es roja.
+ *
+ *   · `checks` y `playwright` llevan `CONDICION_SALTEO` a nivel de JOB. Sólo
+ *     cuenta si el job del publicador corre con `if: always()` y su primer paso
+ *     después del checkout es el verificador de needs (`fallasDelPublicador`).
+ *   · el job `build` lleva `always()` para que un shard rojo no lo deje
+ *     «skipped»: GitHub cuenta un check requerido salteado como aprobado.
+ *   · la marca del árbol probado, sólo en PR y sólo con todo en verde.
+ */
+const CONDICION_SALTEO = "needs.decidir.outputs.probado != 'true'";
+const CONDICION_JOB_DEL_PUBLICADOR = 'always()';
+const CONDICION_MARCA = "success() && github.event_name == 'pull_request'";
+const ROLES_CON_CONDICION_DE_MARCA: ReadonlySet<string> = new Set(['marca', 'subir-marca']);
 
 /** El rol de un paso, por el PREFIJO DE TOKENS de su comando o su `uses`. */
 function rolDePaso(claves: { readonly [k: string]: unknown }): string | null {
@@ -1537,6 +1570,23 @@ function comandosDe(run: string): string[] {
 const CONDICION_CANONICA =
   "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
 
+/**
+ * D493 · ¿el job corre su verificador de needs ANTES del paso, como segundo paso
+ * (después del checkout), con el comando exacto, sin `if:` y sin tolerar error?
+ */
+function verificadorCustodiaAntesDe(
+  job: { readonly pasos: readonly { readonly indice: number; readonly claves: { readonly [k: string]: unknown } }[] },
+  paso: { readonly indice: number },
+): boolean {
+  const [p0, p1] = job.pasos;
+  if (p0 === undefined || p1 === undefined) return false;
+  if (rolDePaso(p0.claves) !== 'checkout') return false;
+  const cmds = comandosDe(texto(p1.claves['run']) ?? '');
+  return cmds.length === 1 && cmds[0] === 'node scripts/ci-verificar-needs.mjs' &&
+    p1.claves['if'] === undefined && TOLERANCIA_VALIDA(p1.claves['continue-on-error']) &&
+    p1.indice < paso.indice;
+}
+
 /** Toda la compuerta del publicador: condición, `if` del job, `strategy` y contexto. */
 function fallasDelPublicador(yml: string): string[] {
   const { jobs, problemas } = leerWorkflow(yml);
@@ -1572,9 +1622,24 @@ function fallasDelPublicador(yml: string): string[] {
      * roja — es exactamente donde se esconde lo que no anticipé.
      */
     if (job.condicion !== undefined) {
-      fallas.push(
-        `${donde}: su job «${job.nombre}» lleva \`if: ${JSON.stringify(job.condicion)}\` — puede aflojar la compuerta`,
-      );
+      /**
+       * 🔴 D493 · LA ÚNICA CONDICIÓN DE JOB ADJUDICADA ES `always()`, Y TRAE UNA
+       * OBLIGACIÓN. Un job que corre siempre ya no garantiza nada por sus
+       * `needs`: los corre aunque hayan fallado. La garantía pasa a su segundo
+       * paso —el verificador de needs, justo después del checkout, sin `if:`—,
+       * y si no está ahí la condición es roja. Cualquier otra condición, como
+       * antes, se rechaza sin interpretarla.
+       */
+      if (job.condicion !== CONDICION_JOB_DEL_PUBLICADOR) {
+        fallas.push(
+          `${donde}: su job «${job.nombre}» lleva \`if: ${JSON.stringify(job.condicion)}\` — puede aflojar la compuerta`,
+        );
+      } else if (!verificadorCustodiaAntesDe(job, paso)) {
+        fallas.push(
+          `${donde}: su job «${job.nombre}» corre con \`if: always()\` y el paso siguiente al checkout ` +
+            'no es el verificador de needs, exacto y sin `if:`: un shard o un check rojo no lo frenarían',
+        );
+      }
     }
     /**
      * 🔴 P73 · `strategy` EN EL JOB DEL PUBLICADOR ES ROJO, sin interpretar.
@@ -1664,6 +1729,15 @@ function fallasDelCenso(yml: string): string[] {
   const ACCIONES_ADJUDICADAS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
     'actions/checkout@v4': { 'fetch-depth': 0, 'persist-credentials': false },
     'actions/setup-node@v4': { 'node-version': 20, cache: 'npm' },
+    // D493 · la marca del árbol probado: nombre derivado del paso `marca`, un
+    // archivo propio y nada más.
+    'actions/upload-artifact@v4': {
+      name: '${{ steps.marca.outputs.nombre }}',
+      path: '.ci-probado',
+      'retention-days': 30,
+      'if-no-files-found': 'error',
+      overwrite: true,
+    },
   };
 
   /**
@@ -1715,6 +1789,9 @@ function fallasDelCenso(yml: string): string[] {
     ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
     ['node', 'scripts/verificar-aliases.mjs'], // gate del alias→herramienta (P88)
     ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
+    ['node', 'scripts/ci-ya-probado.mjs'], // D493 · decidir
+    ['node', 'scripts/ci-verificar-needs.mjs'], // D493 · el verificador de needs
+    ['node', 'scripts/ci-marcar-probado.mjs'], // D493 · la marca del árbol probado
     // 🔴 P77 · LA PUBLICACIÓN NO VA EN ESTA LISTA. Tenía su propia tupla acá, en
     // paralelo a `esInvocacionPublicador`. Hoy las dos coincidían, **y ésa es la
     // trampa**: dos fuentes que coinciden hoy son una casualidad fechada, no una
@@ -1746,48 +1823,58 @@ function fallasDelCenso(yml: string): string[] {
   return fallas;
 }
 
-/** El checkout: único, versión adjudicada, `with` EXACTO y contexto gobernado. */
+/**
+ * El checkout: uno por job y como su PRIMER paso, versión adjudicada, `with`
+ * EXACTO y contexto gobernado.
+ *
+ * 🔴 D493 · antes era «exactamente uno en el workflow», porque había un solo
+ * job. Con cuatro jobs cada uno tiene su workspace, y la propiedad que importa
+ * se mantiene por job: un único checkout, del evento, antes de cualquier otra
+ * cosa. Uno de más, uno de menos o uno que no va primero es rojo.
+ */
 function fallasDelCheckout(yml: string): string[] {
   const { jobs, problemas } = leerWorkflow(yml);
   if (problemas.length > 0) return problemas.map((p) => `el modelo no pudo adjudicar: ${p}`);
-
-  const checkouts = jobs.flatMap((j) =>
-    j.pasos
-      .filter((p) => typeof p.claves['uses'] === 'string' &&
-        /^actions\/checkout@/.test(p.claves['uses'] as string))
-      .map((p) => ({ paso: p, job: j.nombre })),
-  );
-  // Control positivo, adentro: sin checkout único el resto pasaría en vacío.
-  if (checkouts.length !== 1) {
-    return [`hay ${checkouts.length} checkouts y debe haber exactamente 1: el workspace no es único`];
-  }
+  // Control positivo, adentro: sin jobs el resto pasaría en vacío.
+  if (jobs.length === 0) return ['no se leyó ningún job: el checkout mediría en vacío'];
 
   const fallas: string[] = [];
-  const { paso, job } = checkouts[0]!;
-  if (paso.claves['uses'] !== 'actions/checkout@v4') {
-    fallas.push(`la versión de la acción no es la adjudicada: ${JSON.stringify(paso.claves['uses'])}`);
-  }
-  /**
-   * 🔴 P85 · LA IGUALDAD EXACTA ES LA GUARDA, y se afirma acá — no en el test.
-   *
-   * El caso adversarial de P83 plantaba `ref` y afirmaba que el `with` **no** era
-   * igual al canónico. Eso es la PRECONDICIÓN del rechazo, no el rechazo: con la
-   * guarda debilitada a «`with` presente» el caso seguía verde. Ahora la
-   * desigualdad la evalúa esta función, que es la misma que corre el nominal.
-   */
-  if (!mismoMapping(paso.claves['with'], {
-    'fetch-depth': 0,
-    'persist-credentials': false,
-  })) {
+  for (const j of jobs) {
+    const checkouts = j.pasos.filter((p) => typeof p.claves['uses'] === 'string' &&
+      /^actions\/checkout@/.test(p.claves['uses'] as string));
+    if (checkouts.length !== 1) {
+      fallas.push(`el job «${j.nombre}» tiene ${checkouts.length} checkouts y debe tener exactamente 1: el workspace no es único`);
+      continue;
+    }
+    if (checkouts[0]!.indice !== 0) {
+      fallas.push(`el checkout del job «${j.nombre}» no es su primer paso`);
+    }
+    const paso = checkouts[0]!;
+    if (paso.claves['uses'] !== 'actions/checkout@v4') {
+      fallas.push(`la versión de la acción no es la adjudicada: ${JSON.stringify(paso.claves['uses'])}`);
+    }
+    /**
+     * 🔴 P85 · LA IGUALDAD EXACTA ES LA GUARDA, y se afirma acá — no en el test.
+     *
+     * El caso adversarial de P83 plantaba `ref` y afirmaba que el `with` **no** era
+     * igual al canónico. Eso es la PRECONDICIÓN del rechazo, no el rechazo: con la
+     * guarda debilitada a «`with` presente» el caso seguía verde. Ahora la
+     * desigualdad la evalúa esta función, que es la misma que corre el nominal.
+     */
+    if (!mismoMapping(paso.claves['with'], {
+      'fetch-depth': 0,
+      'persist-credentials': false,
+    })) {
+      fallas.push(
+        'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
+          'workspace del evento, y `persist-credentials` distinto de false deja credenciales ' +
+          `Git disponibles para pasos posteriores — ${JSON.stringify(paso.claves['with'])}`,
+      );
+    }
     fallas.push(
-      'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
-        'workspace del evento, y `persist-credentials` distinto de false deja credenciales ' +
-        `Git disponibles para pasos posteriores — ${JSON.stringify(paso.claves['with'])}`,
+      ...fallasDeContexto(yml, j.nombre, paso.claves, `${j.nombre}.steps[${paso.indice}]`, 'el checkout', 'checkout'),
     );
   }
-  fallas.push(
-    ...fallasDeContexto(yml, job, paso.claves, `${job}.steps[${paso.indice}]`, 'el checkout', 'checkout'),
-  );
   return fallas;
 }
 
@@ -1846,12 +1933,18 @@ function fallasDeMinimoPrivilegio(yml: string): string[] {
   if (!esMapaDesconocido(jobsCrudos)) {
     fallas.push('`jobs` no es un mapping adjudicable');
   } else {
+    /**
+     * 🔴 D493 · UN SOLO OVERRIDE ADJUDICADO: `decidir` lee las corridas y sus
+     * marcas (`actions: read`) y nada más. Es más angosto que subirlo al mínimo
+     * global, que lo daría a los cuatro jobs. Cualquier otro override, o éste
+     * con algo de más o de menos, sigue siendo rojo.
+     */
     for (const [nombre, job] of Object.entries(jobsCrudos)) {
-      if (esMapaDesconocido(job) && job['permissions'] !== undefined) {
-        fallas.push(
-          `jobs.${nombre}.permissions no está permitido: un override de job reemplaza el mínimo global`,
-        );
-      }
+      if (!esMapaDesconocido(job) || job['permissions'] === undefined) continue;
+      if (nombre === 'decidir' && mismoMapping(job['permissions'], { contents: 'read', actions: 'read' })) continue;
+      fallas.push(
+        `jobs.${nombre}.permissions no está permitido: un override de job reemplaza el mínimo global`,
+      );
     }
   }
 
@@ -1997,6 +2090,39 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * declarado** —incluidos setup, instalación y reporter— y todos pasan por el
    * mismo contexto. Un paso sin rol es rojo: así un paso NUEVO no entra callado.
    */
+  /**
+   * 🔴 D493 · P55 REESCRITA PARA ESTE ÚNICO CAMINO. Un gate sigue sin poder
+   * llevar `if:` en su PASO. Lo que se admite es que su JOB lleve exactamente
+   * `CONDICION_SALTEO` (el árbol ya pasó la CI completa en su PR), y sólo si el
+   * job del publicador corre con `always()` y su verificador de needs va antes:
+   * ése es el que convierte «el job se salteó» en «se salteó porque `decidir`
+   * lo probó», y falla en cualquier otro caso. Sin el verificador, un job
+   * condicional —o un publicador `always()`— deja los gates sin garantía.
+   */
+  const porNombre = new Map(jobs.map((j) => [j.nombre, j]));
+  for (const pub of publicadores) {
+    const jobPub = porNombre.get(pub.job);
+    const custodia = jobPub !== undefined && verificadorCustodiaAntesDe(jobPub, pub);
+    if (jobPub?.condicion !== undefined && !custodia) {
+      fallasPorPublicador.push(
+        `${pub.job}.steps[${pub.indice}]: su job lleva \`if:\` sin el verificador de needs: sus needs no garantizan nada`,
+      );
+    }
+    for (const j of jobs) {
+      if (j.nombre === pub.job || !esperaA(jobs, pub.job, j.nombre) || j.condicion === undefined) continue;
+      if (j.condicion !== CONDICION_SALTEO) {
+        fallasPorPublicador.push(
+          `${pub.job}.steps[${pub.indice}]: el job «${j.nombre}» lleva \`if: ${JSON.stringify(j.condicion)}\` — ` +
+            'la única condición adjudicada para un job de gates es la del salteo de D493',
+        );
+      } else if (!custodia) {
+        fallasPorPublicador.push(
+          `${pub.job}.steps[${pub.indice}]: el job «${j.nombre}» se puede saltear y nada lo verifica antes de publicar`,
+        );
+      }
+    }
+  }
+
   const fallas: string[] = [...fallasPorPublicador];
   for (const p of previos) {
     const donde = `${p.job}.steps[${p.indice}]`;
@@ -2006,7 +2132,8 @@ function fallasDeGatesPrevios(yml: string): string[] {
       continue;
     }
     const condicion = p.claves['if'];
-    if (condicion !== undefined && !ROLES_QUE_NO_BLOQUEAN.has(rolP)) {
+    const condicionDeMarca = ROLES_CON_CONDICION_DE_MARCA.has(rolP) && condicion === CONDICION_MARCA;
+    if (condicion !== undefined && !ROLES_QUE_NO_BLOQUEAN.has(rolP) && !condicionDeMarca) {
       fallas.push(
         `${donde}: el paso «${rolP}» BLOQUEA y lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`,
       );
@@ -2030,6 +2157,105 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
   for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
+  }
+  return fallas;
+}
+
+/**
+ * 🔴 D493 · EL GRAFO DE JOBS, ADJUDICADO ENTERO.
+ *
+ * Con un solo job, «antes» era el orden de los pasos. Con cuatro, lo que
+ * garantiza que nada se publique sin probar es la FORMA del grafo: quién espera
+ * a quién, con qué condición y en cuántos pedazos. Todo eso se fija acá contra
+ * valores exactos, sin interpretar expresiones:
+ *
+ *   · los jobs son EXACTAMENTE `decidir`, `checks`, `playwright` y `build`;
+ *   · `decidir` no espera a nadie, no tiene condición ni matriz, y expone
+ *     `probado` desde su paso `consulta`, que es el que corre `ci-ya-probado`;
+ *   · `checks` y `playwright` esperan sólo a `decidir`, con la condición de
+ *     salteo exacta;
+ *   · `playwright` tiene la matriz `shard: [1, 2, 3, 4]` sin `include`/`exclude`,
+ *     y su comando es EXACTAMENTE `npx playwright test --shard "$SHARD/4"`: el
+ *     denominador es el largo de la matriz. Un `/8` con cuatro entradas correría
+ *     la mitad de los recorridos y daría verde;
+ *   · `build` espera a los tres, corre con `always()`, y es el único que publica.
+ */
+function fallasDelGrafo(yml: string): string[] {
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) return problemas.map((p) => `el modelo no pudo adjudicar: ${p}`);
+  if (jobs.length === 0) return ['no se leyó ningún job: el grafo mediría en vacío'];
+
+  const fallas: string[] = [];
+  const nombres = jobs.map((j) => j.nombre).sort();
+  const esperados = ['build', 'checks', 'decidir', 'playwright'];
+  if (nombres.join(',') !== esperados.join(',')) {
+    fallas.push(`los jobs no son exactamente ${esperados.join(', ')}: ${nombres.join(', ')}`);
+  }
+  const job = (n: string) => jobs.find((j) => j.nombre === n);
+  const mismasNecesidades = (n: string, quiere: readonly string[]): void => {
+    const j = job(n);
+    if (j === undefined) return;
+    if ([...j.necesita].sort().join(',') !== [...quiere].sort().join(',')) {
+      fallas.push(`«${n}» espera a [${j.necesita.join(', ')}] y debe esperar exactamente a [${quiere.join(', ')}]`);
+    }
+  };
+
+  const decidir = job('decidir');
+  if (decidir !== undefined) {
+    mismasNecesidades('decidir', []);
+    if (decidir.condicion !== undefined) fallas.push('«decidir» no puede llevar `if:`: se saltearía y todo quedaría sin decidir');
+    if (decidir.estrategia !== undefined) fallas.push('«decidir» no puede llevar `strategy`');
+    const crudo = jobCrudo(yml, 'decidir');
+    if (!mismoMapping(crudo?.['outputs'], { probado: '${{ steps.consulta.outputs.probado }}' })) {
+      fallas.push(`los outputs de «decidir» no son exactamente probado ← steps.consulta: ${JSON.stringify(crudo?.['outputs'])}`);
+    }
+    const consulta = decidir.pasos.filter((p) => p.claves['id'] === 'consulta');
+    if (consulta.length !== 1 || rolDePaso(consulta[0]!.claves) !== 'decidir' ||
+      comandosDe(texto(consulta[0]!.claves['run']) ?? '').join(' · ') !== 'node scripts/ci-ya-probado.mjs') {
+      fallas.push('el paso `consulta` de «decidir» no es exactamente `node scripts/ci-ya-probado.mjs`');
+    }
+  }
+
+  for (const n of ['checks', 'playwright']) {
+    const j = job(n);
+    if (j === undefined) continue;
+    mismasNecesidades(n, ['decidir']);
+    if (j.condicion !== CONDICION_SALTEO) {
+      fallas.push(`«${n}» lleva \`if: ${JSON.stringify(j.condicion)}\` y la única adjudicada es «${CONDICION_SALTEO}»`);
+    }
+  }
+  const checks = job('checks');
+  if (checks?.estrategia !== undefined) fallas.push('«checks» no puede llevar `strategy`');
+
+  const pw = job('playwright');
+  if (pw !== undefined) {
+    const MATRIZ = { 'fail-fast': false, matrix: { shard: [1, 2, 3, 4] } };
+    // Por estructura y con claves ordenadas: en YAML el orden de un mapping no
+    // cambia su significado (P81), así que no puede cambiar el veredicto.
+    const canonico = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) =>
+      x !== null && typeof x === 'object' && !Array.isArray(x)
+        ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+        : x);
+    if (canonico(pw.estrategia) !== canonico(MATRIZ)) {
+      fallas.push(`la estrategia de «playwright» no es exactamente ${JSON.stringify(MATRIZ)}: ${JSON.stringify(pw.estrategia)}`);
+    }
+    const corridas = pw.pasos.filter((p) => rolDePaso(p.claves) === 'playwright');
+    const cmds = corridas.flatMap((p) => comandosDe(texto(p.claves['run']) ?? ''));
+    if (corridas.length !== 1 || cmds.length !== 1 || cmds[0] !== 'npx playwright test --shard "$SHARD/4"') {
+      fallas.push(`la corrida de Playwright no es exactamente \`npx playwright test --shard "$SHARD/4"\`: ${JSON.stringify(cmds)}`);
+    }
+  }
+
+  const build = job('build');
+  if (build !== undefined) {
+    mismasNecesidades('build', ['decidir', 'checks', 'playwright']);
+    if (build.condicion !== CONDICION_JOB_DEL_PUBLICADOR) {
+      fallas.push(`«build» lleva \`if: ${JSON.stringify(build.condicion)}\` y debe ser always(): si no, un shard rojo lo deja «skipped» y el check obligatorio aprueba`);
+    }
+  }
+  const publicadores = jobs.flatMap((j) => j.pasos.filter((p) => pasoPublica(texto(p.claves['run']))));
+  if (publicadores.length !== 1 || publicadores[0]!.job !== 'build') {
+    fallas.push('el único publicador tiene que estar en «build»');
   }
   return fallas;
 }
@@ -2333,7 +2559,9 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       ['test', /^npm test$/],
       ['typecheck', /^npm run typecheck$/],
       ['build', /^npm run build$/],
-      ['playwright', /^npx playwright test$/],
+      // D493 · el comando EXACTO del shard: `fallasDelGrafo` ata su
+      // denominador al largo de la matriz.
+      ['playwright', /^npx playwright test --shard "\$SHARD\/4"$/],
     ];
     const faltan = antesDeCadaUno.flatMap(({ donde, cmds }) =>
       GATES.filter(([, re]) => !cmds.some((c) => re.test(c))).map(([n]) => `${donde}: ${n}`),
@@ -2507,22 +2735,21 @@ describe('🔴 invalidar → herramienta → validar, en ese orden', () => {
       const { jobs, problemas } = leerWorkflow(yml);
       expect(problemas).toEqual([]);
       /**
-       * 🔴 P96 · EL CLAIM SE ACOTA AL JOB ÚNICO, y se declara por qué.
+       * 🔴 P96 · EL CLAIM SE ACOTA A UN JOB, y se declara por qué.
        *
        * Comparar índices de pasos **aplanados de varios jobs** no dice nada del
        * orden real: jobs distintos corren en paralelo salvo que haya `needs`, y
-       * un índice menor en otro job no significa «antes». Hoy el workflow tiene
-       * UN job, así que el índice sí es el orden — pero eso es una propiedad del
-       * target, no del método, y por eso se **afirma** en vez de suponerse.
+       * un índice menor en otro job no significa «antes».
        *
-       * El día que aparezca un segundo job, este caso se pone rojo y hay que
-       * venir a decidir cómo se evalúa el orden entre jobs. Es la fricción
-       * correcta: la alternativa es un claim universal que se cumple por
-       * casualidad.
+       * 🔴 D493 · hay cuatro jobs, y ésta es la decisión que el P96 pedía venir
+       * a tomar: el trío se exige ENTERO DENTRO DEL JOB que corre la herramienta
+       * —ahí el índice sí es el orden—, y la herramienta tiene que estar en un
+       * solo job. Un trío repartido entre jobs es rojo.
        */
-      expect(jobs.length, 'hay más de un job: el orden por índice ya no es el orden real')
-        .toBe(1);
-      const pasos = [...jobs[0]!.pasos];
+      const conHerramienta = jobs.filter((jb) => jb.pasos.some((p) => rolDePaso(p.claves) === herramienta));
+      expect(conHerramienta.map((jb) => jb.nombre), `${que}: la herramienta tiene que correr en UN job`)
+        .toHaveLength(1);
+      const pasos = [...conHerramienta[0]!.pasos];
       const idx = (rol: string) => pasos.findIndex((p) => rolDePaso(p.claves) === rol);
       const [i, j, k] = [idx(antes), idx(herramienta), idx(despues)];
       // Control positivo: los tres tienen que EXISTIR, o el orden se cumpliría
@@ -2824,6 +3051,7 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
     expect(fallasDelCheckout(vacio), 'el checkout midió en vacío').not.toEqual([]);
     expect(fallasDeGatesPrevios(vacio), 'los gates midieron en vacío').not.toEqual([]);
     expect(fallasDelCenso(vacio), 'el censo midió en vacío').not.toEqual([]);
+    expect(fallasDelGrafo(vacio), 'el grafo midió en vacío').not.toEqual([]);
   });
 
   it('🔴 el checkout con `ref` a un ancestro → RECHAZADO por la igualdad exacta', () => {
@@ -2937,4 +3165,74 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
       rmSync(dir, { recursive: true, force: true });
     }
   }, 120_000);
+});
+
+/**
+ * 🔴 D493 · EL GRAFO Y EL SALTEO DE MAIN, COMO REGRESIONES PERMANENTES.
+ *
+ * Cada mutante se planta en memoria sobre el `ci.yml` real y atraviesa la
+ * POLÍTICA, no un helper (P85). Lo que hace el verificador de needs y la
+ * consulta de `decidir` al ejecutarse lo prueban `ciAtajoMain.test.ts`: acá se
+ * prueba que el workflow los CABLEA donde tienen que estar.
+ */
+describe('🔴 D493 · el grafo de jobs y el salteo de main', () => {
+  const ci = () => readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const conMutacion = (de: string, a: string): string => {
+    const yml = ci();
+    expect(yml.includes(de), `la mutación no se plantó: no está «${de}»`).toBe(true);
+    return yml.replace(de, a);
+  };
+
+  it('🔴 nominal · el grafo es el adjudicado y todas las políticas lo aceptan', () => {
+    expect(fallasDelGrafo(ci())).toEqual([]);
+    expect(fallasDeGatesPrevios(ci())).toEqual([]);
+    expect(fallasDelPublicador(ci())).toEqual([]);
+    expect(fallasDelCheckout(ci())).toEqual([]);
+    expect(fallasDelCenso(ci())).toEqual([]);
+    expect(fallasDeMinimoPrivilegio(ci())).toEqual([]);
+  });
+
+  const BUILD = '    needs: [decidir, checks, playwright]\n    if: always()';
+  const VERIFICADOR =
+    '      - name: Todo en verde antes de seguir (los needs, uno por uno)\n' +
+    '        run: node scripts/ci-verificar-needs.mjs\n' +
+    '        env:\n          NEEDS: ${{ toJSON(needs) }}\n';
+  const CHECKS = "  checks:\n    runs-on: ubuntu-latest\n    needs: decidir\n    if: needs.decidir.outputs.probado != 'true'";
+
+  const MUTANTES: ReadonlyArray<readonly [string, string, string, (y: string) => string[], RegExp]> = [
+    ['«build» sin always(): un shard rojo lo dejaría «skipped»', BUILD,
+      '    needs: [decidir, checks, playwright]', fallasDelGrafo, /always/],
+    ['«build» con otra condición de job', BUILD,
+      "    needs: [decidir, checks, playwright]\n    if: '!cancelled()'", fallasDelPublicador, /aflojar/],
+    ['sin el verificador de needs (publicador)', VERIFICADOR, '', fallasDelPublicador, /verificador/],
+    ['sin el verificador de needs (gates)', VERIFICADOR, '', fallasDeGatesPrevios, /verificador|salteo|garantizan/],
+    ['el verificador con `if:`', VERIFICADOR,
+      VERIFICADOR.replace('        run: node scripts/ci-verificar-needs.mjs\n',
+        '        if: success()\n        run: node scripts/ci-verificar-needs.mjs\n'), fallasDelPublicador, /verificador/],
+    ['el verificador con un argumento de más', 'run: node scripts/ci-verificar-needs.mjs',
+      'run: node scripts/ci-verificar-needs.mjs --solo-informar', fallasDelPublicador, /verificador/],
+    ['«checks» con otra condición', CHECKS,
+      CHECKS.replace("if: needs.decidir.outputs.probado != 'true'", "if: github.event_name == 'pull_request'"),
+      fallasDeGatesPrevios, /salteo/],
+    ['«checks» sin esperar a decidir', CHECKS, CHECKS.replace('    needs: decidir\n', ''), fallasDelGrafo, /espera/],
+    ['una matriz de 3 con el comando en /4', '        shard: [1, 2, 3, 4]', '        shard: [1, 2, 3]', fallasDelGrafo, /estrategia/],
+    ['un `include` en la matriz', '        shard: [1, 2, 3, 4]', '        shard: [1, 2, 3, 4]\n        include:\n          - shard: 5',
+      fallasDelGrafo, /estrategia/],
+    ['el denominador del shard en 8', 'npx playwright test --shard "$SHARD/4"',
+      'npx playwright test --shard "$SHARD/8"', fallasDelGrafo, /exactamente/],
+    ['«decidir» con `if:`', '  decidir:\n    runs-on: ubuntu-latest',
+      "  decidir:\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest", fallasDelGrafo, /decidir/],
+    ['el output `probado` desde otro paso', '      probado: ${{ steps.consulta.outputs.probado }}',
+      '      probado: ${{ steps.otra.outputs.probado }}', fallasDelGrafo, /outputs/],
+    ['la marca con otra condición', "        if: success() && github.event_name == 'pull_request'\n        run: node scripts/ci-marcar-probado.mjs",
+      '        if: always()\n        run: node scripts/ci-marcar-probado.mjs', fallasDeGatesPrevios, /BLOQUEA/],
+    ['`actions: write` en decidir', '      actions: read', '      actions: write', fallasDeMinimoPrivilegio, /permissions/],
+    ['la marca con otro `with`', '          retention-days: 30', '          retention-days: 90', fallasDelCenso, /with/],
+  ];
+
+  for (const [nombre, de, a, politica, esperado] of MUTANTES) {
+    it(`🔴 ${nombre} → RECHAZADO`, () => {
+      expect(politica(conMutacion(de, a)).join(' · '), `el arnés no rechazó «${nombre}»`).toMatch(esperado);
+    });
+  }
 });

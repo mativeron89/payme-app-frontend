@@ -41,6 +41,7 @@ O sea: el dominio de Mati no tenía ninguna compuerta de calidad.
 ```
 1 · vercel.ts apaga el despliegue automático de `main`
 2 · ci.yml, al final y sólo si TODO pasó, llama al Deploy Hook de cada proyecto
+    (desde D493, en el job `build`: ver «D493 · CI en paralelo» más abajo)
 ```
 
 **Se eligió esta forma sobre apagarlo desde la interfaz de Vercel porque queda
@@ -79,7 +80,8 @@ no acreditado**.
 
 ## Mínimo privilegio local del workflow · 2026-08-23
 
-El workflow declara `permissions: contents: read` y el checkout usa
+El workflow declara `permissions: contents: read` (desde D493, sólo el job
+`decidir` suma `actions: read` para leer las corridas) y el checkout usa
 `persist-credentials: false`: los gates necesitan leer el árbol, no conservar
 una credencial Git ni escribir contenidos. Una guarda estructural censa además
 que las dos referencias `secrets.*` vivan únicamente en el `env` del paso
@@ -89,6 +91,68 @@ publicador correspondiente.
 No se inventó un pin offline: elegir el commit exige verificar la referencia
 oficial en una fuente externa autorizada. Esa deuda queda abierta; el
 hardening local no la disfraza de resuelta.
+
+## D493 · CI en paralelo y main sin repetir pruebas · 2026-10-26
+
+Mati eligió, ante «Estanos avanzando muy lento, como podemos acelerar?»,
+«Pruebas en paralelo» y «Main sin repetir pruebas» (D493). Cada cambio tardaba
+~3,5 h: la CI completa en el PR (90–114 min) y otra igual en main.
+
+```
+decidir ──┬── checks ─────────────┐
+          └── playwright 1..4 ────┴── build   ← el check obligatorio de main
+```
+
+- **`checks`**: secretos, espejo, aliases, la suite unitaria y el typecheck.
+- **`playwright`**: los recorridos de navegador en 4 shards
+  (`npx playwright test --shard "$SHARD/4"`, matriz `shard: [1, 2, 3, 4]`).
+  Cubren lo mismo que antes, repartido en cuatro máquinas.
+- **`build`**: corre siempre (`if: always()`). Si dependiera de los shards sin
+  esa condición, un shard rojo lo dejaría «skipped», y GitHub cuenta un check
+  requerido salteado como aprobado. Su primer paso después del checkout es
+  `ci-verificar-needs.mjs`, que falla si `decidir`, `checks` o algún shard no
+  terminaron en verde. Después construye y, en push a main, publica. El nombre
+  del check obligatorio no cambió: sigue siendo `build`.
+- **`decidir`**: en un push a main, `ci-ya-probado.mjs` busca por API
+  (`actions: read`, sólo en ese job) una corrida de `pull_request` del mismo
+  workflow, exitosa, con `head_sha` igual al SHA pusheado. Además exige la marca
+  `ci-probado-arbol-<árbol>-base-<base>` que dejó esa corrida: el árbol tiene que
+  ser el del SHA y la base, su ancestro. Con todo eso, `checks` y `playwright` se
+  saltean y `build` sólo construye y publica. Ante cualquier duda, una consulta
+  caída o un evento que no sea push a main, corre todo.
+
+**La marca existe porque la API no guarda la base.** Medido el 2026-10-26 sobre
+la corrida 40364386953 (PR #97): `pull_requests` vuelve vacío cuando el PR ya
+entró a main, que es justo cuando hace falta. Por eso la CI del PR, con todo en
+verde, sube un artefacto cuyo nombre lleva el árbol del merge ref que probó y su
+primer padre, la base (`ci-marcar-probado.mjs`). Si la base es ancestro del SHA,
+el merge ref probado tiene el mismo árbol que lo que se publica.
+
+### 🔴 P55, reescrita para este único camino
+
+P55 decía que un gate con **cualquier** `if:` es rojo, y para los pasos lo sigue
+diciendo. Lo que D493 agrega, y el arnés (`despliegue.test.ts`) fija contra
+texto exacto, sin interpretar expresiones:
+
+1. `checks` y `playwright` llevan a nivel de JOB exactamente
+   `needs.decidir.outputs.probado != 'true'`. Sólo cuenta si el job del
+   publicador corre con `always()` y su verificador de needs va antes de
+   publicar. Cualquier otra condición de job en un gate es roja.
+2. El job `build` lleva exactamente `always()`, y eso **obliga** a que su
+   segundo paso, después del checkout, sea el verificador: exacto, sin `if:` y
+   sin tolerar error.
+3. La marca (`ci-marcar-probado.mjs` y su `upload-artifact`) lleva exactamente
+   `success() && github.event_name == 'pull_request'`.
+
+La forma del grafo (los cuatro jobs, sus `needs`, la matriz y el denominador del
+shard) la fija `fallasDelGrafo`. Lo que hacen los scripts al ejecutarse lo
+prueba `ciAtajoMain.test.ts`: un shard rojo deja `build` rojo; la consulta
+caída, un SHA sin PR verde o una base que no es ancestro dan suite completa.
+
+⚠️ **Queda declarado y no medido:** que GitHub cuente como aprobado un check
+requerido «skipped» se toma de su documentación, no se probó en este repo. Con
+`always()` y el verificador, el caso no se da. `actions/upload-artifact@v4` es
+otro tag mutable, igual que checkout y setup-node.
 
 ## 🔴 Lo que este gate NO cubre · corregido el 2026-08-10
 

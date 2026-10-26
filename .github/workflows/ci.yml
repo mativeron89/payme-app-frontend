@@ -17,12 +17,65 @@ on:
 
 # El token del job sólo necesita leer el checkout. Publicar usa Deploy Hooks
 # acotados en el último paso; no necesita escribir contenidos del repositorio.
+# D493 · el único que lee algo más es `decidir` (las corridas y sus marcas,
+# `actions: read`), y lo declara en su propio job.
 permissions:
   contents: read
 
+# ══════════════════════════════════════════════════════════════════════
+# D493 · CUATRO JOBS (Mati: «Pruebas en paralelo» y «Main sin repetir pruebas»)
+#
+#   decidir ──┬── checks ─────────────┐
+#             └── playwright 1..4 ────┴── build (el check obligatorio de main)
+#
+# · `checks`: secretos, espejo, aliases, la suite unitaria y el typecheck.
+# · `playwright`: los recorridos de navegador en 4 shards en paralelo, con la
+#   misma cobertura (cada shard corre su cuarta parte de los archivos).
+# · `build`: corre SIEMPRE (`if: always()`), así un shard rojo no lo deja
+#   «skipped», que GitHub cuenta como aprobado. Su primer paso verifica los
+#   needs y falla si algo no está en verde; recién después construye y, en un
+#   push a main, publica.
+# · `decidir`: en un push a main, si el árbol ya pasó la CI completa en su PR
+#   (marca de la corrida de PR, árbol idéntico y base ancestro), `checks` y
+#   `playwright` se saltean y `build` sólo construye y publica. Cualquier duda o
+#   consulta caída corre todo. El porqué y la regla P55 reescrita, en
+#   `docs/DESPLIEGUE_GATEADO.md`.
+# ══════════════════════════════════════════════════════════════════════
 jobs:
-  build:
+  decidir:
     runs-on: ubuntu-latest
+    # Sólo este job lee las corridas y sus artefactos. Reemplaza el mínimo
+    # global para él solo, y sigue sin escribir nada.
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      probado: ${{ steps.consulta.outputs.probado }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El scanner compara contra el SHA anterior del push o la base del
+          # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
+          # que el instrumento no mida nada.
+          fetch-depth: 0
+          # Ningún paso posterior necesita hacer Git autenticado. Dejar la
+          # credencial en la config amplía innecesariamente lo que un script
+          # de build podría hacer con el token del job.
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: ¿El árbol ya pasó la CI completa en su PR? (sólo en push a main)
+        id: consulta
+        run: node scripts/ci-ya-probado.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  checks:
+    runs-on: ubuntu-latest
+    needs: decidir
+    if: needs.decidir.outputs.probado != 'true'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,6 +135,84 @@ jobs:
       - name: La suite ejecutó la población entera, medido sobre su reporte
         run: node scripts/verificar-aliases.mjs --corrida
       - run: npm run typecheck
+
+  # Los recorridos de navegador también son gate: la auditoría del 2026-08-06
+  # encontró en ellos lo que ninguna suite sin navegador vio (el Shell pisando
+  # la pantalla de rechazo, la coma ×100 en el input). Sólo chromium: es el
+  # proyecto único de playwright.config.
+  #
+  # D493 · en 4 shards. El denominador del `--shard` y la lista de la matriz
+  # van juntos: el arnés exige que sean 4 y 1..4, porque un `/8` con cuatro
+  # entradas correría la mitad de los recorridos y daría verde.
+  playwright:
+    runs-on: ubuntu-latest
+    needs: decidir
+    if: needs.decidir.outputs.probado != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El scanner compara contra el SHA anterior del push o la base del
+          # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
+          # que el instrumento no mida nada.
+          fetch-depth: 0
+          # Ningún paso posterior necesita hacer Git autenticado. Dejar la
+          # credencial en la config amplía innecesariamente lo que un script
+          # de build podría hacer con el token del job.
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --shard "$SHARD/4"
+        env:
+          SHARD: ${{ matrix.shard }}
+
+      # 🔴 Se lee el resultado en un paso APARTE, y el de arriba queda intacto.
+      # Ese `run:` es el que gatea la publicación: un pipe para capturar su
+      # salida le comería el exit code (el shell por defecto es `bash -e`, SIN
+      # `pipefail`) y la compuerta quedaría abierta en silencio.
+      #
+      # `if: always()` porque un flaky puede convivir con una corrida roja, y
+      # ahí también hay que verlo. El script NUNCA sale ≠0: informa, no bloquea.
+      - name: Reportar flaky de Playwright (informa, NO bloquea)
+        if: always()
+        run: bash scripts/reportar-flaky.sh test-results/resultados.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [decidir, checks, playwright]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El scanner compara contra el SHA anterior del push o la base del
+          # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
+          # que el instrumento no mida nada.
+          fetch-depth: 0
+          # Ningún paso posterior necesita hacer Git autenticado. Dejar la
+          # credencial en la config amplía innecesariamente lo que un script
+          # de build podría hacer con el token del job.
+          persist-credentials: false
+      # 🔴 EL PRIMER PASO DESPUÉS DEL CHECKOUT, Y SIN `if:`. El checkout sólo
+      # trae los archivos, no ejecuta nada del repo. El job corre siempre, así
+      # que ESTE paso es el que hace valer los needs: sale ≠0 si `decidir`, `checks` o algún
+      # shard no terminaron en verde (o si se saltearon sin el `probado` de un
+      # push a main). Todo lo que sigue depende de que salga 0.
+      - name: Todo en verde antes de seguir (los needs, uno por uno)
+        run: node scripts/ci-verificar-needs.mjs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
       # 🔴 `VITE_API_URL` va acá desde 0.100.0, y NO es configuración de
       # despliegue: este `build` es una COMPUERTA DE COMPILACIÓN, no el
       # artefacto que se publica —eso lo construye Vercel con su propia
@@ -107,23 +238,24 @@ jobs:
       # fechas, que es lo que un `touch` podía falsificar.
       - name: El build dejó artefacto, no sólo un exit 0
         run: node scripts/verificar-aliases.mjs --artefacto dist
-      # Los 78 recorridos de navegador también son gate: la auditoría del
-      # 2026-08-06 encontró en ellos lo que ninguna suite sin navegador vio
-      # (el Shell pisando la pantalla de rechazo, la coma ×100 en el input).
-      # Sólo chromium: es el proyecto único de playwright.config.
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
 
-      # 🔴 Se lee el resultado en un paso APARTE, y el de arriba queda intacto.
-      # Ese `run:` es el que gatea la publicación: un pipe para capturar su
-      # salida le comería el exit code (el shell por defecto es `bash -e`, SIN
-      # `pipefail`) y la compuerta quedaría abierta en silencio.
-      #
-      # `if: always()` porque un flaky puede convivir con una corrida roja, y
-      # ahí también hay que verlo. El script NUNCA sale ≠0: informa, no bloquea.
-      - name: Reportar flaky de Playwright (informa, NO bloquea)
-        if: always()
-        run: bash scripts/reportar-flaky.sh test-results/resultados.json
+      # D493 · la marca del árbol probado. Sólo en un PR y sólo con todo en verde
+      # hasta acá: el push a main la busca para no repetir la suite. Si falta,
+      # main corre todo.
+      - name: Marcar el árbol probado (sólo en PR, con todo en verde)
+        id: marca
+        if: success() && github.event_name == 'pull_request'
+        run: node scripts/ci-marcar-probado.mjs
+      - name: Guardar la marca del árbol probado
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.marca.outputs.nombre }}
+          path: .ci-probado
+          retention-days: 30
+          if-no-files-found: error
+          # Relanzar la corrida del PR vuelve a subir la marca con el mismo nombre.
+          overwrite: true
 
       # ══════════════════════════════════════════════════════════════════
       # 🔴 LA COMPUERTA DE PUBLICACIÓN · 2026-08-10
