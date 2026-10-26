@@ -145,7 +145,7 @@ beforeAll(async () => {
   servidor = createServer((req, res) => {
     const url = req.url ?? '';
     estado.pedidos.push(url);
-    if (req.headers.authorization !== 'Bearer token-de-prueba') { res.writeHead(401).end('{}'); return; }
+    if (req.headers.authorization !== 'Bearer clave-de-prueba') { res.writeHead(401).end('{}'); return; }
     if (estado.status !== 200) { res.writeHead(estado.status).end('{}'); return; }
     const json = (v: unknown) => { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(v)); };
     if (url === `/repos/o/r/actions/runs/${RUN_ACTUAL}`) return json({ id: RUN_ACTUAL, workflow_id: WORKFLOW });
@@ -169,7 +169,7 @@ const marca = (t: string, b: string, extra: Record<string, unknown> = {}) => ({
 const decidir = (env: Record<string, string | undefined> = {}) =>
   correr(DECIDIR, {
     ...PUSH_MAIN, GITHUB_SHA: head, GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: String(RUN_ACTUAL),
-    GITHUB_API_URL: api, GH_TOKEN: 'token-de-prueba', ...env,
+    GITHUB_API_URL: api, CONSULTA_GH: 'clave-de-prueba', ...env,
   }, repo);
 const preparar = (runs: unknown[], artefactos: Record<string, unknown[]>, status = 200) => {
   estado.status = status;
@@ -198,7 +198,7 @@ describe('D493 · ci-ya-probado: main saltea la suite SÓLO con el árbol ya pro
     ['🔴 la corrida es de otro workflow ⇒ suite completa', () => preparar([runPr({ workflow_id: 1 })], { 77: [marca(arbol(merge), base)] })],
     ['🔴 la corrida es de otro SHA ⇒ suite completa', () => preparar([runPr({ head_sha: ajeno })], { 77: [marca(arbol(merge), base)] })],
     ['🔴 la corrida no es de pull_request ⇒ suite completa', () => preparar([runPr({ event: 'push' })], { 77: [marca(arbol(merge), base)] })],
-    ['🔴 sin token ⇒ suite completa', () => preparar([runPr()], { 77: [marca(arbol(merge), base)] }), { GH_TOKEN: undefined }],
+    ['🔴 sin token ⇒ suite completa', () => preparar([runPr()], { 77: [marca(arbol(merge), base)] }), { CONSULTA_GH: undefined }],
     ['🔴 la API no responde ⇒ suite completa', () => preparar([runPr()], { 77: [marca(arbol(merge), base)] }), { GITHUB_API_URL: 'http://127.0.0.1:9' }],
   ];
   for (const [nombre, plantar, env] of FALSOS) {

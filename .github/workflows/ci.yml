@@ -70,7 +70,7 @@ jobs:
         id: consulta
         run: node scripts/ci-ya-probado.mjs
         env:
-          GH_TOKEN: ${{ github.token }}
+          CONSULTA_GH: ${{ github.token }}
 
   checks:
     runs-on: ubuntu-latest

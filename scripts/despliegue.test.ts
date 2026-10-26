@@ -1178,7 +1178,7 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   reporter: {},
   // D493 · `decidir` consulta las corridas con el token del job (`actions: read`
   // sólo en su job) y el verificador lee el resultado de los needs.
-  decidir: { GH_TOKEN: '${{ github.token }}' },
+  decidir: { CONSULTA_GH: '${{ github.token }}' },
   'verificar-needs': { NEEDS: '${{ toJSON(needs) }}' },
   marca: {},
   'subir-marca': {},

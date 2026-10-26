@@ -61,7 +61,7 @@ async function decidir() {
   const repo = env.GITHUB_REPOSITORY ?? '';
   const runId = env.GITHUB_RUN_ID ?? '';
   const api = env.GITHUB_API_URL ?? '';
-  const token = env.GH_TOKEN ?? '';
+  const token = env.CONSULTA_GH ?? '';
   if (!HEX40.test(sha)) return [false, 'GITHUB_SHA no es un SHA'];
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return [false, 'GITHUB_REPOSITORY inválido'];
   if (!/^[0-9]+$/.test(runId)) return [false, 'GITHUB_RUN_ID inválido'];
