@@ -46,6 +46,14 @@ import { nombreDePlato } from '../utils/nombreDePlato';
 /** Guion, no cero. Un `—` dice "no disponible"; un `0` afirma un valor. */
 const NO_DISPONIBLE = '—';
 
+/**
+ * 🔴 D492 · Mati, con una captura: «Por tipo de cocina» ponía todo en «Otros». Se oculta
+ * hasta que la clasificación de la cocina funcione con sus restaurantes reales y él lo
+ * pruebe (D63). Apagada: la tarjeta no se pinta. El código, el decodificador y el resto
+ * de Mis estadísticas quedan como están; para volver a mostrarla, esta bandera en `true`.
+ */
+export const MOSTRAR_POR_TIPO_DE_COCINA = false;
+
 function pesos(cents: number | null | undefined): string {
   return typeof cents === 'number' && Number.isFinite(cents) ? formatMXN(cents) : NO_DISPONIBLE;
 }
@@ -441,8 +449,13 @@ function mesEnFraseInicial(monthStart: string, idioma: 'es' | 'en'): string {
  * importe, visitas, porcentaje y barra. Nunca el color solo. En el vacío no se
  * muestra: la frase del resumen ya lo dice.
  */
-function TarjetaPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
+export function TarjetaPorCocina({ consumo, mostrar = MOSTRAR_POR_TIPO_DE_COCINA }: {
+  consumo: ConsumoDelMes;
+  /** D492 · la bandera; las pruebas la encienden para ver la tarjeta. */
+  mostrar?: boolean;
+}) {
   const { t } = useIdioma();
+  if (!mostrar) return null;
   // `decodeConsumoDelMes` exige que las cocinas sumen el total y que ninguna
   // venga en 0: sin cocinas es lo mismo que total 0.
   if (consumo.categories.length === 0) return null;

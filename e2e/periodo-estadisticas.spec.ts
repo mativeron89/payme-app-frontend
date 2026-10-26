@@ -62,7 +62,8 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     await expect(cabecera.locator('.est-periodo-estado')).toHaveText('Mes completo');
     await expect(page.locator('.est-total')).toHaveText('$1,320');
     await expect(cabecera).not.toContainText('visitas');
-    await expect(page.getByRole('heading', { name: 'Por tipo de cocina', exact: true })).toBeVisible();
+    // D492 · la tarjeta de cocinas está oculta detrás de su bandera.
+    await expect(page.getByRole('heading', { name: 'Por tipo de cocina', exact: true })).toHaveCount(0);
     // Lo que sale de pagos sin filtro de fecha NO se mezcla con otro período.
     await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toContainText('3 lugares · 5 visitas');

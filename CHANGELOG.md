@@ -1,3 +1,9 @@
+## 0.264.3 · 2026-10-26 (D492 · se oculta «Por tipo de cocina» en Mis estadísticas)
+
+- Mati, con una captura: «Por tipo de cocina» ponía todo en «Otros» (21 visitas, 10 restaurantes, 100 % Otros). Eligió «Ocultar y arreglar». La tarjeta deja de mostrarse detrás de la bandera `MOSTRAR_POR_TIPO_DE_COCINA` (`EstadisticasScreen.tsx`), apagada. No se borra nada: la tarjeta, su decodificador y `colorDeCocina` quedan, y vuelve a verse con la bandera en `true` cuando la clasificación funcione con los restaurantes reales y Mati lo pruebe (D63).
+- El resto de Mis estadísticas no cambia: el resumen, los tres accesos, Meses completos, la regla de que la ausencia no es cero y la pantalla de un dueño anterior. No se tocan el backend, el contrato ni las demás pantallas.
+- Pruebas: `EstadisticasScreen.test.tsx` (nuevo) falla si la bandera se enciende o si la tarjeta se pinta con la bandera apagada, y la muestra con la bandera encendida (filas, porcentajes y colores). En `e2e/estadisticas-d482.spec.ts`, el orden de la principal queda resumen → accesos → meses completos y un test nuevo comprueba que, con un mes de tres cocinas, la tarjeta no aparece. El toque afuera del desplegable pasa al título de Meses completos. En `periodo-estadisticas.spec.ts`, «Por tipo de cocina» ya no se ve con otro período.
+
 ## 0.264.2 · 2026-10-26 (D491 · la palabra de la pantalla de carga entra con una transición más larga)
 
 - Mati, con un video de 0.261.2 en el iPhone: el logo «spawnea de una». Diagnóstico (DIAGNOSTICO_CARGA_D491): la entrada de D476 duraba 600 ms con una curva que frenaba enseguida (`cubic-bezier(.2, .8, .2, 1)`) y arrancaba a los 80 ms, junto con el fundido con el que iOS muestra la app (~0,2 s). Cuando el fondo terminaba de verse, la palabra ya estaba al ~80 %: lo visible duraba ~0,1 s.
