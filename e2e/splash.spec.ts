@@ -1,10 +1,11 @@
 /**
  * La pantalla de carga en un navegador real · D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)»; la adenda 1 la
- * dejó en 1 s y la adenda 2, «Aumenta a dos segundos el icono de carga inicial», en 2 s): aparece en cada apertura o
- * recarga, también por un link o un QR de mesa, desde el primer cuadro, y queda al menos 2 s. Si la app tarda más, sigue
+ * dejó en 1 s, la adenda 2, «Aumenta a dos segundos el icono de carga inicial», en 2 s, y D498, «dejala dos segundos mas
+ * luego», en 4 s): aparece en cada apertura o
+ * recarga, también por un link o un QR de mesa, desde el primer cuadro, y queda al menos 4 s. Si la app tarda más, sigue
  * hasta que monte. Después, el fundido.
  *
- * 🔴 D300 · los 2 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación; y cada imagen de
+ * 🔴 D300 · los 4 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación; y cada imagen de
  * arranque del iPhone es esta misma pantalla, en su tamaño. D476 (opción A, enmienda D300 punto 3): la palabra «PayMe»
  * entra con un fundido mientras sube (quieta con «reducir movimiento»), y la imagen de arranque va sin ella.
  *
@@ -25,8 +26,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { DISPOSITIVOS, archivoDe, hrefDe, leerPng, mediaDe, type PngLeido } from '../scripts/imagenes-de-arranque.mjs';
 import { ingresar } from './_app';
 
-/** El mínimo de D292 (adenda 2) y el fundido de `src/splash.ts`. */
-const MINIMO_MS = 2_000;
+/** El mínimo de D292 (D498: 4 s; la adenda 2 lo había dejado en 2 s) y el fundido de `src/splash.ts`. */
+const MINIMO_MS = 4_000;
 const FUNDIDO_MS = 160;
 
 interface Muestra {
@@ -45,6 +46,8 @@ interface Carga {
   readonly vistoEn: number | null;
   /** D476 · la palabra (su `<svg>`, que es lo que se anima) en ese primer cuadro. */
   readonly palabraAlAparecer: Palabra | null;
+  /** D498 · el fondo de `html` en ese primer cuadro: navy mientras el `#splash` exista. */
+  readonly fondoAlAparecer: string | null;
   readonly montoEn: number | null;
   readonly retiradoEn: number | null;
 }
@@ -52,8 +55,8 @@ interface Carga {
 /** El muestreo, antes que la página: cada cuadro, la opacidad del `#splash`, el montaje y el retiro. */
 async function medirLaCarga(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number; palabra: number | null }>; vistoEn: number | null; palabraAlAparecer: Palabra | null; montoEn: number | null; retiradoEn: number | null } };
-    w.__carga = { muestras: [], vistoEn: null, palabraAlAparecer: null, montoEn: null, retiradoEn: null };
+    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number; palabra: number | null }>; vistoEn: number | null; palabraAlAparecer: Palabra | null; fondoAlAparecer: string | null; montoEn: number | null; retiradoEn: number | null } };
+    w.__carga = { muestras: [], vistoEn: null, palabraAlAparecer: null, fondoAlAparecer: null, montoEn: null, retiradoEn: null };
     const cuadro = () => {
       const t = performance.now();
       const el = document.getElementById('splash');
@@ -62,6 +65,7 @@ async function medirLaCarga(page: Page): Promise<void> {
       if (el) {
         if (w.__carga.vistoEn === null) {
           w.__carga.vistoEn = t;
+          w.__carga.fondoAlAparecer = getComputedStyle(document.documentElement).backgroundColor;
           const palabra = el.querySelector('.carga__palabra svg');
           if (palabra) {
             const cs = getComputedStyle(palabra);
@@ -121,8 +125,8 @@ function esperarElMinimoEntero(c: Carga): void {
   expect(c.retiradoEn!).toBeGreaterThanOrEqual(finDelMinimo + FUNDIDO_MS);
 }
 
-test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada apertura', () => {
-  test('aparece de entrada y queda al menos 2 s aunque la app monte antes; después, el fundido', async ({ page }) => {
+test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada apertura (D498)', () => {
+  test('aparece de entrada y queda al menos 4 s aunque la app monte antes; después, el fundido', async ({ page }) => {
     await medirLaCarga(page);
     await page.goto('/');
     const c = await laCarga(page);
@@ -139,7 +143,7 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     expect(Math.min(...fundido.map((m) => m.t))).toBeGreaterThanOrEqual(finDelMinimo);
     // Y no más que eso: con la app lista antes, el fundido arranca al cumplir el mínimo, no después (holgura para el
     // reloj del navegador de pruebas y los cuadros entre el primero y su anotación en Paint Timing).
-    expect(Math.min(...fundido.map((m) => m.t)), 'esperó de más: el mínimo es 2 s').toBeLessThan(finDelMinimo + 400);
+    expect(Math.min(...fundido.map((m) => m.t)), 'esperó de más: el mínimo es 4 s').toBeLessThan(finDelMinimo + 400);
     expect(c.retiradoEn!).toBeLessThan(finDelMinimo + FUNDIDO_MS + 600);
     await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   });
@@ -153,11 +157,11 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
   });
 
   /**
-   * 🔴 D300 · la página tarda 3 s en llegar (la red, no la app) y la app monta enseguida. Contados desde la navegación, los
-   * 2 s ya habían pasado al montar y la pantalla se iba enseguida: se veía un instante. Desde el primer cuadro pintado,
-   * queda los 2 s enteros.
+   * 🔴 D300 · la página tarda 3 s en llegar (la red, no la app) y la app monta enseguida. Contados desde la navegación, con
+   * 2 s ya habían pasado al montar y la pantalla se iba enseguida (con los 4 s de D498 quedaría ~1 s). Desde el primer
+   * cuadro pintado, queda los 4 s enteros.
    */
-  test('🔴 D300 · con la navegación demorada y la app rápida: los 2 s desde el primer cuadro pintado', async ({ page }) => {
+  test('🔴 D300 · con la navegación demorada y la app rápida: los 4 s desde el primer cuadro pintado', async ({ page }) => {
     await page.route((url) => url.pathname === '/', async (ruta) => {
       await new Promise((listo) => setTimeout(listo, 3_000));
       await ruta.continue();
@@ -179,10 +183,10 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
 
   /**
    * 🔴 D300 · un navegador que no anota Paint Timing (o que todavía no anotó el primer cuadro): se cuenta desde que monta
-   * la app, así que la pantalla nunca queda menos de 2 s desde que se vio. Contar desde la navegación, sin la entrada,
+   * la app, así que la pantalla nunca queda menos de 4 s desde que se vio. Contar desde la navegación, sin la entrada,
    * volvería al defecto: con la página demorada se iría al montar.
    */
-  test('🔴 D300 · sin Paint Timing: desde que monta la app, nunca menos de 2 s desde el primer cuadro', async ({ page }) => {
+  test('🔴 D300 · sin Paint Timing: desde que monta la app, nunca menos de 4 s desde el primer cuadro', async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(performance, 'getEntriesByType', { value: () => [], configurable: true });
     });
@@ -195,17 +199,17 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     const c = await laCarga(page);
     expect(c.vistoEn!, 'la página no llegó tarde: este caso no lo probaría').toBeGreaterThanOrEqual(3_000);
     esperarElMinimoEntero(c);
-    // Sin la entrada, cuenta desde que montó la app: se va 2 s después del montaje, no antes.
+    // Sin la entrada, cuenta desde que montó la app: se va 4 s después del montaje, no antes.
     expect(c.retiradoEn!).toBeGreaterThanOrEqual(c.montoEn! + MINIMO_MS);
   });
 
   test('si la app tarda más, sigue hasta que monta, y entonces se va (sin esperar otro mínimo)', async ({ page }) => {
-    // 3,5 s: bien por encima del mínimo de 2 s (con 2,5 s quedaba a medio segundo).
-    await demorarLaApp(page, 3_500);
+    // 5,5 s: bien por encima del mínimo de 4 s (D498).
+    await demorarLaApp(page, 5_500);
     await medirLaCarga(page);
     await page.goto('/');
     const c = await laCarga(page);
-    expect(c.montoEn!).toBeGreaterThanOrEqual(3_500);
+    expect(c.montoEn!).toBeGreaterThanOrEqual(5_500);
     // Entero hasta que montó la app.
     expect(c.muestras.filter((m) => m.t < c.montoEn!).filter((m) => m.opacidad !== 1)).toEqual([]);
     // Se fue enseguida después de montar: el fundido y nada más (sin otro mínimo).
@@ -217,7 +221,7 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     ['un link de mesa', '/mesa/PA-1234?t=token-de-prueba'],
     ['un QR de mesa', '/?r=qr-de-prueba'],
   ] as const) {
-    test(`por ${nombre} también: desde el primer cuadro y al menos 2 s`, async ({ page }) => {
+    test(`por ${nombre} también: desde el primer cuadro y al menos 4 s`, async ({ page }) => {
       await medirLaCarga(page);
       await page.goto(ruta);
       const c = await laCarga(page);
@@ -296,9 +300,25 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
   });
 
   /**
+   * 🔴 D498 · la barra blanca de abajo. En la app de inicio de iOS el `#splash` no llega a los 59 pt de abajo mientras
+   * el viewport arranca corto, y ahí asomaba el fondo claro de la página. Esto no reproduce ese viewport (el navegador
+   * de la prueba no lo tiene): fija que, mientras el `#splash` exista, el fondo de `html` es su navy, y que cuando la app
+   * lo saca vuelve el de siempre.
+   */
+  test('🔴 D498 · mientras está la pantalla de carga, el fondo de la página es navy; después, el de siempre', async ({ page }) => {
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    expect(c.fondoAlAparecer, 'en el primer cuadro el fondo de la página no era navy').toBe('rgb(16, 30, 59)');
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor),
+      'el fondo navy quedó después de que la app sacó la pantalla de carga').not.toBe('rgb(16, 30, 59)');
+    esperarElMinimoEntero(c);
+  });
+
+  /**
    * 🔴 R1 (informe D475) · la palabra nace casi transparente y las puntas son degradés (no cuentan como contenido): el
    * navegador igual tiene que anotar `first-contentful-paint` con la pantalla de carga, ANTES de que monte la app. Si no,
-   * `src/splash.ts` contaría los 2 s de D300 desde el montaje. La app se demora para que las dos cosas no coincidan.
+   * `src/splash.ts` contaría los 4 s de D300 desde el montaje. La app se demora para que las dos cosas no coincidan.
    */
   test('🔴 R1 · `first-contentful-paint` se anota con la pantalla de carga, antes de que monte la app', async ({ page }) => {
     await demorarLaApp(page, 1_500);
