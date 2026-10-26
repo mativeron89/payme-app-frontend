@@ -99,17 +99,17 @@ const BINARIOS_AUTORIZADOS = [
   // D300 (adenda del Bibliotecario, 2026-10-13T00:35:00Z) · las imágenes de arranque del iPhone, una por tamaño. Las
   // dibuja `scripts/imagenes-de-arranque.mjs` desde `index.html`, así que el repo es su upstream; el SHA-256 es el MEDIDO
   // de lo que escribió el generador.
-  { patron: /^arranque-750x1334\.png$/, sha: '8cee1dbe7373e3dd5eb9f652c2c520c3761a579de8ece788c919335703072d3a' },
-  { patron: /^arranque-828x1792\.png$/, sha: '776265d102572b9bf637d977e73470412ed4a7a1ca3542bcf629017216137e80' },
-  { patron: /^arranque-1125x2436\.png$/, sha: 'b644601c7a636838a3049c8735762d6bf01305e23ba1a111afdd19ce9f0fe273' },
-  { patron: /^arranque-1242x2688\.png$/, sha: '13822daf78e757c8fe0ee8c9e0736dc92e0d142eb5759156d59150b2a019434f' },
-  { patron: /^arranque-1170x2532\.png$/, sha: '9fe05a6e7df52ee863ef0b0faebcf623d1937c5fa37de747253f67c6aca9bbfa' },
-  { patron: /^arranque-1284x2778\.png$/, sha: '7162738326898250dc43d2b84365d03728726e4ce54e7e8c8ffab47c6b32a6c2' },
-  { patron: /^arranque-1179x2556\.png$/, sha: '155defd814fb31810f2c88b332a6a372e636875705a43ce5fca5dd065c17b62e' },
-  { patron: /^arranque-1290x2796\.png$/, sha: '62b4c58a800beabb04c72ec6de8f2873526d6c186f6eabf7519b10e0fb015079' },
-  { patron: /^arranque-1206x2622\.png$/, sha: '105b84580c68e7b39344e9a591a215410a496598e94fd1e9558af5fbbd00f700' },
-  { patron: /^arranque-1320x2868\.png$/, sha: 'f85ac9ae97b2766edc1823ac1dfd02a3404feebc1bb478dfcd28aec02327052d' },
-  { patron: /^arranque-1260x2736\.png$/, sha: 'c4464b6750dd7fd474970784b8d0ce9f67b3a32911d9a6b8ef4fd9295e1b34e0' },
+  { patron: /^arranque-750x1334\.png$/, sha: 'acba4a7920730f399507fe618e26f0a062b9ee31d66995bae2057c67f69fc0de' },
+  { patron: /^arranque-828x1792\.png$/, sha: 'eadfda3e539e18b478c01244fab43de217e370735fe92ea4fade0241b1fd8e56' },
+  { patron: /^arranque-1125x2436\.png$/, sha: 'c032fe79982ac8d2312397fea14e2b66ecf394165916e648ebc12b4ca4473f7d' },
+  { patron: /^arranque-1242x2688\.png$/, sha: '147786fe873984dfea696b6b410ed46e906d7bbd791b8d9a25c65524838df6b3' },
+  { patron: /^arranque-1170x2532\.png$/, sha: 'dee024fba39dcc17ac124c6fd155ab5f3f6fc18bac755e9938cd682e66829f45' },
+  { patron: /^arranque-1284x2778\.png$/, sha: '74aed38fa25629fe98d1d9ee5c807b797935effc40dca0766d0ecb28883c7356' },
+  { patron: /^arranque-1179x2556\.png$/, sha: '2bc541b25a16b74ec2f357a25192d0f645bc154fa52cbb9b56e1e0252d394322' },
+  { patron: /^arranque-1290x2796\.png$/, sha: '4808b5ad562c2fb752537aaa941d03e06210bc03c3810af71755bfa6bd1131eb' },
+  { patron: /^arranque-1206x2622\.png$/, sha: 'd4f6dbfe0cde7187f5e4e30c7d2ca56bd524d9a3bc0ee83a4ed6225d8cb6dd54' },
+  { patron: /^arranque-1320x2868\.png$/, sha: 'a09ba3eeb4b967e7bc5cfe53fdb2a1d29aa6521963689173680bff199d18bd32' },
+  { patron: /^arranque-1260x2736\.png$/, sha: '1b31c5d2ec61c33290edcab04e8345363633b05468b60ea7a95f1200dfd47348' },
 ] as const;
 
 /**

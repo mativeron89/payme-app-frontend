@@ -166,7 +166,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
     const regla = (selector: string) => INDEX.match(new RegExp(`${selector.replace(/\./g, '\\.')}\\s*{([^}]*)}`))?.[1] ?? '';
     const estilo = (INDEX.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-    it('dos puntas en esquinas opuestas, cada una la zona entera recortada, con el degradé teal → cian', () => {
+    it('dos puntas en esquinas opuestas, cada una la zona entera recortada, con el degradado teal → cian', () => {
       const puntas = [
         ['arriba', 'polygon(0 0, 56% 0, 0 19.2%)', 'linear-gradient(135deg, #0a7b80 0%, #0fb5c9 17.1%)'],
         ['abajo', 'polygon(100% 100%, 44% 100%, 100% 80.8%)', 'linear-gradient(315deg, #0a7b80 0%, #0fb5c9 17.1%)'],
@@ -184,7 +184,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
       expect(INDEX).not.toMatch(/class="t |\.t-arriba|\.t-izq|\.t-der|\.t-abajo|carga__icono/);
     });
 
-    it('🔴 D476 · la franja navy lisa y la zona debajo de la barra de estado; la punta de arriba ya no sube detrás', () => {
+    it('🔴 D476 · la franja navy lisa y la zona debajo de la barra de estado; la punta de arriba ya no sube por encima de la barra', () => {
       expect(splash).toContain('<div class="carga__franja"></div>');
       expect(regla('#splash .carga__franja')).toContain('height: env(safe-area-inset-top);');
       expect(regla('#splash .carga__franja')).toContain('background: #101e3b;');
