@@ -225,7 +225,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
       expect([...estilo.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1])).toEqual(['carga-palabra', 'splash-rendirse']);
       expect([...estilo.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]!.trim())).toEqual([
         'splash-rendirse 400ms ease 12s forwards',
-        'carga-palabra 600ms cubic-bezier(.2, .8, .2, 1) 80ms both',
+        'carga-palabra 1200ms cubic-bezier(.4, 0, .2, 1) 300ms both',
       ]);
       // Un solo @media, el de «sin preferencia», y adentro sólo la palabra.
       const medias = [...estilo.matchAll(/@media\s*([^{]+){\s*([^{}]+){([^}]*)}\s*}/g)];
@@ -239,6 +239,24 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 2 segundos (Mati, 
       // Ni el #splash, ni la palabra fuera del @media, ni las puntas se animan.
       expect(regla('#splash .carga__palabra')).not.toMatch(/animation|opacity/);
       expect(estilo).not.toMatch(/carga-entra|splash-aparecer/);
+    });
+
+    /**
+     * 🔴 D491 · Mati: el logo «spawnea de una». Con 600 ms, una curva que frenaba enseguida y 80 ms de retardo, la entrada
+     * corría junto con el fundido de iOS al abrir y lo visible duraba ~0,1 s (DIAGNOSTICO_CARGA_D491). Si la entrada vuelve a
+     * ser corta, o arranca antes de que pase ese fundido, esto falla. Y tiene que terminar antes del mínimo de 2 s (D292),
+     * para no demorar el arranque.
+     */
+    it('🔴 D491 · la entrada de la palabra dura al menos 1000 ms, espera al menos 250 ms y termina antes del mínimo', () => {
+      const regla = [...estilo.matchAll(/animation:\s*carga-palabra\s+(\d+)ms\s+(cubic-bezier\([^)]*\)|[\w-]+)\s+(\d+)ms\s+both;/g)];
+      expect(regla).toHaveLength(1);
+      const duracion = Number(regla[0]![1]);
+      const retardo = Number(regla[0]![3]);
+      expect(duracion).toBeGreaterThanOrEqual(1000);
+      expect(retardo).toBeGreaterThanOrEqual(250);
+      expect(retardo + duracion).toBeLessThan(SPLASH_MINIMO_MS);
+      // No una curva que la complete en el primer décimo de segundo: la de D476 (.2, .8, …) arrancaba casi vertical.
+      expect(regla[0]![2]).toBe('cubic-bezier(.4, 0, .2, 1)');
     });
   });
 

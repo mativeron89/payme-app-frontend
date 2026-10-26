@@ -1,3 +1,10 @@
+## 0.264.2 · 2026-10-26 (D491 · la palabra de la pantalla de carga entra con una transición más larga)
+
+- Mati, con un video de 0.261.2 en el iPhone: el logo «spawnea de una». Diagnóstico (DIAGNOSTICO_CARGA_D491): la entrada de D476 duraba 600 ms con una curva que frenaba enseguida (`cubic-bezier(.2, .8, .2, 1)`) y arrancaba a los 80 ms, junto con el fundido con el que iOS muestra la app (~0,2 s). Cuando el fondo terminaba de verse, la palabra ya estaba al ~80 %: lo visible duraba ~0,1 s.
+- Ahora `carga-palabra 1200ms cubic-bezier(.4, 0, .2, 1) 300ms both`: espera a que pase ese fundido y se ve aparecer durante ~0,8 s. Termina a 1,5 s del primer cuadro, antes del mínimo de 2 s, así que no demora el arranque. Diseño, colores, franja (D476/D353), la subida de 16 px y el nacimiento en 0.001 (R1) no cambian. Con «reducir movimiento», la palabra sigue entera y quieta desde el primer cuadro. Las imágenes de arranque no cambian: el generador oculta la palabra.
+- CSP: el `<style>` inline cambió, así que `HASH_STYLE_SPLASH_APP` (`vercel.ts`) pasa al hash nuevo.
+- Pruebas: `splash.test.ts` falla si la entrada dura menos de 1000 ms, espera menos de 250 ms o no termina antes del mínimo. En `e2e/splash.spec.ts`, un test nuevo mide cuadro por cuadro que en los primeros 200 ms la palabra siga casi invisible y que pasen al menos 400 ms entre el 10 % y el 90 %; las esperas de «entera» pasan de 1,5 s a 2,5 s. D63 sigue abierto: falta la prueba de Mati en el iPhone.
+
 ## 0.264.1 · 2026-10-26 (residual n423 · la vista previa de la porción que completa el plato)
 
 - La vista previa de una porción (`fractionPreview`) toma la rama que completa el plato también cuando deja un faltante menor a la tolerancia del dueño (`TOLERANCIA_DE_COMPLETAR`, 100 bps), como `effectiveBps` de `services/itemClaims.js`. Antes, ⅓ sobre los 3334 que quedaban de un plato de $1,000.00 mostraba $333.30 y el dueño cobraba $333.40. Es presentación: no cambia precio, redondeo, total ni `gross_amount_cents`, que siguen saliendo del dueño, y los pagos siguen apagados. La vista previa sigue tomando a su nominal lo que tomaron los demás.

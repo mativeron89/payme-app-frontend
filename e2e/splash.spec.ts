@@ -32,6 +32,8 @@ const FUNDIDO_MS = 160;
 interface Muestra {
   readonly t: number;
   readonly opacidad: number;
+  /** D491 · la opacidad de la palabra (su `<svg>`) en ese cuadro; `null` si no está. */
+  readonly palabra: number | null;
 }
 interface Palabra {
   readonly opacidad: string;
@@ -50,7 +52,7 @@ interface Carga {
 /** El muestreo, antes que la página: cada cuadro, la opacidad del `#splash`, el montaje y el retiro. */
 async function medirLaCarga(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number }>; vistoEn: number | null; palabraAlAparecer: Palabra | null; montoEn: number | null; retiradoEn: number | null } };
+    const w = window as unknown as { __carga: { muestras: Array<{ t: number; opacidad: number; palabra: number | null }>; vistoEn: number | null; palabraAlAparecer: Palabra | null; montoEn: number | null; retiradoEn: number | null } };
     w.__carga = { muestras: [], vistoEn: null, palabraAlAparecer: null, montoEn: null, retiradoEn: null };
     const cuadro = () => {
       const t = performance.now();
@@ -66,7 +68,8 @@ async function medirLaCarga(page: Page): Promise<void> {
             w.__carga.palabraAlAparecer = { opacidad: cs.opacity, animacion: cs.animationName };
           }
         }
-        w.__carga.muestras.push({ t, opacidad: Number(getComputedStyle(el).opacity) });
+        const svg = el.querySelector('.carga__palabra svg');
+        w.__carga.muestras.push({ t, opacidad: Number(getComputedStyle(el).opacity), palabra: svg ? Number(getComputedStyle(svg).opacity) : null });
       } else if (w.__carga.vistoEn !== null) {
         w.__carga.retiradoEn = t;
         return;
@@ -262,10 +265,33 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 2 segundos en cada ap
     await medirLaCarga(page);
     await page.goto('/');
     const palabra = page.locator('#splash .carga__palabra svg');
-    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 1_500 }).toBe('1');
+    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 2_500 }).toBe('1');
     expect(await palabra.evaluate((el) => getComputedStyle(el).transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
     const c = await laCarga(page);
     expect(c.palabraAlAparecer).toEqual({ opacidad: '0.001', animacion: 'carga-palabra' });
+    esperarElMinimoEntero(c);
+  });
+
+  /**
+   * 🔴 D491 · Mati: el logo «spawnea de una». Ahora la entrada espera a que pase el fundido de la apertura (~0,2 s en el
+   * iPhone) y se ve aparecer: en los primeros 200 ms la palabra sigue casi invisible, y pasa al menos 400 ms entre que se
+   * empieza a ver (> 10 %) y que queda casi entera (> 90 %). Con la entrada de D476 eran ~100 ms.
+   */
+  test('🔴 D491 · sin «reducir movimiento», la palabra se ve aparecer: espera el fundido y dura', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await medirLaCarga(page);
+    await page.goto('/');
+    const c = await laCarga(page);
+    const desde = c.vistoEn!;
+    const conPalabra = c.muestras.filter((m) => m.palabra !== null);
+    const alPrincipio = conPalabra.filter((m) => m.t - desde < 200);
+    expect(alPrincipio.length, 'no hubo cuadros en los primeros 200 ms').toBeGreaterThan(0);
+    expect(Math.max(...alPrincipio.map((m) => m.palabra!)), 'la palabra ya se veía antes de que pase el fundido').toBeLessThan(0.05);
+    const seVe = conPalabra.find((m) => m.palabra! > 0.1);
+    const casiEntera = conPalabra.find((m) => m.palabra! > 0.9);
+    expect(seVe, 'la palabra nunca pasó del 10 %').toBeDefined();
+    expect(casiEntera, 'la palabra nunca pasó del 90 % antes del retiro').toBeDefined();
+    expect(casiEntera!.t - seVe!.t, 'la palabra apareció de una').toBeGreaterThanOrEqual(400);
     esperarElMinimoEntero(c);
   });
 
@@ -307,8 +333,8 @@ for (const ancho of [375, 390, 430] as const) {
     await page.goto('/');
     const palabra = page.locator('#splash .carga__palabra svg');
     await expect(palabra).toBeVisible();
-    // Terminada la entrada: entera y en su lugar.
-    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 1_500 }).toBe('1');
+    // Terminada la entrada: entera y en su lugar (D491: termina a 1,5 s del primer cuadro).
+    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 2_500 }).toBe('1');
     const medida = await page.evaluate(() => {
       const caja = (sel: string) => {
         const r = document.querySelector(sel)!.getBoundingClientRect();
