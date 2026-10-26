@@ -123,6 +123,24 @@ describe('fractionPreview', () => {
   it('nunca devuelve negativo', () => {
     expect(fractionPreview(10000, 10000, 0)).toBe(0);
   });
+
+  /**
+   * Residual n423 · la tolerancia del dueño. Los esperados NO salen de la
+   * fórmula del front: son `effectiveBps` + `priceFraction` de
+   * `services/itemClaims.js` (sha256 21656a4b…, el de TOLERANCIA_DE_COMPLETAR)
+   * corridos sobre estos mismos datos, con los demás claims a su nominal.
+   */
+  it('🔴 ⅓ sobre los 3334 que quedan completa: paga lo que el dueño cobra (33340, no 33330)', () => {
+    expect(fractionPreview(100000, 3333, 3334)).toBe(33340);
+  });
+
+  it('🔴 un faltante de 99 también completa: ¼ sobre 2599 de $123.45 sale 3208', () => {
+    expect(fractionPreview(12345, 2500, 2599)).toBe(3208);
+  });
+
+  it('control: con un faltante de 100 es nominal (3086), como el dueño («< 100»)', () => {
+    expect(fractionPreview(12345, 2500, 2600)).toBe(3086);
+  });
 });
 
 describe('itemsAmountFor', () => {

@@ -1,3 +1,9 @@
+## 0.264.1 · 2026-10-26 (residual n423 · la vista previa de la porción que completa el plato)
+
+- La vista previa de una porción (`fractionPreview`) toma la rama que completa el plato también cuando deja un faltante menor a la tolerancia del dueño (`TOLERANCIA_DE_COMPLETAR`, 100 bps), como `effectiveBps` de `services/itemClaims.js`. Antes, ⅓ sobre los 3334 que quedaban de un plato de $1,000.00 mostraba $333.30 y el dueño cobraba $333.40. Es presentación: no cambia precio, redondeo, total ni `gross_amount_cents`, que siguen saliendo del dueño, y los pagos siguen apagados. La vista previa sigue tomando a su nominal lo que tomaron los demás.
+- La función es la misma que usa la vista previa de «Te toca» en Viajes (`montoDelPlato`), así que ahí también se corrige un faltante de 1 a 99 bps.
+- Pruebas: tres casos en `mesaItemsView.test.ts` (3333 sobre 3334, faltante de 99 y el control con 100) con los importes que da el dueño. D63 sigue abierto: falta la prueba de Mati.
+
 ## 0.264.0 · 2026-10-26 (D484/D486 · varias fotos de un ticket largo)
 
 - Mati: «Otra idea: sacar mas de una foto para tickets largos...implementala» (D484). D486: hasta 4 fotos, dentro del tope de OCR vigente, también en Viajes, y en el visor las partes se pasan deslizando de costado. Consume el dueño 2.196.0 (PR77, servido): `features.ocr_pages`, `pages_version=1`, `ticket_image_version=2` y `?page=`. **Todo detrás de la capacidad `features.ocr_pages`:** sin ella, ningún pedido cambia y la pantalla de escaneo es la de siempre. `ocr_pages.enabled` no dice que la foto del ticket esté encendida (auditoría de PR77, O3): la v2 de la foto se negocia sólo con las dos capacidades.

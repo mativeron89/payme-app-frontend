@@ -135,9 +135,13 @@ export function bpsLabel(bps: number): string {
  * Preview del monto de MI fracción. La fracción COMPLETADORA —la que cierra el
  * ítem— la ajusta el servidor: acá se aproxima con el nominal de lo tomado, y
  * por eso el comprobante usa el `gross_amount_cents` del backend y no esto.
+ *
+ * Completa también la que deja un faltante menor a la tolerancia del dueño
+ * (`effectiveBps`: ⅓ sobre 3334 se queda con los 3334 y paga lo que queda).
+ * Residual n423: antes la vista mostraba el nominal, unos centavos menos.
  */
 export function fractionPreview(priceCents: number, bps: number, remainingBps: number): number {
-  if (bps >= remainingBps) {
+  if (bps >= remainingBps || remainingBps - bps < TOLERANCIA_DE_COMPLETAR.bps) {
     return Math.max(0, priceCents - fractionAmount(priceCents, 10000 - remainingBps));
   }
   return fractionAmount(priceCents, bps);
