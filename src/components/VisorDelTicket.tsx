@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useCapacidadFotoDelTicket, type FotoDelTicket } from '../api/fotoDelTicket';
+import { partesDeLaFoto, useCapacidadFotoDelTicket, type FotoDelTicket } from '../api/fotoDelTicket';
 import { useFotoDelTicket, type EstadoDeFoto, type OrigenDeFoto } from '../api/fotosDeTickets';
 import type { StoredSession } from '../api/storage';
 import { useIdioma } from '../i18n/idioma';
@@ -30,6 +30,19 @@ import { useHojaModal } from './useHojaModal';
  * no sale, Escape cierra, la app queda inerte), las flechas del teclado, `+` y
  * `-`, las fotos sólo en memoria (`useFotoDelTicket`) y el foco de vuelta a
  * quien lo abrió. Sin dependencias nuevas: el zoom son eventos de puntero.
+ *
+ * D484 · D486 · **un ticket en varias fotos** (`foto.pages`, con
+ * `ticket_image_version=2`): Mati eligió «Deslizando de costado», una parte por
+ * vez. Para que no se confunda con pasar al ticket siguiente (D466):
+ *
+ * - En un ticket de dos o más partes, **deslizar pasa de parte y se frena en la
+ *   primera y en la última**: nunca salta a otro ticket.
+ * - **Pasar de ticket va por otro control**: las flechas de la franja (y las del
+ *   teclado), como siempre.
+ * - «Parte N de M», con sus puntos y los botones «Parte anterior» y «Parte
+ *   siguiente», en su propia fila debajo de la foto (nada encima del papel).
+ * - Cada parte trae su miniatura mientras llega su completa.
+ * - Un ticket de una sola parte (o sin la v2) se ve y se desliza como antes.
  */
 
 export interface TicketDelVisor {
@@ -115,15 +128,26 @@ export function VisorDelTicket({
   const [vista, setVista] = useState<Vista>(SIN_ZOOM);
   const [arrastre, setArrastre] = useState(0);
   const total = tickets.length;
+  // D484 · D486 · la parte del ticket que se ve; vuelve a la primera al cambiar de ticket.
+  const [parteElegida, setParte] = useState(0);
+  const partes = partesDeLaFoto(ticket?.foto);
+  const parte = acotar(parteElegida, 0, partes - 1);
   const ir = useCallback((paso: -1 | 1) => {
     setIndice((i) => acotar(i + paso, 0, total - 1));
+    setParte(0);
     setVista(SIN_ZOOM);
     setArrastre(0);
   }, [total]);
+  const irAParte = useCallback((paso: -1 | 1) => {
+    setParte((p) => acotar(p + paso, 0, partes - 1));
+    setVista(SIN_ZOOM);
+    setArrastre(0);
+  }, [partes]);
 
   // Las fotos: la completa si existe; la miniatura siempre (es lo que se ve mientras tanto y si la completa venció).
-  const miniatura = useFotoDelTicket(session, ticket?.origen ?? null, 'thumb');
-  const completa = useFotoDelTicket(session, ticket?.foto.full ? ticket.origen : null, 'full');
+  // D484 · las de la parte que se ve (la 0 es el pedido de siempre).
+  const miniatura = useFotoDelTicket(session, ticket?.origen ?? null, 'thumb', undefined, undefined, parte);
+  const completa = useFotoDelTicket(session, ticket?.foto.full ? ticket.origen : null, 'full', undefined, undefined, parte);
   const completaVencida = !!ticket && (!ticket.foto.full || completa.estado === 'sin_foto');
   const url = (completaVencida ? null : completa.url) ?? miniatura.url;
   const estado: EstadoDeFoto = url
@@ -192,7 +216,7 @@ export function VisorDelTicket({
       const dx = e.clientX - desde.x;
       const dy = e.clientY - desde.y;
       if (desde.vista.escala > 1) setVista({ ...desde.vista, x: desde.vista.x + dx, y: desde.vista.y + dy });
-      else if (total > 1) setArrastre(dx);
+      else if (partes > 1 || total > 1) setArrastre(dx);
     }
   };
 
@@ -204,7 +228,9 @@ export function VisorDelTicket({
       const dx = e.clientX - desde.x;
       const dy = e.clientY - desde.y;
       if (desde.vista.escala === 1 && Math.abs(dx) > UMBRAL_DESLIZAR && Math.abs(dx) > Math.abs(dy)) {
-        ir(dx < 0 ? 1 : -1);
+        // D486 · con varias partes, el deslizamiento es de las partes y se frena en los bordes; si no, de los tickets.
+        if (partes > 1) irAParte(dx < 0 ? 1 : -1);
+        else ir(dx < 0 ? 1 : -1);
         ultimoToque.current = null;
         inicio.current = null;
         return;
@@ -253,7 +279,10 @@ export function VisorDelTicket({
     <img
       className={completaVencida ? 'visor-ticket-foto visor-ticket-foto--vencida' : 'visor-ticket-foto'}
       src={url}
-      alt={t('Foto del ticket de {0}', ticket.titulo)}
+      alt={partes > 1
+        ? t('Foto del ticket de {0}, parte {1} de {2}', ticket.titulo, parte + 1, partes)
+        : t('Foto del ticket de {0}', ticket.titulo)}
+      data-parte={partes > 1 ? parte : undefined}
       // Cuál se ve: la completa, o la miniatura (mientras llega la completa, o si venció).
       data-tamano={!completaVencida && completa.url ? 'full' : 'thumb'}
       draggable={false}
@@ -320,6 +349,36 @@ export function VisorDelTicket({
           )}
         </div>
 
+        {partes > 1 && (
+          // D486 · las partes: su propia fila, debajo de la foto, separada de la franja de los tickets.
+          <div className="visor-ticket-partes">
+            <button
+              type="button"
+              className="visor-ticket-parte-flecha"
+              aria-label={t('Parte anterior')}
+              onClick={() => irAParte(-1)}
+              disabled={parte === 0}
+            >
+              <Icon name="chevron-left" size={18} />
+            </button>
+            <div className="visor-ticket-partes-centro">
+              <span className="visor-ticket-partes-texto" aria-live="polite">{t('Parte {0} de {1}', parte + 1, partes)}</span>
+              <span className="visor-ticket-partes-puntos" aria-hidden="true">
+                {Array.from({ length: partes }, (_, i) => <span key={i} className={i === parte ? 'on' : ''} />)}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="visor-ticket-parte-flecha"
+              aria-label={t('Parte siguiente')}
+              onClick={() => irAParte(1)}
+              disabled={parte === partes - 1}
+            >
+              <Icon name="chevron-right" size={18} />
+            </button>
+          </div>
+        )}
+
         {total > 1 && (
           <div className="visor-ticket-franja">
             {indice > 0 ? (
@@ -365,14 +424,18 @@ export function VisorDelTicket({
  * reducido); error, el ícono adentro. Es sólo lo que se ve: el botón lo pone
  * quien la usa.
  */
-export function MiniaturaDelTicket({ url, estado, icono }: {
+export function MiniaturaDelTicket({ url, estado, icono, partes = 1 }: {
   url: string | null;
   estado: EstadoDeFoto;
   icono: IconName;
+  /** D484 · cuántas fotos tiene el ticket: con 2 o más, la marca «N fotos» sobre la miniatura (la de la parte 0). */
+  partes?: number;
 }) {
+  const { t } = useIdioma();
   return (
     <span className={`miniatura-ticket${estado === 'cargando' && !url ? ' miniatura-ticket--cargando' : ''}`} aria-hidden="true">
       {url ? <img src={url} alt="" draggable={false} /> : estado === 'error' ? <Icon name={icono} size={18} /> : null}
+      {partes > 1 && <span className="miniatura-ticket-partes">{t('{0} fotos', partes)}</span>}
     </span>
   );
 }
@@ -382,27 +445,30 @@ export function MiniaturaDelTicket({ url, estado, icono }: {
  * la fila (que lleva a la pantalla del ticket), con su nombre propio también
  * mientras carga. Abre el visor y no le pasa el toque a la fila.
  */
-export function BotonDeMiniatura({ nombre, url, estado, icono, onAbrir }: {
+export function BotonDeMiniatura({ nombre, url, estado, icono, onAbrir, partes = 1 }: {
   /** El nombre del lugar: «Ver la foto del ticket de {0}» / «Cargando la foto del ticket de {0}». */
   nombre: string;
   url: string | null;
   estado: EstadoDeFoto;
   icono: IconName;
   onAbrir: (boton: HTMLButtonElement) => void;
+  /** D484 · cuántas fotos tiene el ticket (la marca «N fotos» con 2 o más). */
+  partes?: number;
 }) {
   const { t } = useIdioma();
   const cargando = estado === 'cargando' && !url;
+  const nombreAccesible = cargando ? t('Cargando la foto del ticket de {0}', nombre) : t('Ver la foto del ticket de {0}', nombre);
   return (
     <button
       type="button"
       className="fila-ticket-foto"
       aria-haspopup="dialog"
       aria-busy={cargando || undefined}
-      aria-label={cargando ? t('Cargando la foto del ticket de {0}', nombre) : t('Ver la foto del ticket de {0}', nombre)}
+      aria-label={partes > 1 ? `${nombreAccesible} · ${t('{0} fotos', partes)}` : nombreAccesible}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => { e.stopPropagation(); onAbrir(e.currentTarget); }}
     >
-      <MiniaturaDelTicket url={url} estado={estado} icono={icono} />
+      <MiniaturaDelTicket url={url} estado={estado} icono={icono} partes={partes} />
     </button>
   );
 }

@@ -137,10 +137,11 @@ import {
 import * as mockLink from './mock/linkDeInvitacion';
 import {
   aplicarConfigFotoDelTicket,
-  fotoDelTicketHabilitada,
+  negociacionDeFoto,
   PARAMETRO_FOTO_DEL_TICKET,
-  VALOR_FOTO_DEL_TICKET,
+  valorDeLaNegociacion,
 } from './fotoDelTicket';
+import { aplicarConfigOcrPaginas, capacidadOcrPaginas, rechazoLocalDePartes } from './ocrPaginas';
 import { conFotoDelTicketDeViajeMock, conFotoEnLasVisitasMock, conFotoEnLosTicketsDelViajeMock } from './mock/fotoDelTicketMock';
 import {
   applyUsernameConfig,
@@ -302,6 +303,27 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
  * adaptador no confía en que la pantalla haya mirado.
  */
 export const MAX_TICKET_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * D484 · D486 · las fotos de un escaneo, validadas como las validaría el dueño:
+ * cada una de 1 byte a 8 MiB; con dos o más, la capacidad `ocr_pages` encendida
+ * y dentro de sus topes (`max_pages`, `max_total_bytes`, del dueño). La pantalla
+ * ya los mira antes; esta es la segunda capa.
+ */
+function partesDelEscaneo(image: Blob | readonly Blob[] | undefined): readonly Blob[] {
+  // `Array.isArray` y no `instanceof Blob`: una foto que no es un Blob de este realm igual es UNA foto.
+  const fotos: readonly Blob[] = image === undefined ? [] : Array.isArray(image) ? image as readonly Blob[] : [image as Blob];
+  if (fotos.length === 0 || fotos.some((f) => f.size <= 0 || f.size > MAX_TICKET_IMAGE_BYTES)) {
+    throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
+  }
+  if (fotos.length > 1) {
+    const capacidad = capacidadOcrPaginas();
+    if (!capacidad) throw new Error('ocr_pages_not_available');
+    const rechazo = rechazoLocalDePartes(fotos.map((f) => f.size), capacidad);
+    if (rechazo) throw new Error(rechazo === 'muchas_partes' ? 'too_many_pages' : 'pages_too_large');
+  }
+  return fotos;
+}
 
 /**
  * La ESCRITURA de una vinculación no existe en la fachada con la capability
@@ -468,8 +490,14 @@ export interface Api {
    * AF-VIAJES · `opciones.viaje`: el escaneo de un ticket dentro de un viaje
    * pide `trip_version=1` (la huella del duplicado y la fecha impresa).
    */
+  /**
+   * D484 · D486 · `image` puede ser la lista de las partes de un ticket largo,
+   * en el orden del papel. Con una sola, o sin la capacidad `ocr_pages`, el
+   * pedido de siempre (`image`); con dos o más y la capacidad encendida,
+   * `pages_version=1` y el campo `images` repetido.
+   */
   scanTicket(
-    image?: Blob,
+    image?: Blob | readonly Blob[],
     onUploadProgress?: (progress: UploadProgress) => void,
     opciones?: { readonly viaje?: boolean },
   ): Promise<OcrResponse>;
@@ -783,6 +811,8 @@ const realApi: Api = {
     aplicarConfigLinkDeInvitacion(config);
     // D464 · D466 · la capacidad de la foto del ticket, igual (apagada hoy).
     aplicarConfigFotoDelTicket(config);
+    // D484 · D486 · la de varias fotos por ticket, igual. No dice nada de la foto.
+    aplicarConfigOcrPaginas(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -960,9 +990,11 @@ const realApi: Api = {
     if (params?.cursor) qs.set('cursor', params.cursor);
     if (params?.detail) qs.set('detail', params.detail);
     // D464 · D466 · la foto del ticket de cada mesa, sólo con la capacidad encendida.
-    if (fotoDelTicketHabilitada()) qs.set(PARAMETRO_FOTO_DEL_TICKET, VALOR_FOTO_DEL_TICKET);
+    // D484 · con las varias fotos encendidas, la v2 (con `pages`).
+    const foto = negociacionDeFoto();
+    if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, valorDeLaNegociacion(foto));
     const s = qs.toString();
-    return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`));
+    return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`), foto === 2 ? 2 : 1);
   },
   getMovement: async (id) => decodeMovementDetailResponse(
     await httpPrivateJsonRequest<unknown>(`/account/movements/${encodeURIComponent(id)}`),
@@ -996,18 +1028,20 @@ const realApi: Api = {
     // POST /api/ocr es multipart (campo `image`). Usa XHR sólo acá para medir
     // el upload; auth/refresh/timeout/HttpError siguen compartiendo la misma
     // maquinaria que el resto, sin cambiar el fetch del riel monetario.
-    if (!image || image.size <= 0 || image.size > MAX_TICKET_IMAGE_BYTES) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
+    const fotos = partesDelEscaneo(image);
     const form = new FormData();
-    form.append('image', image, 'ticket.jpg');
+    // D484 · D486 · con dos o más partes, `images` en el orden del papel; con una, `image`, como siempre.
+    const paginas = fotos.length > 1;
+    for (const foto of fotos) form.append(paginas ? 'images' : 'image', foto, 'ticket.jpg');
     // AF-VIAJES · el viaje sólo se pide con la capacidad encendida (el dueño lo ignora si no).
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
-    // D464 · D466 · la foto del ticket se negocia sólo con la capacidad encendida.
-    const fotoDelTicket = fotoDelTicketHabilitada();
+    // D464 · D466 · la foto del ticket se negocia sólo con la capacidad encendida (D484: la v2 con varias fotos).
+    const fotoDelTicket = negociacionDeFoto();
     // AF-NOMBRES-CORREGIDOS · el pedido siempre negocia `names_version=1`.
     return ocrResponse(
-      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket }),
-      { viaje, nombres: true, fotoDelTicket },
+      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket, paginas }),
+      { viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas: fotos.length } : {}) },
     );
   },
   createMesa: async (req, intent) =>
@@ -1427,9 +1461,10 @@ const realApi: Api = {
     assertViajesHabilitado();
     // D481 · la foto de cada ticket (`viaje.tickets[].ticket_image`), sólo con la capacidad encendida (strings fijos,
     // sin interpolar, como el ticket del viaje).
-    const foto = fotoDelTicketHabilitada();
+    const foto = negociacionDeFoto();
     return decodeDetalleViaje(await httpRequest<unknown>(
-      'GET', `/viajes/${encodeURIComponent(id)}?viaje_version=11` + (foto ? '&ticket_image_version=1' : ''),
+      'GET', `/viajes/${encodeURIComponent(id)}?viaje_version=11`
+        + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : ''),
     ), 'viajes.detalle', foto);
   },
   aceptarViaje: async (id) => {
@@ -1468,10 +1503,10 @@ const realApi: Api = {
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
     // D464 · D466 · la foto del ticket, sólo con la capacidad encendida (strings fijos, sin interpolar).
-    const foto = fotoDelTicketHabilitada();
+    const foto = negociacionDeFoto();
     return decodeTicketDelViaje(await httpRequest<unknown>(
       'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`
-        + (foto ? '&ticket_image_version=1' : ''),
+        + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : ''),
     ), 'viajes.ticket', foto);
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
@@ -1515,8 +1550,8 @@ const realApi: Api = {
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set('cursor', params.cursor);
     // D481 · la foto de cada visita (`visitas[].ticket_image`), sólo con la capacidad encendida.
-    const foto = fotoDelTicketHabilitada();
-    if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, VALOR_FOTO_DEL_TICKET);
+    const foto = negociacionDeFoto();
+    if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, valorDeLaNegociacion(foto));
     const s = qs.toString();
     return decodeVisitasDeViajes(await httpRequest<unknown>('GET', `/viajes/visitas${s ? `?${s}` : ''}`), foto);
   },
@@ -1576,6 +1611,7 @@ const mockApi: Api = {
     aplicarConfigViajes(config);
     aplicarConfigLinkDeInvitacion(config);
     aplicarConfigFotoDelTicket(config);
+    aplicarConfigOcrPaginas(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
@@ -1678,9 +1714,12 @@ const mockApi: Api = {
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
   getHistory: (params) => mock.mockHistory(params),
-  getMyMesas: async (params) => decodeMisMesas(await mock.mockMisMesas(
-    fotoDelTicketHabilitada() ? { ...params, ticketImage: true } : params,
-  )),
+  getMyMesas: async (params) => {
+    const foto = negociacionDeFoto();
+    return decodeMisMesas(await mock.mockMisMesas(
+      foto ? { ...params, ticketImage: foto === 2 ? 2 : true } : params,
+    ), foto === 2 ? 2 : 1);
+  },
   getMovement: async (id) => decodeMovementDetailResponse(await mock.mockMovement(id)),
 
   getOpenMesas: () => mock.mockOpenMesas(),
@@ -1689,11 +1728,18 @@ const mockApi: Api = {
   replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
     await mock.mockReplaceInformativeSelection(code, req),
   ),
-  scanTicket: async (_image, _onUploadProgress, opciones) => {
+  scanTicket: async (image, _onUploadProgress, opciones) => {
+    // D484 · con varias partes, las mismas guardas que el real: el mock tampoco acepta lo que el dueño
+    // rechazaría. Con una, como antes (el mock no mira la foto).
+    const varias = Array.isArray(image) && image.length > 1;
+    const paginas = varias ? partesDelEscaneo(image).length : undefined;
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
-    const fotoDelTicket = fotoDelTicketHabilitada();
-    return ocrResponse(await mock.mockScanTicket({ viaje, nombres: true, fotoDelTicket }), { viaje, nombres: true, fotoDelTicket });
+    const fotoDelTicket = negociacionDeFoto();
+    return ocrResponse(
+      await mock.mockScanTicket({ viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas } : {}) }),
+      { viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas } : {}) },
+    );
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -1884,9 +1930,9 @@ const mockApi: Api = {
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    const foto = fotoDelTicketHabilitada();
+    const foto = negociacionDeFoto();
     const raw = await mockViajes.mockDetalleViaje(id, { version: 11 });
-    return decodeDetalleViaje(foto ? conFotoEnLosTicketsDelViajeMock(raw) : raw, 'viajes.detalle', foto);
+    return decodeDetalleViaje(foto ? conFotoEnLosTicketsDelViajeMock(raw, foto === 2) : raw, 'viajes.detalle', foto);
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1918,9 +1964,9 @@ const mockApi: Api = {
   },
   getTicketDeViaje: async (id, ticketId) => {
     assertViajesHabilitado();
-    const foto = fotoDelTicketHabilitada();
+    const foto = negociacionDeFoto();
     const raw = await mockViajes.mockVerTicket(id, ticketId, { version: 11 });
-    return decodeTicketDelViaje(foto ? conFotoDelTicketDeViajeMock(raw) : raw, 'viajes.ticket', foto);
+    return decodeTicketDelViaje(foto ? conFotoDelTicketDeViajeMock(raw, foto === 2) : raw, 'viajes.ticket', foto);
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();
@@ -1952,9 +1998,9 @@ const mockApi: Api = {
   },
   getVisitasDeViajes: async (params) => {
     assertViajesHabilitado();
-    const foto = fotoDelTicketHabilitada();
+    const foto = negociacionDeFoto();
     const raw = await mockViajes.mockVisitasDeViajes(params?.cursor ? { cursor: params.cursor } : {});
-    return decodeVisitasDeViajes(foto ? await conFotoEnLasVisitasMock(raw) : raw, foto);
+    return decodeVisitasDeViajes(foto ? await conFotoEnLasVisitasMock(raw, foto === 2) : raw, foto);
   },
   crearNotaDeViaje: async (id, pedido) => {
     assertViajesHabilitado();

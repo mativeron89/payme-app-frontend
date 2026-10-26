@@ -1,4 +1,4 @@
-import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
+import { decodeFotoDelTicket, versionDeLaNegociacion, type FotoDelTicket, type NegociacionDeFoto } from './fotoDelTicket';
 import { CLAVES_COLOR_VIAJE, CONTRATO_VIAJES, ViajesResponseError, type ColorViaje } from './viajes';
 
 /**
@@ -90,9 +90,10 @@ function viajeDeLaVisita(raw: unknown): ViajeDeLaVisita {
   return { id: o.id as string, nombre: o.nombre as string, color: o.color as ColorViaje | null, has_photo: o.has_photo as boolean };
 }
 
-function visita(raw: unknown, conFoto: boolean): VisitaDeViaje {
+function visita(raw: unknown, conFoto: NegociacionDeFoto): VisitaDeViaje {
   // D481 · con la negociación, la visita PUEDE traer `ticket_image`; sin ella, esa clave de más rompe la página.
-  const conClave = conFoto && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
+  const version = versionDeLaNegociacion(conFoto);
+  const conClave = version !== null && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
   const claves = ['ticket_id', 'viaje', 'lugar', 'tipo_lugar', 'instante', 'te_toca_cents'];
   const o = objeto(raw, conClave ? [...claves, 'ticket_image'] : claves);
   exigir(texto(o.ticket_id) && (o.lugar === null || texto(o.lugar)) && esTipo(o.tipo_lugar) && instante(o.instante)
@@ -104,12 +105,12 @@ function visita(raw: unknown, conFoto: boolean): VisitaDeViaje {
     tipo_lugar: o.tipo_lugar as TipoDeVisita,
     instante: o.instante as string,
     te_toca_cents: o.te_toca_cents as number,
-    ...(conClave ? { ticket_image: decodeFotoDelTicket(o.ticket_image) } : {}),
+    ...(conClave ? { ticket_image: decodeFotoDelTicket(o.ticket_image, version ?? 1) } : {}),
   };
 }
 
 /** `GET /api/viajes/visitas` → `{ contract, visitas, page: { limit, next_cursor } }`. */
-export function decodeVisitasDeViajes(raw: unknown, conFoto = false): PaginaDeVisitas {
+export function decodeVisitasDeViajes(raw: unknown, conFoto: NegociacionDeFoto = false): PaginaDeVisitas {
   const b = objeto(raw, ['contract', 'visitas', 'page']);
   exigir(b.contract === CONTRATO_VIAJES);
   const page = objeto(b.page, ['limit', 'next_cursor']);

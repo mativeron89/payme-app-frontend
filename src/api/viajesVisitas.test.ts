@@ -119,7 +119,9 @@ describe('D293 · la fachada', () => {
     expect(metodo).not.toContain('crearNotaDeViaje');
     expect(metodo).toContain("if (params?.cursor) qs.set('cursor', params.cursor);");
     // D481 · 8 · la foto de cada visita se negocia sólo con su capacidad, y el decodificador sabe si se pidió.
-    expect(metodo).toContain('if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, VALOR_FOTO_DEL_TICKET);');
+    // D484 · la v2 (con `pages`) sólo con las varias fotos encendidas: el valor lo elige `negociacionDeFoto`.
+    expect(metodo).toContain('const foto = negociacionDeFoto();');
+    expect(metodo).toContain('if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, valorDeLaNegociacion(foto));');
     expect(metodo).toContain("return decodeVisitasDeViajes(await httpRequest<unknown>('GET', `/viajes/visitas${s ? `?${s}` : ''}`), foto);");
   });
 
@@ -127,6 +129,6 @@ describe('D293 · la fachada', () => {
     const metodo = metodoEn('const mockApi: Api = {');
     expect(metodo.split('\n')[1]!.trim()).toBe('assertViajesHabilitado();');
     expect(metodo).toContain('const raw = await mockViajes.mockVisitasDeViajes(');
-    expect(metodo).toContain('return decodeVisitasDeViajes(foto ? await conFotoEnLasVisitasMock(raw) : raw, foto);');
+    expect(metodo).toContain('return decodeVisitasDeViajes(foto ? await conFotoEnLasVisitasMock(raw, foto === 2) : raw, foto);');
   });
 });

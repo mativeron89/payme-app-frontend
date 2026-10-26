@@ -56,9 +56,13 @@ import {
   codificarFoto,
   decodificarFoto,
   herramientasDelNavegador,
+  miniaturaDeLaParte,
+  OBJETIVO_BYTES_VARIAS,
   type FotoDecodificada,
+  type FotoPreparada,
   type Herramientas,
 } from '../camara/fotoDelTicket';
+import { rechazoLocalDePartes, techoPorParte, useCapacidadOcrPaginas } from '../api/ocrPaginas';
 import { MARCO_ENTERO, recortePixeles, type Marco } from '../camara/marcoDelRecorte';
 import { RecorteDelTicket } from '../components/RecorteDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
@@ -145,10 +149,25 @@ export function ticketOpeningRoute(input: {
   return input.moneyEnabled ? 'guarantee' : 'create_without_money';
 }
 
+/**
+ * D484 · D486 · una parte de un ticket largo, ya preparada: el JPEG sin
+ * metadatos que se sube y una miniatura chica para la tira (su URL de memoria).
+ * Nunca la foto decodificada: cuatro fotos grandes en memoria son un riesgo en
+ * Safari.
+ */
+interface ParteDelTicket {
+  readonly id: number;
+  readonly foto: Blob;
+  readonly miniatura: string | null;
+}
+
 export function ocrFailureIssue(code: string, status: number | null):
-  'budget_exhausted' | 'budget_unavailable' | 'too_large' | 'too_small' | 'image_type' | 'ocr' {
+  'budget_exhausted' | 'budget_unavailable' | 'too_large' | 'too_small' | 'image_type' | 'partes_pesadas' | 'ocr' {
   if (status === 429 && code === 'ocr_monthly_budget_exhausted') return 'budget_exhausted';
   if (status === 503 && code === 'ocr_budget_unavailable') return 'budget_unavailable';
+  // D484 · D486 · App Backend 2.196.0: las fotos de un ticket largo, juntas, pasan el tope del dueño (o son más que
+  // `max_pages`). Antes que el 413 de una foto: no es «la foto pesa más de 8 MB».
+  if (code === 'pages_too_large' || code === 'too_many_pages') return 'partes_pesadas';
   // n81 · App Backend v2.133.0: la imagen es válida pero no se puede leer.
   if (status === 422 && code === 'ticket_image_too_small') return 'too_small';
   if (status === 413 || code === 'image_too_large') return 'too_large';
@@ -289,7 +308,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    */
   const [scanIssue, setScanIssue] = useState<
     'ocr' | 'no_items' | 'no_prices' | 'provider' | 'image_type' | 'too_large' | 'too_small'
-    | 'budget_exhausted' | 'budget_unavailable' | null
+    | 'budget_exhausted' | 'budget_unavailable' | 'partes_pesadas' | null
   >(null);
   /**
    * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
@@ -498,6 +517,49 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const [marco, setMarco] = useState<Marco>(MARCO_ENTERO);
   /** D222 · el recorte no se pudo dibujar y se mandó la foto entera. */
   const [recorteFallido, setRecorteFallido] = useState(false);
+  /**
+   * D484 · D486 · varias fotos de un ticket largo. Mati: «Otra idea: sacar mas de una foto para tickets
+   * largos...implementala»; D486: hasta 4 fotos, también en Viajes. Sólo con la capacidad `ocr_pages` encendida y
+   * fuera del ejemplo de la guía: sin ella, esta pantalla es la de siempre.
+   *
+   * Las partes ya preparadas van en el orden del papel, de arriba hacia abajo, sólo en memoria (`fotosEnMemoria.ts`).
+   * No se reordenan ni se deduplican: la unión la decide el dueño. Se sueltan al salir del paso o de la pantalla.
+   */
+  const capacidadPartes = useCapacidadOcrPaginas();
+  const variasFotos = capacidadPartes !== null && !ejemplo;
+  const maxPartes = capacidadPartes?.maxPartes ?? 1;
+  const [partes, setPartes] = useState<readonly ParteDelTicket[]>([]);
+  const partesRef = useRef(partes);
+  partesRef.current = partes;
+  const idDeParteRef = useRef(0);
+  /** Cambia al soltar las partes: una parte que termina de prepararse después ya no es de este ticket. */
+  const generacionDePartesRef = useRef(0);
+  /** La parte que se está preparando al tocar «Agregar otra parte», mientras la cámara ya está abierta. */
+  const preparandoParteRef = useRef<Promise<void> | null>(null);
+  const [preparandoParte, setPreparandoParte] = useState(false);
+  /** La parte que el dueño rechazó (`page_index`): se marca y se pide repetirla. */
+  const [parteConError, setParteConError] = useState<number | null>(null);
+  /** La parte que se está volviendo a sacar: la foto del marco la reemplaza en su lugar. */
+  const [reemplazando, setReemplazandoEstado] = useState<number | null>(null);
+  const reemplazandoRef = useRef<number | null>(null);
+  const setReemplazando = useCallback((i: number | null) => {
+    reemplazandoRef.current = i;
+    setReemplazandoEstado(i);
+  }, []);
+  /** D484 · la lectura de varias fotos avisó que no pudo saber cuántos renglones se repetían entre ellas. */
+  const [solapeIncierto, setSolapeIncierto] = useState(false);
+  const soltarPartes = useCallback(() => {
+    generacionDePartesRef.current += 1;
+    for (const p of partesRef.current) if (p.miniatura) URL.revokeObjectURL(p.miniatura);
+    partesRef.current = [];
+    setPartes([]);
+    setParteConError(null);
+    setReemplazando(null);
+  }, [setReemplazando]);
+  useEffect(() => () => {
+    generacionDePartesRef.current += 1;
+    for (const p of partesRef.current) if (p.miniatura) URL.revokeObjectURL(p.miniatura);
+  }, []);
   // La foto en recorte es de esta pantalla: se suelta al reemplazarla o al irse.
   // Con «Usar foto» la suelta `codificarFoto`, y antes se saca de acá.
   const recortandoRef = useRef(recortando);
@@ -520,8 +582,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
   }, []);
   useEffect(() => {
-    if (step !== 'scan') soltarRecorte();
-  }, [step, soltarRecorte]);
+    if (step !== 'scan') {
+      soltarRecorte();
+      soltarPartes();
+    }
+  }, [step, soltarRecorte, soltarPartes]);
   const recibirFotoRef = useRef(recibirFoto);
   recibirFotoRef.current = recibirFoto;
   useEffect(() => {
@@ -1129,6 +1194,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       cargarTicketDeEjemplo();
       return;
     }
+    // D484 · la parte anterior todavía se está preparando: una foto grande a la vez en memoria.
+    if (preparandoParteRef.current) await preparandoParteRef.current;
+    // D484 · con las partes completas, una foto más no tiene lugar (salvo que se esté repitiendo una).
+    if (variasFotos && reemplazandoRef.current === null && partesRef.current.length >= maxPartes) return;
     if (capturandoRef.current) return;
     capturandoRef.current = true;
     setCapturando(true);
@@ -1234,6 +1303,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * si el dueño lo publica (`rechazoLocalDeImagen`), sobre la foto preparada.
    */
   async function usarFoto() {
+    // D484 · con partes ya guardadas (o repitiendo una), la foto del marco es una parte más del ticket.
+    if (variasFotos && (partesRef.current.length > 0 || reemplazandoRef.current !== null)) {
+      await usarFotoComoParte();
+      return;
+    }
     const elegida = recortandoRef.current;
     if (!elegida || capturandoRef.current) return;
     capturandoRef.current = true;
@@ -1279,6 +1353,172 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   }
 
   /**
+   * D484 · la foto del marco como parte de un ticket en varias fotos: primero la miniatura chica (antes de soltar la
+   * foto) y después el JPEG con el objetivo de 3 MB y el techo por parte que deja entrar todas en el tope del dueño
+   * (`techoPorParte`, de `max_total_bytes`). El marco se lee ahora, en el toque. Suelta la foto al terminar.
+   */
+  async function prepararParte(elegida: NonNullable<typeof recortando>): Promise<{
+    foto: FotoPreparada;
+    miniatura: Blob | null;
+    enteraPorFallo: boolean;
+  }> {
+    const recorte = recortePixeles(marco, elegida.foto.ancho, elegida.foto.alto);
+    const techo = capacidadPartes ? techoPorParte(capacidadPartes, MAX_TICKET_IMAGE_BYTES) : MAX_TICKET_IMAGE_BYTES;
+    let miniatura: Blob | null = null;
+    try {
+      miniatura = await miniaturaDeLaParte(elegida.foto, elegida.herramientas, recorte);
+    } catch {
+      miniatura = null;
+    }
+    const { foto, enteraPorFallo } = await codificarFoto(
+      elegida.foto, techo, elegida.herramientas, recorte, Math.min(OBJETIVO_BYTES_VARIAS, techo),
+    );
+    return { foto, miniatura, enteraPorFallo };
+  }
+
+  /**
+   * D484 · guarda la parte preparada al final (o en `indice`, si se está repitiendo). Si no se pudo preparar, o queda
+   * fuera de los límites de siempre, el aviso de siempre y no se guarda. `false` = no se guardó.
+   */
+  function guardarParte(
+    r: { foto: FotoPreparada; miniatura: Blob | null; enteraPorFallo: boolean },
+    indice: number | null,
+  ): boolean {
+    if (r.foto === 'muy_grande' || r.foto === 'sin_preparar') {
+      setScanIssue(r.foto === 'muy_grande' ? 'too_large' : 'image_type');
+      return false;
+    }
+    const rechazo = rechazoLocalDeImagen(r.foto.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
+    if (rechazo) {
+      setScanIssue(rechazo);
+      return false;
+    }
+    if (r.enteraPorFallo) setRecorteFallido(true);
+    const parte: ParteDelTicket = {
+      id: ++idDeParteRef.current,
+      foto: r.foto,
+      miniatura: r.miniatura ? URL.createObjectURL(r.miniatura) : null,
+    };
+    const actuales = partesRef.current;
+    let siguientes: readonly ParteDelTicket[];
+    if (indice !== null && indice < actuales.length) {
+      const vieja = actuales[indice];
+      if (vieja?.miniatura) URL.revokeObjectURL(vieja.miniatura);
+      siguientes = actuales.map((p, i) => (i === indice ? parte : p));
+    } else {
+      siguientes = [...actuales, parte];
+    }
+    partesRef.current = siguientes;
+    setPartes(siguientes);
+    return true;
+  }
+
+  /**
+   * D484 · «Agregar otra parte»: la foto del marco queda como una parte y, en este mismo toque, se abre la cámara (o la
+   * galería, si vino de ahí) para la siguiente: iOS sólo la abre dentro del gesto. La parte se prepara mientras tanto; la
+   * foto siguiente espera a que termine (`recibirFoto`).
+   */
+  function agregarParte() {
+    const elegida = recortandoRef.current;
+    if (!elegida || !variasFotos || capturandoRef.current || preparandoParteRef.current) return;
+    if (reemplazandoRef.current !== null || partesRef.current.length + 1 >= maxPartes) return;
+    recortandoRef.current = null;
+    setRecortando(null);
+    setScanIssue(null);
+    setRecorteFallido(false);
+    if (elegida.origen === 'camara') doScan();
+    else fileInput.current?.click();
+    const generacion = generacionDePartesRef.current;
+    setPreparandoParte(true);
+    const trabajo = (async () => {
+      try {
+        const r = await prepararParte(elegida);
+        if (generacion === generacionDePartesRef.current) guardarParte(r, null);
+      } finally {
+        preparandoParteRef.current = null;
+        setPreparandoParte(false);
+      }
+    })();
+    preparandoParteRef.current = trabajo;
+  }
+
+  /** D484 · la última parte (o la que se repetía) va a la lista y se lee el ticket con todas. */
+  async function usarFotoComoParte() {
+    const elegida = recortandoRef.current;
+    if (!elegida || capturandoRef.current || preparandoParteRef.current) return;
+    capturandoRef.current = true;
+    setCapturando(true);
+    recortandoRef.current = null;
+    setRecortando(null);
+    setRecorteFallido(false);
+    const indice = reemplazandoRef.current;
+    const generacion = generacionDePartesRef.current;
+    let guardada = false;
+    try {
+      const r = await prepararParte(elegida);
+      if (generacion !== generacionDePartesRef.current) return;
+      guardada = guardarParte(r, indice);
+      if (guardada) {
+        setReemplazando(null);
+        setParteConError(null);
+      }
+    } finally {
+      capturandoRef.current = false;
+      setCapturando(false);
+    }
+    if (guardada) leerPartes();
+  }
+
+  /** D484 · «Leer ticket (N fotos)»: las partes, en el orden del papel, a una sola lectura. */
+  function leerPartes() {
+    const lista = partesRef.current;
+    if (lista.length === 0 || !capacidadPartes || capturandoRef.current || preparandoParteRef.current) return;
+    const fotos = lista.map((p) => p.foto);
+    if (rechazoLocalDePartes(fotos.map((f) => f.size), capacidadPartes)) {
+      setScanIssue('partes_pesadas');
+      return;
+    }
+    setParteConError(null);
+    setScanIssue(null);
+    setCaptura(URL.createObjectURL(fotos[0]!));
+    const intento = ++intentoLecturaRef.current;
+    void runScan(fotos.length === 1 ? fotos[0] : fotos, intento);
+  }
+
+  /** D484 · ✕ de una parte: sale de la lista; las demás conservan su orden. */
+  function quitarParte(indice: number) {
+    const actuales = partesRef.current;
+    const quitada = actuales[indice];
+    if (!quitada || capturandoRef.current) return;
+    if (quitada.miniatura) URL.revokeObjectURL(quitada.miniatura);
+    const siguientes = actuales.filter((_, i) => i !== indice);
+    partesRef.current = siguientes;
+    setPartes(siguientes);
+    setParteConError(null);
+    setReemplazando(null);
+    setScanIssue(null);
+  }
+
+  /** D484 · la parte que el dueño rechazó se vuelve a sacar: la foto nueva ocupa su lugar. */
+  function repetirParte(indice: number) {
+    setReemplazando(indice);
+    setScanIssue(null);
+    doScan();
+  }
+
+  /** D484 · con partes, «Reintentar» después de una lectura que falló vuelve a mandar las mismas. */
+  function reintentarLectura() {
+    if (variasFotos && partesRef.current.length > 0) leerPartes();
+    else doScan();
+  }
+
+  /** D484 · con partes, una lectura sin platos se vuelve a sacar desde el principio. */
+  function volverASacar() {
+    if (partesRef.current.length > 0) soltarPartes();
+    doScan();
+  }
+
+  /**
    * §1.6 · **siempre existe la salida manual**: un OCR que falla no puede
    * terminar el flujo. Se entra al Ticket en modo edición con una fila vacía —
    * exactamente el mismo estado en el que queda un OCR que contestó 200 con
@@ -1286,6 +1526,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    */
   function cargarAMano() {
     setScanIssue(null);
+    setSolapeIncierto(false);
     setScannedTotalCents(null);
     setScannedTotals(null);
     setScannedAdjustments(null);
@@ -1306,7 +1547,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (!restaurantIdRef.current) void resolveTicketRestaurant().catch(() => undefined);
   }
 
-  async function runScan(image: Blob | undefined, intento: number) {
+  async function runScan(image: Blob | readonly Blob[] | undefined, intento: number) {
     setScanning(true);
     setUploadProgress(null);
     setError(null);
@@ -1325,6 +1566,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       // Cada lectura reemplaza el recibo, aunque venga sin él.
       ocrReceiptRef.current = r.receipt ?? null;
       setOcrMerchant(r.merchant);
+      // D484 · el dueño no pudo saber con el TOTAL cuántos renglones se repetían entre dos fotos.
+      setSolapeIncierto(r.warnings.includes('pages_overlap_uncertain'));
       // Resolver no crea la mesa. Sólo prepara la identidad privada/pública
       // para que el CTA posterior pueda abrirla sin QR. En un viaje no hay mesa.
       if (!enViaje && !restaurantIdRef.current) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
@@ -1391,6 +1634,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       // neutrales porque no prueban que haya faltado luz.
       const apiError = extractApiError(err);
       setScanIssue(ocrFailureIssue(apiError.code, apiError.status));
+      // D484 · D486 · con varias fotos, el dueño dice cuál falló (`page_index`): se marca y se pide repetirla.
+      const pagina = apiError.extra.page_index;
+      if (Array.isArray(image) && typeof pagina === 'number'
+          && Number.isSafeInteger(pagina) && pagina >= 0 && pagina < image.length) {
+        setParteConError(pagina);
+      }
       // El cartel de §1.6 dice lo mismo con sus dos salidas al lado. El toast
       // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
@@ -1983,8 +2232,15 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               : capturando
                 ? t('Preparando la foto…')
                 : recortando
-                  ? t('Ajusta el marco para dejar sólo el ticket')
-                  : t('Saca la foto del ticket completo, de cerca y con luz')}
+                  // D484 · con partes, el marco es el de la parte que sigue (o la que se repite).
+                  ? variasFotos && (partes.length > 0 || reemplazando !== null)
+                    ? t('Parte {0}: ajusta el marco para dejar sólo esa parte', (reemplazando ?? partes.length) + 1)
+                    : t('Ajusta el marco para dejar sólo el ticket')
+                  : variasFotos && partes.length > 0
+                    ? partes.length >= maxPartes
+                      ? t('Ya tienes {0} fotos. Lee el ticket.', partes.length)
+                      : t('Saca la parte siguiente. Deja que se repitan una o dos líneas.')
+                    : t('Saca la foto del ticket completo, de cerca y con luz')}
           </div>
           {/* D464 · D466 · 🔴 TEXTO PROVISORIO: se reemplaza por el que apruebe la abogada antes de encender. Sólo con
               la capacidad encendida, que es cuando el escaneo negocia `ticket_image_version=1` y el dueño guarda la
@@ -2028,6 +2284,60 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           )}
         </div>
         <div className="camara-panel">
+          {/* D484 · D486 · las partes del ticket ya preparadas, numeradas en el orden del papel. ✕ quita una; la que
+              el dueño rechazó queda marcada. Sin la capacidad (o sin partes) no existe. */}
+          {variasFotos && partes.length > 0 && (
+            <ol className="camara-partes" aria-label={t('Partes del ticket')}>
+              {partes.map((p, i) => (
+                <li key={p.id} className={i === parteConError ? 'camara-parte camara-parte--error' : 'camara-parte'}>
+                  <span className="camara-parte-foto" aria-hidden="true">
+                    {p.miniatura ? <img src={p.miniatura} alt="" draggable={false} /> : <Icon name="receipt" size={18} />}
+                  </span>
+                  <span className="camara-parte-nombre">{t('Parte {0}', i + 1)}</span>
+                  <button
+                    type="button"
+                    className="camara-parte-quitar"
+                    aria-label={t('Quitar la parte {0}', i + 1)}
+                    onClick={() => quitarParte(i)}
+                    disabled={scanning || capturando}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+          {parteConError !== null && (scanIssue === 'too_small' || scanIssue === 'image_type' || scanIssue === 'too_large') && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="warning" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('No pudimos leer la parte {0}', parteConError + 1)}</div>
+                  <p className="state-error-body">
+                    {scanIssue === 'too_small'
+                      ? t('Toma otra más cerca, con buena luz y sin recortarla.')
+                      : t('Vuelve a sacar esa parte.')}
+                  </p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => repetirParte(parteConError)}>
+                  {t('Repetir la parte {0}', parteConError + 1)}
+                </button>
+              </div>
+            </div>
+          )}
+          {scanIssue === 'partes_pesadas' && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="warning" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('Las fotos pesan demasiado juntas')}</div>
+                  <p className="state-error-body">{t('Quita una parte o vuelve a sacarlas.')}</p>
+                </div>
+              </div>
+            </div>
+          )}
           {/* D222 · el recorte no se pudo dibujar: se mandó la foto entera, que
               es la de antes del marco. Se dice, sin ámbar y sin frenar. */}
           {recorteFallido && (
@@ -2092,7 +2402,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 {/* Las DOS salidas, al lado. Un OCR que falla no puede terminar
                     el flujo: sin "Cargarlo a mano" la mesa queda sin abrir. */}
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={reintentarLectura}>
                     {t('Reintentar')}
                   </button>
                   {!enViaje && (
@@ -2117,7 +2427,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </div>
                 </div>
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={volverASacar}>
                     {t('Reintentar')}
                   </button>
                   {!enViaje && (
@@ -2144,7 +2454,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </div>
                 </div>
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={volverASacar}>
                     {t('Sacar otra foto')}
                   </button>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()}>
@@ -2163,7 +2473,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </div>
                 </div>
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={reintentarLectura}>
                     {t('Reintentar')}
                   </button>
                   {!enViaje && (
@@ -2174,7 +2484,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 </div>
               </div>
             )}
-            {scanIssue === 'image_type' && (
+            {scanIssue === 'image_type' && parteConError === null && (
               <div className="state-warn" role="alert">
                 <div className="state-error-row">
                   <Icon name="warning" size={22} />
@@ -2197,7 +2507,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 </div>
               </div>
             )}
-            {scanIssue === 'too_large' && (
+            {scanIssue === 'too_large' && parteConError === null && (
               <div className="state-warn" role="alert">
                 <div className="state-error-row">
                   <Icon name="warning" size={22} />
@@ -2215,7 +2525,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             )}
             {/* n81 · decisión 67 de Mati. Texto propuesto por el dueño (tuteo),
                 en la lista de Mati para revisar; las dos oraciones, tal cual. */}
-            {scanIssue === 'too_small' && (
+            {scanIssue === 'too_small' && parteConError === null && (
               <div className="state-warn" role="alert">
                 <div className="state-error-row">
                   <Icon name="warning" size={22} />
@@ -2255,13 +2565,57 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   <span>{t('Elegir otra')}</span>
                 </button>
               )}
+              {/* D484 · D486 · «Agregar otra parte»: la foto del marco queda como una parte y se abre la cámara para la
+                  siguiente. Con la última que entra, deshabilitado con el tope del dueño. Repitiendo una, no va. */}
+              {variasFotos && reemplazando === null && (
+                <button
+                  type="button"
+                  className="camara-galeria camara-agregar-parte"
+                  onClick={agregarParte}
+                  disabled={capturando || preparandoParte || partes.length + 1 >= maxPartes}
+                >
+                  <Icon name="plus" size={20} />
+                  <span>{partes.length + 1 >= maxPartes ? t('Hasta {0} fotos', maxPartes) : t('Agregar otra parte')}</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="camara-usar"
                 onClick={() => { void usarFoto(); }}
-                disabled={capturando}
+                disabled={capturando || preparandoParte}
               >
-                {t('Usar foto')}
+                {variasFotos && (partes.length > 0 || reemplazando !== null)
+                  ? t('Leer ticket ({0} fotos)', reemplazando !== null ? partes.length : partes.length + 1)
+                  : t('Usar foto')}
+              </button>
+            </>
+          ) : variasFotos && partes.length > 0 ? (
+            // D484 · con partes y sin foto en el marco (la cámara se canceló, o la parte se está preparando): la galería y
+            // el botón redondo suman la parte siguiente; «Leer ticket» manda las que hay.
+            <>
+              <button
+                type="button"
+                className="camara-galeria"
+                onClick={() => fileInput.current?.click()}
+                disabled={scanning || capturando || partes.length >= maxPartes}
+              >
+                <Icon name="image" size={20} />
+                <span>{t('Elegir de la galería o Drive')}</span>
+              </button>
+              <button
+                type="button"
+                className="camara-disparador"
+                onClick={doScan}
+                disabled={scanning || capturando || partes.length >= maxPartes}
+                aria-label={t('Sacar la parte siguiente')}
+              />
+              <button
+                type="button"
+                className="camara-usar"
+                onClick={leerPartes}
+                disabled={scanning || capturando || preparandoParte}
+              >
+                {partes.length === 1 ? t('Leer ticket (1 foto)') : t('Leer ticket ({0} fotos)', partes.length)}
               </button>
             </>
           ) : (
@@ -2668,6 +3022,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       : t('Checa que el total coincida con el total del ticket')}
                   </span>
                 </div>
+                {/* D484 · D486 · `pages_overlap_uncertain`: con varias fotos, el dueño no pudo saber con el TOTAL cuántos
+                    renglones se repetían entre ellas. La persona corrige acá. */}
+                {solapeIncierto && (
+                  <div className="title-card-note warn tk-partes-aviso" role="note">
+                    <Icon name="warning" size={16} />
+                    <span>{t('Las fotos se superponían: revisa que ningún plato quede repetido.')}</span>
+                  </div>
+                )}
               <div className="tk-list">
                 {editItems.map((it, idx) => {
                   // D360-5b · D370 · el nombre como se muestra en la fila y en sus

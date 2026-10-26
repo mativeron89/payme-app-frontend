@@ -203,7 +203,8 @@ function rawOcrUploadRequest<T>(
   token: string,
   onProgress?: UploadProgressListener,
   viaje = false,
-  fotoDelTicket = false,
+  fotoDelTicket: boolean | 2 = false,
+  paginas = false,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -222,7 +223,11 @@ function rawOcrUploadRequest<T>(
     // D464 · D466 · `ticket_image_version=1` SÓLO con la capacidad encendida: el
     // dueño guarda la foto únicamente si el cliente lo pide, porque esta pantalla
     // es la que avisa que se conserva. Sin la capacidad, el pedido de siempre.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket ? '&ticket_image_version=1' : ''}`);
+    // D484 · D486 · `pages_version=1` SÓLO con dos o más fotos y la capacidad
+    // encendida (el campo `images`); con una, el pedido de siempre, byte a byte.
+    // `ticket_image_version=2` (la 1 más `pages`) sólo con la foto Y las varias
+    // fotos encendidas.
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket === 2 ? '&ticket_image_version=2' : fotoDelTicket ? '&ticket_image_version=1' : ''}${paginas ? '&pages_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -360,10 +365,13 @@ export async function httpRequest<T>(
 export async function httpOcrUploadRequest<T>(
   body: FormData,
   onProgress?: UploadProgressListener,
-  opciones: { readonly viaje?: boolean; readonly fotoDelTicket?: boolean } = {},
+  opciones: { readonly viaje?: boolean; readonly fotoDelTicket?: boolean | 2; readonly paginas?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(undefined, (session) => (
-    rawOcrUploadRequest<T>(body, session.access_token, onProgress, opciones.viaje === true, opciones.fotoDelTicket === true)
+    rawOcrUploadRequest<T>(
+      body, session.access_token, onProgress, opciones.viaje === true,
+      opciones.fotoDelTicket === 2 ? 2 : opciones.fotoDelTicket === true, opciones.paginas === true,
+    )
   ));
 }
 

@@ -13,7 +13,7 @@
  * omite ese dato; nunca pinta «undefined».
  */
 
-import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
+import { decodeFotoDelTicket, type FotoDelTicket, type VersionDeFotoDelTicket } from './fotoDelTicket';
 
 export interface TuMesa {
   readonly id: string;
@@ -114,7 +114,7 @@ function platosInformativos(raw: unknown): number | null {
   return ids.size;
 }
 
-function fila(raw: unknown): TuMesa | null {
+function fila(raw: unknown, versionFoto: VersionDeFotoDelTicket): TuMesa | null {
   if (!objeto(raw)) return null;
   const id = texto(raw.id);
   const code = texto(raw.code);
@@ -132,7 +132,8 @@ function fila(raw: unknown): TuMesa | null {
   const eleccionInformativa = informativos !== null;
   const itemsCount = eleccionInformativa ? informativos : enteroNoNegativo(mine.items_count);
   const amountCents = eleccionInformativa ? null : enteroNoNegativo(mine.amount_cents);
-  const foto = decodeFotoDelTicket(raw.ticket_image);
+  // D484 · con `ticket_image_version=2`, la forma con `pages`; si no, la de siempre.
+  const foto = decodeFotoDelTicket(raw.ticket_image, versionFoto);
   return {
     id,
     code,
@@ -155,14 +156,14 @@ function fila(raw: unknown): TuMesa | null {
   };
 }
 
-export function decodeMisMesas(raw: unknown): PaginaMisMesas {
+export function decodeMisMesas(raw: unknown, versionFoto: VersionDeFotoDelTicket = 1): PaginaMisMesas {
   if (!objeto(raw) || !Array.isArray(raw.mesas) || !objeto(raw.page)) {
     throw new Error('mis_mesas_response_malformed');
   }
   const cursor = raw.page.next_cursor;
   if (cursor !== null && typeof cursor !== 'string') throw new Error('mis_mesas_response_malformed');
   return {
-    mesas: raw.mesas.map(fila).filter((m): m is TuMesa => m !== null),
+    mesas: raw.mesas.map((m) => fila(m, versionFoto)).filter((m): m is TuMesa => m !== null),
     nextCursor: cursor,
   };
 }

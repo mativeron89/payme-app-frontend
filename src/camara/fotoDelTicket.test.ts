@@ -6,6 +6,10 @@ import {
   decodificarFoto,
   escalera,
   LADO_MAX,
+  LADO_MINIATURA_DE_PARTE,
+  miniaturaDeLaParte,
+  OBJETIVO_BYTES_VARIAS,
+  objetivoDeBytes,
   prepararFotoDelTicket,
   tamanoObjetivo,
   type Herramientas,
@@ -378,5 +382,40 @@ describe('D222 · decodificar una vez, codificar con el recorte del marco', () =
     expect(await decodificarFoto(blob(10), no.h)).toBeNull();
     const tira = falsas(1, 1, () => 1, { decodifica: 'tira' });
     expect(await decodificarFoto(blob(10), tira.h)).toBeNull();
+  });
+});
+
+describe('D484 · D486 · las partes de un ticket largo', () => {
+  it('el objetivo de cada foto: 5 MB con una, 3 MB con dos o más (informe §1.5)', () => {
+    expect(objetivoDeBytes(1)).toBe(OBJETIVO_BYTES);
+    expect(objetivoDeBytes(2)).toBe(OBJETIVO_BYTES_VARIAS);
+    expect(objetivoDeBytes(4)).toBe(OBJETIVO_BYTES_VARIAS);
+    expect(OBJETIVO_BYTES_VARIAS).toBeLessThan(OBJETIVO_BYTES);
+  });
+
+  it('con el objetivo de varias, la escalera de siempre sigue hasta el primer JPEG que entra en 3 MB', async () => {
+    const { h, pasos } = falsas(4032, 3024, (paso) => (paso.calidad >= 0.85 ? mib(4) : mib(2.5)));
+    const foto = await decodificarFoto(blob(1), h);
+    const r = await codificarFoto(foto!, TOPE, h, null, OBJETIVO_BYTES_VARIAS);
+    expect(r.foto).toBeInstanceOf(Blob);
+    expect((r.foto as Blob).size).toBe(mib(2.5));
+    expect(pasos.map((p) => p.calidad)).toEqual([...CALIDADES]);
+  });
+
+  it('la miniatura de la tira: chica, del recorte, y sin soltar la foto (la suelta `codificarFoto` después)', async () => {
+    const { h, pasos, registro } = falsas(4032, 3024, () => 1200);
+    const foto = await decodificarFoto(blob(1), h);
+    const recorte: Recorte = { x: 0, y: 0, ancho: 1000, alto: 3000 };
+    const mini = await miniaturaDeLaParte(foto!, h, recorte);
+    expect(mini?.size).toBe(1200);
+    expect(Math.max(pasos[0]!.ancho, pasos[0]!.alto)).toBe(LADO_MINIATURA_DE_PARTE);
+    expect(pasos[0]!.alto).toBeGreaterThan(pasos[0]!.ancho);
+    expect(registro).toEqual({ soltada: 0, terminada: 0 });
+  });
+
+  it('si el lienzo no puede, no hay miniatura (la tira muestra el número de la parte)', async () => {
+    const { h } = falsas(4032, 3024, () => null);
+    const foto = await decodificarFoto(blob(1), h);
+    expect(await miniaturaDeLaParte(foto!, h, null)).toBeNull();
   });
 });

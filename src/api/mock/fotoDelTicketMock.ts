@@ -1,5 +1,5 @@
 import { fotoDelTicketMockEncendida } from '../fotoDelTicket';
-import { fotoDeMesaMock, MockApiError } from './mockApi';
+import { fotoDeMesaMock, MockApiError, partesDeMesaMock } from './mockApi';
 import { mockVerTicket } from './viajes';
 
 /**
@@ -45,9 +45,14 @@ function pesos(cents: number): string {
  * El ticket dibujado en un canvas, como `jpegDeIniciales`: WebP (como el
  * dueño); si el navegador no lo sabe codificar, PNG. `chico`: la miniatura.
  */
-export function dibujarTicket(papel: PapelDelTicket, chico: boolean): Promise<Blob> {
+export function dibujarTicket(papel: PapelDelTicket, chico: boolean, parte = 0, partes = 1): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const renglones = papel.renglones.slice(0, chico ? 6 : 14);
+    // D484 · un ticket en varias fotos: cada parte dibuja su tramo de renglones; la cabecera va en la primera y el
+    // TOTAL en la última, como en el papel.
+    const tramo = partes > 1 ? tramoDeLaParte(papel.renglones, parte, partes) : papel.renglones;
+    const conCabecera = parte === 0;
+    const conTotal = parte === partes - 1;
+    const renglones = tramo.slice(0, chico ? 6 : 14);
     const total = papel.renglones.reduce((s, r) => s + r.cents, 0);
     const escala = chico ? 1 / 3 : 1;
     const ancho = Math.round(480 * escala);
@@ -65,9 +70,9 @@ export function dibujarTicket(papel: PapelDelTicket, chico: boolean): Promise<Bl
     ctx.setLineDash([6, 6]);
     ctx.font = 'bold 22px "Courier New", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(papel.lugar, 240, 60);
+    if (conCabecera) ctx.fillText(papel.lugar, 240, 60);
     ctx.font = '22px "Courier New", monospace';
-    ctx.fillText('TICKET DE EJEMPLO', 240, 96);
+    ctx.fillText(conCabecera ? 'TICKET DE EJEMPLO' : `PARTE ${parte + 1} DE ${partes}`, 240, 96);
     const raya = (y: number) => { ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(456, y); ctx.stroke(); };
     raya(120);
     renglones.forEach((r, i) => {
@@ -81,11 +86,18 @@ export function dibujarTicket(papel: PapelDelTicket, chico: boolean): Promise<Bl
     raya(fin - 18);
     ctx.font = 'bold 22px "Courier New", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('TOTAL', 28, fin + 16);
+    ctx.fillText(conTotal ? 'TOTAL' : 'SIGUE…', 28, fin + 16);
     ctx.textAlign = 'right';
-    ctx.fillText(pesos(total), 452, fin + 16);
+    if (conTotal) ctx.fillText(pesos(total), 452, fin + 16);
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('sin_blob'))), 'image/webp', 0.85);
   });
+}
+
+/** D484 · los renglones de la parte `parte` de `partes`, repartidos en orden y sin dejar ninguno afuera. */
+function tramoDeLaParte<T>(renglones: readonly T[], parte: number, partes: number): readonly T[] {
+  const desde = Math.floor((renglones.length * parte) / partes);
+  const hasta = Math.floor((renglones.length * (parte + 1)) / partes);
+  return renglones.slice(desde, Math.max(hasta, desde + 1));
 }
 
 const espera = () => new Promise((r) => setTimeout(r, 60));
@@ -118,8 +130,11 @@ function fallaDe(code: string, tamano: 'thumb' | 'full'): FallaDeFoto | null {
   }
 }
 
-/** `GET /api/mesas/:code/ticket-image/:tamano`, del mock. */
-export async function mockFotoDelTicketDeMesa(code: string, tamano: 'thumb' | 'full'): Promise<Blob> {
+/**
+ * `GET /api/mesas/:code/ticket-image/:tamano`, del mock. D484 · `parte` es el
+ * `?page=` del dueño 2.196.0: una parte que el ticket no tiene es el 404 uniforme.
+ */
+export async function mockFotoDelTicketDeMesa(code: string, tamano: 'thumb' | 'full', parte = 0): Promise<Blob> {
   await espera();
   if (!fotoDelTicketMockEncendida()) throw new MockApiError(404, 'not_found');
   const falla = fallaDe(code, tamano);
@@ -128,12 +143,13 @@ export async function mockFotoDelTicketDeMesa(code: string, tamano: 'thumb' | 'f
   if (falla === 'error') throw new MockApiError(500, 'internal_error');
   const foto = fotoDeMesaMock(code);
   const papel = PAPELES_DE_MESAS[code];
-  if (!papel || !foto[tamano]) noEsta();
-  return dibujarTicket(papel, tamano === 'thumb');
+  const partes = partesDeMesaMock(code);
+  if (!papel || !foto[tamano] || parte >= partes) noEsta();
+  return dibujarTicket(papel, tamano === 'thumb', parte, partes);
 }
 
 /** `GET /api/viajes/:id/tickets/:tid/ticket-image/:tamano`, del mock: el ticket del viaje, dibujado. */
-export async function mockFotoDelTicketDeViaje(viajeId: string, ticketId: string, tamano: 'thumb' | 'full'): Promise<Blob> {
+export async function mockFotoDelTicketDeViaje(viajeId: string, ticketId: string, tamano: 'thumb' | 'full', parte = 0): Promise<Blob> {
   if (!fotoDelTicketMockEncendida()) {
     await espera();
     throw new MockApiError(404, 'not_found');
@@ -141,7 +157,8 @@ export async function mockFotoDelTicketDeViaje(viajeId: string, ticketId: string
   // El mismo acceso que el detalle del ticket: si no lo ve, el 404 del ticket.
   const raw = await mockVerTicket(viajeId, ticketId, { version: 11 }) as { ticket?: TicketCrudo };
   const ticket = raw.ticket;
-  if (!ticket || !conFoto(ticket)) noEsta();
+  // D484 · los tickets de los viajes del mock tienen una sola foto: otra parte es el 404.
+  if (!ticket || !conFoto(ticket) || parte > 0) noEsta();
   const papel: PapelDelTicket = {
     lugar: (ticket.lugar ?? 'TICKET').toUpperCase(),
     renglones: (ticket.items ?? []).map((i) => ({ nombre: i.name.toUpperCase(), cents: i.line_cents })),
@@ -165,14 +182,14 @@ function conFoto(ticket: TicketCrudo): boolean {
  * suma `ticket_image` al ticket, como el dueño con el modo encendido. Con el
  * modo apagado no cambia nada.
  */
-export function conFotoDelTicketDeViajeMock(raw: unknown): unknown {
+export function conFotoDelTicketDeViajeMock(raw: unknown, v2 = false): unknown {
   if (!fotoDelTicketMockEncendida()) return raw;
   if (typeof raw !== 'object' || raw === null) return raw;
   const cuerpo = raw as { ticket?: unknown };
   if (typeof cuerpo.ticket !== 'object' || cuerpo.ticket === null) return raw;
   const ticket = cuerpo.ticket as TicketCrudo;
   const tiene = conFoto(ticket);
-  return { ...cuerpo, ticket: { ...ticket, ticket_image: { thumb: tiene, full: tiene } } };
+  return { ...cuerpo, ticket: { ...ticket, ticket_image: fotoDelMock(tiene, v2) } };
 }
 
 /**
@@ -181,7 +198,7 @@ export function conFotoDelTicketDeViajeMock(raw: unknown): unknown {
  * encendido (`listados` del contrato). Tienen foto los escaneados; un gasto a
  * mano, no. Con el modo apagado no cambia nada.
  */
-export function conFotoEnLosTicketsDelViajeMock(raw: unknown): unknown {
+export function conFotoEnLosTicketsDelViajeMock(raw: unknown, v2 = false): unknown {
   if (!fotoDelTicketMockEncendida()) return raw;
   if (typeof raw !== 'object' || raw === null) return raw;
   const cuerpo = raw as { viaje?: unknown };
@@ -190,7 +207,7 @@ export function conFotoEnLosTicketsDelViajeMock(raw: unknown): unknown {
   if (!Array.isArray(viaje.tickets)) return raw;
   const tickets = (viaje.tickets as Array<Record<string, unknown>>).map((tk) => {
     const tiene = tk.origen !== 'manual';
-    return { ...tk, ticket_image: { thumb: tiene, full: tiene } };
+    return { ...tk, ticket_image: fotoDelMock(tiene, v2) };
   });
   return { ...cuerpo, viaje: { ...viaje, tickets } };
 }
@@ -199,7 +216,7 @@ export function conFotoEnLosTicketsDelViajeMock(raw: unknown): unknown {
  * D481 · `GET /api/viajes/visitas` con `ticket_image_version=1`, del mock: cada
  * visita suma `ticket_image` con la regla del detalle del ticket (`conFoto`).
  */
-export async function conFotoEnLasVisitasMock(raw: unknown): Promise<unknown> {
+export async function conFotoEnLasVisitasMock(raw: unknown, v2 = false): Promise<unknown> {
   if (!fotoDelTicketMockEncendida()) return raw;
   if (typeof raw !== 'object' || raw === null) return raw;
   const cuerpo = raw as { visitas?: unknown };
@@ -212,7 +229,12 @@ export async function conFotoEnLasVisitasMock(raw: unknown): Promise<unknown> {
     } catch {
       // Sin acceso al ticket: sin foto, como el dueño.
     }
-    return { ...v, ticket_image: { thumb: tiene, full: tiene } };
+    return { ...v, ticket_image: fotoDelMock(tiene, v2) };
   }));
   return { ...cuerpo, visitas };
+}
+
+/** `ticket_image` de un ticket del viaje, con la v1 o con la v2 de D484 (una sola parte: `pages` 1, o 0 sin foto). */
+function fotoDelMock(tiene: boolean, v2: boolean): Record<string, unknown> {
+  return v2 ? { thumb: tiene, full: tiene, pages: tiene ? 1 : 0 } : { thumb: tiene, full: tiene };
 }

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { capacidadOcrPaginas } from './ocrPaginas';
 
 /**
  * D464 · D465 · D466 · la foto del ticket (App Backend 2.193.0, PR72, sin
@@ -45,6 +46,23 @@ export const CLAVES_CAPACIDAD_FOTO_DEL_TICKET = [
 export interface FotoDelTicket {
   readonly thumb: boolean;
   readonly full: boolean;
+  /**
+   * D484 · D486 · con `ticket_image_version=2`: cuántas fotos tiene el ticket
+   * (`pages`, 0 sin foto). `thumb` y `full` son los de la parte 0. Sin la
+   * negociación v2 no existe, y el ticket se ve como una sola foto.
+   */
+  readonly pages?: number;
+}
+
+/**
+ * D484 · D486 · `ticket_image_version=2` (App Backend 2.196.0): lo mismo que la
+ * 1, más `pages`. El dueño la entiende sólo con `features.ocr_pages.supported`.
+ */
+export const VALOR_FOTO_DEL_TICKET_V2 = '2';
+
+/** Cuántas partes tiene un ticket: `pages` si vino (v2), 1 si no. */
+export function partesDeLaFoto(foto: FotoDelTicket | null | undefined): number {
+  return foto?.pages !== undefined && foto.pages > 1 ? foto.pages : 1;
 }
 
 function objetoPlano(v: unknown): v is Record<string, unknown> {
@@ -63,10 +81,36 @@ function clavesExactas(v: Record<string, unknown>, esperadas: readonly string[])
  * `ticket_image` de una fila → `{ thumb, full }`, claves EXACTAS y booleanos.
  * Cualquier otra forma (o la ausencia) es «sin foto»: se ve el ícono de siempre.
  */
-export function decodeFotoDelTicket(raw: unknown): FotoDelTicket | null {
+export function decodeFotoDelTicket(raw: unknown, version: VersionDeFotoDelTicket = 1): FotoDelTicket | null {
+  if (version === 2) {
+    // D484 · claves EXACTAS `{ thumb, full, pages }`; `pages` entero de 0 a 4,
+    // 0 si y sólo si no hay miniatura. La v1 queda como estaba.
+    if (!objetoPlano(raw) || !clavesExactas(raw, ['thumb', 'full', 'pages'])) return null;
+    if (typeof raw.thumb !== 'boolean' || typeof raw.full !== 'boolean') return null;
+    const pages = raw.pages;
+    if (typeof pages !== 'number' || !Number.isSafeInteger(pages) || pages < 0 || pages > MAXIMO_DE_PARTES_DE_FOTO) return null;
+    if ((pages === 0) !== !raw.thumb) return null;
+    return { thumb: raw.thumb, full: raw.full, pages };
+  }
   if (!objetoPlano(raw) || !clavesExactas(raw, ['thumb', 'full'])) return null;
   if (typeof raw.thumb !== 'boolean' || typeof raw.full !== 'boolean') return null;
   return { thumb: raw.thumb, full: raw.full };
+}
+
+/** D484 · el CHECK del dueño (`page_index` 0..3): más partes es otra semántica. */
+export const MAXIMO_DE_PARTES_DE_FOTO = 4;
+
+/** La versión negociada en un pedido: la 1 de siempre o la 2 de varias fotos. */
+export type VersionDeFotoDelTicket = 1 | 2;
+
+/**
+ * Cómo pasa la fachada la negociación a un decodificador: `false` (no se
+ * negoció), `true` (la 1, como antes) o `2` (D484, con `pages`).
+ */
+export type NegociacionDeFoto = boolean | 2;
+
+export function versionDeLaNegociacion(n: NegociacionDeFoto): VersionDeFotoDelTicket | null {
+  return n === 2 ? 2 : n === true ? 1 : null;
 }
 
 /** ¿Hay algo que mostrar? Sin miniatura no hay foto en la fila (la completa sola no se anuncia). */
@@ -156,6 +200,21 @@ export function fotoDelTicketHabilitada(): boolean {
   return actual.estado === 'encendida';
 }
 
+/**
+ * D484 · D486 · la negociación de la foto en un pedido: `false` con la foto
+ * apagada; `2` con la foto Y las varias fotos encendidas (`features.ocr_pages`,
+ * que no dice nada de la foto: O3); si no, `true` (la 1 de siempre).
+ */
+export function negociacionDeFoto(): NegociacionDeFoto {
+  if (actual.estado !== 'encendida') return false;
+  return capacidadOcrPaginas() ? 2 : true;
+}
+
+/** El valor de `ticket_image_version` para una negociación encendida. */
+export function valorDeLaNegociacion(n: Exclude<NegociacionDeFoto, false>): string {
+  return n === 2 ? VALOR_FOTO_DEL_TICKET_V2 : VALOR_FOTO_DEL_TICKET;
+}
+
 export function capacidadFotoDelTicket(): CapacidadFotoDelTicket | null {
   return actual.estado === 'encendida' ? actual.capacidad : null;
 }
@@ -212,7 +271,7 @@ export function capacidadFotoDelTicketMock(): Record<string, unknown> | undefine
 
 /** `POST /api/ocr` con la negociación: si la foto quedó guardada (pendiente de la mesa) o por qué no. */
 export type FotoDelEscaneo =
-  | { readonly stored: true; readonly thumb: true; readonly full: boolean }
+  | { readonly stored: true; readonly thumb: true; readonly full: boolean; readonly pages?: number }
   | { readonly stored: false; readonly reason: MotivoSinFoto };
 
 export const MOTIVOS_SIN_FOTO = [
@@ -221,9 +280,17 @@ export const MOTIVOS_SIN_FOTO = [
 export type MotivoSinFoto = (typeof MOTIVOS_SIN_FOTO)[number];
 
 /** `ticket_image` de `/api/ocr`, claves exactas por rama (`captura.respuesta_extra`). `null` = no es la forma del dueño. */
-export function decodeFotoDelEscaneo(raw: unknown): FotoDelEscaneo | null {
+export function decodeFotoDelEscaneo(raw: unknown, version: VersionDeFotoDelTicket = 1): FotoDelEscaneo | null {
   if (!objetoPlano(raw)) return null;
-  if (raw.stored === true && clavesExactas(raw, ['stored', 'thumb', 'full'])) {
+  // D484 · con la v2, la guardada suma `pages` (cuántas partes se guardaron, de 1 a 4).
+  if (version === 2 && raw.stored === true && clavesExactas(raw, ['stored', 'thumb', 'full', 'pages'])) {
+    const pages = raw.pages;
+    return raw.thumb === true && typeof raw.full === 'boolean' && typeof pages === 'number'
+      && Number.isSafeInteger(pages) && pages >= 1 && pages <= MAXIMO_DE_PARTES_DE_FOTO
+      ? { stored: true, thumb: true, full: raw.full, pages }
+      : null;
+  }
+  if (version === 1 && raw.stored === true && clavesExactas(raw, ['stored', 'thumb', 'full'])) {
     return raw.thumb === true && typeof raw.full === 'boolean' ? { stored: true, thumb: true, full: raw.full } : null;
   }
   if (raw.stored === false && clavesExactas(raw, ['stored', 'reason'])) {

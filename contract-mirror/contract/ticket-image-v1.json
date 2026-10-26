@@ -39,7 +39,7 @@
       "guardada": { "stored": true, "thumb": true, "full": "boolean (false en modo thumb)" },
       "no_guardada": { "stored": false, "reason": ["no_receipt", "pending_limit", "unsupported_format", "invalid_image", "too_large", "busy", "storage_unavailable"] }
     },
-    "tope_pendientes": "20 fotos sin ligar por cuenta; la 21ª responde pending_limit y no se guarda.",
+    "tope_pendientes": "20 escaneos sin ligar por cuenta (v2.196.0: cuenta recibos, no fotos); el 21º responde pending_limit y no se guarda.",
     "vinculo": "POST /api/mesas o POST /api/viajes/:id/tickets con ese `ocr_receipt` aceptado ligan la foto, en la misma transacción y sin campos nuevos en el cuerpo. Sin ligar, la foto vence a los 130 minutos (la vida del recibo, 2 h, más un margen) y se borra. Un recibo liga a lo primero que lo use."
   },
   "listados": {
@@ -63,6 +63,15 @@
     "apagada": "con la constante en false, las dos rutas no existen: el 404 genérico de la app.",
     "respuesta": "200 con los bytes (Content-Type image/webp), ETag fuerte y `Cache-Control: private, max-age=0, must-revalidate`, `Vary: Authorization`; 304 con If-None-Match. Sin foto, vencida, tipo desconocido o modo off: 404 {\"error\":\"ticket_image_not_found\"} sin ETag (en Viajes, sin acceso: el 404 propio del ticket).",
     "sin_url_publica": true
+  },
+  "paginas": {
+    "desde": "v2.196.0 · D484/D486 (varias fotos de un ticket largo, hasta 4). Lo anuncia `features.ocr_pages` (contract/ocr-pages-v1.json); `features.ticket_image` no cambia.",
+    "captura": "POST /api/ocr con `pages_version=1` y `ticket_image_version=1|2`: cada foto (`images`) se guarda como una parte del mismo recibo, con `page_index` 0..N-1 en el orden del papel (si el lector las invirtió, en el orden ya corregido). Todas o ninguna: si una parte no se puede procesar o subir, `{ stored: false, reason }` y lo subido se encola para borrar. El tope de pendientes cuenta escaneos (recibos), no fotos.",
+    "negociacion_v2": "ticket_image_version=2: lo mismo que la 1, más `pages`. En la captura, `{ stored: true, thumb: true, full, pages: N }`; en los listados, `{ thumb, full, pages }` (`pages` 0 sin foto). Con la 1, la forma de siempre: `thumb` y `full` de la parte 0, sin `pages`.",
+    "lectura": "Las rutas de lectura aceptan `?page=` con la cadena exacta `0`..`3`: ausente es la parte 0 (byte por byte como antes); otro valor, repetido o una parte que no existe es el 404 uniforme (`ticket_image_not_found`, sin ETag). Las puertas, el ETag, el 304 y la caché son los de siempre, por parte.",
+    "vinculo": "POST /api/mesas o POST /api/viajes/:id/tickets con ese recibo ligan todas sus partes, en la misma transacción.",
+    "borrado": "Por fila: cada parte se va con la mesa, el ticket de viaje, la cuenta, el vaciado, el barrido de pendientes y la retención, y encola sus objetos.",
+    "base": "db/migrate_ticket_images_paginas_v2.196.0.sql: `page_index` SMALLINT NOT NULL DEFAULT 0 (las fotos de antes son la parte 0), CHECK 0..3 y unicidad por (recibo, parte), (mesa, parte) y (ticket de viaje, parte)."
   },
   "borrado": [
     "con la mesa y con el ticket de viaje (CASCADE en la base)",

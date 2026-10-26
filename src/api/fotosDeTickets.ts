@@ -3,6 +3,7 @@ import { esCodigoDeEjemplo } from '../ayuda/ejemplo/fixtureEjemplo';
 import { assertFotoDelTicketHabilitada } from './fotoDelTicket';
 import { fotosDeTicketsEnMemoria, type FotosEnMemoria, type ResultadoFoto } from './fotosEnMemoria';
 import { httpPrivateTicketImageRequest } from './http';
+import { capacidadOcrPaginas } from './ocrPaginas';
 import { mockFotoDelTicketDeMesa, mockFotoDelTicketDeViaje } from './mock/fotoDelTicketMock';
 import { assertViajesHabilitado } from './viajes';
 import type { StoredSession } from './storage';
@@ -36,11 +37,24 @@ const IS_MOCK = import.meta.env.VITE_MOCK === '1';
 
 export const PREFIJO_FOTO_DE_TICKET = 'ticket:';
 
-/** La clave del caché: por origen y tamaño (la miniatura y la completa son fotos distintas). */
-export function claveDeFotoDelTicket(origen: OrigenDeFoto, tamano: TamanoDeFoto): string {
-  return origen.tipo === 'mesa'
+/**
+ * La clave del caché: por origen y tamaño (la miniatura y la completa son fotos
+ * distintas). D484 · y por parte: la 0 conserva la clave de siempre.
+ */
+export function claveDeFotoDelTicket(origen: OrigenDeFoto, tamano: TamanoDeFoto, parte = 0): string {
+  const base = origen.tipo === 'mesa'
     ? `${PREFIJO_FOTO_DE_TICKET}mesa:${origen.code}\u0000${tamano}`
     : `${PREFIJO_FOTO_DE_TICKET}viaje:${origen.viajeId}\u0000${origen.ticketId}\u0000${tamano}`;
+  return parte > 0 ? `${base}\u0000${parte}` : base;
+}
+
+/**
+ * D484 · D486 · `?page=` del dueño 2.196.0, sólo para las partes de después de
+ * la primera: la parte 0 es el pedido de siempre, byte por byte.
+ */
+function conParte(ruta: string, parte: number): string {
+  if (!Number.isSafeInteger(parte) || parte < 0 || parte > 3) throw new Error('ticket_image_page_invalid');
+  return parte > 0 ? `${ruta}?page=${parte}` : ruta;
 }
 
 /** Igualdad por valor: dos objetos del mismo origen son el mismo origen. */
@@ -50,19 +64,29 @@ export function mismoOrigen(a: OrigenDeFoto | null, b: OrigenDeFoto | null): boo
 }
 
 /** El pedido de una foto, por el transporte privado (o el mock). */
-export async function pedirFotoDelTicket(origen: OrigenDeFoto, tamano: TamanoDeFoto, sesion: StoredSession): Promise<Blob> {
+export async function pedirFotoDelTicket(
+  origen: OrigenDeFoto,
+  tamano: TamanoDeFoto,
+  sesion: StoredSession,
+  parte = 0,
+): Promise<Blob> {
   assertFotoDelTicketHabilitada();
+  // D484 · una parte de después de la primera existe sólo con las varias fotos encendidas.
+  if (parte > 0 && !capacidadOcrPaginas()) throw new Error('ocr_pages_not_available');
   if (origen.tipo === 'mesa') {
     if (esCodigoDeEjemplo(origen.code)) throw new Error('ejemplo_sin_red');
-    if (IS_MOCK) return mockFotoDelTicketDeMesa(origen.code, tamano);
+    if (IS_MOCK) return mockFotoDelTicketDeMesa(origen.code, tamano, parte);
     return httpPrivateTicketImageRequest(
-      `/mesas/${encodeURIComponent(origen.code)}/ticket-image/${encodeURIComponent(tamano)}`, tamano, sesion,
+      conParte(`/mesas/${encodeURIComponent(origen.code)}/ticket-image/${encodeURIComponent(tamano)}`, parte), tamano, sesion,
     );
   }
   assertViajesHabilitado();
-  if (IS_MOCK) return mockFotoDelTicketDeViaje(origen.viajeId, origen.ticketId, tamano);
+  if (IS_MOCK) return mockFotoDelTicketDeViaje(origen.viajeId, origen.ticketId, tamano, parte);
   return httpPrivateTicketImageRequest(
-    `/viajes/${encodeURIComponent(origen.viajeId)}/tickets/${encodeURIComponent(origen.ticketId)}/ticket-image/${encodeURIComponent(tamano)}`,
+    conParte(
+      `/viajes/${encodeURIComponent(origen.viajeId)}/tickets/${encodeURIComponent(origen.ticketId)}/ticket-image/${encodeURIComponent(tamano)}`,
+      parte,
+    ),
     tamano, sesion,
   );
 }
@@ -181,8 +205,10 @@ export function useFotoDelTicket(
   tamano: TamanoDeFoto,
   cache: FotosEnMemoria = fotosDeTicketsEnMemoria,
   pedir: typeof pedirFotoDelTicket = pedirFotoDelTicket,
+  /** D484 · D486 · la parte del ticket (0, la de arriba, por defecto). */
+  parte = 0,
 ): { url: string | null; estado: EstadoDeFoto; reintentar: () => void } {
-  const clave = origen ? claveDeFotoDelTicket(origen, tamano) : null;
+  const clave = origen ? claveDeFotoDelTicket(origen, tamano, parte) : null;
   const url = useSyncExternalStore(
     cache.suscribir,
     () => (session && clave ? cache.ver(session, clave) : null),
@@ -198,13 +224,13 @@ export function useFotoDelTicket(
     if (!session || !clave || !o) return undefined;
     let vigente = true;
     setEstado({ clave, estado: 'cargando' });
-    void cache.cargar(session, clave, () => pedir(o, tamano, session)).then((r) => {
+    void cache.cargar(session, clave, () => pedir(o, tamano, session, parte)).then((r) => {
       if (!vigente) return;
       const e = estadoDe(r, cache.ver(session, clave) !== null);
       if (e) setEstado({ clave, estado: e });
     });
     return () => { vigente = false; };
-  }, [session, clave, tamano, intento, cache, pedir]);
+  }, [session, clave, tamano, intento, cache, pedir, parte]);
 
   const actual: EstadoDeFoto = estado.clave === clave ? estado.estado : 'cargando';
   return {

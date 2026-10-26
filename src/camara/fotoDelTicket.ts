@@ -54,6 +54,45 @@ export const LADO_MAX = 4096;
 /** Lo que se busca pesar, dentro del tope del dueño. */
 export const OBJETIVO_BYTES = 5_000_000;
 
+/**
+ * D484 · D486 · lo que se busca pesar CADA foto cuando el ticket va en dos o más
+ * (informe §1.5): hasta 4 fotos de unos 3 MB son unos 12 MB, la mitad del tope
+ * total del dueño, con datos móviles. La escalera, el lado largo y el
+ * saneamiento no cambian. Punto de partida, a medir con tickets reales.
+ */
+export const OBJETIVO_BYTES_VARIAS = 3_000_000;
+
+/** El objetivo de bytes de una foto, según cuántas fotos lleva el ticket. */
+export function objetivoDeBytes(fotosDelTicket: number): number {
+  return fotosDelTicket > 1 ? OBJETIVO_BYTES_VARIAS : OBJETIVO_BYTES;
+}
+
+/** D484 · el lado largo de la miniatura de una parte en la tira de la pantalla de escaneo. */
+export const LADO_MINIATURA_DE_PARTE = 240;
+
+/**
+ * D484 · la miniatura de una parte, chica, para la tira: así la pantalla no
+ * retiene cuatro fotos grandes decodificadas (Safari tiene poca memoria de
+ * lienzos). Se dibuja ANTES de `codificarFoto`, que suelta la foto. `null` si el
+ * lienzo no pudo: la tira muestra el número de la parte sin imagen.
+ */
+export async function miniaturaDeLaParte<F>(
+  foto: FotoDecodificada<F>,
+  herramientas: Herramientas<F>,
+  recorte: Recorte | null,
+): Promise<Blob | null> {
+  const lado = tamanoObjetivo(recorte ? recorte.ancho : foto.ancho, recorte ? recorte.alto : foto.alto, LADO_MINIATURA_DE_PARTE);
+  if (!lado) return null;
+  try {
+    const jpeg = recorte
+      ? await herramientas.codificar(foto.fuente, { ...lado, calidad: 0.7 }, recorte)
+      : await herramientas.codificar(foto.fuente, { ...lado, calidad: 0.7 });
+    return jpeg && jpeg.size > 0 ? jpeg : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Las calidades al tamaño completo, de mejor a peor. */
 export const CALIDADES = [0.92, 0.85, 0.75] as const;
 

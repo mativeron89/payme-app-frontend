@@ -414,6 +414,7 @@
     },
     "GET /api/viajes/:id/tickets/:tid/ticket-image/:tipo(thumb|full)": {
       "since": "2.193.0 (D464, contract/ticket-image-v1.json; APAGADA por defecto)",
+      "consulta": { "page": "2.196.0 (D484/D486): la parte del ticket, `0`..`3`; ausente es la 0. Otro valor, repetido o una parte que no existe: 404 ticket_image_not_found sin ETag (contract/ticket-image-v1.json, sección `paginas`)" },
       "respuestas": {
         "200": { "cuerpo": "los bytes de la foto del ticket (image/webp)", "cabeceras": { "Cache-Control": "private, max-age=0, must-revalidate", "ETag": "fuerte", "Vary": "Authorization" } },
         "304": { "cuando": "If-None-Match con el ETag vigente" },

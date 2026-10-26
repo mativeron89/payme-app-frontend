@@ -50,6 +50,14 @@ describe('n179 · apertura desde ticket sin QR', () => {
   });
 });
 
+describe('D484 · D486 · las fotos de un ticket largo, juntas', () => {
+  it('`pages_too_large` (413) y `too_many_pages` (400) son «partes_pesadas», no «la foto pesa más de 8 MB»', () => {
+    expect(ocrFailureIssue('pages_too_large', 413)).toBe('partes_pesadas');
+    expect(ocrFailureIssue('too_many_pages', 400)).toBe('partes_pesadas');
+    expect(ocrFailureIssue('image_too_large', 413)).toBe('too_large');
+  });
+});
+
 describe('n81 · foto de ticket demasiado pequeña', () => {
   it('el 422 del dueño con su código es «too_small»; otro 422 u otro código, no', () => {
     expect(ocrFailureIssue('ticket_image_too_small', 422)).toBe('too_small');

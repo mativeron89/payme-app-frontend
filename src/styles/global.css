@@ -11878,3 +11878,168 @@ h1.pay-title-lbl {
   font-size: 14px;
   color: var(--text-muted);
 }
+
+/* ─── D484 · D486 · varias fotos de un ticket largo ───
+   La tira de partes en la pantalla de escaneo, la marca «N fotos» sobre la
+   miniatura de la fila y la fila de las partes en el visor (debajo de la foto,
+   nunca encima del papel: D481). Sin la capacidad `ocr_pages`, nada de esto
+   aparece. */
+.camara-partes {
+  display: flex;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.camara-parte {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  flex: none;
+  width: 64px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  color: #fff;
+}
+
+.camara-parte--error {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px var(--warning);
+}
+
+.camara-parte-foto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.camara-parte-foto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.camara-parte-nombre {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.camara-parte-quitar {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
+.camara-parte-quitar:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.camara-parte-quitar:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.tk-partes-aviso {
+  margin-top: var(--sp-2);
+}
+
+.miniatura-ticket {
+  position: relative;
+}
+
+.miniatura-ticket-partes {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 1px 0;
+  background: rgba(12, 23, 46, 0.78);
+  color: var(--white);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.visor-ticket-partes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 48px;
+  color: var(--white);
+}
+
+.visor-ticket-parte-flecha {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: 0;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.visor-ticket-parte-flecha:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.visor-ticket-parte-flecha:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
+
+.visor-ticket-partes-centro {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.visor-ticket-partes-texto {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.visor-ticket-partes-puntos {
+  display: flex;
+  gap: 8px;
+}
+
+.visor-ticket-partes-puntos span {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.visor-ticket-partes-puntos span.on {
+  background: var(--white);
+}

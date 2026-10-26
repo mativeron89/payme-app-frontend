@@ -1,5 +1,6 @@
 import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
 import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock } from '../fotoDelTicket';
+import { capacidadOcrPaginasMock } from '../ocrPaginas';
 import { CLOSURE_CHANGED, CLOSURE_REQUIRED } from '../selectionClosure';
 import type {
   GoogleContinueLinkRequest,
@@ -986,6 +987,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
       // D464 · D466 · v2.193.0 (PR72) · seam `payme.app.mock.ticket_image.v1`: sin él, el bloque no existe (el
       // backend de hoy); `apagado`, el del dueño con su constante en `false`; `encendido`, 90 días + miniatura (D465).
       ...(capacidadFotoDelTicketMock() === undefined ? {} : { ticket_image: capacidadFotoDelTicketMock() }),
+      // D484 · D486 · v2.196.0 (PR77) · seam `payme.app.mock.ocr_pages.v1 = encendido`: sin él, el bloque no existe
+      // (el backend de antes). No dice nada de la foto del ticket (O3).
+      ...(capacidadOcrPaginasMock() === undefined ? {} : { ocr_pages: capacidadOcrPaginasMock() }),
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -2247,7 +2251,7 @@ function mineDeMockMesa(m: MockMesa, withItems: boolean): {
 }
 
 export async function mockMisMesas(
-  params?: { cursor?: string; limit?: number; detail?: 'items'; ticketImage?: boolean },
+  params?: { cursor?: string; limit?: number; detail?: 'items'; ticketImage?: boolean | 2 },
 ): Promise<unknown> {
   const seam = leerSeam(CLAVE_MIS_MESAS);
   if (seam === 'error') return fail(500, 'internal_error');
@@ -2257,9 +2261,11 @@ export async function mockMisMesas(
   const limit = Math.min(Math.max(params?.limit ?? 20, 1), 50);
   const desde = params?.cursor ? Number(atob(params.cursor)) || 0 : 0;
   // D464 · como el dueño 2.193.0: `ticket_image` sólo con la negociación y el modo encendido.
-  const conFoto = params?.ticketImage === true && fotoDelTicketMockEncendida();
+  // D484 · con `ticket_image_version=2`, además `pages` (cuántas fotos tiene el ticket; 0 sin foto).
+  const conFoto = (params?.ticketImage === true || params?.ticketImage === 2) && fotoDelTicketMockEncendida();
+  const v2 = params?.ticketImage === 2;
   const pagina = todas.slice(desde, desde + limit)
-    .map((m) => (conFoto ? { ...m, ticket_image: fotoDeMesaMock(m.code) } : m));
+    .map((m) => (conFoto ? { ...m, ticket_image: v2 ? fotoDeMesaMockV2(m.code) : fotoDeMesaMock(m.code) } : m));
   const siguiente = desde + limit < todas.length ? btoa(String(desde + limit)) : null;
   return delay({ mesas: pagina, page: { limit, next_cursor: siguiente } });
 }
@@ -2277,6 +2283,22 @@ const FOTOS_DE_MESAS_MOCK: Readonly<Record<string, { thumb: boolean; full: boole
 
 export function fotoDeMesaMock(code: string): { thumb: boolean; full: boolean } {
   return FOTOS_DE_MESAS_MOCK[code] ?? { thumb: false, full: false };
+}
+
+/**
+ * D484 · D486 · cuántas fotos tiene el ticket de cada mesa del mock, con las
+ * varias fotos encendidas: Café Tacuba se sacó en tres partes; las demás, en una.
+ */
+export const PARTES_DE_MESAS_MOCK: Readonly<Record<string, number>> = { 'PA-6604': 3 };
+
+export function partesDeMesaMock(code: string): number {
+  const foto = fotoDeMesaMock(code);
+  return foto.thumb ? PARTES_DE_MESAS_MOCK[code] ?? 1 : 0;
+}
+
+/** `ticket_image` con `ticket_image_version=2`: `{ thumb, full, pages }`, como el dueño 2.196.0. */
+export function fotoDeMesaMockV2(code: string): { thumb: boolean; full: boolean; pages: number } {
+  return { ...fotoDeMesaMock(code), pages: partesDeMesaMock(code) };
 }
 
 /** Todas las mesas de `/mesas/mine` (con los fixtures del seam), sin filtrar lo oculto ni paginar. */
@@ -2784,16 +2806,76 @@ function nombresCorregidosMock(): boolean {
  * `no_receipt` (la foto se ata al recibo). La lectura nunca falla por la foto.
  */
 export async function mockScanTicket(
-  opciones: { readonly viaje?: boolean; readonly nombres?: boolean; readonly fotoDelTicket?: boolean } = {},
+  opciones: {
+    readonly viaje?: boolean;
+    readonly nombres?: boolean;
+    readonly fotoDelTicket?: boolean | 2;
+    /** D484 · `pages_version=1`: cuántas fotos se mandaron (2 o más). */
+    readonly paginas?: number;
+  } = {},
 ): Promise<OcrResponse> {
-  const lectura = await mockScanTicketSinFoto(opciones);
-  if (opciones.fotoDelTicket !== true || lectura.contract_version !== 2) return lectura;
+  const lectura = opciones.paginas !== undefined
+    ? await mockScanTicketEnPartes(opciones, opciones.paginas)
+    : await mockScanTicketSinFoto(opciones);
+  if ((opciones.fotoDelTicket !== true && opciones.fotoDelTicket !== 2) || lectura.contract_version !== 2) return lectura;
   return {
     ...lectura,
     ticket_image: lectura.receipt !== undefined
-      ? { stored: true, thumb: true, full: true }
+      ? {
+        stored: true, thumb: true, full: true,
+        // D484 · con la v2, cuántas partes se guardaron: todas las que se mandaron.
+        ...(opciones.fotoDelTicket === 2 ? { pages: opciones.paginas ?? 1 } : {}),
+      }
       : { stored: false, reason: 'no_receipt' },
   };
+}
+
+/**
+ * D484 · D486 · el seam `payme.app.mock.ocr_pages.lectura.v1` (sin UI): cómo
+ * sale la lectura de un ticket en varias fotos.
+ * - sin el seam: la lectura de siempre, con un renglón repetido entre dos fotos
+ *   que el dueño quitó (`overlap_removed: 1`);
+ * - `solape_incierto`: el dueño no pudo saber cuántos se repetían y dejó uno de
+ *   más («Vino tinto (copa)» dos veces): no cuadra con el total y avisa
+ *   `pages_overlap_uncertain`;
+ * - `invertidas`: las fotos llegaron de abajo hacia arriba (`pages_reordered`);
+ * - `parte_invalida`: la segunda foto es demasiado chica (el 422 del dueño con
+ *   `page_index: 1`), sin gastar ninguna lectura.
+ */
+export const CLAVE_LECTURA_EN_PARTES_MOCK = 'payme.app.mock.ocr_pages.lectura.v1';
+
+async function mockScanTicketEnPartes(
+  opciones: { readonly viaje?: boolean; readonly nombres?: boolean },
+  paginas: number,
+): Promise<OcrResponse> {
+  const modo = leerSeam(CLAVE_LECTURA_EN_PARTES_MOCK);
+  if (modo === 'parte_invalida') {
+    return fail(422, 'ticket_image_too_small', { page_index: 1, min_image_bytes: 10240 });
+  }
+  const lectura = await mockScanTicketSinFoto(opciones);
+  if (lectura.contract_version !== 2) return lectura;
+  if (modo === 'solape_incierto') {
+    const repetido = lectura.items.find((i) => i.name === 'Vino tinto (copa)') ?? lectura.items[lectura.items.length - 1];
+    const items = repetido ? [...lectura.items, { ...repetido }] : [...lectura.items];
+    const receipt = await mockOcrReceipt(items);
+    return {
+      ...lectura,
+      items,
+      total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
+      total_detected_cents: lectura.total_cents,
+      warnings: ['total_mismatch', 'pages_overlap_uncertain'],
+      ...(receipt ? { receipt } : {}),
+      pages: { count: paginas, overlap_removed: 0, reordered: false },
+    };
+  }
+  if (modo === 'invertidas') {
+    return {
+      ...lectura,
+      warnings: [...lectura.warnings, 'pages_reordered'],
+      pages: { count: paginas, overlap_removed: 1, reordered: true },
+    };
+  }
+  return { ...lectura, pages: { count: paginas, overlap_removed: 1, reordered: false } };
 }
 
 async function mockScanTicketSinFoto(

@@ -52,7 +52,7 @@ import {
 } from './mesasEnLinea';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
-import { fotoDelTicketHabilitada, tieneFoto, useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
+import { fotoDelTicketHabilitada, partesDeLaFoto, tieneFoto, useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
 import { useMiniaturasDeTickets, type OrigenDeFoto } from '../api/fotosDeTickets';
 import { BotonDeMiniatura, FilaDeTicket, VisorDelTicket, type TicketDelVisor } from '../components/VisorDelTicket';
 import { montoDeTuMesa, PantallaDelTicketDeMesa, subtituloDeTuMesa, textoEleccion } from './PantallaDelTicketDeMesa';
@@ -652,6 +652,7 @@ export function MesasScreen() {
         estado={miniaturas.estadoDe(origenDeMesa(m.code))}
         icono={icono}
         onAbrir={(boton) => abrirVisor(m, mes, boton)}
+        partes={partesDeLaFoto(m.fotoDelTicket)}
       />
     ) : undefined;
     return (

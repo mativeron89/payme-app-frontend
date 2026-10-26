@@ -57,14 +57,31 @@ describe('D212 · la cámara nativa se abre dentro del toque', () => {
     expect(ticketNuevo.replace(/\/\/[^\n]*/g, '')).toMatch(/const escanearOtro = \(\) => \{\s*abrirCamaraNativa\(\);\s*navigate\('scan', viajeId\);\s*\};/);
   });
 
-  it('🔴 en el flujo, sólo `doScan` la abre, y `doScan` sólo se usa como onClick', () => {
+  it('🔴 en el flujo, sólo `doScan` la abre, y `doScan` sólo se usa en un toque', () => {
     expect(llamadas(flujo)).toBe(1);
     expect(flujo).toMatch(/function doScan\(\) \{\s*abrirCamaraNativa\(\);\s*\}/);
     const usos = flujo.match(/\bdoScan\b/g)?.length ?? 0;
     const comoToque = flujo.match(/onClick=\{doScan\}/g)?.length ?? 0;
+    // D484 · D486 · los manejadores de las partes de un ticket largo también la abren, con `doScan()` sincrónico: cada
+    // uno es un manejador de toque (sólo se usa en un `onClick`), sin `await` antes de `doScan()`.
+    const manejadores = ['agregarParte', 'repetirParte', 'reintentarLectura', 'volverASacar'];
+    let enManejadores = 0;
+    for (const m of manejadores) {
+      const cuerpo = flujo.match(new RegExp(`\\n  function ${m}\\([^)]*\\) \\{([\\s\\S]*?)\\n  \\}\\n`))?.[1];
+      expect(cuerpo, m).toBeDefined();
+      const antes = cuerpo!.slice(0, cuerpo!.indexOf('doScan()'));
+      expect(cuerpo!.includes('doScan()'), m).toBe(true);
+      expect(antes, m).not.toMatch(/\bawait\b/);
+      enManejadores += cuerpo!.match(/\bdoScan\(\)/g)?.length ?? 0;
+      // Fuera de su definición, el manejador sólo aparece en un `onClick`.
+      const total = flujo.match(new RegExp(`\\b${m}\\b`, 'g'))?.length ?? 0;
+      const enToques = flujo.match(new RegExp(`onClick=\\{(?:${m}|\\(\\) => ${m}\\([^)]*\\))\\}`, 'g'))?.length ?? 0;
+      expect(enToques, m).toBeGreaterThan(0);
+      expect(total, m).toBe(enToques + 1);
+    }
     // Uno es la definición; todos los demás, manejadores de toque.
     expect(comoToque).toBeGreaterThan(0);
-    expect(usos).toBe(comoToque + 1);
+    expect(usos).toBe(comoToque + enManejadores + 1);
   });
 
   it('ninguna se llama desde un efecto ni después de un await', () => {

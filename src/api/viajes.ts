@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { extractApiError } from './errors';
-import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
+import { decodeFotoDelTicket, versionDeLaNegociacion, type FotoDelTicket, type NegociacionDeFoto } from './fotoDelTicket';
 
 /**
  * AF-VIAJES · decisión 242 de Mati, D240 punto 17, Roadmap n338 · App Backend
@@ -700,7 +700,8 @@ function decodeResumenDeNotas(raw: unknown, e: string): ResumenDeNotas {
   return { escribieron: o.escribieron as number, total: o.total as number, nuevo: o.nuevo as boolean };
 }
 
-function viajeDetalle(raw: unknown, e: string, conFoto = false): DetalleViaje {
+function viajeDetalle(raw: unknown, e: string, conFoto: NegociacionDeFoto = false): DetalleViaje {
+  const versionFoto = versionDeLaNegociacion(conFoto);
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'creado_en', 'mi_miembro_id',
     'miembros', 'invitados', 'mi_balance_cents', 'gasto_del_grupo_cents', 'tickets', 'sin_repartir',
     'transferencias', 'transferencias_pendientes', 'color', 'has_photo', 'hora_cierre', 'puedo_cerrar', 'se_cierra_en',
@@ -734,7 +735,7 @@ function viajeDetalle(raw: unknown, e: string, conFoto = false): DetalleViaje {
   }, 40);
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
     // D481 · con la negociación, cada ticket PUEDE traer `ticket_image`; sin ella, esa clave de más rompe como cualquier otra.
-    const conClave = conFoto && plainObject(x) && Object.prototype.hasOwnProperty.call(x, 'ticket_image');
+    const conClave = versionFoto !== null && plainObject(x) && Object.prototype.hasOwnProperty.call(x, 'ticket_image');
     const claves = ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
       'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
       'puede_eliminar', 'pagadores', 'presentes', 'personal', 'servicio_cents', 'descuentos_cents', 'iva_aparte_cents',
@@ -751,7 +752,7 @@ function viajeDetalle(raw: unknown, e: string, conFoto = false): DetalleViaje {
     // D278-2 · con la 9, los pagadores suman el total impreso.
     const pagadores = pagadoresDe(t.pagadores, t.total_cents as number, t.pagado_por, e);
     const base = { ...(t as unknown as TicketEnViaje), pagadores, presentes: presentesDe(t.presentes, e) };
-    return conClave ? { ...base, ticket_image: decodeFotoDelTicket(t.ticket_image) } : base;
+    return conClave ? { ...base, ticket_image: decodeFotoDelTicket(t.ticket_image, versionFoto ?? 1) } : base;
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
     const s = objeto(x, ['ticket_id', 'lugar', 'fecha_ticket', 'monto_cents', 'faltan'], e);
@@ -792,7 +793,7 @@ function viajeDetalle(raw: unknown, e: string, conFoto = false): DetalleViaje {
  * `hora_cierre`, `puedo_cerrar` y `se_cierra_en`; la 3, `color` y `has_photo`): la fachada la pide SIEMPRE en esas
  * rutas, así las claves nuevas nunca llegan sin pedirlas.
  */
-export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle', conFoto = false): DetalleViaje {
+export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle', conFoto: NegociacionDeFoto = false): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);
   return viajeDetalle(b.viaje, endpoint, conFoto);
 }
@@ -858,10 +859,11 @@ const CLAVES_TICKET_DETALLE = ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hor
  * PUEDE traer `ticket_image` con la forma exacta `{ thumb, full }`; sin
  * negociar, esa clave de más rompe como cualquier otra.
  */
-function ticketDetalle(raw: unknown, e: string, conFoto = false): TicketDelViaje {
-  const conClave = conFoto && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
+function ticketDetalle(raw: unknown, e: string, conFoto: NegociacionDeFoto = false): TicketDelViaje {
+  const versionFoto = versionDeLaNegociacion(conFoto);
+  const conClave = versionFoto !== null && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
   const t = objeto(raw, conClave ? [...CLAVES_TICKET_DETALLE, 'ticket_image'] : CLAVES_TICKET_DETALLE, e);
-  const foto = conClave ? decodeFotoDelTicket(t.ticket_image) : null;
+  const foto = conClave ? decodeFotoDelTicket(t.ticket_image, versionFoto ?? 1) : null;
   exigir(!conClave || foto !== null, e);
   exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
     && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && noNegativo(t.monto_cents)
@@ -896,7 +898,7 @@ function ticketDetalle(raw: unknown, e: string, conFoto = false): TicketDelViaje
  * `GET …/tickets/:tid`, `PUT …/seleccion`, `PUT …/presentes` → `{ contract, ticket }`.
  * D464 · `conFoto` sólo en el GET que negoció `ticket_image_version=1`.
  */
-export function decodeTicketDelViaje(raw: unknown, endpoint = 'viajes.ticket', conFoto = false): TicketDelViaje {
+export function decodeTicketDelViaje(raw: unknown, endpoint = 'viajes.ticket', conFoto: NegociacionDeFoto = false): TicketDelViaje {
   const b = cuerpo(raw, ['ticket'], endpoint);
   return ticketDetalle(b.ticket, endpoint, conFoto);
 }

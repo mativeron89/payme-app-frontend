@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "payme.app.ocr_pages/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de varias fotos de un mismo ticket largo, v2.196.0 · D484/D486. Mati: «Otra idea: sacar mas de una foto para tickets largos...implementala». D486: hasta 4 fotos (M2), cada foto es una lectura dentro del tope mensual y de la cuota diaria vigentes (M3), también en Viajes (M4) y el visor desliza de costado (M5, lo resuelve el front con `pages` y `?page=`).",
+    "Owner-first y todo opt-in: `pages_version=1` (la cadena exacta, sólo con `contract_version=2`; repetida llega como lista y no negocia). Un cliente que no lo pide manda `image` y recibe la respuesta de siempre, byte por byte. `features.ocr` y `features.ticket_image` no cambian.",
+    "Con `features.ocr_pages.supported`, el dueño también entiende `ticket_image_version=2` (lo mismo que la 1, más `pages`) y `?page=` en las rutas de lectura de la foto (contract/ticket-image-v1.json, sección `paginas`)."
+  ],
+  "capacidad": {
+    "ruta": "GET /api/config",
+    "path": "features.ocr_pages",
+    "claves": ["supported", "enabled", "max_pages", "max_total_bytes", "negotiation_param", "negotiation_value"],
+    "valor": {
+      "supported": true,
+      "enabled": true,
+      "max_pages": 4,
+      "max_total_bytes": 25165824,
+      "negotiation_param": "pages_version",
+      "negotiation_value": "1"
+    }
+  },
+  "lectura": {
+    "ruta": "POST /api/ocr?contract_version=2&pages_version=1 (más las demás extensiones de siempre: receipt_version, totals_version, adjustments_version, names_version, trip_version, ticket_image_version)",
+    "multipart": "El campo `images`, de 1 a `max_pages` veces, en el orden del papel (de arriba hacia abajo). Cada foto con las reglas de siempre: image/jpeg|png|webp|heic, magic bytes, ≥ 10 KB, ≤ 8 MiB, y en modo real sólo los formatos del proveedor. La suma de las fotos, ≤ `max_total_bytes`.",
+    "errores": {
+      "invalid_multipart": "400 · `image` con la negociación, `images` sin ella, o los dos campos juntos",
+      "too_many_pages": "400 · más de `max_pages` fotos; body { error, max_pages }",
+      "pages_too_large": "413 · la suma pasa `max_total_bytes`; body { error, max_total_bytes }",
+      "por_foto": "invalid_image_type (400), image_too_large (413), ticket_image_too_small (422) y unsupported_image_type_for_provider (415) suman `page_index` (0..N-1): la foto que falló. Se validan TODAS antes de reservar: un error no gasta ninguna lectura.",
+      "cuota_y_presupuesto": "ocr_daily_quota_exhausted (429), ocr_monthly_budget_exhausted (429), ocr_budget_unavailable (503): las N lecturas se reservan de una vez; si no entran todas, no se reserva ninguna y no se llama al proveedor."
+    },
+    "gasto": "Cada foto es una llamada a AnalyzeExpense y una página facturada: un ticket de N fotos consume N de la cuota diaria y N páginas del presupuesto mensual. Si una foto falla en el proveedor, la respuesta es la degradación de siempre (200 con `provider_error`) y las N lecturas quedan consumidas (no se devuelven, como hoy).",
+    "union": "Las N fotos se leen como un ticket partido: a lo sumo un TOTAL y en la última, sin la cabecera del comercio repetida después de la primera y sin dos folios distintos (A2.5); si no, `varios_documentos` (cero ítems). Si las fotos llegaron de abajo hacia arriba (el TOTAL en la primera), se leen al revés y se avisa `pages_reordered`. Los renglones repetidos entre dos fotos seguidas (la cola de una igual a la cabeza de la siguiente, de 0 a 6) se quitan anclados al TOTAL impreso: gana el único solape cuya lectura cierra; si no cierra ninguno o cierran varios, queda el más largo con `pages_overlap_uncertain`.",
+    "recibo": "Uno solo, firmado sobre los ítems unidos (con más de 100 no se firma, como hoy). La huella de Viajes sale del ticket combinado."
+  },
+  "respuesta": {
+    "clave": "pages",
+    "valor": { "count": "1..max_pages (las fotos que se mandaron)", "overlap_removed": "entero ≥ 0 (renglones repetidos que se quitaron)", "reordered": "boolean" },
+    "regla": "Con `pages_version=1`, todo 200 lleva `pages`, también la degradación `provider_error` (con overlap_removed 0 y reordered false). Sin la negociación, no existe.",
+    "avisos": ["pages_overlap_uncertain", "pages_reordered"],
+    "avisos_regla": "Sólo con `pages_version=1`, con o sin `warnings_version=2`. No entran a la lista base de `warnings` (el decoder servido es cerrado)."
+  },
+  "foto": "Con `ticket_image_version=1|2` y un modo encendido, cada foto se guarda como una parte del mismo recibo (`page_index` 0..N-1, en el orden del papel), todas o ninguna. Detalle en contract/ticket-image-v1.json, sección `paginas`."
+}

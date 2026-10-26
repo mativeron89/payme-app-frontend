@@ -1056,7 +1056,26 @@ export type OcrWarning =
    * comanda de cocina. Sólo con `contract_version=2` y `warnings_version=2`
    * negociados; siempre junto a `no_items_found` y con cero ítems.
    */
-  | 'no_prices_found';
+  | 'no_prices_found'
+  /**
+   * D484 · D486 · App Backend 2.196.0 (`contract/ocr-pages-v1.json`), sólo con
+   * `pages_version=1` negociado: no se pudo saber con el TOTAL cuántos renglones
+   * se repetían entre dos fotos seguidas, o las fotos llegaron de abajo hacia
+   * arriba y se leyeron al revés.
+   */
+  | 'pages_overlap_uncertain'
+  | 'pages_reordered';
+
+/**
+ * D484 · D486 · `pages` de `POST /api/ocr` con `pages_version=1`: cuántas fotos
+ * se leyeron, cuántos renglones repetidos entre ellas se quitaron y si se leyeron
+ * al revés. Ausente sin la negociación.
+ */
+export interface OcrPaginas {
+  count: number;
+  overlap_removed: number;
+  reordered: boolean;
+}
 
 export interface OcrMerchant {
   name?: string;
@@ -1139,6 +1158,8 @@ export interface OcrResponse {
    * qué no. Ausente con la capacidad apagada.
    */
   ticket_image?: FotoDelEscaneo;
+  /** D484 · D486 · sólo con `pages_version=1` (dos o más fotos): las partes leídas. */
+  pages?: OcrPaginas;
   warnings: OcrWarning[];
   mock: boolean;
   /**

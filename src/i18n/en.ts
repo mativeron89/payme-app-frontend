@@ -1393,6 +1393,30 @@ export const EN: Record<string, string> = {
   "Ver todo el ticket": "See the full receipt",
   "Ver todo el ticket · {0} más": "See the full receipt · {0} more",
   "Solo lo mío": "Only mine",
+  // D484 · D486 · varias fotos de un ticket largo (hasta 4, también en Viajes). Escrito por App Frontend; «ticket»
+  // va como «receipt», la regla de la app desde D481.
+  "Agregar otra parte": "Add another part",
+  "Hasta {0} fotos": "Up to {0} photos",
+  "Leer ticket ({0} fotos)": "Read receipt ({0} photos)",
+  "Leer ticket (1 foto)": "Read receipt (1 photo)",
+  "Parte {0}: ajusta el marco para dejar sólo esa parte": "Part {0}: adjust the frame to show only that part",
+  "Saca la parte siguiente. Deja que se repitan una o dos líneas.": "Take the next part. Let one or two lines overlap.",
+  "Ya tienes {0} fotos. Lee el ticket.": "You have {0} photos. Read the receipt.",
+  "Partes del ticket": "Parts of the receipt",
+  "Parte {0}": "Part {0}",
+  "Quitar la parte {0}": "Remove part {0}",
+  "Sacar la parte siguiente": "Take the next part",
+  "No pudimos leer la parte {0}": "We couldn't read part {0}",
+  "Vuelve a sacar esa parte.": "Take that part again.",
+  "Repetir la parte {0}": "Retake part {0}",
+  "Las fotos pesan demasiado juntas": "The photos are too large together",
+  "Quita una parte o vuelve a sacarlas.": "Remove a part or take them again.",
+  "Las fotos se superponían: revisa que ningún plato quede repetido.": "The photos overlapped: check that no dish appears twice.",
+  "Parte {0} de {1}": "Part {0} of {1}",
+  "Parte anterior": "Previous part",
+  "Parte siguiente": "Next part",
+  "Foto del ticket de {0}, parte {1} de {2}": "Receipt photo from {0}, part {1} of {2}",
+  "{0} fotos": "{0} photos",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.

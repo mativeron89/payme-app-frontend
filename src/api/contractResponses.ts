@@ -315,6 +315,13 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
  * cualquier otro.
  */
 const OCR_WARNINGS_V2: readonly OcrWarning[] = [...OCR_WARNINGS, 'no_prices_found'];
+/**
+ * D484 · D486 · los avisos de varias fotos (`contract/ocr-pages-v1.json`), sólo
+ * si se negoció `pages_version=1`. Sin la negociación siguen siendo
+ * desconocidos y la lectura se rechaza, como hoy.
+ */
+const OCR_WARNINGS_PAGINAS: readonly OcrWarning[] = ['pages_overlap_uncertain', 'pages_reordered'];
+const OCR_PAGES_KEYS = ['count', 'overlap_removed', 'reordered'];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
 /**
  * AF-NOMBRES-CORREGIDOS · D240 punto 15 · `names_v1` del dueño (2.170.0): con
@@ -459,26 +466,40 @@ function ticketDatetimeOf(value: unknown): { date: string; time: string | null }
  */
 export function ocrResponse(
   value: unknown,
-  opciones: { readonly viaje?: boolean; readonly nombres?: boolean; readonly fotoDelTicket?: boolean } = {},
+  opciones: {
+    readonly viaje?: boolean;
+    readonly nombres?: boolean;
+    /** `true`: se negoció `ticket_image_version=1`; `2`: la v2 de varias fotos (D484). */
+    readonly fotoDelTicket?: boolean | 2;
+    /** D484 · se negoció `pages_version=1`: se mandaron `paginas` fotos (2 o más). */
+    readonly paginas?: number;
+  } = {},
 ): OcrResponse {
   const body = record(value);
   const version2 = body?.contract_version === 2;
+  const conFoto = opciones.fotoDelTicket === true || opciones.fotoDelTicket === 2;
+  const paginas = version2 && opciones.paginas !== undefined ? opciones.paginas : undefined;
   // D464 · D466 · `ticket_image` sólo si se negoció `ticket_image_version=1`
   // (la capacidad encendida); sin negociar, una clave de más sigue rompiendo.
+  // D484 · `pages` sólo si se negoció `pages_version=1`, y entonces SIEMPRE.
   const allowed = version2
     ? [
       ...OCR_V2_KEYS,
       ...(opciones.viaje === true ? ['ticket_datetime'] : []),
-      ...(opciones.fotoDelTicket === true ? ['ticket_image'] : []),
+      ...(conFoto ? ['ticket_image'] : []),
+      ...(paginas !== undefined ? ['pages'] : []),
     ]
     : OCR_V1_KEYS;
+  const avisos: readonly OcrWarning[] = version2
+    ? [...OCR_WARNINGS_V2, ...(paginas !== undefined ? OCR_WARNINGS_PAGINAS : [])]
+    : OCR_WARNINGS;
   if (!body || (version2 && Object.keys(body).some((key) => !allowed.includes(key)))
       || (!version2 && body.contract_version !== undefined)
       || !Array.isArray(body.items)
       || !safeNonNegative(body.total_cents)
       || (body.total_detected_cents !== undefined && !safeNonNegative(body.total_detected_cents))
       || !Array.isArray(body.warnings)
-      || body.warnings.some((warning) => !(version2 ? OCR_WARNINGS_V2 : OCR_WARNINGS).includes(warning as OcrWarning))
+      || body.warnings.some((warning) => !avisos.includes(warning as OcrWarning))
       // La regla del dueño: `no_prices_found` siempre con `no_items_found` y
       // con cero ítems. Si no, es un contrato roto.
       || (body.warnings.includes('no_prices_found')
@@ -486,6 +507,23 @@ export function ocrResponse(
       || new Set(body.warnings).size !== body.warnings.length
       || typeof body.mock !== 'boolean') {
     throw new ContractResponseError('ocr');
+  }
+
+  // D484 · D486 · `pages` con la forma exacta del dueño: `count` es la cantidad
+  // de fotos que se mandaron (la regla: «todo 200 lleva `pages`»), los renglones
+  // quitados un entero ≥ 0, `reordered` booleano y su aviso, si vino, coherente.
+  let pages: OcrResponse['pages'];
+  if (paginas !== undefined) {
+    const raw = record(body.pages);
+    if (!raw || Object.keys(raw).length !== OCR_PAGES_KEYS.length
+        || Object.keys(raw).some((key) => !OCR_PAGES_KEYS.includes(key))
+        || raw.count !== paginas
+        || !safeNonNegative(raw.overlap_removed)
+        || typeof raw.reordered !== 'boolean'
+        || (body.warnings.includes('pages_reordered') && raw.reordered !== true)) {
+      throw new ContractResponseError('ocr');
+    }
+    pages = { count: paginas, overlap_removed: raw.overlap_removed, reordered: raw.reordered };
   }
 
   let merchant: OcrResponse['merchant'];
@@ -545,7 +583,9 @@ export function ocrResponse(
   const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
   // D464 · la foto del escaneo: ausente se tolera (un dueño anterior o el modo
   // `off` no la publican); presente, con la forma exacta de cada rama.
-  const fotoDelEscaneo = version2 && body.ticket_image !== undefined ? decodeFotoDelEscaneo(body.ticket_image) : undefined;
+  const fotoDelEscaneo = version2 && body.ticket_image !== undefined
+    ? decodeFotoDelEscaneo(body.ticket_image, opciones.fotoDelTicket === 2 ? 2 : 1)
+    : undefined;
   if (fotoDelEscaneo === null) throw new ContractResponseError('ocr');
   const ticketDatetime = version2 && opciones.viaje === true ? ticketDatetimeOf(body.ticket_datetime) : undefined;
   if (ticketDatetime === null) throw new ContractResponseError('ocr');
@@ -591,6 +631,7 @@ export function ocrResponse(
     mock: body.mock,
     ...(receipt !== undefined ? { receipt } : {}),
     ...(fotoDelEscaneo ? { ticket_image: fotoDelEscaneo } : {}),
+    ...(pages ? { pages } : {}),
   };
 }
 

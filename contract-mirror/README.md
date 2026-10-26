@@ -1,4 +1,22 @@
-## D464 · D466 · la foto del ticket (A + E), apagada · 0.261.0
+## D484 · D486 · varias fotos de un ticket largo · 0.264.0
+
+Contenido vigente: `154bd06324177feef57ccab2c7272279092a1a66`.
+Inventario íntegro de 159 entradas tomado del PR del dueño (App Backend PR77, rama
+`claude/ab-multifoto-d486-20261025`, punta `03035830502e34c9abec5587d170c2bdad4b3941`, backend 2.196.0, ya en `main`
+y servido; `contract/mirror-inventory.json`, sha256 `31fd0aa86a29ae3aec9bcc2e8656e1bd2993ce61d31ed7e4453922fa797a78cf`), adoptado con
+`--adoptar-inventario` sin editarlo. **18 archivos espejados**, todos JSON de `contract/`;
+**141 fuentes sólo por hash**, conforme D268. Nuevo `contract/ocr-pages-v1.json`
+(sha256 `96c5d62bac5b25602762231fed39ca7f5395be81cc0f96af0c3e30b243436b06`); cambian `ticket-image-v1.json`
+(la sección `paginas`, sha256 `469fd2b3369e1bc4563d7f05b150fdb53f4263e86eb9167c9d9b461bbadb098f`),
+`mesa-acceso-v1.json` y `viajes-v1.json`. Los hechos del dueño se regeneraron en local contra
+`154bd06`: cambian sólo los sha256 de sus fuentes, ningún valor.
+
+Se adopta el inventario del PR77 y no el de `main` (2.197.0): ése además trae
+`contract/sugerencias-dividir-v1.schema.json` (D490), ajeno a esta entrega. El front
+negocia `pages_version=1` y `ticket_image_version=2` sólo con `features.ocr_pages`
+encendida; sin ella, los pedidos y las pantallas son los de antes.
+
+### Refresh anterior · D464 · D466 · la foto del ticket (A + E), apagada · 0.261.0
 
 Contenido vigente: `a6712fd64964bb602e592f5ec89be0cc80522bf7`.
 Inventario íntegro de 157 entradas tomado del PR del dueño (App Backend PR72, rama
