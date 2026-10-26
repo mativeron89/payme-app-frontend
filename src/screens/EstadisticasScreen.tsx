@@ -13,24 +13,27 @@ import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
 import { extractApiError } from '../api/errors';
-import type { TusRestaurantes } from '../api/tusRestaurantes';
+import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
 import type { PlatosDelPeriodo } from '../api/platos';
 import type { Evolucion } from '../api/evolucion';
 import {
-  cocinasTexto,
-  lugaresDistintos,
+  lugaresYVisitas,
+  mesEnFrase,
+  mesYAnio,
   nombreDeCocina,
-  periodoEnFrase,
-  platosTexto,
+  platosDistintos,
+  rotuloDeLaBase,
+  sufijoDePeriodo,
   visitasTexto,
 } from '../utils/textosDeEstadisticas';
 import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
-import { colorEnPaleta, GEOMETRIA_E173, porcentajesEnteros } from '../utils/anillo';
+import { porcentajesEnteros } from '../utils/anillo';
+import { colorDeCocina } from '../utils/coloresDeEstadisticas';
 import { compararMesesCompletos, enteroConSigno, promedioDelResumen } from '../utils/resumenEstadisticas';
-import { nombreDelPeriodo } from '../utils/meses';
 import { useTandaVigente } from './useTandaVigente';
-import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { CabeceraDeEstadisticas, EsqueletoDeEstadisticas } from './CabeceraDeEstadisticas';
+import { IconoDeEstadisticas } from './IconosDeEstadisticas';
 import { nombreDePlato } from '../utils/nombreDePlato';
 
 /**
@@ -152,29 +155,19 @@ export function EstadisticasScreen() {
 
   return (
     <div className="screen has-appbar">
-      {/* El diseño 2a pone el nombre de la pantalla a la derecha de «Volver», en
-          13px apagado. Eso es el estilo de la cabecera COMPARTIDA (`.hdr-title`,
-          hoy sin uso y con otro tamaño) y queda fuera de esta orden: se declara,
-          no se improvisa acá. El nombre sigue siendo el <h1> de la burbuja. */}
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
-      {disenoE173 ? (
-        <BurbujaDelPeriodo
-          clave={efectiva}
-          selector={soportaPeriodo}
+      {/* D479/D482 · AF-1 · la misma tarjeta en cargando, error, vacío y lista.
+          Hasta que el dueño confirme el período, el período elegido quieto. */}
+      <CabeceraDeEstadisticas icono="barras" titulo={t('Mis estadísticas')}>
+        <SelectorDePeriodo
+          clave={stats === null ? clave : efectiva}
+          disponible={soportaPeriodo}
+          cargando={stats === null && !fallo}
           inicio={inicio}
         />
-      ) : (
-        <div className="title-card">
-          <FilaDeTitulo icono="barras">
-            <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
-          </FilaDeTitulo>
-        </div>
-      )}
+      </CabeceraDeEstadisticas>
 
-      <div
-        className={disenoE173 ? 'scroll est-scroll' : 'scroll'}
-        style={disenoE173 ? undefined : { paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}
-      >
+      <div className="scroll est-scroll">
         {!vista.showAccountActivity ? (
           <div className="state-unknown">
             <Icon name="info" size={20} />
@@ -197,22 +190,18 @@ export function EstadisticasScreen() {
             </button>
           </div>
         ) : stats === null ? (
-          <div aria-busy="true" aria-label={t('Cargando tus estadísticas')}>
-            <div className="stat-hero sk">
-              <span className="sk-line w40" />
-              <span className="sk-line w70 tall" />
-            </div>
-          </div>
+          <EsqueletoDeEstadisticas etiqueta={t('Cargando tus estadísticas')} />
         ) : disenoE173 ? (
           <>
-            <ResumenDelPeriodo consumo={consumo} />
+            <ResumenDelPeriodo consumo={consumo} clave={efectiva} />
+            <TarjetaPorCocina consumo={consumo} />
+            <ListaDeAccesos
+              restaurantes={accesoVisible ? restaurantes : null}
+              platos={platos.estado === 'listo' || platos.estado === 'sin_resumen' ? platos : null}
+              evolucion={evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen' ? evolucion : null}
+              clave={efectiva}
+            />
             <ComparacionDeMeses acceso={evolucion} base={consumo.basis} />
-            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={efectiva} inicio={inicio} />}
-            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && (
-              <AccesoQueComes acceso={platos} clave={efectiva} inicio={inicio} />
-            )}
-            {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
-            <TarjetaPorCocina consumo={consumo} clave={efectiva} />
             {/* Con un dueño anterior que no tiene la pantalla de un acceso, queda la
                 sección vieja de ese dato, como antes: cada dato una vez y ninguno se
                 pierde. Son datos del mes, así que sólo con este mes. */}
@@ -223,11 +212,12 @@ export function EstadisticasScreen() {
           </>
         ) : (
           <>
-            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={efectiva} inicio={inicio} />}
-            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && (
-              <AccesoQueComes acceso={platos} clave={efectiva} inicio={inicio} />
-            )}
-            {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
+            <ListaDeAccesos
+              restaurantes={accesoVisible ? restaurantes : null}
+              platos={platos.estado === 'listo' || platos.estado === 'sin_resumen' ? platos : null}
+              evolucion={evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen' ? evolucion : null}
+              clave={efectiva}
+            />
             {!conAnillo && otroPeriodo ? (
               <div className="mesa-empty">
                 <div className="mesa-empty-title">{t('No registramos consumos en este período.')}</div>
@@ -340,144 +330,145 @@ function PlatoMasPedido({ plato }: { plato: NonNullable<StatsResponse['top_dish'
   );
 }
 
-/** El total vive una sola vez en el resumen; la cabecera conserva el selector. */
-function BurbujaDelPeriodo({ clave, selector, inicio }: {
-  clave: ClavePeriodo;
-  selector: boolean;
-  inicio: string | null;
-}) {
-  const { t } = useIdioma();
-  return (
-    <div className="title-card stat-burbuja est-burbuja">
-      <h1 className="stat-oculto">{t('Mis estadísticas')}</h1>
-      <CuadroDeTarjeta icono="barras" />
-      <SelectorDePeriodo clave={clave} disponible={selector} inicio={inicio} />
-      <span className="est-periodo-estado">{clave === 'last_month' ? t('Mes completo') : t('En curso')}</span>
-    </div>
-  );
-}
-
-function ResumenDelPeriodo({ consumo }: { consumo: ConsumoDelMes }) {
+function ResumenDelPeriodo({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
   const promedio = promedioDelResumen(consumo);
+  const esConsumo = consumo.basis === 'consumption';
+  // 1g · el vacío es una frase, nunca un $0 grande: no tener datos no es gastar cero.
+  const vacio = consumo.totalCents === 0;
   return (
     <section className="est-resumen est-panel" aria-labelledby="est-resumen-titulo">
-      <h2 id="est-resumen-titulo">{consumo.basis === 'consumption' ? t('Tu consumo registrado') : t('Tu gasto registrado')}</h2>
-      <div className="est-total">{formatMXN(consumo.totalCents)}</div>
-      <p className="est-nota">{t('MXN · Período elegido')}</p>
+      <h2 id="est-resumen-titulo">{esConsumo ? t('Tu consumo registrado') : t('Tu gasto registrado')}</h2>
+      {vacio ? (
+        <p className="est-vacio">
+          {esConsumo
+            ? t('Todavía no registramos consumos {0}.', sufijoDePeriodo(clave, t))
+            : t('Todavía no registramos pagos {0}.', sufijoDePeriodo(clave, t))}
+        </p>
+      ) : (
+        <div className="est-total">{formatMXN(consumo.totalCents)}</div>
+      )}
       <dl className="est-resumen-datos">
         <div><dt>{t('Visitas')}</dt><dd>{consumo.visits}</dd></div>
-        <div><dt>{t('Promedio por visita')}</dt><dd>{promedio === null ? t('No disponible') : formatMXN(promedio)}</dd></div>
+        <div><dt>{t('Promedio por visita')}</dt><dd className={promedio === null ? 'est-no-disponible' : undefined}>{promedio === null ? t('No disponible') : formatMXN(promedio)}</dd></div>
       </dl>
     </section>
   );
 }
 
+/** Una diferencia con flecha y signo: «↑ +$640 (+94.1%)». En cero, sin flecha. */
+function Diferencia({ signo, texto }: { signo: number; texto: string }) {
+  return (
+    <dd>
+      {signo > 0 && <IconoDeEstadisticas nombre="flecha-arriba" tamano={16} />}
+      {signo < 0 && <IconoDeEstadisticas nombre="flecha-abajo" tamano={16} />}
+      <span>{texto}</span>
+    </dd>
+  );
+}
+
+/**
+ * Meses completos, al final de la principal: los dos últimos meses CERRADOS de
+ * Evolución (`[3]` y `[4]`), nunca el mes en curso. «No cambia con el período».
+ * El cálculo es `compararMesesCompletos`, sin cambios.
+ */
 function ComparacionDeMeses({ acceso, base }: { acceso: Sondeo<Evolucion>; base: ConsumoDelMes['basis'] }) {
   const { t, idioma } = useIdioma();
   const comparacion = compararMesesCompletos(acceso.estado === 'listo' ? acceso.datos : null, base, new Date());
-  const mes = (inicio: string) => new Intl.DateTimeFormat(idioma === 'en' ? 'en-US' : 'es-MX', {
-    month: 'long', year: 'numeric', timeZone: 'America/Mexico_City',
-  }).format(new Date(inicio));
+  const numero = new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 1 });
   const importeConSigno = (centavos: number) => `${centavos > 0 ? '+' : centavos < 0 ? '−' : ''}${formatMXN(Math.abs(centavos))}`;
   const porcentaje = comparacion?.porcentaje;
   const porcentajeTexto = porcentaje === null || porcentaje === undefined ? null
-    : `${porcentaje > 0 ? '+' : porcentaje < 0 ? '−' : ''}${new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 1 }).format(Math.abs(porcentaje))}%`;
+    : `${porcentaje > 0 ? '+' : porcentaje < 0 ? '−' : ''}${numero.format(Math.abs(porcentaje))}%`;
+  const sub = comparacion
+    ? t('{0} frente a {1}. No cambia con el período.',
+      mesEnFraseInicial(comparacion.reciente.monthStart, idioma), mesEnFrase(comparacion.anterior.monthStart, idioma))
+    : t('No cambia con el período.');
   return (
     <section className="est-comparacion est-panel" aria-labelledby="est-comparacion-titulo" aria-busy={acceso.estado === 'cargando'}>
       <h2 id="est-comparacion-titulo">{t('Meses completos')}</h2>
-      <p className="est-nota">{t('Últimos dos meses completos, independientemente del período elegido.')}</p>
+      <p className="est-nota">{sub}</p>
       {comparacion ? (
         <>
-          <p className="est-comparacion-base">{base === 'consumption' ? t('Consumo registrado · MXN') : t('Gasto pagado neto de reembolsos · MXN')}</p>
           <div className="est-meses">
             {[{ datos: comparacion.anterior, promedio: comparacion.promedioAnterior }, { datos: comparacion.reciente, promedio: comparacion.promedioReciente }].map(({ datos, promedio }) => (
               <div className="est-mes" key={datos.monthStart}>
-                <h3>{mes(datos.monthStart)}</h3>
+                <h3>{mesYAnio(datos.monthStart, idioma)}</h3>
                 <strong>{formatMXN(datos.totalCents)}</strong>
-                <span>{visitasTexto(datos.visits, t)}</span>
-                <span>{t('Promedio por visita')}: {promedio === null ? t('No disponible') : formatMXN(promedio)}</span>
+                <span>
+                  {promedio === null
+                    ? t('{0} · promedio no disponible', visitasTexto(datos.visits, t))
+                    : t('{0} · {1} por visita', visitasTexto(datos.visits, t), formatMXN(promedio))}
+                </span>
               </div>
             ))}
           </div>
-          <p className="est-nota">{t('Cambio de {0} respecto a {1}', mes(comparacion.reciente.monthStart), mes(comparacion.anterior.monthStart))}</p>
           <dl className="est-diferencias">
-            <div><dt>{base === 'consumption' ? t('Consumo registrado') : t('Gasto registrado')}</dt><dd>{importeConSigno(comparacion.diferenciaCents)}{porcentajeTexto !== null && <span> ({porcentajeTexto})</span>}</dd></div>
-            <div><dt>{t('Visitas')}</dt><dd>{enteroConSigno(comparacion.diferenciaVisitas)}</dd></div>
-            <div><dt>{t('Promedio por visita')}</dt><dd>{comparacion.diferenciaPromedioCents === null ? t('No disponible') : importeConSigno(comparacion.diferenciaPromedioCents)}</dd></div>
+            <div>
+              <dt>{rotuloDeLaBase(base, idioma)}</dt>
+              <Diferencia signo={comparacion.diferenciaCents} texto={`${importeConSigno(comparacion.diferenciaCents)}${porcentajeTexto !== null ? ` (${porcentajeTexto})` : ''}`} />
+            </div>
+            <div>
+              <dt>{t('Visitas')}</dt>
+              <Diferencia signo={comparacion.diferenciaVisitas} texto={enteroConSigno(comparacion.diferenciaVisitas)} />
+            </div>
+            <div>
+              <dt>{t('Promedio por visita')}</dt>
+              {comparacion.diferenciaPromedioCents === null
+                ? <dd className="est-no-disponible">{t('No disponible')}</dd>
+                : <Diferencia signo={comparacion.diferenciaPromedioCents} texto={importeConSigno(comparacion.diferenciaPromedioCents)} />}
+            </div>
           </dl>
-          {porcentajeTexto === null && <p className="est-nota">{t('Sin porcentaje de cambio: el mes de referencia tiene importe cero.')}</p>}
+          {porcentajeTexto === null && (
+            <p className="est-nota">{t('Sin porcentaje: {0} está en $0.', mesEnFrase(comparacion.anterior.monthStart, idioma))}</p>
+          )}
         </>
-      ) : <p className="est-nota">{acceso.estado === 'cargando' ? t('Cargando comparación…')
+      ) : <p className="est-sin-comparacion">{acceso.estado === 'cargando' ? t('Cargando comparación…')
         : acceso.estado === 'sin_resumen' ? t('No pudimos cargar la comparación. Intenta de nuevo más tarde.')
           : t('No hay datos comparables para estos dos meses completos.')}</p>}
     </section>
   );
 }
 
-/** Cada cocina conserva nombre, importe, visitas y porcentaje además de su barra. */
-function TarjetaPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
+/** El mes al principio de una frase: «Septiembre frente a agosto». */
+function mesEnFraseInicial(monthStart: string, idioma: 'es' | 'en'): string {
+  const m = mesEnFrase(monthStart, idioma);
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
+/**
+ * Por tipo de cocina: un bloque por cocina con su cuadrito de color FIJO, nombre,
+ * importe, visitas, porcentaje y barra. Nunca el color solo. En el vacío no se
+ * muestra: la frase del resumen ya lo dice.
+ */
+function TarjetaPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
   const { t } = useIdioma();
-  const [abierto, setAbierto] = useState(true);
-  const esConsumo = consumo.basis === 'consumption';
   // `decodeConsumoDelMes` exige que las cocinas sumen el total y que ninguna
-  // venga en 0: sin cocinas es lo mismo que total 0. Una sola condición.
-  const vacio = consumo.categories.length === 0;
-  const montos = consumo.categories.map((c) => c.amountCents);
-  const pcts = porcentajesEnteros(montos);
-  // Una cocina que el front no conoce se rotula igual: el dueño pasa la
-  // categoría del restaurante tal cual (ver `consumoDelMes.ts`).
-  const nombres = consumo.categories.map((c) => nombreDeCocina(c.category, t) ?? t('Otra cocina'));
-  const titulo = esConsumo ? t('Tu consumo por tipo de cocina') : t('Tu gasto por tipo de cocina');
+  // venga en 0: sin cocinas es lo mismo que total 0.
+  if (consumo.categories.length === 0) return null;
+  const pcts = porcentajesEnteros(consumo.categories.map((c) => c.amountCents));
   return (
-    <section className="est-cocinas" aria-labelledby="est-cocinas-titulo">
-      <div className="est-cocinas-cabeza">
-        <h2 id="est-cocinas-titulo" className="est-cocinas-titulo">{titulo}</h2>
-        <div className="est-cocinas-sub">
-          {esConsumo
-            ? t('Importe de lo que elegiste, agrupado por tipo de cocina del restaurante.')
-            : t('Importe pagado, descontando reembolsos y agrupado por tipo de cocina del restaurante.')}
-        </div>
-      </div>
-      <div className="est-cocinas-cantidad">
-        <span className="est-cocinas-num">{vacio ? '—' : consumo.categories.length}</span>
-        <span className="est-cocinas-txt">{vacio ? t('Sin consumo') : cocinasTexto(consumo.categories.length, t)}</span>
-      </div>
-      {vacio ? (
-        <p className="est-cocinas-vacio">
-          {clave === 'this_month' ? t('Todavía no registramos consumos este mes') : t('No registramos consumos en este período.')}
-        </p>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="est-detalle"
-            aria-expanded={abierto}
-            aria-controls="est-detalle-lista"
-            onClick={() => setAbierto((v) => !v)}
-          >
-            <span>{t('Detalle por cocina')}</span>
-            <Icon name="chevron-down" size={18} className={`rest-chev${abierto ? ' abierto' : ''}`} />
-          </button>
-          {abierto && (
-            <ul id="est-detalle-lista" className="est-detalle-lista" role="list" aria-label={t('Detalle por cocina')}>
-              {consumo.categories.map((c, i) => (
-                <li key={c.category} className="est-detalle-fila">
-                  <span className="est-detalle-izq">
-                    <span className="est-detalle-nombre">{nombres[i]}</span>
-                    <span className="est-detalle-visitas">{visitasTexto(c.visits, t)}</span>
-                  </span>
-                  <span className="est-detalle-der">
-                    <span className="est-detalle-monto">{formatMXN(c.amountCents)}</span>
-                    <span className="est-detalle-pct">{pcts[i]}%</span>
-                  </span>
-                  <span className="est-cocina-barra" aria-hidden="true"><span style={{ width: `${(c.amountCents / consumo.totalCents) * 100}%`, background: colorEnPaleta(i, GEOMETRIA_E173.colores) }} /></span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+    <section className="est-panel est-cocinas" aria-labelledby="est-cocinas-titulo">
+      <h2 id="est-cocinas-titulo">{t('Por tipo de cocina')}</h2>
+      <ul className="est-filas" role="list">
+        {consumo.categories.map((c, i) => (
+          <li key={c.category} className="est-fila">
+            <span className="est-fila-arriba">
+              <span className="est-cuadrito" style={{ background: colorDeCocina(c.category) }} aria-hidden="true" />
+              {/* Una cocina que el front no conoce se rotula igual: el dueño pasa la categoría tal cual. */}
+              <span className="est-fila-nombre">{nombreDeCocina(c.category, t) ?? t('Otra cocina')}</span>
+              <span className="est-fila-monto">{formatMXN(c.amountCents)}</span>
+            </span>
+            <span className="est-fila-abajo">
+              <span>{visitasTexto(c.visits, t)}</span>
+              <span>{pcts[i]}%</span>
+            </span>
+            <span className="est-barra" aria-hidden="true">
+              <span style={{ width: `${(c.amountCents / consumo.totalCents) * 100}%`, background: colorDeCocina(c.category) }} />
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -495,71 +486,58 @@ type Sondeo<D> =
 type AccesoRestaurantes = Sondeo<TusRestaurantes>;
 
 /**
- * La fila de acceso: título, un subtítulo si lo hay (en dos líneas si hace
- * falta, nunca cortado) y la flecha. Se dibuja sólo si su pantalla existe.
+ * La fila de acceso: ícono, título, un subtítulo si lo hay y la flecha. Se dibuja
+ * sólo si su pantalla existe (404 ⇒ backend anterior ⇒ no se dibuja).
  */
-function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | null; destino: 'restaurantes' | 'platos' | 'evolucion' }) {
+function FilaDeAcceso({ icono, titulo, sub, destino }: {
+  icono: 'tienda' | 'cubiertos' | 'tendencia';
+  titulo: string;
+  sub: string | null;
+  destino: 'restaurantes' | 'platos' | 'evolucion';
+}) {
   return (
-    <button type="button" className="stat-acceso" onClick={() => navigate(destino)}>
-      <span className="stat-acceso-texto">
-        <span className="stat-acceso-titulo">{titulo}</span>
-        {sub && <span className="stat-acceso-sub">{sub}</span>}
-      </span>
-      <Icon name="chevron-down" size={18} className="rest-chev derecha" />
-    </button>
-  );
-}
-
-/** El período dentro de una frase: «octubre», «los últimos 3 meses». */
-function useFraseDelPeriodo(clave: ClavePeriodo, inicio: string | null): string {
-  const { t, idioma } = useIdioma();
-  return periodoEnFrase(clave, nombreDelPeriodo(clave, inicio, idioma, new Date()), idioma, t);
-}
-
-/** E173-4 · «Promedio mensual de los últimos 6 meses: $1,161.66». No depende del período. */
-function AccesoEvolucion({ acceso }: { acceso: Sondeo<Evolucion> }) {
-  const { t } = useIdioma();
-  const datos = acceso.estado === 'listo' ? acceso.datos : null;
-  const sub = datos && datos.totalCents > 0
-    ? t('Promedio mensual de los últimos 6 meses: {0}', formatMXN(datos.avgPerMonthCents))
-    : null;
-  return (
-    <>
-      <FilaDeAcceso titulo={t('Evolución')} sub={sub} destino="evolucion" />
-      {sub && <p className="est-evolucion-nota">{t('El promedio mensual divide el total entre seis meses calendario, incluido el mes en curso y los meses sin actividad.')}</p>}
-    </>
+    <li>
+      <button type="button" className="est-acceso" onClick={() => navigate(destino)}>
+        <IconoDeEstadisticas nombre={icono} tamano={22} />
+        <span className="est-acceso-texto">
+          <span className="est-acceso-titulo">{titulo}</span>
+          {sub && <span className="est-acceso-sub">{sub}</span>}
+        </span>
+        <Icon name="chevron-right" size={18} className="est-acceso-flecha" />
+      </button>
+    </li>
   );
 }
 
 /**
- * E173-4 · «Risotto ai Funghi es lo más elegido · 48 platos». Los platos son
- * `distinctDishes`, platos DISTINTOS (antes: «y 47 platos más» = distintos − 1).
- * Sin platos en el período: «Sin platos en octubre».
+ * Los tres accesos en una sola tarjeta-lista (1a): «3 lugares · 6 visitas»,
+ * «7 platos distintos» y «Últimos 6 meses». Vacíos: «Sin visitas este mes» /
+ * «Sin platos este mes». `null` = ese acceso no se dibuja.
  */
-function AccesoQueComes({ acceso, clave, inicio }: { acceso: Sondeo<PlatosDelPeriodo>; clave: ClavePeriodo; inicio: string | null }) {
+function ListaDeAccesos({ restaurantes, platos, evolucion, clave }: {
+  restaurantes: AccesoRestaurantes | null;
+  platos: Sondeo<PlatosDelPeriodo> | null;
+  evolucion: Sondeo<Evolucion> | null;
+  clave: ClavePeriodo;
+}) {
   const { t } = useIdioma();
-  const enElPeriodo = useFraseDelPeriodo(clave, inicio);
-  const datos = acceso.estado === 'listo' ? acceso.datos : null;
-  const primero = datos?.dishes[0];
-  let sub: string | null = null;
-  if (datos && primero) sub = `${t('{0} es lo más elegido', nombreDePlato(primero.name))} · ${platosTexto(datos.distinctDishes, t)}`;
-  else if (datos) sub = t('Sin platos en {0}', enElPeriodo);
-  return <FilaDeAcceso titulo={t('Qué comes')} sub={sub} destino="platos" />;
-}
-
-/**
- * E173-4 · «20 lugares distintos»: sólo los lugares, sin visitas ni el sufijo
- * del período (que decía «el mes pasado» con el período actual). Sin visitas:
- * «Sin visitas en octubre».
- */
-function AccesoTusRestaurantes({ acceso, clave, inicio }: { acceso: AccesoRestaurantes; clave: ClavePeriodo; inicio: string | null }) {
-  const { t } = useIdioma();
-  const enElPeriodo = useFraseDelPeriodo(clave, inicio);
-  const datos = acceso.estado === 'listo' ? acceso.datos : null;
-  const sub = datos === null
-    ? null
-    : datos.restaurants.length > 0
-      ? lugaresDistintos(datos.restaurants.length, t)
-      : t('Sin visitas en {0}', enElPeriodo);
-  return <FilaDeAcceso titulo={t('Tus restaurantes')} sub={sub} destino="restaurantes" />;
+  if (!restaurantes && !platos && !evolucion) return null;
+  const enElPeriodo = sufijoDePeriodo(clave, t);
+  const datosR = restaurantes?.estado === 'listo' ? restaurantes.datos : null;
+  const datosP = platos?.estado === 'listo' ? platos.datos : null;
+  const subR = datosR === null ? null
+    : datosR.restaurants.length > 0 ? lugaresYVisitas(datosR.restaurants.length, visitasDelMes(datosR), t)
+      : t('Sin visitas {0}', enElPeriodo);
+  const subP = datosP === null ? null
+    : datosP.dishes.length > 0 ? platosDistintos(datosP.distinctDishes, t)
+      : t('Sin platos {0}', enElPeriodo);
+  return (
+    <nav className="est-panel est-accesos" aria-label={t('Mis estadísticas')}>
+      <ul role="list">
+        {restaurantes && <FilaDeAcceso icono="tienda" titulo={t('Tus restaurantes')} sub={subR} destino="restaurantes" />}
+        {platos && <FilaDeAcceso icono="cubiertos" titulo={t('Qué comes')} sub={subP} destino="platos" />}
+        {evolucion && <FilaDeAcceso icono="tendencia" titulo={t('Evolución')} sub={t('Últimos 6 meses')} destino="evolucion" />}
+      </ul>
+    </nav>
+  );
 }

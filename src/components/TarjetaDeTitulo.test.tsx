@@ -80,12 +80,14 @@ function contenedores(): Array<{ donde: string; cuerpo: string }> {
 }
 
 describe('🔴 D285 · la clase completa, enumerada desde el código', () => {
-  it('los contenedores de la tarjeta son 39, en 25 archivos (las 41 filas, con sus estados, más el pizarrón de notas y la pantalla del ticket)', () => {
+  it('los contenedores de la tarjeta son 33, en 22 archivos (las 41 filas, con sus estados, más el pizarrón de notas y la pantalla del ticket)', () => {
     const todos = contenedores();
     // D290 · 0.244.0 suma `NotasScreen.tsx`: el pizarrón cargando y listo, y el apartado de otro (+3, un archivo).
     // D481 · 0.262.0 suma `PantallaDelTicketDeMesa.tsx`: la pantalla del ticket de una mesa (3b) (+1, un archivo).
-    expect(todos.length).toBe(39);
-    expect(new Set(todos.map((c) => c.donde.split(':')[0])).size).toBe(25);
+    // D479/D482 · 0.263.0 junta las tarjetas de las cinco pantallas de Estadísticas
+    // (7 contenedores en 4 archivos) en `CabeceraDeEstadisticas.tsx` (1 en 1): −6 y −3.
+    expect(todos.length).toBe(33);
+    expect(new Set(todos.map((c) => c.donde.split(':')[0])).size).toBe(22);
   });
 
   it('cada contenedor lleva su cuadro: la fila del título, o el cuadro suelto en las burbujas de Estadísticas', () => {

@@ -6,7 +6,7 @@ import { sacarFoto } from './_camara';
  * AF-VIAJES-VARIOS-PAGARON-Y-ESTADISTICAS-20261010, a 375, con el mock de App
  * Backend 2.177.0 (incluye 2.176.0):
  * - D263 · «¿Quién pagó?» con varios, en la carga manual y en el ticket escaneado, y el ticket que pagaron varios;
- * - D260 · «Ver ticket completo» de una visita de viaje en «Tus restaurantes» abre el ticket del viaje;
+ * - D260 · «Ver todo el ticket» de una visita de viaje en «Tus restaurantes» abre el ticket del viaje;
  * - D264 · Crear viaje, sin «Les llega una invitación…».
  */
 const CANCUN = 'd1000000-0000-4000-8000-000000000001';
@@ -150,7 +150,8 @@ test('🔴 D260 · «Tus restaurantes»: la visita de un viaje abre su ticket, y
   await mariscos.locator('.rest-visita-fila').click();
   await expect(mariscos.getByText('Aguachile', { exact: true })).toBeVisible();
   await capturar(page, 'd260-01-visita-de-viaje');
-  await mariscos.getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
+  // D479/D482 · el botón se llama «Ver todo el ticket»; en una visita de viaje sigue abriendo su ticket.
+  await mariscos.getByRole('button', { name: 'Ver todo el ticket', exact: true }).click();
   // El ticket del viaje, no el recibo de una mesa.
   await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
   await expect(page.getByRole('heading', { name: 'Mariscos El Faro', level: 1 })).toBeVisible();

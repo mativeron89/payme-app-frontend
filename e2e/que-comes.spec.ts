@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { mesesDeMexico } from '../src/utils/meses';
-import { porcentajesEnteros, porcionesDelAnillo } from '../src/utils/anillo';
 
 const MESES = mesesDeMexico(new Date(), 'es');
 
@@ -36,39 +35,37 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 const acceso = (page: Page) => page.getByRole('button', { name: /^Qué comes/ });
-const tarjeta = (page: Page) => page.getByRole('region', { name: /^Tus (cinco )?platos$/ });
+const tarjeta = (page: Page) => page.getByRole('region', { name: 'Tus platos más pedidos' });
+const periodo = (page: Page) => page.getByRole('button', { name: /^Período: / });
 
 test.describe('AF-31 · Qué comes (2c)', () => {
-  test('se abre desde 2a: cinco platos con restaurante, veces y monto, y vuelve', async ({ page }) => {
+  test('se abre desde 2a: cinco platos con veces y monto, dónde se pidió al desplegar, y vuelve', async ({ page }) => {
     await preparar(page);
-    // E173-4 · el subtítulo de Claude Design: el plato más elegido y los platos distintos.
-    await expect(acceso(page)).toContainText(' es lo más elegido · 7 platos');
+    // D479/D482 · el subtítulo del paquete: los platos distintos.
+    await expect(acceso(page)).toContainText('7 platos distintos');
     await acceso(page).click();
     await expect(page).toHaveURL(/:\d+\/platos$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Qué comes' })).toBeVisible();
     await expect(tarjeta(page)).toBeVisible();
-    await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
-    await expect(page.locator('.stat-burbuja-contexto')).toHaveText('distintos');
-    const filas = tarjeta(page).getByRole('listitem');
+    await expect(tarjeta(page)).toContainText('7 platos distintos este mes');
+    const filas = tarjeta(page).locator('.est-plato');
     await expect(filas).toHaveCount(5);
-    await expect(filas.first()).toContainText('La Parolaccia');
+    // La fila: nombre, veces e importe; el restaurante, sólo al desplegar.
     await expect(filas.first()).toContainText('3 veces');
-    await expect(filas.last()).toContainText('Hanzo Sushi');
+    await expect(filas.first()).not.toContainText('La Parolaccia');
     await expect(filas.last()).toContainText('2 veces');
-    await expect(tarjeta(page).locator('circle')).toHaveCount(5);
-    await expect(tarjeta(page).getByRole('img', { name: /^Platos más pedidos: / })).toBeVisible();
+    await filas.first().getByRole('button').click();
+    await expect(filas.first().locator('.est-plato-lugar')).toHaveCount(1);
+    await expect(filas.first().locator('.est-plato-lugar')).toContainText('La Parolaccia');
+    await filas.last().getByRole('button').click();
+    await expect(filas.last().locator('.est-plato-lugar')).toContainText('Hanzo Sushi');
+    // Sin anillos (Claude Design 0.261).
+    await expect(page.locator('svg circle')).toHaveCount(0);
     // En base consumo no hay propina que aclarar.
     await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toHaveCount(0);
-    // AF-38: las tres pestañas del diseño, en su orden.
-    await expect(page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab')).toHaveText(['Platos', 'Ingrediente', 'Momento']);
-    const panel = page.getByRole('tabpanel');
-    await expect(panel).toHaveAttribute('aria-labelledby', 'que-comes-tab-platos');
-    const [tabBox, panelBox] = await Promise.all([
-      page.getByRole('tab', { name: 'Platos' }).boundingBox(),
-      panel.boundingBox(),
-    ]);
-    expect(Math.abs(((tabBox?.y ?? 0) + (tabBox?.height ?? 0)) - (panelBox?.y ?? 0))).toBeLessThanOrEqual(1);
-    // AF-32: «Momento» ya existe (2e, v2.109.0) y es pestaña; «Ingrediente» (2d) no.
-    await expect(page.getByRole('tab', { name: 'Momento' })).toBeVisible();
+    // Las tres pestañas, en su orden: un control segmentado.
+    await expect(page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab')).toHaveText(['Platos', 'Ingredientes', 'Momento']);
+    await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'que-comes-tab-platos');
     await capturar(page, 'platos-01-2c');
     await page.getByRole('button', { name: 'Volver' }).click();
     await expect(page).toHaveURL(/:\d+\/estadisticas$/);
@@ -87,10 +84,8 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await expect(page.locator('.est-total')).toHaveText('$1,320');
     await acceso(page).click();
     await expect(tarjeta(page)).toBeVisible();
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
-    await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
-    await expect(page.locator('.stat-burbuja-contexto')).toHaveText('distintos');
-    await expect(tarjeta(page)).toContainText('el mes pasado');
+    await expect(periodo(page)).toHaveText(MESES.anterior);
+    await expect(tarjeta(page)).toContainText('platos distintos el mes pasado');
   });
 
   test('mes sin platos: el vacío', async ({ page }) => {
@@ -121,7 +116,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(page.getByText('No pudimos cargar tus platos')).toBeVisible();
       await page.evaluate(() => localStorage.removeItem('payme.app.mock.platos.v1'));
       await page.getByRole('button', { name: 'Reintentar' }).click();
-      await expect(tarjeta(page).getByRole('listitem')).toHaveCount(5);
+      await expect(tarjeta(page).locator('.est-plato')).toHaveCount(5);
     });
   }
 
@@ -132,7 +127,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page);
       await acceso(page).click();
       const pestanas = page.getByRole('tablist', { name: 'Qué comes' });
-      await expect(pestanas.getByRole('tab')).toHaveText(['Platos', 'Ingrediente', 'Momento']);
+      await expect(pestanas.getByRole('tab')).toHaveText(['Platos', 'Ingredientes', 'Momento']);
       await pestanas.getByRole('tab', { name: 'Momento' }).click();
       await expect(momentos(page)).toBeVisible();
       const filas = momentos(page).getByRole('listitem');
@@ -142,9 +137,9 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(filas.nth(3)).toContainText('Cena');
       await expect(filas.nth(3)).toContainText('desde las 19');
       // Las 6 visitas del mes, como 2a (el mismo modelo del mock).
-      await expect(page.locator('.stat-burbuja')).toContainText('6 visitas');
-      await expect(momentos(page)).toContainText('De 6 visitas este mes');
-      await expect(momentos(page).getByRole('img', { name: /^Visitas por momento del día: Desayuno \d+%, Comida/ })).toBeVisible();
+      await expect(momentos(page)).toContainText('6 visitas este mes');
+      // D482 · los cuatro momentos, también en cero, cada uno con su color fijo y el nombre al lado.
+      await expect(momentos(page).locator('.est-cuadrito')).toHaveCount(4);
       await expect(page.getByText('Cada visita incluye la propina.')).toHaveCount(0);
       await capturar(page, 'momentos-01-2e');
     });
@@ -165,7 +160,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(page.locator('.est-total')).toHaveText('$1,320');
       await acceso(page).click();
       await page.getByRole('tab', { name: 'Momento' }).click();
-      await expect(momentos(page)).toContainText('De 5 visitas el mes pasado');
+      await expect(momentos(page)).toContainText('5 visitas el mes pasado');
     });
 
     test('con pagos, dice que cada visita incluye la propina', async ({ page }) => {
@@ -200,68 +195,51 @@ test.describe('AF-31 · Qué comes (2c)', () => {
 
     async function abrirIngrediente(page: Page): Promise<void> {
       await acceso(page).click();
-      await page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab', { name: 'Ingrediente' }).click();
+      await page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab', { name: 'Ingredientes' }).click();
     }
 
-    test('n178 · las tres pestañas; cada grupo con «N platos» y su monto, el anillo en platos, «Otros» al final', async ({ page }) => {
+    test('n178 · las tres pestañas; cada grupo con «N platos», su monto y su barra, «Otros» al final', async ({ page }) => {
       await preparar(page);
       // E173-4 · el total de 2a es `.est-total`.
       const total2a = (await page.locator('.est-total').textContent()) ?? '';
       expect(total2a).toBe('$2,165');
       await abrirIngrediente(page);
-      await expect(page.getByRole('tab', { name: 'Ingrediente' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('tab', { name: 'Ingredientes' })).toHaveAttribute('aria-selected', 'true');
       await expect(region(page)).toBeVisible();
-      await expect(region(page)).toContainText('Los mismos 7 platos, agrupados por lo que llevan');
+      // D479/D482 · sin la nota «Los mismos N platos…»; K4 · «Clasificado por el nombre del plato» queda.
+      await expect(region(page)).not.toContainText('Los mismos');
+      await expect(region(page).getByText('Clasificado por el nombre del plato')).toBeVisible();
       // Este mes del mock: carnes, postres, alcohol, pastas y lo que no se reconoce.
       await expect(filas(page)).toHaveCount(5);
       await expect(filas(page).last()).toContainText('Otros');
       await expect(region(page)).toContainText('Bebidas con alcohol');
-      // 🔴 Cada fila dice «N platos», como el diseño 2d; ni visitas ni porcentaje.
+      // 🔴 Cada fila dice «N platos», como el diseño; ni visitas ni porcentaje.
       const textos = await filas(page).allTextContents();
       for (const fila of textos) {
         expect(fila).toMatch(/\d+ platos?/);
         expect(fila).not.toMatch(/\d+ visitas?/);
         expect(fila).not.toMatch(/\d+%/);
       }
-      // 🔴 El centro dice cuántos platos, y son los mismos 7 de «Platos»: la
-      // suma de los grupos coincide con el subtítulo y con la burbuja.
-      const porFila = textos.map((f) => Number(/(\d+) platos?/.exec(f)?.[1]));
+      // 🔴 Son los mismos 7 platos de «Platos»: la suma de los grupos coincide.
+      const cuentas = await filas(page).locator('.est-fila-abajo > span:last-child').allTextContents();
+      const porFila = cuentas.map((f) => Number(/^(\d+) platos?$/.exec(f)?.[1]));
       expect(porFila.reduce((a, n) => a + n, 0)).toBe(7);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText('7');
-      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('platos distintos');
       // El dinero sigue en cada fila y suma lo de 2a.
-      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      const montos = await region(page).locator('.est-fila-monto').allTextContents();
       expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
-      await expect(region(page).getByText('Clasificado por el nombre del plato')).toBeVisible();
-      // 🔴 El anillo reparte PLATOS: los porcentajes del anillo salen de los
-      // platos de cada fila, no del dinero (que da otros números en este mock).
-      const nombres = await region(page).locator('.stat-anillo-nombre').allTextContents();
-      const enPlatos = porcentajesEnteros(porFila);
-      const enDinero = porcentajesEnteros(montos.map((m) => Math.round(pesos(m) * 100)));
-      expect(enPlatos).not.toEqual(enDinero);
-      await expect(region(page).getByRole('img', {
-        name: `Por ingrediente principal: ${nombres.map((n, i) => `${n} ${enPlatos[i]}%`).join(', ')}`,
-      })).toBeVisible();
-      // Y el TRAZO de cada porción es el que dan los platos, no el dinero.
-      const trazos = await region(page).locator('svg circle').evaluateAll((cs) => (
-        cs.map((c) => c.getAttribute('stroke-dasharray'))
-      ));
-      expect(trazos).toEqual(porcionesDelAnillo(porFila).map((p) => `${p.trazo.toFixed(1)} ${p.hueco.toFixed(1)}`));
-      // La burbuja es la de «Platos», como el diseño 2d.
-      await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
+      // Sin anillo: cuadrito y barra por grupo, con color fijo.
+      await expect(region(page).locator('svg circle')).toHaveCount(0);
+      await expect(region(page).locator('.est-barra')).toHaveCount(5);
       await capturar(page, 'ingrediente-01-con-datos');
     });
 
-    test('🔴 n178 · con el dueño anterior (sin `dish_count`) queda como antes: dinero al centro, visitas y porcentaje', async ({ page }) => {
+    test('🔴 n178 · con el dueño anterior (sin `dish_count`) cada fila dice sus visitas', async ({ page }) => {
       await preparar(page, { ingredientes: 'sin_platos' });
-      const total2a = (await page.locator('.est-total').textContent()) ?? '';
       await abrirIngrediente(page);
       await expect(filas(page)).toHaveCount(5);
       await expect(filas(page).first()).toContainText(/\d+ visitas?/);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText(total2a);
       for (const fila of await filas(page).allTextContents()) {
         expect(fila).not.toMatch(/\d+ platos?/);
-        expect(fila).toMatch(/\d+%/);
       }
     });
 
@@ -269,7 +247,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page, { ingredientes: 'otros' });
       await abrirIngrediente(page);
       await expect(filas(page).last()).toContainText('Otros');
-      const montos = (await region(page).locator('.stat-anillo-monto').allTextContents()).map(pesos);
+      const montos = (await region(page).locator('.est-fila-monto').allTextContents()).map(pesos);
       expect(montos[montos.length - 1]).toBe(Math.max(...montos));
       expect(montos[montos.length - 1]).toBeGreaterThan(montos[0]);
       await capturar(page, 'ingrediente-02-otros-grande');
@@ -281,7 +259,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(filas(page).last()).toContainText('Otros');
       await expect(region(page)).not.toContainText('Postres');
       await expect(region(page)).not.toContainText('grains');
-      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      const montos = await region(page).locator('.est-fila-monto').allTextContents();
       expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
     });
 
@@ -314,15 +292,14 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     test('con pagos: el pie dice que es lo cobrado, sin la propina', async ({ page }) => {
       await preparar(page, { conDinero: true });
       await abrirIngrediente(page);
-      // n178 · el centro es de platos; la base del dinero la dice el pie.
-      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('platos distintos');
+      await expect(filas(page).first()).toContainText(/\d+ platos?/);
       await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toBeVisible();
     });
 
-    test('con pagos y el dueño anterior: «de gasto» al centro', async ({ page }) => {
+    test('con pagos y el dueño anterior: visitas por fila y el pie de lo cobrado', async ({ page }) => {
       await preparar(page, { conDinero: true, ingredientes: 'sin_platos' });
       await abrirIngrediente(page);
-      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('de gasto');
+      await expect(filas(page).first()).toContainText(/\d+ visitas?/);
       await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toBeVisible();
     });
 
@@ -332,22 +309,20 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
       await expect(page.locator('.est-total')).toHaveText('$1,320');
       await abrirIngrediente(page);
-      // Los montos de las filas son los del mes elegido y el centro, sus platos.
-      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      // Los montos de las filas son los del mes elegido.
+      const montos = await region(page).locator('.est-fila-monto').allTextContents();
       expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(132000);
-      await expect(page.locator('.stat-burbuja-total')).toHaveText(/\d+ platos?/);
-      const burbuja = Number(/\d+/.exec((await page.locator('.stat-burbuja-total').textContent()) ?? '')?.[0]);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText(String(burbuja));
-      await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
+      await expect(periodo(page)).toHaveText(MESES.anterior);
     });
 
-    test('el período elegido rige también con el dueño anterior (dinero al centro)', async ({ page }) => {
+    test('el período elegido rige también con el dueño anterior', async ({ page }) => {
       await preparar(page, { ingredientes: 'sin_platos' });
       await page.getByRole('button', { name: /^Período: / }).click();
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
       await expect(page.locator('.est-total')).toHaveText('$1,320');
       await abrirIngrediente(page);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320');
+      const montos = await region(page).locator('.est-fila-monto').allTextContents();
+      expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(132000);
     });
   });
 });

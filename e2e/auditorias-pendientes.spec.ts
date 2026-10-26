@@ -153,16 +153,17 @@ test.describe('🔴 2 · F-02 · una respuesta vieja no pisa el período nuevo',
     await ingresar(page);
     await page.goto('/estadisticas');
     const acceso = page.getByRole('button', { name: /^Tus restaurantes/ });
-    await expect(acceso).toContainText(/lugar(es)? distintos?/);
+    // D479/D482 · el subtítulo es «3 lugares · 6 visitas».
+    await expect(acceso).toContainText(/lugar(es)? · \d+ visitas?/);
     await retener(page, 'getStatsRestaurants', 'vaciar-mes-pasado');
     await elegirPeriodo(page, 'last_month');
     await elegirPeriodo(page, 'last_3_months');
     await soltar(page, 'last_3_months');
-    await expect(acceso).toContainText(/lugar(es)? distintos?/);
+    await expect(acceso).toContainText(/lugar(es)? · \d+ visitas?/);
     // La vieja (mes pasado, sin visitas) llega después: no se escribe.
     await soltar(page, 'last_month');
     await dosCuadros(page);
-    await expect(acceso).toContainText(/lugar(es)? distintos?/);
+    await expect(acceso).toContainText(/lugar(es)? · \d+ visitas?/);
     await expect(acceso).not.toContainText('Sin visitas');
   });
 
@@ -191,7 +192,8 @@ test.describe('🔴 3 · F-13 · las pestañas de Qué comes, con el teclado', (
     await expect(tab('Momento')).toBeVisible();
     await tab('Platos').focus();
     for (const [tecla, destino] of [
-      ['ArrowRight', 'Ingrediente'], ['ArrowRight', 'Momento'], ['ArrowRight', 'Platos'],
+      // D479/D482 · la pestaña dice «Ingredientes», en plural.
+      ['ArrowRight', 'Ingredientes'], ['ArrowRight', 'Momento'], ['ArrowRight', 'Platos'],
       ['ArrowLeft', 'Momento'], ['Home', 'Platos'], ['End', 'Momento'],
     ] as const) {
       await page.keyboard.press(tecla);
@@ -221,7 +223,7 @@ async function cancunEnCerrados(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 
-test.describe('🔴 5 · V-02 · «Ver ticket completo» con el viaje en Cerrados', () => {
+test.describe('🔴 5 · V-02 · «Ver todo el ticket» con el viaje en Cerrados', () => {
   test('abre el ticket en sólo lectura (antes: 409 y a Cerrados), y Atrás vuelve', async ({ page }) => {
     await conViajes(page);
     await cancunEnCerrados(page);
@@ -230,7 +232,8 @@ test.describe('🔴 5 · V-02 · «Ver ticket completo» con el viaje en Cerrado
     const mariscos = page.getByRole('region', { name: 'Mariscos El Faro', exact: true });
     await mariscos.getByRole('button', { name: /^Mariscos El Faro/ }).click();
     await mariscos.locator('.rest-visita-fila').click();
-    await mariscos.getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
+    // D479/D482 · el botón se llama «Ver todo el ticket»; en una visita de viaje sigue abriendo su ticket.
+    await mariscos.getByRole('button', { name: 'Ver todo el ticket', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
     await expect(page.getByRole('heading', { name: 'Mariscos El Faro', level: 1 })).toBeVisible();
     await expect(page.locator('.vjt-aviso-ticket')).toHaveText('Este viaje ya se cerró: el ticket es sólo para ver.');

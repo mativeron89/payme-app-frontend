@@ -56,24 +56,98 @@ export function platosDistintos(n: number, t: T): string {
   return `${n} ${n === 1 ? t('plato distinto') : t('platos distintos')}`;
 }
 
+// ─── D479/D482 · AF-1 · textos del rediseño de Claude Design (0.261) ──────────
+
+const ZONA_MEXICO = 'America/Mexico_City';
+
+/** Año y mes (1–12) de un instante en hora de México: el corte de los períodos del dueño. */
+function mesDeMexico(instante: Date): { anio: number; mes: number } {
+  const partes = new Intl.DateTimeFormat('en-US', { timeZone: ZONA_MEXICO, year: 'numeric', month: 'numeric' })
+    .formatToParts(instante);
+  const valor = (tipo: string) => Number(partes.find((p) => p.type === tipo)?.value);
+  return { anio: valor('year'), mes: valor('month') };
+}
+
+/** El nombre del mes en minúscula, como lo da Intl («agosto», «August»). El 15 al mediodía UTC no cambia de mes en ninguna zona. */
+function nombreDeMes(anio: number, mes: number, idioma: 'es' | 'en'): string {
+  return new Intl.DateTimeFormat(idioma === 'es' ? 'es-MX' : 'en-US', { month: 'long', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(anio, mes - 1, 15, 12)));
+}
+
+function conMayuscula(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /**
- * E173-4 · el período dentro de una frase: «Sin visitas en octubre». Los meses
- * van en minúscula en español; en inglés, con mayúscula. Los períodos que no son
- * un mes se nombran con su frase.
+ * «Agosto a octubre» / «August to October»: dos meses (año y mes 1–12) unidos.
+ * Mayúscula inicial sola en español; en inglés los meses van con mayúscula.
  */
-export function periodoEnFrase(clave: string, nombre: string | null, idioma: 'es' | 'en', t: T): string {
-  if (clave === 'last_3_months') return t('los últimos 3 meses');
-  if (clave === 'this_year') return nombre ?? t('este año');
-  if (nombre === null) return clave === 'last_month' ? t('el mes pasado') : t('este mes');
-  return idioma === 'es' ? nombre.toLocaleLowerCase('es-MX') : nombre;
+export function rangoDeMeses(
+  desde: { anio: number; mes: number },
+  hasta: { anio: number; mes: number },
+  idioma: 'es' | 'en',
+): string {
+  const a = nombreDeMes(desde.anio, desde.mes, idioma);
+  const b = nombreDeMes(hasta.anio, hasta.mes, idioma);
+  return idioma === 'es' ? `${conMayuscula(a)} a ${b}` : `${conMayuscula(a)} to ${conMayuscula(b)}`;
 }
 
-/** E173-4 · «20 lugares distintos»; con uno, «1 lugar». */
-export function lugaresDistintos(n: number, t: T): string {
-  return n === 1 ? `1 ${t('lugar')}` : `${n} ${t('lugares distintos')}`;
+/** «Agosto a octubre»: los últimos 3 meses de México, contando el actual (el segundo texto del desplegable). */
+export function ultimosTresMeses(ahora: Date, idioma: 'es' | 'en'): string {
+  const { anio, mes } = mesDeMexico(ahora);
+  const indice = anio * 12 + (mes - 1) - 2;
+  return rangoDeMeses({ anio: Math.floor(indice / 12), mes: (indice % 12) + 1 }, { anio, mes }, idioma);
 }
 
-/** E173-4 · el centro del anillo: «4 cocinas»; con una, «cocina». */
-export function cocinasTexto(n: number, t: T): string {
-  return n === 1 ? t('cocina') : t('cocinas');
+/** El año en curso de México: el segundo texto de «Este año · 2026». */
+export function anioDeMexico(ahora: Date): string {
+  return String(mesDeMexico(ahora).anio);
+}
+
+/**
+ * T4 · «Agosto 2026» con mayúscula inicial sola (antes «Agosto De 2026», por un
+ * `text-transform: capitalize` sobre «agosto de 2026»). `monthStart` es el 1 a las
+ * 00:00 de México: se lee en esa zona.
+ */
+export function mesYAnio(monthStart: string, idioma: 'es' | 'en'): string {
+  const { anio, mes } = mesDeMexico(new Date(monthStart));
+  return `${conMayuscula(nombreDeMes(anio, mes, idioma))} ${anio}`;
+}
+
+/** Un mes en minúscula dentro de una frase en español («agosto»); en inglés, con mayúscula. */
+export function mesEnFrase(monthStart: string, idioma: 'es' | 'en'): string {
+  const { anio, mes } = mesDeMexico(new Date(monthStart));
+  const nombre = nombreDeMes(anio, mes, idioma);
+  return idioma === 'es' ? nombre : conMayuscula(nombre);
+}
+
+/** «Mayo a octubre»: el primero y el último de los meses de Evolución. */
+export function rangoDeEvolucion(primero: string, ultimo: string, idioma: 'es' | 'en'): string {
+  return rangoDeMeses(mesDeMexico(new Date(primero)), mesDeMexico(new Date(ultimo)), idioma);
+}
+
+/**
+ * K1 (D482) · el estado del período, en letra chica junto al mes: el mes pasado
+ * está cerrado; los demás incluyen el mes en curso.
+ */
+export function estadoDelPeriodo(clave: string, t: T): string {
+  return clave === 'last_month' ? t('Mes completo') : t('En curso');
+}
+
+/** «Agosto» / «August»: el mes solo, con mayúscula inicial (las filas de la mezcla de Evolución). */
+export function mesConMayuscula(monthStart: string, idioma: 'es' | 'en'): string {
+  const { anio, mes } = mesDeMexico(new Date(monthStart));
+  return conMayuscula(nombreDeMes(anio, mes, idioma));
+}
+
+/**
+ * La fila de la base en Meses completos: «Consumo» / «Gasto», en inglés «Orders»
+ * / «Spending» (D482, TEXTOS-ES-EN.md). Sin `t()` A PROPÓSITO, como los meses de
+ * `meses.ts`: la clave de `en.ts` es el español, y «Consumo» ya se traduce
+ * «Item» (la línea del ticket al crear la mesa) y «Gasto» «Expense» (Viajes). El
+ * mismo español con otro sentido necesita otra traducción.
+ */
+export function rotuloDeLaBase(basis: 'consumption' | 'payments', idioma: 'es' | 'en'): string {
+  if (idioma === 'en') return basis === 'consumption' ? 'Orders' : 'Spending';
+  return basis === 'consumption' ? 'Consumo' : 'Gasto';
 }

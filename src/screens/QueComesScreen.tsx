@@ -11,28 +11,30 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { goBack } from '../router';
-import { colorDeFila, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
 import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { platosDistintos, platosTexto, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
-import { AnilloSvg } from './AnilloSvg';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { useTandaVigente } from './useTandaVigente';
-import { CuadroDeTarjeta, FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { nombreDePlato } from '../utils/nombreDePlato';
+import { colorDeGrupo, colorDeMomento } from '../utils/coloresDeEstadisticas';
+import { CabeceraDeEstadisticas, EsqueletoDeEstadisticas } from './CabeceraDeEstadisticas';
 
 /**
- * **Qué comes** — pantalla 2c de «Mis estadísticas», sólo la vista por PLATOS
- * (AF-31, Roadmap n166). `GET /api/account/stats/dishes?period=`.
+ * **Qué comes** — pantalla 2c de «Mis estadísticas» (AF-31, Roadmap n166).
+ * `GET /api/account/stats/dishes?period=&dishes_version=2`.
  *
- * Pestañas «Platos», «Ingrediente» (2d, AF-38) y «Momento» (2e, AF-32): cada
+ * Pestañas «Platos», «Ingredientes» (2d, AF-38) y «Momento» (2e, AF-32): cada
  * una aparece si su ruta existe en el dueño.
  *
- * El anillo reparte los cinco platos por **veces** (el dato del dueño son
- * VISITAS: media porción cuenta 1) y lleva en el centro cuántos platos
- * distintos hubo. Los porcentajes del `aria-label` son sobre esos cinco, no
- * sobre todo lo que comiste. La lista dice plato, restaurante, veces y monto;
- * nunca el color solo.
+ * D479/D482 · Claude Design 0.261 (1l, 1m, 1n): control segmentado, sin anillos.
+ * - Platos: «Tus platos más pedidos» y una fila por plato con veces e importe;
+ *   desplegada, dónde se pidió (AF-2: con `dishes_version=2` los platos vienen
+ *   agrupados entre restaurantes, y el desplegable muestra cada uno). `times` son
+ *   VISITAS: media porción cuenta 1.
+ * - Ingredientes y Momento: cuadrito y barra con el color FIJO de cada clave,
+ *   siempre con el nombre al lado. Los momentos en cero se muestran como los
+ *   manda el dueño (D482).
  */
 
 type Estado =
@@ -129,9 +131,6 @@ export function QueComesScreen() {
   const periodoDeLaVista = verMomentos ? datosMomentos?.period : verIngredientes ? datosIngredientes?.period : datos?.period;
   const hayDatosDeLaVista = verMomentos ? datosMomentos !== null : verIngredientes ? datosIngredientes !== null : datos !== null;
   const soportaPeriodo = hayDatosDeLaVista && periodoDeLaVista?.key === clave;
-  // AF-38 · en «Ingrediente» la burbuja es la de «Platos», como el diseño 2d: los
-  // mismos platos, agrupados. Sólo si los platos son del MISMO período confirmado.
-  const platosDelMismoPeriodo = datos !== null && datos.period?.key === periodoDeLaVista?.key ? datos : null;
   const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
   const pestanaActiva: Pestana = verMomentos ? 'momento' : verIngredientes ? 'ingrediente' : 'platos';
   /** Las pestañas que se ven, en su orden (las mismas condiciones que las dibujan). */
@@ -151,48 +150,22 @@ export function QueComesScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('estadisticas')} />
-      {conDatos || soportaPeriodo ? (
-        <div className="title-card stat-burbuja">
-          <h1 className="stat-oculto">{verIngredientes ? t('Qué comes · ingrediente') : t('Qué comes')}</h1>
-          <CuadroDeTarjeta icono="cubiertos" />
-          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} inicio={soportaPeriodo ? periodoDeLaVista?.start ?? null : null} />
-          {conDatos && (
-            <div className="stat-burbuja-dato">
-              {/* AF-36 · como el diseño 2c («15 platos» y el contexto debajo): en un
-                  solo renglón de 26px «7 platos distintos» se partía en dos y la
-                  burbuja quedaba más alta que las otras tres. */}
-              <div className="stat-burbuja-total">
-                {verMomentos && datosMomentos
-                  ? visitasTexto(datosMomentos.visits, t)
-                  : verIngredientes
-                    ? platosDelMismoPeriodo
-                      ? platosTexto(platosDelMismoPeriodo.distinctDishes, t)
-                      : datosIngredientes ? formatMXN(datosIngredientes.totalCents) : null
-                    : datos ? platosTexto(datos.distinctDishes, t) : null}
-              </div>
-              {!verMomentos && (verIngredientes ? platosDelMismoPeriodo : datos) && (
-                <div className="stat-burbuja-contexto">
-                  {(verIngredientes ? platosDelMismoPeriodo : datos)?.distinctDishes === 1 ? t('distinto') : t('distintos')}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="title-card">
-          <FilaDeTitulo icono="cubiertos">
-            <h1 className="title-card-title">{t('Qué comes')}</h1>
-          </FilaDeTitulo>
-        </div>
-      )}
+      <CabeceraDeEstadisticas icono="cubiertos" titulo={t('Qué comes')}>
+        <SelectorDePeriodo
+          clave={hayDatosDeLaVista ? efectiva : clave}
+          disponible={soportaPeriodo}
+          cargando={!verMomentos && !verIngredientes && estado.tipo === 'cargando'}
+          inicio={soportaPeriodo ? periodoDeLaVista?.start ?? null : null}
+        />
+      </CabeceraDeEstadisticas>
 
-      <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
+      <div className="scroll est-scroll">
         {/* Las pestañas del diseño 2c, en su orden: «Platos», «Ingrediente» (AF-38)
             y «Momento» (AF-32). Cada una aparece si su ruta existe; sin ninguna
             (dos 404) no hay pestañas. */}
-        <div className={conPestanas ? 'stat-tabs-shell' : undefined}>
+        <div className={conPestanas ? 'est-pestanas-caja' : undefined}>
           {conPestanas && (
-            <div className="seg stat-pestanas" role="tablist" aria-label={t('Qué comes')} onKeyDown={alTeclado}>
+            <div className="est-pestanas" role="tablist" aria-label={t('Qué comes')} onKeyDown={alTeclado}>
             <button
               type="button"
               id="que-comes-tab-platos"
@@ -200,7 +173,7 @@ export function QueComesScreen() {
               aria-selected={!verMomentos && !verIngredientes}
               aria-controls="que-comes-panel"
               tabIndex={!verMomentos && !verIngredientes ? 0 : -1}
-              className={`seg-btn ${!verMomentos && !verIngredientes ? 'on' : ''}`}
+              className={!verMomentos && !verIngredientes ? 'est-pestana on' : 'est-pestana'}
               onClick={() => setPestana('platos')}
             >
               {t('Platos')}
@@ -213,10 +186,10 @@ export function QueComesScreen() {
                 aria-selected={verIngredientes}
                 aria-controls="que-comes-panel"
                 tabIndex={verIngredientes ? 0 : -1}
-                className={`seg-btn ${verIngredientes ? 'on' : ''}`}
+                className={verIngredientes ? 'est-pestana on' : 'est-pestana'}
                 onClick={() => setPestana('ingrediente')}
               >
-                {t('Ingrediente')}
+                {t('Ingredientes')}
               </button>
             )}
             {conMomento && (
@@ -227,7 +200,7 @@ export function QueComesScreen() {
                 aria-selected={verMomentos}
                 aria-controls="que-comes-panel"
                 tabIndex={verMomentos ? 0 : -1}
-                className={`seg-btn ${verMomentos ? 'on' : ''}`}
+                className={verMomentos ? 'est-pestana on' : 'est-pestana'}
                 onClick={() => setPestana('momento')}
               >
                 {t('Momento')}
@@ -239,7 +212,7 @@ export function QueComesScreen() {
             id={conPestanas ? 'que-comes-panel' : undefined}
             role={conPestanas ? 'tabpanel' : undefined}
             aria-labelledby={conPestanas ? `que-comes-tab-${pestanaActiva}` : undefined}
-            className={conPestanas ? 'stat-tabs-panel' : undefined}
+            className={conPestanas ? 'est-pestanas-panel' : undefined}
           >
             {verMomentos ? (
               <VistaDeMomentos estado={momentos} clave={efectiva} onReintentar={cargar} />
@@ -247,16 +220,10 @@ export function QueComesScreen() {
               <VistaDeIngredientes
                 estado={ingredientes}
                 clave={efectiva}
-                platosDistintos={platosDelMismoPeriodo?.distinctDishes ?? null}
                 onReintentar={cargar}
               />
             ) : estado.tipo === 'cargando' ? (
-              <div aria-busy="true" aria-label={t('Cargando tus platos')}>
-                <div className="stat-hero sk">
-                  <span className="sk-line w40" />
-                  <span className="sk-line w70 tall" />
-                </div>
-              </div>
+              <EsqueletoDeEstadisticas etiqueta={t('Cargando tus platos')} />
             ) : estado.tipo === 'error' ? (
               <div className="state-error">
                 <div className="state-error-row">
@@ -292,43 +259,44 @@ export function QueComesScreen() {
 
 function TusPlatos({ datos, clave }: { datos: PlatosDelPeriodo; clave: ClavePeriodo }) {
   const { t } = useIdioma();
-  const veces = datos.dishes.map((d) => d.times);
-  const pcts = porcentajesEnteros(veces);
-  const resumen = datos.dishes.map((d, i) => `${nombreDePlato(d.name)} ${pcts[i]}%`).join(', ');
+  const [abierto, setAbierto] = useState<number | null>(null);
   return (
-    <section className="stat-anillo-card" aria-labelledby="platos-titulo">
-      <div>
-        <h2 id="platos-titulo" className="stat-anillo-titulo">
-          {datos.dishes.length === 5 ? t('Tus cinco platos') : t('Tus platos')}
-        </h2>
-        <div className="stat-anillo-sub">
-          {t('De {0} {1}', platosDistintos(datos.distinctDishes, t), sufijoDePeriodo(clave, t))}
-        </div>
+    <section className="est-bloque" aria-labelledby="platos-titulo">
+      <div className="est-panel est-titulo-panel">
+        <h2 id="platos-titulo">{t('Tus platos más pedidos')}</h2>
+        <p className="est-nota">{`${platosDistintos(datos.distinctDishes, t)} ${sufijoDePeriodo(clave, t)}`}</p>
       </div>
-      <AnilloSvg
-        porciones={porcionesDelAnillo(veces)}
-        etiqueta={t('Platos más pedidos: {0}', resumen)}
-        centro={
-          <>
-            <div className="stat-anillo-total">{datos.distinctDishes}</div>
-            <div className="stat-anillo-unidad">
-              {datos.distinctDishes === 1 ? t('plato distinto') : t('platos distintos')}
-            </div>
-          </>
-        }
-      />
-      <ul className="stat-anillo-lista">
-        {datos.dishes.map((d, i) => (
-          <li key={`${d.restaurant.id}:${d.name}`} className="stat-anillo-fila">
-            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
-            <span className="plato-texto">
-              <span className="stat-anillo-nombre">{nombreDePlato(d.name)}</span>
-              <span className="plato-rest">{d.restaurant.name}</span>
-            </span>
-            <span className="stat-anillo-visitas">{vecesTexto(d.times, t)}</span>
-            <span className="stat-anillo-monto">{formatMXN(d.amountCents)}</span>
-          </li>
-        ))}
+      <ul className="est-panel est-platos" role="list">
+        {datos.dishes.map((d, i) => {
+          const esteAbierto = abierto === i;
+          return (
+            <li key={`${i}:${d.name}`} className="est-plato">
+              <button
+                type="button"
+                className="est-plato-fila"
+                aria-expanded={esteAbierto}
+                aria-controls={`est-plato-${i}`}
+                onClick={() => setAbierto((a) => (a === i ? null : i))}
+              >
+                <span className="est-plato-nombre">{nombreDePlato(d.name)}</span>
+                <span className="est-plato-veces">{vecesTexto(d.times, t)}</span>
+                <span className="est-plato-monto">{formatMXN(d.amountCents)}</span>
+                <Icon name="chevron-down" size={18} className={esteAbierto ? 'rest-chev abierto' : 'rest-chev'} />
+              </button>
+              {esteAbierto && (
+                <ul id={`est-plato-${i}`} className="est-plato-lugares" role="list">
+                  {d.restaurants.map((r) => (
+                    <li key={r.id} className="est-plato-lugar">
+                      <span className="est-plato-nombre">{r.name}</span>
+                      <span className="est-plato-veces">{vecesTexto(r.times, t)}</span>
+                      <span className="est-plato-monto">{formatMXN(r.amountCents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {datos.basis === 'payments' && (
         <p className="rest-pie">{t('Lo cobrado por cada plato, sin la propina.')}</p>
@@ -361,14 +329,7 @@ function VistaDeMomentos({
 }) {
   const { t } = useIdioma();
   if (estado.tipo === 'cargando' || estado.tipo === 'no_disponible') {
-    return (
-      <div aria-busy="true" aria-label={t('Cargando tus momentos')}>
-        <div className="stat-hero sk">
-          <span className="sk-line w40" />
-          <span className="sk-line w70 tall" />
-        </div>
-      </div>
-    );
+    return <EsqueletoDeEstadisticas etiqueta={t('Cargando tus momentos')} />;
   }
   if (estado.tipo === 'error') {
     return (
@@ -398,38 +359,33 @@ function VistaDeMomentos({
       </div>
     );
   }
-  const visitas = datos.dayparts.map((d) => d.visits);
-  const pcts = porcentajesEnteros(visitas);
-  const rotulos = datos.dayparts.map((d) => rotuloDeMomento(d.key, t));
-  const resumen = rotulos.map((r, i) => `${r.nombre} ${pcts[i]}%`).join(', ');
+  const maximo = Math.max(...datos.dayparts.map((d) => d.visits), 1);
   return (
-    <section className="stat-anillo-card" aria-labelledby="momentos-titulo">
-      <div>
-        <h2 id="momentos-titulo" className="stat-anillo-titulo">{t('Por momento del día')}</h2>
-        <div className="stat-anillo-sub">{t('De {0} {1}', visitasTexto(datos.visits, t), sufijoDePeriodo(clave, t))}</div>
+    <section className="est-bloque" aria-labelledby="momentos-titulo">
+      <div className="est-panel est-titulo-panel">
+        <h2 id="momentos-titulo">{t('Por momento del día')}</h2>
+        <p className="est-nota">{`${visitasTexto(datos.visits, t)} ${sufijoDePeriodo(clave, t)}`}</p>
       </div>
-      <AnilloSvg
-        porciones={porcionesDelAnillo(visitas)}
-        etiqueta={t('Visitas por momento del día: {0}', resumen)}
-        centro={
-          <>
-            <div className="stat-anillo-total">{datos.visits}</div>
-            <div className="stat-anillo-unidad">{datos.visits === 1 ? t('visita') : t('visitas')}</div>
-          </>
-        }
-      />
-      <ul className="stat-anillo-lista">
-        {datos.dayparts.map((d, i) => (
-          <li key={d.key} className="stat-anillo-fila">
-            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
-            <span className="plato-texto">
-              <span className="stat-anillo-nombre">{rotulos[i].nombre}</span>
-              <span className="plato-rest">{rotulos[i].horario}</span>
-            </span>
-            <span className="stat-anillo-visitas">{visitasTexto(d.visits, t)}</span>
-            <span className="stat-anillo-monto">{formatMXN(d.amountCents)}</span>
-          </li>
-        ))}
+      <ul className="est-panel est-filas" role="list">
+        {datos.dayparts.map((d) => {
+          const rotulo = rotuloDeMomento(d.key, t);
+          return (
+            <li key={d.key} className="est-fila">
+              <span className="est-fila-arriba">
+                <span className="est-cuadrito" style={{ background: colorDeMomento(d.key) }} aria-hidden="true" />
+                <span className="est-fila-nombre">{rotulo.nombre}</span>
+                <span className="est-fila-monto">{formatMXN(d.amountCents)}</span>
+              </span>
+              <span className="est-fila-abajo con-cuadrito">
+                <span>{rotulo.horario}</span>
+                <span>{visitasTexto(d.visits, t)}</span>
+              </span>
+              <span className="est-barra" aria-hidden="true">
+                <span style={{ width: `${(d.visits / maximo) * 100}%`, background: colorDeMomento(d.key) }} />
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {datos.basis === 'payments' && (
         <p className="rest-pie">{t('Cada visita incluye la propina.')}</p>
@@ -461,25 +417,15 @@ function rotuloDeGrupo(key: ClaveGrupo, t: (s: string, ...a: unknown[]) => strin
 function VistaDeIngredientes({
   estado,
   clave,
-  platosDistintos: distintos,
   onReintentar,
 }: {
   estado: EstadoIngredientes;
   clave: ClavePeriodo;
-  /** Platos distintos del MISMO período (de «Platos»), o `null` si no están. */
-  platosDistintos: number | null;
   onReintentar: () => void;
 }) {
   const { t } = useIdioma();
   if (estado.tipo === 'cargando' || estado.tipo === 'no_disponible') {
-    return (
-      <div aria-busy="true" aria-label={t('Cargando tus ingredientes')}>
-        <div className="stat-hero sk">
-          <span className="sk-line w40" />
-          <span className="sk-line w70 tall" />
-        </div>
-      </div>
-    );
+    return <EsqueletoDeEstadisticas etiqueta={t('Cargando tus ingredientes')} />;
   }
   if (estado.tipo === 'error') {
     return (
@@ -510,60 +456,35 @@ function VistaDeIngredientes({
       </div>
     );
   }
-  const montos = grupos.map((g) => g.amountCents);
   /**
-   * n178 · con `dish_count` (dueño v2.125.0) la vista es la del diseño 2d: el
-   * anillo reparte PLATOS, el centro dice cuántos y cada fila «N platos» y su
-   * monto, igual que 2c y 2e. Sin el dato (dueño anterior) queda como estaba: el
-   * anillo reparte el dinero y la fila dice visitas, monto y porcentaje (G-41).
+   * n178 · con `dish_count` (dueño v2.125.0; AF-2 con la clave agrupada de
+   * `dishes_version=2`) cada fila dice «N platos»; con un dueño anterior, sus
+   * visitas. La barra compara el importe con el del grupo más alto.
    */
-  const platosPorGrupo = grupos.every((g) => g.dishCount !== null)
-    ? grupos.map((g) => g.dishCount as number)
-    : null;
-  const totalPlatos = platosPorGrupo?.reduce((a, n) => a + n, 0) ?? 0;
-  const pcts = porcentajesEnteros(platosPorGrupo ?? montos);
-  const nombres = grupos.map((g) => rotuloDeGrupo(g.key, t));
-  const resumen = nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
+  const conPlatos = grupos.every((g) => g.dishCount !== null);
+  const maximo = Math.max(...grupos.map((g) => g.amountCents), 1);
   return (
-    <section className="stat-anillo-card" aria-labelledby="ingredientes-titulo">
-      <div>
-        <h2 id="ingredientes-titulo" className="stat-anillo-titulo">{t('Por ingrediente principal')}</h2>
-        <div className="stat-anillo-sub">
-          {distintos !== null && distintos > 1
-            ? t('Los mismos {0} platos, agrupados por lo que llevan', distintos)
-            : t('Tus platos, agrupados por lo que llevan')}
-        </div>
+    <section className="est-bloque" aria-labelledby="ingredientes-titulo">
+      <div className="est-panel est-titulo-panel">
+        <h2 id="ingredientes-titulo">{t('Por ingrediente principal')}</h2>
+        {/* K4 (D482) · se conserva: el grupo es una estimación por el nombre del plato. */}
+        {datos.estimated && <p className="est-nota">{t('Clasificado por el nombre del plato')}</p>}
       </div>
-      <AnilloSvg
-        porciones={porcionesDelAnillo(platosPorGrupo ?? montos)}
-        etiqueta={t('Por ingrediente principal: {0}', resumen)}
-        centro={platosPorGrupo ? (
-          <>
-            <div className="stat-anillo-total">{totalPlatos}</div>
-            <div className="stat-anillo-unidad">
-              {totalPlatos === 1 ? t('plato distinto') : t('platos distintos')}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="stat-anillo-total">{formatMXN(datos.totalCents)}</div>
-            <div className="stat-anillo-unidad">{datos.basis === 'payments' ? t('de gasto') : t('de consumo')}</div>
-          </>
-        )}
-      />
-      {datos.estimated && <p className="stat-estimacion">{t('Clasificado por el nombre del plato')}</p>}
-      <ul className="stat-anillo-lista">
-        {grupos.map((g, i) => (
-          <li key={g.key} className="stat-anillo-fila">
-            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
-            <span className="stat-anillo-nombre">{nombres[i]}</span>
-            {platosPorGrupo ? (
-              <span className="stat-anillo-visitas">{platosTexto(platosPorGrupo[i], t)}</span>
-            ) : (
-              <span className="stat-anillo-visitas">{g.times !== null ? visitasTexto(g.times, t) : ''}</span>
-            )}
-            <span className="stat-anillo-monto">{formatMXN(g.amountCents)}</span>
-            {!platosPorGrupo && <span className="stat-anillo-pct">{pcts[i]}%</span>}
+      <ul className="est-panel est-filas" role="list">
+        {grupos.map((g) => (
+          <li key={g.key} className="est-fila">
+            <span className="est-fila-arriba">
+              <span className="est-cuadrito" style={{ background: colorDeGrupo(g.key) }} aria-hidden="true" />
+              <span className="est-fila-nombre">{rotuloDeGrupo(g.key, t)}</span>
+              <span className="est-fila-monto">{formatMXN(g.amountCents)}</span>
+            </span>
+            <span className="est-fila-abajo con-cuadrito">
+              <span />
+              <span>{conPlatos ? platosTexto(g.dishCount as number, t) : g.times !== null ? visitasTexto(g.times, t) : ''}</span>
+            </span>
+            <span className="est-barra" aria-hidden="true">
+              <span style={{ width: `${(g.amountCents / maximo) * 100}%`, background: colorDeGrupo(g.key) }} />
+            </span>
           </li>
         ))}
       </ul>

@@ -102,16 +102,24 @@ test.describe('D202 · H-04 · el foco no sale de las hojas modales', () => {
     await expect(cerrarMesa).toBeFocused();
   });
 
-  test('🔴 «Elige el período»: el foco entra en el elegido, Tab cicla adentro y al cerrar vuelve al período', async ({ page }) => {
+  // D479/D482 · el período ya no es una hoja modal: es un desplegable anclado (Claude Design 0.261). El foco entra
+  // en el elegido, Escape cierra y vuelve al botón, y salir con Tab lo cierra sin atrapar el foco.
+  test('🔴 «Elige el período»: el foco entra en el elegido, Escape vuelve al período y Tab sale cerrándolo', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
     await ingresar(page);
     await irEnLaApp(page, '/estadisticas');
     const periodo = page.getByRole('button', { name: /^Período: / });
     await periodo.click();
-    const hoja = page.getByRole('dialog', { name: 'Elige el período' });
-    await expect(hoja.getByRole('radio', { name: /^Este mes/ })).toBeFocused();
-    await contieneElFoco(page, hoja, () => page.keyboard.press('Escape'));
+    const lista = page.getByRole('radiogroup', { name: 'Elige el período' });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(lista.getByRole('radio', { name: /^Este mes/ })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(lista).toHaveCount(0);
     await expect(periodo).toBeFocused();
+    await periodo.click();
+    await expect(lista.getByRole('radio', { name: /^Este mes/ })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(lista).toHaveCount(0);
   });
 
   test('🔴 el panel de diagnóstico: Tab cicla adentro', async ({ page }) => {

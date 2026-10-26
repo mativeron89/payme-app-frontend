@@ -38,119 +38,114 @@ async function elegir(page: Page, periodo: string): Promise<void> {
 test.describe('AF-31 · período de Mis estadísticas', () => {
   test('«Mes pasado» cambia el consumo, oculta lo que no se mueve y se conserva en 2b', async ({ page }) => {
     await preparar(page);
-    const burbuja = page.locator('.stat-burbuja');
+    const cabecera = page.locator('.est-cabecera');
     await expect(page.locator('.est-total')).toHaveText('$2,165');
-    // E173-4 · cada dato una vez: el plato más elegido va en la fila «Qué comes».
-    await expect(page.getByRole('button', { name: /^Qué comes/ })).toContainText('es lo más elegido');
+    // D479/D482 · «Qué comes» dice los platos distintos; el plato más pedido no tiene tarjeta propia.
+    await expect(page.getByRole('button', { name: /^Qué comes/ })).toContainText('7 platos distintos');
     await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
 
     await selector(page).click();
-    const hoja = page.getByRole('dialog', { name: 'Elige el período' });
-    await expect(hoja.getByRole('radio')).toHaveCount(4);
-    await expect(hoja.getByRole('radio', { name: /^Este mes/ })).toHaveAttribute('aria-checked', 'true');
+    // D479/D482 · un desplegable anclado al botón, no una hoja.
+    const lista = page.getByRole('radiogroup', { name: 'Elige el período' });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(lista.getByRole('radio')).toHaveCount(4);
+    await expect(lista.getByRole('radio', { name: /^Este mes/ })).toHaveAttribute('aria-checked', 'true');
     // AF-36 · cada opción conserva su nombre y lleva el mes al lado, en apagado.
-    await expect(hoja.getByRole('radio', { name: /^Este mes/ })).toContainText(MESES.actual);
-    await expect(hoja.getByRole('radio', { name: /^Mes pasado/ })).toContainText(MESES.anterior);
+    await expect(lista.getByRole('radio', { name: /^Este mes/ })).toContainText(MESES.actual);
+    await expect(lista.getByRole('radio', { name: /^Mes pasado/ })).toContainText(MESES.anterior);
     await capturar(page, 'periodo-01-selector-abierto');
-    await hoja.getByRole('radio', { name: /^Mes pasado/ }).click();
+    await lista.getByRole('radio', { name: /^Mes pasado/ }).click();
 
-    // AF-36 · la burbuja dice el MES, no «Mes pasado».
-    await expect(burbuja).toContainText(MESES.anterior);
-    await expect(burbuja).not.toContainText('Mes pasado');
+    // AF-36 · la cabecera dice el MES, no «Mes pasado»; K1 (D482): «Mes completo» en letra chica.
+    await expect(selector(page)).toHaveText(MESES.anterior);
+    await expect(cabecera).not.toContainText('Mes pasado');
+    await expect(cabecera.locator('.est-periodo-estado')).toHaveText('Mes completo');
     await expect(page.locator('.est-total')).toHaveText('$1,320');
-    // E173-4 · la burbuja ya no lleva visitas ni promedio.
-    await expect(burbuja).not.toContainText('visitas');
-    await expect(page.getByRole('heading', { name: 'Tu consumo por tipo de cocina', exact: true })).toBeVisible();
+    await expect(cabecera).not.toContainText('visitas');
+    await expect(page.getByRole('heading', { name: 'Por tipo de cocina', exact: true })).toBeVisible();
     // Lo que sale de pagos sin filtro de fecha NO se mezcla con otro período.
     await expect(page.getByRole('heading', { name: 'Plato más pedido' })).toHaveCount(0);
-    // E173-4 · sólo los lugares, sin el sufijo del período.
-    await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toContainText('3 lugares distintos');
+    await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toContainText('3 lugares · 5 visitas');
     await capturar(page, 'periodo-02-2a-mes-pasado');
 
-    // 2b con el mismo período y el mismo total. Se espera a la pantalla 2b ANTES
-    // de mirar la burbuja: si no, la de 2a —que ya dice «Mes pasado»— satisface la
-    // aserción mientras 2b todavía no pintó (mutante P4, que así sobrevivía).
+    // 2b con el mismo período. Se espera a la pantalla 2b ANTES de mirar la
+    // cabecera: si no, la de 2a satisface la aserción mientras 2b todavía no pintó.
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
     await expect(page).toHaveURL(/:\d+\/restaurantes$/);
     await expect(page.locator('.rest-card').first()).toBeVisible();
     await expect(page.locator('.rest-card')).toHaveCount(3);
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
-    await expect(page.locator('.stat-burbuja')).toContainText('$1,320');
+    await expect(selector(page)).toHaveText(MESES.anterior);
+    await expect(page.locator('.est-contexto')).toContainText('3 lugares');
     await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
+    await expect(selector(page)).toHaveText(MESES.anterior);
   });
 
   test('con el mes vacío el selector sigue: se puede ir a otro período', async ({ page }) => {
     await preparar(page, { stats: 'vacio' });
-    // E173-4 · el mes vacío dice $0 y el anillo queda con su leyenda.
-    await expect(page.locator('.est-total')).toHaveText('$0');
-    await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
+    // D479/D482 · el vacío es una frase, nunca un $0 grande (1g).
+    await expect(page.locator('.est-total')).toHaveCount(0);
+    await expect(page.getByText('Todavía no registramos consumos este mes.', { exact: true })).toBeVisible();
     await elegir(page, 'Mes pasado');
     await expect(page.locator('.est-total')).toHaveText('$1,320');
     await elegir(page, 'Este mes');
-    await expect(page.getByText('Todavía no registramos consumos este mes', { exact: true })).toBeVisible();
+    await expect(page.getByText('Todavía no registramos consumos este mes.', { exact: true })).toBeVisible();
   });
 
   test('🔴 backend anterior (no devuelve `period`): no hay selector y dice el mes en curso', async ({ page }) => {
     await preparar(page, { periodo: 'antiguo' });
     await expect(page.locator('.est-total')).toHaveText('$2,165');
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.actual);
+    await expect(page.locator('.est-periodo-quieto')).toHaveText(MESES.actual);
     await expect(selector(page)).toHaveCount(0);
   });
 
   test('🔴 un período PEDIDO que el dueño no confirma no se rotula: dice el mes que llegó', async ({ page }) => {
     await preparar(page);
     await elegir(page, 'Mes pasado');
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
+    await expect(selector(page)).toHaveText(MESES.anterior);
     // Desde acá el backend ignora `?period=` y devuelve el mes en curso sin `period`.
     await page.evaluate(() => localStorage.setItem('payme.app.mock.periodo.v1', 'antiguo'));
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
     await expect(page.locator('.rest-card').first()).toBeVisible();
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.actual);
-    await expect(page.locator('.stat-burbuja')).not.toContainText(MESES.anterior);
+    await expect(page.locator('.est-periodo-quieto')).toHaveText(MESES.actual);
+    await expect(page.locator('.est-cabecera')).not.toContainText(MESES.anterior);
   });
 
-  test('🔴 el rótulo y el dato de la burbuja quedan centrados entre sí, con el mismo alto, en 2a, 2b, 2c y 2e', async ({ page }) => {
+  test('🔴 la cabecera mide lo mismo en 2a, 2b, 2c y 2e, y el estado queda centrado con el botón', async ({ page }) => {
     await preparar(page);
     const medir = () => page.evaluate(() => {
-      const b = document.querySelector('.stat-burbuja')!.getBoundingClientRect();
-      const izq = document.querySelector('.stat-burbuja .stat-burbuja-periodo')!.getBoundingClientRect();
-      // D449 · 2a alinea el estado del período; 2b, 2c y 2e conservan su dato.
-      const der = document.querySelector('.stat-burbuja .stat-burbuja-dato, .stat-burbuja .est-periodo-estado')!.getBoundingClientRect();
-      return { alto: Math.round(b.height), diferencia: Math.abs((izq.top + izq.height / 2) - (der.top + der.height / 2)) };
+      const c = document.querySelector('.est-cabecera')!.getBoundingClientRect();
+      const boton = document.querySelector('.est-periodo-boton')!.getBoundingClientRect();
+      const estado = document.querySelector('.est-periodo-estado')!.getBoundingClientRect();
+      return { alto: Math.round(c.height), diferencia: Math.abs((boton.top + boton.height / 2) - (estado.top + estado.height / 2)) };
     });
     const altos: number[] = [];
     await expect(page.locator('.est-total')).toBeVisible();
     let m = await medir();
     expect(m.diferencia, '2a').toBeLessThanOrEqual(1);
     altos.push(m.alto);
-    await capturar(page, 'burbuja-2a-septiembre');
+    await capturar(page, 'cabecera-2a');
 
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
     await expect(page.locator('.rest-card').first()).toBeVisible();
     m = await medir();
     expect(m.diferencia, '2b').toBeLessThanOrEqual(1);
     altos.push(m.alto);
-    await capturar(page, 'burbuja-2b-septiembre');
     await page.getByRole('button', { name: 'Volver' }).click();
 
     await page.getByRole('button', { name: /^Qué comes/ }).click();
     await expect(page.getByRole('tab', { name: 'Momento' })).toBeVisible();
-    await expect(page.locator('.stat-burbuja-dato')).toBeVisible();
+    await expect(page.locator('.est-periodo-estado')).toBeVisible();
     m = await medir();
     expect(m.diferencia, '2c').toBeLessThanOrEqual(1);
     altos.push(m.alto);
-    await capturar(page, 'burbuja-2c-septiembre');
 
     await page.getByRole('tab', { name: 'Momento' }).click();
-    await expect(page.locator('.stat-burbuja-dato')).toBeVisible();
+    await expect(page.locator('.est-periodo-estado')).toBeVisible();
     m = await medir();
     expect(m.diferencia, '2e').toBeLessThanOrEqual(1);
     altos.push(m.alto);
-    await capturar(page, 'burbuja-2e-septiembre');
 
     expect(new Set(altos).size, `altos ${altos.join(', ')}`).toBe(1);
-    await expect(page.locator('.stat-burbuja')).toContainText(MESES.actual);
+    await expect(selector(page)).toHaveText(MESES.actual);
   });
 });

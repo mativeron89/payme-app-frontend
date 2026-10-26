@@ -34,16 +34,17 @@ test('AF-AJUSTES10 · Asociadas queda mínima y el header alinea marca/nombre si
   await capturar(page, 'u03-u07-header-asociadas');
 });
 
-test('AF-AJUSTES10 · pestañas de Qué comes forman una pieza con el panel', async ({ page }) => {
+// D479/D482 · Claude Design 0.261 reemplazó las pestañas pegadas al panel por un control segmentado: la elegida en
+// navy con texto blanco, y el contenido en sus propias tarjetas.
+test('AF-AJUSTES10 · D482 · las pestañas de Qué comes son un control segmentado', async ({ page }) => {
   await ingresar(page);
   await page.goto('/#/platos');
   const tab = page.getByRole('tab', { name: 'Platos' });
   const panel = page.getByRole('tabpanel');
   await expect(tab).toHaveAttribute('aria-controls', 'que-comes-panel');
   await expect(panel).toHaveAttribute('aria-labelledby', 'que-comes-tab-platos');
-  const [tabBox, panelBox] = await Promise.all([tab.boundingBox(), panel.boundingBox()]);
-  expect(Math.abs(((tabBox?.y ?? 0) + (tabBox?.height ?? 0)) - (panelBox?.y ?? 0))).toBeLessThanOrEqual(1);
-  await expect(tab).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(tab).toHaveCSS('background-color', 'rgb(16, 30, 59)');
+  await expect(tab).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(page.getByRole('tab', { name: 'Momento' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await capturar(page, 'u10-tabs-panel');
 });

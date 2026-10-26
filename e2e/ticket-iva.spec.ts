@@ -105,15 +105,15 @@ test.describe('D209 · «Ver el ticket» con subtotal e IVA', () => {
 
 test.describe('D209 · el ticket digital con subtotal e IVA', () => {
   /**
-   * El ticket digital se abre desde «Tus restaurantes», sobre una visita del
-   * modelo del mock (esas mesas no pasan por el alta). Se envuelve `getMesa` de
+   * El ticket digital se abre desde Mesas, sobre la primera mesa terminada del
+   * mock (D479/D482: «Tus restaurantes» ya no abre este visor). Se envuelve `getMesa` de
    * la fachada para que conteste lo que publicaría el dueño en `mesa_detail`:
    * `ticket_totals` con subtotal + IVA = total de la mesa. Lo que se prueba es
    * el decoder del visor y lo que dibuja.
    */
   async function abrirTicketDigital(page: Page, conTotales: boolean): Promise<ReturnType<Page['getByRole']>> {
     await ingresar(page);
-    await page.goto('/restaurantes');
+    await page.goto('/mesas');
     if (conTotales) {
       await page.evaluate(async () => {
         const ruta = '/src/api/index.ts';
@@ -129,11 +129,10 @@ test.describe('D209 · el ticket digital con subtotal e IVA', () => {
         };
       });
     }
-    const parolaccia = page.getByRole('region', { name: 'La Parolaccia', exact: true });
-    await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
-    const visita = parolaccia.locator('.rest-visita').first();
-    await visita.locator('.rest-visita-fila').click();
-    await visita.getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
+    // D479/D482 · «Tus restaurantes» ya no abre este visor: «Ver todo el ticket» despliega el ticket en la visita.
+    // El detalle digital se abre desde Mesas → la pantalla del ticket → «Ver detalle digital» (D481).
+    await page.getByRole('region', { name: 'Tus mesas' }).locator('.tu-mesa button.fila-ticket').first().click();
+    await page.getByRole('button', { name: 'Ver detalle digital', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(dialog).toContainText('Total del ticket');
     return dialog;

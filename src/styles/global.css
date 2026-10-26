@@ -6069,7 +6069,7 @@ button.qc-circulo::after {
   color: var(--gray-d);
 }
 
-.stat-pestanas .seg-btn:focus-visible {
+.est-pestana:focus-visible {
   outline: 3px solid var(--action-2);
   outline-offset: 2px;
 }
@@ -7443,575 +7443,6 @@ button.qc-circulo::after {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-/* AF-36 · centrado vertical: Mati vio el rótulo de la izquierda más abajo que
-   el dato de la derecha («no está centrado»). El diseño alinea al final; se
-   centra por su pedido, en las cuatro pantallas que comparten la burbuja. */
-.stat-burbuja {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  /* D285 · el cuadro con el ícono (el que dice en qué pantalla estás), el período y, a la derecha, el dato. */
-  gap: 14px;
-  text-align: left;
-}
-
-.stat-burbuja > .stat-burbuja-dato,
-.stat-burbuja > .est-total {
-  margin-left: auto;
-}
-
-.stat-burbuja-periodo {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.stat-burbuja-dato {
-  text-align: right;
-}
-
-.stat-burbuja-total {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  color: var(--navy);
-}
-
-.stat-burbuja-contexto {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-.stat-anillo-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 16px;
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
-}
-
-.stat-anillo-titulo {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 16.5px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--navy);
-}
-
-.stat-anillo-sub {
-  font-size: 12.5px;
-  color: var(--gray-d);
-}
-
-.stat-anillo {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-anillo svg {
-  display: block;
-}
-
-.stat-anillo-centro {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-
-.stat-anillo-total {
-  font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--navy);
-}
-
-.stat-anillo-unidad {
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--gray-d);
-}
-
-.stat-anillo-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stat-anillo-fila {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stat-anillo-color {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 4px;
-}
-
-.stat-anillo-nombre {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--navy);
-}
-
-.stat-anillo-visitas,
-.stat-anillo-pct {
-  font-size: 12.5px;
-  color: var(--gray-d);
-}
-
-.stat-anillo-monto {
-  min-width: 68px;
-  text-align: right;
-  font-family: var(--font-display);
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.stat-anillo-pct {
-  min-width: 34px;
-  text-align: right;
-}
-
-/* ── AF-31 · 2f «Evolución»: barras por mes y columnas al 100 % ───────── */
-.evo-card {
-  margin-bottom: 12px;
-}
-
-.evo-barras,
-.evo-columnas {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.evo-barras {
-  height: 180px;
-}
-
-.evo-barra,
-.evo-columna {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.evo-barra-monto {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--gray-d);
-}
-
-.evo-barra.actual .evo-barra-monto,
-.evo-barra.actual .evo-barra-mes {
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.evo-barra-cuerpo {
-  width: 100%;
-  max-width: 34px;
-  border-radius: 8px 8px 4px 4px;
-  background: #c9e3e8;
-}
-
-/* El actual en el cian del diseño (#0FB5C9 = --teal): el diseño lo llama
-   `--brand`, que en esta app es el naranja. Declarado en la entrega. */
-.evo-barra.actual .evo-barra-cuerpo {
-  background: var(--teal);
-}
-
-.evo-barra-mes {
-  font-size: 11.5px;
-  color: var(--gray-d);
-}
-
-.evo-columna-cuerpo {
-  display: flex;
-  flex-direction: column-reverse;
-  width: 100%;
-  max-width: 34px;
-  height: 110px;
-  overflow: hidden;
-  border-radius: 8px;
-}
-
-.evo-columna-cuerpo.vacia {
-  border: 1px dashed var(--border);
-}
-
-.evo-hoy {
-  min-width: 64px;
-}
-
-/* AF-AJUSTES10 · pestañas y panel son una sola pieza, como la unión aprobada
-   de las pestañas de Inicio con su tarjeta. */
-.stat-tabs-shell {
-  border-radius: var(--r-lg);
-}
-
-.stat-pestanas {
-  align-items: flex-end;
-  gap: 4px;
-  margin-bottom: 0;
-  padding: 0;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  background: transparent;
-}
-
-.stat-pestanas .seg-btn {
-  min-height: var(--tap-min);
-  border: 1px solid transparent;
-  border-bottom-color: var(--border);
-  border-radius: 12px 12px 0 0;
-  background: var(--gray-l);
-}
-
-.stat-pestanas .seg-btn.on {
-  position: relative;
-  z-index: 1;
-  margin-bottom: -1px;
-  border-color: var(--border);
-  border-bottom-color: var(--surface);
-  background: var(--surface);
-  color: var(--navy);
-}
-
-.stat-tabs-panel {
-  min-height: 1px;
-  border: 1px solid var(--border);
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
-}
-
-.stat-tabs-panel > .stat-anillo-card {
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-  box-shadow: none;
-}
-
-.stat-tabs-panel > :not(.stat-anillo-card) {
-  margin: var(--sp-4);
-}
-
-/* ── AF-31 · 2c «Qué comes»: la fila del plato lleva el restaurante debajo. */
-.plato-texto {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.plato-texto .stat-anillo-nombre {
-  flex: none;
-}
-
-.plato-rest {
-  font-size: 12px;
-  color: var(--gray-d);
-}
-
-/* ── AF-31 · el selector de período de la burbuja ──────────────────────── */
-.stat-periodo-boton {
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.stat-periodos {
-  display: flex;
-  flex-direction: column;
-  margin: 8px 0 12px;
-}
-
-.stat-periodo-opcion {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 48px;
-  padding: 0 4px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  font-size: 15px;
-  color: var(--navy);
-  text-align: left;
-  cursor: pointer;
-}
-
-.stat-periodo-opcion.on {
-  font-weight: 700;
-  color: var(--teal-txt);
-}
-
-/* AF-38 · 2d · la línea chica de estimación, debajo del anillo (decisión de Mati). */
-.stat-estimacion {
-  margin: -6px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: var(--gray-d);
-}
-
-/* AF-36 · la opción con su mes al lado, en apagado: «Este mes · Septiembre». */
-.stat-periodo-nombre {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.stat-periodo-mes {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--gray-d);
-}
-
-/* ── AF-29 · 2b «Tus restaurantes» y el acceso de 2a ─────────────────────
-   Medidas del diseño 2b: el ancho dice de qué depende cada cosa. Tarjeta del
-   restaurante a lo ancho (blanca), la visita una burbuja --bg 28px más angosta,
-   y lo consumido una blanca con borde 24px más angosta que la visita. */
-.stat-acceso {
-  /* E173-4 · las filas de acceso de la especificación de Claude Design (§2):
-     alto mínimo 64, padding 12/14/12/16, la sombra de las tarjetas. Sólo las usa
-     Estadísticas. */
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 64px;
-  margin-bottom: 10px;
-  padding: 12px 14px 12px 16px;
-  border: 0;
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
-  text-align: left;
-  cursor: pointer;
-}
-
-.stat-acceso-texto,
-.rest-texto {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.stat-acceso-titulo {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-/* E173-4 · el subtítulo de la fila: 14 px, puede ir en dos líneas, nunca cortado. */
-.stat-acceso-sub {
-  font-size: 14px;
-  line-height: 1.35;
-  color: #64748b;
-  overflow-wrap: anywhere;
-}
-
-.rest-sub {
-  font-size: 12.5px;
-  color: var(--gray-d);
-}
-
-.rest-chev {
-  flex: none;
-  color: var(--teal-txt);
-  transition: none;
-}
-
-.rest-chev.abierto {
-  transform: rotate(180deg);
-}
-
-.rest-chev.derecha {
-  transform: rotate(-90deg);
-}
-
-.rest-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rest-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
-}
-
-.rest-fila,
-.rest-visita-fila {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.rest-nombre {
-  font-family: var(--font-display);
-  font-size: 15.5px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.rest-monto {
-  font-family: var(--font-display);
-  font-size: 15.5px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--navy);
-}
-
-.rest-visitas {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rest-visita {
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  width: calc(100% - 28px);
-  margin: 0 auto;
-  padding: 0 12px;
-  border-radius: 16px;
-  background: var(--bg);
-}
-
-.rest-visita-cuando {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.rest-visita-fecha {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.rest-visita-modo {
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--gray-d);
-}
-
-.rest-visita-hora {
-  font-size: 13px;
-  color: var(--gray-d);
-}
-
-.rest-visita-monto {
-  min-width: 66px;
-  text-align: right;
-  font-family: var(--font-display);
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.rest-items {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-sizing: border-box;
-  /* AF-STATS-BURBUJA · el mismo ancho útil que «Ver ticket completo». */
-  width: 100%;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
-  list-style: none;
-}
-
-/* AF-STATS-LO-PROPIO · el ticket completo, aparte de lo propio. */
-.rest-visita-ticket {
-  align-self: center;
-  margin: -4px auto 12px;
-}
-
-.rest-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--navy);
-}
-
-.rest-item-frac {
-  min-width: 14px;
-  font-size: 12.5px;
-  color: var(--gray-d);
-}
-
-/* AF-STATS-BURBUJA · sin ninguna porción en la visita, la columna del «½» no
-   ocupa lugar: vacía, corría el texto 24 px a la izquierda («la burbuja está
-   descentrada», Mati). Con una porción se conserva, para alinear los platos. */
-.rest-items:not(.con-porcion) .rest-item-frac {
-  display: none;
-}
-
-.rest-item-nombre {
-  flex: 1;
-  min-width: 0;
-}
-
-.rest-pie {
-  margin: 0;
-  padding: 0 4px;
-  font-size: 11.5px;
-  color: var(--gray-d);
 }
 
 /* U09 · visor histórico del ticket digital. No representa una foto ni un
@@ -10456,278 +9887,10 @@ h1.pay-title-lbl {
   outline-offset: 2px;
 }
 
-/* ─── D444/D449 · resumen y comparación de Estadísticas ───────────────── */
-.title-card.est-burbuja {
-  padding: 16px 18px;
-}
-.est-burbuja .stat-burbuja-periodo {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: left;
-}
-.est-periodo-estado {
-  margin-left: auto;
-  flex: none;
-  max-width: 72px;
-  text-align: right;
-  color: #0e7c8a;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.est-total {
-  min-width: 0;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--navy);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
 .has-appbar .scroll.est-scroll {
   padding: 14px 16px calc(96px + var(--appbar-pie));
 }
-.est-panel, .est-cocinas {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.06);
-}
-.est-panel {
-  margin-bottom: 12px;
-}
-.est-panel h2, .est-cocinas-titulo {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--navy);
-}
-.est-nota, .est-cocinas-sub, .est-evolucion-nota {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #64748b;
-}
-.est-resumen {
-  gap: 10px;
-  border-top: 3px solid #12a5b4;
-}
-.est-resumen-datos {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 4px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid #e2e8f0;
-}
-.est-resumen-datos > div {
-  min-width: 0;
-}
-.est-resumen-datos dt {
-  font-size: 13px;
-  color: #64748b;
-}
-.est-resumen-datos dd {
-  margin: 6px 0 0;
-  font-size: 19px;
-  font-weight: 800;
-  color: var(--navy);
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
-}
-.est-comparacion-base {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #0e7c8a;
-}
-.est-meses {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.est-mes {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 12px;
-  border-radius: 12px;
-  background: #f8fafc;
-}
-.est-mes:last-child {
-  background: #ecf9fa;
-}
-.est-mes h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: capitalize;
-}
-.est-mes strong {
-  font-size: 19px;
-  color: var(--navy);
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
-}
-.est-mes > span {
-  font-size: 12px;
-  color: #475569;
-  overflow-wrap: anywhere;
-}
-.est-diferencias {
-  margin: 0;
-}
-.est-diferencias > div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-  padding: 9px 0;
-  border-top: 1px solid #e2e8f0;
-}
-.est-diferencias dt {
-  font-size: 13px;
-  color: #475569;
-}
-.est-diferencias dd {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--navy);
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
-}
-.est-evolucion-nota {
-  margin: -4px 4px 16px;
-}
-.est-cocinas-cabeza {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.est-cocinas-cantidad {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.est-cocinas-num {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.1;
-  color: var(--navy);
-}
-.est-cocinas-txt {
-  font-size: 13px;
-  color: #64748b;
-}
-.est-cocinas-vacio {
-  margin: 0;
-  font-size: 14px;
-  color: #64748b;
-}
-.est-detalle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0 2px;
-  border: 0;
-  border-top: 1px solid #f1f5f9;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--navy);
-  text-align: left;
-  cursor: pointer;
-}
-.est-detalle > span {
-  flex: 1;
-}
-.est-detalle .rest-chev {
-  color: #0e7c8a;
-  transition: transform 0.2s;
-}
-.est-detalle-lista {
-  display: flex;
-  flex-direction: column;
-  margin: -14px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.est-detalle-fila {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-  align-items: center;
-  gap: 8px 12px;
-  min-height: 52px;
-  padding: 12px 0;
-  border-top: 1px solid #f1f5f9;
-}
-.est-detalle-izq, .est-detalle-der {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.est-detalle-der {
-  align-items: flex-end;
-}
-.est-detalle-nombre {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--navy);
-}
-.est-detalle-visitas, .est-detalle-pct {
-  font-size: 13px;
-  color: #64748b;
-}
-.est-detalle-monto {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--navy);
-  font-variant-numeric: tabular-nums;
-}
-.est-cocina-barra {
-  display: block;
-  grid-column: 1 / -1;
-  height: 8px;
-  border-radius: 4px;
-  background: #e4f7f8;
-  overflow: hidden;
-}
-.est-cocina-barra > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-@media (max-width: 359px) {
-  .est-total {
-    font-size: 28px;
-  }
-  .est-mes {
-    padding: 10px;
-  }
-  .est-mes strong, .est-resumen-datos dd {
-    font-size: 17px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .est-detalle .rest-chev {
-    transition: none;
-  }
-}
+
 
 /* ─── D176 · la guía «Agregar a inicio» ───────────────────────────────────
    Navy y teal; el naranja, sólo en la acción («Entendido», `.btn-primary`).
@@ -11765,4 +10928,953 @@ h1.pay-title-lbl {
 
 .captura-foto-guardada svg {
   flex: none;
+}
+
+/* ─── D479/D482 · Mis estadísticas según Claude Design 0.261 (AF-1 + AF-2) ───
+   Las cinco pantallas: cabecera común, desplegable del período, resumen,
+   cocinas, accesos, meses completos, Tus restaurantes (caja 2b), Qué comes y
+   Evolución. Plus Jakarta Sans para montos y títulos (40/24/22/20/16), DM Sans
+   para el texto (16/14): nada menor a 14. Colores por token; los de cada
+   cocina, ingrediente y momento salen de `coloresDeEstadisticas.ts`.
+
+   T3 · los botones heredan la letra SÓLO dentro de Estadísticas (antes salían
+   en la del sistema). La letra global de la app no se toca. */
+/* `:where` no suma especificidad: cada botón conserva el tamaño y el peso de su clase. */
+:where(.est-cabecera, .est-scroll) button {
+  font: inherit;
+}
+
+/* El período: «Octubre ⌄» con «En curso» en letra chica al lado (K1, D482). */
+.est-periodo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.est-periodo-boton,
+.est-periodo-quieto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.est-periodo-boton {
+  cursor: pointer;
+}
+
+.est-periodo-boton .rest-chev {
+  color: var(--navy);
+}
+
+.est-periodo-quieto {
+  padding-right: 16px;
+}
+
+.est-periodo-estado {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.est-periodo-lista {
+  position: absolute;
+  top: 50px;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 64px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(16, 30, 59, 0.10);
+}
+
+.est-periodo-opcion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.est-periodo-opcion.on {
+  background: var(--bg);
+}
+
+.est-periodo-radio {
+  flex: none;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.est-periodo-opcion.on .est-periodo-radio {
+  border-color: var(--navy);
+  box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 10px var(--navy);
+}
+
+.est-periodo-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.est-periodo-segundo {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Evolución: «Mayo a octubre · 6 meses», texto fijo con el calendario. */
+.est-rango {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-height: 32px;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* ── Tarjetas ── */
+.est-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+  list-style: none;
+}
+
+.est-panel h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--navy);
+}
+
+.est-nota {
+  margin: -6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.est-titulo-panel {
+  gap: 8px;
+}
+
+.est-titulo-panel .est-nota {
+  margin: 0;
+}
+
+.est-esqueleto-panel {
+  gap: 10px;
+}
+
+/* ── Resumen ── */
+.est-total {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.est-vacio {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--navy);
+}
+
+.est-resumen-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.est-resumen-datos dt {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.est-resumen-datos dd {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.est-resumen-datos dd.est-no-disponible {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* ── Filas con cuadrito, importe y barra (cocinas, ingredientes, momentos) ── */
+.est-filas {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.est-panel.est-filas {
+  gap: 0;
+  padding: 4px 16px;
+}
+
+.est-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+}
+
+.est-fila + .est-fila {
+  border-top: 1px solid var(--border);
+}
+
+.est-fila-arriba,
+.est-fila-abajo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.est-fila-nombre {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.est-fila-monto {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.est-fila-abajo {
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.est-fila-abajo.con-cuadrito {
+  padding-left: 22px;
+}
+
+.est-cuadrito {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.est-cuadrito.chico {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: baseline;
+}
+
+.est-barra {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.est-barra > span {
+  display: block;
+  height: 100%;
+}
+
+.est-barra.apilada {
+  height: 10px;
+  gap: 2px;
+  border-radius: 5px;
+}
+
+/* ── Accesos: una tarjeta-lista, filas de 64 ── */
+.est-panel.est-accesos {
+  padding: 0;
+  gap: 0;
+}
+
+.est-accesos ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.est-accesos li + li {
+  border-top: 1px solid var(--border);
+}
+
+.est-acceso {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.est-acceso-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.est-acceso-titulo {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.est-acceso-sub {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.est-acceso-flecha {
+  color: var(--navy);
+}
+
+/* ── Meses completos ── */
+.est-meses {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.est-mes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.est-mes h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.est-mes strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.est-mes > span {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.est-diferencias {
+  margin: 0;
+}
+
+.est-diferencias > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-top: 1px solid var(--border);
+}
+
+.est-diferencias > div:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.est-diferencias dt {
+  font-size: 16px;
+  color: var(--navy);
+}
+
+.est-diferencias dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.est-diferencias dd.est-no-disponible {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.est-sin-comparacion {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--navy);
+}
+
+.est-icono {
+  flex: none;
+}
+
+/* ── Tus restaurantes (1j, 1k, 1p · caja 2b) ── */
+.est-contexto {
+  margin: 0 4px 2px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.rest-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+}
+
+.rest-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rest-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rest-nombre {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rest-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.rest-monto {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-chev {
+  flex: none;
+  color: var(--navy);
+  transition: none;
+}
+
+.rest-chev.abierto {
+  transform: rotate(180deg);
+}
+
+.rest-visitas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.rest-visita {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--sh-2);
+}
+
+.rest-visita-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rest-visita.abierta .rest-visita-fila {
+  background: var(--navy);
+  color: var(--on-dark);
+}
+
+.rest-visita.abierta .rest-visita-fila .rest-chev {
+  color: var(--on-dark);
+}
+
+.rest-visita-fecha {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rest-visita-monto {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-dentro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.rest-pie {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Lo consumido, con el formato de ¿Qué consumiste?: lo tuyo con círculo y
+   tilde; lo de otro en rosado con candado; lo que nadie eligió, neutro. */
+.est-consumos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.est-consumo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--navy);
+}
+
+.est-consumo.mio {
+  border-color: var(--teal);
+  background: var(--teal-l);
+}
+
+.est-consumo.otro {
+  border-color: transparent;
+  background: var(--danger-l);
+}
+
+.est-consumo-marca {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.est-consumo.mio .est-consumo-marca {
+  background: var(--teal-txt);
+  color: var(--on-dark);
+}
+
+.est-consumo.otro .est-consumo-marca {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.est-consumo.libre .est-consumo-marca,
+.est-consumo.ticket .est-consumo-marca {
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+}
+
+.est-consumo-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.est-consumo-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.est-consumo.otro .est-consumo-nombre {
+  font-weight: 400;
+}
+
+.est-consumo-prefijo {
+  margin-right: 6px;
+  font-weight: 800;
+  color: var(--teal-txt);
+}
+
+.est-consumo.otro .est-consumo-prefijo {
+  color: var(--navy);
+}
+
+.est-consumo-rotulo {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.est-consumo-monto {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.est-consumo.otro .est-consumo-monto {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.est-ticket-boton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--navy);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.est-ticket-signo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--navy);
+  border-radius: 50%;
+}
+
+.est-ticket-estado {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.est-ticket-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--navy);
+}
+
+/* ── Qué comes ── */
+.est-pestanas-caja {
+  display: flex;
+  flex-direction: column;
+}
+
+.est-pestanas {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.est-pestana {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.est-pestana.on {
+  background: var(--navy);
+  color: var(--on-dark);
+}
+
+.est-panel.est-platos {
+  gap: 0;
+  padding: 0 16px;
+}
+
+.est-plato + .est-plato {
+  border-top: 1px solid var(--border);
+}
+
+.est-plato-fila,
+.est-plato-lugar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  text-align: left;
+}
+
+.est-plato-fila {
+  cursor: pointer;
+}
+
+.est-plato-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.est-plato-veces {
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.est-plato-monto {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.est-plato-lugares {
+  margin: 0 0 8px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  list-style: none;
+}
+
+.est-plato-lugar {
+  min-height: 44px;
+  padding-right: 28px;
+}
+
+.est-plato-lugar .est-plato-nombre {
+  font-weight: 400;
+}
+
+.est-plato-lugar + .est-plato-lugar {
+  border-top: 1px solid var(--border);
+}
+
+/* ── Evolución ── */
+.evo-celdas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+
+.evo-celdas dt {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.evo-celdas dd {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.evo-panel .est-nota {
+  margin: 0;
+}
+
+.evo-barras {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evo-barra {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.evo-barra-monto {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.evo-barra-cuerpo {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 0 0;
+  background: var(--navy);
+}
+
+.evo-barra-mes {
+  padding-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.evo-mes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.evo-mes + .evo-mes {
+  border-top: 1px solid var(--border);
+}
+
+.evo-mes h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.evo-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.evo-sin {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }

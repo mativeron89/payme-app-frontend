@@ -3,9 +3,11 @@ import { ingresar } from './_app';
 
 /**
  * AF-STATS-MODALIDAD · decisión 86 de Mati («Modalidad y porción»): cada visita
- * de «Tus restaurantes» dice si fue «Partes iguales» o «Por consumo», con el
- * `visits[].division_mode` que el dueño ya publica. La porción por plato queda
- * como estaba.
+ * de «Tus restaurantes» decía si fue «Partes iguales» o «Por consumo».
+ *
+ * D482 (K3) · Mati eligió sacar la modalidad de la lista de visitas (Claude
+ * Design 0.261). Dentro de una visita en partes iguales queda «Tu parte, en
+ * partes iguales»; dentro de una por consumo, los platos propios.
  *
  * El mock de estadísticas emite todas las visitas en consumo. Para tener una
  * «igual» sin tocar el mock, se envuelve `api.getStatsRestaurants`: llama al
@@ -47,8 +49,8 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 
 const tarjeta = (page: Page, nombre: string) => page.getByRole('region', { name: nombre, exact: true });
 
-test.describe('decisión 86 · la modalidad de cada visita en Tus restaurantes', () => {
-  test('una visita «igual» dice «Partes iguales» y una de consumo dice «Por consumo»', async ({ page }) => {
+test.describe('D482 · K3 · la modalidad sale de la lista y queda dentro de la visita en partes iguales', () => {
+  test('la lista no dice la modalidad; la visita «igual» dice «Tu parte, en partes iguales»', async ({ page }) => {
     await preparar(page);
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
     await expect(page).toHaveURL(/:\d+\/restaurantes$/);
@@ -57,15 +59,16 @@ test.describe('decisión 86 · la modalidad de cada visita en Tus restaurantes',
     await hanzo.getByRole('button', { name: /^Hanzo Sushi/ }).click();
     const visitasHanzo = hanzo.locator('.rest-visita');
     await expect(visitasHanzo).toHaveCount(2);
-    await expect(visitasHanzo.nth(0).locator('.rest-visita-modo')).toHaveText('Partes iguales');
-    await expect(visitasHanzo.nth(1).locator('.rest-visita-modo')).toHaveText('Por consumo');
+    for (const texto of await visitasHanzo.allTextContents()) {
+      expect(texto).not.toMatch(/Partes iguales|Por consumo/);
+    }
+    await visitasHanzo.nth(0).locator('.rest-visita-fila').click();
+    await expect(visitasHanzo.nth(0).locator('.est-consumo.mio')).toHaveText(['Tu parte, en partes iguales']);
     await capturar(page, 'modalidad-01-hanzo');
 
-    // La porción por plato sigue como estaba: «½» junto al plato, nada si es entero.
-    const parolaccia = tarjeta(page, 'La Parolaccia');
-    await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
-    for (const modo of await parolaccia.locator('.rest-visita-modo').allTextContents()) {
-      expect(modo).toBe('Por consumo');
-    }
+    // La de consumo, con sus platos propios.
+    await visitasHanzo.nth(1).locator('.rest-visita-fila').click();
+    await expect(visitasHanzo.nth(1).locator('.est-consumo.mio').first()).toBeVisible();
+    await expect(visitasHanzo.nth(1)).not.toContainText('Tu parte, en partes iguales');
   });
 });

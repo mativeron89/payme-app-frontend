@@ -33,15 +33,18 @@ test('U08 · Historial abre únicamente el detalle propio canónico cuando vino 
   await expect(propio).toContainText('Agua de jamaica');
 });
 
-test('U09 · una visita abre detalle digital completo y devuelve el foco al cerrar', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+test('U09 · una mesa abre el detalle digital completo y devuelve el foco al cerrar', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+    // Las mesas sin cobro del mock, como U08: «Tacos El Güero» tiene sus consumos.
+    localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro');
+  });
   await ingresar(page);
-  await page.goto('/#/restaurantes');
-  const restaurante = page.getByRole('region', { name: 'La Parolaccia' });
-  await restaurante.getByRole('button', { name: /^La Parolaccia/ }).click();
-  await restaurante.locator('.rest-visita-fila').first().click();
-  // AF-STATS-LO-PROPIO · el ticket completo se abre con su botón, no con la fila.
-  const trigger = restaurante.getByRole('button', { name: 'Ver ticket completo', exact: true });
+  // D479/D482 · «Tus restaurantes» despliega el ticket dentro de la visita («Ver todo el ticket»); el detalle
+  // digital vive en Mesas → la pantalla del ticket → «Ver detalle digital» (D481).
+  await page.goto('/#/mesas');
+  await page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' }).locator('button.fila-ticket').click();
+  const trigger = page.getByRole('button', { name: 'Ver detalle digital', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
   // D481 · 1h · el subtítulo nuevo del detalle digital (paquete de Claude Design).

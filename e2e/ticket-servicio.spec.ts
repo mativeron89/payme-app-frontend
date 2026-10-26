@@ -135,8 +135,8 @@ test.describe('D224 · «¿Cómo dividen?» y su hoja con el cargo por servicio 
 
 test.describe('D224 · el ticket digital de una mesa con cargo por servicio', () => {
   /**
-   * El ticket digital se abre desde «Tus restaurantes», sobre visitas del
-   * modelo del mock (no pasan por el alta): se envuelve `getMesa` de la fachada
+   * El ticket digital se abre desde Mesas, sobre la primera mesa terminada del
+   * mock (D479/D482: «Tus restaurantes» ya no abre este visor): se envuelve `getMesa` de la fachada
    * para que conteste lo que publicaría el dueño en `mesa_detail` con una fila
    * v2. Lo que se prueba es el decoder del visor y lo que dibuja.
    */
@@ -144,7 +144,7 @@ test.describe('D224 · el ticket digital de una mesa con cargo por servicio', ()
     page: Page, caso: 'servicio' | 'servicio_iva' | 'no_cierra' | 'v1',
   ): Promise<ReturnType<Page['getByRole']>> {
     await ingresar(page);
-    await page.goto('/restaurantes');
+    await page.goto('/mesas');
     await page.evaluate(async (c) => {
       const ruta = '/src/api/index.ts';
       const { api } = await import(/* @vite-ignore */ ruta) as {
@@ -163,11 +163,10 @@ test.describe('D224 · el ticket digital de una mesa con cargo por servicio', ()
         return { mesa };
       };
     }, caso);
-    const parolaccia = page.getByRole('region', { name: 'La Parolaccia', exact: true });
-    await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
-    const visita = parolaccia.locator('.rest-visita').first();
-    await visita.locator('.rest-visita-fila').click();
-    await visita.getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
+    // D479/D482 · «Tus restaurantes» ya no abre este visor: «Ver todo el ticket» despliega el ticket en la visita.
+    // El detalle digital se abre desde Mesas → la pantalla del ticket → «Ver detalle digital» (D481).
+    await page.getByRole('region', { name: 'Tus mesas' }).locator('.tu-mesa button.fila-ticket').first().click();
+    await page.getByRole('button', { name: 'Ver detalle digital', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(dialog.locator('.ticket-digital-total')).toBeVisible();
     return dialog;

@@ -105,14 +105,14 @@ test.describe('D218 · «Ver el ticket» con el descuento aparte', () => {
 
 test.describe('D218 · L1 · la mesa retomada en el ticket digital', () => {
   /**
-   * El ticket digital se abre desde «Tus restaurantes», sobre visitas del
-   * modelo del mock (no pasan por el alta): se envuelve `getMesa` de la fachada
+   * El ticket digital se abre desde Mesas, sobre la primera mesa terminada del
+   * mock (D479/D482: «Tus restaurantes» ya no abre este visor): se envuelve `getMesa` de la fachada
    * para que conteste lo que publicaría el dueño en `mesa_detail`. Lo que se
    * prueba es el decoder del visor y lo que dibuja.
    */
   async function abrirTicketDigital(page: Page, extra: 'descuento' | 'iva_agregado'): Promise<ReturnType<Page['getByRole']>> {
     await ingresar(page);
-    await page.goto('/restaurantes');
+    await page.goto('/mesas');
     await page.evaluate(async (caso) => {
       const ruta = '/src/api/index.ts';
       const { api } = await import(/* @vite-ignore */ ruta) as {
@@ -130,11 +130,10 @@ test.describe('D218 · L1 · la mesa retomada en el ticket digital', () => {
         };
       };
     }, extra);
-    const parolaccia = page.getByRole('region', { name: 'La Parolaccia', exact: true });
-    await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
-    const visita = parolaccia.locator('.rest-visita').first();
-    await visita.locator('.rest-visita-fila').click();
-    await visita.getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
+    // D479/D482 · «Tus restaurantes» ya no abre este visor: «Ver todo el ticket» despliega el ticket en la visita.
+    // El detalle digital se abre desde Mesas → la pantalla del ticket → «Ver detalle digital» (D481).
+    await page.getByRole('region', { name: 'Tus mesas' }).locator('.tu-mesa button.fila-ticket').first().click();
+    await page.getByRole('button', { name: 'Ver detalle digital', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(dialog.locator('.ticket-digital-total')).toBeVisible();
     return dialog;

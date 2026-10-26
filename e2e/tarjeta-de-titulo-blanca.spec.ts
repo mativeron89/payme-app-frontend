@@ -165,14 +165,14 @@ const ESPERADO: Record<string, Esperado> = {
   '23': { icono: 'lapiz', titulo: 'Agregar gasto' },
   '24': { icono: 'viaje', titulo: 'Oaxaca puente' },
   '25': { icono: 'archivo', titulo: 'Viajes cerrados' },
-  '26': { icono: 'barras', titulo: null },
+  '26': { icono: 'barras', titulo: 'Mis estadísticas' },
   '27': { icono: 'barras', titulo: 'Mis estadísticas' },
-  '28': { icono: 'tienda', titulo: null },
+  '28': { icono: 'tienda', titulo: 'Tus restaurantes' },
   '29': { icono: 'tienda', titulo: 'Tus restaurantes' },
-  '30': { icono: 'cubiertos', titulo: null },
+  '30': { icono: 'cubiertos', titulo: 'Qué comes' },
   '31': { icono: 'cubiertos', titulo: 'Qué comes' },
-  '32': { icono: 'tendencia', titulo: null },
-  '33': { icono: 'tendencia', titulo: null },
+  '32': { icono: 'tendencia', titulo: 'Evolución' },
+  '33': { icono: 'tendencia', titulo: 'Evolución' },
   '34': { icono: 'recibo-de-pagos', titulo: 'Mis pagos' },
   '35': { icono: 'tarjeta', titulo: 'Mis tarjetas' },
   '36': { icono: 'engranaje', titulo: 'Configuración' },
@@ -404,18 +404,19 @@ test('estadísticas · con consumo', async ({ page }) => {
   await entrar(page);
   await ir(page, '/estadisticas');
   await expect(page.locator('.est-total')).toBeVisible();
+  // D479/D482 · Claude Design 0.261: título visible en las cinco pantallas y, debajo del cuadro, el período.
   await medir(page, '26', tarjeta(page), ESPERADO['26']!);
-  // D449 · el estado acompaña al período; el total se muestra una sola vez en el resumen.
-  await expect(tarjeta(page).locator('h1.stat-oculto')).toHaveText('Mis estadísticas');
-  const periodo = (await pieza(tarjeta(page), '.stat-burbuja-periodo'))!;
-  expect(periodo.izquierda).toBeCloseTo(48 + 14, 0);
-  expect([periodo.tamano, periodo.peso]).toEqual(['18px', '700']);
+  const periodo = (await pieza(tarjeta(page), '.est-periodo-boton'))!;
+  expect(periodo.abajoDelCuadro).toBe(true);
+  expect(periodo.izquierda).toBeCloseTo(0, 0);
+  expect([periodo.tamano, periodo.peso]).toEqual(['16px', '700']);
+  // K1 (D482) · «En curso» en letra chica junto al mes.
   const estado = (await pieza(tarjeta(page), '.est-periodo-estado'))!;
-  expect(estado.derecha).toBeCloseTo(18 + 1, 0);
-  expect([estado.tamano, estado.peso]).toEqual(['13px', '700']);
+  expect([estado.tamano, estado.color]).toEqual(['14px', 'rgb(91, 107, 130)']);
+  // El total, una sola vez, en el resumen: 40/800.
   await expect(tarjeta(page).locator('.est-total')).toHaveCount(0);
   await expect(page.locator('.est-resumen .est-total')).toHaveCount(1);
-  await expect(page.locator('.est-resumen .est-total')).toHaveCSS('font-size', '34px');
+  await expect(page.locator('.est-resumen .est-total')).toHaveCSS('font-size', '40px');
   await expect(page.locator('.est-resumen .est-total')).toHaveCSS('font-weight', '800');
 });
 
@@ -430,18 +431,17 @@ test('estadísticas · sin consumo del mes publicado', async ({ page }) => {
 test('estadísticas · tus restaurantes, qué comes y evolución', async ({ page }) => {
   await entrar(page);
   await ir(page, '/restaurantes');
-  await expect(page.locator('.stat-burbuja-total')).toBeVisible();
+  // D479/D482 · la cabecera ya no lleva el total: «3 lugares · 6 visitas» va sobre la lista.
+  await expect(page.locator('.rest-card').first()).toBeVisible();
   await medir(page, '28', tarjeta(page), ESPERADO['28']!);
-  const datoRest = (await pieza(tarjeta(page), '.stat-burbuja-dato'))!;
-  expect(datoRest.derecha).toBeCloseTo(18 + 1, 0);
-  const contexto = (await pieza(tarjeta(page), '.stat-burbuja-contexto'))!;
-  expect([contexto.tamano, contexto.color]).toEqual(['13px', 'rgb(91, 107, 130)']);
+  await expect(tarjeta(page).locator('.est-periodo-boton')).toBeVisible();
   await ir(page, '/platos');
-  await expect(page.locator('.stat-burbuja-total')).toBeVisible();
+  await expect(page.locator('.est-platos')).toBeVisible();
   await medir(page, '30', tarjeta(page), ESPERADO['30']!);
   await ir(page, '/evolucion');
-  await expect(page.locator('.stat-burbuja-total')).toBeVisible();
+  await expect(page.locator('.evo-celdas')).toBeVisible();
   await medir(page, '32', tarjeta(page), ESPERADO['32']!);
+  await expect(tarjeta(page).locator('.est-rango')).toContainText('6 meses');
 });
 
 test('estadísticas · errores: restaurantes, platos, evolución', async ({ page }) => {

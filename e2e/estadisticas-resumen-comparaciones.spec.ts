@@ -81,15 +81,17 @@ test('D449 · resumen acreditado y dos meses completos, excluyendo el actual', a
   await preparar(page);
   await expect(resumen(page).locator('.est-total')).toHaveText('$100.01');
   await expect(resumen(page).locator('dd')).toHaveText(['3', '$33.33']);
-  await expect(page.locator('.est-burbuja')).not.toContainText('$');
+  await expect(page.locator('.est-cabecera')).not.toContainText('$');
   await expect(page.locator('.est-periodo-estado')).toHaveText('En curso');
   const c = comparacion(page);
-  await expect(c.locator('.est-mes h3')).toHaveText(['agosto de 2026', 'septiembre de 2026']);
+  // D479/D482 · T4 · «Agosto 2026»: mayúscula inicial sola.
+  await expect(c.locator('.est-mes h3')).toHaveText(['Agosto 2026', 'Septiembre 2026']);
   await expect(c.locator('.est-mes strong')).toHaveText(['$100', '$150']);
   await expect(c.locator('.est-diferencias dd')).toHaveText(['+$50 (+50%)', '+1', '$0']);
-  await expect(c).toContainText('Consumo registrado · MXN');
+  // D479/D482 · la base se rotula en la fila («Consumo»), sin «· MXN»; la nota del promedio vive en Evolución.
+  await expect(c.locator('.est-diferencias dt').first()).toHaveText('Consumo');
+  await expect(c).toContainText('Septiembre frente a agosto. No cambia con el período.');
   await expect(c).not.toContainText('$9,999');
-  await expect(page.getByText('El promedio mensual divide el total entre seis meses calendario, incluido el mes en curso y los meses sin actividad.', { exact: true })).toBeVisible();
 });
 
 test('D449 · agregados identificados, comparación independiente y selector accesible', async ({ page }) => {
@@ -101,7 +103,7 @@ test('D449 · agregados identificados, comparación independiente y selector acc
   await expect(resumen(page).locator('.est-total')).toHaveText('$200.02');
   await expect(resumen(page).locator('dd')).toHaveText(['6', '$33.33']);
   await expect(page.locator('.est-periodo-estado')).toHaveText('En curso');
-  await expect(comparacion(page)).toContainText('independientemente del período elegido.');
+  await expect(comparacion(page)).toContainText('No cambia con el período.');
   await expect(comparacion(page).locator('.est-mes strong')).toHaveText(['$100', '$150']);
   await periodo(page, 'Este año');
   await expect(resumen(page).locator('.est-total')).toHaveText('$300.03');
@@ -118,7 +120,7 @@ test('D449 · base cero: diferencia monetaria sin porcentaje ni promedio inventa
   const c = comparacion(page);
   await expect(c.locator('.est-mes strong')).toHaveText(['$0', '$150']);
   await expect(c.locator('.est-diferencias dd')).toHaveText(['+$150', '+3', 'No disponible']);
-  await expect(c).toContainText('Sin porcentaje de cambio: el mes de referencia tiene importe cero.');
+  await expect(c).toContainText('Sin porcentaje: agosto está en $0.');
   await expect(c).not.toContainText('%');
 });
 
@@ -142,7 +144,13 @@ for (const modo of ['ausente', 'error', 'otra-base', 'fecha-invalida'] as const)
 for (const modo of ['vacio', 'promedio-incoherente'] as const) {
   test(`D449 · ${modo}: promedio no disponible y total acreditado`, async ({ page }) => {
     await preparar(page, modo);
-    await expect(resumen(page).locator('.est-total')).toHaveText(modo === 'vacio' ? '$0' : '$100.01');
+    // D479/D482 · 1g · sin consumos, una frase y no un $0 grande.
+    if (modo === 'vacio') {
+      await expect(resumen(page).locator('.est-total')).toHaveCount(0);
+      await expect(resumen(page).locator('.est-vacio')).toHaveText('Todavía no registramos consumos este mes.');
+    } else {
+      await expect(resumen(page).locator('.est-total')).toHaveText('$100.01');
+    }
     await expect(resumen(page).locator('dd')).toHaveText([modo === 'vacio' ? '0' : '3', 'No disponible']);
     await expect(comparacion(page).locator('.est-mes strong')).toHaveText(['$100', '$150']);
   });
@@ -151,10 +159,11 @@ for (const modo of ['vacio', 'promedio-incoherente'] as const) {
 test('D449 · inglés y teclado conservan rótulos, resumen y comparación', async ({ page }) => {
   await preparar(page, 'normal', true);
   const c = page.getByRole('region', { name: 'Complete months', exact: true });
-  await expect(page.getByRole('region', { name: 'Your recorded selections', exact: true })).toContainText('MXN · Selected period');
+  // D479/D482 · el inglés confirmado por Mati: «orders».
+  await expect(page.getByRole('region', { name: 'Your recorded orders', exact: true })).not.toContainText('MXN');
   await expect(c.locator('.est-mes h3')).toHaveText(['August 2026', 'September 2026']);
-  await expect(c).toContainText('Recorded selections · MXN');
-  await expect(c).toContainText('Change in September 2026 compared with August 2026');
+  await expect(c.locator('.est-diferencias dt').first()).toHaveText('Orders');
+  await expect(c).toContainText("September versus August. Doesn't change with the period.");
   const selector = page.getByRole('button', { name: /^Period: / });
   await selector.focus();
   await selector.press('Enter');

@@ -3,14 +3,14 @@ import { ingresar } from './_app';
 
 /**
  * AF-STATS-BURBUJA · Mati, en el iPhone: «la burbuja está descentrada». La
- * tarjeta blanca con lo propio tenía el texto corrido a la izquierda: al relleno
- * de 12 px se le sumaba la columna de la porción (14 px + 10 de hueco) aun
- * cuando ningún plato era una porción, y la tarjeta era 24 px más angosta que
- * el botón «Ver ticket completo».
+ * tarjeta blanca con lo propio tenía el texto corrido a la izquierda y era más
+ * angosta que el botón del ticket completo.
  *
- * Se mide la geometría real, a 390 px: relleno simétrico, el texto a la misma
- * distancia de cada borde cuando no hay porciones, y la tarjeta del mismo ancho
- * que el botón.
+ * D479/D482 · con Claude Design 0.261 cada plato propio es su propia fila (el
+ * formato de ¿Qué consumiste?) y la porción va pegada al nombre («½ Tiramisú»):
+ * la columna aparte de la porción ya no existe. Se mide la geometría real, a
+ * 390 px: relleno simétrico en cada fila, y las filas del mismo ancho que el
+ * botón «Ver todo el ticket».
  *
  * El mock emite La Parolaccia con una visita con «½». Para tener una visita sin
  * porciones sin tocar el mock, se envuelve `api.getStatsRestaurants`: pasa los
@@ -52,59 +52,43 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 
 type Caja = { left: number; right: number };
 
-/** Geometría de la tarjeta de lo propio y de su botón, en px CSS. */
+/** Geometría de las filas de lo propio y del botón del ticket, en px CSS. */
 async function medir(page: Page, restaurante: string) {
   const r = page.getByRole('region', { name: restaurante, exact: true });
   await r.getByRole('button', { name: new RegExp(`^${restaurante}`) }).click();
   const visita = r.locator('.rest-visita').first();
   await visita.locator('.rest-visita-fila').click();
-  await expect(visita.locator('.rest-items')).toBeVisible();
+  await expect(visita.locator('.est-consumo.mio').first()).toBeVisible();
   return visita.evaluate((v) => {
     const caja = (e: Element): Caja => { const b = e.getBoundingClientRect(); return { left: b.left, right: b.right }; };
-    const tarjeta = v.querySelector('.rest-items')!;
-    const cs = getComputedStyle(tarjeta);
-    const borde = parseFloat(cs.borderLeftWidth);
-    const t = caja(tarjeta);
-    const filas = [...tarjeta.querySelectorAll('.rest-item')];
+    const filas = [...v.querySelectorAll('.est-consumo.mio')];
     return {
-      paddingLeft: parseFloat(cs.paddingLeft),
-      paddingRight: parseFloat(cs.paddingRight),
-      tarjeta: t,
-      boton: caja(v.querySelector('.rest-visita-ticket')!),
-      // Del borde interior de la tarjeta al primer texto de cada fila, y del
-      // último texto al borde interior derecho.
-      izquierda: filas.map((f) => {
-        const primero = [...f.children].find((c) => c.textContent !== '')!;
-        return primero.getBoundingClientRect().left - (t.left + borde);
-      }),
-      derecha: filas.map((f) => (t.right - borde) - f.lastElementChild!.getBoundingClientRect().right),
+      filas: filas.map((f) => ({ ...caja(f), izq: parseFloat(getComputedStyle(f).paddingLeft), der: parseFloat(getComputedStyle(f).paddingRight) })),
+      boton: caja(v.querySelector('.est-ticket-boton')!),
     };
   });
 }
 
 test.describe('AF-STATS-BURBUJA · la tarjeta de lo propio, centrada', () => {
-  test('sin porciones: el texto queda a la misma distancia de los dos bordes', async ({ page }) => {
+  test('sin porciones: cada fila con el mismo relleno a los dos lados', async ({ page }) => {
     await preparar(page);
     const m = await medir(page, 'Hanzo Sushi');
     await capturar(page, 'burbuja-01-sin-porciones');
-    expect(m.paddingLeft).toBe(m.paddingRight);
-    for (let i = 0; i < m.izquierda.length; i += 1) {
-      expect(Math.abs(m.izquierda[i]! - m.derecha[i]!), `fila ${i}: izq ${m.izquierda[i]} vs der ${m.derecha[i]}`).toBeLessThanOrEqual(1);
-    }
+    expect(m.filas.length).toBeGreaterThan(0);
+    for (const f of m.filas) expect(f.izq).toBe(f.der);
   });
 
-  test('la tarjeta tiene el mismo ancho útil que «Ver ticket completo»', async ({ page }) => {
+  test('las filas de lo propio tienen el mismo ancho que «Ver todo el ticket»', async ({ page }) => {
     await preparar(page);
     const m = await medir(page, 'La Parolaccia');
     await capturar(page, 'burbuja-02-con-porcion');
-    expect(m.paddingLeft).toBe(m.paddingRight);
-    expect(Math.abs(m.tarjeta.left - m.boton.left)).toBeLessThanOrEqual(1);
-    expect(Math.abs(m.tarjeta.right - m.boton.right)).toBeLessThanOrEqual(1);
-    // Con una porción en la visita, la columna del «½» sigue alineando los platos.
-    const conPorcion = page.getByRole('region', { name: 'La Parolaccia', exact: true }).locator('.rest-item');
-    await expect(conPorcion.nth(1)).toHaveText(/^½Tiramisú\$/);
-    await expect(conPorcion.nth(1).locator('.rest-item-frac')).toBeVisible();
-    const nombres = await conPorcion.locator('.rest-item-nombre').evaluateAll((ns) => ns.map((n) => n.getBoundingClientRect().left));
-    expect(new Set(nombres.map((x) => Math.round(x))).size).toBe(1);
+    for (const f of m.filas) {
+      expect(Math.abs(f.left - m.boton.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(f.right - m.boton.right)).toBeLessThanOrEqual(1);
+    }
+    // Con una porción, va delante del nombre en la misma fila.
+    const propio = page.getByRole('region', { name: 'La Parolaccia', exact: true }).locator('.est-consumo.mio');
+    await expect(propio.nth(1)).toHaveText(/^½Tiramisú\$/);
+    await expect(propio.nth(1).locator('.est-consumo-prefijo')).toHaveText('½');
   });
 });

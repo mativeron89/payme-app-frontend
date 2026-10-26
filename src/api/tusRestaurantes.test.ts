@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTusRestaurantes, ordenDeCocinas, rutaDeTusRestaurantes, visitasDelMes } from './tusRestaurantes';
+import { decodeTusRestaurantes, rutaDeTusRestaurantes, visitasDelMes } from './tusRestaurantes';
 
 const VISITA = {
   code: 'PA-12345',
@@ -34,7 +34,7 @@ describe('AF-29 · decodeTusRestaurantes · claves exactas', () => {
     const r = decodeTusRestaurantes(BUENO);
     expect(r.basis).toBe('consumption');
     expect(r.totalCents).toBe(15167);
-    expect(r.restaurants[0].visits[0].items[0]).toEqual({ name: 'Plato 0', fractionBps: 3333, amountCents: 1167 });
+    expect(r.restaurants[0].visits[0].items[0]).toEqual({ name: 'Plato 0', fractionBps: 3333, amountCents: 1167, quantity: null });
     expect(r.restaurants[1].visits[0]).toMatchObject({ divisionMode: 'igual', items: [] });
     expect(visitasDelMes(r)).toBe(3);
   });
@@ -89,10 +89,6 @@ describe('🔴 D260 · `stats_version=2`: el viaje de cada visita (App Backend 2
   const VIAJE = 'd1000000-0000-4000-8000-000000000001';
   const TICKET = 'd2000000-0000-4000-8000-000000000105';
 
-  it('la app lo pide siempre, con el período o sin él', () => {
-    expect(rutaDeTusRestaurantes()).toBe('/account/stats/restaurants?stats_version=2');
-    expect(rutaDeTusRestaurantes('last_month')).toBe('/account/stats/restaurants?period=last_month&stats_version=2');
-  });
 
   it('una mesa: `null`; un ticket de viaje: el id del viaje, y `code` es el del ticket', () => {
     const r = decodeTusRestaurantes(conCambio((b) => {
@@ -115,19 +111,52 @@ describe('🔴 D260 · `stats_version=2`: el viaje de cada visita (App Backend 2
   });
 });
 
-describe('AF-29 · ordenDeCocinas: la misma regla que consumption_month', () => {
-  it('monto de mayor a menor, empate por nombre, «other» al final aunque sea el mayor', () => {
-    const d = decodeTusRestaurantes({
-      basis: 'consumption',
-      month_start: '2026-09-01T00:00:00.000Z',
-      total_cents: 600,
-      restaurants: [
-        { id: 'a', name: 'A', category: 'other', amount_cents: 300, visits_count: 1, visits: [{ ...VISITA, amount_cents: 300 }] },
-        { id: 'b', name: 'B', category: 'japanese', amount_cents: 100, visits_count: 1, visits: [{ ...VISITA, amount_cents: 100 }] },
-        { id: 'c', name: 'C', category: 'cafe', amount_cents: 100, visits_count: 1, visits: [{ ...VISITA, amount_cents: 100 }] },
-        { id: 'd', name: 'D', category: 'italian', amount_cents: 100, visits_count: 1, visits: [{ ...VISITA, amount_cents: 100 }] },
-      ],
-    });
-    expect(ordenDeCocinas(d)).toEqual(['cafe', 'italian', 'japanese', 'other']);
+describe('🔴 D479/D482 · AF-2 · `stats_version=3`: la cantidad de la línea (App Backend 2.195.0)', () => {
+  const conCantidad = (q: unknown, q2: unknown = q) => conCambio((b) => {
+    (b.restaurants[0].visits[0].items[0] as Record<string, unknown>).quantity = q;
+    b.restaurants[0].visits[1]!.items = [{ name: 'Agua mineral', fraction_bps: 10000, amount_cents: 5000, quantity: q2 } as never];
+    return b;
+  });
+
+  it('la app lo pide siempre (la 3 incluye el `viaje_id` de la 2), con el período o sin él', () => {
+    expect(rutaDeTusRestaurantes()).toBe('/account/stats/restaurants?stats_version=3');
+    expect(rutaDeTusRestaurantes('last_month')).toBe('/account/stats/restaurants?period=last_month&stats_version=3');
+  });
+
+  it('negociada: lee `quantity` de cada ítem, entero ≥ 1 o `null` (ticket de viaje)', () => {
+    const r = decodeTusRestaurantes(conCantidad(2, null), { negociado: true });
+    expect(r.restaurants[0].visits[0].items[0]).toEqual({ name: 'Plato 0', fractionBps: 3333, amountCents: 1167, quantity: 2 });
+    expect(r.restaurants[0].visits[1].items[0]!.quantity).toBeNull();
+  });
+
+  it('un dueño anterior contesta la 2: negociada igual se acepta, con `quantity` en `null`', () => {
+    const r = decodeTusRestaurantes(BUENO, { negociado: true });
+    expect(r.restaurants[0].visits[0].items[0]!.quantity).toBeNull();
+  });
+
+  it('🔴 sin negociar, un ítem con `quantity` se rechaza: no lo pidió nadie', () => {
+    expect(() => decodeTusRestaurantes(conCantidad(2))).toThrow('stats_restaurants_response_malformed');
+  });
+
+  it('🔴 negociada: una respuesta mezclada o una cantidad fuera del contrato se rechaza', () => {
+    for (const malo of [
+      // el primer ítem la trae y otro no
+      conCambio((b) => {
+        (b.restaurants[0].visits[0].items[0] as Record<string, unknown>).quantity = 1;
+        b.restaurants[0].visits[1]!.items = [{ name: 'Agua', fraction_bps: 10000, amount_cents: 5000 } as never];
+        return b;
+      }),
+      // el primer ítem no la trae y otro sí
+      conCambio((b) => {
+        b.restaurants[0].visits[1]!.items = [{ name: 'Agua', fraction_bps: 10000, amount_cents: 5000, quantity: 1 } as never];
+        return b;
+      }),
+      conCantidad(0),
+      conCantidad(1.5),
+      conCantidad('2'),
+      conCantidad(-1),
+    ]) {
+      expect(() => decodeTusRestaurantes(malo, { negociado: true }), JSON.stringify(malo).slice(0, 60)).toThrow('stats_restaurants_response_malformed');
+    }
   });
 });

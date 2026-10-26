@@ -16,10 +16,18 @@
  *   suma de los grupos es `distinct_dishes`. **Aditivo:** un dueño anterior no lo
  *   manda y la vista queda como antes. Todos los grupos lo traen o ninguno: una
  *   respuesta mezclada no es de ninguna versión del dueño y se rechaza.
+ * - D479/D482 · AF-2 · la app pide `dishes_version=2` (dueño 2.195.0): `dish_count`
+ *   cuenta los platos AGRUPADOS, con la misma clave que «Platos». La forma no cambia.
  */
 
 import type { BaseDeConsumo } from './consumoDelMes';
-import { decodePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
+import { decodePeriodo, type ClavePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
+import { conVersionDePlatos } from './platos';
+
+/** `/account/stats/ingredients`, con su período si lo hay, y siempre con `dishes_version=2`. */
+export function rutaDeIngredientes(period?: ClavePeriodo): string {
+  return conVersionDePlatos('/account/stats/ingredients', period);
+}
 
 /** Las claves que el front sabe rotular (handoff v2.115.0). */
 export const GRUPOS_CONOCIDOS = ['meat', 'seafood', 'pasta', 'veggie', 'dessert', 'drinks', 'alcohol', 'other'] as const;

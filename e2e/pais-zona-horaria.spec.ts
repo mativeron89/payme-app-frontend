@@ -405,16 +405,20 @@ test.describe('D169 · Ubicación y fechas personales locales', () => {
     await irARestaurantes();
     const card = page.getByRole('region', { name: 'Hanzo Sushi', exact: true });
     await card.getByRole('button').first().click();
-    await expect(card.locator('.rest-visita').first()).toContainText('Mié 31/12');
+    // D479/D482 · «dd/mm · hh:mm», sin el día de la semana.
+    await expect(card.locator('.rest-visita').first()).toContainText('31/12 · 22:30');
     await expect(card.locator('.rest-visita').first()).toContainText('22:30');
-    const shared = await page.locator('.stat-burbuja').textContent();
+    // D479/D482 · lo compartido: el período de la cabecera, «N lugares · M visitas» y los importes.
+    const compartido = () => page.evaluate(() => [document.querySelector('.est-cabecera')?.textContent, document.querySelector('.est-contexto')?.textContent,
+      [...document.querySelectorAll('.rest-monto, .rest-visita-monto')].map((n) => n.textContent).join('|')].join(' / '));
+    const shared = await compartido();
     await page.getByRole('navigation', { name: 'Navegación principal' })
       .getByRole('button', { name: 'Más', exact: true }).click();
     await abrir(page); await elegir(page, 'ES', 'Europe/Madrid');
     await irARestaurantes(); await card.getByRole('button').first().click();
-    await expect(card.locator('.rest-visita').first()).toContainText('Jue 01/01');
+    await expect(card.locator('.rest-visita').first()).toContainText('01/01 · 05:30');
     await expect(card.locator('.rest-visita').first()).toContainText('05:30');
-    await expect(page.locator('.stat-burbuja')).toHaveText(shared!);
+    expect(await compartido()).toBe(shared);
     // E173-1 · decisión 173: la leyenda «Fechas mostradas en …» ya no se muestra.
     await expect(page.getByText(/Fechas mostradas en/)).toHaveCount(0);
   });

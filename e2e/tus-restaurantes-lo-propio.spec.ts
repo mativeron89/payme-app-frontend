@@ -5,9 +5,9 @@ import { ingresar } from './_app';
  * AF-STATS-LO-PROPIO · lo que reportó Mati: «Dice o partes iguales o por consumo
  * pero no me dice qué consumi yo, esta el ticket entero».
  *
- * La causa: tocar una visita desplegaba lo propio Y abría el ticket completo en
- * el mismo toque, y el modal lo tapaba. Ahora el toque sólo despliega o repliega
- * lo propio, y el ticket completo tiene su botón, «Ver ticket completo».
+ * El toque en la visita sólo despliega o repliega lo propio. D479/D482 · el
+ * ticket completo ya no es un modal: «+ Ver todo el ticket» lo agrega dentro de
+ * la misma tarjeta y «− Solo lo mío» lo saca (Claude Design 0.261, 1p).
  */
 
 async function preparar(page: Page, idioma?: 'en'): Promise<void> {
@@ -24,10 +24,9 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 const tarjeta = (page: Page, nombre: string) => page.getByRole('region', { name: nombre, exact: true });
-const TICKET = 'Detalle digital del ticket';
 
 test.describe('AF-STATS-LO-PROPIO · el toque muestra lo propio; el ticket completo va aparte', () => {
-  test('tocar la visita despliega lo propio, sin modal; el botón abre el ticket completo', async ({ page }) => {
+  test('tocar la visita despliega lo propio, sin modal; «Ver todo el ticket» lo agrega en la tarjeta', async ({ page }) => {
     await preparar(page);
     const parolaccia = tarjeta(page, 'La Parolaccia');
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
@@ -40,32 +39,31 @@ test.describe('AF-STATS-LO-PROPIO · el toque muestra lo propio; el ticket compl
     await fila.click();
     await expect(fila).toHaveAttribute('aria-expanded', 'true');
 
-    // Lo propio, con la porción; y ningún modal encima.
-    const propio = visita.locator('.rest-items');
-    await expect(propio).toBeVisible();
-    await expect(propio.locator('.rest-item')).toHaveCount(3);
-    await expect(propio.locator('.rest-item').nth(1)).toHaveText(/^½Tiramisú\$/);
+    // Lo propio, con la porción delante del nombre; y ningún modal encima.
+    const propio = visita.locator('.est-consumo.mio');
+    await expect(propio).toHaveCount(3);
+    await expect(propio.nth(1)).toHaveText(/^½Tiramisú\$/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await capturar(page, 'lo-propio-01-visita-abierta');
 
-    // El botón aparte sí anuncia el diálogo y abre el ticket completo.
-    const boton = visita.getByRole('button', { name: 'Ver ticket completo', exact: true });
-    await expect(boton).toHaveAttribute('aria-haspopup', 'dialog');
+    // El botón despliega el ticket en la misma tarjeta: tampoco es un diálogo.
+    const boton = visita.locator('.est-ticket-boton');
+    await expect(boton).toHaveText('Ver todo el ticket');
+    await expect(boton).not.toHaveAttribute('aria-haspopup', /.*/);
     await boton.click();
-    const dialog = page.getByRole('dialog', { name: TICKET });
-    await expect(dialog).toContainText('Total del ticket');
-    await expect(dialog.locator('.ticket-digital-items li')).not.toHaveCount(0);
+    await expect(boton).toHaveAttribute('aria-expanded', 'true');
+    await expect(boton).toHaveText('Solo lo mío');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(propio).toHaveCount(3);
     await capturar(page, 'lo-propio-02-ticket-completo');
-    await dialog.getByRole('button', { name: 'Cerrar' }).click();
-    await expect(dialog).toHaveCount(0);
+    await boton.click();
+    await expect(boton).toHaveAttribute('aria-expanded', 'false');
     await expect(boton).toBeFocused();
-    // Lo propio sigue desplegado al volver.
-    await expect(propio).toBeVisible();
 
     // Un segundo toque en la fila repliega lo propio, y tampoco abre nada.
     await fila.click();
     await expect(fila).toHaveAttribute('aria-expanded', 'false');
-    await expect(visita.locator('.rest-items')).toHaveCount(0);
+    await expect(visita.locator('.est-consumo')).toHaveCount(0);
     await expect(boton).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
@@ -76,21 +74,21 @@ test.describe('AF-STATS-LO-PROPIO · el toque muestra lo propio; el ticket compl
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     const visitas = parolaccia.locator('.rest-visita');
     await visitas.nth(0).locator('.rest-visita-fila').click();
-    await expect(visitas.nth(0).locator('.rest-items')).toBeVisible();
+    await expect(visitas.nth(0).locator('.est-consumo.mio').first()).toBeVisible();
     await visitas.nth(1).locator('.rest-visita-fila').click();
-    await expect(visitas.nth(1).locator('.rest-items')).toBeVisible();
-    await expect(visitas.nth(0).locator('.rest-items')).toHaveCount(0);
-    await expect(parolaccia.getByRole('button', { name: 'Ver ticket completo', exact: true })).toHaveCount(1);
+    await expect(visitas.nth(1).locator('.est-consumo.mio').first()).toBeVisible();
+    await expect(visitas.nth(0).locator('.est-consumo')).toHaveCount(0);
+    await expect(parolaccia.locator('.est-ticket-boton')).toHaveCount(1);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  // D481 · la tabla de textos del paquete de Claude Design: en inglés siempre «receipt».
-  test('en inglés el botón dice «See full receipt»', async ({ page }) => {
+  // D481 · en inglés «ticket» es siempre «receipt».
+  test('en inglés el botón dice «See the full receipt»', async ({ page }) => {
     await preparar(page, 'en');
     const parolaccia = tarjeta(page, 'La Parolaccia');
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     await parolaccia.locator('.rest-visita-fila').first().click();
-    await expect(parolaccia.getByRole('button', { name: 'See full receipt', exact: true })).toBeVisible();
+    await expect(parolaccia.getByRole('button', { name: 'See the full receipt', exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

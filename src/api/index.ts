@@ -53,10 +53,10 @@ import {
 import { decodeNotificationPreferences } from './notificationPreferences';
 import { decodeBorradoDeNotificaciones } from './borrarNotificaciones';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
-import { decodePlatos, type PlatosDelPeriodo } from './platos';
+import { decodePlatos, rutaDePlatos, type PlatosDelPeriodo } from './platos';
 import { decodeEvolucion, type Evolucion } from './evolucion';
 import { decodeMomentos, type MomentosDelPeriodo } from './momentos';
-import { decodeIngredientes, type IngredientesDelPeriodo } from './ingredientes';
+import { decodeIngredientes, rutaDeIngredientes, type IngredientesDelPeriodo } from './ingredientes';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -1286,16 +1286,18 @@ const realApi: Api = {
     ),
 
   getStats: (period) => httpRequest<StatsResponse>('GET', rutaConPeriodo('/account/stats', period)),
+  // D479/D482 · AF-2 · `dishes_version=2` (platos agrupados) y `stats_version=3` (`quantity`): App Backend 2.195.0.
   getStatsDishes: async (period) =>
-    decodePlatos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dishes', period))),
+    decodePlatos(await httpRequest<unknown>('GET', rutaDePlatos(period)), { negociado: true }),
   getStatsEvolution: async () => decodeEvolucion(await httpRequest<unknown>('GET', '/account/stats/evolution')),
   getStatsDayparts: async (period) =>
     decodeMomentos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dayparts', period))),
   getStatsIngredients: async (period) =>
-    decodeIngredientes(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/ingredients', period))),
+    decodeIngredientes(await httpRequest<unknown>('GET', rutaDeIngredientes(period))),
   getStatsRestaurants: async (period) =>
     decodeTusRestaurantes(
       await httpRequest<unknown>('GET', rutaDeTusRestaurantes(period)),
+      { negociado: true },
     ),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),

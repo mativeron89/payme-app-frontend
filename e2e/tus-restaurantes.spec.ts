@@ -32,14 +32,15 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
   test('se abre desde Mis estadísticas, con el mismo total que 2a, y vuelve', async ({ page }) => {
     await preparar(page, { sinDinero: true });
     await expect(page.locator('.est-total')).toHaveText('$2,165');
-    // E173-4 · el subtítulo de Claude Design: sólo los lugares.
-    await expect(acceso(page)).toContainText('3 lugares distintos');
+    // D479/D482 · el subtítulo de Claude Design 0.261: lugares y visitas.
+    await expect(acceso(page)).toContainText('3 lugares · 6 visitas');
     // Con el acceso nuevo, la sección vieja de barras no está.
     await expect(page.locator('.stat-rest')).toHaveCount(0);
     await acceso(page).click();
     await expect(page).toHaveURL(/:\d+\/restaurantes$/);
-    await expect(page.locator('.stat-burbuja')).toContainText('$2,165');
-    await expect(page.locator('.stat-burbuja')).toContainText('3 lugares · 6 visitas');
+    // D479/D482 · la cabecera ya no lleva el total; «3 lugares · 6 visitas» va sobre la lista.
+    await expect(page.getByRole('heading', { level: 1, name: 'Tus restaurantes' })).toBeVisible();
+    await expect(page.locator('.est-contexto')).toHaveText('3 lugares · 6 visitas');
     await expect(page.locator('.rest-card')).toHaveCount(3);
     await expect(page.getByText('Lo que elegiste en tus mesas.', { exact: true })).toHaveCount(0);
     await capturar(page, 'restaurantes-01-cerrada');
@@ -54,28 +55,19 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     const visitas = parolaccia.locator('.rest-visita');
     await expect(visitas).toHaveCount(3);
-    // Fecha «Xxx dd/mm», la modalidad (decisión 86; el mock las emite en
-    // consumo) y hora «hh:mm».
-    await expect(visitas.first()).toHaveText(/^(Dom|Lun|Mar|Mié|Jue|Vie|Sáb) \d{2}\/\d{2}Por consumo\d{2}:\d{2}\$/);
+    // D479/D482 · «dd/mm · hh:mm» y el importe: sin día de la semana ni modalidad (K3).
+    await expect(visitas.first()).toHaveText(/^\d{2}\/\d{2} · \d{2}:\d{2}\$/);
     await capturar(page, 'restaurantes-02-restaurante-abierto');
 
     // La primera visita que arma el mock es la más NUEVA (va arriba) y trae el
     // plato a medias. El toque despliega lo propio; el ticket completo tiene su
-    // botón (AF-STATS-LO-PROPIO).
+    // botón y se despliega en la tarjeta (D479/D482), sin modal.
     await visitas.first().locator('.rest-visita-fila').click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await visitas.first().getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
-    await expect(dialog).toBeVisible();
-    // D481 · 1h · el subtítulo nuevo del detalle digital (paquete de Claude Design).
-    await expect(dialog).toContainText('Detalle registrado en PayMe. No es factura ni comprobante de pago.');
-    await expect(dialog).toContainText('Total del ticket');
-    await dialog.getByRole('button', { name: 'Cerrar' }).click();
-    const consumido = parolaccia.locator('.rest-items');
-    await expect(consumido).toBeVisible();
-    await expect(consumido.locator('.rest-item')).toHaveCount(3);
-    await expect(consumido.locator('.rest-item').nth(1)).toHaveText(/^½Tiramisú\$/);
-    await expect(consumido.locator('.rest-item').first()).toHaveText(/^Tagliatelle Bolognese\$/);
+    const consumido = parolaccia.locator('.est-consumo.mio');
+    await expect(consumido).toHaveCount(3);
+    await expect(consumido.nth(1)).toHaveText(/^½Tiramisú\$/);
+    await expect(consumido.first()).toHaveText(/^Tagliatelle Bolognese\$/);
     await capturar(page, 'restaurantes-03-visita-abierta');
 
     // Abrir otro restaurante cierra el primero.
@@ -85,7 +77,7 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     // Volver al primero lo abre desde cero: la visita que estaba abierta, cerrada.
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     await expect(parolaccia.locator('.rest-visita')).toHaveCount(3);
-    await expect(parolaccia.locator('.rest-items')).toHaveCount(0);
+    await expect(parolaccia.locator('.est-consumo')).toHaveCount(0);
   });
 
   test('entrando directo por la ruta, «Volver» lleva a Mis estadísticas (no a Inicio)', async ({ page }) => {

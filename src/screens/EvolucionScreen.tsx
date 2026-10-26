@@ -7,29 +7,31 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { goBack } from '../router';
-import { colorDeFila, porcentajesEnteros } from '../utils/anillo';
+import { porcentajesEnteros } from '../utils/anillo';
 import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
-import { mesCorto, mesLargo, pesosCortos } from '../utils/meses';
-import { nombreDeCocina } from '../utils/textosDeEstadisticas';
-import { CuadroDeTarjeta } from '../components/TarjetaDeTitulo';
+import { mesCorto, pesosCortos } from '../utils/meses';
+import { mesConMayuscula, mesYAnio, nombreDeCocina, rangoDeEvolucion } from '../utils/textosDeEstadisticas';
+import { colorDeCocina } from '../utils/coloresDeEstadisticas';
+import { CabeceraDeEstadisticas, EsqueletoDeEstadisticas } from './CabeceraDeEstadisticas';
+import { IconoDeEstadisticas } from './IconosDeEstadisticas';
 
 /**
  * **Evolución** — pantalla 2f de «Mis estadísticas» (AF-31, Roadmap n167).
  * `GET /api/account/stats/evolution`: siempre los últimos 6 meses de México, del
  * más viejo al actual, con los vacíos incluidos. **Sin selector de período**:
- * el rango es fijo (orden).
+ * el rango es fijo, y la cabecera lo dice («Mayo a octubre · 6 meses»).
  *
- * - Barras verticales por mes, en CSS: el actual en el cian del diseño
- *   (`#0FB5C9`, `--teal` en esta app) y el resto apagado. Cada barra lleva su
- *   monto y su mes escritos.
- * - Columnas apiladas al 100 % con la mezcla de cocinas: cada una con su
- *   `aria-label` y una leyenda escrita que compara el primer mes con hoy. Nunca
- *   el color solo.
+ * D479/D482 · AF-1 · Claude Design 0.261 (1o):
+ * - celdas «Total» y «Promedio por mes», con la explicación del promedio
+ *   (D444/D449: el promedio divide entre seis meses, incluidos el mes en curso y
+ *   los meses sin consumos);
+ * - barras navy por mes, con el monto escrito arriba y el mes debajo;
+ * - por cocina, una barra apilada por mes con los porcentajes escritos debajo
+ *   («Italiana 54%»); un mes vacío dice «Sin consumos». Nunca el color solo.
  *
- * 🔴 **El diseño dice «septiembre en `--brand`»**, pero en esta app `--brand` es
- * el naranja (`#ff6b35`) y el archivo del diseño pinta la barra en `#0FB5C9`. Se
- * sigue al píxel del diseño; declarado en la entrega.
+ * 🔴 K2 (D482) · se sacó «Octubre está $X arriba de septiembre»: comparaba el mes
+ * en curso con uno cerrado, y D444 sólo compara meses completos.
  */
 
 type Estado =
@@ -37,11 +39,11 @@ type Estado =
   | { readonly tipo: 'error' }
   | { readonly tipo: 'lista'; readonly datos: Evolucion };
 
-/** Alto máximo de la barra del mes más alto, en px (el diseño: 126 para el mayor). */
-const ALTO_BARRA = 126;
+/** Alto máximo de la barra del mes más alto, en px. */
+const ALTO_BARRA = 120;
 
 export function EvolucionScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const { session } = useAuth();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
 
@@ -58,30 +60,21 @@ export function EvolucionScreen() {
 
   const datos = estado.tipo === 'lista' ? estado.datos : null;
   const conDatos = datos !== null && datos.totalCents > 0;
+  const rango = datos ? `${rangoDeEvolucion(datos.months[0]!.monthStart, datos.months[5]!.monthStart, idioma)} · ${t('6 meses')}` : t('6 meses');
 
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('estadisticas')} />
-      <div className="title-card stat-burbuja">
-        <h1 className="stat-oculto">{t('Evolución')}</h1>
-        <CuadroDeTarjeta icono="tendencia" />
-        <div className="stat-burbuja-periodo">{t('6 meses')}</div>
-        {conDatos && (
-          <div className="stat-burbuja-dato">
-            <div className="stat-burbuja-total">{formatMXN(datos.totalCents)}</div>
-            <div className="stat-burbuja-contexto">{t('{0} promedio por mes', formatMXN(datos.avgPerMonthCents))}</div>
-          </div>
-        )}
-      </div>
+      <CabeceraDeEstadisticas icono="tendencia" titulo={t('Evolución')}>
+        <p className="est-rango">
+          <IconoDeEstadisticas nombre="calendario" />
+          <span>{rango}</span>
+        </p>
+      </CabeceraDeEstadisticas>
 
-      <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
+      <div className="scroll est-scroll">
         {estado.tipo === 'cargando' ? (
-          <div aria-busy="true" aria-label={t('Cargando tu evolución')}>
-            <div className="stat-hero sk">
-              <span className="sk-line w40" />
-              <span className="sk-line w70 tall" />
-            </div>
-          </div>
+          <EsqueletoDeEstadisticas etiqueta={t('Cargando tu evolución')} />
         ) : estado.tipo === 'error' ? (
           <div className="state-error">
             <div className="state-error-row">
@@ -103,11 +96,10 @@ export function EvolucionScreen() {
           <>
             <BarrasPorMes datos={datos} />
             <MezclaPorMes datos={datos} />
-            <p className="rest-pie">
-              {datos.basis === 'consumption'
-                ? t('Lo que elegiste en tus mesas.')
-                : t('Lo que pagaste, descontando reembolsos.')}
-            </p>
+            {/* Sólo en base gasto: la diferencia con lo elegido se rotula (K4, D482). */}
+            {datos.basis !== 'consumption' && (
+              <p className="rest-pie">{t('Lo que pagaste, descontando reembolsos.')}</p>
+            )}
           </>
         )}
       </div>
@@ -117,42 +109,30 @@ export function EvolucionScreen() {
   );
 }
 
-function capitalizar(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function BarrasPorMes({ datos }: { datos: Evolucion }) {
   const { t, idioma } = useIdioma();
   const esConsumo = datos.basis === 'consumption';
   const max = Math.max(...datos.months.map((m) => m.totalCents), 1);
-  const actual = datos.months[5];
-  const anterior = datos.months[4];
-  const diferencia = actual.totalCents - anterior.totalCents;
-  const nombreActual = capitalizar(mesLargo(actual.monthStart, idioma));
-  const nombreAnterior = mesLargo(anterior.monthStart, idioma);
-  const comparacion = diferencia < 0
-    ? t('{0} está {1} abajo de {2}', nombreActual, formatMXN(-diferencia), nombreAnterior)
-    : diferencia > 0
-      ? t('{0} está {1} arriba de {2}', nombreActual, formatMXN(diferencia), nombreAnterior)
-      : t('{0} está igual que {1}', nombreActual, nombreAnterior);
   return (
-    <section className="stat-anillo-card evo-card" aria-labelledby="evo-barras-titulo">
-      <div>
-        <h2 id="evo-barras-titulo" className="stat-anillo-titulo">
-          {esConsumo ? t('Cuánto consumiste por mes') : t('Cuánto gastaste por mes')}
-        </h2>
-        <div className="stat-anillo-sub">{comparacion}</div>
-      </div>
-      <ul className="evo-barras">
-        {datos.months.map((m, i) => (
-          <li key={m.monthStart} className={`evo-barra ${i === 5 ? 'actual' : ''}`}>
-            <span className="evo-barra-monto">{pesosCortos(m.totalCents)}</span>
+    <section className="est-panel evo-panel" aria-labelledby="evo-barras-titulo">
+      <h2 id="evo-barras-titulo">{esConsumo ? t('Cuánto consumiste por mes') : t('Cuánto gastaste por mes')}</h2>
+      <dl className="evo-celdas">
+        <div><dt>{t('Total')}</dt><dd>{formatMXN(datos.totalCents)}</dd></div>
+        <div><dt>{t('Promedio por mes')}</dt><dd>{formatMXN(datos.avgPerMonthCents)}</dd></div>
+      </dl>
+      <p className="est-nota">
+        {t('El promedio divide el total entre seis meses, incluidos el mes en curso y los meses sin consumos.')}
+      </p>
+      <ul className="evo-barras" role="list">
+        {datos.months.map((m) => (
+          <li key={m.monthStart} className="evo-barra" aria-label={`${mesYAnio(m.monthStart, idioma)}: ${formatMXN(m.totalCents)}`}>
+            <span className="evo-barra-monto" aria-hidden="true">{pesosCortos(m.totalCents)}</span>
             <span
               className="evo-barra-cuerpo"
               style={{ height: `${Math.round((m.totalCents / max) * ALTO_BARRA)}px` }}
               aria-hidden="true"
             />
-            <span className="evo-barra-mes">{mesCorto(m.monthStart, idioma)}</span>
+            <span className="evo-barra-mes" aria-hidden="true">{mesCorto(m.monthStart, idioma)}</span>
           </li>
         ))}
       </ul>
@@ -162,51 +142,39 @@ function BarrasPorMes({ datos }: { datos: Evolucion }) {
 
 function MezclaPorMes({ datos }: { datos: Evolucion }) {
   const { t, idioma } = useIdioma();
-  const esConsumo = datos.basis === 'consumption';
   const cocinas = cocinasDeLaEvolucion(datos);
   const nombre = (c: string) => nombreDeCocina(c, t) ?? t('Otra cocina');
-  /** Porcentajes enteros de cada cocina en cada mes, en el orden fijo de `cocinas`. */
-  const pctsPorMes = datos.months.map((m) =>
-    porcentajesEnteros(cocinas.map((c) => m.categories.find((x) => x.category === c)?.amountCents ?? 0)));
-  const primero = datos.months[0];
-  const pctTexto = (mes: number, i: number) => (datos.months[mes].totalCents > 0 ? `${pctsPorMes[mes][i]}%` : '—');
   return (
-    <section className="stat-anillo-card evo-card" aria-labelledby="evo-mezcla-titulo">
-      <div>
-        <h2 id="evo-mezcla-titulo" className="stat-anillo-titulo">
-          {esConsumo ? t('Cómo cambió tu consumo') : t('Cómo cambió tu gasto')}
-        </h2>
-        <div className="stat-anillo-sub">{t('Participación de cada tipo de cocina, mes a mes')}</div>
-      </div>
-      <ul className="evo-columnas">
-        {datos.months.map((m, mes) => {
-          const etiqueta = m.totalCents > 0
-            ? `${capitalizar(mesLargo(m.monthStart, idioma))}: ${cocinas
-              .map((c, i) => (pctsPorMes[mes][i] > 0 ? `${nombre(c)} ${pctsPorMes[mes][i]}%` : null))
-              .filter(Boolean)
-              .join(', ')}`
-            : t('{0}: sin consumos', capitalizar(mesLargo(m.monthStart, idioma)));
+    <section className="est-panel evo-panel" aria-labelledby="evo-mezcla-titulo">
+      <h2 id="evo-mezcla-titulo">{t('Por tipo de cocina, mes a mes')}</h2>
+      <ul className="est-filas" role="list">
+        {datos.months.map((m) => {
+          // Porcentajes enteros de cada cocina en el mes, en el orden fijo de `cocinas`.
+          const pcts = porcentajesEnteros(cocinas.map((c) => m.categories.find((x) => x.category === c)?.amountCents ?? 0));
+          const presentes = cocinas.map((c, i) => ({ c, pct: pcts[i]! })).filter((x) => x.pct > 0);
           return (
-            <li key={m.monthStart} className="evo-columna">
-              <span className={`evo-columna-cuerpo ${m.totalCents > 0 ? '' : 'vacia'}`} role="img" aria-label={etiqueta}>
-                {cocinas.map((c, i) => (pctsPorMes[mes][i] > 0 ? (
-                  <span key={c} style={{ height: `${pctsPorMes[mes][i]}%`, background: colorDeFila(i) }} />
-                ) : null))}
+            <li key={m.monthStart} className="evo-mes">
+              <h3>{mesConMayuscula(m.monthStart, idioma)}</h3>
+              <span className="est-barra apilada" aria-hidden="true">
+                {presentes.map(({ c, pct }) => (
+                  <span key={c} style={{ width: `${pct}%`, background: colorDeCocina(c) }} />
+                ))}
               </span>
-              <span className="evo-barra-mes">{mesCorto(m.monthStart, idioma)}</span>
+              {m.totalCents > 0 ? (
+                <ul className="evo-leyenda" role="list">
+                  {presentes.map(({ c, pct }) => (
+                    <li key={c}>
+                      <span className="est-cuadrito chico" style={{ background: colorDeCocina(c) }} aria-hidden="true" />
+                      {`${nombre(c)} ${pct}%`}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="evo-sin">{t('Sin consumos')}</p>
+              )}
             </li>
           );
         })}
-      </ul>
-      <ul className="stat-anillo-lista">
-        {cocinas.map((c, i) => (
-          <li key={c} className="stat-anillo-fila">
-            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
-            <span className="stat-anillo-nombre">{nombre(c)}</span>
-            <span className="stat-anillo-visitas">{mesLargo(primero.monthStart, idioma)} {pctTexto(0, i)}</span>
-            <span className="stat-anillo-pct evo-hoy">{t('hoy {0}', pctTexto(5, i))}</span>
-          </li>
-        ))}
       </ul>
     </section>
   );

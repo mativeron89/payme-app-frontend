@@ -31,31 +31,31 @@ const acceso = (page: Page) => page.getByRole('button', { name: /^Evolución/ })
 test.describe('AF-31 · Evolución (2f)', () => {
   test('se abre desde 2a: seis barras, total y promedio con el mes vacío adentro', async ({ page }) => {
     await preparar(page);
-    // E173-4 · el subtítulo de Claude Design.
-    await expect(acceso(page)).toContainText('Promedio mensual de los últimos 6 meses: $819.16');
+    // D479/D482 · el subtítulo del paquete: «Últimos 6 meses»; el promedio vive en Evolución.
+    await expect(acceso(page)).toContainText('Últimos 6 meses');
     await acceso(page).click();
     await expect(page).toHaveURL(/:\d+\/evolucion$/);
-    const burbuja = page.locator('.stat-burbuja');
-    await expect(burbuja).toContainText('6 meses');
-    await expect(burbuja).toContainText('$4,915');
-    await expect(burbuja).toContainText('$819.16 promedio por mes');
+    await expect(page.getByRole('heading', { level: 1, name: 'Evolución' })).toBeVisible();
+    await expect(page.locator('.est-rango')).toContainText('6 meses');
+    await expect(page.locator('.evo-celdas')).toContainText('$4,915');
+    await expect(page.locator('.evo-celdas')).toContainText('$819.16');
     // Sin selector de período en esta pantalla.
     await expect(page.getByRole('button', { name: /^Período: / })).toHaveCount(0);
 
     const barras = page.locator('.evo-barra');
     await expect(barras).toHaveCount(6);
     await expect(barras.locator('.evo-barra-monto')).toHaveText(['$300', '$450', '$0', '$680', '$1,320', '$2,165']);
-    // El actual, marcado; el vacío, sin alto.
-    await expect(barras.last()).toHaveClass(/actual/);
+    // Todas navy (Claude Design 0.261); el vacío, sin alto.
+    await expect(barras.last().locator('.evo-barra-cuerpo')).toHaveCSS('background-color', 'rgb(16, 30, 59)');
     await expect(barras.nth(2).locator('.evo-barra-cuerpo')).toHaveCSS('height', '0px');
-    await expect(page.getByText(/ está \$845 arriba de /)).toBeVisible();
+    // K2 (D482) · la frase que comparaba el mes en curso con el anterior se fue.
+    await expect(page.getByText(/ está \$[\d,]+ (arriba|abajo) de /)).toHaveCount(0);
 
-    // Columnas al 100 %: el vacío dice que no hubo consumos; nunca el color solo.
-    const columnas = page.locator('.evo-columna-cuerpo');
-    await expect(columnas).toHaveCount(6);
-    await expect(columnas.nth(2)).toHaveAttribute('aria-label', /: sin consumos$/);
-    await expect(columnas.last()).toHaveAttribute('aria-label', /Italiana 54%, Japonesa 39%, Café 7%/);
-    await expect(page.getByRole('listitem').filter({ hasText: 'Italiana' }).last()).toContainText('hoy 54%');
+    // Una barra apilada por mes; el vacío dice que no hubo consumos; nunca el color solo.
+    const meses = page.locator('.evo-mes');
+    await expect(meses).toHaveCount(6);
+    await expect(meses.nth(2)).toContainText('Sin consumos');
+    await expect(meses.last().locator('.evo-leyenda li')).toHaveText(['Italiana 54%', 'Japonesa 39%', 'Café 7%']);
     await capturar(page, 'evolucion-01-2f');
     await page.getByRole('button', { name: 'Volver' }).click();
     await expect(page).toHaveURL(/:\d+\/estadisticas$/);
@@ -65,8 +65,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     await preparar(page, { stats: 'vacio' });
     await acceso(page).click();
     await expect(page.locator('.evo-barra-monto')).toHaveText(['$300', '$450', '$0', '$680', '$1,320', '$0']);
-    await expect(page.locator('.evo-columna-cuerpo.vacia')).toHaveCount(2);
-    await expect(page.getByText(/ está \$1,320 abajo de /)).toBeVisible();
+    await expect(page.locator('.evo-sin')).toHaveCount(2);
     await capturar(page, 'evolucion-02-2f-meses-vacios');
   });
 

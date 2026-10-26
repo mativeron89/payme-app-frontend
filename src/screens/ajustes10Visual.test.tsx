@@ -34,8 +34,9 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
     expect(header).toContain('className="hdr-user-group"');
     expect(css).toMatch(/\.hdr-user-group\s*\{[\s\S]*align-items:\s*center/);
     expect(mesas).not.toContain('<h2 className="sectlabel">{t(\'Tus mesas\')}</h2>');
-    expect(css).toContain('.stat-tabs-panel');
-    expect(css).toContain('border-bottom-color: var(--surface)');
+    // D479/D482 · Claude Design 0.261 reemplazó las pestañas unidas al panel
+    // por un control segmentado (Platos · Ingredientes · Momento).
+    expect(css).toMatch(/\.est-pestana\.on\s*\{[\s\S]*background:\s*var\(--navy\)/);
   });
 
   /**

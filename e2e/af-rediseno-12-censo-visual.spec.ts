@@ -298,28 +298,19 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '11-historial');
   await page.goto('/#/estadisticas');
   await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeVisible();
-  // n226 · la tarjeta tiene DOS estados: mientras carga es la de título
-  // (centrada en vertical) y con los datos es la burbuja del mes (D285: el cuadro,
-  // el período y el dato a la derecha). Medir «lo que haya» hacía
-  // que el censo pasara o fallara según la latencia del mock. Se mide el estado
-  // FINAL, con su valor exacto; que el cambio no mueve nada lo prueba el test
-  // de abajo.
-  await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
-  // E173-4 · el total de la burbuja de Estadísticas es `.est-total` (Claude Design).
-  await expect(page.locator('.est-total')).toHaveText(/^\$[\d,]+(?:\.\d{2})?$/);
-  // D285 (0.242.0): la burbuja lleva el padding 16 / 18 de todas las tarjetas (antes 16 / 18 / 16 / 8, E173-4) y la
-  // fila arranca a la izquierda: el cuadro del ícono, el período y el dato a la derecha (`margin-left: auto`).
-  await acreditar(page, '12-estadisticas', true, undefined, 'flex-start');
+  // D479/D482 · Claude Design 0.261: la misma tarjeta de título en cargando y con datos (el título y,
+  // debajo, el período). Se mide el estado FINAL; que el paso de uno a otro no mueve nada lo prueba n226.
+  await expect(page.locator('.est-resumen .est-total')).toHaveText(/^\$[\d,]+(?:\.\d{2})?$/);
+  await acreditar(page, '12-estadisticas');
 });
 
 /**
- * n226 · por qué el cambio de forma de la tarjeta es inocuo: se retiene la
- * respuesta de `getStats` para ver el estado de carga, se mide, se suelta y se
- * vuelve a medir. La caja de la tarjeta (posición y tamaño) y el arranque del
- * contenido de abajo son IGUALES en los dos estados: sólo cambia lo de adentro,
- * que pasa del título a «período · total». Nada salta.
+ * n226 · se retiene la respuesta de `getStats` para ver el estado de carga, se
+ * mide, se suelta y se vuelve a medir. D479/D482 · la tarjeta es la misma en los
+ * dos estados (título y período): la caja y el arranque del contenido de abajo
+ * son IGUALES. Nada salta.
  */
-test('n226 · «Mis estadísticas»: la tarjeta pasa de título a burbuja del mes sin mover nada', async ({ page }) => {
+test('n226 · «Mis estadísticas»: la tarjeta de título no cambia de tamaño al llegar los datos', async ({ page }) => {
   await ingresar(page);
   await page.evaluate(async () => {
     const apiPath = '/src/api/index.ts';
@@ -335,19 +326,16 @@ test('n226 · «Mis estadísticas»: la tarjeta pasa de título a burbuja del me
   const medir = () => tarjeta.evaluate((n) => {
     const r = n.getBoundingClientRect();
     const abajo = document.querySelector('.screen > .scroll')!.getBoundingClientRect();
-    return { caja: { x: r.x, y: r.y, w: r.width, h: r.height }, abajo: abajo.y, burbuja: n.classList.contains('stat-burbuja') };
+    return { caja: { x: r.x, y: r.y, w: r.width, h: r.height }, abajo: abajo.y };
   });
   await page.waitForFunction(() => typeof (window as unknown as { __n226Soltar?: unknown }).__n226Soltar === 'function');
-  await expect(tarjeta).toHaveCSS('justify-content', 'center');
+  await expect(page.locator('.est-esqueleto')).toBeVisible();
   const cargando = await medir();
-  expect(cargando.burbuja).toBe(false);
   await page.evaluate(() => (window as unknown as { __n226Soltar: () => void }).__n226Soltar());
-  await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
-  // D285: la fila arranca a la izquierda; el dato va a la derecha por `margin-left: auto`.
-  await expect(tarjeta).toHaveCSS('justify-content', 'flex-start');
+  await expect(page.locator('.est-resumen .est-total')).toBeVisible();
+  await expect(tarjeta.locator('.est-periodo-estado')).toBeVisible();
   const listo = await medir();
-  expect(listo.burbuja).toBe(true);
   expect(listo.caja).toEqual(cargando.caja);
   expect(listo.abajo).toBe(cargando.abajo);
-  expect(cargando.caja).toEqual({ x: 16, y: 112, w: 358, h: 83 });
+  expect([cargando.caja.x, cargando.caja.y, cargando.caja.w]).toEqual([16, 112, 358]);
 });
