@@ -236,6 +236,11 @@ export interface TicketEnViaje {
   readonly iva_aparte_cents: number;
   /** El total impreso: `monto_cents` (los renglones) + servicio + IVA aparte − descuentos. Lo que se paga y se reparte. */
   readonly total_cents: number;
+  /**
+   * D481 · la foto del ticket (`ticket_image: { thumb, full }`), sólo si el GET del viaje negoció
+   * `ticket_image_version=1` (la capacidad encendida). Sin negociar no existe; rara, `null`: la fila lleva el ícono.
+   */
+  readonly ticket_image?: FotoDelTicket | null;
 }
 
 /**
@@ -695,7 +700,7 @@ function decodeResumenDeNotas(raw: unknown, e: string): ResumenDeNotas {
   return { escribieron: o.escribieron as number, total: o.total as number, nuevo: o.nuevo as boolean };
 }
 
-function viajeDetalle(raw: unknown, e: string): DetalleViaje {
+function viajeDetalle(raw: unknown, e: string, conFoto = false): DetalleViaje {
   const o = objeto(raw, ['id', 'nombre', 'fecha_desde', 'fecha_hasta', 'estado', 'creado_en', 'mi_miembro_id',
     'miembros', 'invitados', 'mi_balance_cents', 'gasto_del_grupo_cents', 'tickets', 'sin_repartir',
     'transferencias', 'transferencias_pendientes', 'color', 'has_photo', 'hora_cierre', 'puedo_cerrar', 'se_cierra_en',
@@ -728,10 +733,13 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
     return { id: m.id as string, ...persona(m, e) };
   }, 40);
   const tickets = lista(o.tickets, e, (x): TicketEnViaje => {
-    const t = objeto(x, ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
+    // D481 · con la negociación, cada ticket PUEDE traer `ticket_image`; sin ella, esa clave de más rompe como cualquier otra.
+    const conClave = conFoto && plainObject(x) && Object.prototype.hasOwnProperty.call(x, 'ticket_image');
+    const claves = ['id', 'lugar', 'tipo_lugar', 'fecha_ticket', 'hora_ticket', 'cargado_en', 'forma',
       'pagado_por', 'pagaste_tu', 'te_toca_cents', 'falta_que_elija', 'sin_repartir_cents', 'monto_cents', 'origen',
       'puede_eliminar', 'pagadores', 'presentes', 'personal', 'servicio_cents', 'descuentos_cents', 'iva_aparte_cents',
-      'total_cents'], e);
+      'total_cents'];
+    const t = objeto(x, conClave ? [...claves, 'ticket_image'] : claves, e);
     exigir(texto(t.id) && textoONull(t.lugar) && esTipo(t.tipo_lugar) && fechaONull(t.fecha_ticket)
       && horaONull(t.hora_ticket) && instanteONull(t.cargado_en) && esForma(t.forma) && textoONull(t.pagado_por)
       && typeof t.pagaste_tu === 'boolean' && noNegativo(t.te_toca_cents) && noNegativo(t.falta_que_elija)
@@ -742,7 +750,8 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
       && (t.origen !== 'manual' || t.total_cents === t.monto_cents), e);
     // D278-2 · con la 9, los pagadores suman el total impreso.
     const pagadores = pagadoresDe(t.pagadores, t.total_cents as number, t.pagado_por, e);
-    return { ...(t as unknown as TicketEnViaje), pagadores, presentes: presentesDe(t.presentes, e) };
+    const base = { ...(t as unknown as TicketEnViaje), pagadores, presentes: presentesDe(t.presentes, e) };
+    return conClave ? { ...base, ticket_image: decodeFotoDelTicket(t.ticket_image) } : base;
   }, 200);
   const sinRepartir = lista(o.sin_repartir, e, (x): SinRepartir => {
     const s = objeto(x, ['ticket_id', 'lugar', 'fecha_ticket', 'monto_cents', 'faltan'], e);
@@ -783,9 +792,9 @@ function viajeDetalle(raw: unknown, e: string): DetalleViaje {
  * `hora_cierre`, `puedo_cerrar` y `se_cierra_en`; la 3, `color` y `has_photo`): la fachada la pide SIEMPRE en esas
  * rutas, así las claves nuevas nunca llegan sin pedirlas.
  */
-export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle'): DetalleViaje {
+export function decodeDetalleViaje(raw: unknown, endpoint = 'viajes.detalle', conFoto = false): DetalleViaje {
   const b = cuerpo(raw, ['viaje'], endpoint);
-  return viajeDetalle(b.viaje, endpoint);
+  return viajeDetalle(b.viaje, endpoint, conFoto);
 }
 
 /** `POST …/rechazar` y `…/salir` → `{ contract, viaje_id, estado }`. */

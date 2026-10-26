@@ -84,12 +84,13 @@ test.describe('AF-STATS-LO-PROPIO · el toque muestra lo propio; el ticket compl
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  test('en inglés el botón dice «See full ticket»', async ({ page }) => {
+  // D481 · la tabla de textos del paquete de Claude Design: en inglés siempre «receipt».
+  test('en inglés el botón dice «See full receipt»', async ({ page }) => {
     await preparar(page, 'en');
     const parolaccia = tarjeta(page, 'La Parolaccia');
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     await parolaccia.locator('.rest-visita-fila').first().click();
-    await expect(parolaccia.getByRole('button', { name: 'See full ticket', exact: true })).toBeVisible();
+    await expect(parolaccia.getByRole('button', { name: 'See full receipt', exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

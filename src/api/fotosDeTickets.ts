@@ -81,20 +81,40 @@ function estadoDe(resultado: ResultadoFoto, hayUrl: boolean): EstadoDeFoto | nul
 }
 
 /**
+ * D481 · 2d · el estado de una miniatura de la lista, sin cambiar la caché ni
+ * los pedidos: con la foto en memoria, `lista`; con el 404 del dueño,
+ * `sin_foto` (va el ícono suelto); si el pedido falló, `error` (el recuadro
+ * con el ícono, que sigue abriendo el visor y éste la vuelve a pedir); si no,
+ * `cargando` (el recuadro vacío).
+ */
+export function estadoDeMiniatura(hayUrl: boolean, sinFoto: boolean, fallo: boolean): EstadoDeFoto {
+  if (hayUrl) return 'lista';
+  if (sinFoto) return 'sin_foto';
+  return fallo ? 'error' : 'cargando';
+}
+
+/**
  * Las miniaturas de una lista: pide cada una UNA vez por montaje de la
  * pantalla, de a pocas a la vez, y avisa al llegar. `urlDe` devuelve la foto o
- * `null`; `sinFoto` dice si el dueño respondió 404 (entonces va el ícono).
+ * `null`; `sinFoto` dice si el dueño respondió 404 (entonces va el ícono);
+ * `estadoDe` (D481), en qué está cada una.
  */
 export function useMiniaturasDeTickets(
   session: StoredSession | null,
   origenes: readonly OrigenDeFoto[] | null,
   cache: FotosEnMemoria = fotosDeTicketsEnMemoria,
   pedir: typeof pedirFotoDelTicket = pedirFotoDelTicket,
-): { urlDe: (o: OrigenDeFoto) => string | null; sinFoto: (o: OrigenDeFoto) => boolean } {
+): {
+  urlDe: (o: OrigenDeFoto) => string | null;
+  sinFoto: (o: OrigenDeFoto) => boolean;
+  estadoDe: (o: OrigenDeFoto) => EstadoDeFoto;
+} {
   const sesionRef = useRef(session);
   sesionRef.current = session;
   const pedidas = useRef(new Set<string>());
   const sinFotoRef = useRef(new Set<string>());
+  /** D481 · las que terminaron sin foto en memoria y sin el 404 del dueño: un error de red o del servidor. */
+  const falloRef = useRef(new Set<string>());
   const cola = useRef<OrigenDeFoto[]>([]);
   const enVuelo = useRef(0);
   const vivo = useRef(true);
@@ -116,6 +136,8 @@ export function useMiniaturasDeTickets(
       void cache.cargar(sesion, clave, () => pedir(origen, 'thumb', sesion))
         .then((r) => {
           if (r === 'retirada') sinFotoRef.current.add(clave);
+          else if (estadoDe(r, cache.ver(sesion, clave) !== null) === 'error') falloRef.current.add(clave);
+          else falloRef.current.delete(clave);
           if (vivo.current) setVersion((n) => n + 1);
         })
         .finally(() => {
@@ -136,9 +158,12 @@ export function useMiniaturasDeTickets(
     avanzar();
   }, [origenes, avanzar, session]);
 
+  const urlDe = (o: OrigenDeFoto) => (session ? cache.ver(session, claveDeFotoDelTicket(o, 'thumb')) : null);
+  const sinFoto = (o: OrigenDeFoto) => sinFotoRef.current.has(claveDeFotoDelTicket(o, 'thumb'));
   return {
-    urlDe: (o) => (session ? cache.ver(session, claveDeFotoDelTicket(o, 'thumb')) : null),
-    sinFoto: (o) => sinFotoRef.current.has(claveDeFotoDelTicket(o, 'thumb')),
+    urlDe,
+    sinFoto,
+    estadoDe: (o) => estadoDeMiniatura(urlDe(o) !== null, sinFoto(o), falloRef.current.has(claveDeFotoDelTicket(o, 'thumb'))),
   };
 }
 

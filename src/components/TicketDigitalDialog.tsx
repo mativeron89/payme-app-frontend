@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { isCurrentSession, loadSession } from '../api/storage';
@@ -15,6 +16,7 @@ import { ticketDigitalView, type TicketDigitalView } from '../screens/ticketDigi
 import { formatMXN } from '../utils/format';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { Icon } from './Icon';
+import { apilarCapa, esLaCapaDeArriba } from './useHojaModal';
 import { nombreDePlato } from '../utils/nombreDePlato';
 
 type Estado =
@@ -28,10 +30,17 @@ export function TicketDigitalDialog({
   code,
   onClose,
   returnFocusRef,
+  encima = false,
 }: {
   code: string;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLButtonElement>;
+  /**
+   * D481 · 1h · «Ver consumos» abre la hoja ENCIMA del visor de la foto (velo
+   * al 50 %): va por portal a `body`, porque el visor deja inerte a `.app`, y
+   * la ✕ vuelve a la foto.
+   */
+  encima?: boolean;
 }) {
   const { t } = useIdioma();
   const { session } = useAuth();
@@ -77,7 +86,11 @@ export function TicketDigitalDialog({
   useEffect(() => {
     closeRef.current?.focus();
     const dialog = dialogRef.current;
+    // D481 · una capa de la pila: con el visor abajo, Escape y Tab son de esta hoja y no del visor.
+    const capa = Symbol('detalle-digital');
+    const desapilar = apilarCapa(capa);
     const keepFocusInside = (event: KeyboardEvent) => {
+      if (!esLaCapaDeArriba(capa)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
@@ -103,6 +116,7 @@ export function TicketDigitalDialog({
     document.addEventListener('keydown', keepFocusInside);
     return () => {
       document.removeEventListener('keydown', keepFocusInside);
+      desapilar();
       returnFocusRef.current?.focus();
     };
   }, [onClose, returnFocusRef]);
@@ -132,8 +146,8 @@ export function TicketDigitalDialog({
       });
   };
 
-  return (
-    <div className="ticket-digital-backdrop">
+  const hoja = (
+    <div className={encima ? 'ticket-digital-backdrop ticket-digital-backdrop--encima' : 'ticket-digital-backdrop'}>
       <section
         ref={dialogRef}
         className="ticket-digital-dialog"
@@ -145,7 +159,8 @@ export function TicketDigitalDialog({
         <div className="ticket-digital-head">
           <div>
             <h2 id="ticket-digital-title">{t('Detalle digital del ticket')}</h2>
-            <p>{t('No es una foto, factura ni comprobante de pago.')}</p>
+            {/* D481 · el subtítulo de Claude Design (1h): ya no dice «No es una foto…» justo después de la foto. */}
+            <p>{t('Detalle registrado en PayMe. No es factura ni comprobante de pago.')}</p>
           </div>
           <button ref={closeRef} type="button" className="ticket-digital-close" onClick={onClose} aria-label={t('Cerrar')}>
             <Icon name="x-circle" size={24} />
@@ -296,6 +311,7 @@ export function TicketDigitalDialog({
       </section>
     </div>
   );
+  return encima ? createPortal(hoja, document.body) : hoja;
 }
 
 /**

@@ -47,7 +47,8 @@ async function imagenCargada(img: Locator): Promise<void> {
 }
 
 async function altoDeLaFila(fila: Locator): Promise<number> {
-  return (await fila.locator('button.hist-row').boundingBox())!.height;
+  // D481 · 2a · la fila nueva (`button.fila-ticket`), sin desplegable.
+  return (await fila.locator('button.fila-ticket').boundingBox())!.height;
 }
 
 test.describe('🔴 D466 · apagado: la app de siempre', () => {
@@ -55,7 +56,7 @@ test.describe('🔴 D466 · apagado: la app de siempre', () => {
     await entrar(page, null);
     await page.goto('/#/mesas');
     await expect(filaDe(page, 'Café Tacuba')).toBeVisible();
-    await expect(page.locator('.hist-foto, .hist-row-con-foto, .hist-foto-hueco')).toHaveCount(0);
+    await expect(page.locator('.fila-ticket-foto, .miniatura-ticket')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Ver la foto del ticket/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
@@ -66,7 +67,7 @@ test.describe('🔴 D466 · apagado: la app de siempre', () => {
     await entrar(page, 'apagado');
     await page.goto('/#/mesas');
     await expect(filaDe(page, 'Café Tacuba')).toBeVisible();
-    await expect(page.locator('.hist-foto')).toHaveCount(0);
+    await expect(page.locator('.fila-ticket-foto')).toHaveCount(0);
   });
 });
 
@@ -84,16 +85,16 @@ test.describe('D466 · A + E · encendido (mock)', () => {
     await imagenCargada(fotoDe(page, 'Tacos El Güero').locator('img'));
     expect(Math.abs(await altoDeLaFila(filaDe(page, 'Café Tacuba')) - altoSinFoto)).toBeLessThanOrEqual(1);
 
-    // La mesa del seed, sin foto (cargada a mano): el ícono de siempre, sin hueco.
-    const pagada = tusMesas(page).locator('.tu-mesa').filter({ hasText: 'Pagada' });
-    await expect(pagada.locator('.hist-foto, .hist-foto-hueco')).toHaveCount(0);
-    await expect(pagada.locator('button.hist-row svg').first()).toBeVisible();
+    // La mesa del seed, sin foto (cargada a mano): el ícono en la misma columna, sin botón de foto.
+    const sinFoto = tusMesas(page).locator('.tu-mesa').filter({ hasNot: page.locator('.fila-ticket-foto') }).first();
+    await expect(sinFoto.locator('.fila-ticket-columna svg')).toBeVisible();
     await capturar(page, 'a-mesas');
 
-    // Tocar el resto de la fila la despliega como siempre; no abre el visor.
-    const fila = filaDe(page, 'Café Tacuba').locator('button.hist-row');
+    // D481 · tocar el resto de la fila ya no la despliega: abre la pantalla del ticket (3b), no el visor.
+    const fila = filaDe(page, 'Café Tacuba').locator('button.fila-ticket');
+    await expect(fila).not.toHaveAttribute('aria-expanded', /.*/);
     await fila.click({ position: { x: 200, y: 20 } });
-    await expect(fila).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('heading', { level: 1, name: 'Café Tacuba' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
@@ -147,12 +148,18 @@ test.describe('D466 · A + E · encendido (mock)', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(foto).toBeFocused();
 
-    // «Ver consumos»: el detalle digital de esa mesa; al cerrarlo, el foco vuelve a la miniatura.
+    // D481 · 1h · «Ver consumos»: el detalle digital de esa mesa se abre ENCIMA del visor; su ✕ vuelve a la foto, con el
+    // foco en «Ver consumos». Cerrar el visor devuelve el foco a la miniatura.
     await foto.click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Ver consumos', exact: true }).click();
+    const verConsumos = page.getByRole('dialog').getByRole('button', { name: 'Ver consumos', exact: true });
+    await verConsumos.click();
     const detalle = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(detalle).toContainText('Chilaquiles');
+    await expect(page.getByRole('dialog')).toHaveCount(2);
     await detalle.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(verConsumos).toBeFocused();
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(foto).toBeFocused();
   });
@@ -198,7 +205,11 @@ test.describe('D466 · A + E · encendido (mock)', () => {
     const visor = page.getByRole('dialog', { name: /^Receipt 1 of 2 · / });
     await expect(visor.getByText('The full photo was deleted after 90 days.', { exact: true })).toBeVisible();
     await expect(visor.getByRole('button', { name: 'See items', exact: true })).toBeVisible();
-    await expect(visor.getByText('Pinch or double-tap to zoom.', { exact: true })).toBeVisible();
+    // D481 · 1d · la vencida no se acerca: sin la píldora del zoom. La completa (el siguiente), con la píldora.
+    await expect(visor.locator('.visor-ticket-pista')).toHaveCount(0);
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('dialog', { name: /^Receipt 2 of 2 · / }).locator('.visor-ticket-pista'))
+      .toHaveText('Pinch or double-tap to zoom.');
     await capturar(page, 'e-visor-en');
   });
 });

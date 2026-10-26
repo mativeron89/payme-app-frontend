@@ -56,7 +56,7 @@ import { nombreDePlato } from '../../utils/nombreDePlato';
 import { tieneFoto, useCapacidadFotoDelTicket } from '../../api/fotoDelTicket';
 import { useFotoDelTicket, type OrigenDeFoto } from '../../api/fotosDeTickets';
 import type { StoredSession } from '../../api/storage';
-import { VisorDelTicket } from '../../components/VisorDelTicket';
+import { FilaDeLaFotoDelTicket, VisorDelTicket } from '../../components/VisorDelTicket';
 
 /**
  * AF-VIAJES · D242 · un ticket del viaje: elegir lo que consumí (1i), «Pagar
@@ -277,7 +277,8 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
   }
 
   const enCorreccion = corrigiendo && ticket !== null && viaje !== null && origen !== null;
-  const conPie = enCorreccion || (ticket !== null && ticket.forma === 'consumo' && ticket.puedo_elegir);
+  const conPie = enCorreccion || (ticket !== null && ticket.forma === 'consumo'
+    && (ticket.puedo_elegir || (viaje !== null && vistaElegidaDelViajeCerrado(ticket, viaje.estado !== 'abierto'))));
 
   return (
     <div className={conPie ? 'screen vj-con-pie' : 'screen has-appbar'}>
@@ -637,8 +638,11 @@ function ConsumoVista(props: TicketVistaProps) {
             </ul>
           </section>
         )}
+        {/* D481 · con el viaje cerrado, el ticket por consumo se ve como la pantalla del ticket de Mesas (3b): «Lo que
+            elegiste», de sólo lectura, y en el pie «Elegiste». */}
+        {vistaElegidaDelViajeCerrado(ticket, props.cerrado) && <LoQueElegisteDelViaje ticket={ticket} />}
         {/* D276-3 · un gasto personal es todo mío: sin lista para elegir (quedan el total y quiénes estuvieron). */}
-        {!ticket.personal && (
+        {!ticket.personal && !vistaElegidaDelViajeCerrado(ticket, props.cerrado) && (
           <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
             <h2 id="vjt-que-consumiste" className="vjt-card-titulo">{t('¿Qué consumiste?')}</h2>
             <ListaParaElegir {...props} />
@@ -649,6 +653,16 @@ function ConsumoVista(props: TicketVistaProps) {
         <EditarPresentes {...props} />
         <BotonCorregir {...props} />
       </div>
+      {vistaElegidaDelViajeCerrado(ticket, props.cerrado) && (
+        <div className="vj-pie">
+          <div className="vjt-pie-fila">
+            <span className="vjt-crece">
+              <span className="vjt-pie-rotulo">{t('Elegiste')}</span>
+            </span>
+            <span className="vjt-monto vjt-monto--grande">{formatMXN(ticket.te_toca_platos_cents)}</span>
+          </div>
+        </div>
+      )}
       {ticket.puedo_elegir && (
         <div className="vj-pie">
           <div data-guia="mi-parte" className="vjt-pie-fila">
@@ -672,6 +686,60 @@ function ConsumoVista(props: TicketVistaProps) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * D481 · ¿el ticket se ve como el cerrado de Mesas (3b)? Sólo el ticket por consumo de un viaje ya cerrado, que no es
+ * un gasto personal: los avisos de «Invita…», «Se divide entre…» y el del viaje cerrado quedan como están.
+ */
+export function vistaElegidaDelViajeCerrado(ticket: TicketDelViaje, cerrado = false): boolean {
+  return cerrado && ticket.forma === 'consumo' && !ticket.personal;
+}
+
+/** D481 · las filas de «Lo que elegiste» de un ticket de viaje: lo mío, con la cantidad y la porción antes del nombre. */
+export function filasElegidasDelViaje(ticket: TicketDelViaje): Array<{
+  readonly id: string;
+  readonly cantidad: string | null;
+  readonly porcion: string | null;
+  readonly nombre: string;
+  readonly montoCents: number;
+}> {
+  return ticket.items.filter((i) => i.my_bps > 0).map((i) => ({
+    id: i.id,
+    cantidad: i.quantity > 1 ? `${i.quantity} ×` : null,
+    porcion: i.my_bps < 10000 ? bpsLabel(i.my_bps) : null,
+    nombre: nombreDePlato(i.name),
+    montoCents: i.my_amount_cents,
+  }));
+}
+
+/** D481 · «Lo que elegiste» de un ticket de viaje cerrado: de sólo lectura, sin píldora de porción. */
+function LoQueElegisteDelViaje({ ticket }: { ticket: TicketDelViaje }) {
+  const { t } = useIdioma();
+  const filas = filasElegidasDelViaje(ticket);
+  return (
+    <section className="vj-card pantalla-ticket-eleccion" aria-labelledby="vjt-lo-que-elegiste">
+      <h2 id="vjt-lo-que-elegiste" className="pantalla-ticket-eleccion-titulo">{t('Lo que elegiste')}</h2>
+      {filas.length > 0 ? (
+        <ul className={filas.some((f) => f.porcion) ? 'pantalla-ticket-filas pantalla-ticket-filas--con-porcion' : 'pantalla-ticket-filas'}>
+          {filas.map((f) => (
+            <li key={f.id} className="eleccion-fila">
+              <span className="eleccion-fila-casilla" aria-hidden="true"><Icon name="check" size={18} /></span>
+              {/* D100 · la porción en su columna, antes del nombre (que se alinea), sólo si alguna línea la tiene. */}
+              <span className="eleccion-fila-frac">{f.porcion ?? ''}</span>
+              <span className="eleccion-fila-nombre">
+                {f.cantidad && <span className="eleccion-fila-cant">{f.cantidad} </span>}
+                {f.nombre}
+              </span>
+              <span className="eleccion-fila-monto">{formatMXN(f.montoCents)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="pantalla-ticket-texto">{t('No elegiste ítems')}</p>
+      )}
+    </section>
   );
 }
 
@@ -838,20 +906,12 @@ function FotoDelTicketDelViaje({ session, viajeId, ticket, miembros }: {
   const boton = useRef<HTMLButtonElement | null>(null);
   if (!visible || !ticket.ticket_image || miniatura.estado === 'sin_foto') return null;
   const lugar = nombreDelLugar(ticket.lugar, ticket.tipo_lugar, t);
+  // D481 · 3d · la fila de la foto dentro de la tarjeta de título, separada por una línea (ya no un link subrayado).
   return (
     <>
-      <button
-        ref={boton}
-        type="button"
-        className="vjt-foto-del-ticket"
-        aria-haspopup="dialog"
-        onClick={() => setAbierto(true)}
-      >
-        <span className="hist-foto vjt-foto-miniatura" aria-hidden="true">
-          {miniatura.url ? <img src={miniatura.url} alt="" draggable={false} /> : <Icon name="receipt" size={18} />}
-        </span>
-        <span>{t('Ver la foto del ticket')}</span>
-      </button>
+      <div className="pantalla-ticket-foto">
+        <FilaDeLaFotoDelTicket url={miniatura.url} estado={miniatura.estado} botonRef={boton} onAbrir={() => setAbierto(true)} />
+      </div>
       {abierto && (
         <VisorDelTicket
           session={session}

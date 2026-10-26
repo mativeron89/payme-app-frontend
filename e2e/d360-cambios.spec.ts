@@ -338,30 +338,32 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
   });
 });
 
-// ─── D360 · P09 · en Mesas, toda mesa terminada se despliega ─────────────────
+// ─── D360 · P09 · en Mesas, toda mesa terminada muestra su detalle ───────────
+// D481 · desde la 0.262.0 el detalle ya no se despliega en la fila: toda la fila abre la pantalla del ticket (3b), con lo
+// elegido y «Ver detalle digital» (antes «Ver ticket completo»). Lo que P09 pide —ver los consumos de toda mesa que no
+// es de viaje, también «En partes iguales» y sin nada elegido— se conserva ahí.
 
 test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () => {
-  test('🔴 la mesa «En partes iguales» y la que no tiene nada elegido se despliegan, con «Ver ticket completo»', async ({ page }) => {
+  test('🔴 la mesa «En partes iguales» y la que no tiene nada elegido abren su pantalla del ticket, con «Ver detalle digital»', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
     await ingresar(page);
     await page.goto('/#/mesas');
     const tusMesas = page.getByRole('region', { name: 'Tus mesas' });
     const tacuba = tusMesas.locator('.tu-mesa').filter({ hasText: 'Café Tacuba' });
-    await expect(tacuba).toContainText('Elegiste 1 parte · $180');
+    await expect(tacuba).toContainText('$180');
     const filas = await tusMesas.locator('.tu-mesa').count();
 
-    // «En partes iguales»: antes no se desplegaba (D360 lo declara).
-    const fila = tacuba.locator('button.hist-row');
-    await expect(fila).toHaveAttribute('aria-expanded', 'false');
+    // «En partes iguales»: la fila no se despliega, abre la pantalla del ticket.
+    const fila = tacuba.locator('button.fila-ticket');
+    await expect(fila).not.toHaveAttribute('aria-expanded', /.*/);
     await fila.click();
-    await expect(fila).toHaveAttribute('aria-expanded', 'true');
-    const detalle = tacuba.locator('.hist-detail');
-    await expect(detalle).toHaveCount(1);
-    const ver = detalle.getByRole('button', { name: 'Ver ticket completo', exact: true });
+    await expect(page.getByRole('heading', { level: 1, name: 'Café Tacuba' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Lo que elegiste' })).toContainText('Elegiste 1 parte · $180');
+    const ver = page.getByRole('button', { name: 'Ver detalle digital', exact: true });
     await expect(ver).toBeVisible();
-    await capturar(page, 'd360-07-mesas-detalle-igual', tacuba);
+    await capturar(page, 'd360-07-mesas-detalle-igual');
 
-    // El ticket completo, con lo que el dueño publica de esa mesa.
+    // El detalle digital, con lo que el dueño publica de esa mesa.
     await ver.click();
     const ticket = page.getByRole('dialog');
     await expect(ticket).toContainText('Chilaquiles');
@@ -370,14 +372,16 @@ test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () =
     await ticket.getByRole('button', { name: 'Cerrar', exact: true }).click();
     await expect(ticket).toHaveCount(0);
     await expect(ver).toBeFocused();
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
     // Abrirlo no agregó ni repitió mesas en la lista.
     await expect(tusMesas.locator('.tu-mesa')).toHaveCount(filas);
 
-    // La mesa ya pagada del seed, sin nada elegido: «No elegiste ítems» y el botón.
-    const pagada = tusMesas.locator('.tu-mesa').filter({ hasText: 'Pagada' });
-    await pagada.locator('button.hist-row').click();
-    await expect(pagada.locator('.hist-detail')).toContainText('No elegiste ítems');
-    await expect(pagada.locator('.hist-detail').getByRole('button', { name: 'Ver ticket completo', exact: true })).toBeVisible();
+    // La mesa ya pagada del seed (PA-1099, La Parolaccia), sin nada elegido: «No elegiste ítems», «—» y el botón.
+    const pagada = tusMesas.locator('.tu-mesa').filter({ hasText: 'La Parolaccia' });
+    await expect(pagada.locator('.fila-ticket-monto--sin')).toHaveText('—');
+    await pagada.locator('button.fila-ticket').click();
+    await expect(page.getByRole('region', { name: 'Lo que elegiste' })).toContainText('No elegiste ítems');
+    await expect(page.getByRole('button', { name: 'Ver detalle digital', exact: true })).toBeVisible();
   });
 });
 

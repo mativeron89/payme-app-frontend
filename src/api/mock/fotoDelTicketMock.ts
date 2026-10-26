@@ -94,10 +94,38 @@ function noEsta(): never {
   throw new MockApiError(404, 'ticket_image_not_found');
 }
 
+/**
+ * D481 · 2d, 1e y 1f · el seam `payme.app.mock.ticket_image.fallas.v1` (sin UI;
+ * el build real no lo consulta): un JSON con, por código de mesa y tamaño, si la
+ * foto se queda cargando o falla. Por ejemplo
+ * `{"PA-7310":{"thumb":"cargando"},"PA-6604":{"thumb":"error"}}`. Sirve para ver
+ * los estados de la fila y del visor; sin el seam, nada cambia.
+ */
+export const CLAVE_FALLAS_FOTO_DEL_TICKET_MOCK = 'payme.app.mock.ticket_image.fallas.v1';
+
+type FallaDeFoto = 'cargando' | 'error';
+
+function fallaDe(code: string, tamano: 'thumb' | 'full'): FallaDeFoto | null {
+  let crudo: string | null = null;
+  try { crudo = localStorage.getItem(CLAVE_FALLAS_FOTO_DEL_TICKET_MOCK); } catch { return null; }
+  if (!crudo) return null;
+  try {
+    const fallas = JSON.parse(crudo) as Record<string, Partial<Record<'thumb' | 'full', unknown>>>;
+    const f = fallas?.[code]?.[tamano];
+    return f === 'cargando' || f === 'error' ? f : null;
+  } catch {
+    return null;
+  }
+}
+
 /** `GET /api/mesas/:code/ticket-image/:tamano`, del mock. */
 export async function mockFotoDelTicketDeMesa(code: string, tamano: 'thumb' | 'full'): Promise<Blob> {
   await espera();
   if (!fotoDelTicketMockEncendida()) throw new MockApiError(404, 'not_found');
+  const falla = fallaDe(code, tamano);
+  // Cargando: el pedido no termina nunca (el recuadro vacío, el esqueleto del visor).
+  if (falla === 'cargando') await new Promise<never>(() => undefined);
+  if (falla === 'error') throw new MockApiError(500, 'internal_error');
   const foto = fotoDeMesaMock(code);
   const papel = PAPELES_DE_MESAS[code];
   if (!papel || !foto[tamano]) noEsta();
@@ -145,4 +173,46 @@ export function conFotoDelTicketDeViajeMock(raw: unknown): unknown {
   const ticket = cuerpo.ticket as TicketCrudo;
   const tiene = conFoto(ticket);
   return { ...cuerpo, ticket: { ...ticket, ticket_image: { thumb: tiene, full: tiene } } };
+}
+
+/**
+ * D481 · `GET /api/viajes/:id` con `ticket_image_version=1`, del mock: cada
+ * ticket de `viaje.tickets[]` suma `ticket_image`, como el dueño con el modo
+ * encendido (`listados` del contrato). Tienen foto los escaneados; un gasto a
+ * mano, no. Con el modo apagado no cambia nada.
+ */
+export function conFotoEnLosTicketsDelViajeMock(raw: unknown): unknown {
+  if (!fotoDelTicketMockEncendida()) return raw;
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const cuerpo = raw as { viaje?: unknown };
+  if (typeof cuerpo.viaje !== 'object' || cuerpo.viaje === null) return raw;
+  const viaje = cuerpo.viaje as { tickets?: unknown };
+  if (!Array.isArray(viaje.tickets)) return raw;
+  const tickets = (viaje.tickets as Array<Record<string, unknown>>).map((tk) => {
+    const tiene = tk.origen !== 'manual';
+    return { ...tk, ticket_image: { thumb: tiene, full: tiene } };
+  });
+  return { ...cuerpo, viaje: { ...viaje, tickets } };
+}
+
+/**
+ * D481 · `GET /api/viajes/visitas` con `ticket_image_version=1`, del mock: cada
+ * visita suma `ticket_image` con la regla del detalle del ticket (`conFoto`).
+ */
+export async function conFotoEnLasVisitasMock(raw: unknown): Promise<unknown> {
+  if (!fotoDelTicketMockEncendida()) return raw;
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const cuerpo = raw as { visitas?: unknown };
+  if (!Array.isArray(cuerpo.visitas)) return raw;
+  const visitas = await Promise.all((cuerpo.visitas as Array<{ ticket_id: string; viaje: { id: string } }>).map(async (v) => {
+    let tiene = false;
+    try {
+      const detalle = await mockVerTicket(v.viaje.id, v.ticket_id, { version: 11 }) as { ticket?: TicketCrudo };
+      tiene = !!detalle.ticket && conFoto(detalle.ticket);
+    } catch {
+      // Sin acceso al ticket: sin foto, como el dueño.
+    }
+    return { ...v, ticket_image: { thumb: tiene, full: tiene } };
+  }));
+  return { ...cuerpo, visitas };
 }

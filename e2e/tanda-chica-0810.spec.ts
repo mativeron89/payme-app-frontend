@@ -476,16 +476,25 @@ test.describe('D240 punto 14 · la burbuja del detalle, separada de la línea', 
     await capturar(page, '14-historial');
   });
 
-  test('en «Tus mesas»: la misma separación', async ({ page }) => {
+  // D481 · desde la 0.262.0 lo elegido de una mesa de «Tus mesas» ya no se despliega en la fila: está en la tarjeta
+  // «Lo que elegiste» de la pantalla del ticket (3b). La misma regla de aire: las filas, a la misma distancia de los dos
+  // costados y del pie de la tarjeta.
+  test('en «Tus mesas»: la misma separación, en la tarjeta de la pantalla del ticket', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
     await ingresar(page);
     await page.goto('/#/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
     // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
-    await mesa.locator('button.hist-row').click();
-    await expect(mesa.locator('.hist-detail')).toBeVisible();
-    doceEnLosCuatroLados(await separacion(mesa));
-    await expect(mesa.locator('.hist-row')).toHaveCSS('border-bottom-style', 'solid');
+    await mesa.locator('button.fila-ticket').click();
+    const tarjeta = page.getByRole('region', { name: 'Lo que elegiste' });
+    await expect(tarjeta.locator('.eleccion-fila')).toHaveCount(3);
+    const g = await tarjeta.evaluate((el) => {
+      const card = el.getBoundingClientRect();
+      const lista = el.querySelector('.pantalla-ticket-filas')!.getBoundingClientRect();
+      return { izq: lista.left - card.left, der: card.right - lista.right, abajo: card.bottom - lista.bottom };
+    });
+    expect(Math.abs(g.izq - g.der)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(g.der - g.abajo)).toBeLessThanOrEqual(0.5);
   });
 });
 
@@ -503,14 +512,14 @@ test.describe('D240 punto 16 · los ítems iguales juntos en el detalle de Mesas
     await page.getByRole('dialog', { name: '¿Cerrar la mesa?' }).getByRole('button', { name: 'Sí, cerrar la mesa', exact: true }).click();
     await expect(page.getByText('La cerraste tú.')).toBeVisible();
     await irEnLaApp(page, '/mesas');
-    const tuMesa = page.locator('.tu-mesa').filter({ has: page.locator('button.hist-row') }).first();
-    await expect(tuMesa).toContainText('Elegiste 3 ítems');
-    await tuMesa.locator('button.hist-row').click();
-    const filas = tuMesa.locator('.hist-detail-row');
+    // D481 · la fila abre la pantalla del ticket (3b), donde está lo elegido.
+    const tuMesa = page.locator('.tu-mesa').first();
+    await expect(tuMesa.locator('.fila-ticket-monto')).toHaveText('$335');
+    await tuMesa.locator('button.fila-ticket').click();
+    const filas = page.getByRole('region', { name: 'Lo que elegiste' }).locator('.eleccion-fila');
     await expect(filas).toHaveCount(2);
     await expect(filas.filter({ hasText: '2 × Tiramisú' })).toContainText('$140');
     await expect(filas.filter({ hasText: 'Tagliatelle Bolognese' })).toContainText('$195');
-    await tuMesa.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await capturar(page, '16-tus-mesas');
   });
 

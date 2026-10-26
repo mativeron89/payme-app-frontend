@@ -1,7 +1,11 @@
 import '../../ayuda/ayuda.css';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { errorAlEliminar, type DetalleViaje, type TicketEnViaje } from '../../api/viajes';
+import { tieneFoto, useCapacidadFotoDelTicket } from '../../api/fotoDelTicket';
+import { useMiniaturasDeTickets, type EstadoDeFoto, type OrigenDeFoto } from '../../api/fotosDeTickets';
+import { BotonDeMiniatura, VisorDelTicket } from '../../components/VisorDelTicket';
+import type { StoredSession } from '../../api/storage';
 import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack, BubbleTabs, MountedCard } from '../../components/AppHeader';
@@ -206,6 +210,7 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
         onAbrirTicket={(ticketId) => navigate('viaje-ticket', parametroDeTicket(viajeId, ticketId))}
         fotoDe={fotoDe}
         deslizar={{ abierta, onAbrir: setAbierta, onCerrar: () => setAbierta(null), onEliminar: preguntar }}
+        session={session}
       />
       {/* D250 · desde Balance de un viaje abierto, el círculo escanea para ese viaje. */}
       <AppBottomBar active={null} center={circuloDelViaje(carga.tipo === 'listo' ? carga.viaje : null, t)} />
@@ -252,6 +257,7 @@ export function BalanceVista({
   onAbrirTicket,
   fotoDe,
   deslizar,
+  session = null,
 }: {
   carga: CargaDeViaje;
   opcion: OpcionDeBalance;
@@ -260,6 +266,8 @@ export function BalanceVista({
   onAbrirTicket: (ticketId: string) => void;
   fotoDe?: (miembroId: string) => string | null;
   deslizar?: DeslizarConsumo;
+  /** D481 · 7 · la sesión, para pedir las miniaturas de los tickets (sin ella, la fila de siempre). */
+  session?: StoredSession | null;
 }) {
   const { t } = useIdioma();
   return (
@@ -270,7 +278,7 @@ export function BalanceVista({
           : t('Aquí ves cuánto pagó cada persona, no cuánto le corresponde consumir.')}</p>}
         {carga.tipo === 'listo' ? (
           opcion === 'consumos'
-            ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} deslizar={deslizar} />
+            ? <Consumos viaje={carga.viaje} onAbrirTicket={onAbrirTicket} deslizar={deslizar} session={session} />
             : <Miembros viaje={carga.viaje} fotoDe={fotoDe} />
         ) : (
           <EstadoSinViaje carga={carga} onReintentar={onReintentar} onVerViajes={onVerViajes} />
@@ -280,14 +288,40 @@ export function BalanceVista({
   );
 }
 
-function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
+/** D481 · 7 · la foto de un ticket de Balance: su miniatura y su estado (con la capacidad encendida y si hay foto). */
+interface FotoDeConsumo {
+  readonly url: string | null;
+  readonly estado: EstadoDeFoto;
+  readonly onAbrir: (boton: HTMLButtonElement) => void;
+}
+
+function Consumos({ viaje: v, onAbrirTicket, deslizar, session }: {
   viaje: DetalleViaje;
   onAbrirTicket: (ticketId: string) => void;
   deslizar?: DeslizarConsumo;
+  session: StoredSession | null;
 }) {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   // D281 · qué lugares están abiertos, por su clave.
   const [abiertos, setAbiertos] = useState<ReadonlySet<string>>(() => new Set());
+  // ─── D481 · 7 · la miniatura del ticket en la fila (Mati: los tickets del viaje siguen en Balance, con la fila nueva) ──
+  const capacidadFoto = useCapacidadFotoDelTicket();
+  const origenDe = (tk: TicketEnViaje): OrigenDeFoto => ({ tipo: 'viaje', viajeId: v.id, ticketId: tk.id });
+  const origenes = useMemo<OrigenDeFoto[] | null>(
+    () => (capacidadFoto ? v.tickets.filter((tk) => tieneFoto(tk.ticket_image)).map((tk) => ({ tipo: 'viaje', viajeId: v.id, ticketId: tk.id })) : null),
+    [capacidadFoto, v.id, v.tickets],
+  );
+  const miniaturas = useMiniaturasDeTickets(session, origenes);
+  const [visor, setVisor] = useState<TicketEnViaje | null>(null);
+  const disparador = useRef<HTMLButtonElement | null>(null);
+  const fotoDe = (tk: TicketEnViaje): FotoDeConsumo | undefined => {
+    if (!capacidadFoto || !tieneFoto(tk.ticket_image) || miniaturas.sinFoto(origenDe(tk))) return undefined;
+    return {
+      url: miniaturas.urlDe(origenDe(tk)),
+      estado: miniaturas.estadoDe(origenDe(tk)),
+      onAbrir: (boton) => { disparador.current = boton; setVisor(tk); },
+    };
+  };
   if (v.tickets.length === 0) return <p className="vjb-vacio">{t('Todavía no hay consumos.')}</p>;
   const alternar = (clave: string) => setAbiertos((a) => {
     const n = new Set(a);
@@ -298,7 +332,7 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
     <ul className="vjb-consumos">
       {agruparConsumos(v.tickets).map((lugar) => (lugar.tickets.length === 1 ? (
         <li key={lugar.tickets[0]!.id}>
-          <FilaDeConsumo tk={lugar.tickets[0]!} onAbrirTicket={onAbrirTicket} deslizar={deslizar} />
+          <FilaDeConsumo tk={lugar.tickets[0]!} onAbrirTicket={onAbrirTicket} deslizar={deslizar} foto={fotoDe(lugar.tickets[0]!)} />
         </li>
       ) : (
         <li key={lugar.clave}>
@@ -311,34 +345,67 @@ function Consumos({ viaje: v, onAbrirTicket, deslizar }: {
           />
         </li>
       )))}
+      {visor && visor.ticket_image && (
+        <VisorDelTicket
+          session={session}
+          tickets={[{
+            clave: visor.id,
+            origen: origenDe(visor),
+            foto: visor.ticket_image,
+            titulo: nombreDelLugar(visor.lugar, visor.tipo_lugar, t),
+            monto: formatMXN(visor.total_cents),
+            detalle: [fechaDelTicket(visor, idioma)].filter((x): x is string => x !== null),
+          }]}
+          indiceInicial={0}
+          titulo={() => t('Foto del ticket')}
+          onCerrar={() => setVisor(null)}
+          // Los consumos de ese ticket están en su pantalla: «Ver consumos» la abre.
+          onVerConsumos={(tk) => { setVisor(null); onAbrirTicket(tk.clave); }}
+          returnFocusRef={disparador}
+        />
+      )}
     </ul>
   );
 }
 
 /** Un ticket o gasto, como siempre: abre el ticket y, donde se puede, se desliza para eliminar. */
-function FilaDeConsumo({ tk, onAbrirTicket, deslizar }: {
+function FilaDeConsumo({ tk, onAbrirTicket, deslizar, foto }: {
   tk: TicketEnViaje;
   onAbrirTicket: (ticketId: string) => void;
   deslizar?: DeslizarConsumo;
+  /** D481 · 7 · con foto, la miniatura va en la columna del ícono (un botón aparte, que abre el visor). */
+  foto?: FotoDeConsumo;
 }) {
   const { t } = useIdioma();
-  return (
-    <ConGesto tk={tk} deslizar={deslizar} nombre={nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}>
-      <button type="button" className="vjb-consumo" onClick={() => onAbrirTicket(tk.id)}>
+  const nombre = nombreDelLugar(tk.lugar, tk.tipo_lugar, t);
+  const fila = (
+    <button type="button" className="vjb-consumo" onClick={() => onAbrirTicket(tk.id)}>
+      {foto ? <span className="vjb-consumo-columna" aria-hidden="true" /> : (
         <span className="vjv-ticket-icono">
           <Icon name={iconoTipoLugar(tk.tipo_lugar)} size={22} />
         </span>
-        <span className="vjb-consumo-main">
-          <span className="vjb-consumo-lugar">{nombreDelLugar(tk.lugar, tk.tipo_lugar, t)}</span>
-          {tk.falta_que_elija > 0 && (
-            <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
-          )}
-          {/* D276-3 · un gasto personal: sólo lo veo yo y no suma al viaje. */}
-          {tk.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
-        </span>
-        {/* Respuesta A del plan: el total del ticket o del gasto. D278-2 · el total impreso (`total_cents`). */}
-        <span className="vjb-consumo-monto">{formatMXN(tk.total_cents)}</span>
-      </button>
+      )}
+      <span className="vjb-consumo-main">
+        <span className="vjb-consumo-lugar">{nombre}</span>
+        {tk.falta_que_elija > 0 && (
+          <span className="vjv-chip vjv-chip-aviso">{t('Falta que elija {0}', tk.falta_que_elija)}</span>
+        )}
+        {/* D276-3 · un gasto personal: sólo lo veo yo y no suma al viaje. */}
+        {tk.personal && <span className="vjv-chip vjv-chip-personal">{t('Personal')}</span>}
+      </span>
+      {/* Respuesta A del plan: el total del ticket o del gasto. D278-2 · el total impreso (`total_cents`). D481 · 3 · el
+          total, no tu parte. */}
+      <span className="vjb-consumo-monto">{formatMXN(tk.total_cents)}</span>
+    </button>
+  );
+  return (
+    <ConGesto tk={tk} deslizar={deslizar} nombre={nombre}>
+      {foto ? (
+        <div className="vjb-consumo-con-foto">
+          {fila}
+          <BotonDeMiniatura nombre={nombre} url={foto.url} estado={foto.estado} icono={iconoTipoLugar(tk.tipo_lugar)} onAbrir={foto.onAbrir} />
+        </div>
+      ) : fila}
     </ConGesto>
   );
 }

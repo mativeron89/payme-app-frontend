@@ -46,26 +46,35 @@ async function esperarSinPagos(page: Page): Promise<void> {
 
 const seccion = (page: Page) => page.getByRole('region', { name: 'Tus mesas' });
 
-test('las mesas cerradas sin cobro aparecen con lo que elegiste y cómo terminaron', async ({ page }) => {
+test('las mesas cerradas sin cobro aparecen con su monto; lo que elegiste y cómo terminaron, en la pantalla del ticket (D481)', async ({ page }) => {
   await seam(page, 'sin_cobro');
   await ingresar(page);
   await page.goto('/#/mesas');
   await expect(seccion(page)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Tus mesas', exact: true })).toHaveCount(0);
 
+  // D481 · la fila es nombre y monto (lo que eligió esta cuenta); cómo terminó y lo elegido, en la pantalla del ticket (3b).
   const guero = seccion(page).locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
-  await expect(guero).toContainText('Cerró sin cobro');
-  await expect(guero).toContainText('Elegiste 3 ítems · $450');
+  await expect(guero).toContainText('$450');
+  await expect(guero).not.toContainText('Cerró sin cobro');
   // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
-  await guero.locator('button.hist-row').click();
+  await guero.locator('button.fila-ticket').click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Tacos El Güero' })).toBeVisible();
+  await expect(page.locator('.title-card-sub')).toContainText('Cerró sin cobro');
+  const eleccion = page.getByRole('region', { name: 'Lo que elegiste' });
   // D240 punto 16 · la cantidad va antes del nombre.
-  await expect(guero.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
-  await expect(guero).toContainText('$200');
+  await expect(eleccion.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
+  await expect(eleccion).toContainText('$200');
+  await expect(page.locator('.pantalla-ticket-pie')).toContainText('Elegiste$450');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // En `igual` se eligen PARTES.
-  await expect(seccion(page).locator('.tu-mesa').filter({ hasText: 'Café Tacuba' }))
-    .toContainText('Elegiste 1 parte · $180');
+  const tacuba = seccion(page).locator('.tu-mesa').filter({ hasText: 'Café Tacuba' });
+  await expect(tacuba).toContainText('$180');
+  await tacuba.locator('button.fila-ticket').click();
+  await expect(page.getByRole('region', { name: 'Lo que elegiste' })).toContainText('Elegiste 1 parte · $180');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // La mesa propia ya cobrada del seed (PA-1099, La Parolaccia, completada).
-  await expect(seccion(page).locator('.tu-mesa').filter({ hasText: 'Pagada' })).toHaveCount(1);
+  await expect(seccion(page).locator('.tu-mesa').filter({ hasText: 'La Parolaccia' })).toHaveCount(1);
   // 🔴 Las mesas EN CURSO no se repiten acá: ya están en Inicio. Se cuentan
   // FILAS, no nombres: PA-2847 (en curso) también es La Parolaccia.
   await expect(seccion(page).locator('.tu-mesa')).toHaveCount(3);

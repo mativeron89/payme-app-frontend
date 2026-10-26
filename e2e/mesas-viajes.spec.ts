@@ -61,7 +61,9 @@ async function editarEstado(page: Page, fn: string): Promise<void> {
 }
 
 const lista = (page: Page) => page.getByRole('region', { name: 'Tus mesas', exact: true });
-const nombres = (page: Page) => lista(page).locator('.hist-rest').allTextContents();
+// D481 · las mesas y los restaurantes de viaje usan la fila nueva (`.fila-ticket-nombre`); los pagos, la de siempre.
+const NOMBRE = '.hist-rest, .fila-ticket-nombre';
+const nombres = (page: Page) => lista(page).locator(NOMBRE).allTextContents();
 const meses = (page: Page) => lista(page).locator('h2.mes-sticky').allTextContents();
 const deViaje = (page: Page, lugar: string) => lista(page).locator('.vj-visita').filter({ hasText: lugar });
 const verMas = (page: Page) => lista(page).getByRole('button', { name: 'Ver más mesas', exact: true });
@@ -86,22 +88,24 @@ for (const ancho of [375, 390] as const) {
       // Los meses incluyen los viajes: Mariscos El Faro va en octubre, entre la mesa del 10 y la del 7.
       const octubre = lista(page).getByRole('region', { name: 'octubre de 2026', exact: true });
       await expect(octubre.locator('.vj-visita')).toHaveCount(3);
-      await expect(lista(page).getByRole('region', { name: 'julio de 2026', exact: true }).locator('.hist-rest')).toHaveText(['Los Pericos']);
+      await expect(lista(page).getByRole('region', { name: 'julio de 2026', exact: true }).locator(NOMBRE)).toHaveText(['Los Pericos']);
       // Nada se desborda a lo ancho.
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(ancho);
       await capturar(page, 'mezcla');
     });
 
-    test('🔴 el renglón: el lugar y su tipo, la fecha, la marca con el nombre del viaje y «Te toca»', async ({ page }) => {
+    // D481 · 8 · la misma fila que una mesa: el lugar, la marca con el nombre del viaje y «Te toca»; sin la fecha ni el tipo.
+    test('🔴 el renglón: el lugar, la marca con el nombre del viaje y «Te toca»', async ({ page }) => {
       await entrar(page, { [MIS_MESAS]: 'sin_cobro' });
       await editarEstado(page, `e.viajes.find((v) => v.id === '${CANCUN}').color = 'violeta';`);
       await aMesas(page);
       const r = deViaje(page, 'Mariscos El Faro');
-      await expect(r.locator('.hist-meta')).toHaveText('8 oct · Restaurante');
+      await expect(r.locator('.fila-ticket-nombre')).toHaveText('Mariscos El Faro');
+      await expect(r.locator('.hist-meta')).toHaveCount(0);
       await expect(r.locator('.vj-visita-viaje')).toHaveText('CCancún 2026');
-      await expect(r.locator('.vj-visita-rotulo')).toHaveText('Te toca');
-      await expect(r.locator('.hist-amt')).toHaveText('$530');
-      await expect(deViaje(page, 'Bar La Ola').locator('.hist-meta')).toHaveText('6 oct · Bar');
+      await expect(r.locator('.fila-ticket-rotulo')).toHaveText('Te toca');
+      await expect(r.locator('.fila-ticket-monto')).toHaveText('$530');
+      await expect(deViaje(page, 'Bar La Ola').locator('.fila-ticket-nombre')).toHaveText('Bar La Ola');
       await expect(deViaje(page, 'Café Barrio Antiguo').locator('.vj-visita-viaje')).toHaveText('MMonterrey fin de semana');
       const marca = r.locator('.vj-insignia');
       const m = await marca.evaluate((el) => {
@@ -120,14 +124,14 @@ for (const ancho of [375, 390] as const) {
       // Control: las mesas que se pueden borrar sí lo tienen (el selector encuentra el gesto cuando está).
       expect(await lista(page).locator('.tu-mesa .deslizable').count()).toBeGreaterThan(0);
       // El renglón entero es un blanco cómodo.
-      expect((await r.locator('button.hist-row').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await r.locator('button.fila-ticket').boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await capturar(page, 'renglon');
     });
 
     test('🔴 tocarlo abre el ticket dentro del viaje, con lo mismo que me toca; también en un viaje cerrado', async ({ page }) => {
       await entrar(page);
       await aMesas(page);
-      await deViaje(page, 'Mariscos El Faro').locator('button.hist-row').click();
+      await deViaje(page, 'Mariscos El Faro').locator('button.fila-ticket').click();
       await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
       await expect(page.getByRole('heading', { name: 'Mariscos El Faro', exact: true, level: 1 })).toBeVisible();
       // Abierto y «por lo que pidió cada uno»: «Te toca» va en el pie, con lo elegido.
@@ -135,7 +139,7 @@ for (const ancho of [375, 390] as const) {
       await expect(page.locator('.vjt-pie-fila .vjt-monto')).toHaveText('$530');
       await page.goBack();
       await expect(deViaje(page, 'La Olla')).toBeVisible();
-      await deViaje(page, 'La Olla').locator('button.hist-row').click();
+      await deViaje(page, 'La Olla').locator('button.fila-ticket').click();
       await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${OAXACA}\\.d2000000-[0-9a-f-]+$`));
       await expect(page.getByRole('heading', { name: 'La Olla', exact: true, level: 1 })).toBeVisible();
       // Cerrado: «Te toca» en los totales.

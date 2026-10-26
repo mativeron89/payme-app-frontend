@@ -168,10 +168,14 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // F-3 · el Historial cuenta desde la selección informativa.
     await page.goto('/#/mesas');
     const enHistorial = page.getByRole('region', { name: 'Tus mesas' }).locator('.tu-mesa').filter({ hasText: RESTAURANTE });
-    await expect(enHistorial).toContainText('Cerró sin cobro');
-    await expect(enHistorial).toContainText('Elegiste 1 ítem');
-    await expect(enHistorial).not.toContainText('No elegiste ítems');
+    await expect(enHistorial).toBeVisible();
     await capturar(page, 'd79-05-historial');
+    // D481 · cómo terminó y lo elegido están en la pantalla del ticket de la mesa (3b), no en la fila.
+    await enHistorial.locator('button.fila-ticket').click();
+    await expect(page.locator('.title-card-sub')).toContainText('Cerró sin cobro');
+    const eleccion = page.getByRole('region', { name: 'Lo que elegiste' });
+    await expect(eleccion).toContainText('Elegiste 1 ítem');
+    await expect(eleccion).not.toContainText('No elegiste ítems');
   });
 
   test('F-1 · sin tocar nada, la mesa se relee cada 10 s', async ({ page }) => {

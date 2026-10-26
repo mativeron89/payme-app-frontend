@@ -126,3 +126,58 @@ describe('🔴 D256 · `.app` inerte sólo mientras haya una hoja abierta', () =
     expect(nueva.inert).toBe(false);
   });
 });
+
+describe('🔴 D481 · dos capas apiladas: el teclado es de la de arriba', () => {
+  beforeEach(() => { vi.resetModules(); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  /** Como `conLaApp`, pero guarda los oyentes de teclado para dispararlos. */
+  function conOyentes() {
+    const oyentes = new Set<(e: { key: string; shiftKey?: boolean; preventDefault: () => void }) => void>();
+    const doc = {
+      querySelector: (sel: string) => (sel === '.app' ? { inert: false } : null),
+      addEventListener: (_: string, fn: never) => { oyentes.add(fn); },
+      removeEventListener: (_: string, fn: never) => { oyentes.delete(fn); },
+      activeElement: null,
+    };
+    vi.stubGlobal('document', doc);
+    return { teclear: (key: string) => { for (const fn of [...oyentes]) fn({ key, preventDefault: () => undefined }); } };
+  }
+
+  async function hojaQueCuenta(cerradas: string[], nombre: string) {
+    const { useHojaModal } = await import('./useHojaModal');
+    return new Montaje(() => useHojaModal({ current: null }, { current: null }, () => { cerradas.push(nombre); }));
+  }
+
+  it('Escape con el visor y una hoja encima: cierra sólo la de arriba; después, la de abajo', async () => {
+    const { teclear } = conOyentes();
+    const cerradas: string[] = [];
+    const visor = await hojaQueCuenta(cerradas, 'visor');
+    const detalle = await hojaQueCuenta(cerradas, 'detalle');
+    visor.montar(); detalle.montar();
+    teclear('Escape');
+    expect(cerradas).toEqual(['detalle']);
+    detalle.desmontar();
+    teclear('Escape');
+    expect(cerradas).toEqual(['detalle', 'visor']);
+    visor.desmontar();
+  });
+
+  it('una capa ajena (el detalle digital, que no usa el hook) también deja sin teclado a la de abajo', async () => {
+    const { teclear } = conOyentes();
+    const cerradas: string[] = [];
+    const visor = await hojaQueCuenta(cerradas, 'visor');
+    visor.montar();
+    const { apilarCapa, esLaCapaDeArriba } = await import('./useHojaModal');
+    const ajena = Symbol('detalle');
+    const sacar = apilarCapa(ajena);
+    expect(esLaCapaDeArriba(ajena)).toBe(true);
+    teclear('Escape');
+    expect(cerradas).toEqual([]);
+    sacar();
+    expect(esLaCapaDeArriba(ajena)).toBe(false);
+    teclear('Escape');
+    expect(cerradas).toEqual(['visor']);
+    visor.desmontar();
+  });
+});

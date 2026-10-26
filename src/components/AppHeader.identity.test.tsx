@@ -81,13 +81,15 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
   // `AppHeaderFlow`: es la cámara a pantalla completa, sin cabecera.
   // D387: Join conserva dos cabeceras anónimas; el éxito intermedio y su
   // AppHeader compact se retiraron al abrir directamente los consumos.
-  it('los 20 montajes autenticados pasan userName y los dos pre-sesión siguen anónimos', () => {
+  // D481 (2026-10-25): 20 → 21 por `PantallaDelTicketDeMesa` (3b), la pantalla
+  // del ticket de una mesa en Mesas.
+  it('los 21 montajes autenticados pasan userName y los dos pre-sesión siguen anónimos', () => {
     const authenticated = Object.entries(SCREEN_SOURCES)
       .filter(([path]) => !path.endsWith('/JoinMesaScreen.tsx'))
       .flatMap(([, source]) => headerCalls(source));
     const preSession = headerCalls(SCREEN_SOURCES['/src/screens/JoinMesaScreen.tsx']);
 
-    expect(authenticated).toHaveLength(20);
+    expect(authenticated).toHaveLength(21);
     expect(authenticated.every((call) => /\buserName=/.test(call))).toBe(true);
     expect(authenticated.some((call) => /\bpaymeId=/.test(call))).toBe(false);
     expect(preSession).toHaveLength(2);

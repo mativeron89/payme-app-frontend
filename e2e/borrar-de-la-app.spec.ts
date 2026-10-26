@@ -145,8 +145,10 @@ test.describe('D239 · el gesto', () => {
     await cerradaYQuieta(mesa);
 
     await deslizar(page, mesa, -120);
-    await mesa.locator('.hist-main').click();
+    // D481 · la fila nueva de la mesa (`.fila-ticket-main`): tocarla abierta sólo la cierra.
+    await mesa.locator('.fila-ticket-main').click();
     await cerradaYQuieta(mesa);
+    await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
 
     // Tocar afuera, con el foco fuera de la tarjeta: si no, la cerraría el
     // `blur` del botón rojo y no el toque (deslizar de vuelta lo enfoca). Con el
@@ -322,7 +324,7 @@ test.describe('la alternativa sin gesto', () => {
     await aMesas(page);
     const tarjeta = tarjetaDeLaMesa(page);
     const eliminar = tarjeta.getByRole('button', { name: /^Eliminar / });
-    await tarjeta.locator('.hist-row').focus().catch(() => undefined);
+    await tarjeta.locator('.fila-ticket').focus().catch(() => undefined);
     await page.getByRole('heading', { name: 'Mesas', exact: true }).click();
     for (let k = 0; k < 12 && !(await eliminar.evaluate((e) => e === document.activeElement)); k += 1) {
       await page.keyboard.press('Tab');

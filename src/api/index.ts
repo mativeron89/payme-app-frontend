@@ -141,7 +141,7 @@ import {
   PARAMETRO_FOTO_DEL_TICKET,
   VALOR_FOTO_DEL_TICKET,
 } from './fotoDelTicket';
-import { conFotoDelTicketDeViajeMock } from './mock/fotoDelTicketMock';
+import { conFotoDelTicketDeViajeMock, conFotoEnLasVisitasMock, conFotoEnLosTicketsDelViajeMock } from './mock/fotoDelTicketMock';
 import {
   applyUsernameConfig,
   decodeEstadoUsername,
@@ -1423,7 +1423,12 @@ const realApi: Api = {
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}?viaje_version=11`));
+    // D481 · la foto de cada ticket (`viaje.tickets[].ticket_image`), sólo con la capacidad encendida (strings fijos,
+    // sin interpolar, como el ticket del viaje).
+    const foto = fotoDelTicketHabilitada();
+    return decodeDetalleViaje(await httpRequest<unknown>(
+      'GET', `/viajes/${encodeURIComponent(id)}?viaje_version=11` + (foto ? '&ticket_image_version=1' : ''),
+    ), 'viajes.detalle', foto);
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1507,8 +1512,11 @@ const realApi: Api = {
     assertViajesHabilitado();
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set('cursor', params.cursor);
+    // D481 · la foto de cada visita (`visitas[].ticket_image`), sólo con la capacidad encendida.
+    const foto = fotoDelTicketHabilitada();
+    if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, VALOR_FOTO_DEL_TICKET);
     const s = qs.toString();
-    return decodeVisitasDeViajes(await httpRequest<unknown>('GET', `/viajes/visitas${s ? `?${s}` : ''}`));
+    return decodeVisitasDeViajes(await httpRequest<unknown>('GET', `/viajes/visitas${s ? `?${s}` : ''}`), foto);
   },
   crearNotaDeViaje: async (id, pedido) => {
     assertViajesHabilitado();
@@ -1874,7 +1882,9 @@ const mockApi: Api = {
   },
   getViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeDetalleViaje(await mockViajes.mockDetalleViaje(id, { version: 11 }));
+    const foto = fotoDelTicketHabilitada();
+    const raw = await mockViajes.mockDetalleViaje(id, { version: 11 });
+    return decodeDetalleViaje(foto ? conFotoEnLosTicketsDelViajeMock(raw) : raw, 'viajes.detalle', foto);
   },
   aceptarViaje: async (id) => {
     assertViajesHabilitado();
@@ -1940,7 +1950,9 @@ const mockApi: Api = {
   },
   getVisitasDeViajes: async (params) => {
     assertViajesHabilitado();
-    return decodeVisitasDeViajes(await mockViajes.mockVisitasDeViajes(params?.cursor ? { cursor: params.cursor } : {}));
+    const foto = fotoDelTicketHabilitada();
+    const raw = await mockViajes.mockVisitasDeViajes(params?.cursor ? { cursor: params.cursor } : {});
+    return decodeVisitasDeViajes(foto ? await conFotoEnLasVisitasMock(raw) : raw, foto);
   },
   crearNotaDeViaje: async (id, pedido) => {
     assertViajesHabilitado();

@@ -1,3 +1,4 @@
+import { decodeFotoDelTicket, type FotoDelTicket } from './fotoDelTicket';
 import { CLAVES_COLOR_VIAJE, CONTRATO_VIAJES, ViajesResponseError, type ColorViaje } from './viajes';
 
 /**
@@ -38,6 +39,11 @@ export interface VisitaDeViaje {
   readonly instante: string;
   /** Lo que me toca de ese ticket, en centavos. */
   readonly te_toca_cents: number;
+  /**
+   * D481 · la foto del ticket (`visitas[].ticket_image`), sólo si el pedido negoció `ticket_image_version=1`. Sin
+   * negociar no existe; rara, `null`: la fila lleva el ícono.
+   */
+  readonly ticket_image?: FotoDelTicket | null;
 }
 
 export interface PaginaDeVisitas {
@@ -84,8 +90,11 @@ function viajeDeLaVisita(raw: unknown): ViajeDeLaVisita {
   return { id: o.id as string, nombre: o.nombre as string, color: o.color as ColorViaje | null, has_photo: o.has_photo as boolean };
 }
 
-function visita(raw: unknown): VisitaDeViaje {
-  const o = objeto(raw, ['ticket_id', 'viaje', 'lugar', 'tipo_lugar', 'instante', 'te_toca_cents']);
+function visita(raw: unknown, conFoto: boolean): VisitaDeViaje {
+  // D481 · con la negociación, la visita PUEDE traer `ticket_image`; sin ella, esa clave de más rompe la página.
+  const conClave = conFoto && plainObject(raw) && Object.prototype.hasOwnProperty.call(raw, 'ticket_image');
+  const claves = ['ticket_id', 'viaje', 'lugar', 'tipo_lugar', 'instante', 'te_toca_cents'];
+  const o = objeto(raw, conClave ? [...claves, 'ticket_image'] : claves);
   exigir(texto(o.ticket_id) && (o.lugar === null || texto(o.lugar)) && esTipo(o.tipo_lugar) && instante(o.instante)
     && centavos(o.te_toca_cents));
   return {
@@ -95,18 +104,19 @@ function visita(raw: unknown): VisitaDeViaje {
     tipo_lugar: o.tipo_lugar as TipoDeVisita,
     instante: o.instante as string,
     te_toca_cents: o.te_toca_cents as number,
+    ...(conClave ? { ticket_image: decodeFotoDelTicket(o.ticket_image) } : {}),
   };
 }
 
 /** `GET /api/viajes/visitas` → `{ contract, visitas, page: { limit, next_cursor } }`. */
-export function decodeVisitasDeViajes(raw: unknown): PaginaDeVisitas {
+export function decodeVisitasDeViajes(raw: unknown, conFoto = false): PaginaDeVisitas {
   const b = objeto(raw, ['contract', 'visitas', 'page']);
   exigir(b.contract === CONTRATO_VIAJES);
   const page = objeto(b.page, ['limit', 'next_cursor']);
   exigir(typeof page.limit === 'number' && Number.isSafeInteger(page.limit) && page.limit >= 1 && page.limit <= LIMITE_MAXIMO
     && (page.next_cursor === null || texto(page.next_cursor)));
   exigir(Array.isArray(b.visitas) && (b.visitas as unknown[]).length <= (page.limit as number));
-  const visitas = (b.visitas as unknown[]).map(visita);
+  const visitas = (b.visitas as unknown[]).map((v) => visita(v, conFoto));
   // Un ticket aparece una sola vez: dos filas con el mismo id se repetirían en la lista de Mesas.
   exigir(new Set(visitas.map((v) => v.ticket_id)).size === visitas.length);
   // De la más reciente a la más vieja (el orden del contrato): la mezcla de Mesas lo necesita para no saltear nada.

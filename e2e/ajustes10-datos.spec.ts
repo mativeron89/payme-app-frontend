@@ -24,12 +24,13 @@ test('U08 · Historial abre únicamente el detalle propio canónico cuando vino 
   await ingresar(page);
   await page.goto('/#/mesas');
   const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
-  // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
-  await mesa.locator('button.hist-row').click();
+  // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta. D481 · abre la pantalla del ticket.
+  await mesa.locator('button.fila-ticket').click();
+  const propio = page.getByRole('region', { name: 'Lo que elegiste' });
   // D240 punto 16 · la cantidad va antes del nombre.
-  await expect(mesa.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
-  await expect(mesa).toContainText('$200');
-  await expect(mesa).toContainText('Agua de jamaica');
+  await expect(propio.getByText('2 × Tacos al pastor', { exact: true })).toBeVisible();
+  await expect(propio).toContainText('$200');
+  await expect(propio).toContainText('Agua de jamaica');
 });
 
 test('U09 · una visita abre detalle digital completo y devuelve el foco al cerrar', async ({ page }) => {
@@ -43,7 +44,8 @@ test('U09 · una visita abre detalle digital completo y devuelve el foco al cerr
   const trigger = restaurante.getByRole('button', { name: 'Ver ticket completo', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
-  await expect(dialog).toContainText('No es una foto, factura ni comprobante de pago.');
+  // D481 · 1h · el subtítulo nuevo del detalle digital (paquete de Claude Design).
+  await expect(dialog).toContainText('Detalle registrado en PayMe. No es factura ni comprobante de pago.');
   await expect(dialog.locator('.ticket-digital-items li')).not.toHaveCount(0);
   await expect(dialog).toContainText('Total del ticket');
   await capturar(page, 'u09-ticket-digital');

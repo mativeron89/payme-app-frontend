@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
@@ -17,11 +17,11 @@ import { useToast } from '../components/ui';
 import { extractApiError } from '../api/errors';
 import { resultadoDeOcultar, sePuedeOcultar, useCapacidadOcultar } from '../api/ocultar';
 import { bpsLabel } from './mesaItemsView';
-import { agruparDelPago, agruparPropios, nombreConCantidad } from './agruparIguales';
+import { agruparDelPago, nombreConCantidad } from './agruparIguales';
 import type { TuMesa } from '../api/misMesas';
 import { olvidarLoDeMesas, ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
-import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
+import { tuMesaEnCurso } from '../utils/labels';
 import { useRegion } from '../preferences/RegionProvider';
 import { personalDateLabel, personalZoneCaption } from '../utils/personalDates';
 import {
@@ -38,6 +38,7 @@ import { useCapacidadViajes, viajesHabilitado } from '../api/viajes';
 import type { VisitaDeViaje } from '../api/viajesVisitas';
 import { FilaDeVisitaDeViaje } from './FilaDeVisitaDeViaje';
 import { useFotosDeViajes } from './viajes/InsigniaDelViaje';
+import { nombreDelLugar, parametroDeTicket } from './viajes/viajesView';
 import {
   agregarSinRepetir,
   agruparLineaPorMes,
@@ -53,7 +54,8 @@ import { nombreDePlato } from '../utils/nombreDePlato';
 import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
 import { fotoDelTicketHabilitada, tieneFoto, useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
 import { useMiniaturasDeTickets, type OrigenDeFoto } from '../api/fotosDeTickets';
-import { VisorDelTicket, type TicketDelVisor } from '../components/VisorDelTicket';
+import { BotonDeMiniatura, FilaDeTicket, VisorDelTicket, type TicketDelVisor } from '../components/VisorDelTicket';
+import { montoDeTuMesa, PantallaDelTicketDeMesa, subtituloDeTuMesa, textoEleccion } from './PantallaDelTicketDeMesa';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -74,6 +76,11 @@ const FRANJA_ICON: Record<Franja, IconName> = {
 /** D466 · el origen de la foto del ticket de una mesa. */
 function origenDeMesa(code: string): OrigenDeFoto {
   return { tipo: 'mesa', code };
+}
+
+/** D481 · 8 · el origen de la foto del ticket de un restaurante de un viaje. */
+function origenDeVisita(v: VisitaDeViaje): OrigenDeFoto {
+  return { tipo: 'viaje', viajeId: v.viaje.id, ticketId: v.ticket_id };
 }
 
 function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]) => string, zone: string | null): string {
@@ -105,33 +112,6 @@ function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]
  * (`FilaDeVisitaDeViaje`). Antes las mesas iban arriba sin mes y los pagos abajo por mes: con una sola lista los viajes
  * quedan junto a las mesas y en sus meses a la vez.
  */
-/** AF-24 · el texto de cómo terminó cada mesa, con un `t('…')` literal por caso. */
-function textoEstadoTuMesa(e: EstadoTuMesa, t: (s: string, ...a: unknown[]) => string): string {
-  switch (e) {
-    case 'sin_cobro': return t('Cerró sin cobro');
-    case 'pagada': return t('Pagada');
-    case 'vencio': return t('Venció');
-    case 'cancelada': return t('Cancelada');
-    case 'cerrada': return t('Cerrada');
-  }
-}
-
-/**
- * AF-24 · «Elegiste N ítems · $X». Es lo que eligió ESTA cuenta, no lo que se
- * cobró: por eso va en el texto y no en la columna de monto, que en los pagos de
- * abajo es lo cobrado. En `igual` se eligen PARTES, y así se dice.
- */
-function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): string | null {
-  if (m.itemsCount === null) return null;
-  if (m.itemsCount === 0) return t('No elegiste ítems');
-  // En «igual» se eligen PARTES; con la selección informativa (F-3), PLATOS.
-  const partes = m.divisionMode === 'igual' && !m.eleccionInformativa;
-  const que = m.itemsCount === 1
-    ? (partes ? t('Elegiste 1 parte') : t('Elegiste 1 ítem'))
-    : (partes ? t('Elegiste {0} partes', m.itemsCount) : t('Elegiste {0} ítems', m.itemsCount));
-  return m.amountCents === null ? que : `${que} · ${formatMXN(m.amountCents)}`;
-}
-
 /** D237 · lo que se guarda de «Tus mesas»: la primera página y su cursor. */
 interface PrimeraPaginaDeTusMesas {
   readonly mesas: TuMesa[];
@@ -156,15 +136,25 @@ export function MesasScreen() {
   const [fallo, setFallo] = useState(false);
   const unread = useSinLeer();
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [mesaPropiaAbierta, setMesaPropiaAbierta] = useState<string | null>(null);
   /**
-   * D360 · P09 · «Ver ticket completo» de una mesa de «Tus mesas»: el ticket
-   * entero, con `GET /mesas/:code` (lectura, sin back nuevo), en el mismo visor
-   * de Tus restaurantes. El foco vuelve al botón que lo abrió.
+   * D481 · 3b · la pantalla del ticket de una mesa (sin ruta nueva: una
+   * subvista de Mesas). Reemplaza al desplegable de D360-P09. Al volver, la
+   * lista regresa a la misma posición de scroll.
+   */
+  const [pantallaDe, setPantallaDe] = useState<TuMesa | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollAlAbrir = useRef<number | null>(null);
+  const filaQueAbrio = useRef<string | null>(null);
+  /**
+   * El detalle digital de una mesa (`GET /mesas/:code`, lectura, sin back
+   * nuevo), en el mismo visor de Tus restaurantes. El foco vuelve al botón que
+   * lo abrió. D481 · 1h · desde el visor de la foto se abre ENCIMA del visor
+   * (`encima`) y su ✕ vuelve a la foto.
    */
   const [ticketCode, setTicketCode] = useState<string | null>(null);
+  const [ticketEncima, setTicketEncima] = useState(false);
   const ticketTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const cerrarTicket = useCallback(() => setTicketCode(null), []);
+  const cerrarTicket = useCallback(() => { setTicketCode(null); setTicketEncima(false); }, []);
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
   /**
    * AF-24 · «Tus mesas», de `GET /api/mesas/mine`. Con los pagos apagados, el
@@ -188,6 +178,8 @@ export function MesasScreen() {
    */
   const capacidadFoto = useCapacidadFotoDelTicket();
   const conFotoAlPedir = useRef(false);
+  /** D481 · 8 · lo mismo para mis restaurantes de viaje (`GET /api/viajes/visitas`). */
+  const visitasConFotoAlPedir = useRef(false);
   /**
    * D293 · mis restaurantes de viaje (`GET /api/viajes/visitas`), sólo con Viajes encendido. Se cargan y fallan aparte,
    * como las otras dos listas.
@@ -273,6 +265,7 @@ export function MesasScreen() {
     setFalloVisitas(false);
     generacionVisitas.current += 1;
     if (desdeCero) setVisitas(null);
+    visitasConFotoAlPedir.current = fotoDelTicketHabilitada();
     // T-01 · la cuenta se toma AL PEDIR.
     const turno = ultimoVisto.turno();
     api.getVisitasDeViajes()
@@ -314,6 +307,11 @@ export function MesasScreen() {
   useEffect(() => {
     if (capacidadViajes === 'encendida') cargarVisitas(false);
   }, [capacidadViajes, cargarVisitas]);
+
+  // D481 · 8 · la capacidad de la foto se encendió después: las visitas se piden de nuevo, negociándola.
+  useEffect(() => {
+    if (capacidadFoto && capacidadViajes === 'encendida' && !visitasConFotoAlPedir.current) cargarVisitas(false);
+  }, [capacidadFoto, capacidadViajes, cargarVisitas]);
 
   // D293 · sin saber todavía si Viajes está encendido, la lista espera la config; si no llega, sigue sin los viajes.
   useEffect(() => {
@@ -404,13 +402,15 @@ export function MesasScreen() {
     setFallo(false);
     setFalloMas(false);
     setAbierta(null);
-    setMesaPropiaAbierta(null);
+    setPantallaDe(null);
     setDetalles({});
     setDeslizada(null);
     setPreguntaMesa(null);
     setAviso(null);
-    // D466 · el visor de la cuenta anterior también se cierra.
+    // D466 · el visor de la cuenta anterior también se cierra (y el detalle digital).
     setVisor(null);
+    setTicketCode(null);
+    setTicketEncima(false);
     cargarMisMesas(false);
     cargarHistorial(false);
     cargarVisitas(false);
@@ -523,21 +523,28 @@ export function MesasScreen() {
   // ─── D466 · A + E · la miniatura del ticket y el visor ───────────────────
   /** Las mesas con foto: sólo con la capacidad encendida y si el dueño dice que hay miniatura. */
   const origenesConFoto = useMemo<OrigenDeFoto[] | null>(() => {
-    if (!capacidadFoto || !tusMesas) return null;
-    return tusMesas.filter((m) => tieneFoto(m.fotoDelTicket)).map((m) => (origenDeMesa(m.code)));
-  }, [capacidadFoto, tusMesas]);
+    if (!capacidadFoto || (!tusMesas && !visitas)) return null;
+    // D481 · 8 · también los restaurantes de mis viajes con foto (`visitas[].ticket_image`).
+    return [
+      ...(tusMesas ?? []).filter((m) => tieneFoto(m.fotoDelTicket)).map((m) => (origenDeMesa(m.code))),
+      ...(visitas ?? []).filter((v) => tieneFoto(v.ticket_image)).map((v) => origenDeVisita(v)),
+    ];
+  }, [capacidadFoto, tusMesas, visitas]);
   const miniaturas = useMiniaturasDeTickets(session, origenesConFoto);
   const conFotoEnLaFila = (m: TuMesa): boolean =>
     capacidadFoto !== null && tieneFoto(m.fotoDelTicket) && !miniaturas.sinFoto(origenDeMesa(m.code));
-  const [visor, setVisor] = useState<{ readonly tickets: readonly TicketDelVisor[]; readonly indice: number; readonly mes: string } | null>(null);
+  const [visor, setVisor] = useState<{
+    readonly tickets: readonly TicketDelVisor[];
+    readonly indice: number;
+    readonly mes: string | null;
+    /** D481 · 8 · el visor de una visita de viaje: «Ver consumos» abre su ticket en el viaje. */
+    readonly deVisita?: VisitaDeViaje;
+  } | null>(null);
   const fotoTriggerRef = useRef<HTMLButtonElement | null>(null);
   const cerrarVisor = useCallback(() => setVisor(null), []);
   const ticketDelVisor = (m: TuMesa): TicketDelVisor => {
     const eleccion = textoEleccion(m, t);
-    const cuando = [
-      m.createdAt ? fechaDeFila(m.createdAt, locale, t, presentationZone) : null,
-      textoEstadoTuMesa(estadoDeTuMesa(m), t),
-    ].filter((x): x is string => x !== null).join(' · ');
+    const cuando = subtituloDeTuMesa(m, locale, t, presentationZone);
     return {
       clave: m.code,
       origen: origenDeMesa(m.code),
@@ -555,6 +562,53 @@ export function MesasScreen() {
     fotoTriggerRef.current = boton;
     setVisor({ tickets: delMes.map(ticketDelVisor), indice, mes: mes.label === 'Sin fecha' ? t('Sin fecha') : mes.label });
   };
+  /** D481 · 8 · la miniatura de una visita de viaje: el visor con ese solo ticket. */
+  const abrirVisorDeVisita = (v: VisitaDeViaje, boton: HTMLButtonElement) => {
+    if (!v.ticket_image) return;
+    fotoTriggerRef.current = boton;
+    setVisor({
+      tickets: [{
+        clave: v.ticket_id,
+        origen: origenDeVisita(v),
+        foto: v.ticket_image,
+        titulo: nombreDelLugar(v.lugar, v.tipo_lugar, t),
+        monto: null,
+        detalle: [personalDateLabel(v.instante, locale, presentationZone, t), v.viaje.nombre],
+      }],
+      indice: 0,
+      mes: null,
+      deVisita: v,
+    });
+  };
+  const fotoDeVisita = (v: VisitaDeViaje) => (
+    capacidadFoto && tieneFoto(v.ticket_image) && !miniaturas.sinFoto(origenDeVisita(v))
+      ? { url: miniaturas.urlDe(origenDeVisita(v)), estado: miniaturas.estadoDe(origenDeVisita(v)) }
+      : null
+  );
+  /** D481 · 3b · desde la pantalla del ticket: el visor con ese solo ticket, «Foto del ticket». */
+  const abrirVisorDeUna = (m: TuMesa, boton: HTMLButtonElement) => {
+    fotoTriggerRef.current = boton;
+    setVisor({ tickets: [ticketDelVisor(m)], indice: 0, mes: null });
+  };
+
+  // ─── D481 · 3b · la pantalla del ticket ──────────────────────────────────
+  const abrirPantalla = (m: TuMesa) => {
+    scrollAlAbrir.current = scrollRef.current?.scrollTop ?? 0;
+    filaQueAbrio.current = m.code;
+    setPantallaDe(m);
+  };
+  const volverDePantalla = useCallback(() => setPantallaDe(null), []);
+  // Al volver: la lista en la misma posición, y el foco en la fila que se tocó.
+  useLayoutEffect(() => {
+    if (pantallaDe !== null || scrollAlAbrir.current === null) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollAlAbrir.current;
+    scrollAlAbrir.current = null;
+    const code = filaQueAbrio.current;
+    filaQueAbrio.current = null;
+    if (code) scrollRef.current?.querySelector<HTMLButtonElement>(`[data-mesa="${CSS.escape(code)}"] button.fila-ticket`)?.focus({ preventScroll: true });
+  }, [pantallaDe]);
+  /** La mesa de la pantalla, con lo último de la lista (si se recargó por detrás). */
+  const mesaDePantalla = pantallaDe ? (tusMesas?.find((x) => x.code === pantallaDe.code) ?? pantallaDe) : null;
 
   const cargandoMas = cargandoMasMesas || cargandoMasVisitas;
   const verMas = () => {
@@ -585,114 +639,38 @@ export function MesasScreen() {
   );
 
   const filaDeMesa = (m: TuMesa, mes: MesDeLinea) => {
-    const eleccion = textoEleccion(m, t);
     const conFoto = conFotoEnLaFila(m);
-    // D360 · P09 · «en Mesas no permite ver el detalle de los consumos» de una
-    // mesa que no es de viaje (Mati). Antes sólo se desplegaba la que tenía
-    // platos propios; ahora toda mesa terminada se despliega, también las de
-    // «En partes iguales» y las que no tienen nada elegido, con lo elegido (si
-    // hay) y «Ver ticket completo».
-    const lineas = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0 ? m.items : null;
-    const detalleAbierto = mesaPropiaAbierta === m.code;
-    const fila = (
-      <>
-        {/* D466 · A · con foto, la miniatura va ENCIMA de este hueco (un botón aparte, abajo). */}
-        {conFoto ? <span className="hist-foto-hueco" aria-hidden="true" /> : (
-          <span aria-hidden="true">
-            <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
-          </span>
-        )}
-        <div className="hist-main">
-          <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
-          <div className="hist-meta">
-            {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t, presentationZone)}{' · '}</>}
-            {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
-          </div>
-          {eleccion && <div className="hist-meta">{eleccion}</div>}
-        </div>
-        <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
-          <Icon name="chevron-down" size={20} />
-        </span>
-      </>
-    );
+    const nombre = m.restaurante ?? t('Mesa {0}', m.code);
+    const icono = CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining';
     const claveGesto = tarjetaDeTusMesas(m.code);
+    // D481 · 2a · 2d · la fila es miniatura (o ícono), nombre y monto; sin fecha, estado ni «Elegiste…», que pasan a la
+    // pantalla del ticket (3b). Toda la fila la abre; la miniatura es otro botón, que abre el visor (D466 · E).
+    const miniatura = conFoto ? (
+      <BotonDeMiniatura
+        nombre={nombre}
+        url={miniaturas.urlDe(origenDeMesa(m.code))}
+        estado={miniaturas.estadoDe(origenDeMesa(m.code))}
+        icono={icono}
+        onAbrir={(boton) => abrirVisor(m, mes, boton)}
+      />
+    ) : undefined;
     return (
-      <div key={`mesa:${m.id}`} className={`hist-item tu-mesa ${detalleAbierto ? 'on' : ''}`}>
+      <div key={`mesa:${m.id}`} className="hist-item tu-mesa fila-ticket-item" data-mesa={m.code}>
         <ConGesto
           activo={sePuedeOcultar(capacidad, m.status)}
           abierta={mismaTarjeta(deslizada, claveGesto)}
           onAbrir={() => setDeslizada(claveGesto)}
           onCerrar={() => cerrarDeslizada(claveGesto)}
-          nombre={m.restaurante ?? t('Mesa {0}', m.code)}
+          nombre={nombre}
           onEliminar={() => setPreguntaMesa(m)}
         >
-        {(() => {
-          const boton = (
-            <button
-              type="button"
-              className="hist-row"
-              aria-expanded={detalleAbierto}
-              onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
-            >
-              {fila}
-            </button>
-          );
-          if (!conFoto) return boton;
-          const url = miniaturas.urlDe(origenDeMesa(m.code));
-          // D466 · A · tocar la miniatura abre el visor; el resto de la fila la despliega, como siempre.
-          return (
-            <div className="hist-row-con-foto">
-              <button
-                type="button"
-                className="hist-foto"
-                aria-haspopup="dialog"
-                aria-label={t('Ver la foto del ticket de {0}', m.restaurante ?? t('Mesa {0}', m.code))}
-                onClick={(event) => abrirVisor(m, mes, event.currentTarget)}
-              >
-                {url
-                  ? <img src={url} alt="" draggable={false} />
-                  : <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={18} />}
-              </button>
-              {boton}
-            </div>
-          );
-        })()}
-        {/* Decisión 100 de Mati: plato, porción y monto en UNA línea, en
-            columnas, con el criterio de Tus restaurantes (AF-STATS-BURBUJA):
-            la columna del «½» sólo ocupa lugar si alguna línea la tiene.
-            D360 · P09 · un solo recuadro por tarjeta, con lo elegido (o «No
-            elegiste ítems») y, adentro, «Ver ticket completo». */}
-        {detalleAbierto && (
-          <div
-            className={lineas?.some((item) => item.fractionBps < 10000)
-              ? 'hist-detail hist-detail--con-porcion'
-              : 'hist-detail'}
-            aria-label={t('Lo que elegiste')}
-          >
-            {/* D240 punto 16 · los iguales juntos, con la cantidad antes. */}
-            {lineas && agruparPropios(lineas).map((g) => (
-              <div key={g.key} className="hist-detail-row">
-                <span className="hist-detail-frac">{g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : ''}</span>
-                <span className="hist-detail-name">{nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))}</span>
-                <span className="hist-detail-amount">{formatMXN(g.montoCents ?? g.primero.amountCents)}</span>
-              </div>
-            ))}
-            {!lineas && m.itemsCount === 0 && (
-              <p className="hist-detail-vacio">{t('No elegiste ítems')}</p>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm hist-detail-ticket"
-              aria-haspopup="dialog"
-              onClick={(event) => {
-                ticketTriggerRef.current = event.currentTarget;
-                setTicketCode(m.code);
-              }}
-            >
-              {t('Ver ticket completo')}
-            </button>
-          </div>
-        )}
+          <FilaDeTicket
+            icono={icono}
+            nombre={nombre}
+            monto={montoDeTuMesa(m)}
+            miniatura={miniatura}
+            onAbrir={() => abrirPantalla(m)}
+          />
         </ConGesto>
       </div>
     );
@@ -805,11 +783,74 @@ export function MesasScreen() {
           key={claveDeRenglon(r)}
           visita={r.visita}
           foto={r.visita.viaje.has_photo ? fotoDe(r.visita.viaje.id) : null}
-          zona={presentationZone}
+          miniatura={fotoDeVisita(r.visita)}
+          onVerFoto={(boton) => abrirVisorDeVisita(r.visita, boton)}
         />
       );
     }
   };
+
+  const modales = (
+    <>
+      {ticketCode && (
+        <TicketDigitalDialog
+          code={ticketCode}
+          onClose={cerrarTicket}
+          returnFocusRef={ticketTriggerRef}
+          encima={ticketEncima}
+        />
+      )}
+      {visor && (
+        <VisorDelTicket
+          session={session}
+          tickets={visor.tickets}
+          indiceInicial={visor.indice}
+          titulo={(i, n) => (visor.mes === null ? t('Foto del ticket') : t('Ticket {0} de {1} · {2}', i + 1, n, visor.mes))}
+          onCerrar={cerrarVisor}
+          onVerConsumos={(ticket, boton) => {
+            // D481 · 8 · de una visita de viaje: su ticket, en el viaje (como tocar la fila).
+            if (visor.deVisita) {
+              const v = visor.deVisita;
+              setVisor(null);
+              navigate('viaje-ticket', parametroDeTicket(v.viaje.id, v.ticket_id));
+              return;
+            }
+            // D481 · 1h · el detalle digital de esa mesa se abre ENCIMA del visor; su ✕ vuelve a la foto y el foco, a
+            // «Ver consumos».
+            ticketTriggerRef.current = boton;
+            setTicketEncima(true);
+            setTicketCode(ticket.clave);
+          }}
+          returnFocusRef={fotoTriggerRef}
+        />
+      )}
+    </>
+  );
+
+  if (mesaDePantalla) {
+    const conFoto = conFotoEnLaFila(mesaDePantalla);
+    const origen = origenDeMesa(mesaDePantalla.code);
+    return (
+      <>
+        <PantallaDelTicketDeMesa
+          mesa={mesaDePantalla}
+          zona={presentationZone}
+          userName={fullName(session) ?? undefined}
+          unread={unread}
+          onBell={() => navigate('avisos')}
+          onVolver={volverDePantalla}
+          foto={conFoto ? { url: miniaturas.urlDe(origen), estado: miniaturas.estadoDe(origen) } : null}
+          onVerFoto={(boton) => abrirVisorDeUna(mesaDePantalla, boton)}
+          onVerDetalle={(boton) => {
+            ticketTriggerRef.current = boton;
+            setTicketEncima(false);
+            setTicketCode(mesaDePantalla.code);
+          }}
+        />
+        {modales}
+      </>
+    );
+  }
 
   return (
     <div className="screen has-appbar">
@@ -827,7 +868,7 @@ export function MesasScreen() {
         </FilaDeTitulo>
       </div>
 
-      <div className="scroll history-scroll">
+      <div className="scroll history-scroll" ref={scrollRef}>
         {/* D219 · D223-3 · «Unirme con código», sólo acá: una fila que se abre
             en el lugar, arriba del historial. */}
         <UnirmeConCodigo />
@@ -893,25 +934,7 @@ export function MesasScreen() {
           <button type="button" className="aviso-deshacer-boton" onClick={aviso.deshacer}>{t('Deshacer')}</button>
         </div>
       )}
-      {ticketCode && (
-        <TicketDigitalDialog code={ticketCode} onClose={cerrarTicket} returnFocusRef={ticketTriggerRef} />
-      )}
-      {visor && (
-        <VisorDelTicket
-          session={session}
-          tickets={visor.tickets}
-          indiceInicial={visor.indice}
-          titulo={(i, n) => t('Ticket {0} de {1} · {2}', i + 1, n, visor.mes)}
-          onCerrar={cerrarVisor}
-          onVerConsumos={(ticket) => {
-            // «Ver consumos»: el detalle digital de esa mesa; al cerrarlo, el foco vuelve a la miniatura.
-            ticketTriggerRef.current = fotoTriggerRef.current;
-            setVisor(null);
-            setTicketCode(ticket.clave);
-          }}
-          returnFocusRef={fotoTriggerRef}
-        />
-      )}
+      {modales}
       <AppBottomBar active="mesas" />
     </div>
   );

@@ -338,7 +338,7 @@ export const EN: Record<string, string> = {
   "Esa apertura terminó sin quedar en pie. Ya puedes abrir una nueva.": "That opening didn't end up going through. You can open a new one now.",
   "Esa mesa ya existe: {0}": "That table already exists: {0}",
   "Esa solicitud ya no está disponible": "That request is no longer available",
-  "Escanea el ticket": "Scan the ticket",
+  "Escanea el ticket": "Scan the receipt",
   "Ese intento de pago ya no sirve. Prueba de nuevo.": "That payment attempt is no longer valid. Try again.",
   "Ese intento reembolsado requiere reconciliación antes de iniciar otro pago.": "That refunded attempt requires reconciliation before starting another payment.",
   "Ese intento ya no sirve. Prueba de nuevo para abrir la mesa.": "That attempt is no longer valid. Try again to open the table.",
@@ -489,7 +489,7 @@ export const EN: Record<string, string> = {
   "No pudimos cargar el formulario de pago. Revisa tu conexión.": "We couldn't load the payment form. Check your connection.",
   "No pudimos cargar las opciones de propina — tu pago sigue sin propina.": "We couldn't load the tip options — your payment still has no tip.",
   "No pudimos cargar el detalle": "We couldn't load the details",
-  "No es una foto, factura ni comprobante de pago.": "This isn't a photo, invoice, or proof of payment.",
+  "Detalle registrado en PayMe. No es factura ni comprobante de pago.": "Details recorded in PayMe. Not an invoice or proof of payment.",
   "No pudimos cargar tu historial": "We couldn't load your history",
   "No pudimos cargar tu mesa": "We couldn't load your table",
   "No pudimos cargar tus contactos": "We couldn't load your contacts",
@@ -764,7 +764,7 @@ export const EN: Record<string, string> = {
   "Todavía no podemos confirmar el cierre ni una entrega al restaurante.": "We still can't confirm the closing or a handoff to the restaurant.",
   "Todavía no podemos confirmar el resultado de la garantía.": "We still can't confirm the guarantee's result.",
   "Todavía no registramos consumos este mes.": "We haven't recorded any orders this month yet.",
-  "Detalle digital del ticket": "Digital ticket details",
+  "Detalle digital del ticket": "Digital receipt details",
   "Total": "Total",
   "Total del ticket": "Ticket total",
   "Total mesa": "Table total",
@@ -806,7 +806,7 @@ export const EN: Record<string, string> = {
   "Ver más": "See more",
   "Ver pagos": "View payments",
   "Ver perfil": "View profile",
-  "Ver ticket completo": "See full ticket",
+  "Ver ticket completo": "See full receipt",
   "Ver tarjetas": "View cards",
   "Visitas": "Visits",
   "Volver": "Back",
@@ -1282,7 +1282,7 @@ export const EN: Record<string, string> = {
   "Elegir otra": "Choose another",
   "No pudimos recortar la foto. Mandamos la foto entera.": "We couldn't crop the photo. We're sending the whole photo.",
   "Marco del recorte": "Crop frame",
-  "Foto del ticket": "Photo of the ticket",
+  "Foto del ticket": "Receipt photo",
   "Esquina de arriba a la izquierda": "Top-left corner",
   "Esquina de arriba a la derecha": "Top-right corner",
   "Esquina de abajo a la izquierda": "Bottom-left corner",
@@ -1292,7 +1292,7 @@ export const EN: Record<string, string> = {
   "Borde de la izquierda": "Left edge",
   "Borde de la derecha": "Right edge",
   // AF-D212 · «Nueva» abre la cámara nativa del teléfono.
-  "Saca la foto del ticket completo, de cerca y con luz": "Take a photo of the whole ticket, up close and in good light",
+  "Saca la foto del ticket completo, de cerca y con luz": "Take a photo of the whole receipt, up close and in good light",
   "Sacar foto": "Take photo",
   "Preparando la foto…": "Preparing the photo…",
   // AF-E173-4-E176 · E173-4 · Estadísticas de Claude Design.
@@ -1420,6 +1420,11 @@ export const EN: Record<string, string> = {
   "La foto completa ya se borró.": "The full photo has already been deleted.",
   "De este ticket sólo se guardó una foto chica.": "Only a small photo of this receipt was saved.",
   "PayMe guarda la foto de este ticket para que la veas después en Mesas.": "PayMe saves this receipt's photo so you can see it later in Tables.",
+  // D481 · el paquete de Claude Design de la foto del ticket: la fila de Mesas, la pantalla del ticket y el visor.
+  "Cargando la foto del ticket de {0}": "Loading the receipt photo from {0}",
+  "Elegiste": "You chose",
+  "Ver detalle digital": "See digital details",
+  "Sin consumos elegidos": "No items chosen",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.

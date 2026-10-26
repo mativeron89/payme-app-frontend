@@ -11032,41 +11032,150 @@ h1.pay-title-lbl {
 .legal-notice summary { cursor: pointer; padding: 10px 0; }
 .legal-notice a { overflow-wrap: anywhere; }
 
-/* ─── D466 · A · la miniatura del ticket en la fila de Mesas ───────────────
-   Donde va el ícono de la cocina va la foto, con la misma altura de fila: un
-   hueco del ancho de la miniatura dentro del botón de la fila y, encima, el
-   botón de la foto (dos botones hermanos: uno no puede ir dentro del otro).
-   Sin foto, la fila de siempre, sin este envoltorio. */
-.hist-row-con-foto {
+/* ─── D481 · 2a · 2c · 2d · la fila de un ticket (Mesas y las visitas de viaje) ───
+   Paquete de Claude Design de la foto del ticket (D479; Mati aceptó las ocho
+   recomendaciones, D481). La fila es miniatura (o ícono), nombre y monto: sin
+   fecha, estado ni «Elegiste…». Toda la fila lleva a la pantalla del ticket; la
+   miniatura es otro botón, encima de la columna de 44 px (dos botones
+   hermanos: uno no puede ir dentro del otro). Con foto o sin foto, la fila mide
+   lo mismo (76 px) y el texto arranca en el mismo x. Reemplaza a la fila
+   desplegable de D360-P09 y al hueco de D466. */
+.hist-item.fila-ticket-item {
+  margin-bottom: var(--sp-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+.fila-ticket-cuerpo {
   position: relative;
 }
 
-.hist-foto-hueco {
-  flex: 0 0 34px;
-  height: 44px;
+.fila-ticket {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 76px;
+  padding: 12px var(--sp-4);
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
 }
 
-.hist-foto {
+.fila-ticket:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* La columna: la miniatura (el botón de encima) o el ícono de 26 px, centrados. */
+.fila-ticket-columna {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  color: var(--text);
+}
+
+.fila-ticket-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.fila-ticket-nombre {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fila-ticket-monto-col {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.fila-ticket-rotulo {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.fila-ticket-monto {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* D481 · 2 · sin consumos elegidos: «—» en gris, no un «$0» que no se sabe. */
+.fila-ticket-monto--sin {
+  color: var(--text-muted);
+}
+
+.fila-ticket-flecha {
+  flex: none;
+  color: var(--text-muted);
+}
+
+/* El botón de la miniatura: 44 × 52 sobre la columna, con la miniatura de 40 × 52 adentro. */
+.fila-ticket-foto {
   position: absolute;
   z-index: 1;
   top: 50%;
   left: var(--sp-4);
-  width: 34px;
-  height: 44px;
-  padding: 0;
-  overflow: hidden;
-  transform: translateY(-50%);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--text-muted);
-  cursor: zoom-in;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 52px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: zoom-in;
 }
 
-.hist-foto img {
+.fila-ticket-foto:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* El recuadro = hay foto. Lista: la foto desde arriba. Cargando: vacío y quieto
+   (con pulso suave, salvo movimiento reducido). Error: el ícono adentro. */
+.miniatura-ticket {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.miniatura-ticket img {
   display: block;
   width: 100%;
   height: 100%;
@@ -11074,12 +11183,240 @@ h1.pay-title-lbl {
   object-position: top center;
 }
 
-.hist-foto:focus-visible {
-  outline: 2px solid var(--action);
-  outline-offset: 2px;
+.miniatura-ticket--cargando {
+  animation: miniatura-ticket-pulso 1.4s ease-in-out infinite;
 }
 
-/* ─── D466 · E · el visor del ticket, a pantalla completa ──────────────── */
+@keyframes miniatura-ticket-pulso {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .miniatura-ticket--cargando {
+    animation: none;
+  }
+}
+
+/* D481 · 7 · Balance › Consumos: la miniatura en la columna del ícono (44 px), en la fila de siempre. */
+.vjb-consumo-con-foto {
+  position: relative;
+}
+
+.vjb-consumo-columna {
+  flex: 0 0 44px;
+  height: 52px;
+}
+
+.vjb-consumo-con-foto .fila-ticket-foto {
+  left: 0;
+}
+
+/* Texto sólo para el lector de pantalla. */
+.visor-ticket-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── D481 · 3b · 3d · la pantalla del ticket ─────────────────────────────
+   La fila de la foto dentro de la tarjeta de título, separada por una línea:
+   miniatura, «Ver la foto del ticket» y la flecha (ya no un link subrayado). */
+.pantalla-ticket-foto {
+  margin: 0 -18px;
+  padding: var(--sp-3) 18px 0;
+  border-top: 1px solid var(--border);
+}
+
+.fila-de-la-foto {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.fila-de-la-foto-texto {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fila-de-la-foto-flecha {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.fila-de-la-foto:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.pantalla-ticket .pantalla-ticket-scroll {
+  padding-bottom: var(--sp-4);
+}
+
+/* «Lo que elegiste»: una sola tarjeta con las filas de elegida, de sólo lectura. */
+.pantalla-ticket-eleccion {
+  margin: var(--sp-3) 16px 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-2);
+}
+
+.pantalla-ticket-eleccion.vj-card {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.pantalla-ticket-eleccion-titulo {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.pantalla-ticket-filas {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* La elegida: fondo --teal-l, borde 2 px --action-2 (nunca sólo color) y la
+   casilla marcada de 40 px. El tilde va en --action-2-fg, como en la mesa
+   (el blanco del paquete sobre este cian no llega a contraste). */
+.eleccion-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 56px;
+  padding: 6px 12px;
+  border: 2px solid var(--action-2);
+  border-radius: var(--r-md);
+  background: var(--teal-l);
+}
+
+.eleccion-fila-casilla {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+  color: var(--action-2-fg);
+}
+
+/* D100 · la columna del «½»: sólo ocupa lugar si alguna línea de la lista la tiene. */
+.eleccion-fila-frac {
+  display: none;
+  flex: 0 0 1em;
+  margin-right: calc(4px - var(--sp-3));
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pantalla-ticket-filas--con-porcion .eleccion-fila-frac {
+  display: block;
+}
+
+.eleccion-fila-nombre {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.eleccion-fila-cant {
+  font-variant-numeric: tabular-nums;
+}
+
+.eleccion-fila-monto {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pantalla-ticket-texto {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* El pie fijo: «Elegiste» y el monto (sin el total) y «Ver detalle digital». */
+.pantalla-ticket-pie {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -4px 16px rgba(16, 30, 59, 0.08);
+}
+
+.pantalla-ticket-pie .btn {
+  width: 100%;
+  min-height: 52px;
+}
+
+.pantalla-ticket-pie-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.pantalla-ticket-pie-rotulo {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.pantalla-ticket-pie-monto {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pantalla-ticket-pie-monto--sin {
+  color: var(--text-muted);
+}
+
+/* ─── D466 · E · D481 · 1c–1h · 1k · el visor del ticket, a pantalla completa ─── */
 .visor-ticket {
   position: fixed;
   inset: 0;
@@ -11091,11 +11428,21 @@ h1.pay-title-lbl {
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
 }
 
+.visor-ticket-columna {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 .visor-ticket-cabecera {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  min-height: 68px;
+  padding: 0 var(--sp-4);
 }
 
 .visor-ticket-x {
@@ -11121,6 +11468,7 @@ h1.pay-title-lbl {
   padding-right: var(--tap-min);
 }
 
+/* La foto a todo el ancho menos 16 por lado; nada se dibuja encima del papel: abajo queda el lugar de la píldora. */
 .visor-ticket-escenario {
   position: relative;
   flex: 1;
@@ -11131,23 +11479,69 @@ h1.pay-title-lbl {
   overflow: hidden;
   touch-action: none;
   user-select: none;
-  padding: var(--sp-4);
+  padding: 0 var(--sp-4) 48px;
 }
 
-/* La foto llena el escenario sin deformarse (una de 320 px también): `contain`
-   sobre una caja del tamaño disponible, con tope de ancho para el escritorio. */
 .visor-ticket-foto {
   width: 100%;
-  max-width: 560px;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.4));
   transform-origin: center;
   transition: transform 0.12s ease-out;
   cursor: zoom-in;
   -webkit-user-drag: none;
 }
 
+/* 1d · vencida: la miniatura a su tamaño (≤ 320 px), nunca agrandada, sin zoom,
+   y el aviso pegado debajo. */
+.visor-ticket-vencida {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+  max-width: 100%;
+}
+
+.visor-ticket-foto--vencida {
+  width: auto;
+  height: auto;
+  max-width: min(320px, 100%);
+  object-fit: none;
+  cursor: default;
+}
+
+.visor-ticket-aviso {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* 1e · cargando: el esqueleto 4:3 y el texto. */
+.visor-ticket-esqueleto {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  max-width: 560px;
+}
+
+.visor-ticket-esqueleto-papel {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.visor-ticket-esqueleto p {
+  margin: 0;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* 1f · error: el texto y Reintentar, blanco, de 44 px. */
 .visor-ticket-estado {
   display: grid;
   gap: var(--sp-3);
@@ -11159,37 +11553,71 @@ h1.pay-title-lbl {
 
 .visor-ticket-estado p {
   margin: 0;
+  font-size: var(--fs-body);
 }
 
-.visor-ticket-flecha {
+.visor-ticket-reintentar {
+  min-height: var(--tap-min);
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--white);
+  color: var(--navy);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 1c · la píldora de zoom, a 14 px del borde de abajo del escenario: se va a los 4 s o al primer zoom. */
+.visor-ticket-pista {
   position: absolute;
-  z-index: 1;
-  top: 50%;
+  left: 50%;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  transform: translateX(-50%);
+  border-radius: var(--r-full);
+  background: #2e374b;
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* La franja de 60 px entre la foto y el pie: las flechas a los lados de los puntos. */
+.visor-ticket-franja {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 22px;
+  min-height: 60px;
+}
+
+.visor-ticket-flecha,
+.visor-ticket-flecha-hueco {
+  flex: none;
   width: var(--tap-min);
   height: var(--tap-min);
-  transform: translateY(-50%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.visor-ticket-flecha {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
   border-radius: var(--r-full);
-  /* Oscura y opaca: va encima del papel blanco del ticket. */
-  background: rgba(16, 30, 59, 0.82);
+  background: none;
   color: var(--white);
   cursor: pointer;
 }
 
-.visor-ticket-flecha--antes {
-  left: var(--sp-2);
-}
-
-.visor-ticket-flecha--despues {
-  right: var(--sp-2);
-}
-
 .visor-ticket-x:focus-visible,
 .visor-ticket-flecha:focus-visible,
-.visor-ticket-boton:focus-visible {
+.visor-ticket-boton:focus-visible,
+.visor-ticket-reintentar:focus-visible {
   outline: 2px solid var(--white);
   outline-offset: 2px;
 }
@@ -11197,13 +11625,12 @@ h1.pay-title-lbl {
 .visor-ticket-puntos {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  padding: var(--sp-2) 0;
+  gap: 22px;
 }
 
 .visor-ticket-puntos span {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: var(--r-full);
   background: rgba(255, 255, 255, 0.35);
 }
@@ -11215,16 +11642,8 @@ h1.pay-title-lbl {
 .visor-ticket-pie {
   display: grid;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
-  background: rgba(0, 0, 0, 0.22);
-}
-
-.visor-ticket-aviso {
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.12);
-  font-size: var(--fs-sm);
+  padding: 18px 20px 28px;
+  background: #0c172e;
 }
 
 .visor-ticket-resumen {
@@ -11236,6 +11655,7 @@ h1.pay-title-lbl {
 .visor-ticket-resumen b {
   font-family: var(--font-display);
   font-size: var(--fs-body);
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -11252,14 +11672,67 @@ h1.pay-title-lbl {
 }
 
 .visor-ticket-boton {
-  min-height: var(--tap-min);
+  min-height: 48px;
   border: none;
   border-radius: var(--r-md);
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--white);
   font-family: var(--font-display);
   font-weight: 700;
   cursor: pointer;
+}
+
+/* 1k · escritorio: columna de 760 px, la foto a 420 de alto, las flechas por fuera de la columna y el pie como
+   tarjeta con el resumen a la izquierda y los dos botones a la derecha. */
+@media (min-width: 1024px) {
+  .visor-ticket-columna {
+    width: 760px;
+    max-width: calc(100% - 160px);
+    margin: 0 auto;
+  }
+
+  .visor-ticket-cabecera {
+    min-height: 48px;
+    padding: var(--sp-3) 0 0;
+  }
+
+  .visor-ticket-escenario {
+    flex: 0 0 468px;
+    height: 468px;
+    padding: 0 0 48px;
+  }
+
+  .visor-ticket-franja {
+    min-height: 32px;
+  }
+
+  .visor-ticket-flecha,
+  .visor-ticket-flecha-hueco {
+    position: absolute;
+    top: calc(48px + var(--sp-3) + 210px - 22px);
+  }
+
+  .visor-ticket-flecha--antes,
+  .visor-ticket-franja > .visor-ticket-flecha-hueco:first-child {
+    left: -72px;
+  }
+
+  .visor-ticket-flecha--despues,
+  .visor-ticket-franja > .visor-ticket-flecha-hueco:last-child {
+    right: -72px;
+  }
+
+  .visor-ticket-pie {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    margin-top: var(--sp-3);
+    border-radius: 20px;
+    padding: var(--sp-4) 20px;
+  }
+
+  .visor-ticket-acciones {
+    grid-auto-columns: 180px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -11268,38 +11741,28 @@ h1.pay-title-lbl {
   }
 }
 
-/* D466 · el aviso provisorio de que la foto se guarda, junto a la captura
-   (hereda el color y la letra de `.camara-sub`). */
-.captura-foto-guardada {
-  margin-bottom: 0;
+/* D481 · 1h · el detalle digital ENCIMA del visor: por portal a `body`, con velo al 50 %. */
+.ticket-digital-backdrop.ticket-digital-backdrop--encima {
+  position: fixed;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-/* D466 · E · en el ticket de un viaje, la foto debajo del título (alineada a la
-   izquierda, como lo que va adentro de la tarjeta de título, D285). */
-.vjt-foto-del-ticket {
+/* D481 · 1i · el aviso de que la foto se guarda, en una fila propia (texto provisorio hasta la abogada). */
+.captura-foto-guardada {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  min-height: var(--tap-min);
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text);
+  gap: 10px;
+  margin: var(--sp-3) 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
   font-family: var(--font-body);
   font-size: var(--fs-sm);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: zoom-in;
+  line-height: var(--lh-sm);
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.vjt-foto-del-ticket .vjt-foto-miniatura {
-  position: static;
-  flex: 0 0 34px;
-  transform: none;
-}
-
-.vjt-foto-del-ticket:focus-visible {
-  outline: 2px solid var(--action);
-  outline-offset: 2px;
+.captura-foto-guardada svg {
+  flex: none;
 }

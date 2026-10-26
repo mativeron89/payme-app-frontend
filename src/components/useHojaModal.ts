@@ -29,6 +29,27 @@ import { useEffect, useRef, type RefObject } from 'react';
 /** D256 · las hojas abiertas ahora: `.app` es inerte mientras haya alguna. */
 const abiertas = new Set<symbol>();
 
+/**
+ * D481 · la pila de capas modales, de abajo hacia arriba: la hoja del detalle
+ * digital se abre ENCIMA del visor de la foto del ticket. Escape y Tab los
+ * atiende sólo la capa de arriba; sin esto, un Escape cerraba las dos.
+ */
+const pila: symbol[] = [];
+
+/** Suma una capa arriba de la pila; devuelve cómo sacarla (en cualquier orden). */
+export function apilarCapa(capa: symbol): () => void {
+  pila.push(capa);
+  return () => {
+    const i = pila.lastIndexOf(capa);
+    if (i >= 0) pila.splice(i, 1);
+  };
+}
+
+/** ¿Es esta la capa de arriba? Una capa que no está en la pila no atiende el teclado. */
+export function esLaCapaDeArriba(capa: symbol): boolean {
+  return pila.length > 0 && pila[pila.length - 1] === capa;
+}
+
 /** Cuántas hojas hay abiertas (lo muestra el panel de diagnóstico). */
 export function hojasAbiertas(): number {
   return abiertas.size;
@@ -53,10 +74,13 @@ export function useHojaModal(
   useEffect(() => {
     const esta = Symbol('hoja');
     abiertas.add(esta);
+    const desapilar = apilarCapa(esta);
     aplicarInerte();
     inicial.current?.focus();
 
     const alTeclado = (event: KeyboardEvent) => {
+      // D481 · con otra capa encima (el detalle digital sobre el visor), el teclado es de esa.
+      if (!esLaCapaDeArriba(esta)) return;
       if (event.key === 'Escape') {
         cerrar.current();
         return;
@@ -82,6 +106,7 @@ export function useHojaModal(
     document.addEventListener('keydown', alTeclado);
     return () => {
       document.removeEventListener('keydown', alTeclado);
+      desapilar();
       abiertas.delete(esta);
       aplicarInerte();
     };

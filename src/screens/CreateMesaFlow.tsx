@@ -1989,9 +1989,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           {/* D464 · D466 · 🔴 TEXTO PROVISORIO: se reemplaza por el que apruebe la abogada antes de encender. Sólo con
               la capacidad encendida, que es cuando el escaneo negocia `ticket_image_version=1` y el dueño guarda la
               foto; sin ella (hoy), nada nuevo. */}
+          {/* D481 · 1i · el mismo texto, en una fila propia con el ícono de imagen: se distingue del subtítulo sin
+              color de alerta. */}
           {capacidadFoto && (
-            <p className="camara-sub captura-foto-guardada">
-              {t('PayMe guarda la foto de este ticket para que la veas después en Mesas.')}
+            <p className="captura-foto-guardada">
+              <Icon name="image" size={20} />
+              <span>{t('PayMe guarda la foto de este ticket para que la veas después en Mesas.')}</span>
             </p>
           )}
         </div>

@@ -67,7 +67,8 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await visitas.first().getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('No es una foto, factura ni comprobante de pago.');
+    // D481 · 1h · el subtítulo nuevo del detalle digital (paquete de Claude Design).
+    await expect(dialog).toContainText('Detalle registrado en PayMe. No es factura ni comprobante de pago.');
     await expect(dialog).toContainText('Total del ticket');
     await dialog.getByRole('button', { name: 'Cerrar' }).click();
     const consumido = parolaccia.locator('.rest-items');

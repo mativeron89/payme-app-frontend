@@ -115,6 +115,9 @@ test.describe('D98 + D99 · Inicio › Cuenta: Pagos lleva a Mesas y Perfil a Co
   });
 });
 
+// D481 · desde la 0.262.0 lo elegido de una mesa de Mesas se ve en su pantalla del ticket (3b), no en la fila
+// desplegada: la regla D100 (plato, «½» y monto en una línea; el «½» en su columna, sólo si alguna línea lo tiene) se
+// cumple ahí.
 test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () => {
   test('el «½» comparte la línea del nombre y del monto, en columna', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
@@ -122,10 +125,10 @@ test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () 
     await page.goto('/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
     // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
-    await mesa.locator('button.hist-row').click();
-    const detalle = mesa.locator('.hist-detail');
+    await mesa.locator('button.fila-ticket').click();
+    const detalle = page.getByRole('region', { name: 'Lo que elegiste' });
     await expect(detalle).toContainText('Quesadilla');
-    const filas = await detalle.locator('.hist-detail-row').evaluateAll((rs) => rs.map((r) => {
+    const filas = await detalle.locator('.eleccion-fila').evaluateAll((rs) => rs.map((r) => {
       const caja = (sel: string) => {
         const e = r.querySelector(sel);
         if (!e || getComputedStyle(e).display === 'none') return null;
@@ -134,9 +137,9 @@ test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () 
       };
       return {
         texto: r.textContent,
-        frac: caja('.hist-detail-frac'),
-        nombre: caja('.hist-detail-name'),
-        monto: caja('.hist-detail-amount'),
+        frac: caja('.eleccion-fila-frac'),
+        nombre: caja('.eleccion-fila-nombre'),
+        monto: caja('.eleccion-fila-monto'),
       };
     }));
     const quesadilla = filas.find((f) => f.texto?.includes('Quesadilla'))!;
@@ -156,15 +159,15 @@ test.describe('D100 · Historial: plato, «½» y monto en una sola línea', () 
     await page.goto('/mesas');
     const mesa = page.locator('.tu-mesa').filter({ hasText: 'Mesa de prueba 1' }).first();
     // AF-BORRAR-MESAS · la tarjeta tiene además «Eliminar»: el botón de la tarjeta.
-    await mesa.locator('button.hist-row').click();
-    const fila = mesa.locator('.hist-detail-row').first();
+    await mesa.locator('button.fila-ticket').click();
+    const fila = page.getByRole('region', { name: 'Lo que elegiste' }).locator('.eleccion-fila').first();
     await expect(fila).toBeVisible();
     const m = await fila.evaluate((r) => {
-      const d = r.closest('.hist-detail')!.getBoundingClientRect();
-      const n = r.querySelector('.hist-detail-name')!.getBoundingClientRect();
-      const pad = parseFloat(getComputedStyle(r.closest('.hist-detail')!).paddingLeft);
-      return { desdeElBorde: n.left - d.left - pad - 1 };
+      const c = r.querySelector('.eleccion-fila-casilla')!.getBoundingClientRect();
+      const n = r.querySelector('.eleccion-fila-nombre')!.getBoundingClientRect();
+      const gap = parseFloat(getComputedStyle(r).columnGap);
+      return { desdeLaCasilla: n.left - c.right - gap };
     });
-    expect(Math.abs(m.desdeElBorde), JSON.stringify(m)).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.desdeLaCasilla), JSON.stringify(m)).toBeLessThanOrEqual(1);
   });
 });
