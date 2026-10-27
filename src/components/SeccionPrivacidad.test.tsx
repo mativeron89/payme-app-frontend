@@ -4,7 +4,9 @@ import { MockApiError } from '../api/mock/mockApi';
 import { aplicarConfigSugerencias, reiniciarSugerenciasParaTests } from '../api/sugerencias';
 import type { StoredSession } from '../api/storage';
 import { traducir } from '../i18n/idioma';
-import { FilaPermisoOpcionalView, SeccionPrivacidad, mensajeDeRechazo } from './SeccionPrivacidad';
+import type { PermisoFoto } from '../api/fotoPerfilNoAmigos';
+import type { EstadoPrivacidadFoto } from './PrivacidadFotoPanel';
+import { FilaFotoView, FilaPermisoOpcionalView, SeccionPrivacidad, SeccionPrivacidadView, mensajeDeRechazo } from './SeccionPrivacidad';
 
 const SESION = { family_id: 'f', principal_id: 'p' } as unknown as StoredSession;
 const TEXTOS = {
@@ -16,23 +18,34 @@ const TEXTOS = {
 afterEach(() => reiniciarSugerenciasParaTests());
 
 describe('n420 · Configuración › Privacidad, las filas de los permisos opcionales', () => {
-  it('🔴 apagadas (hoy): la sección no se pinta', () => {
+  const sinFila = <SeccionPrivacidadView foto={null} sugerencias={null} analisis={null} />;
+  const filas = (sug: boolean, ana: boolean) => {
+    // La sección real arma las filas según la capacidad; la foto (`useControlFoto`) se prueba aparte.
+    aplicarConfigSugerencias({ features: {
+      ...(sug ? { sugerencias: { supported: true, enabled: true } } : {}),
+      ...(ana ? { analisis_interno: { supported: true, enabled: true } } : {}),
+    } });
+    return renderToStaticMarkup(<SeccionPrivacidad session={SESION} />);
+  };
+
+  it('🔴 sin la foto y con las dos apagadas (hoy, con un servidor sin la finalidad): la sección no se pinta', () => {
+    expect(renderToStaticMarkup(sinFila)).toBe('');
+    // Mientras consulta el estado de la foto, tampoco: si no, aparecería y se iría con un 404 (salto de pantalla).
     expect(renderToStaticMarkup(<SeccionPrivacidad session={SESION} />)).toBe('');
-    aplicarConfigSugerencias({ features: { sugerencias: { supported: true, enabled: false }, analisis_interno: { supported: true, enabled: false } } });
-    expect(renderToStaticMarkup(<SeccionPrivacidad session={SESION} />)).toBe('');
+    const html = filas(false, false);
+    expect(html).not.toContain('Sugerencias para dividir');
+    expect(html).not.toContain('Análisis interno de PayMe');
   });
 
   it('🔴 encendidas: «Privacidad» y las dos filas, en ese orden (D426: el análisis debajo)', () => {
-    aplicarConfigSugerencias({ features: { sugerencias: { supported: true, enabled: true }, analisis_interno: { supported: true, enabled: true } } });
-    const html = renderToStaticMarkup(<SeccionPrivacidad session={SESION} />);
+    const html = filas(true, true);
     expect(html).toContain('Privacidad');
     expect(html.indexOf('Sugerencias para dividir')).toBeGreaterThan(-1);
     expect(html.indexOf('Análisis interno de PayMe')).toBeGreaterThan(html.indexOf('Sugerencias para dividir'));
   });
 
   it('una encendida y la otra no: sólo esa fila', () => {
-    aplicarConfigSugerencias({ features: { sugerencias: { supported: true, enabled: true } } });
-    const html = renderToStaticMarkup(<SeccionPrivacidad session={SESION} />);
+    const html = filas(true, false);
     expect(html).toContain('Sugerencias para dividir');
     expect(html).not.toContain('Análisis interno de PayMe');
   });
@@ -78,5 +91,63 @@ describe('n420 · Configuración › Privacidad, las filas de los permisos opcio
     expect(en('Más en el Aviso de Privacidad.')).toBe('More in the Privacy Notice.');
     expect(en('Esta opción no está disponible para tu cuenta.')).toBe("This option isn't available for your account.");
     expect(en('Por ahora no está disponible. Prueba de nuevo más tarde.')).toBe('Not available right now. Try again later.');
+  });
+});
+
+const HASH = '51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc';
+const permiso = (granted: boolean): PermisoFoto => ({
+  purpose_key: 'foto_perfil_no_amigos', granted, state: granted ? 'granted' : 'revoked',
+  since: '2026-10-23T00:00:00.000Z', notice_version: '3.1.0', notice_hash: HASH,
+});
+const AVISO = { kind: 'aviso_privacidad', version: '3.1.0', hash: HASH, effective_from: '2026-10-23T00:00:00.000Z', body: 'x' } as EstadoPrivacidadFoto['aviso'];
+const estadoFoto = (o: Partial<EstadoPrivacidadFoto>): EstadoPrivacidadFoto =>
+  ({ permiso: null, aviso: null, permiteGrant: false, ocupado: false, error: null, ...o });
+const filaFoto = (e: EstadoPrivacidadFoto) => renderToStaticMarkup(<FilaFotoView estado={e} onCambiar={() => undefined} onConsultar={() => undefined} />);
+
+describe('D499 b5 · la fila simple del permiso de foto', () => {
+  it('🔴 una fila con su interruptor, el enlace al Aviso y sin el bloque grande de D468', () => {
+    const html = filaFoto(estadoFoto({ permiso: permiso(false), aviso: AVISO, permiteGrant: true }));
+    expect(html).toContain('Mostrar mi foto a personas que no son mis amigos');
+    expect(html).toContain('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes.');
+    expect(html).toContain('Más en el Aviso de Privacidad.');
+    expect(html.match(/role="switch"/g)).toHaveLength(1);
+    expect(html).not.toMatch(/Aviso de Privacidad Integral|<details|Consultar estado|>Activar<|>Desactivar</);
+  });
+
+  it('🔴 activar: sólo con la capacidad y el Aviso 3.1.0 verificado', () => {
+    expect(filaFoto(estadoFoto({ permiso: permiso(false), aviso: AVISO, permiteGrant: true }))).not.toMatch(/disabled/);
+    const sinAviso = filaFoto(estadoFoto({ permiso: permiso(false), aviso: null, permiteGrant: true }));
+    expect(sinAviso).toMatch(/role="switch"[^>]*disabled/);
+    expect(sinAviso).toContain('Este permiso no está disponible para activarlo en este momento.');
+    expect(filaFoto(estadoFoto({ permiso: permiso(false), aviso: AVISO, permiteGrant: false }))).toMatch(/disabled/);
+  });
+
+  it('🔴 D463 · revocar: otorgado, el interruptor queda habilitado aunque no haya capacidad ni Aviso', () => {
+    const html = filaFoto(estadoFoto({ permiso: permiso(true), aviso: null, permiteGrant: false }));
+    expect(html).toMatch(/checked=""/);
+    expect(html).not.toMatch(/disabled/);
+  });
+
+  it('mientras consulta o sin estado confirmado, apagado y deshabilitado; un error ofrece consultar de nuevo', () => {
+    expect(filaFoto(estadoFoto({ ocupado: true }))).toMatch(/role="switch"[^>]*disabled/);
+    const error = filaFoto(estadoFoto({ error: 'No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.' }));
+    expect(error).toContain('No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.');
+    expect(error).toContain('Consultar estado');
+    expect(error).not.toContain('checked');
+  });
+
+  it('va primera en la sección, antes de las filas opcionales', () => {
+    const html = renderToStaticMarkup(<SeccionPrivacidadView
+      foto={{ estado: estadoFoto({ permiso: permiso(false) }), onCambiar: () => undefined, onConsultar: () => undefined }}
+      sugerencias={<p>Sugerencias para dividir</p>} analisis={null} />);
+    expect(html.indexOf('Mostrar mi foto')).toBeLessThan(html.indexOf('Sugerencias para dividir'));
+  });
+
+  it('EN · la fila traducida', () => {
+    const en = (s: string) => traducir(s, 'en');
+    expect(en('Mostrar mi foto a personas que no son mis amigos')).toBe('Show my photo to people who are not my friends');
+    expect(en('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.'))
+      .not.toBe('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.');
+    expect(en('Más en el Aviso de Privacidad.')).toBe('More in the Privacy Notice.');
   });
 });

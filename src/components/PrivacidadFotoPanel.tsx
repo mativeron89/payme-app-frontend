@@ -25,8 +25,8 @@ export function PrivacidadFotoView({ estado, soloRevocar, onCambiar, onConsultar
 }) {
   const { t, idioma } = useIdioma();
   const id = useId();
-  const { permiso, aviso, permiteGrant, ocupado, error } = estado;
-  const habilitado = permiso !== null && !ocupado && (permiso.granted || (!soloRevocar && permiteGrant && aviso !== null));
+  const { permiso, aviso, ocupado, error } = estado;
+  const habilitado = fotoHabilitada(estado, soloRevocar);
   return <section className="card privacidad-foto" aria-labelledby={`${id}-titulo`} aria-busy={ocupado}>
     <h2 id={`${id}-titulo`} className="h2">{t('Privacidad')}</h2>
     <p id={`${id}-etiqueta`}>{t('Mostrar mi foto a personas que no son mis amigos')}</p>
@@ -59,8 +59,8 @@ export function PrivacidadFotoView({ estado, soloRevocar, onCambiar, onConsultar
 }
 
 const INICIAL: EstadoPrivacidadFoto = { permiso: null, aviso: null, permiteGrant: false, ocupado: true, error: null };
-const ERROR_LECTURA = 'No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.';
-const ERROR_CAMBIO = 'No se confirmó el cambio. Consulta el estado antes de volver a intentarlo.';
+export const ERROR_LECTURA = 'No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.';
+export const ERROR_CAMBIO = 'No se confirmó el cambio. Consulta el estado antes de volver a intentarlo.';
 const CAMBIO_RECONSULTADO = 'No recibimos la confirmación del cambio. El estado mostrado corresponde a una nueva consulta.';
 
 /** Key por cuenta/familia: ninguna respuesta ni elección de otra sesión se reutiliza. */
@@ -72,6 +72,21 @@ export function PrivacidadFotoPanel({ session, soloRevocar = false }: {
 }
 
 function ControlFoto({ session, soloRevocar }: { readonly session: StoredSession; readonly soloRevocar: boolean }) {
+  const { estado, noSoportado, cambiar, consultar } = useControlFoto(session, soloRevocar);
+  return noSoportado ? null : <PrivacidadFotoView estado={estado} soloRevocar={soloRevocar}
+    onCambiar={cambiar} onConsultar={consultar} />;
+}
+
+/**
+ * D457 · la lógica del permiso de foto, sin la vista: la usan el panel de la puerta legal (sólo revocar) y la fila de
+ * Configuración › Privacidad (D499 b5). Remontar con `key` por cuenta (ver `PrivacidadFotoPanel`).
+ */
+export function useControlFoto(session: StoredSession, soloRevocar: boolean): {
+  readonly estado: EstadoPrivacidadFoto;
+  readonly noSoportado: boolean;
+  readonly cambiar: () => void;
+  readonly consultar: () => void;
+} {
   const [estado, setEstado] = useState<EstadoPrivacidadFoto>(INICIAL);
   const [intento, setIntento] = useState(0);
   const [noSoportado, setNoSoportado] = useState(false);
@@ -153,7 +168,16 @@ function ControlFoto({ session, soloRevocar }: { readonly session: StoredSession
     } finally { mutando.current = false; }
   }
 
-  return noSoportado ? null : <PrivacidadFotoView estado={estado} soloRevocar={soloRevocar}
-    onCambiar={() => { void cambiar(); }}
-    onConsultar={() => { if (!mutando.current) setIntento((n) => n + 1); }} />;
+  return {
+    estado,
+    noSoportado,
+    cambiar: () => { void cambiar(); },
+    consultar: () => { if (!mutando.current) setIntento((n) => n + 1); },
+  };
+}
+
+/** Si `habilitado` el interruptor puede cambiar: revocar siempre; activar sólo con capacidad y Aviso verificado. */
+export function fotoHabilitada(estado: EstadoPrivacidadFoto, soloRevocar: boolean): boolean {
+  const { permiso, aviso, permiteGrant, ocupado } = estado;
+  return permiso !== null && !ocupado && (permiso.granted || (!soloRevocar && permiteGrant && aviso !== null));
 }

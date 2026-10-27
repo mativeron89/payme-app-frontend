@@ -114,16 +114,67 @@ for (const vp of [{ nombre: 'Chrome 1280×720', width: 1280, height: 720 }, { no
   });
 }
 
-// D468 · los cuatro casos que entraban por Configuración se quitaron con el bloque (están en el historial de git,
-// 0.261.0); el panel sigue cubierto por PrivacidadFotoPanel.test.tsx y por los casos de la puerta legal.
-test('D468 · Configuración no muestra el permiso de foto (el componente queda para reincorporarlo)', async ({ page }) => {
+/**
+ * D499 b5 · Mati: «Fila simple en Privacidad». El permiso vuelve a Configuración › Privacidad como UNA fila con
+ * interruptor, sin el bloque grande que quitó D468. Usa la misma lógica (`useControlFoto`) y la misma fachada.
+ */
+async function aConfiguracion(page: Page, opciones: Parameters<typeof instrumentar>[1]) {
   await ingresar(page);
   const acuse = page.getByLabel('Actualización del Aviso de Privacidad');
   if (await acuse.count()) await acuse.getByRole('button', { name: 'Entendido', exact: true }).click();
-  await instrumentar(page, {});
+  await instrumentar(page, opciones);
   await irEnLaApp(page, '/mas');
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+}
+
+test('🔴 D499 b5 · Configuración › Privacidad: la fila, activar con el Aviso 3.1.0 y revocar', async ({ page }) => {
+  await aConfiguracion(page, {});
+  const seccion = page.getByRole('region', { name: 'Privacidad', exact: true });
+  const control = seccion.getByRole('switch', { name: ETIQUETA, exact: true });
+  await expect(control).not.toBeChecked();
+  await expect(control).toBeEnabled();
+  await expect(seccion.getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toBeVisible();
+  // Sin el bloque grande de D468: ni el Aviso desplegable, ni «Consultar estado», ni botones Activar/Desactivar.
+  await expect(seccion.getByText('Aviso de Privacidad Integral')).toHaveCount(0);
+  await expect(seccion.getByRole('button', { name: 'Consultar estado' })).toHaveCount(0);
+  await expect(seccion.getByRole('button', { name: /^(Activar|Desactivar)$/ })).toHaveCount(0);
+  await control.click();
+  await expect(control).toBeChecked();
+  expect((await espia(page)).grants).toBe(1);
+  await control.click();
+  await expect(control).not.toBeChecked();
+  expect((await espia(page)).revokes).toBe(1);
+});
+
+test('🔴 D463 · otorgado y con la capacidad apagada: se revoca igual', async ({ page }) => {
+  await aConfiguracion(page, { concedido: true, enabled: false });
+  const control = page.getByRole('switch', { name: ETIQUETA, exact: true });
+  await expect(control).toBeChecked();
+  await expect(control).toBeEnabled();
+  await control.click();
+  await expect(control).not.toBeChecked();
+  expect((await espia(page)).revokes).toBe(1);
+  // Ya revocado y con la capacidad apagada, no se puede volver a activar.
+  await expect(control).toBeDisabled();
+  await expect(page.getByText('Este permiso no está disponible para activarlo en este momento.')).toBeVisible();
+});
+
+test('sin la finalidad en el servidor (404): ni la fila ni la sección', async ({ page }) => {
+  await aConfiguracion(page, { viejo: true });
+  await expect.poll(async () => (await espia(page)).lecturas).toBeGreaterThan(0);
   await expect(page.getByRole('switch', { name: ETIQUETA, exact: true })).toHaveCount(0);
-  await expect(page.getByText('No pudimos confirmar el estado del permiso.')).toHaveCount(0);
-  expect((await espia(page)).lecturas).toBe(0);
+  await expect(page.getByRole('region', { name: 'Privacidad', exact: true })).toHaveCount(0);
+});
+
+test('EN · la fila traducida', async ({ page }) => {
+  await ingresar(page);
+  await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+  await page.reload();
+  const acuse = page.getByLabel(/Privacy Notice update|Actualización del Aviso de Privacidad/);
+  if (await acuse.count()) await acuse.getByRole('button', { name: /^(Got it|Entendido)$/ }).click();
+  await instrumentar(page, {});
+  await irEnLaApp(page, '/mas');
+  const seccion = page.getByRole('region', { name: 'Privacy', exact: true });
+  await expect(seccion.getByRole('switch', { name: 'Show my photo to people who are not my friends', exact: true })).toBeVisible();
+  await expect(seccion.getByRole('link', { name: 'More in the Privacy Notice.' })).toBeVisible();
 });

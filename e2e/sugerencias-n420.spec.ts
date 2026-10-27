@@ -118,8 +118,8 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
   });
 
-  /** La marca en inglés («As usual · between N») la fija `src/api/sugerencias.test.ts`: el ayudante de la cámara es en español. */
-  test('EN · las filas en inglés', async ({ page }) => {
+  /** La marca en EN («As usual · between N») la fija `src/api/sugerencias.test.ts`: el ayudante de la cámara es en español. */
+  test('EN · las filas traducidas', async ({ page }) => {
     await conCosturas(page, { sugerencias: 'encendido' });
     await ingresar(page);
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
