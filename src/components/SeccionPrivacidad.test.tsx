@@ -108,10 +108,31 @@ describe('D499 b5 · la fila simple del permiso de foto', () => {
   it('🔴 una fila con su interruptor, el enlace al Aviso y sin el bloque grande de D468', () => {
     const html = filaFoto(estadoFoto({ permiso: permiso(false), aviso: AVISO, permiteGrant: true }));
     expect(html).toContain('Mostrar mi foto a personas que no son mis amigos');
-    expect(html).toContain('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes.');
     expect(html).toContain('Más en el Aviso de Privacidad.');
     expect(html.match(/role="switch"/g)).toHaveLength(1);
     expect(html).not.toMatch(/Aviso de Privacidad Integral|<details|Consultar estado|>Activar<|>Desactivar</);
+  });
+
+  it('🔴 D505 · sólo el título: sin la descripción ni un aria-describedby que la apunte, en ninguno de sus estados', () => {
+    const estados = [
+      estadoFoto({ permiso: permiso(false), aviso: AVISO, permiteGrant: true }),
+      estadoFoto({ permiso: permiso(true), aviso: null, permiteGrant: false }),
+      estadoFoto({ permiso: permiso(false), aviso: null, permiteGrant: true }),
+      estadoFoto({ ocupado: true }),
+      estadoFoto({ error: 'No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.' }),
+    ];
+    for (const e of estados) {
+      const html = filaFoto(e);
+      expect(html).toContain('Mostrar mi foto a personas que no son mis amigos');
+      expect(html).toContain('Más en el Aviso de Privacidad.');
+      expect(html).not.toContain('Permite que otros usuarios vean tu foto');
+      expect(html).not.toContain('Tus amigos podrán seguir viéndola');
+      expect(html).not.toContain('aria-describedby');
+      expect(html).not.toContain('privacidad-foto-texto');
+    }
+    // Los mensajes de estado y error se conservan.
+    expect(filaFoto(estados[2]!)).toContain('Este permiso no está disponible para activarlo en este momento.');
+    expect(filaFoto(estados[4]!)).toContain('Consultar estado');
   });
 
   it('🔴 activar: sólo con la capacidad y el Aviso 3.1.0 verificado', () => {
@@ -146,6 +167,7 @@ describe('D499 b5 · la fila simple del permiso de foto', () => {
   it('EN · la fila traducida', () => {
     const en = (s: string) => traducir(s, 'en');
     expect(en('Mostrar mi foto a personas que no son mis amigos')).toBe('Show my photo to people who are not my friends');
+    // D505 · la fila ya no la muestra; la cadena sigue traducida porque la usa la puerta legal (`PrivacidadFotoPanel`).
     expect(en('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.'))
       .not.toBe('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.');
     expect(en('Más en el Aviso de Privacidad.')).toBe('More in the Privacy Notice.');

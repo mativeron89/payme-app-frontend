@@ -134,6 +134,9 @@ test('🔴 D499 b5 · Configuración › Privacidad: la fila, activar con el Avi
   await expect(control).not.toBeChecked();
   await expect(control).toBeEnabled();
   await expect(seccion.getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toBeVisible();
+  // D505 · sólo el título: sin la descripción.
+  await expect(seccion.getByText('Permite que otros usuarios vean tu foto', { exact: false })).toHaveCount(0);
+  await expect(control).not.toHaveAttribute('aria-describedby');
   // Sin el bloque grande de D468: ni el Aviso desplegable, ni «Consultar estado», ni botones Activar/Desactivar.
   await expect(seccion.getByText('Aviso de Privacidad Integral')).toHaveCount(0);
   await expect(seccion.getByRole('button', { name: 'Consultar estado' })).toHaveCount(0);
@@ -177,4 +180,5 @@ test('EN · la fila traducida', async ({ page }) => {
   const seccion = page.getByRole('region', { name: 'Privacy', exact: true });
   await expect(seccion.getByRole('switch', { name: 'Show my photo to people who are not my friends', exact: true })).toBeVisible();
   await expect(seccion.getByRole('link', { name: 'More in the Privacy Notice.' })).toBeVisible();
+  await expect(seccion.getByText('Allow other users to see your photo', { exact: false })).toHaveCount(0);
 });

@@ -70,7 +70,7 @@ export function SeccionPrivacidadView({ foto, sugerencias, analisis }: {
   );
 }
 
-/** D499 b5 · la fila simple de la foto: título, una línea, el enlace al Aviso y el interruptor. */
+/** D499 b5 · la fila simple de la foto. D505 · sólo el título (sin descripción), el enlace al Aviso, los mensajes y el interruptor. */
 export function FilaFotoView({ estado, onCambiar, onConsultar }: {
   readonly estado: EstadoPrivacidadFoto;
   readonly onCambiar: () => void;
@@ -90,9 +90,6 @@ export function FilaFotoView({ estado, onCambiar, onConsultar }: {
         <div id="privacidad-foto-titulo" style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
           {t('Mostrar mi foto a personas que no son mis amigos')}
         </div>
-        <div id="privacidad-foto-texto" className="caption">
-          {t('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.')}
-        </div>
         <a className="caption privacidad-enlace" href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">
           {t('Más en el Aviso de Privacidad.')}
         </a>
@@ -108,7 +105,6 @@ export function FilaFotoView({ estado, onCambiar, onConsultar }: {
         role="switch"
         className="notif-switch"
         aria-labelledby="privacidad-foto-titulo"
-        aria-describedby="privacidad-foto-texto"
         checked={permiso?.granted === true}
         disabled={!habilitado}
         onChange={onCambiar}
