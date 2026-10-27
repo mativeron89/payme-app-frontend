@@ -1,4 +1,5 @@
 import { PrivacidadFotoPanel } from '../components/PrivacidadFotoPanel';
+import { SeccionPrivacidad } from '../components/SeccionPrivacidad';
 import { useRef, useState } from 'react';
 import { IS_MOCK } from '../api';
 import { SelectorIdioma } from '../components/SelectorIdioma';
@@ -219,6 +220,8 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
+        {/* n420 · Configuración › Privacidad: las filas de los permisos opcionales, sólo con su capacidad (hoy apagadas). */}
+        {session && <SeccionPrivacidad session={session} />}
         {/* D468 · Mati: «Quitalo, después vemos cómo lo incorporamos y dónde». El componente y su lógica quedan. */}
         {session && MOSTRAR_PERMISO_FOTO_EN_CONFIGURACION && <PrivacidadFotoPanel session={session} />}
         <AccesoGuia />

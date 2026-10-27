@@ -104,6 +104,8 @@ import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
 import { mensajeDeRechazo, mismaPropina, rechazoOcultaElSelector } from './propinaDeLaMesaView';
 import { useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
+import { textoDeSugerencia } from '../api/sugerencias';
+import { useSugerenciaDeDividir } from './useSugerenciaDeDividir';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -680,6 +682,13 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   restaurantIdRef.current = restaurantId;
   restaurantRef.current = restaurant;
   const effectiveRestaurantId = restaurant?.id ?? restaurantId;
+  // n420 · «dividir como siempre», APAGADO hoy: sin la capacidad del `/config` no pide nada ni cambia nada.
+  const sugerencia = useSugerenciaDeDividir({
+    activo: step === 'ticket' && !enViaje && !ejemplo,
+    listo: restaurant !== null || restaurantRecordOnly || restaurantError !== null,
+    restaurantId: effectiveRestaurantId || null,
+    session,
+  });
   const mesaScopeBase = actor
     ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}`)
     : '';
@@ -2843,7 +2852,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 <div className="div-ico">{op.ico}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="div-title">{titulo}</div>
-                  <div className="div-sub">{t(op.sub)}</div>
+                  {/* D411 · la opción sugerida cambia su texto chico por «Como siempre» (D413: «entre N» en partes
+                      iguales). Sin altura ni controles nuevos; elegirla no completa el número (D412). */}
+                  <div className="div-sub">{textoDeSugerencia(sugerencia, op.modo, t) ?? t(op.sub)}</div>
                 </div>
               </button>
               <AyudaDeOpcion

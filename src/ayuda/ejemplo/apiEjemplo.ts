@@ -42,6 +42,11 @@ export const CLASIFICACION_DEL_EJEMPLO = {
   // Configuración, legales, sesión y cuenta.
   getConfig: 'pasa',
   getFotoPerfilNoAmigos: 'pasa',
+  // n420 · ni los permisos opcionales ni la sugerencia de dividir corren con el ejemplo activo.
+  getConsentimiento: 'cortado',
+  grantConsentimiento: 'cortado',
+  revokeConsentimiento: 'cortado',
+  getSugerenciaDividir: 'cortado',
   grantFotoPerfilNoAmigos: 'pasa',
   revokeFotoPerfilNoAmigos: 'pasa',
   getPrivacyNotice: 'pasa',

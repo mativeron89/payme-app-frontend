@@ -142,6 +142,12 @@ import {
   valorDeLaNegociacion,
 } from './fotoDelTicket';
 import { aplicarConfigOcrPaginas, capacidadOcrPaginas, rechazoLocalDePartes } from './ocrPaginas';
+import {
+  RUTA_CONSENTIMIENTO, RUTA_GRANT, RUTA_REVOKE, aplicarConfigSugerencias, capacidadOpcional, confirmarConsentimiento,
+  decodeConsentimiento, decodeSugerenciaDeDividir, rutaDeSugerencia,
+  type EstadoDeConsentimiento, type FinalidadOpcional, type SugerenciaDeDividir,
+} from './sugerencias';
+import * as mockSugerencias from './mock/mockSugerencias';
 import { conFotoDelTicketDeViajeMock, conFotoEnLasVisitasMock, conFotoEnLosTicketsDelViajeMock } from './mock/fotoDelTicketMock';
 import {
   applyUsernameConfig,
@@ -354,6 +360,15 @@ export interface Api {
   getFotoPerfilNoAmigos(expectedSession: StoredSession): Promise<PermisoFoto>;
   grantFotoPerfilNoAmigos(aviso: LegalTextResponse['legal_text'], expectedSession: StoredSession): Promise<PermisoFoto>;
   revokeFotoPerfilNoAmigos(expectedSession: StoredSession): Promise<PermisoFoto>;
+  /**
+   * n420 · los permisos opcionales `sugerencias` y `analisis_interno` (D415, D417, D426). Sólo se piden con su
+   * capacidad anunciada en `/config` (`./sugerencias.ts`); con ella apagada nadie los llama.
+   */
+  getConsentimiento(finalidad: FinalidadOpcional, expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
+  grantConsentimiento(finalidad: FinalidadOpcional, aviso: LegalTextResponse['legal_text'], expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
+  revokeConsentimiento(finalidad: FinalidadOpcional, expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
+  /** n420 · `GET /api/sugerencias/dividir` (AB-2): sólo con la capacidad encendida y el permiso otorgado. */
+  getSugerenciaDividir(restaurantId: string | null, expectedSession: StoredSession): Promise<SugerenciaDeDividir>;
   /** Aviso vigente que debe ponerse a disposición antes del alta. Público. */
   getPrivacyNotice(): Promise<LegalTextResponse>;
   /**
@@ -798,6 +813,23 @@ const realApi: Api = {
   revokeFotoPerfilNoAmigos: async (s) => confirmarMutacionFoto(await httpPrivateJsonMutationRequest<unknown>(
     `${FOTO_PATH}/revoke`, {}, s, undefined, 'POST', { forbidEtag: false },
   ), false),
+  getConsentimiento: async (f, s) => decodeConsentimiento(await httpPrivateJsonRequest<unknown>(
+    RUTA_CONSENTIMIENTO[f], s, undefined, { requireAuthorizationVary: true },
+  ), f),
+  grantConsentimiento: async (f, aviso, s) => {
+    // Revalidar la capacidad al gesto: apagada en el medio, no se otorga. El dueño vuelve a validar Aviso/mínimo y edad.
+    if (!capacidadOpcional(f)?.enabled) throw new Error('consent_grant_unavailable');
+    return confirmarConsentimiento(await httpPrivateJsonMutationRequest<unknown>(
+      RUTA_GRANT[f], { notice_version: aviso.version, notice_hash: aviso.hash, channel: 'app' }, s,
+      undefined, 'POST', { forbidEtag: false },
+    ), f, true);
+  },
+  revokeConsentimiento: async (f, s) => confirmarConsentimiento(await httpPrivateJsonMutationRequest<unknown>(
+    RUTA_REVOKE[f], {}, s, undefined, 'POST', { forbidEtag: false },
+  ), f, false),
+  getSugerenciaDividir: async (restaurantId, s) => decodeSugerenciaDeDividir(await httpPrivateJsonRequest<unknown>(
+    rutaDeSugerencia(restaurantId), s,
+  )),
   // AF-USUARIO-ARROBA · cada config que llega alimenta la capability del @:
   // así el @ no agrega una request propia (`./username.ts`).
   getConfig: async () => {
@@ -813,6 +845,8 @@ const realApi: Api = {
     aplicarConfigFotoDelTicket(config);
     // D484 · D486 · la de varias fotos por ticket, igual. No dice nada de la foto.
     aplicarConfigOcrPaginas(config);
+    // n420 · las de sugerencias y análisis interno, igual (apagadas hoy).
+    aplicarConfigSugerencias(config);
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(
@@ -1599,6 +1633,13 @@ const mockApi: Api = {
   getFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(404, 'unknown_purpose'); },
   grantFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(409, 'purpose_not_available'); },
   revokeFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(404, 'unknown_purpose'); },
+  getConsentimiento: async (f) => decodeConsentimiento(await mockSugerencias.mockGetConsentimiento(f), f),
+  grantConsentimiento: async (f, aviso) => {
+    if (!capacidadOpcional(f)?.enabled) throw new Error('consent_grant_unavailable');
+    return confirmarConsentimiento(await mockSugerencias.mockGrantConsentimiento(f, aviso), f, true);
+  },
+  revokeConsentimiento: async (f) => confirmarConsentimiento(await mockSugerencias.mockRevokeConsentimiento(f), f, false),
+  getSugerenciaDividir: async (restaurantId) => decodeSugerenciaDeDividir(await mockSugerencias.mockGetSugerenciaDividir(restaurantId)),
   getConfig: async () => {
     // AF-VIAJES · con el seam de Viajes encendido, sus avisos (1t) se siembran
     // ANTES de cualquier lectura de la bandeja: si se sembraran al volver la
@@ -1612,6 +1653,7 @@ const mockApi: Api = {
     aplicarConfigLinkDeInvitacion(config);
     aplicarConfigFotoDelTicket(config);
     aplicarConfigOcrPaginas(config);
+    aplicarConfigSugerencias(mockSugerencias.conCapacidadesDelMock(config));
     return config;
   },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
