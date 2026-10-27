@@ -139,19 +139,31 @@ async function espiar(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
-    const w = window as unknown as { __n420: Record<string, number> };
+    const w = window as unknown as { __n420: Record<string, number>; __n420Leidas: string[] };
     w.__n420 = { getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 };
+    w.__n420Leidas = [];
     for (const m of Object.keys(w.__n420)) {
       const original = api[m]!.bind(api);
-      api[m] = async (...a: unknown[]) => { w.__n420[m] += 1; return original(...a); };
+      api[m] = async (...a: unknown[]) => {
+        w.__n420[m] += 1;
+        if (m === 'getConsentimiento') w.__n420Leidas.push(String(a[0]));
+        return original(...a);
+      };
     }
   });
 }
 const pedidos = (page: Page) => page.evaluate(() => (window as unknown as { __n420: Record<string, number> }).__n420);
+const leidas = (page: Page) => page.evaluate(() => [...(window as unknown as { __n420Leidas: string[] }).__n420Leidas].sort());
 
 /**
  * O1/O2 · auditoría de PR102. «Apagado» con la forma de producción de hoy (`{supported: true, enabled: false}`).
  * Para saber si hay algo que revocar, Configuración lee el estado: un GET por finalidad, nada más.
+ *
+ * 🔴 Cuántas lecturas: la e2e corre contra el servidor de desarrollo, y la app privada monta en `StrictMode`, que en
+ * desarrollo corre cada efecto dos veces. Si la capacidad ya está en memoria al montar Configuración, cada finalidad se
+ * lee dos veces; si el `/config` llega después, una (medido: el CI de PR103, run 40452967722, vio 4; en local, 2). En el
+ * build que se publica, una. Por eso se afirma «sólo estas dos finalidades, a lo sumo dos veces cada una», y lo que
+ * protege la O2 en «¿Cómo dividen?» se mide como diferencia: CERO pedidos nuevos.
  */
 test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)', () => {
   test('🔴 O2 · sin el permiso: ninguna fila; Configuración sólo lee el estado, y «¿Cómo dividen?» no pide nada', async ({ page }) => {
@@ -161,13 +173,37 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
     await espiar(page);
     await ir(page, '#/mas');
     await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
-    await expect.poll(async () => (await pedidos(page)).getConsentimiento).toBe(2);
+    // Las dos finalidades leídas al menos una vez, y nada más.
+    await expect.poll(async () => [...new Set(await leidas(page))]).toEqual(['analisis_interno', 'sugerencias']);
     await expect(page.getByText('Sugerencias para dividir')).toHaveCount(0);
     await expect(page.getByText('Análisis interno de PayMe')).toHaveCount(0);
+    const enConfiguracion = await leidas(page);
+    for (const f of ['analisis_interno', 'sugerencias']) {
+      const veces = enConfiguracion.filter((x) => x === f).length;
+      expect(veces, `${f} leída ${veces} veces`).toBeGreaterThanOrEqual(1);
+      expect(veces, `${f} leída ${veces} veces`).toBeLessThanOrEqual(2);
+    }
     await aComoDividen(page);
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
     await expect(page.getByText(/Como siempre/)).toHaveCount(0);
-    expect(await pedidos(page)).toEqual({ getConsentimiento: 2, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+    // «¿Cómo dividen?» con la capacidad apagada: ni una lectura más del permiso, ni la sugerencia.
+    expect(await leidas(page)).toEqual(enConfiguracion);
+    expect(await pedidos(page)).toMatchObject({ grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+  });
+
+  /**
+   * 🔴 O2 · la puerta de la capacidad en «¿Cómo dividen?», sin pasar antes por Configuración (que deja el permiso en
+   * memoria) y con el permiso otorgado: si el hook no mirara la capacidad, acá pediría el permiso y la sugerencia.
+   */
+  test('🔴 O2 · apagada y con el permiso otorgado, «¿Cómo dividen?» no pide nada', async ({ page }) => {
+    await configurarTicketSinQr(page, { ocr: 'no_merchant' });
+    await conCosturas(page, { sugerencias: 'apagado', consentimientos_otorgados: 'sugerencias', sugerencia_dividir: 'igual-4' });
+    await ingresar(page);
+    await espiar(page);
+    await aComoDividen(page);
+    await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
+    await expect(page.getByText(/Como siempre/)).toHaveCount(0);
+    expect(await pedidos(page)).toEqual({ getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
   });
 
   test('🔴 O1 · con los dos permisos otorgados: las filas aparecen sólo para revocar, y no se pueden volver a activar', async ({ page }) => {
