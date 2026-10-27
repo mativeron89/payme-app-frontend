@@ -74,6 +74,19 @@ export async function mockGetConsentimiento(f: FinalidadOpcional): Promise<unkno
   return forma(f);
 }
 
+/** La lista, con la regla del dueño (`behavior.listing`): sólo lo que hoy se puede otorgar o lo que está otorgado. */
+export async function mockGetConsentimientos(): Promise<unknown> {
+  sembrar();
+  const consents: Record<string, unknown> = {
+    perfilado_campanas: { purpose_key: 'perfilado_campanas', ...NUNCA },
+  };
+  for (const f of ['sugerencias', 'analisis_interno'] as const) {
+    const r = permisos.get(f);
+    if (encendida() || r?.state === 'granted') consents[f] = { purpose_key: f, ...(r ?? NUNCA) };
+  }
+  return { consents };
+}
+
 export async function mockGrantConsentimiento(f: FinalidadOpcional, aviso: { readonly version: string; readonly hash: string }): Promise<unknown> {
   if (!encendida()) throw new MockApiError(409, 'purpose_not_available');
   permisos.set(f, { granted: true, state: 'granted', since: new Date().toISOString(), notice_version: aviso.version, notice_hash: aviso.hash });

@@ -31,6 +31,8 @@ export const RUTA_REVOKE: Readonly<Record<FinalidadOpcional, string>> = {
   analisis_interno: '/account/consents/analisis_interno/revoke',
 };
 export const RUTA_SUGERENCIA = '/sugerencias/dividir';
+/** O1 · la lista: con `supported: true` se lee aunque `enabled` sea `false` (contrato, `behavior.listing`). */
+export const RUTA_CONSENTIMIENTOS = '/account/consents';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -94,6 +96,7 @@ export function capacidadOpcional(finalidad: FinalidadOpcional): CapacidadOpcion
 
 export function reiniciarSugerenciasParaTests(): void {
   actual = NINGUNA;
+  enVuelo.clear();
   permisoDeSugerencias.olvidar();
   oyentes.clear();
 }
@@ -123,6 +126,39 @@ export function decodeConsentimiento(value: unknown, finalidad: FinalidadOpciona
     throw invalido();
   }
   return { purpose_key: finalidad, granted: c.granted, state: c.state };
+}
+
+/** Lo que trae la lista para las finalidades opcionales; una ausente no se puede otorgar ni está otorgada. */
+export type ConsentimientosOpcionales = Readonly<Partial<Record<FinalidadOpcional, EstadoDeConsentimiento>>>;
+
+/**
+ * O1 · `GET /api/account/consents` → `{consents: {...}}`. Como manda el contrato (`behavior.consumer`): primero se
+ * descartan las finalidades que este consumidor no usa, después se validan las suyas de forma estricta, con la clave
+ * del mapa igual a su `purpose_key`. La lista trae una finalidad sólo si hoy se puede otorgar o si está otorgada
+ * (`behavior.listing`): con la capacidad apagada y sin el permiso, no viene.
+ */
+export function decodeConsentimientosOpcionales(value: unknown): ConsentimientosOpcionales {
+  if (!record(value) || !keys(value, ['consents']) || !record(value.consents)) throw new Error('consents_response_malformed');
+  const salida: Partial<Record<FinalidadOpcional, EstadoDeConsentimiento>> = {};
+  for (const f of FINALIDADES_OPCIONALES) {
+    if (!Object.prototype.hasOwnProperty.call(value.consents, f)) continue;
+    salida[f] = decodeConsentimiento({ consent: value.consents[f] }, f);
+  }
+  return salida;
+}
+
+/**
+ * O1 · una sola lectura por cuenta mientras está en vuelo: la sección pide la lista una vez para las dos filas, y si
+ * el efecto corre dos veces (StrictMode en desarrollo) o dos montajes se pisan, el segundo espera la misma respuesta.
+ * Se olvida al terminar: nunca sirve una lista vieja.
+ */
+const enVuelo = new Map<string, Promise<ConsentimientosOpcionales>>();
+export function leerUnaVez(cuenta: string, leer: () => Promise<ConsentimientosOpcionales>): Promise<ConsentimientosOpcionales> {
+  const previa = enVuelo.get(cuenta);
+  if (previa) return previa;
+  const nueva = leer().finally(() => { if (enVuelo.get(cuenta) === nueva) enVuelo.delete(cuenta); });
+  enVuelo.set(cuenta, nueva);
+  return nueva;
 }
 
 /** El cambio pedido tiene que ser el que el servidor confirma; si no, error. */

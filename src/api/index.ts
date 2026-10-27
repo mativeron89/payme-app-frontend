@@ -143,9 +143,9 @@ import {
 } from './fotoDelTicket';
 import { aplicarConfigOcrPaginas, capacidadOcrPaginas, rechazoLocalDePartes } from './ocrPaginas';
 import {
-  RUTA_CONSENTIMIENTO, RUTA_GRANT, RUTA_REVOKE, aplicarConfigSugerencias, capacidadOpcional, confirmarConsentimiento,
-  decodeConsentimiento, decodeSugerenciaDeDividir, rutaDeSugerencia,
-  type EstadoDeConsentimiento, type FinalidadOpcional, type SugerenciaDeDividir,
+  RUTA_CONSENTIMIENTO, RUTA_CONSENTIMIENTOS, RUTA_GRANT, RUTA_REVOKE, aplicarConfigSugerencias, capacidadOpcional,
+  confirmarConsentimiento, decodeConsentimiento, decodeConsentimientosOpcionales, decodeSugerenciaDeDividir, rutaDeSugerencia,
+  type ConsentimientosOpcionales, type EstadoDeConsentimiento, type FinalidadOpcional, type SugerenciaDeDividir,
 } from './sugerencias';
 import * as mockSugerencias from './mock/mockSugerencias';
 import { conFotoDelTicketDeViajeMock, conFotoEnLasVisitasMock, conFotoEnLosTicketsDelViajeMock } from './mock/fotoDelTicketMock';
@@ -365,6 +365,8 @@ export interface Api {
    * capacidad anunciada en `/config` (`./sugerencias.ts`); con ella apagada nadie los llama.
    */
   getConsentimiento(finalidad: FinalidadOpcional, expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
+  /** O1 · la lista, para Configuración: un solo pedido para las dos finalidades, con la capacidad anunciada. */
+  getConsentimientosOpcionales(expectedSession: StoredSession): Promise<ConsentimientosOpcionales>;
   grantConsentimiento(finalidad: FinalidadOpcional, aviso: LegalTextResponse['legal_text'], expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
   revokeConsentimiento(finalidad: FinalidadOpcional, expectedSession: StoredSession): Promise<EstadoDeConsentimiento>;
   /** n420 · `GET /api/sugerencias/dividir` (AB-2): sólo con la capacidad encendida y el permiso otorgado. */
@@ -816,6 +818,9 @@ const realApi: Api = {
   getConsentimiento: async (f, s) => decodeConsentimiento(await httpPrivateJsonRequest<unknown>(
     RUTA_CONSENTIMIENTO[f], s, undefined, { requireAuthorizationVary: true },
   ), f),
+  getConsentimientosOpcionales: async (s) => decodeConsentimientosOpcionales(await httpPrivateJsonRequest<unknown>(
+    RUTA_CONSENTIMIENTOS, s, undefined, { requireAuthorizationVary: true },
+  )),
   grantConsentimiento: async (f, aviso, s) => {
     // Revalidar la capacidad al gesto: apagada en el medio, no se otorga. El dueño vuelve a validar Aviso/mínimo y edad.
     if (!capacidadOpcional(f)?.enabled) throw new Error('consent_grant_unavailable');
@@ -1634,6 +1639,7 @@ const mockApi: Api = {
   grantFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(409, 'purpose_not_available'); },
   revokeFotoPerfilNoAmigos: async () => { throw new mock.MockApiError(404, 'unknown_purpose'); },
   getConsentimiento: async (f) => decodeConsentimiento(await mockSugerencias.mockGetConsentimiento(f), f),
+  getConsentimientosOpcionales: async () => decodeConsentimientosOpcionales(await mockSugerencias.mockGetConsentimientos()),
   grantConsentimiento: async (f, aviso) => {
     if (!capacidadOpcional(f)?.enabled) throw new Error('consent_grant_unavailable');
     return confirmarConsentimiento(await mockSugerencias.mockGrantConsentimiento(f, aviso), f, true);

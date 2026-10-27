@@ -44,6 +44,7 @@ export const CLASIFICACION_DEL_EJEMPLO = {
   getFotoPerfilNoAmigos: 'pasa',
   // n420 · ni los permisos opcionales ni la sugerencia de dividir corren con el ejemplo activo.
   getConsentimiento: 'cortado',
+  getConsentimientosOpcionales: 'cortado',
   grantConsentimiento: 'cortado',
   revokeConsentimiento: 'cortado',
   getSugerenciaDividir: 'cortado',

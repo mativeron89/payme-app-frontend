@@ -139,56 +139,58 @@ async function espiar(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
-    const w = window as unknown as { __n420: Record<string, number>; __n420Leidas: string[] };
-    w.__n420 = { getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 };
-    w.__n420Leidas = [];
+    const w = window as unknown as { __n420: Record<string, number> };
+    w.__n420 = { getConsentimientosOpcionales: 0, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 };
     for (const m of Object.keys(w.__n420)) {
       const original = api[m]!.bind(api);
-      api[m] = async (...a: unknown[]) => {
-        w.__n420[m] += 1;
-        if (m === 'getConsentimiento') w.__n420Leidas.push(String(a[0]));
-        return original(...a);
-      };
+      api[m] = async (...a: unknown[]) => { w.__n420[m] += 1; return original(...a); };
     }
   });
 }
 const pedidos = (page: Page) => page.evaluate(() => (window as unknown as { __n420: Record<string, number> }).__n420);
-const leidas = (page: Page) => page.evaluate(() => [...(window as unknown as { __n420Leidas: string[] }).__n420Leidas].sort());
+/** La capacidad en memoria ANTES de montar Configuración: el caso en que StrictMode, en desarrollo, corre el efecto dos veces. */
+const conConfigCargada = (page: Page) => page.evaluate(async () => {
+  const ruta = '/src/api/index.ts';
+  const { api } = await import(/* @vite-ignore */ ruta) as { api: { getConfig(): Promise<unknown> } };
+  await api.getConfig();
+});
 
 /**
  * O1/O2 · auditoría de PR102. «Apagado» con la forma de producción de hoy (`{supported: true, enabled: false}`).
- * Para saber si hay algo que revocar, Configuración lee el estado: un GET por finalidad, nada más.
+ * Para saber si hay algo que revocar, Configuración lee la lista `GET /api/account/consents` UNA vez (auditoría de
+ * PR103, punto 4 b).
  *
- * 🔴 Cuántas lecturas: la e2e corre contra el servidor de desarrollo, y la app privada monta en `StrictMode`, que en
- * desarrollo corre cada efecto dos veces. Si la capacidad ya está en memoria al montar Configuración, cada finalidad se
- * lee dos veces; si el `/config` llega después, una (medido: el CI de PR103, run 40452967722, vio 4; en local, 2). En el
- * build que se publica, una. Por eso se afirma «sólo estas dos finalidades, a lo sumo dos veces cada una», y lo que
- * protege la O2 en «¿Cómo dividen?» se mide como diferencia: CERO pedidos nuevos.
+ * 🔴 Exactamente uno, también en el servidor de desarrollo: la app privada monta en `StrictMode`, que en desarrollo corre
+ * cada efecto dos veces si la capacidad ya está en memoria al montar (el CI de PR103, run 40452967722, lo encontró con
+ * los GET por finalidad). La lectura va con single-flight por cuenta (`leerUnaVez`), y el caso se fuerza: el `/config`
+ * se carga antes de entrar a Configuración.
  */
 test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)', () => {
-  test('🔴 O2 · sin el permiso: ninguna fila; Configuración sólo lee el estado, y «¿Cómo dividen?» no pide nada', async ({ page }) => {
+  test('🔴 O2 · sin el permiso: ninguna fila; Configuración pide la lista UNA vez, y «¿Cómo dividen?» no pide nada', async ({ page }) => {
     await configurarTicketSinQr(page, { ocr: 'no_merchant' });
     await conCosturas(page, { sugerencias: 'apagado', sugerencia_dividir: 'igual-4' });
     await ingresar(page);
+    await conConfigCargada(page);
     await espiar(page);
     await ir(page, '#/mas');
     await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
-    // Las dos finalidades leídas al menos una vez, y nada más.
-    await expect.poll(async () => [...new Set(await leidas(page))]).toEqual(['analisis_interno', 'sugerencias']);
+    await expect.poll(async () => (await pedidos(page)).getConsentimientosOpcionales).toBe(1);
     await expect(page.getByText('Sugerencias para dividir')).toHaveCount(0);
     await expect(page.getByText('Análisis interno de PayMe')).toHaveCount(0);
-    const enConfiguracion = await leidas(page);
-    for (const f of ['analisis_interno', 'sugerencias']) {
-      const veces = enConfiguracion.filter((x) => x === f).length;
-      expect(veces, `${f} leída ${veces} veces`).toBeGreaterThanOrEqual(1);
-      expect(veces, `${f} leída ${veces} veces`).toBeLessThanOrEqual(2);
-    }
     await aComoDividen(page);
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
     await expect(page.getByText(/Como siempre/)).toHaveCount(0);
-    // «¿Cómo dividen?» con la capacidad apagada: ni una lectura más del permiso, ni la sugerencia.
-    expect(await leidas(page)).toEqual(enConfiguracion);
-    expect(await pedidos(page)).toMatchObject({ grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+    expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 1, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+  });
+
+  test('🔴 sin la capacidad anunciada (el mock por defecto): Configuración no pide nada', async ({ page }) => {
+    await ingresar(page);
+    await conConfigCargada(page);
+    await espiar(page);
+    await ir(page, '#/mas');
+    await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
+    expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 0, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
   });
 
   /**
@@ -203,12 +205,13 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
     await aComoDividen(page);
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
     await expect(page.getByText(/Como siempre/)).toHaveCount(0);
-    expect(await pedidos(page)).toEqual({ getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+    expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 0, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
   });
 
   test('🔴 O1 · con los dos permisos otorgados: las filas aparecen sólo para revocar, y no se pueden volver a activar', async ({ page }) => {
     await conCosturas(page, { sugerencias: 'apagado', consentimientos_otorgados: 'sugerencias,analisis_interno' });
     await ingresar(page);
+    await conConfigCargada(page);
     await espiar(page);
     await ir(page, '#/mas');
     for (const nombre of ['Sugerencias para dividir', 'Análisis interno de PayMe']) {
@@ -219,7 +222,7 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
       // Sigue a la vista, apagada: con la capacidad apagada no se otorga.
       await expect(fila(page, nombre)).toBeDisabled();
     }
-    expect(await pedidos(page)).toMatchObject({ revokeConsentimiento: 2, grantConsentimiento: 0 });
+    expect(await pedidos(page)).toMatchObject({ getConsentimientosOpcionales: 1, getConsentimiento: 0, revokeConsentimiento: 2, grantConsentimiento: 0 });
   });
 
   test('O1 · otorgado sólo uno: sólo esa fila', async ({ page }) => {

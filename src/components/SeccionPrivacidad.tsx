@@ -3,8 +3,8 @@ import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import type { StoredSession } from '../api/storage';
 import {
-  recordarPermisoDeSugerencias, useCapacidadesOpcionales, type CapacidadOpcional, type EstadoDeConsentimiento,
-  type FinalidadOpcional,
+  leerUnaVez, recordarPermisoDeSugerencias, useCapacidadesOpcionales, type CapacidadOpcional,
+  type ConsentimientosOpcionales, type EstadoDeConsentimiento, type FinalidadOpcional,
 } from '../api/sugerencias';
 import { useIdioma } from '../i18n/idioma';
 import { PATH_PRIVACIDAD } from '../public/publicRoute';
@@ -27,7 +27,8 @@ import { ERROR_CAMBIO, ERROR_LECTURA, fotoHabilitada, useControlFoto, type Estad
  * O1 (auditoría de PR102) · con la capacidad anunciada pero apagada (`{supported: true, enabled: false}`, lo que sirve
  * producción hoy), la fila aparece SÓLO para revocar si la persona tiene el permiso otorgado, como la foto (D463): el
  * contrato deja leer el estado con `enabled: false` para revocar grants previos. Sin el permiso, no se ve, como antes.
- * Para saberlo se lee el estado (un GET por finalidad); sin la capacidad anunciada, ni eso.
+ * Para saberlo se lee la lista `GET /api/account/consents` UNA vez por sección (auditoría de PR103, punto 4 b): trae
+ * sólo lo que hoy se puede otorgar o lo que está otorgado. Sin la capacidad anunciada, ningún pedido.
  */
 /** Key por cuenta: ninguna respuesta ni elección de otra sesión se reutiliza (como `PrivacidadFotoPanel`). */
 export function SeccionPrivacidad({ session }: { readonly session: StoredSession }) {
@@ -37,8 +38,9 @@ export function SeccionPrivacidad({ session }: { readonly session: StoredSession
 function Seccion({ session }: { readonly session: StoredSession }) {
   const foto = useControlFoto(session, false);
   const capacidades = useCapacidadesOpcionales();
-  const sugerencias = useFilaOpcional('sugerencias', session, capacidades.sugerencias);
-  const analisis = useFilaOpcional('analisis_interno', session, capacidades.analisis_interno);
+  const lista = useListaDeConsentimientos(session, capacidades.sugerencias !== null || capacidades.analisis_interno !== null);
+  const sugerencias = useFilaOpcional('sugerencias', session, capacidades.sugerencias, lista);
+  const analisis = useFilaOpcional('analisis_interno', session, capacidades.analisis_interno, lista);
   // La fila aparece con el estado ya leído: si no, se pintaría mientras consulta y desaparecería con un 404 (un
   // servidor sin la finalidad), y la pantalla saltaría.
   const leyendo = foto.estado.ocupado && foto.estado.permiso === null && foto.estado.error === null;
@@ -189,62 +191,82 @@ export function modoDeFilaOpcional(capacidad: CapacidadOpcional | null, estado: 
   return estado?.granted === true || yaVisible ? 'solo_revocar' : 'oculta';
 }
 
-function useFilaOpcional(finalidad: FinalidadOpcional, session: StoredSession, capacidad: CapacidadOpcional | null): JSX.Element | null {
-  const [estado, setEstado] = useState<EstadoDeConsentimiento | null>(null);
-  const [ocupado, setOcupado] = useState(true);
-  const [leido, setLeido] = useState(false);
-  const [mensaje, setMensaje] = useState<MensajeDeFila | null>(null);
+interface ListaLeida {
+  readonly leida: boolean;
+  readonly error: boolean;
+  readonly estados: ConsentimientosOpcionales;
+}
+const SIN_LEER: ListaLeida = { leida: false, error: false, estados: {} };
+
+/** O1 · la lista de la sección: un pedido, con single-flight por cuenta (`leerUnaVez`). Sin capacidad anunciada, nada. */
+function useListaDeConsentimientos(session: StoredSession, anunciadas: boolean): ListaLeida {
+  const [lista, setLista] = useState<ListaLeida>(SIN_LEER);
+  const sesionRef = useRef(session);
+  sesionRef.current = session;
+  const cuenta = `${session.family_id}:${session.principal_id}`;
+  useEffect(() => {
+    let vigente = true;
+    setLista(SIN_LEER);
+    if (!anunciadas) return () => { vigente = false; };
+    leerUnaVez(cuenta, () => api.getConsentimientosOpcionales(sesionRef.current)).then(
+      (estados) => {
+        if (!vigente) return;
+        setLista({ leida: true, error: false, estados });
+        const s = estados.sugerencias;
+        if (s) recordarPermisoDeSugerencias(s.granted);
+      },
+      () => { if (vigente) setLista({ leida: true, error: true, estados: {} }); },
+    );
+    return () => { vigente = false; };
+  }, [cuenta, anunciadas]);
+  return lista;
+}
+
+function useFilaOpcional(finalidad: FinalidadOpcional, session: StoredSession, capacidad: CapacidadOpcional | null,
+  lista: ListaLeida): JSX.Element | null {
+  // Lo que cambió en esta pantalla (activar o revocar) manda sobre lo leído.
+  const [cambiado, setCambiado] = useState<EstadoDeConsentimiento | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [mensajeDelCambio, setMensajeDelCambio] = useState<MensajeDeFila | null>(null);
   const epoca = useRef(0);
   const yaVisible = useRef(false);
   const sesionRef = useRef(session);
   sesionRef.current = session;
   const cuenta = `${session.family_id}:${session.principal_id}`;
-  const anunciada = capacidad !== null;
 
   useEffect(() => {
-    const marca = ++epoca.current;
-    setEstado(null);
-    setOcupado(true);
-    setLeido(false);
-    setMensaje(null);
+    epoca.current += 1;
+    setCambiado(null);
+    setOcupado(false);
+    setMensajeDelCambio(null);
     yaVisible.current = false;
-    // Sin la capacidad anunciada no se pide nada.
-    if (!anunciada) return () => { epoca.current += 1; };
-    void (async () => {
-      try {
-        const leidoAhora = await api.getConsentimiento(finalidad, sesionRef.current);
-        if (marca !== epoca.current) return;
-        setEstado(leidoAhora);
-        if (finalidad === 'sugerencias') recordarPermisoDeSugerencias(leidoAhora.granted);
-      } catch {
-        // Ante la duda, apagado y deshabilitado: nunca «activado».
-        if (marca === epoca.current) setMensaje('por_ahora');
-      } finally {
-        if (marca === epoca.current) { setOcupado(false); setLeido(true); }
-      }
-    })();
-    return () => { epoca.current += 1; };
-  }, [finalidad, cuenta, anunciada]);
+  }, [finalidad, cuenta]);
 
-  const modo = modoDeFilaOpcional(capacidad, estado, leido, yaVisible.current);
+  // Ausente de una lista bien leída: nunca otorgado (la lista sólo trae lo otorgable o lo otorgado).
+  const leido: EstadoDeConsentimiento | null = !lista.leida || lista.error ? null
+    : lista.estados[finalidad] ?? { purpose_key: finalidad, granted: false, state: 'never' };
+  const estado = cambiado ?? leido;
+  const modo = modoDeFilaOpcional(capacidad, estado, lista.leida, yaVisible.current);
   if (modo !== 'oculta') yaVisible.current = true;
   const soloRevocar = modo === 'solo_revocar';
+  // Ante la duda, apagado y deshabilitado: nunca «activado».
+  const mensaje = mensajeDelCambio ?? (lista.error ? 'por_ahora' : null);
 
   async function cambiar(activar: boolean) {
-    if (ocupado || estado === null || (activar && soloRevocar)) return;
+    if (ocupado || !lista.leida || estado === null || (activar && soloRevocar)) return;
     const marca = ++epoca.current;
     setOcupado(true);
-    setMensaje(null);
+    setMensajeDelCambio(null);
     try {
       const s = sesionRef.current;
       const nuevo = activar
         ? await api.grantConsentimiento(finalidad, (await api.getPrivacyNotice()).legal_text, s)
         : await api.revokeConsentimiento(finalidad, s);
       if (marca !== epoca.current) return;
-      setEstado(nuevo);
+      setCambiado(nuevo);
       if (finalidad === 'sugerencias') recordarPermisoDeSugerencias(nuevo.granted);
     } catch (err) {
-      if (marca === epoca.current) setMensaje(mensajeDeRechazo(err));
+      if (marca === epoca.current) setMensajeDelCambio(mensajeDeRechazo(err));
     } finally {
       if (marca === epoca.current) setOcupado(false);
     }
@@ -252,6 +274,6 @@ function useFilaOpcional(finalidad: FinalidadOpcional, session: StoredSession, c
 
   // Con la capacidad apagada, un error de lectura no muestra una fila: no hay nada que revocar que se sepa.
   if (modo === 'oculta' || (soloRevocar && estado === null)) return null;
-  return <FilaPermisoOpcionalView finalidad={finalidad} estado={estado} ocupado={ocupado} mensaje={mensaje}
+  return <FilaPermisoOpcionalView finalidad={finalidad} estado={estado} ocupado={ocupado || !lista.leida} mensaje={mensaje}
     soloRevocar={soloRevocar} onCambiar={(activar) => { void cambiar(activar); }} />;
 }

@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { traducir } from '../i18n/idioma';
 import {
   aplicarConfigSugerencias, capacidadOpcional, confirmarConsentimiento, decodeCapacidadOpcional, decodeConsentimiento,
-  decodeSugerenciaDeDividir, permisoDeSugerencias, recordarPermisoDeSugerencias, reiniciarSugerenciasParaTests,
+  decodeConsentimientosOpcionales, decodeSugerenciaDeDividir, leerUnaVez, permisoDeSugerencias, recordarPermisoDeSugerencias,
+  reiniciarSugerenciasParaTests,
   rutaDeSugerencia, textoDeSugerencia,
 } from './sugerencias';
 
@@ -88,6 +89,49 @@ describe('n420 · la sugerencia (`GET /api/sugerencias/dividir`)', () => {
   });
 });
 
+describe('O1 · la lista `GET /api/account/consents` (auditoría de PR103, punto 4 b)', () => {
+  const campanas = { purpose_key: 'perfilado_campanas', granted: false, state: 'never', since: null, notice_version: null, notice_hash: null };
+
+  it('🔴 descarta las finalidades que no usa ANTES de validar, y valida las suyas estrictas', () => {
+    expect(decodeConsentimientosOpcionales({ consents: { perfilado_campanas: campanas, sugerencias: otorgado('sugerencias').consent } }))
+      .toEqual({ sugerencias: { purpose_key: 'sugerencias', granted: true, state: 'granted' } });
+    // Una finalidad que el front no conoce, aunque venga rara, no rompe.
+    expect(decodeConsentimientosOpcionales({ consents: { perfilado_campanas: campanas, otra_futura: { x: 1 } } })).toEqual({});
+    // Con la capacidad apagada y sin el permiso, no vienen: lista sin las dos.
+    expect(decodeConsentimientosOpcionales({ consents: { perfilado_campanas: campanas } })).toEqual({});
+  });
+
+  it('una suya mal formada, o con una clave que no es su `purpose_key`, es error; y la forma de afuera, exacta', () => {
+    expect(() => decodeConsentimientosOpcionales({ consents: { sugerencias: { ...otorgado('sugerencias').consent, extra: 1 } } })).toThrow();
+    expect(() => decodeConsentimientosOpcionales({ consents: { sugerencias: otorgado('analisis_interno').consent } })).toThrow();
+    expect(() => decodeConsentimientosOpcionales({ consents: {}, extra: 1 })).toThrow();
+    expect(() => decodeConsentimientosOpcionales({})).toThrow();
+  });
+
+  it('🔴 single-flight: dos lecturas de la misma cuenta en vuelo son UN pedido; terminada, la siguiente vuelve a leer', async () => {
+    let pedidos = 0;
+    let soltar: (v: object) => void = () => undefined;
+    const leer = () => { pedidos += 1; return new Promise<object>((r) => { soltar = r; }); };
+    const a = leerUnaVez('f:p', leer);
+    const b = leerUnaVez('f:p', leer);
+    expect(pedidos).toBe(1);
+    soltar({});
+    await Promise.all([a, b]);
+    void leerUnaVez('f:p', leer);
+    expect(pedidos).toBe(2);
+    // Otra cuenta no comparte la lectura.
+    void leerUnaVez('otra:cuenta', leer);
+    expect(pedidos).toBe(3);
+  });
+
+  it('un error también se olvida: la siguiente lectura vuelve a pedir', async () => {
+    let pedidos = 0;
+    await leerUnaVez('f:p', async () => { pedidos += 1; throw new Error('red'); }).catch(() => undefined);
+    await leerUnaVez('f:p', async () => { pedidos += 1; return {}; });
+    expect(pedidos).toBe(2);
+  });
+});
+
 /**
  * 🔴 Guardarraíl de fuente: con la capacidad apagada nadie pide nada. Sólo el hook de «¿Cómo dividen?» pide la
  * sugerencia, y sólo él y la sección de Privacidad leen o cambian los permisos opcionales.
@@ -106,8 +150,9 @@ describe('n420 · quién llama', () => {
   it('getSugerenciaDividir, sólo desde useSugerenciaDeDividir', () => {
     expect(llamadores('getSugerenciaDividir')).toEqual(['screens/useSugerenciaDeDividir.ts']);
   });
-  it('getConsentimiento, grantConsentimiento y revokeConsentimiento, sólo desde el hook y la sección de Privacidad', () => {
-    expect(llamadores('getConsentimiento').sort()).toEqual(['components/SeccionPrivacidad.tsx', 'screens/useSugerenciaDeDividir.ts']);
+  it('getConsentimiento sólo desde el hook; la lista, grant y revoke sólo desde la sección de Privacidad', () => {
+    expect(llamadores('getConsentimiento')).toEqual(['screens/useSugerenciaDeDividir.ts']);
+    expect(llamadores('getConsentimientosOpcionales')).toEqual(['components/SeccionPrivacidad.tsx']);
     expect(llamadores('grantConsentimiento')).toEqual(['components/SeccionPrivacidad.tsx']);
     expect(llamadores('revokeConsentimiento')).toEqual(['components/SeccionPrivacidad.tsx']);
   });
