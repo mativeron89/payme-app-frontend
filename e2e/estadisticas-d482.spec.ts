@@ -59,7 +59,7 @@ const periodo = (page: Page) => page.getByRole('button', { name: /^(Período|Per
 const resumen = (page: Page) => page.getByRole('region', { name: 'Tu consumo registrado', exact: true });
 
 test.describe('D479/D482 · la principal', () => {
-  test('cabecera común y el orden del paquete: resumen → accesos → meses completos (D492: sin cocinas)', async ({ page }) => {
+  test('cabecera común y el orden del paquete: resumen → cocinas → accesos → meses completos', async ({ page }) => {
     await preparar(page);
     await expect(page.getByRole('heading', { level: 1, name: 'Mis estadísticas' })).toBeVisible();
     await expect(periodo(page)).toHaveText('Octubre');
@@ -68,9 +68,10 @@ test.describe('D479/D482 · la principal', () => {
     await expect(resumen(page)).toContainText('$2,165');
     await expect(resumen(page)).not.toContainText('MXN');
     const titulos = await page.locator('.est-scroll h2').allTextContents();
-    expect(titulos).toEqual(['Tu consumo registrado', 'Meses completos']);
+    // D494 M3 · octubre del mock tiene sus 6 visitas con cocina (100 %): la tarjeta vuelve.
+    expect(titulos).toEqual(['Tu consumo registrado', 'Por tipo de cocina', 'Meses completos']);
     const orden = await page.locator('.est-scroll > *').evaluateAll((els) => els.map((e) => e.className));
-    expect(orden.slice(0, 3)).toEqual(['est-resumen est-panel', 'est-panel est-accesos', 'est-comparacion est-panel']);
+    expect(orden.slice(0, 4)).toEqual(['est-resumen est-panel', 'est-panel est-cocinas', 'est-panel est-accesos', 'est-comparacion est-panel']);
     // Los tres accesos en una sola lista, con los subtítulos del paquete.
     const accesos = page.getByRole('navigation', { name: 'Mis estadísticas' }).getByRole('button');
     await expect(accesos).toHaveText(['Tus restaurantes3 lugares · 6 visitas', 'Qué comes7 platos distintos', 'EvoluciónÚltimos 6 meses']);
@@ -78,19 +79,31 @@ test.describe('D479/D482 · la principal', () => {
   });
 
   /**
-   * 🔴 D492 · Mati: «Por tipo de cocina» ponía todo en «Otros». Con un mes que SÍ trae tres cocinas, la tarjeta no
-   * aparece mientras su bandera esté apagada; el resto de la principal sigue. La tarjeta encendida la prueba
-   * `EstadisticasScreen.test.tsx`.
+   * 🔴 D492/D494 M3 · la tarjeta vuelve sola con al menos el 70 % de las visitas con cocina reconocida (el borde de
+   * 69/70 % y el mes con todo en «Otros» los prueba `EstadisticasScreen.test.tsx`). Con ella, la atribución de
+   * OpenStreetMap del contrato del dueño (`cocinas-v1.json`, D497).
    */
-  test('🔴 D492 · con cocinas en el mes, la tarjeta «Por tipo de cocina» no aparece (bandera apagada)', async ({ page }) => {
+  test('cocinas: un bloque por cocina con color FIJO, importe, visitas, porcentaje y barra; y la atribución de OpenStreetMap', async ({ page }) => {
     await preparar(page);
-    await expect(resumen(page)).toContainText('$2,165');
-    await expect(page.getByRole('region', { name: 'Por tipo de cocina', exact: true })).toHaveCount(0);
-    await expect(page.locator('.est-cocinas')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Por tipo de cocina', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('navigation', { name: 'Mis estadísticas' }).getByRole('button')).toHaveCount(3);
-    await expect(page.getByRole('region', { name: 'Meses completos' })).toBeVisible();
-    await capturar(page, 'd492-sin-cocinas-es');
+    const tarjeta = page.getByRole('region', { name: 'Por tipo de cocina' });
+    const cocinas = tarjeta.getByRole('listitem');
+    await expect(cocinas).toHaveCount(3);
+    await expect(cocinas.nth(0)).toHaveText(/^Italiana\$1,1803 visitas54%$/);
+    await expect(cocinas.nth(1)).toHaveText(/^Japonesa\$8352 visitas39%$/);
+    await expect(cocinas.nth(2)).toHaveText(/^Café\$1501 visita7%$/);
+    const colores = await page.locator('.est-cocinas .est-cuadrito').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+    expect(colores).toEqual(['rgb(18, 165, 180)', 'rgb(16, 30, 59)', 'rgb(71, 85, 105)']);
+    await expect(tarjeta.locator('.est-atribucion')).toHaveText('Cocinas: datos © colaboradores de OpenStreetMap (ODbL)');
+    await capturar(page, 'd494-cocinas-es');
+  });
+
+  test('cocinas en EN: los nombres y la atribución traducidos', async ({ page }) => {
+    await preparar(page, { ingles: true });
+    // Cambiar el hash no recarga: el idioma guardado se lee al montar.
+    await page.reload();
+    const tarjeta = page.getByRole('region', { name: 'By type of cuisine' });
+    await expect(tarjeta.getByRole('listitem').locator('.est-fila-nombre')).toHaveText(['Italian', 'Japanese', 'Coffee']);
+    await expect(tarjeta.locator('.est-atribucion')).toHaveText('Cuisines: data © OpenStreetMap contributors (ODbL)');
   });
 
   test('meses completos: dos columnas «Agosto 2026», diferencias con signo y «No cambia con el período»', async ({ page }) => {
@@ -143,7 +156,7 @@ test.describe('D479/D482 · el período, un desplegable anclado', () => {
     await expect(resumen(page)).toContainText('$1,320');
     await expect(periodo(page)).toBeFocused();
     await periodo(page).click();
-    // Un toque afuera del desplegable (que tapa el resumen): el título de meses completos (D492: sin cocinas).
+    // Un toque afuera del desplegable (que tapa el resumen): el título de meses completos.
     await page.locator('.est-comparacion h2').click();
     await expect(page.getByRole('radiogroup', { name: 'Elige el período' })).toHaveCount(0);
   });

@@ -17,6 +17,14 @@ export const COLORES_DE_COCINA = {
   japanese: '#101E3B',
   mexican: '#0A7B80',
   cafe: '#475569',
+  // D496 · las seis nuevas de App Backend 2.198.0: tonos de la misma familia, ninguno repetido
+  // entre cocinas ni igual al de Otros.
+  spanish: '#B4462F',
+  argentinian: '#0A6C85',
+  peruvian: '#C2410C',
+  chinese: '#92620A',
+  american: '#047857',
+  seafood: '#5B4B8A',
   other: '#7D8CA1',
 } as const;
 

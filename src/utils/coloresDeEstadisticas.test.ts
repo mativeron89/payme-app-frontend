@@ -12,9 +12,11 @@ import {
 
 /** LEEME §5 del paquete de Claude Design 0.261 (D479/D482), tal cual. */
 describe('D479/D482 · colores FIJOS por clave en Estadísticas', () => {
-  it('cocinas: los cinco del paquete', () => {
+  it('cocinas: los cinco del paquete, más las seis de D496 (App Backend 2.198.0)', () => {
     expect(COLORES_DE_COCINA).toEqual({
-      italian: '#12A5B4', japanese: '#101E3B', mexican: '#0A7B80', cafe: '#475569', other: '#7D8CA1',
+      italian: '#12A5B4', japanese: '#101E3B', mexican: '#0A7B80', cafe: '#475569',
+      spanish: '#B4462F', argentinian: '#0A6C85', peruvian: '#C2410C', chinese: '#92620A', american: '#047857', seafood: '#5B4B8A',
+      other: '#7D8CA1',
     });
   });
 

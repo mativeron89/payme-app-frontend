@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "payme.app.cocinas/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de las cocinas de un restaurante, v2.198.0 · D492/D494/D495/D496/D497.",
+    "D496 («Lista base»): las cocinas de hoy más española, argentina, peruana, china, americana (hamburguesas) y mariscos. Lo demás queda en `other`. Son las claves del CHECK de `restaurants.category` (db/migrate_cocina_places_v2.198.0.sql) y de services/clasificadorCocina.js; tests/cocina-places.test.js exige que coincidan.",
+    "Ninguna respuesta cambia de forma. Lo único nuevo es que `category` (del restaurante) puede traer una de las seis claves nuevas. Pasa en `GET /api/account/stats` (`consumption_month.categories[].category` y la evolución), en `GET /api/account/stats/restaurants`, en los platos y en el historial. El filtro `GET /api/account/history?category=` acepta las once. Un cliente anterior las rotula «Otra cocina», como cualquier clave que no conoce (decodeConsumoDelMes las acepta).",
+    "Los textos ES/EN y los colores de cada cocina son del front.",
+    "La cocina la pone el backend sólo en restaurantes privados (los que nacen al escanear), en este orden (D497): reglas por nombre y platos y el catálogo propio de OpenStreetMap. Google Places no decide la cocina (sus términos no permiten guardar sus tipos ni algo deducido de ellos): en esta versión sólo puede guardarse su place_id, detrás de una bandera apagada. Está APAGADO (COCINA_CLASIFICACION_ENABLED): mientras tanto todo sigue como hoy."
+  ],
+  "cocinas": ["italian", "japanese", "mexican", "cafe", "spanish", "argentinian", "peruvian", "chinese", "american", "seafood", "other"],
+  "nuevas_en_v1": ["spanish", "argentinian", "peruvian", "chinese", "american", "seafood"],
+  "sin_reconocer": "other",
+  "atribucion": {
+    "texto": "Cocinas: datos © colaboradores de OpenStreetMap (ODbL)",
+    "url": "https://www.openstreetmap.org/copyright",
+    "cuando": "Junto a la tarjeta «Por tipo de cocina» (u otra vista que muestre la cocina deducida), cuando vuelva a mostrarse. La cocina de un restaurante puede venir del catálogo de OpenStreetMap (D497); data/ATRIBUCION_OSM.md en App Backend."
+  },
+  "umbral_d494_m3": {
+    "regla": "La tarjeta «Por tipo de cocina» se muestra sólo si al menos el 70 % de las visitas del período tiene una cocina reconocida (D494 M3).",
+    "fuente": "GET /api/account/stats → consumption_month (sin cambios de contrato)",
+    "calculo": "reconocidas = consumption_month.visits − (la `visits` de la categoría `other`, o 0 si no viene). Se muestra si visits > 0 y 10 × reconocidas ≥ 7 × visits.",
+    "notas": [
+      "Cada visita cuenta en una sola categoría, así que la suma de `categories[].visits` es `visits`.",
+      "Ausencia ≠ cero: sin visitas no hay porcentaje y la tarjeta no se muestra.",
+      "Los tickets de viaje que no se pudieron ligar a un restaurante cuentan como `other`, salvo un café."
+    ]
+  }
+}

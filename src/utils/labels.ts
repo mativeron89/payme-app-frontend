@@ -97,8 +97,9 @@ export function walletTxIcon(type: WalletTxType | string): IconName {
 
 /**
  * Categoría del RESTAURANTE — el enum de `restaurants.category` del contrato
- * (`italian | japanese | mexican | cafe | other`), que es lo que devuelve
- * `favorite_category` de `GET /account/stats`.
+ * (`contract/cocinas-v1.json` del dueño, 2.198.0 · D496: las cinco de antes más
+ * `spanish | argentinian | peruvian | chinese | american | seafood`), que es lo
+ * que devuelve `favorite_category` y `consumption_month` de `GET /account/stats`.
  *
  * **No es el tipo del plato.** El spec de Estadísticas (§1.11) lo dice con
  * todas las letras porque es una confusión fácil y cara: el ranking por
@@ -115,6 +116,14 @@ const CATEGORIA: Record<string, string> = {
   japanese: 'Japonesa',
   mexican: 'Mexicana',
   cafe: 'Café',
+  // D496 · las seis nuevas de App Backend 2.198.0.
+  spanish: 'Española',
+  // En EN queda «Argentina»: la clave de `en.ts` es la misma que la del país.
+  argentinian: 'Argentina',
+  peruvian: 'Peruana',
+  chinese: 'China',
+  american: 'Americana',
+  seafood: 'Mariscos',
   other: 'Otros',
 };
 

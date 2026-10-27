@@ -1,14 +1,20 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "9bb11ac9cdb0daf35d6daf9873c008b6b3d6c547",
-  "total": 161,
+  "commit": "37b58c887618aa5603fbdb9bb1696f8dbed9aa00",
+  "total": 163,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
       "destino": "contract/account-consents-v1.schema.json",
       "sha256": "92e94ee76c72113a5c32da2ed0e8d4734828de3c103a8ba6ad2dd99d96c4afdc",
       "bytes": 17199
+    },
+    {
+      "origen": "contract/cocinas-v1.json",
+      "destino": "contract/cocinas-v1.json",
+      "sha256": "07307fe0f9f7ccede0b648608f0fad78235b55e73a8aa76c76eb725f96f4d9dc",
+      "bytes": 2957
     },
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -147,6 +153,12 @@
       "destino": "db/migrate_card_save_intents_v2.47.0.sql",
       "sha256": "ff7020141dd0371c2f2d33b457fbcfd172a617010fe6ff15091dc53f741a9db9",
       "bytes": 4551
+    },
+    {
+      "origen": "db/migrate_cocina_places_v2.198.0.sql",
+      "destino": "db/migrate_cocina_places_v2.198.0.sql",
+      "sha256": "61c178d9466c4f147990dc572c234094cdfff6874fa84787bc32be31c79c3cb2",
+      "bytes": 9247
     },
     {
       "origen": "db/migrate_connect_charges_v2.23.sql",
@@ -649,8 +661,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "b3931d497f947a185cefed0f92fc5dc38a8aead08c20b0f0441881038a99b730",
-      "bytes": 34377
+      "sha256": "b81881bcefcf35ed6610b046748bc8f05f964646da2a1ffa9751e1908167e078",
+      "bytes": 34494
     },
     {
       "origen": "services/authRecovery.js",

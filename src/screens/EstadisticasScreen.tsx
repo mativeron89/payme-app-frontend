@@ -47,12 +47,20 @@ import { nombreDePlato } from '../utils/nombreDePlato';
 const NO_DISPONIBLE = '—';
 
 /**
- * 🔴 D492 · Mati, con una captura: «Por tipo de cocina» ponía todo en «Otros». Se oculta
- * hasta que la clasificación de la cocina funcione con sus restaurantes reales y él lo
- * pruebe (D63). Apagada: la tarjeta no se pinta. El código, el decodificador y el resto
- * de Mis estadísticas quedan como están; para volver a mostrarla, esta bandera en `true`.
+ * 🔴 D492 · Mati, con una captura: «Por tipo de cocina» ponía todo en «Otros». D494 M3: la
+ * tarjeta vuelve sola cuando al menos el 70 % de las visitas del período tiene una cocina
+ * reconocida, distinta de `other`. La regla es la del dueño (`contract/cocinas-v1.json`,
+ * `umbral_d494_m3`, App Backend 2.198.0): reconocidas = `visits` − la `visits` de `other`
+ * (0 si no viene); se muestra si `visits > 0` y `10 × reconocidas ≥ 7 × visits`. Enteros,
+ * sin decimales que redondeen 69,9 % a 70 %. Ausencia ≠ cero: sin visitas no hay
+ * porcentaje y la tarjeta no se muestra.
  */
-export const MOSTRAR_POR_TIPO_DE_COCINA = false;
+export function mostrarPorTipoDeCocina(consumo: ConsumoDelMes): boolean {
+  if (!(consumo.visits > 0)) return false;
+  const otras = consumo.categories.find((c) => c.category === 'other')?.visits ?? 0;
+  const reconocidas = consumo.visits - otras;
+  return 10 * reconocidas >= 7 * consumo.visits;
+}
 
 function pesos(cents: number | null | undefined): string {
   return typeof cents === 'number' && Number.isFinite(cents) ? formatMXN(cents) : NO_DISPONIBLE;
@@ -449,13 +457,9 @@ function mesEnFraseInicial(monthStart: string, idioma: 'es' | 'en'): string {
  * importe, visitas, porcentaje y barra. Nunca el color solo. En el vacío no se
  * muestra: la frase del resumen ya lo dice.
  */
-export function TarjetaPorCocina({ consumo, mostrar = MOSTRAR_POR_TIPO_DE_COCINA }: {
-  consumo: ConsumoDelMes;
-  /** D492 · la bandera; las pruebas la encienden para ver la tarjeta. */
-  mostrar?: boolean;
-}) {
+export function TarjetaPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
   const { t } = useIdioma();
-  if (!mostrar) return null;
+  if (!mostrarPorTipoDeCocina(consumo)) return null;
   // `decodeConsumoDelMes` exige que las cocinas sumen el total y que ninguna
   // venga en 0: sin cocinas es lo mismo que total 0.
   if (consumo.categories.length === 0) return null;
@@ -482,6 +486,10 @@ export function TarjetaPorCocina({ consumo, mostrar = MOSTRAR_POR_TIPO_DE_COCINA
           </li>
         ))}
       </ul>
+      {/* D497 · la cocina puede venir del catálogo de OpenStreetMap: su atribución va junto a la
+          tarjeta (`contract/cocinas-v1.json`, `atribucion`). Sin link: el host no está entre los
+          destinos permitidos de la app. */}
+      <p className="est-atribucion">{t('Cocinas: datos © colaboradores de OpenStreetMap (ODbL)')}</p>
     </section>
   );
 }

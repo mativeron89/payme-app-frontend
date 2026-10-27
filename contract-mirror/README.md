@@ -1,4 +1,18 @@
-## D484 · D486 · varias fotos de un ticket largo · 0.264.0
+## D494 · D496 · D497 · las cocinas de los restaurantes · 0.264.5
+
+Contenido vigente: `37b58c887618aa5603fbdb9bb1696f8dbed9aa00`.
+Inventario íntegro de 163 entradas tomado del `main` del dueño, el servido (App Backend
+2.198.0, `main` en `66beb47fb60e6dfe4d1a1873907535e70137f2f9`; `contract/mirror-inventory.json`,
+sha256 `9fe4a6853bf1af5b861707f6fcc46c28639eb28622da846b430f97572fd1f2c8`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `37b58c8`. **20 archivos espejados**, todos JSON de `contract/`;
+**143 fuentes sólo por hash**, conforme D268. Nuevo `contract/cocinas-v1.json` (sha256
+`07307fe0f9f7ccede0b648608f0fad78235b55e73a8aa76c76eb725f96f4d9dc`): las once cocinas, la atribución de OpenStreetMap y la regla del 70 %. Por hash,
+nuevo `db/migrate_cocina_places_v2.198.0.sql` y cambia `schemas/index.js`. Los hechos del dueño se
+regeneraron en local contra `37b58c8`: cambian sólo el commit y el sha256 de `schemas/index.js`,
+ningún valor. `PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al mismo commit:
+`services/parteDeMesa.js` y `utils/money.js` tienen en `37b58c8` los sha256 que ya declaraba.
+
+### Refresh anterior · D484 · D486 · varias fotos de un ticket largo · 0.264.0
 
 Contenido vigente: `9bb11ac9cdb0daf35d6daf9873c008b6b3d6c547`.
 Inventario íntegro de 161 entradas tomado del `main` del dueño, el servido (App Backend

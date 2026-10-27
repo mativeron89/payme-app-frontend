@@ -11091,6 +11091,14 @@ h1.pay-title-lbl {
   color: var(--text-muted);
 }
 
+/* D497 · la atribución de OpenStreetMap al pie de «Por tipo de cocina». */
+.est-atribucion {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .est-titulo-panel {
   gap: 8px;
 }
