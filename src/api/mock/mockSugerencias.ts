@@ -8,7 +8,10 @@ import { MockApiError } from './mockApi';
  * Por defecto el mock es el backend servido de hoy: NO anuncia las capacidades, así que la app no muestra nada ni
  * pide nada. Las costuras (sólo para la e2e y la demo):
  * - `payme.app.mock.sugerencias.v1` = `encendido`: anuncia `features.sugerencias` y `features.analisis_interno`
- *   encendidas;
+ *   encendidas; `apagado`: las anuncia con la forma de producción de hoy, `{supported: true, enabled: false}` (O2 de
+ *   la auditoría de PR102): se leen y se revocan, pero no se otorgan;
+ * - `payme.app.mock.consentimientos_otorgados.v1` = `sugerencias,analisis_interno` (cualquiera de las dos): la página
+ *   arranca con ese permiso ya otorgado (O1: revocar con la capacidad apagada);
  * - `payme.app.mock.sugerencia_dividir.v1` = `consumo` | `igual-<N>`: lo que el dueño sugeriría con el permiso
  *   otorgado. Sin la costura, `sugerencia: null` (sin historial suficiente, D405).
  *
@@ -21,15 +24,16 @@ function costura(clave: string): string | null {
 
 /** El `/config` del mock con las capacidades de la costura, sin tocar el resto. */
 export function conCapacidadesDelMock(config: unknown): unknown {
-  if (costura('sugerencias') !== 'encendido') return config;
+  if (!anunciada()) return config;
+  const enabled = encendida();
   const base = (config && typeof config === 'object' ? config : {}) as Record<string, unknown>;
   const features = (base.features && typeof base.features === 'object' ? base.features : {}) as Record<string, unknown>;
   return {
     ...base,
     features: {
       ...features,
-      sugerencias: { supported: true, enabled: true },
-      analisis_interno: { supported: true, enabled: true },
+      sugerencias: { supported: true, enabled },
+      analisis_interno: { supported: true, enabled },
     },
   };
 }
@@ -37,8 +41,22 @@ export function conCapacidadesDelMock(config: unknown): unknown {
 interface Registro { granted: boolean; state: 'never' | 'granted' | 'revoked'; since: string | null; notice_version: string | null; notice_hash: string | null }
 const permisos = new Map<FinalidadOpcional, Registro>();
 const NUNCA: Registro = { granted: false, state: 'never', since: null, notice_version: null, notice_hash: null };
+const OTORGADO_DE_ARRANQUE: Registro = {
+  granted: true, state: 'granted', since: '2026-10-27T00:00:00.000Z', notice_version: '3.1.0',
+  notice_hash: '51f9c46f6c5874a0b62dad06e1ead77051cce010ed587de4d720b6add6b002bc',
+};
+let sembrado = false;
+
+function sembrar(): void {
+  if (sembrado) return;
+  sembrado = true;
+  for (const f of (costura('consentimientos_otorgados') ?? '').split(',')) {
+    if ((f === 'sugerencias' || f === 'analisis_interno') && !permisos.has(f)) permisos.set(f, OTORGADO_DE_ARRANQUE);
+  }
+}
 
 function forma(f: FinalidadOpcional): unknown {
+  sembrar();
   return { consent: { purpose_key: f, ...(permisos.get(f) ?? NUNCA) } };
 }
 
@@ -46,8 +64,13 @@ function encendida(): boolean {
   return costura('sugerencias') === 'encendido';
 }
 
+function anunciada(): boolean {
+  return encendida() || costura('sugerencias') === 'apagado';
+}
+
 export async function mockGetConsentimiento(f: FinalidadOpcional): Promise<unknown> {
-  if (!encendida()) throw new MockApiError(404, 'unknown_purpose');
+  // Como el dueño: el estado se lee con la capacidad anunciada aunque esté apagada (para revocar grants previos).
+  if (!anunciada()) throw new MockApiError(404, 'unknown_purpose');
   return forma(f);
 }
 
@@ -58,6 +81,8 @@ export async function mockGrantConsentimiento(f: FinalidadOpcional, aviso: { rea
 }
 
 export async function mockRevokeConsentimiento(f: FinalidadOpcional): Promise<unknown> {
+  if (!anunciada()) throw new MockApiError(404, 'unknown_purpose');
+  sembrar();
   const previo = permisos.get(f);
   // Revocar nunca se bloquea; `never` o `revoked` no agrega nada.
   if (previo?.state === 'granted') permisos.set(f, { ...previo, granted: false, state: 'revoked', since: new Date().toISOString() });
@@ -77,4 +102,5 @@ export async function mockGetSugerenciaDividir(_restaurantId: string | null): Pr
 /** Sólo para tests. */
 export function reiniciarMockSugerencias(): void {
   permisos.clear();
+  sembrado = false;
 }

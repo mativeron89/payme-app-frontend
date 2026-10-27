@@ -3,7 +3,8 @@ import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import type { StoredSession } from '../api/storage';
 import {
-  recordarPermisoDeSugerencias, useCapacidadesOpcionales, type EstadoDeConsentimiento, type FinalidadOpcional,
+  recordarPermisoDeSugerencias, useCapacidadesOpcionales, type CapacidadOpcional, type EstadoDeConsentimiento,
+  type FinalidadOpcional,
 } from '../api/sugerencias';
 import { useIdioma } from '../i18n/idioma';
 import { PATH_PRIVACIDAD } from '../public/publicRoute';
@@ -20,9 +21,13 @@ import { ERROR_CAMBIO, ERROR_LECTURA, fotoHabilitada, useControlFoto, type Estad
  * n420 · las dos filas de los permisos opcionales, con los textos que aprobó Mati, literales:
  * - D415 · «Sugerencias para dividir»;
  * - D426 · «Análisis interno de PayMe», debajo de la anterior.
- * Cada una aparece SÓLO si el `/config` anuncia su capacidad encendida (D403/D417). Hoy están apagadas: sin fila y sin
- * ningún pedido. El estado del permiso se lee del servidor al montar la fila; activar no es optimista (el interruptor
- * se enciende recién con el 201) y revocar nunca se bloquea.
+ * Cada una aparece con su capacidad encendida (D403/D417). Activar no es optimista (el interruptor se enciende recién
+ * con el 201) y revocar nunca se bloquea.
+ *
+ * O1 (auditoría de PR102) · con la capacidad anunciada pero apagada (`{supported: true, enabled: false}`, lo que sirve
+ * producción hoy), la fila aparece SÓLO para revocar si la persona tiene el permiso otorgado, como la foto (D463): el
+ * contrato deja leer el estado con `enabled: false` para revocar grants previos. Sin el permiso, no se ve, como antes.
+ * Para saberlo se lee el estado (un GET por finalidad); sin la capacidad anunciada, ni eso.
  */
 /** Key por cuenta: ninguna respuesta ni elección de otra sesión se reutiliza (como `PrivacidadFotoPanel`). */
 export function SeccionPrivacidad({ session }: { readonly session: StoredSession }) {
@@ -32,14 +37,16 @@ export function SeccionPrivacidad({ session }: { readonly session: StoredSession
 function Seccion({ session }: { readonly session: StoredSession }) {
   const foto = useControlFoto(session, false);
   const capacidades = useCapacidadesOpcionales();
+  const sugerencias = useFilaOpcional('sugerencias', session, capacidades.sugerencias);
+  const analisis = useFilaOpcional('analisis_interno', session, capacidades.analisis_interno);
   // La fila aparece con el estado ya leído: si no, se pintaría mientras consulta y desaparecería con un 404 (un
   // servidor sin la finalidad), y la pantalla saltaría.
   const leyendo = foto.estado.ocupado && foto.estado.permiso === null && foto.estado.error === null;
   return (
     <SeccionPrivacidadView
       foto={foto.noSoportado || leyendo ? null : { estado: foto.estado, onCambiar: foto.cambiar, onConsultar: foto.consultar }}
-      sugerencias={capacidades.sugerencias?.enabled === true ? <FilaPermisoOpcional finalidad="sugerencias" session={session} /> : null}
-      analisis={capacidades.analisis_interno?.enabled === true ? <FilaPermisoOpcional finalidad="analisis_interno" session={session} /> : null}
+      sugerencias={sugerencias}
+      analisis={analisis}
     />
   );
 }
@@ -121,8 +128,10 @@ export function mensajeDeRechazo(err: unknown): MensajeDeFila {
   return 'no_se_guardo';
 }
 
-export function FilaPermisoOpcionalView({ finalidad, estado, ocupado, mensaje, onCambiar }: {
+export function FilaPermisoOpcionalView({ finalidad, estado, ocupado, mensaje, onCambiar, soloRevocar = false }: {
   readonly finalidad: FinalidadOpcional;
+  /** O1 · con la capacidad apagada: el interruptor sólo apaga; nunca otorga. */
+  readonly soloRevocar?: boolean;
   readonly estado: EstadoDeConsentimiento | null;
   readonly ocupado: boolean;
   readonly mensaje: MensajeDeFila | null;
@@ -155,45 +164,74 @@ export function FilaPermisoOpcionalView({ finalidad, estado, ocupado, mensaje, o
         aria-labelledby={`${id}-titulo`}
         aria-describedby={`${id}-texto`}
         checked={estado?.granted === true}
-        disabled={ocupado || estado === null}
-        onChange={(e) => onCambiar(e.target.checked)}
+        disabled={ocupado || estado === null || (soloRevocar && !estado.granted)}
+        onChange={(e) => { if (!soloRevocar || !e.target.checked) onCambiar(e.target.checked); }}
       />
     </div>
   );
 }
 
-function FilaPermisoOpcional({ finalidad, session }: { readonly finalidad: FinalidadOpcional; readonly session: StoredSession }) {
+export type ModoDeFilaOpcional = 'oculta' | 'normal' | 'solo_revocar';
+
+/**
+ * O1 · cómo se muestra una fila opcional:
+ * - sin la capacidad anunciada: oculta (y no se lee nada);
+ * - encendida: normal;
+ * - apagada: oculta hasta leer el estado; con el permiso otorgado, sólo para revocar; sin él, oculta. Una fila que ya
+ *   se mostró en esta pantalla sigue (apagada y sin poder activarse) después de revocar, para que no desaparezca bajo
+ *   el dedo.
+ */
+export function modoDeFilaOpcional(capacidad: CapacidadOpcional | null, estado: EstadoDeConsentimiento | null,
+  leido: boolean, yaVisible: boolean): ModoDeFilaOpcional {
+  if (capacidad === null) return 'oculta';
+  if (capacidad.enabled) return 'normal';
+  if (!leido) return 'oculta';
+  return estado?.granted === true || yaVisible ? 'solo_revocar' : 'oculta';
+}
+
+function useFilaOpcional(finalidad: FinalidadOpcional, session: StoredSession, capacidad: CapacidadOpcional | null): JSX.Element | null {
   const [estado, setEstado] = useState<EstadoDeConsentimiento | null>(null);
   const [ocupado, setOcupado] = useState(true);
+  const [leido, setLeido] = useState(false);
   const [mensaje, setMensaje] = useState<MensajeDeFila | null>(null);
   const epoca = useRef(0);
+  const yaVisible = useRef(false);
   const sesionRef = useRef(session);
   sesionRef.current = session;
   const cuenta = `${session.family_id}:${session.principal_id}`;
+  const anunciada = capacidad !== null;
 
   useEffect(() => {
     const marca = ++epoca.current;
     setEstado(null);
     setOcupado(true);
+    setLeido(false);
     setMensaje(null);
+    yaVisible.current = false;
+    // Sin la capacidad anunciada no se pide nada.
+    if (!anunciada) return () => { epoca.current += 1; };
     void (async () => {
       try {
-        const leido = await api.getConsentimiento(finalidad, sesionRef.current);
+        const leidoAhora = await api.getConsentimiento(finalidad, sesionRef.current);
         if (marca !== epoca.current) return;
-        setEstado(leido);
-        if (finalidad === 'sugerencias') recordarPermisoDeSugerencias(leido.granted);
+        setEstado(leidoAhora);
+        if (finalidad === 'sugerencias') recordarPermisoDeSugerencias(leidoAhora.granted);
       } catch {
         // Ante la duda, apagado y deshabilitado: nunca «activado».
         if (marca === epoca.current) setMensaje('por_ahora');
       } finally {
-        if (marca === epoca.current) setOcupado(false);
+        if (marca === epoca.current) { setOcupado(false); setLeido(true); }
       }
     })();
     return () => { epoca.current += 1; };
-  }, [finalidad, cuenta]);
+  }, [finalidad, cuenta, anunciada]);
+
+  const modo = modoDeFilaOpcional(capacidad, estado, leido, yaVisible.current);
+  if (modo !== 'oculta') yaVisible.current = true;
+  const soloRevocar = modo === 'solo_revocar';
 
   async function cambiar(activar: boolean) {
-    if (ocupado || estado === null) return;
+    if (ocupado || estado === null || (activar && soloRevocar)) return;
     const marca = ++epoca.current;
     setOcupado(true);
     setMensaje(null);
@@ -212,6 +250,8 @@ function FilaPermisoOpcional({ finalidad, session }: { readonly finalidad: Final
     }
   }
 
+  // Con la capacidad apagada, un error de lectura no muestra una fila: no hay nada que revocar que se sepa.
+  if (modo === 'oculta' || (soloRevocar && estado === null)) return null;
   return <FilaPermisoOpcionalView finalidad={finalidad} estado={estado} ocupado={ocupado} mensaje={mensaje}
-    onCambiar={(activar) => { void cambiar(activar); }} />;
+    soloRevocar={soloRevocar} onCambiar={(activar) => { void cambiar(activar); }} />;
 }

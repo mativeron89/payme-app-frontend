@@ -6,7 +6,7 @@ import type { StoredSession } from '../api/storage';
 import { traducir } from '../i18n/idioma';
 import type { PermisoFoto } from '../api/fotoPerfilNoAmigos';
 import type { EstadoPrivacidadFoto } from './PrivacidadFotoPanel';
-import { FilaFotoView, FilaPermisoOpcionalView, SeccionPrivacidad, SeccionPrivacidadView, mensajeDeRechazo } from './SeccionPrivacidad';
+import { FilaFotoView, FilaPermisoOpcionalView, SeccionPrivacidad, SeccionPrivacidadView, mensajeDeRechazo, modoDeFilaOpcional } from './SeccionPrivacidad';
 
 const SESION = { family_id: 'f', principal_id: 'p' } as unknown as StoredSession;
 const TEXTOS = {
@@ -149,5 +149,48 @@ describe('D499 b5 · la fila simple del permiso de foto', () => {
     expect(en('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.'))
       .not.toBe('Permite que otros usuarios vean tu foto en búsquedas, invitaciones y cuando compartas mesas o viajes. Tus amigos podrán seguir viéndola si lo desactivas.');
     expect(en('Más en el Aviso de Privacidad.')).toBe('More in the Privacy Notice.');
+  });
+});
+
+/** O1/O2 · auditoría de PR102. «Apagado» con la forma de producción de hoy: `{supported: true, enabled: false}`. */
+describe('O1 · revocar sugerencias y análisis con la capacidad apagada (como la foto, D463)', () => {
+  const APAGADA = { supported: true, enabled: false } as const;
+  const ENCENDIDA = { supported: true, enabled: true } as const;
+  const est = (granted: boolean) => ({ purpose_key: 'sugerencias' as const, granted, state: granted ? 'granted' as const : 'never' as const });
+
+  it('🔴 las cuatro combinaciones: otorgado/no otorgado × encendida/apagada', () => {
+    expect(modoDeFilaOpcional(ENCENDIDA, est(true), true, false)).toBe('normal');
+    expect(modoDeFilaOpcional(ENCENDIDA, est(false), true, false)).toBe('normal');
+    expect(modoDeFilaOpcional(APAGADA, est(true), true, false)).toBe('solo_revocar');
+    expect(modoDeFilaOpcional(APAGADA, est(false), true, false)).toBe('oculta');
+  });
+
+  it('apagada: oculta mientras lee y si la lectura falla; sin la capacidad anunciada, oculta siempre', () => {
+    expect(modoDeFilaOpcional(APAGADA, null, false, false)).toBe('oculta');
+    expect(modoDeFilaOpcional(APAGADA, null, true, false)).toBe('oculta');
+    expect(modoDeFilaOpcional(null, est(true), true, false)).toBe('oculta');
+  });
+
+  it('apagada y recién revocada en esta pantalla: sigue, sólo apagada (no desaparece bajo el dedo)', () => {
+    expect(modoDeFilaOpcional(APAGADA, { purpose_key: 'sugerencias', granted: false, state: 'revoked' }, true, true)).toBe('solo_revocar');
+  });
+
+  it('🔴 sólo para revocar: otorgado, el interruptor está habilitado; no otorgado, deshabilitado (nunca otorga)', () => {
+    const vista = (granted: boolean) => renderToStaticMarkup(<FilaPermisoOpcionalView finalidad="sugerencias" soloRevocar
+      estado={{ purpose_key: 'sugerencias', granted, state: granted ? 'granted' : 'revoked' }} ocupado={false} mensaje={null} onCambiar={() => undefined} />);
+    expect(vista(true)).toMatch(/checked=""/);
+    expect(vista(true)).not.toMatch(/disabled/);
+    expect(vista(false)).toMatch(/role="switch"[^>]*disabled/);
+    // Encendida (no sólo revocar), no otorgado: se puede activar.
+    expect(renderToStaticMarkup(<FilaPermisoOpcionalView finalidad="sugerencias"
+      estado={{ purpose_key: 'sugerencias', granted: false, state: 'never' }} ocupado={false} mensaje={null} onCambiar={() => undefined} />)).not.toMatch(/disabled/);
+  });
+
+  it('🔴 O2 · con la forma de producción y sin leer todavía: la sección no pinta ninguna fila', () => {
+    aplicarConfigSugerencias({ features: { sugerencias: APAGADA, analisis_interno: APAGADA } });
+    const html = renderToStaticMarkup(<SeccionPrivacidad session={SESION} />);
+    expect(html).not.toContain('Sugerencias para dividir');
+    expect(html).not.toContain('Análisis interno de PayMe');
+    expect(html).toBe('');
   });
 });

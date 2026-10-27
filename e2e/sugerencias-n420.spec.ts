@@ -133,3 +133,76 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     await expect(fila(page, 'Split suggestions')).toBeChecked();
   });
 });
+
+/** Cuenta los pedidos a la fachada de los permisos opcionales y de la sugerencia, en la página ya cargada. */
+async function espiar(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
+    const w = window as unknown as { __n420: Record<string, number> };
+    w.__n420 = { getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 };
+    for (const m of Object.keys(w.__n420)) {
+      const original = api[m]!.bind(api);
+      api[m] = async (...a: unknown[]) => { w.__n420[m] += 1; return original(...a); };
+    }
+  });
+}
+const pedidos = (page: Page) => page.evaluate(() => (window as unknown as { __n420: Record<string, number> }).__n420);
+
+/**
+ * O1/O2 · auditoría de PR102. «Apagado» con la forma de producción de hoy (`{supported: true, enabled: false}`).
+ * Para saber si hay algo que revocar, Configuración lee el estado: un GET por finalidad, nada más.
+ */
+test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)', () => {
+  test('🔴 O2 · sin el permiso: ninguna fila; Configuración sólo lee el estado, y «¿Cómo dividen?» no pide nada', async ({ page }) => {
+    await configurarTicketSinQr(page, { ocr: 'no_merchant' });
+    await conCosturas(page, { sugerencias: 'apagado', sugerencia_dividir: 'igual-4' });
+    await ingresar(page);
+    await espiar(page);
+    await ir(page, '#/mas');
+    await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
+    await expect.poll(async () => (await pedidos(page)).getConsentimiento).toBe(2);
+    await expect(page.getByText('Sugerencias para dividir')).toHaveCount(0);
+    await expect(page.getByText('Análisis interno de PayMe')).toHaveCount(0);
+    await aComoDividen(page);
+    await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
+    await expect(page.getByText(/Como siempre/)).toHaveCount(0);
+    expect(await pedidos(page)).toEqual({ getConsentimiento: 2, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+  });
+
+  test('🔴 O1 · con los dos permisos otorgados: las filas aparecen sólo para revocar, y no se pueden volver a activar', async ({ page }) => {
+    await conCosturas(page, { sugerencias: 'apagado', consentimientos_otorgados: 'sugerencias,analisis_interno' });
+    await ingresar(page);
+    await espiar(page);
+    await ir(page, '#/mas');
+    for (const nombre of ['Sugerencias para dividir', 'Análisis interno de PayMe']) {
+      await expect(fila(page, nombre)).toBeChecked();
+      await expect(fila(page, nombre)).toBeEnabled();
+      await fila(page, nombre).click();
+      await expect(fila(page, nombre)).not.toBeChecked();
+      // Sigue a la vista, apagada: con la capacidad apagada no se otorga.
+      await expect(fila(page, nombre)).toBeDisabled();
+    }
+    expect(await pedidos(page)).toMatchObject({ revokeConsentimiento: 2, grantConsentimiento: 0 });
+  });
+
+  test('O1 · otorgado sólo uno: sólo esa fila', async ({ page }) => {
+    await conCosturas(page, { sugerencias: 'apagado', consentimientos_otorgados: 'analisis_interno' });
+    await ingresar(page);
+    await ir(page, '#/mas');
+    await expect(fila(page, 'Análisis interno de PayMe')).toBeChecked();
+    await expect(page.getByText('Sugerencias para dividir')).toHaveCount(0);
+  });
+
+  test('control · encendida y otorgado: la fila normal, que se apaga y se vuelve a activar', async ({ page }) => {
+    await conCosturas(page, { sugerencias: 'encendido', consentimientos_otorgados: 'sugerencias' });
+    await ingresar(page);
+    await ir(page, '#/mas');
+    await expect(fila(page, 'Sugerencias para dividir')).toBeChecked();
+    await fila(page, 'Sugerencias para dividir').click();
+    await expect(fila(page, 'Sugerencias para dividir')).not.toBeChecked();
+    await expect(fila(page, 'Sugerencias para dividir')).toBeEnabled();
+    await fila(page, 'Sugerencias para dividir').click();
+    await expect(fila(page, 'Sugerencias para dividir')).toBeChecked();
+  });
+});
