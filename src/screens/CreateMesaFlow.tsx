@@ -68,6 +68,7 @@ import { rechazoLocalDePartes, techoPorParte, useCapacidadOcrPaginas } from '../
 import { analizarMuestra, LADO_MUESTRA, SIN_ANALISIS, type AnalisisDeFoto } from '../camara/mejoraDeFoto';
 import { MARCO_ENTERO, recortePixeles, type Marco } from '../camara/marcoDelRecorte';
 import { RecorteDelTicket } from '../components/RecorteDelTicket';
+import { FotosAlVolver } from '../components/FotosAlVolver';
 import { resolutionRequest } from '../api/restaurantResolution';
 import { MAX_PERSONAS, canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
@@ -590,6 +591,41 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     generacionDePartesRef.current += 1;
     for (const p of partesRef.current) if (p.miniatura) URL.revokeObjectURL(p.miniatura);
   }, []);
+  /**
+   * D547 · las fotos que la cámara nativa mandó y esperan el ✓ de «la pantalla al volver» (`FotosAlVolver`). Mati:
+   * «que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto
+   * apareciendo un check abajo a la derecha». Son los originales, sin decodificar y sólo en memoria: el recuadro los
+   * decodifica de a uno después del ✓ y las partes salen de ahí (`prepararParte`, sin EXIF). Sólo con la capacidad de
+   * varias fotos y sólo las de la cámara: la galería y la foto que repite una parte van al recuadro como siempre.
+   */
+  const [tanda, setTanda] = useState<readonly { id: number; original: Blob; url: string }[]>([]);
+  const tandaRef = useRef(tanda);
+  tandaRef.current = tanda;
+  const idDeFotoRef = useRef(0);
+  const [recienLlegada, setRecienLlegada] = useState<number | null>(null);
+  /** D547 · la foto de la tanda que no se pudo usar en el recuadro (su número): la pantalla lo avisa. */
+  const [avisoDeLaTanda, setAvisoDeLaTanda] = useState<number | null>(null);
+  /**
+   * D547 · después del ✓, la foto de la tanda que está en el recuadro (`indice`) y cuántas partes había antes de la
+   * tanda (`partesAntes`): «Volver a las fotos» deja sólo esas.
+   */
+  const [secuencia, setSecuenciaEstado] = useState<{ indice: number; partesAntes: number } | null>(null);
+  const secuenciaRef = useRef(secuencia);
+  const setSecuencia = useCallback((s: { indice: number; partesAntes: number } | null) => {
+    secuenciaRef.current = s;
+    setSecuenciaEstado(s);
+  }, []);
+  const soltarTanda = useCallback(() => {
+    for (const f of tandaRef.current) URL.revokeObjectURL(f.url);
+    tandaRef.current = [];
+    setTanda([]);
+    setRecienLlegada(null);
+    setAvisoDeLaTanda(null);
+    setSecuencia(null);
+  }, [setSecuencia]);
+  useEffect(() => () => {
+    for (const f of tandaRef.current) URL.revokeObjectURL(f.url);
+  }, []);
   // La foto en recorte es de esta pantalla: se suelta al reemplazarla o al irse.
   // Con «Usar foto» la suelta `codificarFoto`, y antes se saca de acá.
   const recortandoRef = useRef(recortando);
@@ -615,8 +651,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (step !== 'scan') {
       soltarRecorte();
       soltarPartes();
+      soltarTanda();
     }
-  }, [step, soltarRecorte, soltarPartes]);
+  }, [step, soltarRecorte, soltarPartes, soltarTanda]);
   const recibirFotoRef = useRef(recibirFoto);
   recibirFotoRef.current = recibirFoto;
   useEffect(() => {
@@ -1254,9 +1291,29 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
     // D484 · la parte anterior todavía se está preparando: una foto grande a la vez en memoria.
     if (preparandoParteRef.current) await preparandoParteRef.current;
+    // D547 · la de la cámara, con varias fotos, va a «la pantalla al volver» y espera el ✓ (salvo que repita una parte).
+    if (variasFotos && origen === 'camara' && reemplazandoRef.current === null && secuenciaRef.current === null) {
+      if (partesRef.current.length + tandaRef.current.length >= maxPartes) return;
+      const foto = { id: ++idDeFotoRef.current, original, url: URL.createObjectURL(original) };
+      const siguientes = [...tandaRef.current, foto];
+      tandaRef.current = siguientes;
+      setTanda(siguientes);
+      setRecienLlegada(foto.id);
+      setAvisoDeLaTanda(null);
+      setScanIssue(null);
+      return;
+    }
     // D484 · con las partes completas, una foto más no tiene lugar (salvo que se esté repitiendo una).
     if (variasFotos && reemplazandoRef.current === null && partesRef.current.length >= maxPartes) return;
-    if (capturandoRef.current) return;
+    await alRecuadro(original, origen);
+  }
+
+  /**
+   * La foto al recuadro: se decodifica UNA vez y se mide (D509). `false` si no se pudo abrir (el aviso de formato ya
+   * quedó puesto) o si llegó otra antes.
+   */
+  async function alRecuadro(original: Blob, origen: 'camara' | 'galeria'): Promise<boolean> {
+    if (capturandoRef.current) return false;
     capturandoRef.current = true;
     setCapturando(true);
     setScanIssue(null);
@@ -1269,7 +1326,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (intento !== intentoLecturaRef.current) {
         foto?.soltar();
         herramientas.terminar();
-        return;
+        return false;
       }
       soltarRecorte();
       // AF-D212-SEGUIMIENTO · sin una foto recodificada no se sube nada: el
@@ -1278,7 +1335,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (!foto) {
         herramientas.terminar();
         setScanIssue('image_type');
-        return;
+        return false;
       }
       // D509 · n322 · la foto se mide una vez al llegar (una muestra chica): el
       // marco arranca sobre el papel si se lo ve claro, y si no, entero como antes.
@@ -1287,10 +1344,98 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       const nueva = { foto, herramientas, origen, intento, analisis };
       recortandoRef.current = nueva;
       setRecortando(nueva);
+      return true;
     } finally {
       capturandoRef.current = false;
       setCapturando(false);
     }
+  }
+
+  /** D547 · ✕ de una foto de la tanda (desde su vista grande): sale; las demás siguen en su orden. */
+  function quitarDeLaTanda(id: number) {
+    const quitada = tandaRef.current.find((f) => f.id === id);
+    if (!quitada) return;
+    URL.revokeObjectURL(quitada.url);
+    const siguientes = tandaRef.current.filter((f) => f.id !== id);
+    tandaRef.current = siguientes;
+    setTanda(siguientes);
+    setAvisoDeLaTanda(null);
+  }
+
+  /** D547 · el ✓: la primera foto de la tanda al recuadro. */
+  async function recuadroDeLaTanda() {
+    const primera = tandaRef.current[0];
+    if (!primera || capturandoRef.current || preparandoParteRef.current) return;
+    // Al volver a la pantalla, la última foto ya no es «recién llegada»: no se vuelve a achicar.
+    setRecienLlegada(null);
+    setAvisoDeLaTanda(null);
+    setScanIssue(null);
+    setRecorteFallido(false);
+    setSecuencia({ indice: 0, partesAntes: partesRef.current.length });
+    if (!(await alRecuadro(primera.original, 'camara'))) volverALasFotos(0);
+  }
+
+  /**
+   * D547 · «Volver a las fotos» (y «Volver» arriba, con el recuadro de la tanda): sin la foto del recuadro y sin las
+   * partes que salieron de esta tanda; las fotos quedan. Con `fallida`, el número de la que no se pudo usar.
+   */
+  function volverALasFotos(fallida: number | null = null) {
+    const s = secuenciaRef.current;
+    if (!s || capturandoRef.current) return;
+    intentoLecturaRef.current += 1;
+    soltarRecorte();
+    generacionDePartesRef.current += 1;
+    const actuales = partesRef.current;
+    for (const p of actuales.slice(s.partesAntes)) if (p.miniatura) URL.revokeObjectURL(p.miniatura);
+    const siguientes = actuales.slice(0, s.partesAntes);
+    partesRef.current = siguientes;
+    setPartes(siguientes);
+    setRecorteFallido(false);
+    setScanIssue(null);
+    setSecuencia(null);
+    setAvisoDeLaTanda(fallida === null ? null : s.partesAntes + fallida + 1);
+  }
+
+  /** D547 · «Siguiente foto»: la del recuadro queda como parte y la que sigue de la tanda pasa al recuadro. */
+  async function siguienteDeLaTanda() {
+    const s = secuenciaRef.current;
+    const elegida = recortandoRef.current;
+    if (!s || !elegida || capturandoRef.current || preparandoParteRef.current) return;
+    capturandoRef.current = true;
+    setCapturando(true);
+    recortandoRef.current = null;
+    setRecortando(null);
+    setRecorteFallido(false);
+    const generacion = generacionDePartesRef.current;
+    let guardada = false;
+    try {
+      const r = await prepararParte(elegida);
+      if (generacion !== generacionDePartesRef.current) return;
+      guardada = guardarParte(r, null);
+    } finally {
+      capturandoRef.current = false;
+      setCapturando(false);
+    }
+    if (secuenciaRef.current !== s) return;
+    if (!guardada) {
+      volverALasFotos(s.indice);
+      return;
+    }
+    const indice = s.indice + 1;
+    const siguiente = tandaRef.current[indice];
+    if (!siguiente) return;
+    setSecuencia({ ...s, indice });
+    if (!(await alRecuadro(siguiente.original, 'camara'))) volverALasFotos(indice);
+  }
+
+  /**
+   * D547 · la última foto de la tanda: desde acá es «Usar foto» de siempre (una foto, la lectura de una imagen) o «Leer
+   * ticket (N fotos)» de D484. La tanda ya no hace falta.
+   */
+  function ultimaDeLaTanda() {
+    if (!recortandoRef.current || capturandoRef.current || preparandoParteRef.current) return;
+    soltarTanda();
+    void usarFoto();
   }
 
   /**
@@ -2218,6 +2363,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       toast(t('Tienes una apertura sin confirmar: reinténtala antes de cambiar la mesa'));
       return;
     }
+    // D547 · con una foto de la tanda en el recuadro, «Volver» vuelve a las fotos, no se va.
+    if (step === 'scan' && secuenciaRef.current !== null) return volverALasFotos();
     if (step === 'scan') return enViaje && viajeId !== null ? navigate('viaje', viajeId) : navigate('home');
     // D363 · Q7 · en el ejemplo, «Volver» desde el ticket o ¿Cómo dividen? es irse del recorrido: la mesa de
     // ejemplo se descarta (la guía se cierra sola al verlo) y se vuelve a Inicio, con la tarjeta Tutorial a la vista.
@@ -2277,6 +2424,29 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * conserva el texto honesto sin fabricar porcentaje ni barra.
    */
   if (step === 'scan') {
+    const tituloDelEscaneo = enViaje && nombreDelViaje !== null ? t('Ticket para {0}', nombreDelViaje) : t('Escanea el ticket');
+    // D547 · las fotos de la cámara esperan el ✓ en «la pantalla al volver».
+    if (variasFotos && tanda.length > 0 && secuencia === null) {
+      return (
+        <FotosAlVolver
+          fotos={tanda}
+          previas={partes.length}
+          max={maxPartes}
+          recienLlegada={recienLlegada}
+          aviso={avisoDeLaTanda}
+          titulo={tituloDelEscaneo}
+          onSacarOtra={doScan}
+          onListo={() => { void recuadroDeLaTanda(); }}
+          onQuitar={quitarDeLaTanda}
+          onSalir={back}
+        />
+      );
+    }
+    /** D547 · el recuadro de una foto de la tanda: cuántas fotos suma el ticket y si es la última. */
+    // Mientras la foto se decodifica o la parte se prepara no hay recuadro: los botones esperan deshabilitados.
+    const enLaTanda = secuencia !== null;
+    const fotosDelTicket = secuencia !== null ? secuencia.partesAntes + tanda.length : 0;
+    const ultimaDeLaTandaEnElRecuadro = secuencia !== null && secuencia.indice >= tanda.length - 1;
     const uploadPercentage = uploadProgress && uploadProgress.totalBytes !== null
       ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
       : null;
@@ -2288,9 +2458,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             {t('Volver')}
           </button>
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
-          <h1 className="camara-titulo">
-            {enViaje && nombreDelViaje !== null ? t('Ticket para {0}', nombreDelViaje) : t('Escanea el ticket')}
-          </h1>
+          <h1 className="camara-titulo">{tituloDelEscaneo}</h1>
           <div className="camara-sub" aria-live="polite" aria-atomic="true">
             {scanning
               ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
@@ -2298,7 +2466,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 ? t('Preparando la foto…')
                 : recortando
                   // D484 · con partes, el marco es el de la parte que sigue (o la que se repite).
-                  ? variasFotos && (partes.length > 0 || reemplazando !== null)
+                  ? variasFotos && (partes.length > 0 || reemplazando !== null || fotosDelTicket > 1)
                     ? t('Parte {0}: ajusta el marco para dejar sólo esa parte', (reemplazando ?? partes.length) + 1)
                     : t('Ajusta el marco para dejar sólo el ticket')
                   : variasFotos && partes.length > 0
@@ -2364,7 +2532,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                     className="camara-parte-quitar"
                     aria-label={t('Quitar la parte {0}', i + 1)}
                     onClick={() => quitarParte(i)}
-                    disabled={scanning || capturando}
+                    disabled={scanning || capturando || secuencia !== null}
                   >
                     <Icon name="x" size={14} />
                   </button>
@@ -2645,7 +2813,28 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               vino de la galería) arriba y «Usar foto» abajo, donde cae el
               pulgar. «Sacar otra» abre la cámara en este mismo toque, como el
               botón redondo. La foto actual queda hasta que llega la otra. */}
-          {recortando ? (
+          {enLaTanda ? (
+            // D547 · el recuadro de una foto de la tanda: «Volver a las fotos» arriba y, donde cae el pulgar, la que
+            // sigue o, en la última, la lectura de siempre («Usar foto» o «Leer ticket (N fotos)»).
+            <>
+              <button type="button" className="camara-galeria" onClick={() => volverALasFotos()} disabled={capturando}>
+                <Icon name="arrow-left" size={20} />
+                <span>{t('Volver a las fotos')}</span>
+              </button>
+              <button
+                type="button"
+                className="camara-usar"
+                onClick={ultimaDeLaTandaEnElRecuadro ? ultimaDeLaTanda : () => { void siguienteDeLaTanda(); }}
+                disabled={capturando || preparandoParte || !recortando}
+              >
+                {!ultimaDeLaTandaEnElRecuadro
+                  ? t('Siguiente foto')
+                  : fotosDelTicket > 1
+                    ? t('Leer ticket ({0} fotos)', fotosDelTicket)
+                    : t('Usar foto')}
+              </button>
+            </>
+          ) : recortando ? (
             <>
               {recortando.origen === 'camara' ? (
                 <button type="button" className="camara-galeria" onClick={doScan} disabled={capturando}>

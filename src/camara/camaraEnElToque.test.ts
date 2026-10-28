@@ -16,6 +16,7 @@ const flujo = readFileSync(new URL('../screens/CreateMesaFlow.tsx', import.meta.
 const circulo = readFileSync(new URL('../screens/viajes/circuloDelViaje.ts', import.meta.url), 'utf8');
 const hoja = readFileSync(new URL('../screens/viajes/HojaParaQueViaje.tsx', import.meta.url), 'utf8');
 const ticketNuevo = readFileSync(new URL('../screens/viajes/TicketNuevoScreen.tsx', import.meta.url), 'utf8');
+const alVolver = readFileSync(new URL('../components/FotosAlVolver.tsx', import.meta.url), 'utf8');
 
 const llamadas = (fuente: string) => fuente.match(/abrirCamaraNativa\(\)/g)?.length ?? 0;
 /** D368 · el menú del teléfono: desde D536 no lo abre ningún botón (se cuenta para fijar que siga en cero). */
@@ -80,9 +81,18 @@ describe('D212 · la cámara nativa se abre dentro del toque', () => {
       expect(enToques, m).toBeGreaterThan(0);
       expect(total, m).toBe(enToques + 1);
     }
+    // D547 · «Sacar otra» de la pantalla al volver: el flujo le pasa `doScan` tal cual y la pantalla lo usa sólo como
+    // `onClick` de su botón (nunca en un efecto ni después de un await).
+    const comoSacarOtra = flujo.match(/onSacarOtra=\{doScan\}/g)?.length ?? 0;
+    expect(comoSacarOtra).toBe(1);
+    const pantallaSinComentarios = alVolver.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const enLaPantalla = pantallaSinComentarios.match(/\bonSacarOtra\b/g)?.length ?? 0;
+    // La prop en la firma, su tipo y un solo `onClick={onSacarOtra}`.
+    expect(alVolver.match(/onClick=\{onSacarOtra\}/g)?.length ?? 0).toBe(1);
+    expect(enLaPantalla).toBe(3);
     // Uno es la definición; todos los demás, manejadores de toque.
     expect(comoToque).toBeGreaterThan(0);
-    expect(usos).toBe(comoToque + enManejadores + 1);
+    expect(usos).toBe(comoToque + enManejadores + comoSacarOtra + 1);
   });
 
   it('ninguna se llama desde un efecto ni después de un await', () => {

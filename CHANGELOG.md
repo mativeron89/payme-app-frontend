@@ -1,3 +1,38 @@
+## 0.267.0 · 2026-10-28 (D547 · varias fotos con la pantalla al volver de la cámara)
+
+- **D547.** Mati: «cuando se saca la foto (que ya vi que se abre de una la cámara) que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto apareciendo un check abajo a la derecha (…) Una vez se selecciona el check se pasa a la edición de la foto para el recuadro». Eligió «Pantalla al volver (Recomendada)»: la cámara sigue siendo la nativa del teléfono (D212/D536), que no admite nada encima.
+  - **La pantalla nueva:** al volver de la cámara con una foto aparece una pantalla de PayMe (`src/components/FotosAlVolver.tsx`). La foto se ve grande un instante y se achica hacia la fila de miniaturas, abajo a la izquierda, numeradas. «Sacar otra» va grande al centro y vuelve a abrir la cámara nativa en el toque. El ✓ va abajo a la derecha.
+  - **El ✓** pasa al recuadro (D222, con el marco, el enderezado y los avisos de foco y luz de D509) de cada foto, en el orden en que se sacaron, con «Siguiente foto». En la última, la lectura de siempre: «Usar foto» con una sola foto (el mismo pedido de una imagen) o «Leer ticket (N fotos)» de D484. «Volver a las fotos» y el «Volver» de arriba regresan a la pantalla con todas las fotos, sin las partes que ya se habían preparado de esa tanda.
+  - **Tope de 4 (D486, el del dueño):** con 4 fotos (contando las partes que ya había), «Sacar otra» se deshabilita y una línea lo explica.
+  - **Tocar una miniatura** la muestra grande, con «Quitar esta foto».
+  - **«Volver» con fotos** pregunta antes de salir («¿Salir sin leer el ticket?», con «Seguir sacando» y «Salir y perder las fotos»).
+  - **Accesibilidad:** el foco va al título al aparecer la pantalla y a la acción segura en la vista grande y en la pregunta. Escape cierra las dos. Con «reducir movimiento» no hay animación. Textos en ES y EN.
+- **Lo que sigue igual:**
+  - Sin la capacidad de varias fotos del dueño (`features.ocr_pages`) o en el ejemplo de la guía, no aparece la pantalla: la cámara va directo al recuadro, como antes.
+  - La galería («Elegir de la galería o Drive», con su «Agregar otra parte») tampoco la usa, y la foto que repite una parte rechazada va directo al recuadro, en su lugar.
+  - Las fotos de la pantalla son las originales de la cámara, sólo en memoria y sólo para verlas. Lo que se sube sale del recuadro, recodificado y sin EXIF, y nada se guarda en el teléfono.
+  - No hay cambios de backend ni de contrato.
+- **Lo que sale:** en el recuadro de una foto de la cámara con varias fotos ya no van «Sacar otra» ni «Agregar otra parte»: se sacan en la pantalla, y repetir una foto es quitarla ahí y sacar otra. Mientras se recorren las fotos de la tanda, la ✕ de la tira de partes queda deshabilitada.
+- **Pruebas:**
+  - `FotosAlVolver.test.tsx`: el marcado con una foto, con varias, con las partes de antes, con el tope (el del dueño) y con el aviso.
+  - `camaraEnElToque.test.ts`: «Sacar otra» de la pantalla es `doScan` usado sólo como `onClick`.
+  - e2e nuevo `fotos-al-volver-d547.spec.ts`:
+    - las posiciones (miniatura abajo a la izquierda, ✓ abajo a la derecha) y el foco en el título;
+    - «Sacar otra» abre la cámara nativa;
+    - la animación, y que con «reducir movimiento» no hay;
+    - una sola foto con la lectura de una imagen;
+    - la vista grande y quitar una foto;
+    - el tope de 4;
+    - la pregunta de salida;
+    - «Volver a las fotos»;
+    - el inglés;
+    - sin la capacidad, lo de siempre.
+  - `multifoto-d486.spec.ts`, al flujo nuevo:
+    - las fotos de la cámara pasan por la pantalla y «Siguiente foto»;
+    - la galería con la capacidad sigue con «Agregar otra parte»;
+    - la cámara cancelada en «Sacar otra» deja la pantalla con su foto.
+- D63: lo cierra la prueba de Mati en el iPhone.
+
 ## 0.266.2 · 2026-10-28 (D535/D536 · «Escanear» abre la cámara del teléfono de una)
 
 - **D535 · D536.** Mati, en D535: «Error importante, cuando se selecciona el boton de escanear de la pantalla principal no abre la camara de una». Desde D368, el «Escanear» de la barra abría la entrada nativa SIN `capture` (`abrirMenuDeFotos`), y por eso el iPhone mostraba su menú (Fototeca o Tomar foto) antes de la cámara: un paso de más. D536 («Cámara del iPhone directo (Recomendada)») reemplaza la vista propia con getUserMedia que pedía la orden D535 y conserva D212, por la calidad de la foto: la cámara del teléfono da 12 MP y un cuadro de video no leía los tickets largos (0.218.0). Ahora el «Escanear» de la barra abre la cámara directo, con `capture="environment"` y `image/*`, igual que el botón redondo. Vale en la pantalla principal, en las fechas de un viaje (D276-1, D250) y en la hoja «¿Para qué viaje?». El carrete sigue en «Elegir de la galería o Drive» de «Escanea el ticket», con su propia entrada sin `capture`.

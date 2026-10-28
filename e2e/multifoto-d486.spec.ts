@@ -7,9 +7,12 @@ import { camaraSimulada, FOTO_DE_CAMARA, sacarFoto } from './_camara';
  * `payme.app.mock.ocr_pages.v1 = encendido` (el bloque `features.ocr_pages` del
  * dueño 2.196.0: hasta 4 fotos y 24 MiB entre todas).
  *
- * - El escaneo: «Agregar otra parte», la tira numerada con ✕, «Leer ticket (N
- *   fotos)», el tope de 4, una parte rechazada que se repite en su lugar y el
- *   aviso de que las fotos se superponían.
+ * - El escaneo: D547 · las fotos de la cámara pasan primero por la pantalla al
+ *   volver («Sacar otra» y el ✓) y después por el recuadro, una por una
+ *   («Siguiente foto»); la tira numerada, «Leer ticket (N fotos)», el tope de 4,
+ *   una parte rechazada que se repite en su lugar y el aviso de que las fotos se
+ *   superponían. Lo propio de la pantalla al volver está en
+ *   `fotos-al-volver-d547.spec.ts`.
  * - Viajes (M4): la misma pantalla, hasta «Ticket nuevo».
  * - 🔴 El visor (M5, «Deslizando de costado»): en un ticket de varias partes,
  *   deslizar pasa de parte y se frena en los bordes; pasar de ticket va por las
@@ -67,21 +70,46 @@ async function abrirEscaneo(page: Page): Promise<void> {
   await expect(page).toHaveURL(/:\d+\/scan$/);
 }
 
-/** La foto llega al marco (sin tocar «Usar foto»). */
+/**
+ * La capacidad de varias fotos llega con la config, que el mock carga con su demora: en el teléfono la cámara tarda
+ * segundos y siempre llega antes, pero acá la foto «se saca» al instante. Sin esperarla, la foto llega sin la
+ * capacidad y va directo al recuadro (lo de siempre).
+ */
+async function esperarCapacidad(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(async () => {
+    const ruta = '/src/api/ocrPaginas.ts';
+    const m = await import(/* @vite-ignore */ ruta) as { capacidadOcrPaginas: () => unknown };
+    return m.capacidadOcrPaginas() !== null;
+  }), { message: 'la capacidad de varias fotos no llegó' }).toBe(true);
+}
+
+/** La foto llega al marco (sin tocar «Usar foto»): sin la capacidad, o repitiendo una parte. */
 async function fotoAlMarco(page: Page): Promise<void> {
   await sacarFoto(page, undefined, { usar: false });
   await expect(marco(page)).toBeVisible();
 }
 
+const alVolver = (page: Page) => page.locator('.fotos-al-volver');
+
 /**
- * «Agregar otra parte»: la del marco va a la tira y, en el mismo toque, se abre el selector para la siguiente, que llega
- * al marco. Es la cámara si la del marco vino de la cámara, o la galería si vino de ahí, así que se toma el selector que
- * se abra.
+ * D547 · `n` fotos con la cámara: la primera con la cámara que ya está abierta y las demás con «Sacar otra» de la
+ * pantalla al volver. Después, el ✓: la primera al recuadro.
  */
-async function otraParte(page: Page, enLaTira: number): Promise<void> {
-  const [selector] = await Promise.all([page.waitForEvent('filechooser'), agregar(page).click()]);
+async function fotosAlRecuadro(page: Page, n: number): Promise<void> {
+  await esperarCapacidad(page);
+  for (let i = 1; i <= n; i++) {
+    if (i > 1) await alVolver(page).getByRole('button', { name: /^(Sacar otra|Take another)$/ }).click();
+    await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
+    await expect(alVolver(page).getByRole('list').getByRole('listitem')).toHaveCount(i);
+  }
+  await alVolver(page).getByRole('button', { name: /^(Listo, ajustar el recuadro|Done, adjust the frame)$/ }).click();
+  await expect(marco(page)).toBeVisible();
+}
+
+/** D547 · «Siguiente foto»: la del recuadro va a la tira y la que sigue llega al marco. */
+async function siguienteFoto(page: Page, enLaTira: number): Promise<void> {
+  await page.getByRole('button', { name: /^(Siguiente foto|Next photo)$/ }).click();
   await expect(tira(page).getByRole('listitem')).toHaveCount(enLaTira);
-  await selector.setFiles(FOTO_DE_CAMARA);
   await expect(marco(page)).toBeVisible();
 }
 
@@ -107,9 +135,11 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
   });
 
   test('🔴 dos partes: la tira, «Leer ticket (2 fotos)» y la lectura con las dos, de hasta 3 MB, en JPEG', async ({ page }) => {
-    await fotoAlMarco(page);
-    await expect(agregar(page)).toHaveText('Agregar otra parte');
-    await otraParte(page, 1);
+    await fotosAlRecuadro(page, 2);
+    // D547 · en el recuadro de la tanda no van «Sacar otra» ni «Agregar otra parte»: las fotos ya se sacaron.
+    await expect(agregar(page)).toHaveCount(0);
+    await expect(page.getByText('Parte 1: ajusta el marco para dejar sólo esa parte', { exact: true })).toBeVisible();
+    await siguienteFoto(page, 1);
     await expect(tira(page).getByRole('listitem').first()).toContainText('Parte 1');
     await expect(page.getByText('Parte 2: ajusta el marco para dejar sólo esa parte', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
@@ -120,22 +150,25 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     for (const b of lectura!.bytes) expect(b).toBeLessThanOrEqual(3_000_000);
   });
 
-  test('quitar una parte con ✕: las demás siguen en su orden', async ({ page }) => {
-    await fotoAlMarco(page);
-    await otraParte(page, 1);
-    await otraParte(page, 2);
-    await page.getByRole('button', { name: 'Quitar la parte 2', exact: true }).click();
-    await expect(tira(page).getByRole('listitem')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true })).toBeVisible();
+  test('D547 · mientras se recorren las fotos de la tanda, ✕ de la tira no se puede tocar', async ({ page }) => {
+    await fotosAlRecuadro(page, 3);
+    await siguienteFoto(page, 1);
+    await siguienteFoto(page, 2);
+    await expect(page.getByRole('button', { name: 'Quitar la parte 2', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Leer ticket (3 fotos)', exact: true })).toBeVisible();
   });
 
-  test('🔴 el tope del dueño: con la cuarta en el marco, «Hasta 4 fotos» deshabilitado y se leen las cuatro', async ({ page }) => {
-    await fotoAlMarco(page);
-    await otraParte(page, 1);
-    await otraParte(page, 2);
-    await otraParte(page, 3);
-    await expect(agregar(page)).toBeDisabled();
-    await expect(agregar(page)).toHaveText('Hasta 4 fotos');
+  test('🔴 el tope del dueño: con la cuarta, «Sacar otra» deshabilitado con su línea, y se leen las cuatro', async ({ page }) => {
+    await esperarCapacidad(page);
+    for (let i = 1; i <= 4; i++) {
+      if (i > 1) await alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true }).click();
+      await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
+    }
+    await expect(alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true })).toBeDisabled();
+    await expect(alVolver(page).getByText('Ya tienes 4 fotos, el máximo por ticket.', { exact: true })).toBeVisible();
+    await alVolver(page).getByRole('button', { name: 'Listo, ajustar el recuadro', exact: true }).click();
+    await expect(marco(page)).toBeVisible();
+    for (const n of [1, 2, 3]) await siguienteFoto(page, n);
     await page.getByRole('button', { name: 'Leer ticket (4 fotos)', exact: true }).click();
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     expect((await lecturas(page))[0]!.partes).toBe(4);
@@ -143,8 +176,8 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
 
   test('🔴 una parte rechazada (`page_index`): se marca, «Repetir la parte 2» la reemplaza en su lugar y se vuelve a leer', async ({ page }) => {
     await page.evaluate((k) => localStorage.setItem(k, 'parte_invalida'), LECTURA);
-    await fotoAlMarco(page);
-    await otraParte(page, 1);
+    await fotosAlRecuadro(page, 2);
+    await siguienteFoto(page, 1);
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
     const aviso = page.getByRole('alert').filter({ hasText: 'No pudimos leer la parte 2' });
     await expect(aviso).toBeVisible({ timeout: 20_000 });
@@ -154,7 +187,9 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await expect(page.getByText('La foto es demasiado pequeña para leer el ticket.', { exact: true })).toHaveCount(0);
     await page.evaluate((k) => localStorage.removeItem(k), LECTURA);
     await aviso.getByRole('button', { name: 'Repetir la parte 2', exact: true }).click();
+    // D547 · la foto que repite una parte va directo al recuadro, en su lugar: sin la pantalla al volver.
     await fotoAlMarco(page);
+    await expect(alVolver(page)).toHaveCount(0);
     await expect(agregar(page)).toHaveCount(0);
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
@@ -163,8 +198,8 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
 
   test('`pages_overlap_uncertain`: no cuadra con el total y se avisa que las fotos se superponían', async ({ page }) => {
     await page.evaluate((k) => localStorage.setItem(k, 'solape_incierto'), LECTURA);
-    await fotoAlMarco(page);
-    await otraParte(page, 1);
+    await fotosAlRecuadro(page, 2);
+    await siguienteFoto(page, 1);
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Las fotos se superponían: revisa que ningún plato quede repetido.', { exact: true })).toBeVisible();
@@ -181,14 +216,26 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await capturar(page, 'd509-filas-dudosas');
   });
 
-  test('sin foto en el marco (la cámara se canceló), se leen las partes que hay', async ({ page }) => {
-    await fotoAlMarco(page);
-    await agregar(page).click();
-    await expect(tira(page).getByRole('listitem')).toHaveCount(1);
-    await expect(page.getByText('Saca la parte siguiente. Deja que se repitan una o dos líneas.', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Leer ticket (1 foto)', exact: true }).click();
+  test('D547 · la cámara se cancela en «Sacar otra»: queda la pantalla con la foto que había y se lee con una', async ({ page }) => {
+    await esperarCapacidad(page);
+    await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
+    // Se abre la cámara y la persona la cierra sin sacar foto: nunca llega nada.
+    await alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true }).click();
+    await expect(alVolver(page).getByRole('list').getByRole('listitem')).toHaveCount(1);
+    await alVolver(page).getByRole('button', { name: 'Listo, ajustar el recuadro', exact: true }).click();
+    await expect(marco(page)).toBeVisible();
+    await page.getByRole('button', { name: 'Usar foto', exact: true }).click();
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     expect((await lecturas(page))[0]!.partes).toBe(1);
+  });
+
+  test('con la capacidad, la galería sigue igual: su foto va directo al marco, con «Agregar otra parte»', async ({ page }) => {
+    await esperarCapacidad(page);
+    await page.locator('.screen.camara input[type="file"]').setInputFiles(FOTO_DE_CAMARA);
+    await expect(marco(page)).toBeVisible();
+    await expect(alVolver(page)).toHaveCount(0);
+    await expect(agregar(page)).toHaveText('Agregar otra parte');
+    await expect(page.getByRole('button', { name: 'Elegir otra', exact: true })).toBeVisible();
   });
 });
 
@@ -210,8 +257,8 @@ test.describe('D486 · M4 · también en Viajes', () => {
     await espiarOcr(page);
     await alViaje.click();
     await expect(page).toHaveURL(new RegExp(`/scan/${CANCUN}$`));
-    await fotoAlMarco(page);
-    await otraParte(page, 1);
+    await fotosAlRecuadro(page, 2);
+    await siguienteFoto(page, 1);
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Ticket nuevo', level: 1 })).toBeVisible({ timeout: 20_000 });
     expect((await lecturas(page))[0]!.partes).toBe(2);
@@ -353,9 +400,9 @@ for (const ancho of [390, 1280] as const) {
           await expect(page.getByRole('button', { name: 'Scan', exact: true })).toBeVisible();
         }
         await page.getByRole('button', { name: es ? 'Escanear' : 'Scan', exact: true }).click();
-        await fotoAlMarco(page);
-        await capturar(page, `${idioma}-marco-agregar-parte`);
-        for (const n of [1, 2]) await otraParte(page, n);
+        await fotosAlRecuadro(page, 3);
+        await capturar(page, `${idioma}-marco-parte-1`);
+        for (const n of [1, 2]) await siguienteFoto(page, n);
         await capturar(page, `${idioma}-tira-tres-partes`);
         await page.evaluate((k) => localStorage.setItem(k, 'parte_invalida'), LECTURA);
         await page.locator('button.camara-usar').click();

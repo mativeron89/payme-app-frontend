@@ -12016,6 +12016,239 @@ h1.pay-title-lbl {
   outline-offset: 2px;
 }
 
+/* ─── D547 · la pantalla al volver de la cámara nativa (`FotosAlVolver`) ───
+   La foto recién sacada se achica hacia la fila de abajo a la izquierda; «Sacar otra» al centro y el ✓ abajo a la
+   derecha, donde cae el pulgar. Sobre el negro de la cámara, como «Escanea el ticket». */
+.fotos-al-volver {
+  display: flex;
+  flex-direction: column;
+}
+
+.fotos-al-volver .camara-titulo:focus {
+  outline: none;
+}
+
+.fotos-al-volver-centro {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+
+.fotos-al-volver-otra {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: min(100%, 220px);
+  min-height: 120px;
+  padding: var(--sp-4);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fotos-al-volver-otra:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.fotos-al-volver-tope,
+.fotos-al-volver-aviso {
+  max-width: 320px;
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.fotos-al-volver-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.fotos-al-volver-abajo {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) max(var(--sp-4), env(safe-area-inset-bottom));
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.65));
+}
+
+.fotos-al-volver-fila {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 0 0 -8px;
+  /* El número de cada miniatura sobresale 8 px arriba y a la izquierda: la fila deja ese lugar para no cortarlo. */
+  padding: 8px 0 0 8px;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.fotos-al-volver-mini {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 52px;
+  height: 68px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  overflow: visible;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.fotos-al-volver-mini img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.fotos-al-volver-numero {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--r-full);
+  background: #fff;
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.fotos-al-volver-listo {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: #fff;
+  color: var(--action);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.fotos-al-volver-listo:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.fotos-al-volver-otra:focus-visible,
+.fotos-al-volver-mini:focus-visible,
+.fotos-al-volver-listo:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* La foto que acaba de llegar: se ve grande un instante y se achica hacia abajo a la izquierda, donde queda su
+   miniatura. Sin «reducir movimiento» nada más: con él, la pantalla ni la dibuja (`FotosAlVolver`). */
+.fotos-al-volver-recien {
+  position: absolute;
+  top: 18%;
+  right: var(--sp-4);
+  bottom: 18%;
+  left: var(--sp-4);
+  width: calc(100% - 2 * var(--sp-4));
+  height: 64%;
+  object-fit: contain;
+  object-position: left bottom;
+  transform-origin: left bottom;
+  pointer-events: none;
+  animation: fotos-al-volver-achicar 900ms ease-in-out forwards;
+}
+
+@keyframes fotos-al-volver-achicar {
+  0%, 30% { transform: none; opacity: 1; }
+  100% { transform: translateY(16vh) scale(0.16); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fotos-al-volver-recien { display: none; }
+}
+
+.fotos-al-volver-capa {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: calc(env(safe-area-inset-top) + var(--sp-4)) var(--sp-4) max(var(--sp-4), env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.92);
+}
+
+.fotos-al-volver-grande {
+  flex: 1 1 0;
+  min-height: 0;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.fotos-al-volver-capa-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+}
+
+.fotos-al-volver-pregunta {
+  display: grid;
+  gap: var(--sp-3);
+  width: min(100%, 360px);
+  padding: var(--sp-6);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--text);
+}
+
+.fotos-al-volver-pregunta h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.fotos-al-volver-pregunta p {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
 .tk-partes-aviso {
   margin-top: var(--sp-2);
 }

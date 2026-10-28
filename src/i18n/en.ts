@@ -1443,6 +1443,26 @@ export const EN: Record<string, string> = {
   "Revisa la cantidad con el ticket.": "Check the quantity against the receipt.",
   "Revisa el precio: puede tener un dígito de más o de menos.": "Check the price: it may have one digit too many or too few.",
   "Este importe es mayor que todo el ticket. Revísalo.": "This amount is larger than the whole receipt. Check it.",
+  // D547 · la pantalla al volver de la cámara nativa: la foto se achica abajo a la izquierda, «Sacar otra» y el ✓.
+  // Escrito por App Frontend; «ticket» va como «receipt» (D481).
+  "Sacaste 1 foto.": "You took 1 photo.",
+  "Sacaste {0} fotos.": "You took {0} photos.",
+  "Toca ✓ para ajustar el recuadro.": "Tap ✓ to adjust the frame.",
+  "Si el ticket es largo, saca otra parte. Si no, toca ✓.": "If the receipt is long, take another part. If not, tap ✓.",
+  "Ya tienes {0} fotos, el máximo por ticket.": "You have {0} photos, the most per receipt.",
+  "No pudimos usar la foto {0}. Quítala y saca otra.": "We couldn't use photo {0}. Remove it and take another.",
+  "Fotos del ticket": "Receipt photos",
+  "Ver la foto {0}": "View photo {0}",
+  "Listo, ajustar el recuadro": "Done, adjust the frame",
+  "Foto {0}": "Photo {0}",
+  "Quitar esta foto": "Remove this photo",
+  "¿Salir sin leer el ticket?": "Leave without reading the receipt?",
+  "Se pierde la foto que sacaste.": "The photo you took will be lost.",
+  "Se pierden las {0} fotos que sacaste.": "The {0} photos you took will be lost.",
+  "Seguir sacando": "Keep going",
+  "Salir y perder las fotos": "Leave and lose the photos",
+  "Volver a las fotos": "Back to the photos",
+  "Siguiente foto": "Next photo",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.
