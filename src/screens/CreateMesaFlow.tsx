@@ -831,6 +831,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       name: request.name ?? null,
       rfc: request.rfc ?? null,
       fallback: request.fallback_key,
+      // D504 · otra lectura del mismo comercio que ahora trae la dirección es otro pedido.
+      address: request.address ?? null,
     });
     const current = resolutionRef.current;
     if (current && current.sessionId === sessionId && current.fingerprint === fingerprint) {

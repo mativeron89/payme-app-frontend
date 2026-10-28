@@ -5,7 +5,8 @@
   "request_fields": [
     "name?",
     "rfc?",
-    "fallback_key? UUID"
+    "fallback_key? UUID",
+    "address? {street, number, neighborhood?, postal_code?, city?, state?} (since 2.201.0)"
   ],
   "response": {
     "restaurant": [
@@ -22,5 +23,13 @@
     "restaurant_identity_required": 400,
     "restaurant_not_found": 404,
     "restaurant_record_only": 409
+  },
+  "local_address": {
+    "since": "2.201.0",
+    "decision": "504, 511",
+    "request": "Optional and additive: the address that POST /api/ocr published in merchant.address with local_address_version=1. Strict object; lengths in UTF-16 code units: street <=200, number <=40, neighborhood <=120, postal_code <=10, city <=100, state <=100. Unknown keys or longer values: 400 validation_error.",
+    "stored": "Only for the private restaurant created or found by this call, the first valid one (later ones are ignored), in restaurant_local_addresses. Never in restaurants.address. Never with an RFC shaped as a natural person (including the generic ones). Invalid numbers (S/N, not starting with a digit) or postal codes are not stored. Retention: while the restaurant exists (decision 511).",
+    "response": "Unchanged, with or without address: restaurant.address keeps its value (null for a private one).",
+    "internal": "Aviso 3.1.0 section 6: data used only for the internal identification of the establishment is not visible to other users. The stored address is never in any API response (restaurant, mesa, statistics, OPS individual); it is only read by the cuisine sweep (services/cocinaRestaurantes.js). tests/ocr-direccion-http.test.js pins it."
   }
 }

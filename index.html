@@ -19,7 +19,7 @@
          `index.html`, toda navegación y la API van SIEMPRE por red; las
          respuestas privadas siguen `no-store`, y sigue SIN haber modo offline.
          No se registra desde este HTML sino desde `src/main.tsx`; qué hace y
-         cómo se retira: `docs/SERVICE_WORKER.md`.
+         cómo se retira: la cabecera de `src/sw/serviceWorker.js` (`RETIRAR`).
          El apple-touch-icon es full-bleed opaco porque iOS aplica su propia
          máscara; el maskable del manifest lleva el tile dentro de la safe zone.
          La guarda estructural vive en `scripts/pwaInstallability.test.ts`. -->

@@ -17,6 +17,21 @@ describe('D509 · filas dudosas', () => {
       .toEqual({});
   });
 
+  /**
+   * O2 (auditoría PR105) · una cuenta que cierra no marca nada, aunque alguna fila «explicaría» la otra suma posible.
+   * Sin el retorno temprano (medido con él quitado), la fila que vale justo el IVA salía como «repetida» o «cantidad».
+   */
+  const totalesConIva = { subtotal_cents: 10000, tax_cents: 1600 };
+  it('🔴 O2 · cierra con el IVA agregado (los platos suman el subtotal): ninguna fila se marca', () => {
+    // 8400 + 1600 = 10000 y el impreso es 11600. Sin el retorno temprano, la de 1600 salía «cantidad».
+    expect(marcas([fila(8400), fila(1600)], 11600, { totales: totalesConIva })).toEqual({});
+  });
+
+  it('🔴 O2 · cierra con el IVA incluido y una fila vale justo el IVA: no es «repetida»', () => {
+    // 10000 + 1600 = 11600, el impreso. Sin el retorno temprano, la de 1600 salía «repetida».
+    expect(marcas([fila(10000), fila(1600)], 11600, { totales: totalesConIva })).toEqual({});
+  });
+
   it('🔴 un renglón leído dos veces: la línea vale justo lo que sobra → «repetida»', () => {
     // Tacos 12000, Agua 4000 y otra vez Agua 4000 contra un impreso de 16000: cualquiera de las dos aguas.
     expect(marcas([fila(12000), fila(4000), fila(4000)], 16000)).toEqual({ 1: 'repetida', 2: 'repetida' });

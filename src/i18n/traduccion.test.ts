@@ -308,7 +308,7 @@ function huerfanasDe(clavesEN: string[], usados: ReadonlySet<string>): string[] 
  *     Es el límite que el propio archivo declara arriba: "ninguno de los dos
  *     ve el texto visible que nadie envolvió en `t()`". Envolver esos sitios
  *     toca `MesaScreen.tsx`/`paymentStatus.ts`/pantallas de link — fuera del
- *     alcance de paths de AF-07 (`GAPS.md`/`src/i18n/**`/`index.html`/
+ *     alcance de paths de AF-07 (el registro de gaps/`src/i18n/**`/`index.html`/
  *     `pwaInstallability.test.ts`), y varias son copy de garantía/banco: NO
  *     se tocan sin una orden que autorice esos paths.
  *

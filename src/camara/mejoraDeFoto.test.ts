@@ -27,13 +27,27 @@ interface Ticket {
   fondo?: number;
   claro?: number;
   tinta?: number;
+  /** Fracción de píxeles del papel que salen como tinta suelta (manchas, puntos), con semilla fija. */
+  ruido?: number;
+  semilla?: number;
+}
+
+/** Un generador congruencial con semilla: el mismo «ruido» en cada corrida. */
+function aleatorio(semilla: number): () => number {
+  let s = semilla >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
 }
 
 /** Un ticket sintético en gris. Los renglones son trazos cortados, como palabras. */
 function ticket({
   ancho = 300, alto = 400, papel = { x0: 0.25, y0: 0.1, x1: 0.75, y1: 0.9 }, giro = 0, fondo = 40, claro = 235, tinta = 30,
+  ruido = 0, semilla = 1,
 }: Ticket = {}): Gris {
   const datos = new Float32Array(ancho * alto);
+  const azar = aleatorio(semilla);
   const cx = ((papel.x0 + papel.x1) / 2) * ancho;
   const cy = ((papel.y0 + papel.y1) / 2) * alto;
   const rad = (giro * Math.PI) / 180;
@@ -54,6 +68,7 @@ function ticket({
         const enRenglon = fila % 12 >= 4 && fila % 12 < 7 && fila > 8 && fila < (papel.y1 - papel.y0) * alto - 8;
         const enPalabra = col % 19 < 14 && col > 6 && col < (papel.x1 - papel.x0) * ancho - 6;
         if (enRenglon && enPalabra) v = tinta;
+        if (ruido > 0 && azar() < ruido) v = tinta;
       }
       datos[y * ancho + x] = v;
     }
@@ -158,6 +173,19 @@ describe('D509 · 2 · el enderezado', () => {
   it('un ticket derecho (o casi) no se gira: menos de 1° es 0', () => {
     expect(estimarInclinacion(ticket())).toBe(0);
     expect(estimarInclinacion(ticket({ giro: 0.4 }))).toBe(0);
+  });
+
+  /**
+   * O1 (auditoría PR105) · la guarda del 15 %: con el texto casi recto, un ángulo de 1° puede dar un perfil apenas
+   * mejor que dejarla como está, y eso no alcanza para girar. Sin la guarda, estos casos se giraban 1° (medido con
+   * la guarda quitada); con ella, 0. Las semillas fijan el ruido: cada corrida es la misma foto.
+   */
+  it.each([
+    { nombre: '0,5° sin ruido', giro: 0.5, ruido: 0, semilla: 1 },
+    { nombre: '0,8° con manchas', giro: 0.8, ruido: 0.005, semilla: 13 },
+    { nombre: '0,7° con manchas', giro: 0.7, ruido: 0.002, semilla: 13 },
+  ])('🔴 O1 · texto casi recto ($nombre): una mejora marginal no gira, 0', ({ nombre: _nombre, ...caso }) => {
+    expect(estimarInclinacion(ticket(caso))).toBe(0);
   });
 
   it('sin texto no hay renglones: 0', () => {

@@ -18,7 +18,7 @@ import type { User } from './types';
 // `D-WEB-1-BIS`— y este párrafo estaba redactado en PRESENTE, como si describiera
 // el despliegue vigente. **El hecho sigue siendo cierto como historia; la
 // descripción había caducado.** Se corrige el tiempo verbal, no el contenido: el
-// `CLAUDE.md` de la raíz cita estas líneas como evidencia de por qué se eligieron
+// gobierno del workspace cita estas líneas como evidencia de por qué se eligieron
 // tres orígenes, y ese argumento **se apoya en que el incidente ocurrió acá**, no
 // en que siga ocurriendo.
 //

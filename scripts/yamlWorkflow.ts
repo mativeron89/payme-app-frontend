@@ -11,7 +11,7 @@ import { load } from 'js-yaml';
  * (`bundleSinYaml` en `despliegue.test.ts`) porque una promesa así se rompe sin
  * que nadie se entere. Autorizada por Mati el 2026-08-21, etiqueta literal
  * «Sí, librería real en tests (Recomendada)», y confirmada por él directamente
- * a esta sesión: el `CLAUDE.md` prohíbe dependencias nuevas sin su OK previo.
+ * a esta sesión: el gobierno del repo prohíbe dependencias nuevas sin su OK previo.
  *
  * ## Las doce vueltas anteriores, en una línea
  *

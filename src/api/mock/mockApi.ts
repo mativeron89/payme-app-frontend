@@ -1,6 +1,7 @@
 import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
 import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock } from '../fotoDelTicket';
 import { capacidadOcrPaginasMock } from '../ocrPaginas';
+import { direccionDelLocal } from '../direccionDelLocal';
 import { CLOSURE_CHANGED, CLOSURE_REQUIRED } from '../selectionClosure';
 import type {
   GoogleContinueLinkRequest,
@@ -55,6 +56,7 @@ import type {
   MesaDetailResponse,
   MesaStatus,
   NotificationsResponse,
+  OcrLocalAddress,
   OcrResponse,
   OpenMesa,
   OpenMesasResponse,
@@ -2003,20 +2005,32 @@ export async function mockResolveRestaurant(
         : null;
   if (!identity) return fail(400, 'restaurant_identity_required');
 
+  // D504 · D511 · la dirección, como el esquema del dueño: estricta. Una forma inválida es un 400, no se ignora.
+  const address = input.address === undefined ? undefined : direccionDelLocal(input.address);
+  if (address === null) return fail(400, 'validation_error');
+
   const byUser = state.restaurantResolutions[session.principal_id] ?? {};
   state.restaurantResolutions[session.principal_id] = byUser;
   const existing = byUser[identity];
-  if (existing) return delay({ restaurant: { ...existing }, record_only: true });
-
-  const restaurant = {
+  const restaurant = existing ?? {
     id: mockId('e'),
     name: name ?? 'Restaurante sin identificar',
     category: 'other',
     address: null,
   };
   byUser[identity] = restaurant;
+  // Sólo en el privado, la primera que llega, y nunca con un RFC con forma de persona física (13 caracteres,
+  // incluidos los genéricos). La respuesta no cambia: `restaurant.address` sigue siendo el de siempre.
+  if (address && !rfcDePersonaFisica(rfc) && !state.restaurantLocalAddresses[restaurant.id]) {
+    state.restaurantLocalAddresses[restaurant.id] = { ...address };
+  }
   persist();
   return delay({ restaurant: { ...restaurant }, record_only: true });
+}
+
+/** D504 · un RFC de persona física tiene 13 caracteres (cuatro letras); el de una persona moral, 12. */
+function rfcDePersonaFisica(rfc: string | null): boolean {
+  return rfc !== null && rfc.length === 13;
 }
 
 export async function mockWalletTransactions(): Promise<WalletTransactionsResponse> {
@@ -2814,11 +2828,13 @@ export async function mockScanTicket(
     readonly fotoDelTicket?: boolean | 2;
     /** D484 · `pages_version=1`: cuántas fotos se mandaron (2 o más). */
     readonly paginas?: number;
+    /** D504 · `local_address_version=1`: la lectura puede publicar la dirección del local. */
+    readonly direccion?: boolean;
   } = {},
 ): Promise<OcrResponse> {
-  const lectura = opciones.paginas !== undefined
+  const lectura = conDireccionDelLocalMock(opciones.paginas !== undefined
     ? await mockScanTicketEnPartes(opciones, opciones.paginas)
-    : await mockScanTicketSinFoto(opciones);
+    : await mockScanTicketSinFoto(opciones), opciones.direccion === true);
   if ((opciones.fotoDelTicket !== true && opciones.fotoDelTicket !== 2) || lectura.contract_version !== 2) return lectura;
   return {
     ...lectura,
@@ -2829,6 +2845,35 @@ export async function mockScanTicket(
         ...(opciones.fotoDelTicket === 2 ? { pages: opciones.paginas ?? 1 } : {}),
       }
       : { stored: false, reason: 'no_receipt' },
+  };
+}
+
+/**
+ * D504 · D507 · el seam `payme.app.mock.ocr.direccion.v1` (sin UI). El mock del dueño nunca publica la dirección del
+ * local; con el seam, la lectura la suma SÓLO si se negoció `local_address_version=1` y es v2, como 2.201.0:
+ * - `con_direccion`: el comercio de siempre, con su dirección;
+ * - `solo_direccion`: un ticket sin nombre ni RFC legibles, sólo con la dirección.
+ * La dirección es ficticia a propósito, para buscarla en pantalla y comprobar que nunca aparece.
+ */
+export const CLAVE_DIRECCION_DEL_LOCAL_MOCK = 'payme.app.mock.ocr.direccion.v1';
+export const DIRECCION_DEL_LOCAL_MOCK: OcrLocalAddress = Object.freeze({
+  street: 'Calle de Ejemplo',
+  number: '123-B',
+  neighborhood: 'Colonia Prueba',
+  postal_code: '01234',
+  city: 'Ciudad Ficticia',
+  state: 'Estado de Muestra',
+});
+
+function conDireccionDelLocalMock(lectura: OcrResponse, negociada: boolean): OcrResponse {
+  const modo = leerSeam(CLAVE_DIRECCION_DEL_LOCAL_MOCK);
+  if (!negociada || lectura.contract_version !== 2 || (modo !== 'con_direccion' && modo !== 'solo_direccion')) {
+    return lectura;
+  }
+  const address = { ...DIRECCION_DEL_LOCAL_MOCK };
+  return {
+    ...lectura,
+    merchant: modo === 'solo_direccion' ? { address } : { ...lectura.merchant, address },
   };
 }
 

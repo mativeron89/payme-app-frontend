@@ -1,4 +1,5 @@
 import type {
+  OcrLocalAddress,
   RestaurantResolutionRequest,
   RestaurantResolutionResponse,
 } from './types';
@@ -42,9 +43,13 @@ export function decodeRestaurantResolution(value: unknown): RestaurantResolution
   };
 }
 
-/** La llamada siempre lleva al menos una identidad y el fallback es UUID real. */
+/**
+ * La llamada siempre lleva al menos una identidad y el fallback es UUID real.
+ * D504 · D511 · si la lectura publicó la dirección del local, va tal cual como `address` (una copia, con sus seis
+ * claves): el dueño la guarda sólo en el restaurante privado y no la devuelve. Nunca se muestra.
+ */
 export function resolutionRequest(
-  merchant: { readonly name?: string; readonly rfc?: string } | undefined,
+  merchant: { readonly name?: string; readonly rfc?: string; readonly address?: OcrLocalAddress } | undefined,
   fallbackKey: string,
 ): RestaurantResolutionRequest {
   if (!UUID.test(fallbackKey)) throw new Error('restaurant_resolution_fallback_invalid');
@@ -52,5 +57,6 @@ export function resolutionRequest(
     ...(merchant?.name ? { name: merchant.name } : {}),
     ...(merchant?.rfc ? { rfc: merchant.rfc } : {}),
     fallback_key: fallbackKey,
+    ...(merchant?.address ? { address: { ...merchant.address } } : {}),
   };
 }

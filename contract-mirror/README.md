@@ -1,4 +1,23 @@
-## D494 · D496 · D497 · las cocinas de los restaurantes · 0.264.5
+## D504 · D507 · D511 · la dirección del local · 0.266.1
+
+Contenido vigente: `43e72f0487982f6609e30f120adf9fdcf38a9b4f`.
+Inventario íntegro de 163 entradas tomado del `main` del dueño (App Backend 2.202.0, `main` en
+`4e3c273ee59c80dd08ab9ce63dd69b39638fbb82`; `contract/mirror-inventory.json`, sha256
+`f0a6897150fe6b4a55d859db80a04e0a8fca78c3b2bb09d90b155074b4a59ed5`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `43e72f0`. **20 archivos espejados**, todos JSON de `contract/`;
+**143 fuentes sólo por hash**, conforme D268. Cambian `contract/ocr-merchant-v2.json` (sha256
+`db847124b83ae3194a30771608ee22b32bbf3580018133f7f8812a640cf09e91`: la sección `local_address_v1` de 2.201.0 y, por arrastre de
+2.202.0, el contador de correcciones del recibo) y `contract/restaurant-resolution-v1.json` (sha256
+`138698de69acff077964a42a2f44aa8521bda95b3abef605eafa227e40ca6105`: `address` opcional). Por hash cambian `routes/account.js`,
+`routes/mesas.js`, `routes/ocr.js`, `schemas/index.js`, `services/consent.js`, `services/legalAcceptance.js`,
+`services/ocrResponseContract.js`, `services/viajes.js` y `services/viajesNotas.js`. Los hechos del dueño se
+regeneraron en local contra `43e72f0`: cambian sólo el commit y los sha256 de sus fuentes, ningún valor.
+
+El front negocia `local_address_version=1` en la lectura de una mesa (nunca en un viaje, que no resuelve
+restaurante) y reenvía `merchant.address` tal cual como `address` en `POST /api/restaurants/resolve`. La dirección
+no se muestra en ninguna vista (Aviso 3.1.0 §6: identificación interna).
+
+### Refresh anterior · D494 · D496 · D497 · las cocinas de los restaurantes · 0.264.5
 
 Contenido vigente: `37b58c887618aa5603fbdb9bb1696f8dbed9aa00`.
 Inventario íntegro de 163 entradas tomado del `main` del dueño, el servido (App Backend
@@ -2295,8 +2314,8 @@ superficie de dinero, garantía, invitaciones ni schema.
 
 1. El mirror se **refresca copiando**; no se parchea.
 2. Todo archivo espejado, salvo este README, debe ser byte-idéntico a su fuente.
-3. Si `src/` necesita un campo o endpoint inexistente, se registra en
-   `../GAPS.md`; el front no inventa contrato ni lo simula en silencio.
+3. Si `src/` necesita un campo o endpoint inexistente, se registra como gap del
+   front (fuera del repo público desde D510 M2); el front no inventa contrato ni lo simula en silencio.
 4. Los archivos de `db/` y `services/` son evidencia para comprender autoridad,
    retries y estados; no convierten detalles internos en API pública.
 5. Un hash local no acredita que esa versión esté publicada. La procedencia se

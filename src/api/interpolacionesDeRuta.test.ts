@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * AF-20 · C-03 · guarda de CLASE sobre las interpolaciones de path de la
- * fachada (`docs/COSTURAS_CONOCIDAS.md`).
+ * fachada (la costura C-03).
  *
  * La instancia que motivó la costura —`getFriendRequests(direction)` sin
  * `encodeURIComponent`— ya no existe: `87c03ca` la partió en dos métodos con

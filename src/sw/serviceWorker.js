@@ -37,7 +37,7 @@ const VERSION = '__PAYME_SW_VERSION__';
  * KILL-SWITCH. Retirar el service worker de todos los dispositivos es un commit
  * que cambia esto a `true` y un deploy normal: la próxima vez que el navegador
  * revise este archivo, borra las cachés de PayMe, se desregistra y deja de
- * interceptar. Procedimiento completo en `docs/SERVICE_WORKER.md`.
+ * interceptar. No hace falta ningún otro paso.
  */
 const RETIRAR = false;
 

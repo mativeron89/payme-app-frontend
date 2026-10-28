@@ -1078,9 +1078,11 @@ const realApi: Api = {
     // D464 · D466 · la foto del ticket se negocia sólo con la capacidad encendida (D484: la v2 con varias fotos).
     const fotoDelTicket = negociacionDeFoto();
     // AF-NOMBRES-CORREGIDOS · el pedido siempre negocia `names_version=1`.
+    // D504 · la dirección del local sólo en la lectura de una mesa (la reenvía al resolver); un viaje no la pide.
+    const direccion = !viaje;
     return ocrResponse(
-      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket, paginas }),
-      { viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas: fotos.length } : {}) },
+      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket, paginas, direccion }),
+      { viaje, nombres: true, fotoDelTicket, direccion, ...(paginas ? { paginas: fotos.length } : {}) },
     );
   },
   createMesa: async (req, intent) =>
@@ -1784,9 +1786,11 @@ const mockApi: Api = {
     const viaje = opciones?.viaje === true;
     if (viaje) assertViajesHabilitado();
     const fotoDelTicket = negociacionDeFoto();
+    // D504 · como el real: la dirección del local sólo en la lectura de una mesa.
+    const direccion = !viaje;
     return ocrResponse(
-      await mock.mockScanTicket({ viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas } : {}) }),
-      { viaje, nombres: true, fotoDelTicket, ...(paginas ? { paginas } : {}) },
+      await mock.mockScanTicket({ viaje, nombres: true, fotoDelTicket, direccion, ...(paginas ? { paginas } : {}) }),
+      { viaje, nombres: true, fotoDelTicket, direccion, ...(paginas ? { paginas } : {}) },
     );
   },
   createMesa: async (req, intent) =>

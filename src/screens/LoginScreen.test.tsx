@@ -257,7 +257,7 @@ describe('LoginScreen · rediseño del 2026-09-17', () => {
   it('🔴 cero superficie de pago como invitado, ni apagada', () => {
     // El HTML aprobado la trae detrás de un tweak (`sc-if invitado`, apagado
     // por defecto) y la reconciliación la elevó como STOP: el backend contesta
-    // 401 desde v2.32.0 y el CLAUDE.md de este repo dice «no volver a
+    // 401 desde v2.32.0 y el gobierno de este repo dice «no volver a
     // implementar el pago de invitado». Apagada tampoco.
     expect(source.toLowerCase()).not.toContain('invitado');
     expect(CSS.toLowerCase()).not.toContain('pagar como invitado');

@@ -139,3 +139,69 @@ describe('mock restaurants/resolve · ownership e idempotencia', () => {
     })).rejects.toMatchObject({ status: 409, message: 'restaurant_label_not_allowed' });
   });
 });
+
+/**
+ * D504 · D511 · el mock replica al dueño 2.201.0: la lectura publica la dirección del local sólo si se negoció (y con
+ * el seam, porque el mock del dueño no la publica nunca); el resolver la guarda en el privado —la primera válida, nunca
+ * con RFC de persona física— y su respuesta no cambia.
+ */
+describe('D504 · la dirección del local en el mock', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    setupStorage();
+  });
+
+  async function conSesion() {
+    const cargado = await load();
+    const user = { ...cargado.store.state.user, id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' };
+    cargado.storage.saveSession(cargado.storage.createSession({ access_token: 'c', refresh_token: 'd', user }));
+    return cargado;
+  }
+  const FALLBACK = '22222222-2222-4222-8222-222222222222';
+
+  it('🔴 la lectura la publica sólo negociada y con el seam', async () => {
+    const { mock } = await conSesion();
+    localStorage.setItem(mock.CLAVE_DIRECCION_DEL_LOCAL_MOCK, 'con_direccion');
+    expect((await mock.mockScanTicket({ nombres: true, direccion: true })).merchant)
+      .toEqual({ name: 'Tacos El Güero', rfc: 'TEG010101AB1', address: mock.DIRECCION_DEL_LOCAL_MOCK });
+    expect((await mock.mockScanTicket({ nombres: true })).merchant).toEqual({ name: 'Tacos El Güero', rfc: 'TEG010101AB1' });
+    localStorage.setItem(mock.CLAVE_DIRECCION_DEL_LOCAL_MOCK, 'solo_direccion');
+    expect((await mock.mockScanTicket({ nombres: true, direccion: true })).merchant)
+      .toEqual({ address: mock.DIRECCION_DEL_LOCAL_MOCK });
+    localStorage.removeItem(mock.CLAVE_DIRECCION_DEL_LOCAL_MOCK);
+    expect((await mock.mockScanTicket({ nombres: true, direccion: true })).merchant).toEqual({ name: 'Tacos El Güero', rfc: 'TEG010101AB1' });
+  });
+
+  it('🔴 el resolver la guarda en el privado, la primera, y no la devuelve', async () => {
+    const { mock, store } = await conSesion();
+    const address = { ...mock.DIRECCION_DEL_LOCAL_MOCK };
+    const primera = await mock.mockResolveRestaurant({ name: 'Tacos El Güero', rfc: 'TEG010101AB1', fallback_key: FALLBACK, address });
+    expect(primera).toEqual({ record_only: true, restaurant: { id: primera.restaurant.id, name: 'Tacos El Güero', category: 'other', address: null } });
+    expect(JSON.stringify(primera)).not.toContain(address.street);
+    expect(store.state.restaurantLocalAddresses[primera.restaurant.id]).toEqual(address);
+    // Una segunda, distinta, se ignora; la respuesta sigue igual.
+    const otra = await mock.mockResolveRestaurant({
+      name: 'Tacos El Güero', rfc: 'TEG010101AB1', fallback_key: FALLBACK, address: { ...address, number: '999' },
+    });
+    expect(otra).toEqual(primera);
+    expect(store.state.restaurantLocalAddresses[primera.restaurant.id]).toEqual(address);
+  });
+
+  it('🔴 nunca con un RFC con forma de persona física (13 caracteres, también el genérico)', async () => {
+    const { mock, store } = await conSesion();
+    const address = { ...mock.DIRECCION_DEL_LOCAL_MOCK };
+    for (const rfc of ['GOME800101AB1', 'XAXX010101000']) {
+      const r = await mock.mockResolveRestaurant({ name: 'Fonda Doña Mary', rfc, fallback_key: FALLBACK, address });
+      expect(store.state.restaurantLocalAddresses[r.restaurant.id]).toBeUndefined();
+    }
+  });
+
+  it('una dirección con otra forma es un 400, como el esquema estricto del dueño', async () => {
+    const { mock } = await conSesion();
+    await expect(mock.mockResolveRestaurant({
+      name: 'Tacos El Güero', fallback_key: FALLBACK,
+      address: { ...mock.DIRECCION_DEL_LOCAL_MOCK, number: 'S/N' },
+    })).rejects.toMatchObject({ status: 400, message: 'validation_error' });
+  });
+});

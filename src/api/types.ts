@@ -383,6 +383,8 @@ export interface RestaurantResolutionRequest {
   name?: string;
   rfc?: string;
   fallback_key?: string;
+  /** D504 · D511 · la dirección que publicó la lectura, tal cual. El dueño la guarda sólo en el privado y no la devuelve. */
+  address?: OcrLocalAddress;
 }
 
 export interface RestaurantResolutionResponse {
@@ -1080,6 +1082,23 @@ export interface OcrPaginas {
 export interface OcrMerchant {
   name?: string;
   rfc?: string;
+  /**
+   * D504 · D507 · D511 · la dirección del local que leyó el ticket (App Backend 2.201.0,
+   * `contract-mirror/contract/ocr-merchant-v2.json` → `local_address_v1`). Sólo llega si la lectura negoció
+   * `local_address_version=1`, y sólo sirve para reenviarla, sin cambios, a `POST /api/restaurants/resolve`.
+   * 🔴 Nunca se muestra: Aviso 3.1.0 §6, identificación interna del establecimiento.
+   */
+  address?: OcrLocalAddress;
+}
+
+/** D504 · las seis claves fijas de `merchant.address` del dueño; las cuatro últimas pueden ser `null`. */
+export interface OcrLocalAddress {
+  street: string;
+  number: string;
+  neighborhood: string | null;
+  postal_code: string | null;
+  city: string | null;
+  state: string | null;
 }
 
 /**
@@ -1116,7 +1135,10 @@ export interface TicketAdjustment {
 export interface OcrResponse {
   /** Ausente en el contrato v1; exactamente 2 cuando se pidió v2. */
   contract_version?: 2;
-  /** Sólo identidad del proveedor. Nunca domicilio, RFC receptor ni pago. */
+  /**
+   * Sólo identidad del proveedor. Nunca el domicilio del receptor, el RFC receptor ni el pago. La dirección del local
+   * (D504) sólo con `local_address_version=1`, y nunca a la vista.
+   */
   merchant?: OcrMerchant;
   items: Array<{
     name: string;

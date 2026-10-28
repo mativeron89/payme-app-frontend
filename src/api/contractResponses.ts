@@ -25,6 +25,7 @@ import type {
   TicketTotals,
 } from './types';
 import { decodeFotoDelEscaneo } from './fotoDelTicket';
+import { direccionDelLocal } from './direccionDelLocal';
 import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
@@ -473,6 +474,8 @@ export function ocrResponse(
     readonly fotoDelTicket?: boolean | 2;
     /** D484 · se negoció `pages_version=1`: se mandaron `paginas` fotos (2 o más). */
     readonly paginas?: number;
+    /** D504 · se negoció `local_address_version=1`: `merchant` puede traer `address` (y sólo eso). */
+    readonly direccion?: boolean;
   } = {},
 ): OcrResponse {
   const body = record(value);
@@ -534,8 +537,12 @@ export function ocrResponse(
     const normalizedRfc = typeof rfc === 'string'
       ? rfc.normalize('NFC').toUpperCase().replace(/[\s-]/gu, '')
       : null;
+    // D504 · `address` sólo si se negoció `local_address_version=1`; sin negociar, una clave de más sigue rompiendo.
+    const clavesDelComercio = opciones.direccion === true ? ['name', 'rfc', 'address'] : ['name', 'rfc'];
+    const address = raw && raw.address !== undefined ? direccionDelLocal(raw.address) : undefined;
     if (!raw || Object.keys(raw).length === 0
-        || Object.keys(raw).some((key) => key !== 'name' && key !== 'rfc')
+        || Object.keys(raw).some((key) => !clavesDelComercio.includes(key))
+        || address === null
         || (name !== undefined && (typeof name !== 'string' || normalizedMerchantName(name) !== name))
         || (rfc !== undefined && (typeof rfc !== 'string' || normalizedRfc !== rfc
           || !/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc)))) {
@@ -544,6 +551,7 @@ export function ocrResponse(
     merchant = {
       ...(typeof name === 'string' ? { name } : {}),
       ...(typeof rfc === 'string' ? { rfc } : {}),
+      ...(address ? { address } : {}),
     };
   }
 

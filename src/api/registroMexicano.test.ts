@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  * Esto barre **texto de usuario**, no comentarios de código. Tres motivos:
  *
  * 1. **El gobierno de este repo manda rioplatense para el trabajo**
- *    (`CLAUDE.md`: *"Idioma: español rioplatense"*). El equipo habla
+ *    (*"Idioma: español rioplatense"*). El equipo habla
  *    rioplatense; **el PRODUCTO habla mexicano**. Es una división, no una
  *    excepción.
  * 2. Un comentario **no le llega a nadie que use la app** — misma doctrina que

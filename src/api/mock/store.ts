@@ -12,6 +12,7 @@ import type {
   ItemStatus,
   MesaDetail,
   MesaStatus,
+  OcrLocalAddress,
   OpenMesa,
   PaymentMethod,
   Restaurant,
@@ -267,6 +268,11 @@ export interface MockState {
   joinedMesaCodes: string[];
   /** Registros privados creados por /restaurants/resolve, aislados por usuario. */
   restaurantResolutions: Record<string, Record<string, Restaurant>>;
+  /**
+   * D504 · D511 · la dirección del local que reenvió el resolver, por id del restaurante privado: la primera
+   * válida, como `restaurant_local_addresses` del dueño. Ninguna respuesta la devuelve (Aviso 3.1.0 §6).
+   */
+  restaurantLocalAddresses: Record<string, OcrLocalAddress>;
   /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
   idempotency: Record<string, MockIdemEntry>;
   /** v2.123.0 · selección informativa propia, aislada por mesa+usuario. */
@@ -970,6 +976,7 @@ function seedState(): MockState {
     linkTokens: {},
     joinedMesaCodes: [],
     restaurantResolutions: {},
+    restaurantLocalAddresses: {},
     idempotency: {},
     informativeSelections: {},
     ocultamientos: {},
@@ -1358,6 +1365,11 @@ function loadPersisted(): MockState | null {
     if (!parsed.restaurantResolutions || typeof parsed.restaurantResolutions !== 'object'
         || Array.isArray(parsed.restaurantResolutions)) {
       parsed.restaurantResolutions = {};
+    }
+    // D504 · nació en 0.266.1: un estado persistido de antes no lo trae.
+    if (!parsed.restaurantLocalAddresses || typeof parsed.restaurantLocalAddresses !== 'object'
+        || Array.isArray(parsed.restaurantLocalAddresses)) {
+      parsed.restaurantLocalAddresses = {};
     }
     if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
     if (!Array.isArray(parsed.friendRequestReceipts)) {

@@ -75,7 +75,7 @@ export class HttpError extends Error {
 }
 
 /**
- * AF-20 · n89 · cierra la costura C-02 de `docs/COSTURAS_CONOCIDAS.md`.
+ * AF-20 · n89 · cierra la costura C-02 (Web Locks).
  *
  * «No hay Web Locks» se distingue de «la acción corrió» con un CENTINELA
  * propio, y no con `null`. Antes era `null`: una acción que resolviera `null`
@@ -205,6 +205,7 @@ function rawOcrUploadRequest<T>(
   viaje = false,
   fotoDelTicket: boolean | 2 = false,
   paginas = false,
+  direccion = false,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -227,7 +228,11 @@ function rawOcrUploadRequest<T>(
     // encendida (el campo `images`); con una, el pedido de siempre, byte a byte.
     // `ticket_image_version=2` (la 1 más `pages`) sólo con la foto Y las varias
     // fotos encendidas.
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket === 2 ? '&ticket_image_version=2' : fotoDelTicket ? '&ticket_image_version=1' : ''}${paginas ? '&pages_version=1' : ''}`);
+    // D504 · D507 · `local_address_version=1` (App Backend 2.201.0) sólo en la
+    // lectura de una mesa: el dueño publica la dirección del local para
+    // reenviarla a `POST /api/restaurants/resolve`. Un viaje no resuelve
+    // restaurante, así que no la pide. Nunca se muestra (Aviso 3.1.0 §6).
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket === 2 ? '&ticket_image_version=2' : fotoDelTicket ? '&ticket_image_version=1' : ''}${paginas ? '&pages_version=1' : ''}${direccion ? '&local_address_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -365,12 +370,18 @@ export async function httpRequest<T>(
 export async function httpOcrUploadRequest<T>(
   body: FormData,
   onProgress?: UploadProgressListener,
-  opciones: { readonly viaje?: boolean; readonly fotoDelTicket?: boolean | 2; readonly paginas?: boolean } = {},
+  opciones: {
+    readonly viaje?: boolean;
+    readonly fotoDelTicket?: boolean | 2;
+    readonly paginas?: boolean;
+    readonly direccion?: boolean;
+  } = {},
 ): Promise<T> {
   return authenticatedRequest(undefined, (session) => (
     rawOcrUploadRequest<T>(
       body, session.access_token, onProgress, opciones.viaje === true,
       opciones.fotoDelTicket === 2 ? 2 : opciones.fotoDelTicket === true, opciones.paginas === true,
+      opciones.direccion === true,
     )
   ));
 }

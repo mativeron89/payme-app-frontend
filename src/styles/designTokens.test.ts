@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 // `?raw` trae el CSS como texto. Se usa esto y no `node:fs` a propósito: los
 // tipos de `?raw` ya vienen en `vite/client`, que el tsconfig carga, mientras
 // que `node:fs` exigiría @types/node — una dependencia nueva, y agregar
-// dependencias sin OK previo de Mati está prohibido por el CLAUDE.md del repo.
+// dependencias sin OK previo de Mati está prohibido por el gobierno del repo.
 import CSS from './global.css?raw'
 import PANTALLA_DEL_LINK from '../screens/JoinMesaScreen.tsx?raw'
 

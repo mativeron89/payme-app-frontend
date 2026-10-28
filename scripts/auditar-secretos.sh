@@ -214,7 +214,7 @@ PATRONES=(
 # de fixture de test— y CERO eran un secreto real. Una guarda que marca eso
 # es la misma familia que el propio script ya documenta arriba: "grita de más
 # y se apaga sola". `llave` es sinónimo exacto de `clave` en este repo (ver
-# `GAPS.md` y varios comentarios) y comparte el mismo riesgo, así que sale con
+# varios comentarios) y comparte el mismo riesgo, así que sale con
 # ella.
 #
 # **Lo que NO se retira es la capacidad de detectar un secreto real nombrado
