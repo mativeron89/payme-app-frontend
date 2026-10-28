@@ -57,12 +57,15 @@ import {
   decodificarFoto,
   herramientasDelNavegador,
   miniaturaDeLaParte,
+  OBJETIVO_BYTES,
   OBJETIVO_BYTES_VARIAS,
+  type AjustesDeFoto,
   type FotoDecodificada,
   type FotoPreparada,
   type Herramientas,
 } from '../camara/fotoDelTicket';
 import { rechazoLocalDePartes, techoPorParte, useCapacidadOcrPaginas } from '../api/ocrPaginas';
+import { analizarMuestra, LADO_MUESTRA, SIN_ANALISIS, type AnalisisDeFoto } from '../camara/mejoraDeFoto';
 import { MARCO_ENTERO, recortePixeles, type Marco } from '../camara/marcoDelRecorte';
 import { RecorteDelTicket } from '../components/RecorteDelTicket';
 import { resolutionRequest } from '../api/restaurantResolution';
@@ -94,6 +97,7 @@ import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
 import { AccionesDeCompartirEjemplo, AmigosDeEjemplo } from '../ayuda/ejemplo/CompartirEjemplo';
 import { CODIGO_EJEMPLO, PLATOS_DE_EJEMPLO, RESTAURANTE_DE_EJEMPLO, TOTAL_DE_EJEMPLO_CENTS } from '../ayuda/ejemplo/fixtureEjemplo';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
+import { filasDudosas, type MotivoDeDuda } from './filasDudosas';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
@@ -161,6 +165,28 @@ interface ParteDelTicket {
   readonly id: number;
   readonly foto: Blob;
   readonly miniatura: string | null;
+}
+
+/**
+ * D509 · n322 · mide la foto recién llegada con una muestra chica: el borde
+ * del ticket, el giro y el aviso de foco y luz. Si el navegador no da la
+ * muestra (o algo falla), sin análisis: todo queda como antes.
+ */
+function analizarFotoRecibida<F>(foto: FotoDecodificada<F>, herramientas: Herramientas<F>): AnalisisDeFoto {
+  try {
+    const muestra = herramientas.muestrear?.(foto.fuente, LADO_MUESTRA);
+    return muestra ? analizarMuestra(muestra.datos, muestra.ancho, muestra.alto) : SIN_ANALISIS;
+  } catch {
+    return SIN_ANALISIS;
+  }
+}
+
+/**
+ * D509 · lo que se le hace a la foto al codificarla: el giro medido y, con el papel desteñido, el realce. Sin
+ * ninguno de los dos, `null`: la foto se codifica exactamente como antes.
+ */
+function ajustesDeLaFoto(analisis: AnalisisDeFoto): AjustesDeFoto | null {
+  return analisis.giro !== 0 || analisis.realzar ? { giro: analisis.giro, realzar: analisis.realzar } : null;
 }
 
 export function ocrFailureIssue(code: string, status: number | null):
@@ -515,6 +541,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     herramientas: Herramientas<HTMLImageElement>;
     origen: 'camara' | 'galeria';
     intento: number;
+    /** D509 · n322 · el borde del ticket, el giro y los avisos de foco y luz, medidos al llegar. */
+    analisis: AnalisisDeFoto;
   } | null>(null);
   const [marco, setMarco] = useState<Marco>(MARCO_ENTERO);
   /** D222 · el recorte no se pudo dibujar y se mandó la foto entera. */
@@ -1118,6 +1146,25 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
       : null;
   const ticketForcedOpen = totalMismatch !== null;
+  /**
+   * D509 · cuando la suma no cierra con el ticket, las filas que explican la diferencia quedan marcadas para
+   * revisar (`filasDudosas`). Nunca se corrigen solas.
+   */
+  const dudas: ReadonlyMap<number, MotivoDeDuda> = totalMismatch
+    ? filasDudosas({
+      filas: editItems.map((it) => ({ precioCents: precioDeLinea(it.priceStr), cantidad: it.quantity })),
+      impreso: scannedTotalCents,
+      totales: scannedTotals,
+      ajustes: scannedAdjustments,
+    })
+    : new Map();
+  const textoDeDuda = (motivo: MotivoDeDuda): string => (motivo === 'repetida'
+    ? t('¿Está repetido? Revísalo con el ticket.')
+    : motivo === 'cantidad'
+      ? t('Revisa la cantidad con el ticket.')
+      : motivo === 'precio'
+        ? t('Revisa el precio: puede tener un dígito de más o de menos.')
+        : t('Este importe es mayor que todo el ticket. Revísalo.'));
 
   useEffect(() => {
     if (!ticketAbierto && !ticketForcedOpen) return;
@@ -1231,8 +1278,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         setScanIssue('image_type');
         return;
       }
-      setMarco(MARCO_ENTERO);
-      const nueva = { foto, herramientas, origen, intento };
+      // D509 · n322 · la foto se mide una vez al llegar (una muestra chica): el
+      // marco arranca sobre el papel si se lo ve claro, y si no, entero como antes.
+      const analisis = analizarFotoRecibida(foto, herramientas);
+      setMarco(analisis.marco ?? MARCO_ENTERO);
+      const nueva = { foto, herramientas, origen, intento, analisis };
       recortandoRef.current = nueva;
       setRecortando(nueva);
     } finally {
@@ -1332,11 +1382,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         return;
       }
       const recorte = recortePixeles(marco, elegida.foto.ancho, elegida.foto.alto);
+      // D509 · enderezada y realzada para papel térmico al codificarla.
       const { foto, enteraPorFallo } = await codificarFoto(
         elegida.foto,
         MAX_TICKET_IMAGE_BYTES,
         elegida.herramientas,
         recorte,
+        Math.min(OBJETIVO_BYTES, MAX_TICKET_IMAGE_BYTES),
+        ajustesDeLaFoto(elegida.analisis),
       );
       if (intento !== intentoLecturaRef.current) return;
       if (foto === 'muy_grande') {
@@ -1381,6 +1434,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
     const { foto, enteraPorFallo } = await codificarFoto(
       elegida.foto, techo, elegida.herramientas, recorte, Math.min(OBJETIVO_BYTES_VARIAS, techo),
+      ajustesDeLaFoto(elegida.analisis),
     );
     return { foto, miniatura, enteraPorFallo };
   }
@@ -2347,6 +2401,39 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </div>
             </div>
           )}
+          {/* D509 · n322 · con la foto en el marco: el marco ya está sobre el papel (se mueve igual) y, si la foto
+              salió movida, oscura o con reflejo, un aviso. Nunca bloquea «Usar foto»: sólo avisa. */}
+          {recortando && (recortando.analisis.marco || recortando.analisis.avisos.movida
+            || recortando.analisis.avisos.oscura || recortando.analisis.avisos.quemada) && (
+            <div className="card recorte-aviso foto-avisos" role="status">
+              {recortando.analisis.marco && (
+                <div className="foto-avisos-marco">
+                  <span>{t('Ajustamos el marco al ticket.')}</span>
+                  {/* Si la detección se equivocó, volver a la foto entera es un toque, y la detección se descarta: el
+                      aviso no vuelve a aparecer mientras la persona mueve el marco a mano (ni corre la foto). */}
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setMarco(MARCO_ENTERO);
+                      setRecortando((r) => (r ? { ...r, analisis: { ...r.analisis, marco: null } } : r));
+                    }}
+                  >
+                    {t('Usar la foto entera')}
+                  </button>
+                </div>
+              )}
+              {recortando.analisis.avisos.movida && (
+                <span>{t('La foto parece movida. Si puedes, sácala de nuevo con el teléfono quieto.')}</span>
+              )}
+              {recortando.analisis.avisos.oscura && (
+                <span>{t('Hay poca luz. Si puedes, sácala de nuevo con más luz.')}</span>
+              )}
+              {recortando.analisis.avisos.quemada && (
+                <span>{t('Hay mucho brillo sobre el ticket. Si puedes, evita el reflejo.')}</span>
+              )}
+            </div>
+          )}
           {/* D222 · el recorte no se pudo dibujar: se mandó la foto entera, que
               es la de antes del marco. Se dice, sin ámbar y sin frenar. */}
           {recorteFallido && (
@@ -3057,14 +3144,28 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       ?
                     </span>
                   ) : null;
+                  // D509 · la fila que explica que la suma no cierre: marcada, con el motivo.
+                  const duda = dudas.get(idx);
+                  const dudaWarning = duda ? (
+                    <span className="tk-confidence-warning tk-duda" role="img" aria-label={textoDeDuda(duda)} title={textoDeDuda(duda)}>
+                      !
+                    </span>
+                  ) : null;
+                  const marcada = it.lowConfidence || duda !== undefined;
                   if (editingItems && expandedItem === idx) {
                     return (
                       <div
-                        className={`tk-edit ${it.lowConfidence ? 'tk-edit-warning' : ''}`}
+                        className={`tk-edit ${marcada ? 'tk-edit-warning' : ''}`}
                         key={idx}
                         ref={expandedRowRef}
                       >
                         {confidenceWarning}
+                        {dudaWarning}
+                        {duda && (
+                          <div className="tk-original" data-duda={duda}>
+                            <span className="tk-original-txt">{textoDeDuda(duda)}</span>
+                          </div>
+                        )}
                         <label className="tk-edit-field">
                           <span className="tk-edit-lbl">{t('Consumo')}</span>
                           <input
@@ -3129,9 +3230,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                     );
                   }
                   return (
-                    <div className={`tk-row ${it.lowConfidence ? 'tk-row-warning' : ''}`} key={idx}>
+                    <div className={`tk-row ${marcada ? 'tk-row-warning' : ''}`} key={idx} data-duda={duda}>
                       <span className="tk-qty">{it.quantity}</span>
                       {confidenceWarning}
+                      {dudaWarning}
                       <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
                         {nombre || t('Sin nombre')}
                       </span>

@@ -1432,6 +1432,17 @@ export const EN: Record<string, string> = {
   "Parte siguiente": "Next part",
   "Foto del ticket de {0}, parte {1} de {2}": "Receipt photo from {0}, part {1} of {2}",
   "{0} fotos": "{0} photos",
+  // D509 · n322 · la foto mejor antes de enviarla y las filas dudosas. Escrito por App Frontend; «ticket» va como
+  // «receipt» (regla de D481).
+  "Ajustamos el marco al ticket.": "We fitted the frame to the receipt.",
+  "Usar la foto entera": "Use the whole photo",
+  "La foto parece movida. Si puedes, sácala de nuevo con el teléfono quieto.": "The photo looks blurry. If you can, take it again holding the phone still.",
+  "Hay poca luz. Si puedes, sácala de nuevo con más luz.": "It's too dark. If you can, take it again with more light.",
+  "Hay mucho brillo sobre el ticket. Si puedes, evita el reflejo.": "There's a lot of glare on the receipt. If you can, avoid the reflection.",
+  "¿Está repetido? Revísalo con el ticket.": "Is it repeated? Check it against the receipt.",
+  "Revisa la cantidad con el ticket.": "Check the quantity against the receipt.",
+  "Revisa el precio: puede tener un dígito de más o de menos.": "Check the price: it may have one digit too many or too few.",
+  "Este importe es mayor que todo el ticket. Revísalo.": "This amount is larger than the whole receipt. Check it.",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.

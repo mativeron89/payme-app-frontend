@@ -52,7 +52,7 @@ jobs:
     outputs:
       probado: ${{ steps.consulta.outputs.probado }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (v4.4.0)
         with:
           # El scanner compara contra el SHA anterior del push o la base del
           # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
@@ -62,7 +62,7 @@ jobs:
           # credencial en la config amplía innecesariamente lo que un script
           # de build podría hacer con el token del job.
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (v4.4.0)
         with:
           node-version: 20
           cache: npm
@@ -77,7 +77,7 @@ jobs:
     needs: decidir
     if: needs.decidir.outputs.probado != 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (v4.4.0)
         with:
           # El scanner compara contra el SHA anterior del push o la base del
           # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
@@ -89,7 +89,7 @@ jobs:
           persist-credentials: false
       - name: Auditar secretos del cambio
         run: bash scripts/auditar-secretos.sh "${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (v4.4.0)
         with:
           node-version: 20
           cache: npm
@@ -153,7 +153,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (v4.4.0)
         with:
           # El scanner compara contra el SHA anterior del push o la base del
           # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
@@ -163,7 +163,7 @@ jobs:
           # credencial en la config amplía innecesariamente lo que un script
           # de build podría hacer con el token del job.
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (v4.4.0)
         with:
           node-version: 20
           cache: npm
@@ -189,7 +189,7 @@ jobs:
     needs: [decidir, checks, playwright]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (v4.4.0)
         with:
           # El scanner compara contra el SHA anterior del push o la base del
           # PR. Un checkout shallow puede volver esa base inalcanzable y hacer
@@ -208,7 +208,7 @@ jobs:
         run: node scripts/ci-verificar-needs.mjs
         env:
           NEEDS: ${{ toJSON(needs) }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (v4.4.0)
         with:
           node-version: 20
           cache: npm
@@ -248,7 +248,7 @@ jobs:
         run: node scripts/ci-marcar-probado.mjs
       - name: Guardar la marca del árbol probado
         if: success() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 (v4.6.2)
         with:
           name: ${{ steps.marca.outputs.nombre }}
           # Sin punto adelante: upload-artifact@v4 excluye los archivos ocultos

@@ -1726,12 +1726,19 @@ function fallasDelCenso(yml: string): string[] {
    * menos o un valor distinto es rojo sin enumerar cuál — misma forma que el
    * `env` por rol.
    */
+  /**
+   * D512 · CFG-03 · las acciones van fijadas por SHA, no por tag: un tag se
+   * puede mover y el SHA no. Son los commits a los que apuntaba cada `v4` el
+   * 2026-10-27 (medidos con la API de GitHub): checkout v4.4.0, setup-node
+   * v4.4.0 y upload-artifact v4.6.2. Una acción por tag, o por otro SHA, no
+   * está adjudicada.
+   */
   const ACCIONES_ADJUDICADAS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
-    'actions/checkout@v4': { 'fetch-depth': 0, 'persist-credentials': false },
-    'actions/setup-node@v4': { 'node-version': 20, cache: 'npm' },
+    'actions/checkout@11d5960a326750d5838078e36cf38b85af677262': { 'fetch-depth': 0, 'persist-credentials': false },
+    'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020': { 'node-version': 20, cache: 'npm' },
     // D493 · la marca del árbol probado: nombre derivado del paso `marca`, un
     // archivo propio y nada más.
-    'actions/upload-artifact@v4': {
+    'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02': {
       name: '${{ steps.marca.outputs.nombre }}',
       // Sin punto adelante: upload-artifact@v4 no sube archivos ocultos (corrida 40392476002).
       path: 'ci-probado.json',
@@ -1851,7 +1858,7 @@ function fallasDelCheckout(yml: string): string[] {
       fallas.push(`el checkout del job «${j.nombre}» no es su primer paso`);
     }
     const paso = checkouts[0]!;
-    if (paso.claves['uses'] !== 'actions/checkout@v4') {
+    if (paso.claves['uses'] !== 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262') {
       fallas.push(`la versión de la acción no es la adjudicada: ${JSON.stringify(paso.claves['uses'])}`);
     }
     /**

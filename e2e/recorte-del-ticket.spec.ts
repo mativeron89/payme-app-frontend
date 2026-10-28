@@ -28,18 +28,34 @@ const ALTO = 1600;
  * justo a sus bordes.
  */
 const TICKET = { x: 390, y: 100, ancho: 420, alto: 1400 };
+/**
+ * D509 · para el marco automático, un ticket más ancho (600 px): el angosto se ve de menos de 88 px con el aviso
+ * arriba, y el marco no puede achicarse tanto (el mínimo de D222); acá se prueba la detección, no el mínimo.
+ */
+const TICKET_ANCHO = { x: 300, y: 100, ancho: 600, alto: 1400 };
+type Ticket = typeof TICKET;
 
 type Color = [number, number, number];
 
 /** La foto de la mesa con el ticket, armada en el navegador. */
-async function ticketEnLaMesa(page: Page, nombre = 'IMG_0700.jpg'): Promise<ArchivoDeFoto> {
-  const b64 = await page.evaluate(async ([w, h, t]) => {
+async function ticketEnLaMesa(
+  page: Page,
+  nombre = 'IMG_0700.jpg',
+  ticket: Ticket = TICKET,
+  { borroso = false, oscuro = false, giro = 0 }: { borroso?: boolean; oscuro?: boolean; giro?: number } = {},
+): Promise<ArchivoDeFoto> {
+  const b64 = await page.evaluate(async ([w, h, t, opciones]) => {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#8b5a2b';
     ctx.fillRect(0, 0, w, h);
+    // D509 · el ticket torcido sobre la mesa, girado `giro` grados alrededor de su centro.
+    ctx.save();
+    ctx.translate(t.x + t.ancho / 2, t.y + t.alto / 2);
+    ctx.rotate((opciones.giro * Math.PI) / 180);
+    ctx.translate(-(t.x + t.ancho / 2), -(t.y + t.alto / 2));
     ctx.fillStyle = '#f4f4f4';
     ctx.fillRect(t.x, t.y, t.ancho, t.alto);
     const franja = Math.round(t.alto * 0.08);
@@ -52,18 +68,29 @@ async function ticketEnLaMesa(page: Page, nombre = 'IMG_0700.jpg'): Promise<Arch
     for (let y = t.y + franja + 40; y < t.y + t.alto - franja - 20; y += 44) {
       ctx.fillText('1 TACO  $45', t.x + 40, y);
     }
+    ctx.restore();
     // Grano en toda la foto: le da peso al JPEG sin cambiar los colores.
     const d = ctx.getImageData(0, 0, w, h);
     for (let i = 0; i < d.data.length; i += 4) {
       for (let k = 0; k < 3; k += 1) d.data[i + k] = d.data[i + k]! + Math.round((Math.random() - 0.5) * 30);
     }
     ctx.putImageData(d, 0, 0);
-    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.9));
+    // D509 · las variantes para los avisos: movida (desenfocada) y con poca luz (todo oscuro, el papel gris).
+    let salida: HTMLCanvasElement = c;
+    if (opciones.borroso || opciones.oscuro) {
+      salida = document.createElement('canvas');
+      salida.width = w;
+      salida.height = h;
+      const s2 = salida.getContext('2d')!;
+      s2.filter = `${opciones.borroso ? 'blur(14px)' : ''} ${opciones.oscuro ? 'brightness(0.18)' : ''}`.trim();
+      s2.drawImage(c, 0, 0);
+    }
+    const blob = await new Promise<Blob>((r) => salida.toBlob((b) => r(b!), 'image/jpeg', 0.9));
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let s = '';
     for (const b of bytes) s += String.fromCharCode(b);
     return btoa(s);
-  }, [ANCHO, ALTO, TICKET] as const);
+  }, [ANCHO, ALTO, ticket, { borroso, oscuro, giro }] as const);
   return { name: nombre, mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') };
 }
 
@@ -107,6 +134,27 @@ async function espiarOcr(page: Page): Promise<void> {
       return original(...args);
     };
   });
+}
+
+/** D509 · la inclinación de los renglones (grados, con el mismo medidor de la app) en la subida `i`, o en una foto. */
+async function inclinacion(page: Page, cual: number | ArchivoDeFoto): Promise<number> {
+  if (typeof cual === 'number') await expect.poll(() => cantidadDeSubidas(page)).toBeGreaterThan(cual);
+  return page.evaluate(async (arg) => {
+    const ruta = '/src/camara/mejoraDeFoto.ts';
+    const m = await import(/* @vite-ignore */ ruta) as typeof import('../src/camara/mejoraDeFoto');
+    const blob = typeof arg === 'number'
+      ? (window as unknown as { __subidas: Blob[] }).__subidas[arg]!
+      : new Blob([Uint8Array.from(atob(arg), (ch) => ch.charCodeAt(0))], { type: 'image/jpeg' });
+    const bmp = await createImageBitmap(blob);
+    const k = Math.min(1, m.LADO_MUESTRA / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    return m.estimarInclinacion(m.aGris(d, c.width, c.height));
+  }, typeof cual === 'number' ? cual : cual.buffer.toString('base64'));
 }
 
 const cantidadDeSubidas = (page: Page) => page.evaluate(
@@ -179,7 +227,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
  * ofrece «Elegir otra»); estas pruebas son de la foto de la cámara, así que la
  * sacan con el botón redondo, que sigue abriendo la cámara directo.
  */
-async function conLaFoto(page: Page, foto: ArchivoDeFoto): Promise<void> {
+async function conLaFoto(page: Page, foto: ArchivoDeFoto, { entera = true }: { entera?: boolean } = {}): Promise<void> {
   await ingresar(page);
   await espiarOcr(page);
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
@@ -188,6 +236,46 @@ async function conLaFoto(page: Page, foto: ArchivoDeFoto): Promise<void> {
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page, foto, { usar: false });
   await expect(marco(page)).toBeVisible();
+  // D509 · el marco arranca sobre el ticket si lo ve. Estas pruebas son del MARCO a mano (D222): arrancan desde la
+  // foto entera con «Usar la foto entera», que es justamente la salida que tiene la persona.
+  if (entera) await fotoEntera(page);
+}
+
+/** D509 · si el marco arrancó sobre el ticket, «Usar la foto entera» lo lleva a los bordes. */
+async function fotoEntera(page: Page): Promise<void> {
+  const boton = page.getByRole('button', { name: 'Usar la foto entera', exact: true });
+  if (await boton.count()) await boton.click();
+  await expect(boton).toHaveCount(0);
+}
+
+/** D509 · el marco quedó sobre el ticket de la foto (con el margen chico de la detección). */
+async function marcoSobreElTicket(page: Page, ticket: Ticket = TICKET): Promise<void> {
+  await fotoQuieta(page);
+  const foto = await fotoEnPantalla(page);
+  const m = await marcoEnPantalla(page);
+  const px = (x: number, y: number) => [foto.x + (x / ANCHO) * foto.width, foto.y + (y / ALTO) * foto.height] as const;
+  const [x0, y0] = px(ticket.x, ticket.y);
+  const [x1, y1] = px(ticket.x + ticket.ancho, ticket.y + ticket.alto);
+  // El ticket queda adentro, y el marco no se va más que el margen (1,5 % de la foto) más un píxel.
+  const holguraX = 0.02 * foto.width + 1;
+  const holguraY = 0.02 * foto.height + 1;
+  expect(m.x).toBeLessThanOrEqual(x0 + 1); expect(m.x).toBeGreaterThanOrEqual(x0 - holguraX);
+  expect(m.y).toBeLessThanOrEqual(y0 + 1); expect(m.y).toBeGreaterThanOrEqual(y0 - holguraY);
+  expect(m.x + m.width).toBeGreaterThanOrEqual(x1 - 1); expect(m.x + m.width).toBeLessThanOrEqual(x1 + holguraX);
+  expect(m.y + m.height).toBeGreaterThanOrEqual(y1 - 1); expect(m.y + m.height).toBeLessThanOrEqual(y1 + holguraY);
+}
+
+/**
+ * El aviso de arriba achica la foto, y la foto se vuelve a medir un cuadro después: se espera a que dos medidas
+ * seguidas (con dos cuadros en el medio) coincidan.
+ */
+async function fotoQuieta(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(async () => {
+    const medir = () => JSON.stringify(document.querySelector('.recorte-foto')!.getBoundingClientRect());
+    const antes = medir();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return antes === medir();
+  })).toBe(true);
 }
 
 /** La foto en pantalla, en px de la página. */
@@ -228,8 +316,95 @@ async function marcoEnPantalla(page: Page) {
   return (await page.locator('.recorte-marco').boundingBox())!;
 }
 
+test.describe('D509 · n322 · el marco arranca sobre el ticket', () => {
+  test('🔴 la foto llega con el marco sobre el ticket y el aviso; sin tocarlo, «Usar foto» sube SÓLO el ticket', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page, 'IMG_0700.jpg', TICKET_ANCHO), { entera: false });
+    await marcoSobreElTicket(page, TICKET_ANCHO);
+    await expect(page.getByRole('status').filter({ hasText: 'Ajustamos el marco al ticket.' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Usar la foto entera', exact: true })).toBeVisible();
+    // Nada se sube hasta «Usar foto».
+    expect(await cantidadDeSubidas(page)).toBe(0);
+    await capturar(page, 'recorte-automatico-375');
+    await usar(page).click();
+    await expect(ticketListo(page)).toBeVisible();
+    const s = await subida(page);
+    // El ticket y apenas el margen: no la mesa entera.
+    expect(s.ancho).toBeGreaterThanOrEqual(TICKET_ANCHO.ancho - 4);
+    expect(s.ancho).toBeLessThanOrEqual(TICKET_ANCHO.ancho + 0.04 * ANCHO + 8);
+    expect(s.alto).toBeGreaterThanOrEqual(TICKET_ANCHO.alto - 4);
+    expect(s.alto).toBeLessThanOrEqual(TICKET_ANCHO.alto + 0.04 * ALTO + 8);
+    // Las franjas del ticket quedan adentro (no se le cortó la punta) y el color se conserva: no hizo falta realzar.
+    expect(AZUL(s.arriba) || MESA(s.arriba), `arriba: ${s.arriba}`).toBe(true);
+    expect(VERDE(s.abajo) || MESA(s.abajo), `abajo: ${s.abajo}`).toBe(true);
+    expect(PAPEL(s.medio) || s.medio.every((v) => v < 120), `medio: ${s.medio}`).toBe(true);
+  });
+
+  test('🔴 «Usar la foto entera» deshace el marco automático: vuelve a los bordes', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page, 'IMG_0700.jpg', TICKET_ANCHO), { entera: false });
+    await marcoSobreElTicket(page, TICKET_ANCHO);
+    await page.getByRole('button', { name: 'Usar la foto entera', exact: true }).click();
+    // El aviso se va (y la foto crece a su lugar); el marco, en los bordes.
+    await expect(page.getByRole('button', { name: 'Usar la foto entera', exact: true })).toHaveCount(0);
+    await fotoQuieta(page);
+    const foto = await fotoEnPantalla(page);
+    const m = await marcoEnPantalla(page);
+    expect(Math.abs(m.x - foto.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.width - foto.width)).toBeLessThanOrEqual(1);
+    // Y no vuelve al mover el marco a mano.
+    await arrastrar(page, 'Esquina de arriba a la izquierda', foto.x + 30, foto.y + 30);
+    await expect(page.getByText('Ajustamos el marco al ticket.', { exact: true })).toHaveCount(0);
+  });
+
+  test('🔴 un ticket movido: el aviso de foco aparece y «Usar foto» igual sigue (nunca bloquea)', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page, 'IMG_0704.jpg', TICKET_ANCHO, { borroso: true }), { entera: false });
+    await expect(page.getByText('La foto parece movida. Si puedes, sácala de nuevo con el teléfono quieto.', { exact: true })).toBeVisible();
+    await expect(usar(page)).toBeEnabled();
+    await capturar(page, 'aviso-movida-375');
+    await usar(page).click();
+    await expect(ticketListo(page)).toBeVisible();
+  });
+
+  test('🔴 un ticket con poca luz: el aviso de luz aparece y «Usar foto» igual sigue', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page, 'IMG_0705.jpg', TICKET_ANCHO, { oscuro: true }), { entera: false });
+    await expect(page.getByText('Hay poca luz. Si puedes, sácala de nuevo con más luz.', { exact: true })).toBeVisible();
+    await usar(page).click();
+    await expect(ticketListo(page)).toBeVisible();
+    // El papel térmico desteñido se sube realzado: en grises (sin el tinte de la mesa) y con el papel claro.
+    const s = await subida(page);
+    for (const punto of [s.arriba, s.izquierda, s.derecha]) {
+      expect(Math.max(...punto) - Math.min(...punto), `gris: ${punto}`).toBeLessThanOrEqual(6);
+    }
+  });
+
+  test('🔴 un ticket torcido sobre la mesa se sube derecho', async ({ page }) => {
+    const torcido = await ticketEnLaMesa(page, 'IMG_0707.jpg', TICKET_ANCHO, { giro: 5 });
+    await conLaFoto(page, torcido, { entera: false });
+    // El control: la foto tal como llega está torcida (el medidor lo ve)…
+    expect(Math.abs(await inclinacion(page, torcido))).toBeGreaterThanOrEqual(3);
+    await usar(page).click();
+    await expect(ticketListo(page)).toBeVisible();
+    // …y la que se sube, derecha.
+    expect(Math.abs(await inclinacion(page, 0))).toBeLessThan(1);
+  });
+
+  test('un ticket nítido y con luz: sin avisos de foco ni de luz', async ({ page }) => {
+    await conLaFoto(page, await ticketEnLaMesa(page, 'IMG_0706.jpg', TICKET_ANCHO), { entera: false });
+    await expect(page.getByText('Ajustamos el marco al ticket.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/parece movida|poca luz|mucho brillo/)).toHaveCount(0);
+  });
+
+  test('una foto sin un papel claro (rojo y azul) arranca entera, sin aviso', async ({ page }) => {
+    await conLaFoto(page, await rojoAzul(page), { entera: false });
+    const foto = await fotoEnPantalla(page);
+    const m = await marcoEnPantalla(page);
+    expect(Math.abs(m.width - foto.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.height - foto.height)).toBeLessThanOrEqual(1);
+    await expect(page.getByText('Ajustamos el marco al ticket.', { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe('D222 · el marco para recortar la foto del ticket', () => {
-  test('🔴 la foto llega con el marco en sus bordes; sin tocarlo, «Usar foto» sube la foto ENTERA', async ({ page }) => {
+  test('🔴 desde la foto entera: el marco en sus bordes; sin tocarlo, «Usar foto» sube la foto ENTERA', async ({ page }) => {
     await conLaFoto(page, await ticketEnLaMesa(page));
     await expect(page.locator('.camara-sub')).toHaveText('Ajusta el marco para dejar sólo el ticket');
     // Nada se sube hasta «Usar foto».
@@ -419,14 +594,11 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     await expect(marco(page)).toBeVisible();
     await page.waitForTimeout(300);
     expect(await cantidadDeSubidas(page)).toBe(0);
-    // Con otra foto, el marco vuelve a la foto entera.
+    // Con otra foto, el marco vuelve a arrancar (D509: sobre el ticket de la foto nueva), no donde quedó.
     await arrastrar(page, 'Borde de arriba', 187, 300);
-    await sacarFoto(page, await ticketEnLaMesa(page, 'IMG_0702.jpg'), { usar: false });
-    await expect.poll(async () => {
-      const f = await fotoEnPantalla(page);
-      const m = await marcoEnPantalla(page);
-      return Math.abs(m.y - f.y) <= 1 && Math.abs(m.height - f.height) <= 1;
-    }).toBe(true);
+    await sacarFoto(page, await ticketEnLaMesa(page, 'IMG_0702.jpg', TICKET_ANCHO), { usar: false });
+    await expect(page.getByRole('button', { name: 'Usar la foto entera', exact: true })).toBeVisible();
+    await marcoSobreElTicket(page, TICKET_ANCHO);
     expect(await cantidadDeSubidas(page)).toBe(0);
   });
 
@@ -438,6 +610,8 @@ test.describe('D222 · el marco para recortar la foto del ticket', () => {
     await expect(input).toHaveAttribute('accept', /image\/heic/);
     await input.setInputFiles(await ticketEnLaMesa(page, 'IMG_0703.jpg'));
     await expect(marco(page)).toBeVisible();
+    // D509 · desde la foto entera, como las demás pruebas del marco a mano.
+    await fotoEntera(page);
     await expect(page.getByRole('button', { name: 'Sacar otra', exact: true })).toHaveCount(0);
     const [selector] = await Promise.all([
       page.waitForEvent('filechooser'),

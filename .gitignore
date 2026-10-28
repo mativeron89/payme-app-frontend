@@ -45,3 +45,9 @@ blob-report/
 # n186 · builds del harness CSP de Playwright (playwright.config.ts).
 dist-e2e-csp/
 dist-e2e-csp-landing/
+
+# D510 M2 · el gobierno local de las conversaciones que trabajan en el repo no
+# es público: vive fuera del repo y, en la copia de trabajo, sin trackear.
+/CLAUDE.md
+/AGENTS.md
+/GAPS.md

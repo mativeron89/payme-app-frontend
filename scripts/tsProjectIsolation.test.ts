@@ -153,8 +153,19 @@ describe('el programa de producción NO ve los tipos de Node', () => {
  * se pudre en silencio hasta que rompe en runtime. Ya pasó: `scripts/` y
  * `landing/` estuvieron sin cobertura hasta la ORDEN 2A.
  *
- * `docs/CENSO_PROYECTOS_TS.md` explica el reparto para quien lea; **la
- * autoridad es este test**, no el documento.
+ * El reparto, para quien lea, está en `REPARTO` (abajo). Antes vivía en
+ * `docs/CENSO_PROYECTOS_TS.md`, que salió del repo público (D510 M2, 0.266.0):
+ * ahora la explicación está junto al test que la hace cumplir.
+ *
+ * ⚠️ `tsc -b` NO es el typecheck de este repo: `tsconfig.json` no declara
+ * `references`, así que el modo build mira un proyecto y no los cuatro. El gate
+ * es `npm run typecheck`, el mismo comando que corre la CI.
+ *
+ * Si el censo se pone rojo, en orden de preferencia: el archivo va a un
+ * proyecto existente (ajustar su `include`); es una unidad nueva de verdad
+ * (otro runner u otro entorno) y lleva proyecto propio, en `typecheck` de
+ * `package.json`, en `PROYECTOS` y en `REPARTO`; o el archivo no debería
+ * existir. Sacarlo del censo no es una salida.
  */
 describe('censo de cobertura TypeScript', () => {
   const PROYECTOS = [
@@ -194,11 +205,32 @@ describe('censo de cobertura TypeScript', () => {
     expect(huerfanos, `sin typecheck: ${huerfanos.join(' · ')}`).toEqual([]);
   }, 120_000);
 
-  it('🔴 el documento del censo nombra exactamente los proyectos que existen', () => {
-    // Que el doc no envejezca sin que nadie lo note: si mañana aparece un
-    // quinto proyecto y nadie lo explica, esto se pone rojo.
-    const doc = readFileSync(join(RAIZ, 'docs/CENSO_PROYECTOS_TS.md'), 'utf8');
-    const enDoc = [...doc.matchAll(/`(tsconfig(?:\.[a-z0-9]+)?\.json)`/g)].map((m) => m[1]!);
-    expect(new Set(enDoc), 'el doc no coincide con los proyectos reales').toEqual(new Set(PROYECTOS));
+  /**
+   * Qué cubre cada proyecto y por qué son cuatro. Un archivo puede estar en
+   * varios (un módulo de `src/` que un test importa está en `tsconfig.json` y
+   * en `tsconfig.test.json`): lo prohibido es que no esté en ninguno.
+   */
+  const REPARTO: Readonly<Record<string, string>> = {
+    'tsconfig.json': 'src/ sin los *.test.*, con types vite/client: el código que se despacha al teléfono, el único que tiene que estar limpio de globals de Node.',
+    'tsconfig.test.json': 'src/**/*.test.ts(x): corren en jsdom pero importan vitest, que arrastra @types/node por el grafo de módulos; separados para que eso no llegue al de arriba.',
+    'tsconfig.node.json': 'scripts/**/*.test.ts y landing/**/*.test.ts, con types node: usan node:fs, node:child_process, node:os.',
+    'tsconfig.e2e.json': 'e2e/, con Playwright: otro runner; su page.evaluate corre en el navegador y el spec en Node.',
+  };
+
+  it('🔴 cada proyecto que existe está explicado, y lo explicado existe', () => {
+    // Que la explicación no envejezca sin que nadie lo note: si mañana aparece
+    // un quinto proyecto y nadie lo explica, esto se pone rojo.
+    expect(new Set(Object.keys(REPARTO)), 'REPARTO no coincide con los proyectos').toEqual(new Set(PROYECTOS));
+    // Y los proyectos son los que existen de verdad: los tsconfig versionados
+    // y los que corre `npm run typecheck`, que es lo que corre la CI.
+    const versionados = execFileSync('git', ['ls-files', 'tsconfig*.json', '*/tsconfig*.json'], {
+      cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
+    }).split('\n').map((l) => l.trim()).filter(Boolean);
+    expect(new Set(versionados), 'hay un tsconfig versionado fuera del censo').toEqual(new Set(PROYECTOS));
+    const typecheck = (JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    }).scripts.typecheck ?? '';
+    const enTypecheck = [...typecheck.matchAll(/-p\s+(\S+)/g)].map((m) => m[1]!);
+    expect(new Set(enTypecheck), '`npm run typecheck` no corre exactamente los proyectos del censo').toEqual(new Set(PROYECTOS));
   });
 });

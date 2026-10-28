@@ -1,3 +1,5 @@
+import { realzarPapel } from './mejoraDeFoto';
+
 /**
  * D212 · la foto del ticket, preparada para el OCR con la máxima definición que
  * entra en el tope del dueño.
@@ -148,13 +150,38 @@ export interface Recorte {
   readonly alto: number;
 }
 
+/**
+ * D509 · n322 · lo que se le hace a la foto al codificarla para que el lector
+ * la lea mejor: el giro que la endereza (grados; positivo, horario) y el
+ * realce para papel térmico (gris y niveles estirados). Sin ajustes, la foto de
+ * siempre.
+ */
+export interface AjustesDeFoto {
+  readonly giro: number;
+  readonly realzar: boolean;
+}
+
+/** D509 · una muestra chica de la foto (RGBA), para analizarla en el teléfono. */
+export interface Muestra {
+  readonly ancho: number;
+  readonly alto: number;
+  readonly datos: Uint8ClampedArray;
+}
+
 export interface Herramientas<F> {
   decodificar(foto: Blob): Promise<FotoDecodificada<F> | null>;
   /**
    * El JPEG de `fuente` a ese tamaño y calidad; `null` si el lienzo no pudo.
-   * Con `recorte`, sólo ese rectángulo de la foto, escalado al paso.
+   * Con `recorte`, sólo ese rectángulo de la foto, escalado al paso. D509 · con
+   * `ajustes`, además enderezada y realzada.
    */
-  codificar(fuente: F, paso: Paso, recorte?: Recorte): Promise<Blob | null>;
+  codificar(fuente: F, paso: Paso, recorte?: Recorte, ajustes?: AjustesDeFoto): Promise<Blob | null>;
+  /**
+   * D509 · la foto entera chica (lado largo `ladoMax`) para analizarla: el
+   * borde del ticket, el giro y el aviso de foco y luz. Opcional: sin ella no
+   * se analiza y todo queda como antes.
+   */
+  muestrear?(fuente: F, ladoMax: number): Muestra | null;
   /** Suelta el lienzo al terminar (en Safari la memoria de lienzos es chica). */
   terminar(): void;
 }
@@ -191,6 +218,7 @@ async function recorrerEscalera<F>(
   herramientas: Herramientas<F>,
   objetivo: number,
   recorte: Recorte | null,
+  ajustes: AjustesDeFoto | null = null,
 ): Promise<FotoPreparada> {
   let algunLienzo = false;
   let mejorEnElTope: Blob | null = null;
@@ -200,9 +228,12 @@ async function recorrerEscalera<F>(
     let jpeg: Blob | null = null;
     try {
       // Sin recorte, la llamada de siempre (dos argumentos): la foto entera.
-      jpeg = recorte
-        ? await herramientas.codificar(foto.fuente, paso, recorte)
-        : await herramientas.codificar(foto.fuente, paso);
+      // D509 · con ajustes, un cuarto argumento; sin ellos, como antes.
+      jpeg = ajustes
+        ? await herramientas.codificar(foto.fuente, paso, recorte ?? undefined, ajustes)
+        : recorte
+          ? await herramientas.codificar(foto.fuente, paso, recorte)
+          : await herramientas.codificar(foto.fuente, paso);
     } catch {
       jpeg = null;
     }
@@ -240,15 +271,16 @@ export async function codificarFoto<F>(
   herramientas: Herramientas<F>,
   recorte: Recorte | null = null,
   objetivo = Math.min(OBJETIVO_BYTES, maxBytes),
+  ajustes: AjustesDeFoto | null = null,
 ): Promise<Codificada> {
   try {
     if (recorte) {
-      const recortada = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, recorte);
+      const recortada = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, recorte, ajustes);
       if (recortada !== 'sin_preparar') return { foto: recortada, enteraPorFallo: false };
-      const entera = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null);
+      const entera = await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null, ajustes);
       return { foto: entera, enteraPorFallo: entera instanceof Blob };
     }
-    return { foto: await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null), enteraPorFallo: false };
+    return { foto: await recorrerEscalera(foto, maxBytes, herramientas, objetivo, null, ajustes), enteraPorFallo: false };
   } finally {
     foto.soltar();
     herramientas.terminar();
@@ -303,11 +335,11 @@ export function herramientasDelNavegador(doc: Document = document): Herramientas
         },
       };
     },
-    async codificar(img, paso, recorte) {
+    async codificar(img, paso, recorte, ajustes) {
       lienzo ??= doc.createElement('canvas');
-      const clave = recorte
+      const clave = (recorte
         ? `${paso.ancho}x${paso.alto}@${recorte.x},${recorte.y},${recorte.ancho}x${recorte.alto}`
-        : `${paso.ancho}x${paso.alto}`;
+        : `${paso.ancho}x${paso.alto}`) + (ajustes ? `~${ajustes.giro},${ajustes.realzar ? 1 : 0}` : '');
       if (dibujado !== clave) {
         dibujado = '';
         lienzo.width = paso.ancho;
@@ -321,15 +353,57 @@ export function herramientasDelNavegador(doc: Document = document): Herramientas
         // D222 · el recorte y la escala en el MISMO dibujo, desde la foto
         // decodificada: el rectángulo de origen está en píxeles de la foto ya
         // orientada, que es lo que dibuja `drawImage` con un `<img>`.
+        // D509 · el giro alrededor del centro: lo que queda afuera en las
+        // esquinas es papel blanco (el fondo de arriba), nunca la foto vieja.
+        const giro = ajustes && ajustes.giro !== 0 ? (ajustes.giro * Math.PI) / 180 : 0;
+        if (giro !== 0) {
+          ctx.save();
+          ctx.translate(paso.ancho / 2, paso.alto / 2);
+          ctx.rotate(giro);
+          ctx.translate(-paso.ancho / 2, -paso.alto / 2);
+        }
         if (recorte) {
           ctx.drawImage(img, recorte.x, recorte.y, recorte.ancho, recorte.alto, 0, 0, paso.ancho, paso.alto);
         } else {
           ctx.drawImage(img, 0, 0, paso.ancho, paso.alto);
         }
+        if (giro !== 0) ctx.restore();
+        // D509 · el realce para papel térmico, sobre los píxeles ya dibujados.
+        // Si el navegador no deja leerlos, se manda sin realzar.
+        if (ajustes?.realzar) {
+          try {
+            const imagen = ctx.getImageData(0, 0, paso.ancho, paso.alto);
+            realzarPapel(imagen.data);
+            ctx.putImageData(imagen, 0, 0);
+          } catch {
+            // sin realce
+          }
+        }
         dibujado = clave;
       }
       const destino = lienzo;
       return new Promise<Blob | null>((resolver) => destino.toBlob(resolver, 'image/jpeg', paso.calidad));
+    },
+    muestrear(img, ladoMax) {
+      const tam = tamanoObjetivo(img.naturalWidth, img.naturalHeight, ladoMax);
+      if (!tam) return null;
+      const c = doc.createElement('canvas');
+      c.width = tam.ancho;
+      c.height = tam.alto;
+      try {
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, tam.ancho, tam.alto);
+        ctx.drawImage(img, 0, 0, tam.ancho, tam.alto);
+        const d = ctx.getImageData(0, 0, tam.ancho, tam.alto);
+        return { ancho: tam.ancho, alto: tam.alto, datos: d.data };
+      } catch {
+        return null;
+      } finally {
+        c.width = 0;
+        c.height = 0;
+      }
     },
     terminar() {
       if (lienzo) {

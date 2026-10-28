@@ -169,6 +169,16 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Las fotos se superponían: revisa que ningún plato quede repetido.', { exact: true })).toBeVisible();
     await expect(page.getByText(/Checa que el total coincida con el total del ticket: /)).toBeVisible();
+    // D509 · la validación de números: el renglón leído dos veces vale justo lo que sobra, y las dos copias quedan
+    // marcadas para revisar. No se corrige nada sola: siguen las dos.
+    const dudosas = page.locator('.tk-row[data-duda="repetida"]');
+    await expect(dudosas).toHaveCount(2);
+    for (const fila of await dudosas.all()) {
+      await expect(fila).toContainText('Vino tinto (copa)');
+      await expect(fila.getByRole('img', { name: '¿Está repetido? Revísalo con el ticket.', exact: true })).toBeVisible();
+    }
+    await expect(page.locator('.tk-row[data-duda]')).toHaveCount(2);
+    await capturar(page, 'd509-filas-dudosas');
   });
 
   test('sin foto en el marco (la cámara se canceló), se leen las partes que hay', async ({ page }) => {

@@ -2709,6 +2709,23 @@ html.app-de-inicio-ios .app {
   line-height: var(--lh-sm);
 }
 
+/* D509 · n322 · el aviso de la foto: compacto, para no achicar la foto en el iPhone SE (un ticket angosto quedaría
+   debajo del mínimo del marco). Arriba, el marco automático con «Usar la foto entera» en la misma fila. */
+.foto-avisos {
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  margin-bottom: var(--sp-2);
+}
+
+.foto-avisos-marco {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: var(--sp-2);
+}
+
 /* ─── Voucher OXXO / CLABE ─── */
 .voucher {
   background: #fff;
