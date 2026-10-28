@@ -1,7 +1,7 @@
 import { MemoriaDeCuenta } from '../../api/memoriaDeCuenta';
 import type { EstadoViaje } from '../../api/viajes';
 import type { ViajeConFechas } from '../../api/viajesDeHoy';
-import { abrirMenuDeFotos } from '../../camara/camaraNativa';
+import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import type { AppBottomBarProps } from '../../components/AppBottomBar';
 import { navigate } from '../../router';
 import { abrirHojaParaQueViaje } from './hojaParaQueViajeEstado';
@@ -31,8 +31,8 @@ export function circuloDelViaje(
     ariaLabel: t('Escanear ticket para {0}', viaje.nombre),
     onClick: () => {
       // D212 · la cámara nativa se abre EN ESTE TOQUE (iOS sólo la abre dentro del gesto).
-      // D368 · es el «Escanear» de la barra: también en un viaje, el menú del teléfono.
-      abrirMenuDeFotos();
+      // D536 · es el «Escanear» de la barra: también en un viaje, la cámara directo (sin el menú de D368).
+      abrirCamaraNativa();
       navigate('scan', id);
     },
   };

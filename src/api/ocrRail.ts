@@ -168,16 +168,6 @@ function subscribe(l: () => void): () => void {
 
 const getState = (): OcrRailState => state;
 
-/**
- * D368 · el `accept` vigente, SIN pedir nada: el del dueño si alguien ya cargó
- * la capability (la pantalla de escaneo) o, si todavía no, el respaldo estricto
- * (`OCR_RAIL_FALLBACK`). Lo usa el «Escanear» de la barra, que está en casi
- * todas las pantallas: con el hook, cada una pediría la configuración.
- */
-export function acceptVigente(): string {
-  return state.accept;
-}
-
 /** Sólo para tests: vuelve al fallback, que es el estado inicial. */
 export function resetOcrRailForTests(): void {
   state = CERRADO;

@@ -2265,9 +2265,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    *    decisión 91, que en iPhone ofrece Fototeca y Archivos (y Drive, si está
    *    instalado). La foto elegida pasa por la misma preparación que la de la
    *    cámara.
-   *  - D368 · el «Escanear» de la barra ya no abre la cámara directo: abre el
-   *    menú del teléfono (Fototeca o Tomar foto). El botón redondo, «Sacar
-   *    otra» y «Reintentar» siguen con la cámara directo.
+   *  - D536 · el «Escanear» de la barra vuelve a abrir la cámara directo, como
+   *    el botón redondo, «Sacar otra» y «Reintentar»: sale el menú del teléfono
+   *    de D368. El carrete es «Elegir de la galería», acá abajo.
    *  - Sin marco ni recuadro: la foto es la de la cámara entera.
    *  - El título sigue siendo «Escanea el ticket».
    *

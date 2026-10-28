@@ -21,10 +21,10 @@ import { expect, type FileChooser, type Page } from '@playwright/test';
  * Los selectores de la GALERÍA no se tocan acá: los specs de galería usan
  * `setInputFiles` o su propio `waitForEvent('filechooser')`.
  *
- * D368 · el «Escanear» de la barra abre la MISMA entrada sin `capture` (el menú
- * del teléfono), así que ya no se la distingue por `capture`: la entrada nativa
- * lleva `data-camara="nativa"` (`camaraNativa.ts`) y el registro cuenta las dos
- * formas de abrirla. La galería de «Escanea el ticket» no la lleva.
+ * La entrada nativa se distingue por `data-camara="nativa"` (`camaraNativa.ts`),
+ * no por `capture`: la fábrica la puede abrir también sin `capture` (el menú de
+ * D368, que desde D536 no usa ningún botón) y el registro cuenta las dos formas.
+ * La galería de «Escanea el ticket» no la lleva.
  */
 interface Registro {
   /** Las abiertas que todavía no sacaron foto. */

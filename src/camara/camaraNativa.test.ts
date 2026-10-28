@@ -124,7 +124,7 @@ describe('D212 · la cámara nativa', () => {
   });
 });
 
-describe('D368 · el menú del teléfono desde el «Escanear» de la barra', () => {
+describe('D368 · el menú del teléfono (`abrirMenu` de la fábrica; desde D536 ningún botón lo usa)', () => {
   /** El respaldo estricto del `accept` (antes de que cargue la configuración del OCR). */
   const ACCEPT_RESPALDO_ESTRICTO = 'image/jpeg,image/jpg,image/png';
 

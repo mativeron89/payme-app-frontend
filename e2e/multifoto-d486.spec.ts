@@ -75,8 +75,8 @@ async function fotoAlMarco(page: Page): Promise<void> {
 
 /**
  * «Agregar otra parte»: la del marco va a la tira y, en el mismo toque, se abre el selector para la siguiente, que llega
- * al marco. Es la cámara si la del marco vino de la cámara, o la galería si vino del menú del teléfono (D368: el
- * «Escanear» de la barra), así que se toma el selector que se abra.
+ * al marco. Es la cámara si la del marco vino de la cámara, o la galería si vino de ahí, así que se toma el selector que
+ * se abra.
  */
 async function otraParte(page: Page, enLaTira: number): Promise<void> {
   const [selector] = await Promise.all([page.waitForEvent('filechooser'), agregar(page).click()]);

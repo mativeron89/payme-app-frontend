@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { ViajeConFechas } from '../../api/viajesDeHoy';
-import { abrirMenuDeFotos } from '../../camara/camaraNativa';
+import { abrirCamaraNativa } from '../../camara/camaraNativa';
 import { useHojaModal } from '../../components/useHojaModal';
 import { useIdioma } from '../../i18n/idioma';
 import { EVENTO_RUTA, navigate } from '../../router';
@@ -88,8 +88,8 @@ export function HojaParaQueViaje({ viajes, alCerrar, alElegir }: {
               type="button"
               className="vj-hoja-viaje"
               onClick={() => {
-                // D368 · viene del «Escanear» de la barra: el menú del teléfono.
-                abrirMenuDeFotos();
+                // D536 · viene del «Escanear» de la barra: la cámara directo (sin el menú de D368).
+                abrirCamaraNativa();
                 alElegir();
                 navigate('scan', v.id);
               }}

@@ -385,46 +385,41 @@ test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () =
   });
 });
 
-// ─── D368 · al tocar «Escanear», el teléfono pregunta ────────────────────────
+// ─── D536 · al tocar «Escanear», la cámara de una (sale el menú de D368) ──────
 
-test.describe('D368 · el «Escanear» de la barra abre el menú del teléfono', () => {
-  test('🔴 sin `capture` y con el accept del dueño; la foto que llega del menú se trata como del carrete («Elegir otra»); el botón redondo sigue con la cámara', async ({ page }) => {
+test.describe('D536 · el «Escanear» de la barra abre la cámara directo', () => {
+  test('🔴 con `capture` e image/*; la foto llega como de la cámara («Sacar otra»); el carrete sigue en «Elegir de la galería», sin `capture`', async ({ page }) => {
     await ingresar(page);
-    const [menu] = await Promise.all([
+    const [camara] = await Promise.all([
       page.waitForEvent('filechooser'),
       page.getByRole('button', { name: 'Escanear', exact: true }).click(),
     ]);
-    expect(await menu.element().getAttribute('capture')).toBeNull();
-    expect(await menu.element().getAttribute('data-camara')).toBe('nativa');
-    // El respaldo estricto del dueño: la configuración del OCR carga después del toque.
-    expect(await menu.element().getAttribute('accept')).toBe('image/jpeg,image/jpg,image/png');
+    // Mati, D535: «no abre la camara de una». La entrada nativa, con `capture`: ni el menú del teléfono ni el accept
+    // estricto del dueño.
+    expect(await camara.element().getAttribute('capture')).toBe('environment');
+    expect(await camara.element().getAttribute('accept')).toBe('image/*');
+    expect(await camara.element().getAttribute('data-camara')).toBe('nativa');
     await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
-    // Una foto elegida en el menú: el marco ofrece «Elegir otra», como la galería.
+    // La foto viene de la cámara: el marco ofrece «Sacar otra», no «Elegir otra».
     await sacarFoto(page, undefined, { usar: false });
     await expect(page.getByRole('group', { name: 'Marco del recorte' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Elegir otra', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sacar otra', exact: true })).toHaveCount(0);
-    // «Elegir otra» abre la galería (sin `capture`), que en el iPhone también ofrece el menú.
-    const [galeria] = await Promise.all([
-      page.waitForEvent('filechooser'),
-      page.getByRole('button', { name: 'Elegir otra', exact: true }).click(),
-    ]);
-    expect(await galeria.element().getAttribute('capture')).toBeNull();
+    await expect(page.getByRole('button', { name: 'Sacar otra', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Elegir otra', exact: true })).toHaveCount(0);
   });
 
-  test('🔴 después del menú, el botón redondo vuelve a abrir la cámara directo (capture, image/*)', async ({ page }) => {
+  test('🔴 si se cancela la cámara, el carrete es «Elegir de la galería» de la pantalla de abajo (sin `capture`)', async ({ page }) => {
     await ingresar(page);
     await Promise.all([
       page.waitForEvent('filechooser'),
       page.getByRole('button', { name: 'Escanear', exact: true }).click(),
     ]);
-    const [camara] = await Promise.all([
+    await expect(page.getByRole('heading', { name: 'Escanea el ticket', exact: true })).toBeVisible();
+    const [galeria] = await Promise.all([
       page.waitForEvent('filechooser'),
-      page.getByRole('button', { name: 'Sacar foto', exact: true }).click(),
+      page.getByRole('button', { name: 'Elegir de la galería o Drive', exact: true }).click(),
     ]);
-    expect(await camara.element().getAttribute('capture')).toBe('environment');
-    expect(await camara.element().getAttribute('accept')).toBe('image/*');
-    expect(await camara.element().getAttribute('data-camara')).toBe('nativa');
+    expect(await galeria.element().getAttribute('capture')).toBeNull();
+    expect(await galeria.element().getAttribute('data-camara')).toBeNull();
   });
 });
 

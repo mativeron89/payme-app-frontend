@@ -18,31 +18,32 @@ const hoja = readFileSync(new URL('../screens/viajes/HojaParaQueViaje.tsx', impo
 const ticketNuevo = readFileSync(new URL('../screens/viajes/TicketNuevoScreen.tsx', import.meta.url), 'utf8');
 
 const llamadas = (fuente: string) => fuente.match(/abrirCamaraNativa\(\)/g)?.length ?? 0;
-/** D368 · el menú del teléfono (el `accept` vigente lo lee la cámara en el mismo toque). */
+/** D368 · el menú del teléfono: desde D536 no lo abre ningún botón (se cuenta para fijar que siga en cero). */
 const menus = (fuente: string) => fuente.match(/abrirMenuDeFotos\(\)/g)?.length ?? 0;
 
 describe('D212 · la cámara nativa se abre dentro del toque', () => {
-  it('🔴 «Nueva» abre el menú del teléfono (D368) en su propio onClick, antes de navegar y sin esperar nada', () => {
-    expect(llamadas(barra)).toBe(0);
-    expect(menus(barra)).toBe(1);
+  it('🔴 D536 · «Escanear» de la barra abre la cámara directo (con capture) en su propio onClick, antes de navegar', () => {
+    // Mati, D535: «no abre la camara de una». Sale el menú del teléfono de D368.
+    expect(llamadas(barra)).toBe(1);
+    expect(menus(barra)).toBe(0);
     // Entre la apertura y `navigate` sólo puede haber comentarios.
     const sinComentarios = barra.replace(/\/\/[^\n]*/g, '');
-    expect(sinComentarios).toMatch(/onClick: \(\) => \{\s*abrirMenuDeFotos\(\);\s*navigate\('scan'\);\s*\}/);
-    // Y la barra registra de dónde lee el `accept` el menú: el vigente del dueño.
-    expect(sinComentarios).toContain('registrarAcceptDelMenu(acceptVigente);');
+    expect(sinComentarios).toMatch(/onClick: \(\) => \{\s*abrirCamaraNativa\(\);\s*navigate\('scan'\);\s*\}/);
+    // Y la barra ya no registra un `accept` para el menú: no lo abre nadie.
+    expect(sinComentarios).not.toContain('registrarAcceptDelMenu');
   });
 
-  it('🔴 D368 · en un viaje, el «Escanear» de la barra y «¿Para qué viaje?» también abren el menú en el toque', () => {
+  it('🔴 D536 · en un viaje, el «Escanear» de la barra y «¿Para qué viaje?» también abren la cámara directo en el toque', () => {
     const sin = (f: string) => f.replace(/\/\/[^\n]*/g, '');
-    expect(llamadas(circulo)).toBe(0);
-    expect(menus(circulo)).toBe(1);
-    expect(sin(circulo)).toMatch(/onClick: \(\) => \{\s*abrirMenuDeFotos\(\);\s*navigate\('scan', id\);\s*\}/);
-    expect(llamadas(hoja)).toBe(0);
-    expect(menus(hoja)).toBe(1);
-    expect(sin(hoja)).toMatch(/onClick=\{\(\) => \{\s*abrirMenuDeFotos\(\);\s*alElegir\(\);/);
+    expect(llamadas(circulo)).toBe(1);
+    expect(menus(circulo)).toBe(0);
+    expect(sin(circulo)).toMatch(/onClick: \(\) => \{\s*abrirCamaraNativa\(\);\s*navigate\('scan', id\);\s*\}/);
+    expect(llamadas(hoja)).toBe(1);
+    expect(menus(hoja)).toBe(0);
+    expect(sin(hoja)).toMatch(/onClick=\{\(\) => \{\s*abrirCamaraNativa\(\);\s*alElegir\(\);/);
   });
 
-  it('🔴 D368 · «Escanear otro ticket» del ticket del viaje sigue abriendo la cámara directo (con capture), no el menú', () => {
+  it('🔴 «Escanear otro ticket» del ticket del viaje abre la cámara directo (con capture), no el menú', () => {
     // Control positivo: es la pantalla del botón, y el botón llama al manejador.
     expect(ticketNuevo).toContain("t('Escanear otro ticket')");
     expect(ticketNuevo).toContain('onClick={onEscanearOtro}');

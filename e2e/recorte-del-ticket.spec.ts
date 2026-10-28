@@ -222,10 +222,9 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 /**
- * «Nueva», la foto de la CÁMARA y el marco en pantalla. D368 · el «Escanear» de
- * la barra abre el menú del teléfono (la foto puede ser del carrete y el marco
- * ofrece «Elegir otra»); estas pruebas son de la foto de la cámara, así que la
- * sacan con el botón redondo, que sigue abriendo la cámara directo.
+ * «Nueva», la foto de la CÁMARA y el marco en pantalla. Desde D536 el «Escanear»
+ * de la barra también abre la cámara directo; estas pruebas la sacan con el botón
+ * redondo, que la abre de nuevo (el registro toma la última que se abrió).
  */
 async function conLaFoto(page: Page, foto: ArchivoDeFoto, { entera = true }: { entera?: boolean } = {}): Promise<void> {
   await ingresar(page);

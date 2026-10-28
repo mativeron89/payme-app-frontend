@@ -19,14 +19,15 @@
  * (`alRecibirFoto`); si no hay nadie, se descarta: una foto que llega tarde no
  * aparece después en otra mesa (la misma regla que D202).
  *
- * D368 · «Que el iPhone pregunte»: la misma entrada tiene dos formas de abrirse.
- * - `abrir()`: con `capture`, la cámara directo (el botón redondo de «Escanea el
- *   ticket», «Sacar otra», «Reintentar», «Escanear otro» del viaje).
- * - `abrirMenu(accept)`: SIN `capture` y con el `accept` del dueño, así el
- *   teléfono muestra su menú (en el iPhone, Fototeca o Tomar foto): una foto del
- *   carrete queda a un toque. Es la del «Escanear» de la barra, también en un
- *   viaje. Que iOS respete el cambio de atributo en una entrada ya usada es
- *   conducta de plataforma: lo comprueba la prueba de Mati (D63).
+ * La misma entrada tiene dos formas de abrirse.
+ * - `abrir()`: con `capture`, la cámara directo. D536 · también el «Escanear» de
+ *   la barra (pantalla principal y fechas de viaje), como antes de D368. Mati,
+ *   en D535: «no abre la camara de una, quiero que abra la camara».
+ *   Además el botón redondo de «Escanea el ticket», «Sacar otra», «Reintentar» y
+ *   «Escanear otro» del viaje. El carrete sigue en «Elegir de la galería» de la
+ *   pantalla de abajo, con su propia entrada.
+ * - `abrirMenu(accept)`: SIN `capture`, el menú del teléfono (D368). Desde D536
+ *   ningún botón de la app la usa; queda en la fábrica, con sus pruebas.
  * La foto llega con la forma en que se abrió (`origen`): desde el menú puede ser
  * del carrete, así que la pantalla la trata como de la galería.
  *
@@ -113,29 +114,6 @@ function laCamara(): CamaraNativa {
 /** Abre la cámara nativa directo. Sólo dentro de un toque (ver arriba). */
 export function abrirCamaraNativa(): void {
   laCamara().abrir();
-}
-
-/**
- * D368 · de dónde sale el `accept` del menú: lo registra la barra
- * (`AppBottomBar`) con `acceptVigente` de `ocrRail`. Así este módulo y los del
- * viaje que abren el menú no importan la fachada de la API.
- */
-let leerAcceptDelMenu: (() => string) | null = null;
-
-export function registrarAcceptDelMenu(leer: () => string): void {
-  leerAcceptDelMenu = leer;
-}
-
-/**
- * D368 · abre el menú de fotos del teléfono (Fototeca o Tomar foto) con el
- * `accept` del dueño. Sólo dentro de un toque (ver arriba). Si nadie registró
- * de dónde leer el `accept` (no pasa en la app: la barra lo registra al
- * cargar), abre la cámara directo, como antes de D368.
- */
-export function abrirMenuDeFotos(): void {
-  const leer = leerAcceptDelMenu;
-  if (leer) laCamara().abrirMenu(leer());
-  else laCamara().abrir();
 }
 
 /** Recibe la foto de la cámara nativa mientras la pantalla escucha, con cómo se abrió. */

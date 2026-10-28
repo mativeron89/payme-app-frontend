@@ -113,7 +113,7 @@ async function dosFotosJuntas(page: Page): Promise<void> {
       input.files = dt.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    // D368 · la entrada nativa, por su marca: desde la barra se abre sin `capture`.
+    // La entrada nativa, por su marca (`data-camara`), la distingue de la galería.
     entregar(document.querySelector<HTMLInputElement>('input[type="file"][data-camara="nativa"]')!, 'image.jpg');
     entregar(document.querySelector<HTMLInputElement>('.camara-controles input[type="file"]')!, 'IMG_0001.jpg');
   }, FOTO_DE_CAMARA.buffer.toString('base64'));

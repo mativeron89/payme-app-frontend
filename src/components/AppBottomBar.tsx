@@ -1,16 +1,11 @@
 import { Icon, type IconName } from './Icon';
 import { useIdioma } from '../i18n/idioma';
 import { navigate, type PageId } from '../router';
-import { abrirMenuDeFotos, registrarAcceptDelMenu } from '../camara/camaraNativa';
-import { acceptVigente } from '../api/ocrRail';
+import { abrirCamaraNativa } from '../camara/camaraNativa';
 import { useSolicitudesPendientes } from '../amigos/solicitudesPendientes';
 import { textoDeLaBurbuja } from './burbuja';
 import { centroPorFechas } from '../screens/viajes/circuloDelViaje';
 import { useViajesDeHoy } from '../screens/viajes/useViajesDeHoy';
-
-// D368 · el menú de fotos del «Escanear» usa el `accept` vigente del dueño, leído
-// sin pedir nada (el respaldo estricto si la configuración todavía no cargó).
-registrarAcceptDelMenu(acceptVigente);
 
 // D230 · la regla de la burbuja vive en `./burbuja`, compartida con la campana
 // (D240 punto 5); se re-exporta acá porque sus pruebas la importan de la barra.
@@ -133,11 +128,11 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
     // D212 · «Nueva» abre la cámara nativa EN ESTE TOQUE (iOS sólo la abre
     // dentro del gesto) y la app pasa a «Escanea el ticket» debajo, que recibe
     // la foto. Si la persona cancela, ahí tiene «Sacar foto» y la galería.
-    // D368 · «Que el iPhone pregunte»: sin `capture`, el teléfono muestra su
-    // menú (Fototeca o Tomar foto), con el `accept` del dueño (el respaldo
-    // estricto si la configuración todavía no cargó).
+    // D536 · la cámara directo, con `capture`, sin el menú del teléfono de D368
+    // (Mati, D535: «no abre la camara de una»). El carrete queda en «Elegir de
+    // la galería» de «Escanea el ticket».
     onClick: () => {
-      abrirMenuDeFotos();
+      abrirCamaraNativa();
       navigate('scan');
     },
     disabled: false,
