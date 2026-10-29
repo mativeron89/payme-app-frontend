@@ -1,4 +1,27 @@
-## D504 · D507 · D511 · la dirección del local · 0.266.1
+## D550 · D553 · D554 · el agente gastronómico, E1 · 0.268.0
+
+Contenido vigente: `773dfd10d287784513157abc0cefc2548b4f05b3`.
+Inventario íntegro de 167 entradas tomado del `main` del dueño, el servido (App Backend 2.208.0, `main` en
+`1aca0498751ab963b0b89faa7a7ccddc263c3ca2`; `contract/mirror-inventory.json`, sha256
+`3b9e256216a931c92d540d8ed834885d9a1c8c1c576e22ac98678cba7b0a12ff`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `773dfd1`. Entre `773dfd1` y `1aca049` no cambia ningún archivo inventariado (`git diff` vacío).
+**21 archivos espejados**, todos JSON de `contract/`; **146 fuentes sólo por hash**, conforme D268.
+Nuevo `contract/agente-e1-v1.schema.json` (sha256 `4fab1f911b1ecf12035438396f58c36cb3dfe1e6072b6b99a2ffc5ffd4e7401a`): las rutas
+`/api/agente/*`, el aviso `agente_tu_hora` y las formas que lee `src/api/agente.ts` (`agente.contrato.test.ts` las
+coteja contra este archivo). Cambian `contract/cocinas-v1.json` (sha256
+`f5ff5710b20d722ad902ce18aeb97e7f796543e130ad8be39bdef94634747905`: las fuentes adicionales de la atribución, D514/D516) y
+`contract/ocr-merchant-v2.json` (sha256 `4c7993dd203298f83b3cca09ece3a76a3da098acfdf2f7e955e7fb4f62baea64`). Por hash, nuevos
+`db/migrate_agente_e1_v2.208.0.sql`, `routes/agente.js` y `services/agenteComensal.js`, y cambian `routes/account.js`,
+`routes/mesas.js`, `routes/ocr.js`, `services/consent.js` y `services/notifications.js`. Los hechos del dueño se
+regeneraron en local contra `773dfd1`: cambian sólo el commit y los sha256 de `routes/account.js`, `routes/mesas.js`,
+`routes/ocr.js` y `services/notifications.js`, ningún valor. `PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al
+mismo commit: `services/parteDeMesa.js` y `utils/money.js` siguen con los sha256 de siempre.
+
+⚠️ `contract/account-consents-v1.schema.json` no cambió: su enum de finalidades todavía no nombra `recomendaciones`,
+aunque `services/consent.js` 2.208.0 la sirve y `agente-e1-v1` dice que se otorga por `/api/account/consents`. El front
+la consume con la misma forma que las otras finalidades opcionales; queda anotado para el dueño.
+
+### Refresh anterior · D504 · D507 · D511 · la dirección del local · 0.266.1
 
 Contenido vigente: `43e72f0487982f6609e30f120adf9fdcf38a9b4f`.
 Inventario íntegro de 163 entradas tomado del `main` del dueño (App Backend 2.202.0, `main` en

@@ -14,7 +14,17 @@
   "atribucion": {
     "texto": "Cocinas: datos © colaboradores de OpenStreetMap (ODbL)",
     "url": "https://www.openstreetmap.org/copyright",
-    "cuando": "Junto a la tarjeta «Por tipo de cocina» (u otra vista que muestre la cocina deducida), cuando vuelva a mostrarse. La cocina de un restaurante puede venir del catálogo de OpenStreetMap (D497); data/ATRIBUCION_OSM.md en App Backend."
+    "cuando": "Junto a la tarjeta «Por tipo de cocina» (u otra vista que muestre la cocina deducida), cuando vuelva a mostrarse. La cocina de un restaurante puede venir del catálogo de OpenStreetMap (D497); data/ATRIBUCION_OSM.md en App Backend.",
+    "fuentes_adicionales": {
+      "desde": "2.203.0 (D514/D516)",
+      "textos": [
+        "Fuente: INEGI, DENUE 05/2026",
+        "Overture Maps Foundation, overturemaps.org",
+        "Incluye datos de Foursquare OS Places © 2025 Foursquare Labs, Inc. (Apache-2.0)"
+      ],
+      "urls": ["https://www.inegi.org.mx/inegi/terminos.html", "https://overturemaps.org", "http://www.apache.org/licenses/LICENSE-2.0"],
+      "cuando": "Junto al texto de OpenStreetMap, en el mismo lugar. El aviso completo de Foursquare está en data/catalogo/NOTICE-foursquare.txt y el detalle en data/ATRIBUCION_FUENTES.md, en App Backend. La base combinada es interna: ninguna respuesta la devuelve, sólo la cocina deducida."
+    }
   },
   "umbral_d494_m3": {
     "regla": "La tarjeta «Por tipo de cocina» se muestra sólo si al menos el 70 % de las visitas del período tiene una cocina reconocida (D494 M3).",

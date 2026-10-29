@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.agente-e1/v1",
+  "title": "/api/agente · agente gastronómico, etapa E1 (comensal base) · D550/D553/D554 · publicado APAGADO",
+  "description": "Contrato propietario de App Backend 2.208.0 para App Frontend. Apagado por dos banderas estrictas: RECOMENDACIONES_CERCA_ENABLED (para-vos, cerca, presupuesto y el aviso «a tu hora» de la campana) y CALIFICACIONES_ENABLED (la calificación). Apagada → 404 not_found sin leer nada. Toda respuesta lleva Cache-Control: private, no-store. «Para vos» y «cerca» piden el permiso `recomendaciones` otorgado (R-2 a; se otorga por /api/account/consents con el par del Aviso mostrado, desde el Aviso 3.1.0 por D549): sin él, 403 permission_required sin leer el historial. La ubicación de POST /cerca va en el cuerpo, se redondea a 3 decimales y no se guarda ni se loguea (R-4 a). «Cerca» devuelve, de cada local del catálogo, SÓLO ref opaca, nombre, cocina, distancia redondeada a 50 m, nivel y las estrellas propias con 3 cuentas o más; nunca dirección ni coordenadas; como mucho 10 lugares por respuesta, y siempre con la atribución de las fuentes del catálogo.",
+  "endpoints": {
+    "GET /api/agente/estado": { "auth": "requireAuth", "200": { "$ref": "#/$defs/estado" } },
+    "GET /api/agente/para-vos": { "auth": "requireAuth, cuenta (no invitado), permiso recomendaciones", "200": { "$ref": "#/$defs/paraVos" } },
+    "POST /api/agente/cerca": {
+      "auth": "requireAuth, cuenta (no invitado), permiso recomendaciones",
+      "body": { "$ref": "#/$defs/ubicacion" },
+      "200": { "$ref": "#/$defs/cerca" }
+    },
+    "GET /api/agente/presupuesto": { "auth": "requireAuth, cuenta (no invitado); vista propia, sin permiso", "200": { "$ref": "#/$defs/presupuesto" } },
+    "PUT /api/agente/presupuesto": {
+      "auth": "requireAuth, cuenta (no invitado)",
+      "body": { "type": "object", "additionalProperties": false, "required": ["monto_cents"],
+        "properties": { "monto_cents": { "type": "integer", "minimum": 100, "maximum": 100000000 } } },
+      "200": { "$ref": "#/$defs/presupuesto" }
+    },
+    "DELETE /api/agente/presupuesto": { "auth": "requireAuth, cuenta (no invitado); vuelve al promedio automático", "200": { "$ref": "#/$defs/presupuesto" } },
+    "GET /api/agente/mesas/{code}/calificacion": { "auth": "requireAuth, cuenta, participante de la mesa", "200": { "$ref": "#/$defs/calificacionRespuesta" } },
+    "PUT /api/agente/mesas/{code}/calificacion": {
+      "auth": "requireAuth, cuenta, participante de la mesa; una por persona y mesa, editable",
+      "body": { "type": "object", "additionalProperties": false, "required": ["estrellas"],
+        "properties": { "estrellas": { "type": "integer", "minimum": 1, "maximum": 5 } } },
+      "200": { "$ref": "#/$defs/calificacionRespuesta" }
+    }
+  },
+  "errors": {
+    "400": { "error": "validation_error" },
+    "403": [{ "error": "account_required" }, { "error": "permission_required", "purpose": "recomendaciones" }],
+    "404": [{ "error": "not_found" }, { "error": "mesa_not_found" }]
+  },
+  "notification": {
+    "type": "agente_tu_hora",
+    "title": "Es tu hora",
+    "body": "Es tu hora: mirá lugares cerca para lo de siempre.",
+    "payload": { "franja": "madrugada | desayuno | comida | cena" },
+    "reglas": "Sólo con el permiso recomendaciones, en la franja habitual de la persona, si tiene platos; como mucho 1 por día (de México) y 3 en 7 días (R-10 a). Sin ubicación. Sólo en la app: sin correo."
+  },
+  "$defs": {
+    "franja": { "enum": ["madrugada", "desayuno", "comida", "cena"] },
+    "estado": {
+      "type": "object", "additionalProperties": false, "required": ["recomendaciones", "calificaciones"],
+      "properties": {
+        "recomendaciones": { "type": "object", "additionalProperties": false, "required": ["enabled"], "properties": { "enabled": { "type": "boolean" } } },
+        "calificaciones": { "type": "object", "additionalProperties": false, "required": ["enabled"], "properties": { "enabled": { "type": "boolean" } } }
+      }
+    },
+    "plato": {
+      "type": "object", "additionalProperties": false, "required": ["nombre", "visitas"],
+      "properties": { "nombre": { "type": "string" }, "visitas": { "type": "integer", "minimum": 3 } }
+    },
+    "presupuesto": {
+      "type": "object", "additionalProperties": false,
+      "required": ["monto_cents", "origen", "promedio_cents", "gastado_cents", "basis"],
+      "properties": {
+        "monto_cents": { "type": ["integer", "null"] },
+        "origen": { "enum": ["editado", "automatico", null] },
+        "promedio_cents": { "type": ["integer", "null"], "description": "Promedio de los últimos 3 meses completos, con los meses sin consumo adentro; null si no hubo consumo." },
+        "gastado_cents": { "type": "integer", "minimum": 0, "description": "Lo del mes en curso, con la misma cuenta que consumption_month de /api/account/stats." },
+        "basis": { "enum": ["consumption", "payments"] }
+      }
+    },
+    "paraVos": {
+      "type": "object", "additionalProperties": false, "required": ["franja_habitual", "es_tu_hora", "platos", "presupuesto"],
+      "properties": {
+        "franja_habitual": { "oneOf": [{ "$ref": "#/$defs/franja" }, { "type": "null" }] },
+        "es_tu_hora": { "type": "boolean" },
+        "platos": { "type": "array", "maxItems": 3, "items": { "$ref": "#/$defs/plato" } },
+        "presupuesto": { "$ref": "#/$defs/presupuesto" }
+      }
+    },
+    "ubicacion": {
+      "type": "object", "additionalProperties": false, "required": ["lat", "lon"],
+      "properties": { "lat": { "type": "number", "minimum": -90, "maximum": 90 }, "lon": { "type": "number", "minimum": -180, "maximum": 180 } }
+    },
+    "lugar": {
+      "type": "object", "additionalProperties": false, "required": ["ref", "nombre", "cocina", "distancia_m", "nivel", "estrellas"],
+      "properties": {
+        "ref": { "type": "string" },
+        "nombre": { "type": "string" },
+        "cocina": { "type": ["string", "null"] },
+        "distancia_m": { "type": "integer", "minimum": 50, "multipleOf": 50 },
+        "nivel": { "enum": ["confirmado", "probable"] },
+        "estrellas": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "additionalProperties": false, "required": ["promedio", "cuentas"],
+              "properties": { "promedio": { "type": "number", "minimum": 1, "maximum": 5 }, "cuentas": { "type": "integer", "minimum": 3 } } }
+          ]
+        }
+      }
+    },
+    "cerca": {
+      "type": "object", "additionalProperties": false, "required": ["radio_m", "platos", "atribucion"],
+      "properties": {
+        "radio_m": { "enum": [1000, 3000] },
+        "platos": {
+          "type": "array", "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["nombre", "visitas", "lugares"],
+            "properties": {
+              "nombre": { "type": "string" },
+              "visitas": { "type": "integer", "minimum": 3 },
+              "lugares": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/lugar" } }
+            }
+          }
+        },
+        "atribucion": {
+          "type": "object", "additionalProperties": false, "required": ["textos", "urls"],
+          "properties": { "textos": { "type": "array", "items": { "type": "string" } }, "urls": { "type": "array", "items": { "type": "string" } } }
+        }
+      },
+      "x-tope": "La suma de lugares de todos los platos es como mucho 10."
+    },
+    "calificacion": {
+      "type": "object", "additionalProperties": false, "required": ["estrellas", "creada_en", "actualizada_en"],
+      "properties": { "estrellas": { "type": "integer", "minimum": 1, "maximum": 5 }, "creada_en": { "type": "string", "format": "date-time" }, "actualizada_en": { "type": "string", "format": "date-time" } }
+    },
+    "calificacionRespuesta": {
+      "type": "object", "additionalProperties": false, "required": ["calificacion"],
+      "properties": { "calificacion": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/calificacion" }] } }
+    }
+  }
+}

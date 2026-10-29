@@ -24,10 +24,13 @@
   - Se actualizó la lista fijada del ejemplo.
   - `mesa-recuperacion-listo.spec.ts` rechaza toda API que no conoce y termina en Inicio: ahora conoce `GET /api/agente/estado`, con la forma servida hoy (las dos apagadas).
   - e2e nuevo `agente-e1.spec.ts`: apagado sin nada y sin pedir la ubicación; encendido con la ubicación sólo al tocar y sin guardarla; la negativa, los 3 km, la campana, la calificación y el presupuesto. Las capturas salen con `PAYME_E2E_CAPTURAS`.
+- **Espejo del contrato (enmienda del lease de VI):** el dueño 2.208.0 completo, como en 0.266.1. El inventario de 167 entradas sale de `main` `1aca049`, que declara `773dfd1`, y se adoptó con `--adoptar-inventario` sin editarlo; da paridad OK.
+  - Nuevo `contract/agente-e1-v1.schema.json`; cambian `cocinas-v1.json` y `ocr-merchant-v2.json`.
+  - Los hechos del dueño se regeneraron: cambian el commit y cuatro sha256, ningún valor.
+  - `agente.contrato.test.ts` coteja los decodificadores contra el schema espejado: rutas, aviso, permiso, claves exactas, enums y límites.
 - **Pendiente, sin bloquear:**
   - El texto de la fila «Recomendaciones» y los de las tarjetas los propuso App Frontend; se revisan antes de encender.
-  - El `account-consents-v1` del dueño todavía no lista `recomendaciones` en su enum, aunque `consent.js` 2.208.0 la sirve y el contrato del agente la nombra.
-  - El espejo del contrato sigue en 2.202.0, a la espera del alcance del lease.
+  - El `account-consents-v1` del dueño todavía no lista `recomendaciones` en su enum, aunque `consent.js` 2.208.0 la sirve y el contrato del agente la nombra. VI lo anotó para una corrección del backend, junto con el voseo del aviso.
   - Lo cierra la prueba de Mati (D63) cuando se enciendan las banderas.
 
 ## 0.267.0 · 2026-10-28 (D547 · varias fotos con la pantalla al volver de la cámara)
