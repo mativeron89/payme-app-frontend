@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  enlaceDeAtribucion, pedirUbicacion, PARAM_TARJETA_CERCA, type Cerca, type LugarCerca, type ParaVos,
+  enlaceDeAtribucion, pedirUbicacion, PARAM_TARJETA_CERCA,
+  type Cerca, type LugarCerca, type ParaVos, type ResultadoDeUbicacion, type Ubicacion,
 } from '../api/agente';
+import { extractApiError } from '../api/errors';
 import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
 import { useRoute } from '../router';
@@ -25,14 +27,46 @@ export function textoDeEstrellas(promedio: number, cuentas: number, locale: stri
   return { visible: `${p} · ${cuentas}`, accesible: t('{0} estrellas en PayMe, de {1} personas', p, cuentas) };
 }
 
-type Busqueda =
+export type Busqueda =
   | { readonly fase: 'quieta' }
   | { readonly fase: 'ubicando' }
   | { readonly fase: 'buscando' }
   | { readonly fase: 'lista'; readonly cerca: Cerca }
   | { readonly fase: 'negada' }
   | { readonly fase: 'sin_ubicacion' }
+  | { readonly fase: 'demasiadas' }
   | { readonly fase: 'error' };
+
+/** O3 del PR #95 · el 429 del dueño (`too_many_requests`, el límite por cuenta de 2.208.1) tiene su propio texto. */
+export function faseDeErrorDeCerca(err: unknown): 'demasiadas' | 'error' {
+  return extractApiError(err).status === 429 ? 'demasiadas' : 'error';
+}
+
+/**
+ * Una búsqueda de «cerca», de punta a punta. O2 del PR #109: `vigente()` es la MISMA época que reinicia la tarjeta al
+ * cambiar de cuenta (como el presupuesto y la calificación): si la sesión cambió mientras se esperaba la ubicación o
+ * el POST, el resultado de la cuenta anterior se descarta y no se pone nada.
+ */
+export async function buscarCerca(paso: {
+  readonly pedir: () => Promise<ResultadoDeUbicacion>;
+  readonly postear: (u: Ubicacion) => Promise<Cerca>;
+  readonly vigente: () => boolean;
+  readonly poner: (b: Busqueda) => void;
+}): Promise<void> {
+  const poner = (b: Busqueda) => { if (paso.vigente()) paso.poner(b); };
+  poner({ fase: 'ubicando' });
+  const r = await paso.pedir();
+  if (!paso.vigente()) return;
+  if (r.tipo === 'negada') { poner({ fase: 'negada' }); return; }
+  if (r.tipo === 'no_disponible') { poner({ fase: 'sin_ubicacion' }); return; }
+  poner({ fase: 'buscando' });
+  try {
+    const cerca = await paso.postear(r.ubicacion);
+    poner({ fase: 'lista', cerca });
+  } catch (err) {
+    poner({ fase: faseDeErrorDeCerca(err) });
+  }
+}
 
 /**
  * D550/D554 · R-1 a, R-4 a, R-7 a · «Lo de siempre, cerca», la tarjeta de Inicio.
@@ -57,8 +91,10 @@ export function TarjetaCerca() {
   const cuenta = session ? `${session.family_id}:${session.principal_id}` : null;
   const sesionRef = useRef(session);
   sesionRef.current = session;
+  const epoca = useRef(0);
 
   useEffect(() => {
+    ++epoca.current;
     setParaVos(null);
     setBusqueda({ fase: 'quieta' });
     const s = sesionRef.current;
@@ -82,16 +118,13 @@ export function TarjetaCerca() {
   async function buscar() {
     const s = sesionRef.current;
     if (!s || busqueda.fase === 'ubicando' || busqueda.fase === 'buscando') return;
-    setBusqueda({ fase: 'ubicando' });
-    const r = await pedirUbicacion();
-    if (r.tipo === 'negada') { setBusqueda({ fase: 'negada' }); return; }
-    if (r.tipo === 'no_disponible') { setBusqueda({ fase: 'sin_ubicacion' }); return; }
-    setBusqueda({ fase: 'buscando' });
-    try {
-      setBusqueda({ fase: 'lista', cerca: await api.postCerca(r.ubicacion, s) });
-    } catch {
-      setBusqueda({ fase: 'error' });
-    }
+    const marca = epoca.current;
+    await buscarCerca({
+      pedir: () => pedirUbicacion(),
+      postear: (u) => api.postCerca(u, s),
+      vigente: () => marca === epoca.current,
+      poner: setBusqueda,
+    });
   }
 
   const ocupada = busqueda.fase === 'ubicando' || busqueda.fase === 'buscando';
@@ -121,10 +154,21 @@ export function TarjetaCerca() {
       {busqueda.fase === 'sin_ubicacion' && (
         <p className="agente-cerca-nota" role="status">{t('No pudimos saber dónde estás. Prueba de nuevo.')}</p>
       )}
+      {busqueda.fase === 'demasiadas' && (
+        <p className="agente-cerca-nota" role="status">{t('Hiciste muchas búsquedas seguidas. Prueba en un rato.')}</p>
+      )}
       {busqueda.fase === 'error' && (
         <p className="agente-cerca-nota" role="status">{t('No pudimos buscar lugares. Prueba de nuevo.')}</p>
       )}
-      {busqueda.fase === 'lista' && <ListaCerca cerca={busqueda.cerca} t={t} locale={locale} />}
+      {busqueda.fase === 'lista' && (
+        <>
+          <ListaCerca cerca={busqueda.cerca} t={t} locale={locale} />
+          {/* O3 del PR #109 · repetir la búsqueda sin recargar ni salir de Inicio. Pide la ubicación de nuevo. */}
+          <button type="button" className="btn btn-ghost agente-cerca-de-nuevo" onClick={() => void buscar()}>
+            {t('Buscar de nuevo')}
+          </button>
+        </>
+      )}
     </section>
   );
 }

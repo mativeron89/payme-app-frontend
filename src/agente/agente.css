@@ -11,6 +11,8 @@
 .agente-cerca-platos { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-muted); }
 .agente-cerca-hora { display: inline-block; margin-top: var(--sp-3); padding: 2px 10px; border-radius: var(--r-full); background: var(--teal-l); color: var(--teal-txt); font-size: var(--fs-xs); font-weight: 700; }
 .agente-cerca-ver { margin-top: var(--sp-3); width: 100%; min-height: var(--tap-min); }
+/* O3 del PR #109 · «Buscar de nuevo», debajo de la lista: secundario, el mismo ancho que «Ver lugares cerca». */
+.agente-cerca-de-nuevo { margin-top: var(--sp-3); width: 100%; min-height: var(--tap-min); }
 .agente-cerca-nota { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-muted); }
 .agente-cerca-plato { margin: var(--sp-4) 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
 .agente-cerca-lista { margin: 0; padding: 0; list-style: none; }

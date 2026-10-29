@@ -109,6 +109,13 @@ test.describe('D554 · encendido en el mock (control positivo)', () => {
     await expect(tarjeta(page).getByRole('listitem')).toHaveCount(5);
     await capturar(page, 'agente-03-inicio-lugares-cerca');
 
+    // O3 del PR #109 · «Buscar de nuevo» repite la búsqueda sin recargar: pide la ubicación otra vez y vuelve la lista.
+    await tarjeta(page).getByRole('button', { name: 'Buscar de nuevo', exact: true }).click();
+    await expect.poll(() => pedidosDeUbicacion(page)).toBe(2);
+    await expect(tarjeta(page).getByRole('heading', { level: 3, name: 'Tacos al pastor' })).toBeVisible();
+    await expect(tarjeta(page).getByRole('listitem')).toHaveCount(5);
+    await expect(tarjeta(page).getByRole('button', { name: 'Buscar de nuevo', exact: true })).toBeVisible();
+
     // 🔴 Nada de la ubicación quedó en el dispositivo ni en la pantalla.
     const guardado = await page.evaluate(() => JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage }, url: location.href }));
     expect(guardado).not.toMatch(/19\.43|99\.13/);
@@ -138,6 +145,19 @@ test.describe('D554 · encendido en el mock (control positivo)', () => {
     await tarjeta(page).getByRole('button', { name: 'Ver lugares cerca', exact: true }).click();
     await expect(tarjeta(page)).toContainText('No había nada a 1 km: te mostramos hasta 3 km.');
     await expect(tarjeta(page)).toContainText('1.8 km');
+  });
+
+  test('O3 del PR #95 · el 429 del límite por cuenta tiene su texto, no el error genérico', async ({ page, context }) => {
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ latitude: 19.43, longitude: -99.13 });
+    await conCosturas(page, { agente: 'encendido', consentimientos_otorgados: 'recomendaciones', agente_cerca: 'demasiadas' });
+    await ingresar(page);
+    await tarjeta(page).getByRole('button', { name: 'Ver lugares cerca', exact: true }).click();
+    await expect(tarjeta(page)).toContainText('Hiciste muchas búsquedas seguidas. Prueba en un rato.');
+    await expect(tarjeta(page)).not.toContainText('No pudimos buscar lugares.');
+    await expect(tarjeta(page).getByRole('listitem')).toHaveCount(0);
+    await expect(tarjeta(page).getByRole('button', { name: 'Ver lugares cerca', exact: true })).toBeEnabled();
+    await capturar(page, 'agente-07-inicio-demasiadas-busquedas');
   });
 
   test('«Es tu hora» en la campana lleva a la tarjeta', async ({ page }) => {

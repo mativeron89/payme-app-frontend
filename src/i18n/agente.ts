@@ -11,6 +11,8 @@ export const EN_AGENTE: Record<string, string> = {
   'Para ver lugares cerca, permite la ubicación en tu navegador.': 'To see places nearby, allow location in your browser.',
   'No pudimos saber dónde estás. Prueba de nuevo.': "We couldn't tell where you are. Try again.",
   'No pudimos buscar lugares. Prueba de nuevo.': "We couldn't look for places. Try again.",
+  'Hiciste muchas búsquedas seguidas. Prueba en un rato.': "You've searched a lot in a row. Try again in a while.",
+  'Buscar de nuevo': 'Search again',
   'No encontramos lugares cerca para lo de siempre.': "We didn't find places nearby for your usual.",
   'No había nada a 1 km: te mostramos hasta 3 km.': 'There was nothing within 1 km: showing up to 3 km.',
   'Se pide en PayMe': 'Ordered on PayMe',

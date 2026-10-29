@@ -15,7 +15,8 @@ import { persist as persistirStore, state as store } from './store';
  *   «ninguna capacidad anunciada», que con el dueño de hoy ya no es el caso: `estado` anuncia `recomendaciones` apagada;
  * - el permiso `recomendaciones` vive en el mock de los permisos (`mockSugerencias.ts`): nace en `never`, o otorgado con
  *   `payme.app.mock.consentimientos_otorgados.v1` = `recomendaciones`;
- * - `payme.app.mock.agente_cerca.v1` = `vacio` (no hay nada cerca) o `lejos` (sólo a 3 km).
+ * - `payme.app.mock.agente_cerca.v1` = `vacio` (no hay nada cerca), `lejos` (sólo a 3 km) o `demasiadas` (el 429
+ *   `too_many_requests` del límite por cuenta de 2.208.1).
  *
  * Como el dueño: la ubicación no se guarda; el mock sólo mira que llegue con 3 decimales o menos.
  */
@@ -114,6 +115,7 @@ export async function mockCerca(u: Ubicacion): Promise<unknown> {
   conPermiso();
   if (!tresDecimales(u.lat) || !tresDecimales(u.lon)) throw new MockApiError(400, 'validation_error');
   const modo = costura('agente_cerca');
+  if (modo === 'demasiadas') throw new MockApiError(429, 'too_many_requests');
   if (modo === 'vacio') {
     return { radio_m: 3000, platos: PLATOS.map((p) => ({ ...p, lugares: [] })), atribucion: ATRIBUCION };
   }

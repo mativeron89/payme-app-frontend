@@ -5,7 +5,10 @@ import { FilaPermisoOpcionalView, modoDeFilaOpcional } from '../components/Secci
 import { traducir } from '../i18n/idioma';
 import { mesaCalificable } from './CalificarMesa';
 import { avanceDelPresupuesto, centavosDelPresupuesto } from './PresupuestoDelMes';
-import { textoDeDistancia, textoDeEstrellas } from './TarjetaCerca';
+import { HttpError } from '../api/http';
+import { MockApiError } from '../api/mock/mockApi';
+import type { Cerca } from '../api/agente';
+import { buscarCerca, faseDeErrorDeCerca, textoDeDistancia, textoDeEstrellas, type Busqueda } from './TarjetaCerca';
 
 const t = (s: string, ...a: unknown[]) => traducir(s, 'es', ...a);
 
@@ -22,6 +25,82 @@ describe('D554 · «Lo de siempre, cerca»', () => {
   it('las estrellas propias: el promedio con un decimal, cuántas personas, y un nombre accesible', () => {
     expect(textoDeEstrellas(4.6, 7, 'es-MX', t)).toEqual({ visible: '4.6 · 7', accesible: '4.6 estrellas en PayMe, de 7 personas' });
     expect(textoDeEstrellas(4, 3, 'es-MX', t).visible).toBe('4.0 · 3');
+  });
+});
+
+describe('O2/O3 del PR #109 y O3 del PR #95 · la búsqueda de «cerca»', () => {
+  const CERCA: Cerca = { radioM: 1000, platos: [], atribucion: { textos: [], urls: [] } } as unknown as Cerca;
+  const UBICACION = { tipo: 'ok', ubicacion: { lat: 19.43, lon: -99.13 } } as const;
+
+  it('el 429 del dueño (real o mock) tiene su fase; cualquier otro fallo, el error genérico', () => {
+    expect(faseDeErrorDeCerca(new HttpError(429, { error: 'too_many_requests' }))).toBe('demasiadas');
+    expect(faseDeErrorDeCerca(new MockApiError(429, 'too_many_requests'))).toBe('demasiadas');
+    expect(faseDeErrorDeCerca(new HttpError(500, { error: 'internal_error' }))).toBe('error');
+    expect(faseDeErrorDeCerca(new HttpError(403, { error: 'permission_required' }))).toBe('error');
+    expect(faseDeErrorDeCerca(new Error('red'))).toBe('error');
+    expect(traducir('Hiciste muchas búsquedas seguidas. Prueba en un rato.', 'en'))
+      .toBe("You've searched a lot in a row. Try again in a while.");
+    expect(traducir('Buscar de nuevo', 'en')).toBe('Search again');
+  });
+
+  it('con la cuenta de siempre, la lista llega', async () => {
+    const fases: Busqueda['fase'][] = [];
+    await buscarCerca({
+      pedir: async () => UBICACION, postear: async () => CERCA, vigente: () => true, poner: (b) => { fases.push(b.fase); },
+    });
+    expect(fases).toEqual(['ubicando', 'buscando', 'lista']);
+  });
+
+  it('🔴 si la cuenta cambia mientras espera el POST, el resultado de la anterior se descarta', async () => {
+    let epoca = 0;
+    const marca = epoca;
+    const fases: Busqueda['fase'][] = [];
+    await buscarCerca({
+      pedir: async () => UBICACION,
+      postear: async () => { epoca += 1; return CERCA; },
+      vigente: () => marca === epoca,
+      poner: (b) => { fases.push(b.fase); },
+    });
+    expect(fases).toEqual(['ubicando', 'buscando']);
+  });
+
+  it('🔴 si la cuenta cambia mientras espera la ubicación, ni siquiera se busca', async () => {
+    let epoca = 0;
+    const marca = epoca;
+    const fases: Busqueda['fase'][] = [];
+    let posteos = 0;
+    await buscarCerca({
+      pedir: async () => { epoca += 1; return UBICACION; },
+      postear: async () => { posteos += 1; return CERCA; },
+      vigente: () => marca === epoca,
+      poner: (b) => { fases.push(b.fase); },
+    });
+    expect(fases).toEqual(['ubicando']);
+    expect(posteos).toBe(0);
+  });
+
+  it('un error de la cuenta anterior tampoco se muestra', async () => {
+    let epoca = 0;
+    const marca = epoca;
+    const fases: Busqueda['fase'][] = [];
+    await buscarCerca({
+      pedir: async () => UBICACION,
+      postear: async () => { epoca += 1; throw new HttpError(429, { error: 'too_many_requests' }); },
+      vigente: () => marca === epoca,
+      poner: (b) => { fases.push(b.fase); },
+    });
+    expect(fases).toEqual(['ubicando', 'buscando']);
+  });
+
+  it('el 429 vigente se muestra como «demasiadas»', async () => {
+    const fases: Busqueda['fase'][] = [];
+    await buscarCerca({
+      pedir: async () => UBICACION,
+      postear: async () => { throw new HttpError(429, { error: 'too_many_requests' }); },
+      vigente: () => true,
+      poner: (b) => { fases.push(b.fase); },
+    });
+    expect(fases).toEqual(['ubicando', 'buscando', 'demasiadas']);
   });
 });
 
