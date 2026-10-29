@@ -1,20 +1,20 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "773dfd10d287784513157abc0cefc2548b4f05b3",
+  "commit": "a33a2e7d445335b179d9c4a6ed7821015debfa5e",
   "total": 167,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
       "destino": "contract/account-consents-v1.schema.json",
-      "sha256": "92e94ee76c72113a5c32da2ed0e8d4734828de3c103a8ba6ad2dd99d96c4afdc",
-      "bytes": 17199
+      "sha256": "975039ff56bba5a78056a5c6fd65d96e60ce3e45f0bf0026d6fa172cfe70143c",
+      "bytes": 17731
     },
     {
       "origen": "contract/agente-e1-v1.schema.json",
       "destino": "contract/agente-e1-v1.schema.json",
-      "sha256": "4fab1f911b1ecf12035438396f58c36cb3dfe1e6072b6b99a2ffc5ffd4e7401a",
-      "bytes": 8158
+      "sha256": "372b8b1c72fd0549250ec9c5e96e480898c2d38fe56886fabf7b81f4bcf4b094",
+      "bytes": 8594
     },
     {
       "origen": "contract/cocinas-v1.json",
@@ -535,8 +535,8 @@
     {
       "origen": "routes/agente.js",
       "destino": "routes/agente.js",
-      "sha256": "db422cfef88993ea598ce48859eeeff756dd3189e7d4a94822fa44d762d7998a",
-      "bytes": 4957
+      "sha256": "76b70bf034b3a655d53294faa72e526750c0e54f2d58780d596de10d2783cbb6",
+      "bytes": 6094
     },
     {
       "origen": "routes/auth.js",
@@ -685,8 +685,8 @@
     {
       "origen": "services/agenteComensal.js",
       "destino": "services/agenteComensal.js",
-      "sha256": "8c1db50684a8cb6b2228d1c9b60dec22f0bb7b8ea5cf7cb4048aa81a05a1e53a",
-      "bytes": 25587
+      "sha256": "8430491527d342139a0df8a84578c20c1cc94b9a7930bf17d5745c20e9165bab",
+      "bytes": 26620
     },
     {
       "origen": "services/authRecovery.js",

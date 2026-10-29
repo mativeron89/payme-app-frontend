@@ -1,4 +1,22 @@
-## D550 · D553 · D554 · el agente gastronómico, E1 · 0.268.0
+## O2 del PR #95 · D550 · D554 · el reespejo de 2.208.1 · 0.268.1
+
+Contenido vigente: `a33a2e7d445335b179d9c4a6ed7821015debfa5e`.
+Inventario íntegro de 167 entradas tomado del `main` del dueño, el servido (App Backend 2.208.1, `main` en
+`d6bb00dfb4a04ccf745c0ad9008ffaeea40dabc1`; `contract/mirror-inventory.json`, sha256
+`089bda8b1fd7470684329935ed62b01aa7faf4d7288e9be3c45ae2fd9309196e`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `a33a2e7`. Entre `a33a2e7` y `d6bb00d` no cambia ningún archivo inventariado (sólo el
+inventario publicado y un test del dueño). **21 archivos espejados**, todos JSON de `contract/`; **146 fuentes sólo por
+hash**, conforme D268.
+Cambian `contract/account-consents-v1.schema.json` (sha256
+`975039ff56bba5a78056a5c6fd65d96e60ce3e45f0bf0026d6fa172cfe70143c`: la finalidad `recomendaciones` en el enum, la lista
+y el grant `optionalGrant`; resuelve el ⚠️ del refresh anterior) y `contract/agente-e1-v1.schema.json` (sha256
+`372b8b1c72fd0549250ec9c5e96e480898c2d38fe56886fabf7b81f4bcf4b094`: el 429 `too_many_requests` de `POST /api/agente/cerca`
+y el texto del aviso con tú). Por hash cambian `routes/agente.js` y `services/agenteComensal.js`. Los hechos del dueño se
+regeneraron en local contra `a33a2e7`: cambia sólo el commit, ningún sha256 ni valor. `PROCEDENCIA.commit` de
+`src/api/mock/parteDeMesa.ts` pasa al mismo commit: `services/parteDeMesa.js` y `utils/money.js` siguen con los sha256
+de siempre.
+
+### Refresh anterior · D550 · D553 · D554 · el agente gastronómico, E1 · 0.268.0
 
 Contenido vigente: `773dfd10d287784513157abc0cefc2548b4f05b3`.
 Inventario íntegro de 167 entradas tomado del `main` del dueño, el servido (App Backend 2.208.0, `main` en

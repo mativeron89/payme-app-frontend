@@ -30,12 +30,13 @@
   "errors": {
     "400": { "error": "validation_error" },
     "403": [{ "error": "account_required" }, { "error": "permission_required", "purpose": "recomendaciones" }],
-    "404": [{ "error": "not_found" }, { "error": "mesa_not_found" }]
+    "404": [{ "error": "not_found" }, { "error": "mesa_not_found" }],
+    "429": [{ "error": "too_many_requests", "endpoint": "POST /api/agente/cerca", "description": "v2.208.1 · límite propio por cuenta (O2 del PR #94): 10 búsquedas en 15 minutos y 40 por día. Cuentan todos los pedidos de la cuenta, también los inválidos; con la función apagada o sin cuenta responde la puerta (404 o 403) y no cuenta. Lleva las cabeceras RateLimit estándar. El límite general de /api, por IP, sigue igual." }]
   },
   "notification": {
     "type": "agente_tu_hora",
     "title": "Es tu hora",
-    "body": "Es tu hora: mirá lugares cerca para lo de siempre.",
+    "body": "Es tu hora: mira lugares cerca para lo de siempre.",
     "payload": { "franja": "madrugada | desayuno | comida | cena" },
     "reglas": "Sólo con el permiso recomendaciones, en la franja habitual de la persona, si tiene platos; como mucho 1 por día (de México) y 3 en 7 días (R-10 a). Sin ubicación. Sólo en la app: sin correo."
   },

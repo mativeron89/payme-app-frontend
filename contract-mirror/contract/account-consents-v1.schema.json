@@ -24,7 +24,8 @@
         "sugerencias": "optionalGrant",
         "analisis_interno": "optionalGrant",
         "perfilado_campanas": "campaignGrant",
-        "foto_perfil_no_amigos": "optionalGrant"
+        "foto_perfil_no_amigos": "optionalGrant",
+        "recomendaciones": "optionalGrant"
       },
       "response": "single"
     },
@@ -87,7 +88,8 @@
     "order": "Capacidad → mínimo/Aviso → edad → validación del cuerpo/par. unknown_purpose y unknown_channel conservan su prioridad previa. requireAuth corre antes del handler.",
     "atomicity": "Grants opcionales con mínimo definido toman payme/legal-sync/aviso_privacidad/v1 en una transacción. Aviso y evento usan el mismo cliente/par. Campañas/revoke mantienen su registro histórico. Foto serializa grant/revoke por titular, usa clock_timestamp y conserva revoked ante empate.",
     "state": "never implica granted false y fecha/par null. granted/revoked llevan fecha y par registrados. Revoked gana empates de created_at; UUID sólo desempata mismo estado.",
-    "limits": "Sólo D457. No habilita sugerencias, análisis, pagos, cambios de proveedor ni migraciones."
+    "limits": "Sólo D457. No habilita sugerencias, análisis, pagos, cambios de proveedor ni migraciones.",
+    "recomendaciones": "v2.208.1 · la finalidad que sirve services/consent.js desde 2.208.0 (D550/D554, R-2 a): opcional, para mayores de edad, con el par del Aviso mostrado y mínimo 3.1.0; se ofrece sólo con RECOMENDACIONES_CERCA_ENABLED. Su capacidad la publica GET /api/agente/estado (contract/agente-e1-v1.schema.json), no /api/config: no está en capabilities."
   },
   "$defs": {
     "state": {
@@ -108,7 +110,8 @@
             "perfilado_campanas",
             "analisis_interno",
             "sugerencias",
-            "foto_perfil_no_amigos"
+            "foto_perfil_no_amigos",
+            "recomendaciones"
           ]
         },
         "granted": {
@@ -229,6 +232,9 @@
               "$ref": "#/$defs/state"
             },
             "foto_perfil_no_amigos": {
+              "$ref": "#/$defs/state"
+            },
+            "recomendaciones": {
               "$ref": "#/$defs/state"
             }
           }

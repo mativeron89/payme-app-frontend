@@ -8,7 +8,7 @@ import {
 
 /**
  * D554 · los decodificadores del agente, contra el contrato ESPEJADO del dueño (`contract-mirror/contract/
- * agente-e1-v1.schema.json`, App Backend 2.208.0, inventario `773dfd1`), no contra una lectura a mano. Si el dueño
+ * agente-e1-v1.schema.json`, App Backend 2.208.1, inventario `a33a2e7`), no contra una lectura a mano. Si el dueño
  * cambia una forma, el espejo cambia y esto se pone rojo antes de que la pantalla lea un dato que no entiende.
  */
 
