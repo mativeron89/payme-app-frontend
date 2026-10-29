@@ -404,9 +404,16 @@ test.describe('D240 puntos 12 y 13 · Configuración', () => {
     const demo = page.getByRole('button', { name: 'Reiniciar la demo', exact: true });
     await expect(demo).toHaveCSS('background-color', 'rgb(241, 245, 249)');
     await expect(demo).toHaveCSS('color', 'rgb(16, 30, 59)');
-    const s = await salir.boundingBox();
-    const barra = await page.locator('.appbar-block').boundingBox();
-    expect(s!.y + s!.height).toBeLessThanOrEqual(barra!.y);
+    // Configuración termina de cargar después del primer cuadro («Cuentas conectadas», la lista de permisos): bajar una
+    // sola vez y medir enseguida era una carrera (1 de 10 en la base 73f878b). Se espera la carga, se baja al fondo y se
+    // mide; si al fondo quedara bajo la barra, sigue rojo.
+    await expect(page.locator('.cuentas-conectadas').getByText('Cargando…')).toHaveCount(0);
+    await expect.poll(async () => {
+      await page.locator('.scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      const s = await salir.boundingBox();
+      const barra = await page.locator('.appbar-block').boundingBox();
+      return s!.y + s!.height <= barra!.y;
+    }).toBe(true);
     await capturar(page, '12-cerrar-sesion');
   });
 

@@ -73,7 +73,8 @@ function encendida(f: FinalidadOpcional = 'sugerencias'): boolean {
 }
 
 function anunciada(f: FinalidadOpcional = 'sugerencias'): boolean {
-  if (f === 'recomendaciones') return true;
+  // El dueño 2.208.0 la tiene siempre; uno anterior (la costura `agente = ausente`), no.
+  if (f === 'recomendaciones') return costura('agente') !== 'ausente';
   return encendida() || costura('sugerencias') === 'apagado';
 }
 

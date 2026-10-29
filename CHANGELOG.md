@@ -28,6 +28,13 @@
   - Nuevo `contract/agente-e1-v1.schema.json`; cambian `cocinas-v1.json` y `ocr-merchant-v2.json`.
   - Los hechos del dueño se regeneraron: cambian el commit y cuatro sha256, ningún valor.
   - `agente.contrato.test.ts` coteja los decodificadores contra el schema espejado: rutas, aviso, permiso, claves exactas, enums y límites.
+- **La lectura de la lista de permisos en Configuración (CI del PR #109, run 40824183811, `sugerencias-n420.spec.ts:186`).** Con el dueño de hoy, `/api/agente/estado` anuncia `recomendaciones` apagada. Configuración lee entonces `GET /api/account/consents` una vez, para saber si hay un permiso otorgado que revocar (O1, `behavior.listing`).
+  - Es la lectura correcta. En producción ya ocurría: `/config` anuncia `sugerencias` y `analisis_interno` con `supported: true`, y la lectura es única para las tres, así que no hay un pedido más.
+  - El test «sin la capacidad anunciada» suponía que el mock por defecto no anunciaba nada. Ahora usa la costura nueva `payme.app.mock.agente.v1 = ausente` (un dueño anterior al agente, todo 404) y conserva su aserción de cero pedidos.
+  - Dos casos nuevos: el dueño de hoy sin permisos (la lista una vez, ninguna fila) y O1 con «Recomendaciones» otorgado y la bandera apagada (la fila sólo para revocar).
+- **Una carrera de `tanda-chica-0810.spec.ts` («Cerrar sesión» no queda bajo la barra):** el test bajaba al fondo antes de que Configuración terminara de cargar y medía enseguida.
+  - Ya fallaba 1 de 10 en la base `73f878b`; con las lecturas asíncronas del agente, 3 de 10.
+  - Ahora espera la carga, baja al fondo y mide. La exigencia no cambia: si al fondo queda bajo la barra, sigue rojo. Pasó 20 de 20.
 - **Pendiente, sin bloquear:**
   - El texto de la fila «Recomendaciones» y los de las tarjetas los propuso App Frontend; se revisan antes de encender.
   - El `account-consents-v1` del dueño todavía no lista `recomendaciones` en su enum, aunque `consent.js` 2.208.0 la sirve y el contrato del agente la nombra. VI lo anotó para una corrección del backend, junto con el voseo del aviso.

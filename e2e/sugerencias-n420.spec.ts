@@ -183,7 +183,12 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
     expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 1, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
   });
 
-  test('🔴 sin la capacidad anunciada (el mock por defecto): Configuración no pide nada', async ({ page }) => {
+  /**
+   * D554 · «sin ninguna capacidad anunciada» exige ahora un dueño anterior al agente (`agente = ausente`): el mock por
+   * defecto es el dueño 2.208.0, cuyo `/api/agente/estado` anuncia `recomendaciones` apagada. La aserción no cambia.
+   */
+  test('🔴 sin la capacidad anunciada (un dueño sin sugerencias ni agente): Configuración no pide nada', async ({ page }) => {
+    await conCosturas(page, { agente: 'ausente' });
     await ingresar(page);
     await conConfigCargada(page);
     await espiar(page);
@@ -191,6 +196,37 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
     await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
     expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 0, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+  });
+
+  /**
+   * D554 · el dueño de hoy (2.208.0) con todo apagado y sin ningún permiso: `recomendaciones` está anunciada y apagada,
+   * así que Configuración lee la lista UNA vez para saber si hay un permiso otorgado que revocar (O1, `behavior.listing`
+   * de `account-consents-v1`). En producción esa lectura ya ocurría, porque `/config` anuncia `sugerencias` y
+   * `analisis_interno` con `supported: true` (`consent.capacidad`): es la misma lectura única, sin un pedido más.
+   */
+  test('🔴 D554 · el dueño de hoy (agente anunciado y apagado), sin permisos: la lista UNA vez y ninguna fila', async ({ page }) => {
+    await ingresar(page);
+    await conConfigCargada(page);
+    await espiar(page);
+    await ir(page, '#/mas');
+    await expect(page.getByRole('heading', { level: 1, name: 'Configuración' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
+    await expect.poll(async () => (await pedidos(page)).getConsentimientosOpcionales).toBe(1);
+    await expect(page.getByText('Recomendaciones', { exact: true })).toHaveCount(0);
+    expect(await pedidos(page)).toEqual({ getConsentimientosOpcionales: 1, getConsentimiento: 0, grantConsentimiento: 0, revokeConsentimiento: 0, getSugerenciaDividir: 0 });
+  });
+
+  test('🔴 D554 · O1 · con el agente apagado y «Recomendaciones» otorgado: la fila sólo para revocar', async ({ page }) => {
+    await conCosturas(page, { consentimientos_otorgados: 'recomendaciones' });
+    await ingresar(page);
+    await conConfigCargada(page);
+    await espiar(page);
+    await ir(page, '#/mas');
+    await expect(fila(page, 'Recomendaciones')).toBeChecked();
+    await fila(page, 'Recomendaciones').click();
+    await expect(fila(page, 'Recomendaciones')).not.toBeChecked();
+    await expect(fila(page, 'Recomendaciones')).toBeDisabled();
+    expect(await pedidos(page)).toMatchObject({ getConsentimientosOpcionales: 1, revokeConsentimiento: 1, grantConsentimiento: 0 });
   });
 
   /**

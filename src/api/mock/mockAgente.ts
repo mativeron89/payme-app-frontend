@@ -10,7 +10,9 @@ import { persist as persistirStore, state as store } from './store';
  *
  * Por defecto el mock es el dueño servido de hoy: las dos banderas apagadas. `estado` contesta `false/false` y todo lo
  * demás 404 `not_found`, sin leer nada. Las costuras (sólo para la e2e, la demo y las capturas del catálogo, D542):
- * - `payme.app.mock.agente.v1` = `encendido` (las dos banderas), `recomendaciones` o `calificaciones` (sólo esa);
+ * - `payme.app.mock.agente.v1` = `encendido` (las dos banderas), `recomendaciones` o `calificaciones` (sólo esa), o
+ *   `ausente`: un dueño anterior a 2.208.0, sin `/api/agente` (todo 404, también `estado`). Así una prueba puede pedir
+ *   «ninguna capacidad anunciada», que con el dueño de hoy ya no es el caso: `estado` anuncia `recomendaciones` apagada;
  * - el permiso `recomendaciones` vive en el mock de los permisos (`mockSugerencias.ts`): nace en `never`, o otorgado con
  *   `payme.app.mock.consentimientos_otorgados.v1` = `recomendaciones`;
  * - `payme.app.mock.agente_cerca.v1` = `vacio` (no hay nada cerca) o `lejos` (sólo a 3 km).
@@ -41,6 +43,7 @@ function conPermiso(): void {
 }
 
 export async function mockEstado(): Promise<unknown> {
+  if (costura('agente') === 'ausente') throw noEncontrado();
   return { recomendaciones: { enabled: recomendacionesEncendidas() }, calificaciones: { enabled: calificacionesEncendidas() } };
 }
 
