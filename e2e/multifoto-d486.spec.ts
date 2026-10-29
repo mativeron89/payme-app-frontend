@@ -237,6 +237,26 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await expect(agregar(page)).toHaveText('Agregar otra parte');
     await expect(page.getByRole('button', { name: 'Elegir otra', exact: true })).toBeVisible();
   });
+
+  test('auditoría de PR108, O2 · por la galería, ✕ quita una parte y las demás siguen en su orden', async ({ page }) => {
+    const galeria = page.locator('.screen.camara input[type="file"]');
+    await esperarCapacidad(page);
+    await galeria.setInputFiles(FOTO_DE_CAMARA);
+    await expect(marco(page)).toBeVisible();
+    // «Agregar otra parte» desde una foto de la galería vuelve a abrir la galería.
+    for (const enLaTira of [1, 2]) {
+      const [selector] = await Promise.all([page.waitForEvent('filechooser'), agregar(page).click()]);
+      await expect(tira(page).getByRole('listitem')).toHaveCount(enLaTira);
+      await selector.setFiles(FOTO_DE_CAMARA);
+      await expect(marco(page)).toBeVisible();
+    }
+    await page.getByRole('button', { name: 'Quitar la parte 1', exact: true }).click();
+    await expect(tira(page).getByRole('listitem')).toHaveCount(1);
+    await expect(tira(page).getByRole('listitem').first()).toContainText('Parte 1');
+    await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
+    await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
+    expect((await lecturas(page))[0]!.partes).toBe(2);
+  });
 });
 
 test.describe('D486 · M4 · también en Viajes', () => {

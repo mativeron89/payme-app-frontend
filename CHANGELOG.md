@@ -10,11 +10,16 @@
 - **Lo que sigue igual:**
   - Sin la capacidad de varias fotos del dueño (`features.ocr_pages`) o en el ejemplo de la guía, no aparece la pantalla: la cámara va directo al recuadro, como antes.
   - La galería («Elegir de la galería o Drive», con su «Agregar otra parte») tampoco la usa, y la foto que repite una parte rechazada va directo al recuadro, en su lugar.
-  - Las fotos de la pantalla son las originales de la cámara, sólo en memoria y sólo para verlas. Lo que se sube sale del recuadro, recodificado y sin EXIF, y nada se guarda en el teléfono.
+  - Las fotos de la tanda quedan sólo en memoria. Lo que se sube sale del recuadro, recodificado y sin EXIF, y nada se guarda en el teléfono.
+- **Memoria (auditoría de PR108, punto 4):** la pantalla nunca dibuja el original de la cámara. Un 12 MP decodificado ocupa unos 46 MiB, y con cuatro fotos una pestaña de Safari se puede recargar y perderlas.
+  - Al llegar, cada foto se decodifica una vez y de a una. De ahí salen, con `miniaturaDeLaParte` (que ahora acepta el lado), la miniatura de la fila (240 px) y la vista de la foto grande y de la que se achica (1024 px, `LADO_VISTA_DE_LA_TANDA`), y la decodificación se suelta enseguida.
+  - El ✓ espera a que termine esa preparación. La foto grande en memoria sigue siendo sólo la del recuadro, como en D484.
+  - Mientras la miniatura se prepara, o si el navegador no pudo dibujarla, la fila muestra un ícono.
   - No hay cambios de backend ni de contrato.
 - **Lo que sale:** en el recuadro de una foto de la cámara con varias fotos ya no van «Sacar otra» ni «Agregar otra parte»: se sacan en la pantalla, y repetir una foto es quitarla ahí y sacar otra. Mientras se recorren las fotos de la tanda, la ✕ de la tira de partes queda deshabilitada.
 - **Pruebas:**
-  - `FotosAlVolver.test.tsx`: el marcado con una foto, con varias, con las partes de antes, con el tope (el del dueño) y con el aviso.
+  - `FotosAlVolver.test.tsx`: el marcado con una foto (la fila dibuja la miniatura, no la vista), con varias, con las partes de antes, con el tope (el del dueño), con el aviso y sin miniatura todavía (un ícono, ninguna imagen).
+  - `fotoDelTicket.test.ts`: `miniaturaDeLaParte` con `ladoMax` da la vista de 1024, no suelta la foto y nunca agranda.
   - `camaraEnElToque.test.ts`: «Sacar otra» de la pantalla es `doScan` usado sólo como `onClick`.
   - e2e nuevo `fotos-al-volver-d547.spec.ts`:
     - las posiciones (miniatura abajo a la izquierda, ✓ abajo a la derecha) y el foco en el título;
@@ -26,11 +31,13 @@
     - la pregunta de salida;
     - «Volver a las fotos»;
     - el inglés;
-    - sin la capacidad, lo de siempre.
+    - sin la capacidad, lo de siempre;
+    - 🔴 la fila y la foto grande dibujan copias de 240 y 1024 px, nunca el original de 1400 px (un mutante que dibuja el original muere).
   - `multifoto-d486.spec.ts`, al flujo nuevo:
     - las fotos de la cámara pasan por la pantalla y «Siguiente foto»;
     - la galería con la capacidad sigue con «Agregar otra parte»;
     - la cámara cancelada en «Sacar otra» deja la pantalla con su foto.
+    - por la galería, ✕ quita una parte y las demás siguen en orden (O2 de la auditoría).
 - D63: lo cierra la prueba de Mati en el iPhone.
 
 ## 0.266.2 · 2026-10-28 (D535/D536 · «Escanear» abre la cámara del teléfono de una)

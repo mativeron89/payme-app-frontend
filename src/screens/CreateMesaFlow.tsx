@@ -59,6 +59,7 @@ import {
   miniaturaDeLaParte,
   OBJETIVO_BYTES,
   OBJETIVO_BYTES_VARIAS,
+  LADO_VISTA_DE_LA_TANDA,
   type AjustesDeFoto,
   type FotoDecodificada,
   type FotoPreparada,
@@ -162,6 +163,12 @@ export function ticketOpeningRoute(input: {
  * Nunca la foto decodificada: cuatro fotos grandes en memoria son un riesgo en
  * Safari.
  */
+/** D547 · suelta la miniatura y la vista de una foto de la tanda. */
+function soltarVistas(f: { readonly miniatura: string | null; readonly vista: string | null }): void {
+  if (f.miniatura) URL.revokeObjectURL(f.miniatura);
+  if (f.vista) URL.revokeObjectURL(f.vista);
+}
+
 interface ParteDelTicket {
   readonly id: number;
   readonly foto: Blob;
@@ -594,14 +601,28 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   /**
    * D547 · las fotos que la cámara nativa mandó y esperan el ✓ de «la pantalla al volver» (`FotosAlVolver`). Mati:
    * «que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto
-   * apareciendo un check abajo a la derecha». Son los originales, sin decodificar y sólo en memoria: el recuadro los
-   * decodifica de a uno después del ✓ y las partes salen de ahí (`prepararParte`, sin EXIF). Sólo con la capacidad de
-   * varias fotos y sólo las de la cámara: la galería y la foto que repite una parte van al recuadro como siempre.
+   * apareciendo un check abajo a la derecha». Se guardan los originales, sólo en memoria: el recuadro los decodifica de
+   * a uno después del ✓ y las partes salen de ahí (`prepararParte`, sin EXIF). Sólo con la capacidad de varias fotos y
+   * sólo las de la cámara: la galería y la foto que repite una parte van al recuadro como siempre.
+   *
+   * Auditoría de PR108, punto 4 · la pantalla NO dibuja el original (un 12 MP son ~46 MiB decodificado; con cuatro, una
+   * pestaña de Safari se puede recargar y perder las fotos). Al llegar, cada foto se decodifica una vez, de a una
+   * (`vistasDeLaTandaRef`), se sacan una miniatura chica y una vista de 1024 (`miniaturaDeLaParte`) y la decodificación
+   * se suelta. La foto grande que queda en memoria es sólo la del recuadro, como en D484.
    */
-  const [tanda, setTanda] = useState<readonly { id: number; original: Blob; url: string }[]>([]);
+  const [tanda, setTanda] = useState<readonly {
+    id: number;
+    original: Blob;
+    /** La de la fila, chica. `null` mientras se prepara o si el navegador no pudo dibujarla. */
+    miniatura: string | null;
+    /** La de la foto grande y la que se achica, de hasta 1024. `null` igual. */
+    vista: string | null;
+  }[]>([]);
   const tandaRef = useRef(tanda);
   tandaRef.current = tanda;
   const idDeFotoRef = useRef(0);
+  /** La preparación de las vistas de la tanda en curso: la siguiente foto (o el recuadro) espera a que termine. */
+  const vistasDeLaTandaRef = useRef<Promise<void>>(Promise.resolve());
   const [recienLlegada, setRecienLlegada] = useState<number | null>(null);
   /** D547 · la foto de la tanda que no se pudo usar en el recuadro (su número): la pantalla lo avisa. */
   const [avisoDeLaTanda, setAvisoDeLaTanda] = useState<number | null>(null);
@@ -616,7 +637,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     setSecuenciaEstado(s);
   }, []);
   const soltarTanda = useCallback(() => {
-    for (const f of tandaRef.current) URL.revokeObjectURL(f.url);
+    for (const f of tandaRef.current) soltarVistas(f);
     tandaRef.current = [];
     setTanda([]);
     setRecienLlegada(null);
@@ -624,7 +645,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     setSecuencia(null);
   }, [setSecuencia]);
   useEffect(() => () => {
-    for (const f of tandaRef.current) URL.revokeObjectURL(f.url);
+    for (const f of tandaRef.current) soltarVistas(f);
+    // Una vista que termina de prepararse después ya no tiene tanda donde quedar.
+    tandaRef.current = [];
   }, []);
   // La foto en recorte es de esta pantalla: se suelta al reemplazarla o al irse.
   // Con «Usar foto» la suelta `codificarFoto`, y antes se saca de acá.
@@ -1294,13 +1317,13 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     // D547 · la de la cámara, con varias fotos, va a «la pantalla al volver» y espera el ✓ (salvo que repita una parte).
     if (variasFotos && origen === 'camara' && reemplazandoRef.current === null && secuenciaRef.current === null) {
       if (partesRef.current.length + tandaRef.current.length >= maxPartes) return;
-      const foto = { id: ++idDeFotoRef.current, original, url: URL.createObjectURL(original) };
+      const foto = { id: ++idDeFotoRef.current, original, miniatura: null, vista: null };
       const siguientes = [...tandaRef.current, foto];
       tandaRef.current = siguientes;
       setTanda(siguientes);
-      setRecienLlegada(foto.id);
       setAvisoDeLaTanda(null);
       setScanIssue(null);
+      prepararVistasDeLaTanda(foto.id, original);
       return;
     }
     // D484 · con las partes completas, una foto más no tiene lugar (salvo que se esté repitiendo una).
@@ -1351,21 +1374,74 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
   }
 
+  /**
+   * D547 · auditoría de PR108, punto 4 · la miniatura y la vista de una foto de la tanda, después de las anteriores:
+   * una sola foto decodificada a la vez, que se suelta apenas salen las dos. Si la foto ya no está en la tanda
+   * (quitada, soltada, fuera de la pantalla), no se prepara nada o se descarta. Cuando están, la foto «llega»: es la
+   * que se achica.
+   */
+  function prepararVistasDeLaTanda(id: number, original: Blob) {
+    const sigue = () => tandaRef.current.some((f) => f.id === id);
+    const anterior = vistasDeLaTandaRef.current;
+    const trabajo = (async () => {
+      await anterior;
+      if (!sigue()) return;
+      const herramientas = herramientasDelNavegador();
+      let miniatura: Blob | null = null;
+      let vista: Blob | null = null;
+      try {
+        const foto = await decodificarFoto(original, herramientas);
+        if (foto) {
+          try {
+            miniatura = await miniaturaDeLaParte(foto, herramientas, null);
+            vista = await miniaturaDeLaParte(foto, herramientas, null, LADO_VISTA_DE_LA_TANDA);
+          } finally {
+            foto.soltar();
+          }
+        }
+      } finally {
+        herramientas.terminar();
+      }
+      if (!sigue()) return;
+      const urls = {
+        miniatura: miniatura ? URL.createObjectURL(miniatura) : null,
+        vista: vista ? URL.createObjectURL(vista) : null,
+      };
+      const siguientes = tandaRef.current.map((f) => (f.id === id ? { ...f, ...urls } : f));
+      tandaRef.current = siguientes;
+      setTanda(siguientes);
+      setRecienLlegada(id);
+    })().catch(() => undefined);
+    vistasDeLaTandaRef.current = trabajo;
+  }
+
   /** D547 · ✕ de una foto de la tanda (desde su vista grande): sale; las demás siguen en su orden. */
   function quitarDeLaTanda(id: number) {
     const quitada = tandaRef.current.find((f) => f.id === id);
     if (!quitada) return;
-    URL.revokeObjectURL(quitada.url);
+    soltarVistas(quitada);
     const siguientes = tandaRef.current.filter((f) => f.id !== id);
     tandaRef.current = siguientes;
     setTanda(siguientes);
     setAvisoDeLaTanda(null);
   }
 
-  /** D547 · el ✓: la primera foto de la tanda al recuadro. */
+  /**
+   * D547 · el ✓: la primera foto de la tanda al recuadro. Antes termina la preparación de las vistas que esté en
+   * curso: una sola foto grande decodificada a la vez.
+   */
   async function recuadroDeLaTanda() {
+    if (tandaRef.current.length === 0 || capturandoRef.current || preparandoParteRef.current) return;
+    capturandoRef.current = true;
+    setCapturando(true);
+    try {
+      await vistasDeLaTandaRef.current;
+    } finally {
+      capturandoRef.current = false;
+      setCapturando(false);
+    }
     const primera = tandaRef.current[0];
-    if (!primera || capturandoRef.current || preparandoParteRef.current) return;
+    if (!primera) return;
     // Al volver a la pantalla, la última foto ya no es «recién llegada»: no se vuelve a achicar.
     setRecienLlegada(null);
     setAvisoDeLaTanda(null);

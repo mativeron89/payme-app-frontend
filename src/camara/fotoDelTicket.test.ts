@@ -7,6 +7,7 @@ import {
   escalera,
   LADO_MAX,
   LADO_MINIATURA_DE_PARTE,
+  LADO_VISTA_DE_LA_TANDA,
   miniaturaDeLaParte,
   OBJETIVO_BYTES_VARIAS,
   objetivoDeBytes,
@@ -411,6 +412,18 @@ describe('D484 · D486 · las partes de un ticket largo', () => {
     expect(Math.max(pasos[0]!.ancho, pasos[0]!.alto)).toBe(LADO_MINIATURA_DE_PARTE);
     expect(pasos[0]!.alto).toBeGreaterThan(pasos[0]!.ancho);
     expect(registro).toEqual({ soltada: 0, terminada: 0 });
+  });
+
+  it('D547 · con `ladoMax`, la vista de la tanda: hasta 1024 de lado, la foto entera, sin soltarla; nunca agranda', async () => {
+    const { h, pasos, registro } = falsas(4032, 3024, () => 90_000);
+    const foto = await decodificarFoto(blob(1), h);
+    const vista = await miniaturaDeLaParte(foto!, h, null, LADO_VISTA_DE_LA_TANDA);
+    expect(vista?.size).toBe(90_000);
+    expect(pasos[0]).toMatchObject({ ancho: LADO_VISTA_DE_LA_TANDA, alto: 768 });
+    expect(registro).toEqual({ soltada: 0, terminada: 0 });
+    const chica = falsas(800, 600, () => 10);
+    await miniaturaDeLaParte((await decodificarFoto(blob(1), chica.h))!, chica.h, null, LADO_VISTA_DE_LA_TANDA);
+    expect(chica.pasos[0]).toMatchObject({ ancho: 800, alto: 600 });
   });
 
   it('si el lienzo no puede, no hay miniatura (la tira muestra el número de la parte)', async () => {

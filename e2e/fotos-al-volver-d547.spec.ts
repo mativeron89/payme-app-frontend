@@ -121,6 +121,29 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await capturar(page, 'es-una-foto');
   });
 
+  test('🔴 auditoría de PR108, punto 4 · la fila y la foto grande dibujan copias chicas, nunca el original', async ({ page }) => {
+    // La foto de la cámara del harness mide 1400×1050: el original tendría ese tamaño natural.
+    await sacar(page, 2);
+    const minis = fila(page).locator('img');
+    await expect(minis).toHaveCount(2);
+    for (const img of await minis.all()) {
+      await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      const { ancho, alto } = await img.evaluate((el) => ({
+        ancho: (el as HTMLImageElement).naturalWidth, alto: (el as HTMLImageElement).naturalHeight,
+      }));
+      expect(Math.max(ancho, alto)).toBe(240);
+    }
+    // Ninguna imagen de la pantalla es el original (ni la de la fila ni la grande): todas salen del lienzo.
+    await fila(page).getByRole('button', { name: 'Ver la foto 1', exact: true }).click();
+    const grande = page.getByRole('dialog').locator('img.fotos-al-volver-grande');
+    await expect.poll(() => grande.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1024);
+    expect(await grande.evaluate((el) => (el as HTMLImageElement).naturalHeight)).toBe(768);
+    const tamanosDeLaPantalla = await alVolver(page).locator('img').evaluateAll((imgs) =>
+      imgs.map((el) => Math.max((el as HTMLImageElement).naturalWidth, (el as HTMLImageElement).naturalHeight)));
+    for (const lado of tamanosDeLaPantalla) expect(lado).toBeLessThanOrEqual(1024);
+    expect(tamanosDeLaPantalla).not.toContain(1400);
+  });
+
   test('🔴 «Sacar otra» abre la cámara nativa en el toque y la foto se suma a la fila, numerada', async ({ page }) => {
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     const antes = camarasAbiertas(page);

@@ -8,12 +8,13 @@ import { FotosAlVolver, type FotoAlVolver } from './FotosAlVolver';
  * cámara) lo mide `e2e/fotos-al-volver-d547.spec.ts`.
  */
 const nada = (): void => undefined;
-const fotos = (n: number): FotoAlVolver[] => Array.from({ length: n }, (_, i) => ({ id: i + 1, url: `blob:foto-${i + 1}` }));
+const fotos = (n: number): FotoAlVolver[] =>
+  Array.from({ length: n }, (_, i) => ({ id: i + 1, miniatura: `blob:mini-${i + 1}`, vista: `blob:vista-${i + 1}` }));
 
-function marcado(opciones: { n: number; previas?: number; max?: number; aviso?: number | null }): string {
+function marcado(opciones: { n: number; previas?: number; max?: number; aviso?: number | null; lista?: FotoAlVolver[] }): string {
   return renderToStaticMarkup(
     <FotosAlVolver
-      fotos={fotos(opciones.n)}
+      fotos={opciones.lista ?? fotos(opciones.n)}
       previas={opciones.previas ?? 0}
       max={opciones.max ?? 4}
       recienLlegada={null}
@@ -36,7 +37,9 @@ describe('D547 · FotosAlVolver', () => {
     expect(html).toContain('<h1 class="camara-titulo" tabindex="-1">Escanea el ticket</h1>');
     expect(html).toContain('Sacaste 1 foto.');
     expect(html).toContain('aria-label="Ver la foto 1"');
-    expect(html).toContain('src="blob:foto-1"');
+    // La fila dibuja la miniatura chica, nunca la vista grande (ni el original, que la pantalla no recibe).
+    expect(html).toContain('src="blob:mini-1"');
+    expect(html).not.toContain('blob:vista-1');
     expect(html).toContain('<span class="fotos-al-volver-numero" aria-hidden="true">1</span>');
     const otra = boton(html, 'Sacar otra');
     expect(otra).toBeDefined();
@@ -81,6 +84,15 @@ describe('D547 · FotosAlVolver', () => {
     const html = marcado({ n: 2, aviso: 2 });
     expect(html).toContain('role="alert"');
     expect(html).toContain('No pudimos usar la foto 2. Quítala y saca otra.');
+  });
+
+  it('🔴 auditoría de PR108, punto 4 · mientras la miniatura se prepara (o si no se pudo), un ícono y ninguna imagen', () => {
+    const html = marcado({ n: 1, lista: [{ id: 1, miniatura: null, vista: null }] });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('class="fotos-al-volver-sin-mini"');
+    // Igual se puede abrir, quitar y pasar al recuadro.
+    expect(html).toContain('aria-label="Ver la foto 1"');
+    expect(html.match(/<button[^>]*class="fotos-al-volver-listo"[^>]*>/)?.[0]).not.toContain('disabled');
   });
 
   it('sin la vista grande ni la pregunta de salida hasta que se tocan', () => {

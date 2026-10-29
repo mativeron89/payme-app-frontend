@@ -72,18 +72,25 @@ export function objetivoDeBytes(fotosDelTicket: number): number {
 /** D484 · el lado largo de la miniatura de una parte en la tira de la pantalla de escaneo. */
 export const LADO_MINIATURA_DE_PARTE = 240;
 
+/** D547 · el lado largo de la vista de una foto de la tanda: la foto grande y la que se achica en «la pantalla al volver». */
+export const LADO_VISTA_DE_LA_TANDA = 1024;
+
 /**
  * D484 · la miniatura de una parte, chica, para la tira: así la pantalla no
  * retiene cuatro fotos grandes decodificadas (Safari tiene poca memoria de
  * lienzos). Se dibuja ANTES de `codificarFoto`, que suelta la foto. `null` si el
  * lienzo no pudo: la tira muestra el número de la parte sin imagen.
+ *
+ * D547 · también las de «la pantalla al volver», con `ladoMax`: la miniatura de la fila (el lado de siempre) y la vista
+ * de la foto grande (`LADO_VISTA_DE_LA_TANDA`). Nunca agranda.
  */
 export async function miniaturaDeLaParte<F>(
   foto: FotoDecodificada<F>,
   herramientas: Herramientas<F>,
   recorte: Recorte | null,
+  ladoMax: number = LADO_MINIATURA_DE_PARTE,
 ): Promise<Blob | null> {
-  const lado = tamanoObjetivo(recorte ? recorte.ancho : foto.ancho, recorte ? recorte.alto : foto.alto, LADO_MINIATURA_DE_PARTE);
+  const lado = tamanoObjetivo(recorte ? recorte.ancho : foto.ancho, recorte ? recorte.alto : foto.alto, ladoMax);
   if (!lado) return null;
   try {
     const jpeg = recorte

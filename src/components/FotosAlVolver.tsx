@@ -20,12 +20,17 @@ import { Icon } from './Icon';
  * - Tocar una miniatura la muestra grande, con «Quitar esta foto».
  * - «Volver» con fotos pregunta antes de salir: se pierden.
  *
- * Las fotos son las originales de la cámara, sólo en memoria y sólo para mirarlas acá (un object URL que la pantalla
- * suelta). Lo que se sube sigue saliendo del recuadro, recodificado y sin EXIF; nada se guarda en el teléfono.
+ * Auditoría de PR108, punto 4 · la pantalla nunca dibuja el original de la cámara: recibe una miniatura chica para la
+ * fila y una vista de hasta 1024 para la foto grande y la que se achica, que el flujo saca al llegar cada foto y suelta
+ * él mismo. Mientras no están (o si el navegador no pudo dibujarlas), la miniatura es un ícono. Lo que se sube sigue
+ * saliendo del recuadro, recodificado y sin EXIF; nada se guarda en el teléfono.
  */
 export interface FotoAlVolver {
   readonly id: number;
-  readonly url: string;
+  /** La de la fila, chica (`LADO_MINIATURA_DE_PARTE`). */
+  readonly miniatura: string | null;
+  /** La de la foto grande y la que se achica (`LADO_VISTA_DE_LA_TANDA`). */
+  readonly vista: string | null;
 }
 
 export function FotosAlVolver({
@@ -82,7 +87,7 @@ export function FotosAlVolver({
     const corte = setTimeout(() => setAnimando((a) => (a === recienLlegada ? null : a)), 1200);
     return () => clearTimeout(corte);
   }, [recienLlegada]);
-  const fotoAnimada = animando === null ? undefined : fotos.find((f) => f.id === animando);
+  const fotoAnimada = animando === null ? undefined : fotos.find((f) => f.id === animando && f.vista !== null);
 
   const indiceEnVista = vista === null ? -1 : fotos.findIndex((f) => f.id === vista);
   const fotoEnVista = indiceEnVista < 0 ? undefined : fotos[indiceEnVista];
@@ -153,7 +158,9 @@ export function FotosAlVolver({
                 aria-label={t('Ver la foto {0}', previas + i + 1)}
                 onClick={() => setVista(f.id)}
               >
-                <img src={f.url} alt="" draggable={false} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+                {f.miniatura
+                  ? <img src={f.miniatura} alt="" draggable={false} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+                  : <span className="fotos-al-volver-sin-mini" aria-hidden="true"><Icon name="receipt" size={20} /></span>}
                 <span className="fotos-al-volver-numero" aria-hidden="true">{previas + i + 1}</span>
               </button>
             </li>
@@ -173,7 +180,7 @@ export function FotosAlVolver({
       {fotoAnimada && (
         <img
           className="fotos-al-volver-recien"
-          src={fotoAnimada.url}
+          src={fotoAnimada.vista!}
           alt=""
           aria-hidden="true"
           draggable={false}
@@ -183,7 +190,9 @@ export function FotosAlVolver({
 
       {fotoEnVista && (
         <div className="fotos-al-volver-capa" role="dialog" aria-modal="true" aria-label={t('Foto {0}', previas + indiceEnVista + 1)}>
-          <img className="fotos-al-volver-grande" src={fotoEnVista.url} alt="" draggable={false} />
+          {fotoEnVista.vista ?? fotoEnVista.miniatura
+            ? <img className="fotos-al-volver-grande" src={(fotoEnVista.vista ?? fotoEnVista.miniatura)!} alt="" draggable={false} />
+            : <Icon name="receipt" size={48} />}
           <div className="fotos-al-volver-capa-acciones">
             <button
               type="button"
