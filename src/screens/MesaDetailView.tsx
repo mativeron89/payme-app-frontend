@@ -236,6 +236,8 @@ export interface MesaDetailViewProps {
    * ofrece y, si el dueño publica la propina, se lee.
    */
   propinaDeLaMesa?: ReactNode;
+  /** D553/D554 · la calificación con un toque (`CalificarMesa`), sólo con la mesa cerrada. Apagada, `null`. */
+  calificacion?: ReactNode;
   /**
    * D344 · mientras el `PUT /tip` está en vuelo no se eligen platos (contrato,
    * `escritura.cliente`): las filas, «Soltar» y «Listo» quedan quietos.
@@ -561,6 +563,7 @@ export function MesaDetailView({
   onCopyInvitationLink,
   onBack,
   propinaDeLaMesa = null,
+  calificacion = null,
   propinaGuardando = false,
   propinaConFalla = false,
   ejemplo = false,
@@ -1256,6 +1259,7 @@ export function MesaDetailView({
             <div>{t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}</div>
           </div>
         )}
+        {calificacion}
         {!esConsumo && informativeSaved && (
           <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
             {t('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».')}

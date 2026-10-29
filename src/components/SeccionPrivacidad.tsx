@@ -9,6 +9,7 @@ import {
 import { useIdioma } from '../i18n/idioma';
 import { PATH_PRIVACIDAD } from '../public/publicRoute';
 import { ERROR_CAMBIO, ERROR_LECTURA, fotoHabilitada, useControlFoto, type EstadoPrivacidadFoto } from './PrivacidadFotoPanel';
+import { useAgenteDeSesion } from '../agente/useAgente';
 
 /**
  * Configuración › Privacidad.
@@ -29,6 +30,10 @@ import { ERROR_CAMBIO, ERROR_LECTURA, fotoHabilitada, useControlFoto, type Estad
  * contrato deja leer el estado con `enabled: false` para revocar grants previos. Sin el permiso, no se ve, como antes.
  * Para saberlo se lee la lista `GET /api/account/consents` UNA vez por sección (auditoría de PR103, punto 4 b): trae
  * sólo lo que hoy se puede otorgar o lo que está otorgado. Sin la capacidad anunciada, ningún pedido.
+ *
+ * D554 · R-2 a · la tercera fila, «Recomendaciones» (el agente gastronómico, App Backend 2.208.0): opcional, apagada
+ * por defecto y revocable, con el mismo patrón. Su capacidad sale del estado del agente (`useAgente`), no de `/config`:
+ * encendida se otorga; apagada, sólo se revoca lo que ya estaba otorgado; sin el estado, no hay fila.
  */
 /** Key por cuenta: ninguna respuesta ni elección de otra sesión se reutiliza (como `PrivacidadFotoPanel`). */
 export function SeccionPrivacidad({ session }: { readonly session: StoredSession }) {
@@ -37,10 +42,14 @@ export function SeccionPrivacidad({ session }: { readonly session: StoredSession
 
 function Seccion({ session }: { readonly session: StoredSession }) {
   const foto = useControlFoto(session, false);
+  // Lee (una vez por sesión) el estado del agente: de ahí sale la capacidad de «Recomendaciones».
+  useAgenteDeSesion(session);
   const capacidades = useCapacidadesOpcionales();
-  const lista = useListaDeConsentimientos(session, capacidades.sugerencias !== null || capacidades.analisis_interno !== null);
+  const lista = useListaDeConsentimientos(session, capacidades.sugerencias !== null || capacidades.analisis_interno !== null
+    || capacidades.recomendaciones !== null);
   const sugerencias = useFilaOpcional('sugerencias', session, capacidades.sugerencias, lista);
   const analisis = useFilaOpcional('analisis_interno', session, capacidades.analisis_interno, lista);
+  const recomendaciones = useFilaOpcional('recomendaciones', session, capacidades.recomendaciones, lista);
   // La fila aparece con el estado ya leído: si no, se pintaría mientras consulta y desaparecería con un 404 (un
   // servidor sin la finalidad), y la pantalla saltaría.
   const leyendo = foto.estado.ocupado && foto.estado.permiso === null && foto.estado.error === null;
@@ -49,23 +58,27 @@ function Seccion({ session }: { readonly session: StoredSession }) {
       foto={foto.noSoportado || leyendo ? null : { estado: foto.estado, onCambiar: foto.cambiar, onConsultar: foto.consultar }}
       sugerencias={sugerencias}
       analisis={analisis}
+      recomendaciones={recomendaciones}
     />
   );
 }
 
-export function SeccionPrivacidadView({ foto, sugerencias, analisis }: {
+export function SeccionPrivacidadView({ foto, sugerencias, analisis, recomendaciones = null }: {
   readonly foto: { readonly estado: EstadoPrivacidadFoto; readonly onCambiar: () => void; readonly onConsultar: () => void } | null;
   readonly sugerencias: JSX.Element | null;
   readonly analisis: JSX.Element | null;
+  /** D554 · la fila «Recomendaciones», debajo de las otras dos. */
+  readonly recomendaciones?: JSX.Element | null;
 }) {
   const { t } = useIdioma();
-  if (!foto && !sugerencias && !analisis) return null;
+  if (!foto && !sugerencias && !analisis && !recomendaciones) return null;
   return (
     <section className="card config-card privacidad-seccion" aria-labelledby="privacidad-titulo">
       <h2 id="privacidad-titulo" className="privacidad-titulo">{t('Privacidad')}</h2>
       {foto && <FilaFotoView estado={foto.estado} onCambiar={foto.onCambiar} onConsultar={foto.onConsultar} />}
       {sugerencias}
       {analisis}
+      {recomendaciones}
     </section>
   );
 }
@@ -136,17 +149,21 @@ export function FilaPermisoOpcionalView({ finalidad, estado, ocupado, mensaje, o
   readonly onCambiar: (activar: boolean) => void;
 }) {
   const { t } = useIdioma();
-  // Los textos aprobados, literales: D415 y D426.
-  const titulo = finalidad === 'sugerencias' ? t('Sugerencias para dividir') : t('Análisis interno de PayMe');
+  // Los textos aprobados, literales: D415 y D426. D554 · el de «Recomendaciones» lo propuso App Frontend con lo que
+  // dice el contrato del dueño (la finalidad de `consent.js` y R-4 a): queda para revisar antes de encenderla.
+  const titulo = finalidad === 'sugerencias' ? t('Sugerencias para dividir')
+    : finalidad === 'analisis_interno' ? t('Análisis interno de PayMe') : t('Recomendaciones');
   const texto = finalidad === 'sugerencias'
     ? t('PayMe te sugiere cómo dividir según las mesas que abriste. Sólo lo ves tú.')
-    : t('Opcional. PayMe analiza, sin tu nombre, cómo se consume en las mesas. No llega a restaurantes ni a otros usuarios. Puedes apagarlo.');
+    : finalidad === 'analisis_interno'
+      ? t('Opcional. PayMe analiza, sin tu nombre, cómo se consume en las mesas. No llega a restaurantes ni a otros usuarios. Puedes apagarlo.')
+      : t('Opcional. PayMe usa lo que comes, tu horario y tu ubicación del momento para recomendarte lugares cerca. Tu ubicación no se guarda. Puedes apagarlo.');
   const aviso = mensaje === 'no_elegible' ? t('Esta opción no está disponible para tu cuenta.')
     : mensaje === 'por_ahora' ? t('Por ahora no está disponible. Prueba de nuevo más tarde.')
       : mensaje === 'no_se_guardo' ? t('No se pudo guardar') : null;
   const id = `privacidad-${finalidad}`;
   return (
-    <div className="list-row privacidad-fila" style={{ cursor: 'default' }} aria-busy={ocupado}>
+    <div className="list-row privacidad-fila privacidad-fila--con-texto" style={{ cursor: 'default' }} aria-busy={ocupado}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div id={`${id}-titulo`} style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{titulo}</div>
         <div id={`${id}-texto`} className="caption">{texto}</div>

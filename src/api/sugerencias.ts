@@ -14,21 +14,30 @@ import { MemoriaDeCuenta } from './memoriaDeCuenta';
  * Con todo apagado, como hoy: cero pedidos nuevos y nada visible.
  */
 
-export type FinalidadOpcional = 'sugerencias' | 'analisis_interno';
-export const FINALIDADES_OPCIONALES: readonly FinalidadOpcional[] = ['sugerencias', 'analisis_interno'];
+/**
+ * D554 · R-2 a · `recomendaciones` (el agente gastronómico, App Backend 2.208.0): la tercera, con la misma forma de
+ * consentimiento. Su capacidad NO viene de `/config` (el dueño no la anuncia ahí) sino de `GET /api/agente/estado`
+ * (`./agente.ts`, `aplicarCapacidadDeRecomendaciones`): con la bandera del dueño encendida se otorga; apagada, sólo se
+ * revoca lo ya otorgado (O1).
+ */
+export type FinalidadOpcional = 'sugerencias' | 'analisis_interno' | 'recomendaciones';
+export const FINALIDADES_OPCIONALES: readonly FinalidadOpcional[] = ['sugerencias', 'analisis_interno', 'recomendaciones'];
 
 /** Literales, no interpolados: la guarda C-03 (`interpolacionesDeRuta.test.ts`). */
 export const RUTA_CONSENTIMIENTO: Readonly<Record<FinalidadOpcional, string>> = {
   sugerencias: '/account/consents/sugerencias',
   analisis_interno: '/account/consents/analisis_interno',
+  recomendaciones: '/account/consents/recomendaciones',
 };
 export const RUTA_GRANT: Readonly<Record<FinalidadOpcional, string>> = {
   sugerencias: '/account/consents/sugerencias/grant',
   analisis_interno: '/account/consents/analisis_interno/grant',
+  recomendaciones: '/account/consents/recomendaciones/grant',
 };
 export const RUTA_REVOKE: Readonly<Record<FinalidadOpcional, string>> = {
   sugerencias: '/account/consents/sugerencias/revoke',
   analisis_interno: '/account/consents/analisis_interno/revoke',
+  recomendaciones: '/account/consents/recomendaciones/revoke',
 };
 export const RUTA_SUGERENCIA = '/sugerencias/dividir';
 /** O1 · la lista: con `supported: true` se lee aunque `enabled` sea `false` (contrato, `behavior.listing`). */
@@ -53,7 +62,7 @@ export interface CapacidadOpcional {
 }
 export type CapacidadesOpcionales = Readonly<Record<FinalidadOpcional, CapacidadOpcional | null>>;
 
-const NINGUNA: CapacidadesOpcionales = { sugerencias: null, analisis_interno: null };
+const NINGUNA: CapacidadesOpcionales = { sugerencias: null, analisis_interno: null, recomendaciones: null };
 
 /** `features.<finalidad>` con exactamente `supported: true` y `enabled` booleano; cualquier otra cosa: `null`. */
 export function decodeCapacidadOpcional(config: unknown, finalidad: FinalidadOpcional): CapacidadOpcional | null {
@@ -72,10 +81,26 @@ export function aplicarConfigSugerencias(config: unknown): void {
   const siguiente: CapacidadesOpcionales = {
     sugerencias: decodeCapacidadOpcional(config, 'sugerencias'),
     analisis_interno: decodeCapacidadOpcional(config, 'analisis_interno'),
+    // No viene de `/config`: la conserva el estado del agente.
+    recomendaciones: actual.recomendaciones,
   };
   if (huella(siguiente) === huella(actual)) return;
   actual = siguiente;
   if (!siguiente.sugerencias?.enabled) permisoDeSugerencias.olvidar();
+  for (const oyente of [...oyentes]) oyente();
+}
+
+/**
+ * D554 · la capacidad de `recomendaciones`, desde `GET /api/agente/estado`: `{supported: true, enabled}` con el estado
+ * leído; `null` (sin fila ni pedidos) si el dueño no lo tiene (404), vino mal formado o falló la red.
+ */
+export function aplicarCapacidadDeRecomendaciones(enabled: boolean | null): void {
+  const siguiente: CapacidadesOpcionales = {
+    ...actual,
+    recomendaciones: enabled === null ? null : { supported: true, enabled },
+  };
+  if (huella(siguiente) === huella(actual)) return;
+  actual = siguiente;
   for (const oyente of [...oyentes]) oyente();
 }
 

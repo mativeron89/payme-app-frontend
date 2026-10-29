@@ -35,6 +35,7 @@ import { useTandaVigente } from './useTandaVigente';
 import { CabeceraDeEstadisticas, EsqueletoDeEstadisticas } from './CabeceraDeEstadisticas';
 import { IconoDeEstadisticas } from './IconosDeEstadisticas';
 import { nombreDePlato } from '../utils/nombreDePlato';
+import { PresupuestoDelMes } from '../agente/PresupuestoDelMes';
 
 /**
  * D444/D449 · presentación de los contratos vigentes de estadísticas.
@@ -210,6 +211,8 @@ export function EstadisticasScreen() {
         ) : disenoE173 ? (
           <>
             <ResumenDelPeriodo consumo={consumo} clave={efectiva} />
+            {/* D553/D554 · el presupuesto es del mes en curso: con otro período no se muestra. Apagado, nada. */}
+            {efectiva === 'this_month' && <PresupuestoDelMes />}
             <TarjetaPorCocina consumo={consumo} />
             <ListaDeAccesos
               restaurantes={accesoVisible ? restaurantes : null}

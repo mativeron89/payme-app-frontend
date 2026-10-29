@@ -63,6 +63,7 @@ import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
 import { olvidarLoDeViajes } from '../api/ultimoVisto';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { AVISO_ES_TU_HORA, PARAM_TARJETA_CERCA } from '../api/agente';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
@@ -159,6 +160,8 @@ const NOTIF_ICON: Record<string, IconName> = {
   viaje_transfer_marked: 'cash',
   viaje_transfer_not_received: 'warning',
   viaje_finished: 'check-circle',
+  // D554 · v2.208.0 · «Es tu hora»: lleva a la tarjeta «Lo de siempre, cerca» de Inicio.
+  [AVISO_ES_TU_HORA]: 'pin',
 };
 
 /** La fila principal de un aviso: un botón si lleva a algún lado (una mesa o un viaje), un div si no. */
@@ -409,6 +412,9 @@ export function AvisosScreen() {
    */
   function destinoDelAviso(n: AppNotification): DestinoDeAviso | null {
     if (esAvisoDeViaje(n.type)) return destinoDeAvisoDeViaje(n, viajesHabilitado, estadoDeInvitacion(n));
+    // D554 · sin ubicación ni mesa: Inicio con la tarjeta a la vista. Si la tarjeta no aparece (permiso revocado,
+    // función apagada), Inicio se ve como siempre.
+    if (n.type === AVISO_ES_TU_HORA) return { page: 'home', param: PARAM_TARJETA_CERCA };
     return destinoDeMesa(n);
   }
 
@@ -660,6 +666,9 @@ export function AvisosScreen() {
                           <><strong>{negritaDeViaje.nombre}</strong>{negritaDeViaje.resto}</>
                         ) : invitationSuffix !== null ? (
                           <><strong>{inviterName}</strong>{invitationSuffix}</>
+                        ) : n.type === AVISO_ES_TU_HORA ? (
+                          // D554 · el texto propio del front, traducido: el cuerpo del dueño viene en voseo y en español.
+                          <><strong>{t('Es tu hora')}</strong><br />{t('Mira lugares cerca para lo de siempre.')}</>
                         ) : n.type === 'join_request_accepted' && n.title ? (
                           // D219 · X08 · título y cuerpo del dueño, tal cual: «Te
                           // aceptaron en la mesa» y «Ya estás en la mesa PA-…».

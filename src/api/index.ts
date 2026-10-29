@@ -55,6 +55,13 @@ import { decodeBorradoDeNotificaciones } from './borrarNotificaciones';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { decodePlatos, rutaDePlatos, type PlatosDelPeriodo } from './platos';
 import { decodeEvolucion, type Evolucion } from './evolucion';
+import {
+  RUTA_CERCA, RUTA_ESTADO_AGENTE, RUTA_PARA_VOS, RUTA_PRESUPUESTO, confirmarCalificacion, decodeCalificacion,
+  decodeCerca, decodeEstadoDelAgente, decodeParaVos, decodePresupuesto, montoDePresupuestoValido, rutaDeCalificacion,
+  estrellasValidas, type CalificacionDeMesa, type Cerca, type EstadoDelAgente, type ParaVos, type PresupuestoDelMes,
+  type Ubicacion,
+} from './agente';
+import * as mockAgente from './mock/mockAgente';
 import { decodeMomentos, type MomentosDelPeriodo } from './momentos';
 import { decodeIngredientes, rutaDeIngredientes, type IngredientesDelPeriodo } from './ingredientes';
 import { extractApiError } from './errors';
@@ -660,6 +667,20 @@ export interface Api {
   getStatsDayparts(period?: ClavePeriodo): Promise<MomentosDelPeriodo>;
   /** AF-38 · n168 · «por ingrediente» (2d). 404 = backend anterior. */
   getStatsIngredients(period?: ClavePeriodo): Promise<IngredientesDelPeriodo>;
+  /**
+   * D550/D553/D554 · el agente gastronómico, E1 (`./agente.ts`, contrato `agente-e1-v1`, App Backend 2.208.0).
+   * Apagado en el dueño: 404 en todo menos `estado`. «Para vos» y «cerca» exigen además el permiso `recomendaciones`.
+   */
+  getEstadoDelAgente(expectedSession: StoredSession): Promise<EstadoDelAgente>;
+  getParaVos(expectedSession: StoredSession): Promise<ParaVos>;
+  /** La ubicación ya redondeada, en el CUERPO del POST. No se guarda. */
+  postCerca(ubicacion: Ubicacion, expectedSession: StoredSession): Promise<Cerca>;
+  getPresupuesto(expectedSession: StoredSession): Promise<PresupuestoDelMes>;
+  putPresupuesto(montoCents: number, expectedSession: StoredSession): Promise<PresupuestoDelMes>;
+  /** Vuelve al promedio automático. */
+  deletePresupuesto(expectedSession: StoredSession): Promise<PresupuestoDelMes>;
+  getCalificacionDeMesa(code: string, expectedSession: StoredSession): Promise<CalificacionDeMesa | null>;
+  putCalificacionDeMesa(code: string, estrellas: number, expectedSession: StoredSession): Promise<CalificacionDeMesa>;
   // social
   getFriends(): Promise<FriendsResponse>;
   /** Estado privado del acuse específico de la audiencia de fotos entre amigos. */
@@ -1365,6 +1386,29 @@ const realApi: Api = {
   getStatsDishes: async (period) =>
     decodePlatos(await httpRequest<unknown>('GET', rutaDePlatos(period)), { negociado: true }),
   getStatsEvolution: async () => decodeEvolucion(await httpRequest<unknown>('GET', '/account/stats/evolution')),
+  // D554 · el router `/api/agente` manda `Cache-Control: private, no-store` pero no `Vary` (contrato agente-e1-v1).
+  getEstadoDelAgente: async (s) => decodeEstadoDelAgente(await httpPrivateJsonRequest<unknown>(RUTA_ESTADO_AGENTE, s)),
+  getParaVos: async (s) => decodeParaVos(await httpPrivateJsonRequest<unknown>(RUTA_PARA_VOS, s)),
+  postCerca: async (u, s) => decodeCerca(await httpPrivateJsonMutationRequest<unknown>(
+    RUTA_CERCA, { lat: u.lat, lon: u.lon }, s, undefined, 'POST', { forbidEtag: false, requireAuthorizationVary: false },
+  )),
+  getPresupuesto: async (s) => decodePresupuesto(await httpPrivateJsonRequest<unknown>(RUTA_PRESUPUESTO, s)),
+  putPresupuesto: async (monto, s) => {
+    if (!montoDePresupuestoValido(monto)) throw new Error('agente_presupuesto_invalido');
+    return decodePresupuesto(await httpPrivateJsonMutationRequest<unknown>(
+      RUTA_PRESUPUESTO, { monto_cents: monto }, s, undefined, 'PUT', { forbidEtag: false, requireAuthorizationVary: false },
+    ));
+  },
+  deletePresupuesto: async (s) => decodePresupuesto(await httpPrivateJsonMutationRequest<unknown>(
+    RUTA_PRESUPUESTO, undefined, s, undefined, 'DELETE', { forbidEtag: false, requireAuthorizationVary: false },
+  )),
+  getCalificacionDeMesa: async (code, s) => decodeCalificacion(await httpPrivateJsonRequest<unknown>(rutaDeCalificacion(code), s)),
+  putCalificacionDeMesa: async (code, estrellas, s) => {
+    if (!estrellasValidas(estrellas)) throw new Error('agente_estrellas_invalidas');
+    return confirmarCalificacion(await httpPrivateJsonMutationRequest<unknown>(
+      rutaDeCalificacion(code), { estrellas }, s, undefined, 'PUT', { forbidEtag: false, requireAuthorizationVary: false },
+    ), estrellas);
+  },
   getStatsDayparts: async (period) =>
     decodeMomentos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dayparts', period))),
   getStatsIngredients: async (period) =>
@@ -1873,6 +1917,8 @@ const mockApi: Api = {
 
   getNotifications: () => {
     mockViajes.sembrarViajesMock();
+    // D554 · «Es tu hora», sólo con la costura del agente y el permiso.
+    mockAgente.sembrarAvisoDelAgenteMock();
     return mock.mockNotifications();
   },
   getShortfallDetail: async (mesaCode, expectedShortfallCents) => {
@@ -1882,6 +1928,7 @@ const mockApi: Api = {
   },
   getUnreadCount: () => {
     mockViajes.sembrarViajesMock();
+    mockAgente.sembrarAvisoDelAgenteMock();
     return mock.mockUnreadCount();
   },
   markNotificationRead: (id) => mock.mockMarkNotificationRead(id),
@@ -1899,6 +1946,20 @@ const mockApi: Api = {
   getStats: (period) => mock.mockStats(period),
   getStatsDishes: async (period) => decodePlatos(await mock.mockStatsDishes(period)),
   getStatsEvolution: async () => decodeEvolucion(await mock.mockStatsEvolution()),
+  getEstadoDelAgente: async () => decodeEstadoDelAgente(await mockAgente.mockEstado()),
+  getParaVos: async () => decodeParaVos(await mockAgente.mockParaVos()),
+  postCerca: async (u) => decodeCerca(await mockAgente.mockCerca(u)),
+  getPresupuesto: async () => decodePresupuesto(await mockAgente.mockPresupuesto()),
+  putPresupuesto: async (monto) => {
+    if (!montoDePresupuestoValido(monto)) throw new Error('agente_presupuesto_invalido');
+    return decodePresupuesto(await mockAgente.mockPutPresupuesto(monto));
+  },
+  deletePresupuesto: async () => decodePresupuesto(await mockAgente.mockDeletePresupuesto()),
+  getCalificacionDeMesa: async (code) => decodeCalificacion(await mockAgente.mockCalificacion(code)),
+  putCalificacionDeMesa: async (code, estrellas) => {
+    if (!estrellasValidas(estrellas)) throw new Error('agente_estrellas_invalidas');
+    return confirmarCalificacion(await mockAgente.mockPutCalificacion(code, estrellas), estrellas);
+  },
   getStatsDayparts: async (period) => decodeMomentos(await mock.mockStatsDayparts(period)),
   getStatsIngredients: async (period) => decodeIngredientes(await mock.mockStatsIngredients(period)),
   getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period, { statsVersion: 2 })),

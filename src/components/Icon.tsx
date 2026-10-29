@@ -159,6 +159,13 @@ const GLYPHS = {
       'M18 10.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z',
     ],
   },
+  /* D553/D554 · la estrella de la calificación con un toque y de las estrellas propias de un local: el contorno y la
+     llena (la elegida). Las dos con el mismo trazo, para que llenarla no mueva nada. */
+  star: { d: ['M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9Z'] },
+  'star-fill': {
+    f: ['M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9Z'],
+    d: ['M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9Z'],
+  },
   /* D275 · los cubiertos del restaurante pendiente, con el trazo del prototipo de Claude Design. */
   cubiertos: { d: ['M7 3v8', 'M5 3v5a2 2 0 0 0 4 0V3', 'M7 11v10', 'M17 21V3c-2 0-3.5 2.5-3.5 6s1.5 4 3.5 4'] },
   /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la

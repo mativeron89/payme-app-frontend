@@ -1,3 +1,35 @@
+## 0.268.0 · 2026-10-29 (D550/D553/D554/D558 · el agente gastronómico, E1: las pantallas del comensal)
+
+- **Qué es.** Las pantallas de la etapa E1 del agente (orden `ORDEN_AF_E1_AGENTE_COMENSAL_BASE_20261029.md`, propuesta D550 §10–§11 con las recomendadas de D554), sobre el contrato del dueño App Backend 2.208.0 (`contract/agente-e1-v1.schema.json`, main `1aca049`). Todo llega **apagado**: el dueño lo publica detrás de `RECOMENDACIONES_CERCA_ENABLED` y `CALIFICACIONES_ENABLED`, y con las dos apagadas la app se ve exactamente como 0.267.0.
+- **La puerta (`src/api/agente.ts`):** `GET /api/agente/estado` se lee una vez por sesión, en memoria y con dueño. Si falta (backend anterior, 404), viene con otra forma o falla la red, todo queda apagado y nada se pide ni se dibuja. Cada respuesta del dueño se lee con claves exactas: una forma distinta esconde la pieza en vez de inventar un dato.
+- **Configuración › Privacidad · «Recomendaciones» (R-2 a):** la tercera fila de permisos opcionales, con el mismo patrón que «Sugerencias para dividir» y «Análisis interno». Es opcional, nace apagada y se revoca. Su capacidad sale del estado del agente: encendida se otorga con el par del Aviso mostrado; apagada, sólo se revoca lo que ya estaba otorgado; sin el estado, no hay fila.
+- **Inicio · «Lo de siempre, cerca» (R-1 a, R-4 a, R-6 a, R-7 a):** la tarjeta va debajo de las mesas y los viajes. Aparece sólo con la función encendida, el permiso otorgado y algún plato tuyo (3 visitas o más); si no, no deja hueco.
+  - 🔴 La ubicación se pide **sólo al tocar** «Ver lugares cerca», con el permiso del navegador y baja precisión. Se redondea a 3 decimales y viaja en el cuerpo del POST, nunca en la URL. No se guarda: ni storage, ni memoria de la cuenta, ni estado de la pantalla.
+  - Muestra hasta 10 lugares por plato, con lo que publica el dueño: nombre, cocina, distancia, nivel («Se pide en PayMe» o «Probable») y las estrellas propias con 3 personas o más. Nunca dirección ni coordenadas. Siempre va la atribución de las fuentes del catálogo; sólo un enlace `https:` llega a un `href`.
+  - Si no hay nada a 1 km, lo dice y muestra hasta 3 km. Con el permiso negado, sin ubicación o con un error, lo dice sin lugares.
+- **La campana · «Es tu hora» (R-10 a):** el aviso `agente_tu_hora` lleva a `/home/cerca`, donde la tarjeta se pone a la vista con el foco. La fila dibuja un texto propio, traducido, porque el cuerpo del dueño viene en voseo («mirá»).
+- **La mesa cerrada · calificación con un toque (D553 funcionalidad 8, R-8 a):** de 1 a 5 estrellas, en las vistas de mesa cerrada y en el detalle de sólo lectura. Sólo aparece con una mesa que ya pasó (no abierta, ni con garantía fallida o cancelada), nunca en el ejemplo de la guía ni para un invitado. Tocar guarda; el dibujo cambia recién con la confirmación del dueño, y se puede cambiar. Es un `radiogroup` con nombres accesibles.
+- **Estadísticas · el presupuesto del mes (D553 funcionalidad 3, R-13 a):** va en la pantalla que ya existe, debajo del resumen y sólo con «Este mes», sin pantallas nuevas.
+  - Muestra lo gastado contra tu promedio de 3 meses o el monto que pusiste, con su barra.
+  - Se edita en centavos enteros (`stringToCents`, de $1 en adelante) y se vuelve al promedio.
+  - Pide la función encendida, no el permiso (vista propia, D-05 rev. 4).
+- **Las filas de permisos con texto ya no se recortan:** `.config-card .list-row` fija 60 px (las filas de navegación) y la descripción de «Recomendaciones» quedaba cortada. Pasaría igual con «Sugerencias para dividir» y «Análisis interno», hoy apagadas. `privacidad-fila--con-texto` las deja crecer con su texto; la fila de la foto, sólo con título, no cambia.
+- **Transporte:** el router `/api/agente` manda `Cache-Control: private, no-store` pero no `Vary`. `httpPrivateJsonMutationRequest` suma `DELETE` y la opción `requireAuthorizationVary: false`, que sólo usa el agente; el resto sigue exigiendo `Vary: Authorization`.
+- **Mock (`src/api/mock/mockAgente.ts`):** por defecto es el dueño de hoy, con todo apagado. La costura `payme.app.mock.agente.v1` (`encendido`, `recomendaciones` o `calificaciones`) y `agente_cerca.v1` (`vacio`, `lejos`) encienden las piezas para la e2e y las capturas del catálogo (D542). Los datos son inventados, sin enlaces ni dominios.
+- **Ejemplo de la guía:** los métodos nuevos pasan; la calificación recibe el código, así que con `PA-1224` no sale a la red.
+- **Pruebas:**
+  - `src/api/agente.test.ts`: decodificadores estrictos, sin dirección ni coordenadas, el tope de 10, el redondeo, la ubicación pedida una vez, sin storage, el código escapado y el estado de una vez por sesión.
+  - `src/agente/agente.test.tsx`: la distancia, las estrellas, el monto del presupuesto, la barra, las mesas calificables y la fila de Privacidad.
+  - `src/i18n/agente.i18n.test.ts`: ninguna clave pisa otra.
+  - Se actualizó la lista fijada del ejemplo.
+  - `mesa-recuperacion-listo.spec.ts` rechaza toda API que no conoce y termina en Inicio: ahora conoce `GET /api/agente/estado`, con la forma servida hoy (las dos apagadas).
+  - e2e nuevo `agente-e1.spec.ts`: apagado sin nada y sin pedir la ubicación; encendido con la ubicación sólo al tocar y sin guardarla; la negativa, los 3 km, la campana, la calificación y el presupuesto. Las capturas salen con `PAYME_E2E_CAPTURAS`.
+- **Pendiente, sin bloquear:**
+  - El texto de la fila «Recomendaciones» y los de las tarjetas los propuso App Frontend; se revisan antes de encender.
+  - El `account-consents-v1` del dueño todavía no lista `recomendaciones` en su enum, aunque `consent.js` 2.208.0 la sirve y el contrato del agente la nombra.
+  - El espejo del contrato sigue en 2.202.0, a la espera del alcance del lease.
+  - Lo cierra la prueba de Mati (D63) cuando se enciendan las banderas.
+
 ## 0.267.0 · 2026-10-28 (D547 · varias fotos con la pantalla al volver de la cámara)
 
 - **D547.** Mati: «cuando se saca la foto (que ya vi que se abre de una la cámara) que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto apareciendo un check abajo a la derecha (…) Una vez se selecciona el check se pasa a la edición de la foto para el recuadro». Eligió «Pantalla al volver (Recomendada)»: la cámara sigue siendo la nativa del teléfono (D212/D536), que no admite nada encima.

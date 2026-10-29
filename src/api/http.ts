@@ -555,9 +555,16 @@ export async function httpPrivateJsonMutationRequest<T>(
   body: unknown,
   expectedSession: StoredSession,
   timeoutMs = REQUEST_TIMEOUT_MS,
-  /** AF2 · `PUT` para las preferencias de notificaciones (E1); `POST` sigue siendo el default. */
-  method: 'POST' | 'PUT' = 'POST',
-  policy: { readonly forbidEtag?: boolean } = {},
+  /**
+   * AF2 · `PUT` para las preferencias de notificaciones (E1); `POST` sigue siendo el default. D554 · `DELETE` para el
+   * presupuesto del agente (`DELETE /agente/presupuesto` vuelve al promedio y contesta el presupuesto).
+   */
+  method: 'POST' | 'PUT' | 'DELETE' = 'POST',
+  /**
+   * D554 · `requireAuthorizationVary: false` sólo para `/api/agente`: su router manda `Cache-Control: private,
+   * no-store` en toda respuesta pero no `Vary` (contrato `agente-e1-v1`). El resto lo sigue exigiendo.
+   */
+  policy: { readonly forbidEtag?: boolean; readonly requireAuthorizationVary?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
     method, path, body, session.access_token, timeoutMs,
@@ -568,7 +575,9 @@ export async function httpPrivateJsonMutationRequest<T>(
         throw new Error('private_json_cache_policy_invalid');
       }
       const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
-      if (!vary.includes('authorization')) throw new Error('private_json_vary_invalid');
+      if (policy.requireAuthorizationVary !== false && !vary.includes('authorization')) {
+        throw new Error('private_json_vary_invalid');
+      }
       if (policy.forbidEtag !== false && response.headers.has('etag')) throw new Error('private_json_etag_forbidden');
       if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
         throw new Error('private_json_media_type_invalid');

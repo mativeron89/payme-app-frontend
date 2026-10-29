@@ -43,6 +43,7 @@
  * acciones distintas mostrando dos mensajes. Las cuatro frases nuevas están
  * marcadas «ES corregido» en el documento de Diseño.
  */
+import { EN_AGENTE } from './agente';
 import { EN_VIAJES_AVISOS } from './viajes/avisos';
 import { EN_VIAJES_CERRADO } from './viajes/cerrado';
 import { EN_VIAJES_COMUN } from './viajes/comun';
@@ -1475,4 +1476,6 @@ export const EN: Record<string, string> = {
   ...EN_VIAJES_CERRADO,
   // D290 · el pizarrón de notas del viaje.
   ...EN_VIAJES_NOTAS,
+  // D554 · el agente gastronómico (E1). `agente.i18n.test.ts` vigila que no pise ninguna clave de arriba.
+  ...EN_AGENTE,
 };

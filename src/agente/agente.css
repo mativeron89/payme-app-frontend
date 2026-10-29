@@ -1,0 +1,50 @@
+/* D550/D553/D554 · el agente gastronómico, E1: la tarjeta «Lo de siempre, cerca» de Inicio, la calificación con un
+   toque al cerrar la mesa y el presupuesto del mes de Estadísticas. Sólo tokens del sistema: ningún color nuevo. */
+
+/* ─── La tarjeta de Inicio ─── */
+.agente-cerca { box-sizing: border-box; margin: var(--sp-6) var(--sp-4) 0; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--sh-1), var(--sh-3); scroll-margin-top: var(--sp-6); }
+.agente-cerca-cabeza { display: flex; align-items: center; gap: 14px; }
+.agente-cerca-cuadro { flex: none; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--action); color: var(--action-fg); }
+.agente-cerca-titulo { margin: 0; font-family: var(--font-display); font-size: 20px; line-height: 1.25; font-weight: 700; color: var(--text); }
+.agente-cerca-titulo:focus { outline: none; }
+.agente-cerca-titulo:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.agente-cerca-platos { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-muted); }
+.agente-cerca-hora { display: inline-block; margin-top: var(--sp-3); padding: 2px 10px; border-radius: var(--r-full); background: var(--teal-l); color: var(--teal-txt); font-size: var(--fs-xs); font-weight: 700; }
+.agente-cerca-ver { margin-top: var(--sp-3); width: 100%; min-height: var(--tap-min); }
+.agente-cerca-nota { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-muted); }
+.agente-cerca-plato { margin: var(--sp-4) 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
+.agente-cerca-lista { margin: 0; padding: 0; list-style: none; }
+.agente-lugar { display: flex; align-items: flex-start; gap: var(--sp-3); padding: 10px 0; border-top: 1px solid var(--gray-l); }
+.agente-lugar:first-child { border-top: 0; }
+.agente-lugar-datos { flex: 1; min-width: 0; }
+.agente-lugar-nombre { font-weight: 600; font-size: var(--fs-body); color: var(--text); overflow-wrap: anywhere; }
+.agente-lugar-meta { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-muted); }
+.agente-lugar-lado { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.agente-nivel { padding: 1px 8px; border-radius: var(--r-full); font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+.agente-nivel--confirmado { background: var(--success-tint); color: var(--success); }
+.agente-nivel--probable { background: var(--surface-2); color: var(--text-muted); }
+.agente-estrellas { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); font-weight: 700; color: var(--text); white-space: nowrap; }
+.agente-estrellas svg { color: var(--brand); }
+.agente-atribucion { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-faint); }
+.agente-atribucion a { color: inherit; }
+
+/* ─── La calificación al cerrar la mesa ─── */
+.agente-calificar { box-sizing: border-box; margin: 14px 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); text-align: center; }
+.agente-calificar-titulo { margin: 0; font-size: var(--fs-body); font-weight: 700; color: var(--text); }
+.agente-calificar-estrellas { display: flex; justify-content: center; gap: 4px; margin-top: var(--sp-2); }
+.agente-estrella { width: var(--tap-min); height: var(--tap-min); padding: 0; display: grid; place-items: center; background: transparent; border: 0; border-radius: var(--r-full); color: var(--gray-d); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.agente-estrella[aria-checked='true'], .agente-estrella--llena { color: var(--brand); }
+.agente-estrella:focus-visible { outline: 2px solid var(--action); outline-offset: 0; }
+.agente-estrella:disabled { cursor: default; }
+.agente-calificar-nota { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-muted); }
+
+/* ─── El presupuesto del mes ─── */
+.agente-presupuesto .agente-presupuesto-cifra { margin-top: var(--sp-2); font-size: var(--fs-body); color: var(--text); }
+.agente-presupuesto .agente-presupuesto-cifra b { font-variant-numeric: tabular-nums; }
+.agente-presupuesto .mesa-bar { margin-top: var(--sp-2); }
+.agente-presupuesto-origen { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-muted); }
+.agente-presupuesto-acciones { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.agente-presupuesto-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+.agente-presupuesto-input { flex: 1; min-width: 120px; min-height: var(--tap-min); padding: 0 12px; border: 1px solid var(--border); border-radius: var(--r-md); font: inherit; color: var(--text); background: var(--surface); }
+.agente-presupuesto-input:focus-visible { outline: 2px solid var(--action); outline-offset: 1px; }
+.agente-presupuesto-error { width: 100%; margin: 0; font-size: var(--fs-xs); color: var(--danger); }

@@ -178,6 +178,10 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
       if (path === '/api/mesas/open') { await responder(route, { mesas: [] }); return; }
       if (path === '/api/invitations') { await responder(route, { invitations: [] }); return; }
       if (path === '/api/friends/avatar-notice') { await responder(route, { error: 'not_found' }, 404); return; }
+      // D554 · Inicio lee el estado del agente (App Backend 2.208.0, publicado apagado): la forma servida hoy.
+      if (path === '/api/agente/estado') {
+        await responder(route, { recomendaciones: { enabled: false }, calificaciones: { enabled: false } }); return;
+      }
       if (path === `/api/mesas/${CODE}/informative-selection`) {
         propiaGets += 1;
         if (fallarLecturas) { await responder(route, { error: 'unavailable' }, 503); return; }

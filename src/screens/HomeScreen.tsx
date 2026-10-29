@@ -41,6 +41,7 @@ import { useAperturaPendiente } from '../ayuda/aperturaPendiente';
 import { mesaDeEjemploEnInicio, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
 import { TarjetaMesaDeEjemplo, TarjetaTutorial } from '../ayuda/TarjetaTutorial';
 import { AvisoSinMesas } from './AvisoSinMesas';
+import { TarjetaCerca } from '../agente/TarjetaCerca';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -555,6 +556,10 @@ export function HomeScreen() {
             onReintentar={() => void cargarViajes()}
           />
         )}
+
+        {/* D550/D554 · «Lo de siempre, cerca», debajo de las mesas y los viajes: sólo con la función encendida en el
+            dueño, el permiso «Recomendaciones» y algún plato tuyo. Si no, no dibuja nada. */}
+        <TarjetaCerca />
 
         {/* ══════════════════════════════════════════════════════════════════
             RIEL DE SALDO · DURMIENTE. Los DOS bloques de abajo están gateados

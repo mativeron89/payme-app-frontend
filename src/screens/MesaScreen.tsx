@@ -66,6 +66,7 @@ import {
   requiresReconciliation,
 } from './freezeMachine';
 import { MesaDetailView, type QuienesSeSumaron, type SolicitudesDeUnirse } from './MesaDetailView';
+import { CalificarMesa, mesaCalificable } from '../agente/CalificarMesa';
 import { bpsLabel, bpsValido, confirmedConsumptionProgress, itemsAmountFor, limiteInformativo } from './mesaItemsView';
 import { porcionesDisponibles } from './queConsumisteView';
 import { goBack, navigate } from '../router';
@@ -2524,6 +2525,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
               {t('Se eligieron todos los consumos.')}
             </div>
           </div>
+          {/* D553/D554 · la calificación con un toque, al cerrar la mesa. Apagada en el dueño, no aparece. */}
+          {!isGuest && !ejemplo && <CalificarMesa code={code} />}
         </div>
         <div className="action-bar">
           <button className="btn btn-ghost" onClick={() => setCierrePropio(false)}>
@@ -2672,6 +2675,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
               <b>{t('Tu garantía cubrió')} {formatMXN(shortfall)}.</b> {t('El restaurante cobró el total y nadie quedó debiendo en la mesa. Pronto vas a poder pedirle ese monto a quien no llegó a pagar.')}
             </div>
           )}
+          {/* D553/D554 · la calificación con un toque, en la mesa cerrada. Apagada en el dueño, no aparece. */}
+          {!isGuest && !ejemplo && <CalificarMesa code={code} />}
         </div>
         {/* La barra se muestra SIEMPRE: sin esto el invitado quedaba en una
             pantalla de solo lectura sin ninguna salida. */}
@@ -3469,6 +3474,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
+      // D553/D554 · con la mesa ya cerrada (sólo lectura), la calificación con un toque.
+      calificacion={mesaCalificable(mesa.status) && !isGuest && !ejemplo ? <CalificarMesa code={code} /> : null}
       propinaGuardando={propinaGuardando}
       // D360-4b · con la hoja del engranaje cerrada, la página dice que falló.
       propinaConFalla={ofrecePropina && (estadoPropina.fase === 'agotada' || estadoPropina.fase === 'rechazada')}

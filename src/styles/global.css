@@ -8370,6 +8370,13 @@ h1.pay-title-lbl {
   align-items: flex-start;
   gap: 12px;
 }
+/* D554 · una fila de permiso con su texto (sugerencias, análisis, recomendaciones) no entra en los 60 px fijos de las
+   filas de navegación de Configuración (`.config-card .list-row`): crece con su texto y no se recorta. */
+.config-card .list-row.privacidad-fila--con-texto {
+  height: auto;
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-3);
+}
 .privacidad-enlace {
   display: inline-block;
   margin-top: 2px;

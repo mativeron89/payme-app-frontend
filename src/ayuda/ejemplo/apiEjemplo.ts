@@ -167,6 +167,16 @@ export const CLASIFICACION_DEL_EJEMPLO = {
   getStatsEvolution: 'pasa',
   getStatsDayparts: 'pasa',
   getStatsIngredients: 'pasa',
+  // D554 · el agente gastronómico (E1): cosas de la cuenta de verdad, que el ejemplo nunca pide. La calificación recibe
+  // el código de la mesa, así que con `PA-1224` no sale (`RECIBEN_CODIGO_DE_MESA`).
+  getEstadoDelAgente: 'pasa',
+  getParaVos: 'pasa',
+  postCerca: 'pasa',
+  getPresupuesto: 'pasa',
+  putPresupuesto: 'pasa',
+  deletePresupuesto: 'pasa',
+  getCalificacionDeMesa: 'pasa',
+  putCalificacionDeMesa: 'pasa',
 
   // Amigos y grupos.
   getFriends: 'pasa',
@@ -238,7 +248,7 @@ export const RECIBEN_CODIGO_DE_MESA: ReadonlySet<keyof Api> = new Set<keyof Api>
   'lockItems', 'releaseItems', 'closeMesa', 'fijarPropinaDeLaMesa', 'ocultarMesa', 'mostrarMesa',
   'getMesaParticipants', 'getParticipantAvatar', 'requestJoin', 'getMesaJoinRequests',
   'acceptJoinRequest', 'rejectJoinRequest', 'payMesa', 'createInvitation', 'inviteFriend',
-  'getShortfallDetail',
+  'getShortfallDetail', 'getCalificacionDeMesa', 'putCalificacionDeMesa',
 ]);
 
 type Clasificacion = typeof CLASIFICACION_DEL_EJEMPLO;
