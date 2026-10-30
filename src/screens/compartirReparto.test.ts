@@ -70,7 +70,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       '  Mis platos: $195',
       `  Descuento: ${MENOS}$11.61`,
       '  Propina (15 % de la mesa): $27.51',
-      'Total de la mesa: $840',
+      'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ].join('\n'));
   });
@@ -83,7 +83,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       '  My dishes: $195',
       `  Discount: ${MENOS}$11.61`,
       '  Tip (15 % for the table): $27.51',
-      'Table total: $840',
+      'Ticket total: $840',
       'Split with PayMe · paymemx.com',
     ].join('\n'));
   });
@@ -97,7 +97,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       '  Mis platos: $210',
       '  Descuento y cargos del ticket: $8.75',
       '  Propina (10 % de la mesa): $19.75',
-      'Total de la mesa: $840',
+      'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ].join('\n'));
     expect(texto).not.toMatch(/cada uno/i);
@@ -112,7 +112,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       'Mi parte: $210',
       '  Mis platos: $210',
       '  Propina: $0',
-      'Total de la mesa: $840',
+      'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ]);
   });

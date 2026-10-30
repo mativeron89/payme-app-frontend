@@ -10,7 +10,8 @@ import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina } from './miParteVie
  *
  * Lo que se comparte es **lo que la persona ya ve** al pie de «Tu parte» (D588,
  * camino A de la propuesta): su parte, con los mismos renglones, rótulos y
- * montos del desglose, y el total de la mesa del encabezado. Nunca la parte de
+ * montos del desglose, y el total del encabezado, rotulado «Total del ticket»
+ * (D605: es el ticket antes de la propina, y las partes con propina suman más). Nunca la parte de
  * nadie más (R5), ni nombres, código, link de la mesa, RFC, dirección o foto.
  *
  * El texto se arma en el teléfono con lo que ya llegó del dueño y lo manda la
@@ -37,7 +38,7 @@ export interface DatosDelReparto {
   readonly status: MesaStatus;
   readonly divisionMode: 'consumo' | 'igual';
   readonly expectedParticipants: number;
-  /** El total de la mesa del encabezado (`mesa.total_cents`). */
+  /** El total del encabezado (`mesa.total_cents`), rotulado «Total del ticket» (D605). */
   readonly totalDeLaMesaCents: number;
   readonly totales: ShareTotals;
   readonly mia: MyShare;
@@ -73,7 +74,7 @@ export function textoDelReparto(datos: DatosDelReparto, t: Traducir): string {
     `  ${t('Mis platos')}: ${formatMXN(mia.items_cents)}`,
     ...(renglon ? [`  ${rotuloDeAjustes(renglon, t)}: ${montoDeAjustes(mia)}`] : []),
     `  ${rotuloDePropina(datos.tipSetting, t)}: ${formatMXN(mia.tip_cents)}`,
-    t('Total de la mesa: {0}', formatMXN(datos.totalDeLaMesaCents)),
+    t('Total del ticket: {0}', formatMXN(datos.totalDeLaMesaCents)),
     t('Dividido con PayMe · paymemx.com'),
   ].filter((linea) => linea.length > 0).join('\n');
 }

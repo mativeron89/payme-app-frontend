@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { RESTAURANTE_DE_EJEMPLO } from '../src/ayuda/ejemplo/fixtureEjemplo';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
+import * as guia from './_guia';
 import { abrirTusConsumos } from './_mesa';
 
 /**
@@ -69,7 +71,7 @@ async function mesaIgualesAl10(page: Page): Promise<void> {
 }
 
 test.describe('D588–D591 · «Compartir» el reparto', () => {
-  test('🔴 partes iguales: el botón va al pie de «Tu parte», debajo del total, y comparte mi parte y el total de la mesa', async ({ page }) => {
+  test('🔴 partes iguales: el botón va al pie de «Tu parte», debajo del total, y comparte mi parte y el total del ticket', async ({ page }) => {
     await prepararCompartir(page, 'hoja');
     await mesaIgualesAl10(page);
     await abrirTuParte(page);
@@ -93,7 +95,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
       '  Mis platos: $210',
       '  Descuento y cargos del ticket: $8.75',
       '  Propina (10 % de la mesa): $19.75',
-      'Total de la mesa: $840',
+      'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ]);
     // La primera línea es el restaurante que muestra el encabezado.
@@ -112,7 +114,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await expect(page.getByText('Copiado ✓', { exact: true })).toBeVisible();
     const [texto] = await copias(page);
     expect(texto).toContain('Mi parte: $238.50');
-    expect(texto).toContain('Total de la mesa: $840');
+    expect(texto).toContain('Total del ticket: $840');
     await capturar(page, 'compartir-02-copiado');
   });
 
@@ -155,9 +157,28 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
       '  Mis platos: $195',
       `  Descuento: ${MENOS}$11.61`,
       '  Propina (15 % de la mesa): $27.51',
-      'Total de la mesa: $840',
+      'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ]);
     await capturar(page, 'compartir-03-boton-por-consumo', tuParte(page));
+  });
+
+  /**
+   * O3 de la auditoría del PR #111 · la mesa de ejemplo de la guía no ofrece «Compartir» (D367: la guía no comparte
+   * ni copia). Hoy la protegen dos guardas: `ejemplo ? null` en `MesaDetailView` y que el ejemplo no publica
+   * `my_share` (sin desglose no hay botón). Si un día el ejemplo publicara su parte, este conteo sigue exigiendo 0.
+   */
+  test('🔴 la mesa de ejemplo de la guía no ofrece «Compartir»', async ({ page }) => {
+    await guia.entrar(page);
+    await guia.abrirDesdeLaTarjeta(page);
+    await guia.hastaLaCamara(page);
+    await guia.hastaElTicket(page);
+    await guia.hastaDividir(page);
+    await guia.hastaCompartir(page);
+    await guia.hastaTuMesa(page);
+    // Control positivo: es la mesa de ejemplo, con sus platos a la vista.
+    await expect(page.locator('.mesa-selection-context-main')).toHaveText(RESTAURANTE_DE_EJEMPLO.name);
+    await expect(page.locator('.qc-lista')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Compartir', exact: true })).toHaveCount(0);
   });
 });

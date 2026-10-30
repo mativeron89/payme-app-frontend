@@ -1473,7 +1473,7 @@ export const EN: Record<string, string> = {
   "partes iguales, entre {0}": "split evenly, between {0}",
   "Mi parte: {0}": "My share: {0}",
   "Mis platos": "My dishes",
-  "Total de la mesa: {0}": "Table total: {0}",
+  "Total del ticket: {0}": "Ticket total: {0}",
   "Dividido con PayMe · paymemx.com": "Split with PayMe · paymemx.com",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
