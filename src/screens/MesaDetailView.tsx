@@ -48,7 +48,7 @@ import {
   vistaPreviaPorConsumo,
 } from './miParteView';
 import { textoDeLaPropinaDeLaMesa } from './propinaDeLaMesaView';
-import { montoDeDescuento } from './desgloseDelTicket';
+import { compartirTexto, montoDeAjustes, textoDelReparto } from './compartirReparto';
 import type { PreparacionListo } from './mesaRecovery';
 
 /**
@@ -472,15 +472,30 @@ function DesgloseDeMiParte({
   tipSetting,
   abierto,
   onToggle,
+  textoParaCompartir,
 }: {
   readonly totales: ShareTotals;
   readonly mia: MyShare;
   readonly tipSetting: TipSetting | null;
   readonly abierto: boolean;
   readonly onToggle: () => void;
+  /** D588–D591 · el texto de «Compartir», o `null` si no se ofrece (la mesa de ejemplo). */
+  readonly textoParaCompartir: string | null;
 }) {
   const { t } = useIdioma();
+  const toast = useToast();
   const renglon = renglonDeAjustes(totales, mia);
+  /**
+   * D590 · D591 · «Compartir» al pie, debajo del total: la hoja nativa con el
+   * texto y, sin hoja o si falla, la copia con su aviso. Si la persona cancela
+   * la hoja, nada.
+   */
+  const compartir = async (): Promise<void> => {
+    if (textoParaCompartir === null) return;
+    const resultado = await compartirTexto(textoParaCompartir);
+    if (resultado === 'copiado') toast(t('Copiado ✓'));
+    else if (resultado === 'sin_portapapeles') toast(t('No se pudo copiar: tu navegador no habilitó el portapapeles'));
+  };
   return (
     <Desplegable className="mi-parte-desglose" titulo={t('Tu parte')} abierto={abierto} onToggle={onToggle}>
       <dl>
@@ -491,7 +506,7 @@ function DesgloseDeMiParte({
         {renglon && (
           <div className="mi-parte-desglose-fila">
             <dt>{rotuloDeAjustes(renglon, t)}</dt>
-            <dd>{mia.adjustments_cents < 0 ? montoDeDescuento(-mia.adjustments_cents) : formatMXN(mia.adjustments_cents)}</dd>
+            <dd>{montoDeAjustes(mia)}</dd>
           </div>
         )}
         {/* D360 · P47 · «Poner en negrita la propina»: el renglón entero. */}
@@ -504,6 +519,13 @@ function DesgloseDeMiParte({
           <dd>{formatMXN(mia.total_cents)}</dd>
         </div>
       </dl>
+      {textoParaCompartir !== null && (
+        <div className="mi-parte-compartir">
+          <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={() => { void compartir(); }}>
+            <Icon name="share" size={16} className="ico-inline" /> {t('Compartir')}
+          </button>
+        </div>
+      )}
     </Desplegable>
   );
 }
@@ -693,6 +715,12 @@ export function MesaDetailView({
     ? (totales ? vistaPreviaPorConsumo(itemsAmount, totales) ?? itemsAmount : itemsAmount)
     : (totales && mia ? mia.total_cents : itemsAmount);
   const avisoOmitidos = totales ? avisoDeAjustesOmitidos(totales, t) : null;
+  /**
+   * D588–D591 · el texto de «Compartir», con lo mismo que muestra «Tu parte» y
+   * el total del encabezado. Sale sólo con el desglose, que por consumo es la
+   * parte guardada después de «Listo» y en partes iguales la del servidor. No en
+   * la mesa de ejemplo: la guía no comparte ni copia (D367).
+   */
   const desgloseDeMiParte = totales && muestraElDesglose(mia, esConsumo) ? (
     <DesgloseDeMiParte
       totales={totales}
@@ -700,6 +728,16 @@ export function MesaDetailView({
       tipSetting={parteDelDueno.tipSetting ?? null}
       abierto={miParteAbierta}
       onToggle={() => setMiParteAbierta((a) => !a)}
+      textoParaCompartir={ejemplo ? null : textoDelReparto({
+        restaurante: mesa.restaurant.name,
+        status: mesa.status,
+        divisionMode: mesa.division_mode,
+        expectedParticipants: mesa.expected_participants,
+        totalDeLaMesaCents: mesa.total_cents,
+        totales,
+        mia,
+        tipSetting: parteDelDueno.tipSetting ?? null,
+      }, t)}
     />
   ) : null;
   const original = originalParticipants(mesa.original_participants);

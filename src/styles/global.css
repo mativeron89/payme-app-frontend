@@ -10240,6 +10240,12 @@ h1.pay-title-lbl {
   font-weight: 700;
   color: var(--text);
 }
+/* D590 · «Compartir» al pie de «Tu parte», debajo del total, chico y centrado. */
+.mi-parte-compartir {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
 
 /* D457 · control de privacidad dentro de las tarjetas existentes. */
 .privacidad-foto { margin-bottom: 12px; padding: 16px; }

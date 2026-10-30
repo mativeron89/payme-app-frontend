@@ -1464,6 +1464,17 @@ export const EN: Record<string, string> = {
   "Salir y perder las fotos": "Leave and lose the photos",
   "Volver a las fotos": "Back to the photos",
   "Siguiente foto": "Next photo",
+  // D588–D591 · «Compartir» el reparto (0.269.0): el botón al pie de «Tu parte» y el texto que se comparte.
+  "Compartir": "Share",
+  "Copiado ✓": "Copied ✓",
+  "Así va la mesa ({0})": "How the table is going ({0})",
+  "Así quedó la mesa ({0})": "How the table ended up ({0})",
+  "por consumo": "by item",
+  "partes iguales, entre {0}": "split evenly, between {0}",
+  "Mi parte: {0}": "My share: {0}",
+  "Mis platos": "My dishes",
+  "Total de la mesa: {0}": "Table total: {0}",
+  "Dividido con PayMe · paymemx.com": "Split with PayMe · paymemx.com",
   // AF-VIAJES · D242 · Viajes, por pantalla (`src/i18n/viajes/`). El diseño no trae
   // inglés: lo escribió App Frontend. `viajes.i18n.test.ts` vigila que ninguna
   // clave de Viajes pise una de arriba ni se repita entre archivos.
