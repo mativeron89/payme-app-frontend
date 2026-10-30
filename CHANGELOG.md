@@ -1,3 +1,16 @@
+## 0.269.0 · 2026-10-30 (D584 · D588–D591 · «Compartir» el reparto, entrega 1: el texto)
+
+- **Qué es.** Orden `ORDEN_AF_COMPARTIR_REPARTO_0_269_0_20261030.md`, lease `AF-CLAUDE-COMPARTIR-REPARTO-0-269-0-20261030`, entrega 1 de `PROPUESTA_COMPARTIR_REPARTO_D584_20261030.md` con las cuatro recomendadas: mi parte y el total de la mesa (D588), texto ahora e imagen después (D589), el botón al pie de «Tu parte» (D590) y después de «Listo», con el monto guardado (D591). Sólo front: sin pedidos nuevos al backend, sin link público, sin datos nuevos ni analítica.
+- **El botón.** «Compartir» («Share») va dentro del desplegable «Tu parte», debajo del renglón «Total», para todos los integrantes. Sale sólo cuando el desglose se ve: por consumo, con la parte que publica el dueño después de «Listo»; en partes iguales, siempre que se vea «Tu parte». No sale en la mesa de ejemplo de la guía (D367: la guía no comparte ni copia).
+- **El texto (`src/screens/compartirReparto.ts`, `textoDelReparto`).** El restaurante; «Así va la mesa» con la mesa abierta o «Así quedó la mesa» cerrada, con la modalidad («por consumo» o «partes iguales, entre N»); «Mi parte», con mis platos, el renglón de ajustes y la propina; «Total de la mesa» (el del encabezado) y «Dividido con PayMe · paymemx.com».
+  - 🔴 Los renglones salen de **las mismas funciones** que dibujan «Tu parte» (`renglonDeAjustes`, `rotuloDeAjustes`, `rotuloDePropina`, `formatMXN` y `montoDeAjustes`, que ahora usa también el desglose): si la pantalla no muestra un renglón, el texto tampoco, y los montos son los mismos.
+  - Nunca la parte de nadie más (R5), ni nombres, código o link de la mesa, RFC, dirección o foto. En partes iguales dice «entre N», nunca «$X cada uno» (D587).
+  - Sin fecha: el detalle de la mesa no publica cuándo se abrió ni cuándo cerró, y la del día mentiría en una mesa vieja.
+- **Cómo se comparte (`compartirTexto`).** La hoja nativa con `navigator.share({ text })`. Si no existe o falla, se copia al portapapeles y avisa «Copiado ✓» («Copied ✓»); sin portapapeles, el aviso de siempre. Si la persona cancela la hoja, nada.
+- **Pruebas:**
+  - `src/screens/compartirReparto.test.ts`: el texto en ES y EN, por consumo y en partes iguales, abierta y cerrada, con descuento, con servicio y sin ajustes ni propina; que los renglones coinciden con los del desglose; que no lleva código, link ni otros montos; y la hoja, la cancelación y la copia de respaldo.
+  - `e2e/compartir-reparto.spec.ts` (mock): el botón debajo del total, lo compartido (sólo `text`), la copia con «Copiado ✓», la cancelación sin copia y, por consumo, sin botón antes de «Listo» y con la parte guardada después. Capturas `compartir-01-boton-tu-parte`, `compartir-02-copiado` y `compartir-03-boton-por-consumo` con `PAYME_E2E_CAPTURAS`.
+
 ## 0.268.1 · 2026-10-29 (O2/O3 del PR #95 y O2/O3/O6 del PR #109 · el reespejo de 2.208.1 y la tarjeta «Lo de siempre, cerca»)
 
 - **Qué es.** Orden `ORDEN_AF_E1_REESPEJO_0_268_1_20261029.md`, lease `AF-CLAUDE-E1-REESPEJO-20261029`, sobre el dueño servido App Backend 2.208.1 (las correcciones en `a33a2e7`, `main` `d6bb00d`). Todo sigue **apagado**: sin las banderas del dueño la app se ve como 0.268.0. No cambia el texto de la fila «Recomendaciones» (O1 del PR #109, espera a Mati).
