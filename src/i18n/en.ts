@@ -1509,4 +1509,7 @@ export const EN: Record<string, string> = {
   "Quedan {0} platos sin dueño y {1} a medias.": "{0} dishes are still unclaimed and {1} are partly picked.",
   "Antes de cerrar la mesa, revisa que todos hayan elegido lo suyo.": "Before you close the table, check that everyone has picked theirs.",
   "Cuando se elija todo, la mesa se cierra sola.": "When everything is picked, the table closes by itself.",
+  // D622 · AF-3 · mejora 6 · el QR de «Compartir la mesa» y del engranaje (textos de la especificación, §7).
+  "Que lo escaneen con la cámara.": "Have them scan it with their camera.",
+  "QR para unirse a la mesa {0}": "QR code to join table {0}",
 };

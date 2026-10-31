@@ -8649,6 +8649,32 @@ h1.pay-title-lbl {
   border-top: 0;
 }
 
+/* D622 · AF-3 · el QR del link (§7): 160 px, centrado, entre el código y los botones. El fondo blanco y la zona de
+   silencio van dentro del propio SVG, así que se lee igual sobre cualquier superficie. */
+.codigo-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: var(--sp-2) 0;
+}
+
+.codigo-qr-svg {
+  display: block;
+  width: 160px;
+  height: 160px;
+  border-radius: 8px;
+}
+
+.codigo-qr-ayuda {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .share-actions .share-wa,
 .share-actions .share-copy {
   height: 44px;

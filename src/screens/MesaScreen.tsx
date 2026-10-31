@@ -555,6 +555,13 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const shareAttemptsRef = useRef<Map<string, string>>(new Map());
   const shareLinksRef = useRef<Map<string, string>>(new Map());
   const shareInFlightRef = useRef(createInFlightMutex());
+  /**
+   * D622 · AF-3 · el link del QR de la hoja del engranaje, atado a su mesa. Se pide al abrir la hoja: el dueño
+   * reutiliza la invitación por link pendiente de la mesa, así que es el mismo link que copia «Copiar link» (D631).
+   */
+  const [linkDelQr, setLinkDelQr] = useState<{ readonly code: string; readonly link: string } | null>(null);
+  const qrAttemptsRef = useRef<Map<string, string>>(new Map());
+  const qrInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
   // 2026-08-06; el porqué vive en `saveCardView.ts`). El invitado sin cuenta
@@ -646,6 +653,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
     shareInFlightRef.current = createInFlightMutex();
+    qrInFlightRef.current = createInFlightMutex(); setLinkDelQr(null);
     // El reset por mesa vuelve AL DEFAULT, no a un literal propio: acá vivía
     // el segundo `true`, igual que el segundo `15` de la propina.
     setCardChoice(SIN_TARJETA_ELEGIDA); setSaveCard(GUARDAR_TARJETA_DEFAULT); setCardEl(null);
@@ -704,6 +712,37 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       );
     } finally {
       shareInFlightRef.current.leave();
+    }
+  }
+
+  /**
+   * D622 · AF-3 · el link para el QR de la hoja. Sin link (vencido, sin respuesta o error) no hay QR y nada más:
+   * «Copiar link» sigue al lado y avisa lo suyo. La clave se conserva sólo cuando no se sabe si se creó.
+   */
+  async function pedirLinkDelQr(): Promise<void> {
+    if (linkDelQr?.code === code) return;
+    // El candado de ESTA identidad: si cambia la mesa o la sesión, el reinicio pone otro y este pedido no lo suelta.
+    const candado = qrInFlightRef.current;
+    if (!candado.tryEnter()) return;
+    const pedido = code;
+    const identityEpoch = identityEpochRef.current.capture();
+    try {
+      const key = qrAttemptsRef.current.get(pedido) ?? newIdempotencyKey();
+      qrAttemptsRef.current.set(pedido, key);
+      const invitation = await api.createInvitation(pedido, key);
+      if (invitation.invitation.status === 'expired') {
+        qrAttemptsRef.current.delete(pedido);
+        return;
+      }
+      if (!invitation.link) return;
+      qrAttemptsRef.current.delete(pedido);
+      if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
+      setLinkDelQr({ code: pedido, link: invitation.link });
+    } catch (err) {
+      const failure = extractApiError(err);
+      if (isDefinitiveMutationError(failure.code, failure.status)) qrAttemptsRef.current.delete(pedido);
+    } finally {
+      candado.leave();
     }
   }
 
@@ -3469,6 +3508,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onCloseInvite={() => setInviteOpen(false)}
       memoriaDeInvitaciones={memoriaDeInvitaciones}
       onCopyInvitationLink={() => void copyInvitationLink()}
+      linkDelQr={linkDelQr?.code === code ? linkDelQr.link : null}
+      onPedirLinkDelQr={() => void pedirLinkDelQr()}
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
       // D553/D554 · con la mesa ya cerrada (sólo lectura), la calificación con un toque.

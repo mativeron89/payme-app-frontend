@@ -56,6 +56,7 @@ import {
 import { textoDeLaPropinaDeLaMesa } from './propinaDeLaMesaView';
 import { compartirTexto, montoDeAjustes, textoDelReparto } from './compartirReparto';
 import type { PreparacionListo } from './mesaRecovery';
+import { CodigoQr } from '../components/CodigoQr';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -235,6 +236,10 @@ export interface MesaDetailViewProps {
   /** D379 · la memoria de las invitaciones de la mesa: sobrevive a cerrar y reabrir la hoja. */
   memoriaDeInvitaciones?: MemoriaDeInvitaciones;
   onCopyInvitationLink: () => void;
+  /** D622 · AF-3 · el link para el QR de la hoja del engranaje (el mismo de «Copiar link», D631), o `null` si no llegó. */
+  linkDelQr?: string | null;
+  /** D622 · AF-3 · pide ese link al abrir la hoja, una vez por apertura (sólo con la mesa recibiendo gente). */
+  onPedirLinkDelQr?: () => void;
   onBack: () => void;
   /**
    * D344 · el selector de la propina de la mesa del organizador, armado por
@@ -606,6 +611,8 @@ export function MesaDetailView({
   onCloseInvite,
   memoriaDeInvitaciones,
   onCopyInvitationLink,
+  linkDelQr = null,
+  onPedirLinkDelQr,
   onBack,
   propinaDeLaMesa = null,
   calificacion = null,
@@ -689,6 +696,16 @@ export function MesaDetailView({
       onCloseInvite?.();
     }
   }, [hojaDeLaMesa, hayConfiguracion, onCloseInvite]);
+  /**
+   * D622 · AF-3 · al abrir la hoja (y si la mesa recibe gente) se pide el link del QR, una vez por apertura: la
+   * relectura de la mesa cada 10 s (D79) no lo vuelve a pedir. Sin link, la hoja va sin QR.
+   */
+  const pedirLinkDelQrRef = useRef(onPedirLinkDelQr);
+  pedirLinkDelQrRef.current = onPedirLinkDelQr;
+  const hojaRecibeGente = hojaDeLaMesa && hayConfiguracion && codigoParaUnirse !== null;
+  useEffect(() => {
+    if (hojaRecibeGente) pedirLinkDelQrRef.current?.();
+  }, [hojaRecibeGente]);
   const cerrarHojaDeLaMesa = (): void => {
     setHojaDeLaMesa(false);
     // D379 · el panel de invitar se pliega con la hoja: al reabrirla se ve «Invitar amigos», y lo enviado se conserva
@@ -1540,6 +1557,7 @@ export function MesaDetailView({
       {hojaDeLaMesa && hayConfiguracion && (
         <HojaDeLaMesa
           codigo={codigoParaUnirse}
+          qr={linkDelQr && codigoParaUnirse !== null ? <CodigoQr texto={linkDelQr} codigo={codigoParaUnirse} t={t} /> : null}
           compartir={compartirDeLaMesa}
           propina={propinaDeLaMesa ?? (propinaLeida !== null ? <p className="propina-mesa-lectura">{propinaLeida}</p> : null)}
           onCerrar={cerrarHojaDeLaMesa}

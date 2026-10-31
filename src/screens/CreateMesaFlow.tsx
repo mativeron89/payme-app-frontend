@@ -114,6 +114,7 @@ import { mensajeDeRechazo, mismaPropina, rechazoOcultaElSelector } from './propi
 import { useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
 import { textoDeSugerencia } from '../api/sugerencias';
 import { useSugerenciaDeDividir } from './useSugerenciaDeDividir';
+import { CodigoQr } from '../components/CodigoQr';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -3966,6 +3967,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * deja deshabilitado ni con copy de "próximamente" —mismo tratamiento que
    * Cuentas Asociadas— y un QR decorativo que no decodifique sería peor que no
    * tenerlo. Cuando exista la orden de dependencia, el toggle vuelve tal cual.
+   * → **Volvió con D622 · AF-3 (0.272.0)**, sin dependencia: D630 eligió el
+   *   generador propio (`src/qr/`) y D631 que abra el link directo. Va entre el
+   *   código y los botones, sólo con el link listo y nunca en la mesa de ejemplo.
    *
    * **La pestaña "Ya se sumaron" también queda afuera (G-30)**, así que el
    * componente de pestañas en burbuja no aplica: una sola sección no es un
@@ -4085,6 +4089,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               <span className="share-code-txt">{code}</span>
               <span className="share-code-help">{t('Para dictarlo en la mesa')}</span>
             </button>
+            {/* D622 · AF-3 · el QR del MISMO link que «Copiar link» y WhatsApp (D631). Sin link (generando o con
+                error) no hay QR, y la guía no lo dibuja: no comparte ni copia (D367). */}
+            {!ejemplo && link && <CodigoQr texto={link} codigo={code} t={t} />}
             {/* 🔴 A1 · el BOTÓN reemplaza al link impreso (Diseño, ratificado
                 2026-08-16, etiqueta «Confirmo sacarlo»). Antes el link viajaba
                 también como texto en pantalla; ahora el código táctil y «Copiar

@@ -78,6 +78,9 @@ async function compartirDelEjemplo(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'WhatsApp' })).toHaveCount(0);
   await expect(page.getByText('No pudimos generar el link')).toHaveCount(0);
   await expect(page.getByText(/propina/i)).toHaveCount(0);
+  // D622 · AF-3 · la guía no dibuja el QR del link (§7): ni escaneable ni de adorno.
+  await expect(page.locator('.codigo-qr')).toHaveCount(0);
+  await expect(page.getByRole('img', { name: /^QR para unirse/ })).toHaveCount(0);
 }
 
 /** 2e · «Tu mesa» del titular, sin engranaje, sin solicitudes y sin «Cerrar mesa». */
