@@ -2519,11 +2519,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <Icon name="check-circle" size={40} />
             </div>
-            <div className="h2" style={{ marginTop: 8 }}>{t('La mesa se cerró')}</div>
+            <div className="h2" style={{ marginTop: 8 }}>{t('¡Listo! Ya se eligió todo y la mesa se cerró.')}</div>
             <div className="body-text" style={{ marginTop: 6 }}>{mesa.restaurant.name}</div>
-            <div className="body-text cierre-motivo" style={{ marginTop: 4 }}>
-              {t('Se eligieron todos los consumos.')}
-            </div>
           </div>
           {/* D553/D554 · la calificación con un toque, al cerrar la mesa. Apagada en el dueño, no aparece. */}
           {!isGuest && !ejemplo && <CalificarMesa code={code} />}

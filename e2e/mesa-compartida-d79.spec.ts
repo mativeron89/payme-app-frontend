@@ -8,7 +8,7 @@ import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
  *
  * El escenario es el de Mati en «partes iguales»: el invitado elige, el
  * organizador ve lo que queda sin recargar, intenta duplicar y el dueño lo
- * rechaza con un mensaje claro, completa la mesa, ve «La mesa se cerró» y el
+ * rechaza con un mensaje claro, completa la mesa, ve «¡Listo! Ya se eligió todo y la mesa se cerró.» y el
  * Historial dice lo que eligió.
  *
  * ⚠️ El mock tiene UNA sola sesión. «La otra cuenta» es una declaración escrita
@@ -159,9 +159,8 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
+    await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
     await expect(page.getByText(RESTAURANTE, { exact: true })).toBeVisible();
-    await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${CODIGO}$`));
     await capturar(page, 'd79-04-la-mesa-se-cerro');
 

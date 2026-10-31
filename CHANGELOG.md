@@ -1,3 +1,10 @@
+## 0.270.0 · 2026-10-31 (D622 · AF-1: «Tu parte» y textos)
+
+- «Tu parte» mantiene el desplegable cerrado y muestra sólo los platos guardados. Sus montos individuales aparecen únicamente si suman exactamente los platos de `my_share`; ante un residuo quedan nombre y porción, sin redistribuir centavos.
+- Los cargos y redondeos positivos llevan «+», también al compartir. En partes iguales se indica «1 de N partes», sin atribuir un precio a los platos declarados. La explicación de la propina usa la parte propia y los totales publicados de la mesa.
+- Textos ES/EN más directos para entrar por link, recuperar o guardar la selección y confirmar el cierre propio. Con pagos apagados, la selección deja de invitar a pagar.
+- Sin cambios de cálculo, API, permisos ni banderas. Tutorial intacto según C44/D367; los escenarios se verifican con mocks y fixtures. Prueba visual de Mati pendiente (D63).
+
 ## 0.269.0 · 2026-10-30 (D584 · D588–D591 · «Compartir» el reparto, entrega 1: el texto)
 
 - **Qué es.** Orden `ORDEN_AF_COMPARTIR_REPARTO_0_269_0_20261030.md`, lease `AF-CLAUDE-COMPARTIR-REPARTO-0-269-0-20261030`, entrega 1 de `PROPUESTA_COMPARTIR_REPARTO_D584_20261030.md` con las cuatro recomendadas: mi parte y el total de la mesa (D588), texto ahora e imagen después (D589), el botón al pie de «Tu parte» (D590) y después de «Listo», con el monto guardado (D591). Sólo front: sin pedidos nuevos al backend, sin link público, sin datos nuevos ni analítica.

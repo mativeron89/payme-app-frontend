@@ -16,8 +16,8 @@ const NAVY = 'rgb(16, 30, 59)'; // --action
 const EXITO = 'rgb(4, 120, 87)'; // --success
 const SIGNUP = 'signup-token-link-mesa-aaaaaaaa';
 const A_SIN_SESION = '/#/mesa/PA-0001?t=tok-cualquiera-largo';
-const A1_TXT = 'Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe';
-const B_ALTA_TXT = 'Crea tu cuenta o entra para sumarte y pagar tu parte.';
+const A1_TXT = 'Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.';
+const B_ALTA_TXT = 'Crea tu cuenta o entra para sumarte y elegir tus platos.';
 const NOTA_E3 = 'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.';
 
 async function capturar(page: Page, nombre: string): Promise<void> {

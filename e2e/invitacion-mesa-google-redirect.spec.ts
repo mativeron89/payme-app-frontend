@@ -33,7 +33,7 @@ const MODO = 'payme.app.retorno_mesa_modo.v1';
 const SALIDA = 'payme.app.google_salida.v1';
 const AVISO = 'Parece que Google no terminó. Toca «Continuar con Google» de nuevo.';
 const AVISO_CASILLAS = 'Parece que Google no terminó. Marca las casillas y toca «Continuar con Google» de nuevo.';
-const A1_TXT = 'Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe';
+const A1_TXT = 'Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.';
 
 interface Seams {
   altaRedirect?: boolean;
@@ -292,7 +292,7 @@ test.describe('D372 · P02-a · la recarga vuelve al modo que se eligió en la i
     expect(Object.keys(modo!).sort()).toEqual(['code', 'modo', 'savedAt']);
     await page.reload();
     await expect(page.locator('.ingreso-burbuja-titulo')).toHaveText('Crea tu cuenta');
-    await expect(page.getByText('Crea tu cuenta o entra para sumarte y pagar tu parte.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Crea tu cuenta o entra para sumarte y elegir tus platos.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Crear cuenta gratis', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true })).toHaveCount(0);
     await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');

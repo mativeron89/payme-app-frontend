@@ -251,8 +251,7 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await expect(hoja.getByText('Con tu selección ya se eligió todo lo de la mesa.')).toBeVisible();
     await expect(page).toHaveURL(/\/mesa\//);
     await hoja.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
-    await expect(page.getByText('Se eligieron todos los consumos.', { exact: true })).toBeVisible();
+    await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
     await expect(page.getByRole('progressbar', { name: 'Asignado 100% de la mesa' })).toBeVisible();
   });

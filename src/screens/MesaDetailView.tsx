@@ -28,7 +28,7 @@ import {
   progresoConBorrador,
   restanteInformativo,
 } from './mesaItemsView';
-import { etiquetaPorcion, porcionesDisponibles, textoPlatos } from './queConsumisteView';
+import { etiquetaPorcion, porcionesDisponibles, textoPartes, textoPlatos } from './queConsumisteView';
 import {
   elegidosAlGuardar,
   elegidosRegistrados,
@@ -39,10 +39,14 @@ import { HojaDeLaMesa } from '../components/HojaDeLaMesa';
 import { leerParteDelDetalle, type MyShare, type ShareTotals, type TipSetting } from '../api/miParte';
 import {
   avisoDeAjustesOmitidos,
+  lineasDeTusPlatos,
+  lineaDeLaPropina,
   miParteDelDueno,
   muestraElDesglose,
+  numeroDePartesIguales,
   renglonDeAjustes,
   rotuloDeAjustes,
+  rotuloDePartesIguales,
   rotuloDePropina,
   totalesDeLaMesa,
   vistaPreviaPorConsumo,
@@ -469,6 +473,9 @@ function HojaAntesDeCerrar({
 function DesgloseDeMiParte({
   totales,
   mia,
+  items,
+  esConsumo,
+  partes,
   tipSetting,
   abierto,
   onToggle,
@@ -476,6 +483,9 @@ function DesgloseDeMiParte({
 }: {
   readonly totales: ShareTotals;
   readonly mia: MyShare;
+  readonly items: readonly MesaItem[];
+  readonly esConsumo: boolean;
+  readonly partes: number | null;
   readonly tipSetting: TipSetting | null;
   readonly abierto: boolean;
   readonly onToggle: () => void;
@@ -485,6 +495,8 @@ function DesgloseDeMiParte({
   const { t } = useIdioma();
   const toast = useToast();
   const renglon = renglonDeAjustes(totales, mia);
+  const platos = lineasDeTusPlatos(items, mia, esConsumo);
+  const cuentaPropina = lineaDeLaPropina(totales, mia, tipSetting, esConsumo, partes, t);
   /**
    * D590 · D591 · «Compartir» al pie, debajo del total: la hoja nativa con el
    * texto y, sin hoja o si falla, la copia con su aviso. Si la persona cancela
@@ -500,9 +512,15 @@ function DesgloseDeMiParte({
     <Desplegable className="mi-parte-desglose" titulo={t('Tu parte')} abierto={abierto} onToggle={onToggle}>
       <dl>
         <div className="mi-parte-desglose-fila">
-          <dt>{t('Tus platos')}</dt>
+          <dt>{esConsumo ? t('Tus platos') : rotuloDePartesIguales(partes, t)}</dt>
           <dd>{formatMXN(mia.items_cents)}</dd>
         </div>
+        {platos.map((plato) => (
+          <div key={plato.id} className="mi-parte-plato">
+            <dt>{plato.nombre}{plato.porcion && <span className="mi-parte-plato-porcion"> · {plato.porcion}</span>}</dt>
+            <dd>{plato.montoCents !== null ? formatMXN(plato.montoCents) : null}</dd>
+          </div>
+        ))}
         {renglon && (
           <div className="mi-parte-desglose-fila">
             <dt>{rotuloDeAjustes(renglon, t)}</dt>
@@ -514,6 +532,9 @@ function DesgloseDeMiParte({
           <dt>{rotuloDePropina(tipSetting, t)}</dt>
           <dd>{formatMXN(mia.tip_cents)}</dd>
         </div>
+        {cuentaPropina && (
+          <div className="mi-parte-cuenta-propina"><dt>{t('Propina')}</dt><dd>{cuentaPropina}</dd></div>
+        )}
         <div className="mi-parte-desglose-fila mi-parte-desglose-total">
           <dt>{t('Total')}</dt>
           <dd>{formatMXN(mia.total_cents)}</dd>
@@ -711,6 +732,9 @@ export function MesaDetailView({
    */
   const totales = totalesDeLaMesa(parteDelDueno, mesa.guarantee_mode);
   const mia = miParteDelDueno(parteDelDueno, mesa.guarantee_mode);
+  const partes = numeroDePartesIguales(mesa.original_participants, mesa.expected_participants);
+  // Sin la parte publicada (también en el tutorial), conserva la presentación anterior.
+  const resumenMiParte = esConsumo || !mia ? textoPlatos(selected.size, t) : textoPartes(partes, t);
   const montoDeMiParte = esConsumo
     ? (totales ? vistaPreviaPorConsumo(itemsAmount, totales) ?? itemsAmount : itemsAmount)
     : (totales && mia ? mia.total_cents : itemsAmount);
@@ -725,6 +749,9 @@ export function MesaDetailView({
     <DesgloseDeMiParte
       totales={totales}
       mia={mia}
+      items={mesa.items}
+      esConsumo={esConsumo}
+      partes={partes}
       tipSetting={parteDelDueno.tipSetting ?? null}
       abierto={miParteAbierta}
       onToggle={() => setMiParteAbierta((a) => !a)}
@@ -821,7 +848,7 @@ export function MesaDetailView({
   const divisionLabel = esConsumo
     ? t('cada uno lo suyo')
     : mesa.expected_participants === 1
-      ? t('pagar el total')
+      ? pagosCortados ? t('toda la cuenta') : t('pagar el total')
       : t('partes iguales');
 
   /**
@@ -880,16 +907,17 @@ export function MesaDetailView({
   const miParte = faltaElegir ? null : (
     <div data-guia="mi-parte" className="mi-parte">
       {nothingLeft ? (
-        <span>{t('No queda nada por pagar')}</span>
+        <span>{pagosCortados ? t('No queda nada por elegir') : t('No queda nada por pagar')}</span>
       ) : !esConsumo && availableSlots === 0 ? (
         <span>{t('No quedan partes')}</span>
       ) : (
         <>
-          {/* Regla 8 del diseño · «Mi parte · N platos» y el monto. N cuenta los
-              platos de la selección, que son los que suma el monto. */}
+          {/* AF-1 · en igual, la parte no depende de los platos declarados. */}
           <span className="mi-parte-lbl">
             {mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}
-            <span className="mi-parte-platos"> · {textoPlatos(selected.size, t)}</span>
+            {resumenMiParte !== null && (
+              <span className="mi-parte-platos"> · {resumenMiParte}</span>
+            )}
           </span>
           <span className="mi-parte-amt">{formatMXN(montoDeMiParte)}</span>
         </>
@@ -1196,7 +1224,7 @@ export function MesaDetailView({
       {mySlotsTaken > 0 && !esConsumo && (
         <div className="note note-teal" style={{ marginTop: 8 }}>
           <b>{t('Ya pagaste')} {mySlotsTaken === 1 ? t('tu parte') : t('{0} partes', mySlotsTaken)} ✓</b>
-          {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
+          {!pagosCortados && availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
         </div>
       )}
     </>
@@ -1305,17 +1333,17 @@ export function MesaDetailView({
         )}
         {!esConsumo && informativeLoading && !informativeSaved && (
           <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
-            {t('Estamos leyendo tu selección guardada…')}
+            {t('Buscando lo que ya elegiste…')}
           </div>
         )}
         {!esConsumo && informativeUnsupported && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
-            {t('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')}
+            {t('Ahora no podemos guardar lo que elegiste. No se guardó nada: inténtalo de nuevo en un rato.')}
           </div>
         )}
         {!esConsumo && informativeLoadError && (
           <div className="note note-amber" role="alert" style={{ marginBottom: 12 }}>
-            {t('No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.')}
+            {t('No pudimos recuperar lo que habías elegido. No lo borramos: vuelve a intentarlo.')}
             <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onRetryInformative}>
               {t('Reintentar lectura')}
             </button>
@@ -1323,7 +1351,7 @@ export function MesaDetailView({
         )}
         {esConsumo && nothingLeft && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
-            {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
+            {t('Los demás ya eligieron todo lo de esta mesa: no queda nada para ti.')}
           </div>
         )}
         {/* D344 · concreción 7: por qué los ajustes del ticket no entran. Lo ve

@@ -2,8 +2,7 @@ import type { MyShare, ShareTotals, TipSetting } from '../api/miParte';
 import type { MesaStatus } from '../api/types';
 import { formatMXN } from '../utils/format';
 import { writeClipboardText } from '../utils/clipboard';
-import { montoDeDescuento } from './desgloseDelTicket';
-import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina } from './miParteView';
+import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina, signoDeAjustes } from './miParteView';
 
 /**
  * D584 · D588–D591 · «Compartir» el reparto, entrega 1: el texto.
@@ -28,9 +27,9 @@ import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina } from './miParteVie
 
 type Traducir = (s: string, ...args: unknown[]) => string;
 
-/** El monto del renglón de ajustes, como lo dibuja «Tu parte»: el descuento con el signo menos. */
+/** AF-1 · el mismo signo explícito en pantalla y en el texto compartido. */
 export function montoDeAjustes(mia: MyShare): string {
-  return mia.adjustments_cents < 0 ? montoDeDescuento(-mia.adjustments_cents) : formatMXN(mia.adjustments_cents);
+  return `${signoDeAjustes(mia.adjustments_cents)}${formatMXN(Math.abs(mia.adjustments_cents))}`;
 }
 
 export interface DatosDelReparto {
@@ -54,7 +53,7 @@ function modalidad(datos: DatosDelReparto, t: Traducir): string {
   if (datos.divisionMode === 'consumo') return t('por consumo');
   return datos.expectedParticipants > 1
     ? t('partes iguales, entre {0}', datos.expectedParticipants)
-    : t('pagar el total');
+    : t('toda la cuenta');
 }
 
 /**

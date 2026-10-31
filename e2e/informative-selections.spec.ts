@@ -158,7 +158,7 @@ test.describe('Listo · selección informativa v2', () => {
     });
     await page.goto('/#/mesa/PA-3121');
     await enTuMesaConLaLista(page);
-    await expect(page.getByText('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')).toBeVisible();
+    await expect(page.getByText('Ahora no podemos guardar lo que elegiste. No se guardó nada: inténtalo de nuevo en un rato.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
     await expect(page.getByText('Tu selección quedó guardada.')).toHaveCount(0);
@@ -173,15 +173,14 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(page.locator('.qc-renglon [data-estado="mio"]')).toHaveCount(total);
 
     // El guardado responde OK y CIERRA la mesa. F-2 (decisión 80): en vez de
-    // volver mudo a Inicio se dice «La mesa se cerró»; «Ver la mesa» lleva a
+    // volver mudo a Inicio se dice «¡Listo! Ya se eligió todo y la mesa se cerró.»; «Ver la mesa» lleva a
     // la vista de sólo lectura.
     const enMesa = await page.evaluate(() => location.pathname);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
-    await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
+    await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => location.pathname)).toBe(enMesa);
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
@@ -270,7 +269,7 @@ test.describe('Listo · selección informativa v2', () => {
       location.hash = '#/mesa/PA-3121';
     });
 
-    await expect(page.getByText('No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.')).toBeVisible();
+    await expect(page.getByText('No pudimos recuperar lo que habías elegido. No lo borramos: vuelve a intentarlo.')).toBeVisible();
     await enTuMesaConLaLista(page);
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
@@ -340,7 +339,7 @@ test.describe('Listo · selección informativa v2', () => {
 
     const first = page.getByRole('button', { name: plato('Omakase para dos') });
     const second = page.getByRole('button', { name: plato('Sashimi mixto') });
-    await expect(page.getByText('Estamos leyendo tu selección guardada…')).toBeVisible();
+    await expect(page.getByText('Buscando lo que ya elegiste…')).toBeVisible();
     await enTuMesaConLaLista(page);
     await expect(first).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_initial)());

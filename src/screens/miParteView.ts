@@ -1,5 +1,69 @@
 import type { MotivoDeAjustesOmitidos, MyShare, ParteDelDetalle, ShareTotals, TipSetting } from '../api/miParte';
 import { porcentajeVisible } from './propinaDeLaMesaView';
+import type { MesaItem } from '../api/types';
+import { originalParticipants } from '../api/mesaPresentation';
+import { formatMXN } from '../utils/format';
+import { nombreDePlato } from '../utils/nombreDePlato';
+import { bpsLabel, bpsValido, fractionPreview } from './mesaItemsView';
+
+type Traducir = (s: string, ...args: unknown[]) => string;
+
+/** AF-1 · sólo presentación: nunca modifica la parte publicada ni el borrador. */
+export interface LineaDeTuPlato {
+  readonly id: string;
+  readonly nombre: string;
+  readonly porcion: string | null;
+  readonly montoCents: number | null;
+}
+
+export function lineasDeTusPlatos(
+  items: readonly MesaItem[], mia: MyShare | null, esConsumo: boolean,
+): readonly LineaDeTuPlato[] {
+  if (!mia || !esConsumo) return [];
+  const lineas = items.filter((item) => bpsValido(item.my_bps) && item.my_bps > 0).map((item) => {
+    const precio = item.price_cents * item.quantity;
+    const monto = Number.isSafeInteger(precio) && precio >= 0
+      ? fractionPreview(precio, item.my_bps, 10000) : null;
+    return {
+      id: item.id,
+      nombre: `${item.quantity > 1 ? `${item.quantity} × ` : ''}${nombreDePlato(item.name)}`,
+      porcion: item.my_bps < 10000 ? bpsLabel(item.my_bps) : null,
+      montoCents: monto,
+    };
+  });
+  // Un residuo del dueño no se reparte ni se oculta en otro plato: todos van sin monto.
+  const sumaExacta = lineas.every((linea) => linea.montoCents !== null && Number.isSafeInteger(linea.montoCents))
+    && lineas.reduce((suma, linea) => suma + BigInt(linea.montoCents!), 0n) === BigInt(mia.items_cents);
+  return sumaExacta ? lineas : lineas.map((linea) => ({ ...linea, montoCents: null }));
+}
+
+/** El fallback es sólo para el rótulo, nunca para las porciones ni el cálculo. */
+export function numeroDePartesIguales(original: number | null, expected: number): number | null {
+  return originalParticipants(original ?? expected);
+}
+
+export function rotuloDePartesIguales(n: number | null, t: Traducir): string {
+  return n === null ? t('Tu parte') : t('Te toca 1 de {0} partes', n);
+}
+
+export function signoDeAjustes(cents: number): string {
+  return cents < 0 ? '−' : cents > 0 ? '+' : '';
+}
+
+export function lineaDeLaPropina(
+  totales: ShareTotals, mia: MyShare | null, setting: TipSetting | null,
+  esConsumo: boolean, n: number | null, t: Traducir,
+): string | null {
+  if (!mia || setting === null || mia.tip_cents === 0 || totales.tip_cents === 0) return null;
+  if (!esConsumo) return n === null ? null
+    : t('La propina de la mesa, {0}, se reparte entre {1}.', formatMXN(totales.tip_cents), n);
+  if (totales.items_cents <= 0) return null;
+  // Sólo el porcentaje informativo se redondea: una décima, sin tocar centavos.
+  const decimas = (BigInt(mia.items_cents) * 2000n + BigInt(totales.items_cents))
+    / (2n * BigInt(totales.items_cents));
+  const porcentaje = decimas % 10n === 0n ? String(decimas / 10n) : `${decimas / 10n}.${decimas % 10n}`;
+  return t('Tus platos son el {0} % de la mesa; la propina de la mesa es {1}.', porcentaje, formatMXN(totales.tip_cents));
+}
 
 /**
  * D344 · «Mi parte» con platos, ajustes y propina en la mesa sin garantía

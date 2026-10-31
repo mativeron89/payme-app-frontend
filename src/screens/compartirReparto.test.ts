@@ -95,7 +95,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       'Así va la mesa (partes iguales, entre 4)',
       'Mi parte: $238.50',
       '  Mis platos: $210',
-      '  Descuento y cargos del ticket: $8.75',
+      '  Descuento y cargos del ticket: +$8.75',
       '  Propina (10 % de la mesa): $19.75',
       'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
@@ -117,9 +117,10 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
     ]);
   });
 
-  it('partes iguales con una sola persona dice «pagar el total»', () => {
-    expect(textoDelReparto({ ...igualAbierta, expectedParticipants: 1 }, es))
-      .toContain('Así va la mesa (pagar el total)');
+  it('una sola persona: describe toda la cuenta sin invitar a pagar con pagos apagados', () => {
+    const texto = textoDelReparto({ ...igualAbierta, expectedParticipants: 1 }, es);
+    expect(texto).toContain('Así va la mesa (toda la cuenta)');
+    expect(texto).not.toMatch(/\bpagar\b/i);
   });
 
   it('🔴 los renglones dicen lo mismo que «Tu parte»: mismas funciones de rótulo y de monto', () => {
@@ -143,7 +144,10 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
 
   it('montoDeAjustes: el descuento con el signo menos, el cargo como monto', () => {
     expect(montoDeAjustes(MIA_DESCUENTO)).toBe(`${MENOS}$11.61`);
-    expect(montoDeAjustes(MIA_SERVICIO)).toBe('$8.75');
+    expect(montoDeAjustes(MIA_SERVICIO)).toBe('+$8.75');
+    expect(montoDeAjustes({ ...MIA_LIMPIA, adjustments_cents: 0 })).toBe('$0');
+    expect(montoDeAjustes({ ...MIA_LIMPIA, adjustments_cents: 1 })).toBe('+$0.01');
+    expect(montoDeAjustes({ ...MIA_LIMPIA, adjustments_cents: -1 })).toBe('−$0.01');
   });
 });
 

@@ -10229,6 +10229,32 @@ h1.pay-title-lbl {
   margin: 0;
   color: var(--text);
 }
+.mi-parte-plato {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 3px 0 3px var(--sp-3);
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mi-parte-plato dt { min-width: 0; overflow-wrap: anywhere; }
+.mi-parte-plato dd { margin: 0; white-space: nowrap; }
+.mi-parte-plato-porcion { white-space: nowrap; }
+.mi-parte-cuenta-propina dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.mi-parte-cuenta-propina dd {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
 /* D360 · P47 · la propina en negrita, el renglón entero (rótulo y monto). */
 .mi-parte-desglose-propina {
   font-weight: 700;

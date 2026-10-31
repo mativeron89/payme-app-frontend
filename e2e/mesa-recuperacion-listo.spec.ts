@@ -408,8 +408,7 @@ test('PUT informativo guardado y cerrado con respuesta perdida converge al éxit
   await entrar(page); await elegir(page); f.comportamiento('commit_perdido');
   await listo(page).click(); await expect(hoja(page)).toBeVisible();
   await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-  await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
-  await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
+  await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
   expect(f.writes).toBe(2); expect(f.mutations).toBe(1); await expect(page).toHaveURL(new RegExp(`/mesa/${CODE}$`));
 });
 
@@ -462,7 +461,7 @@ for (const mode of ['consumo', 'igual'] as const) {
     const previous = f.cuerpos[1] as { items: unknown[]; closure_confirmation: { revision: string; confirmed: boolean } };
     expect(previous.items).toEqual(initial.items); expect(previous.closure_confirmation.confirmed).toBe(true);
     await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
+    await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
     expect(f.writes).toBe(3); expect(f.mutations).toBe(1);
     const current = f.cuerpos[2] as typeof previous;
     expect(current.items).toEqual(initial.items);

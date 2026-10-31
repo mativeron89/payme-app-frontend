@@ -1,13 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MyShare, ParteDelDetalle, ShareTotals, TipSetting } from '../api/miParte';
+import type { MesaItem } from '../api/types';
+import { traducir } from '../i18n/idioma';
 import {
   avisoDeAjustesOmitidos,
+  lineasDeTusPlatos,
+  lineaDeLaPropina,
   miParteDelDueno,
   muestraElDesglose,
+  numeroDePartesIguales,
   renglonDeAjustes,
   rotuloDeAjustes,
+  rotuloDePartesIguales,
   rotuloDePropina,
+  signoDeAjustes,
   totalesDeLaMesa,
   vistaPreviaPorConsumo,
 } from './miParteView';
@@ -91,6 +98,81 @@ describe('totalesDeLaMesa · sólo en la mesa sin garantía y con los totales en
   it('🔴 término `shareTotals` · totales ausentes (undefined): null, nunca undefined', () => {
     // Sin el término, la rama devolvería `parte.shareTotals`, que es undefined.
     expect(totalesDeLaMesa(parte(undefined, null), false)).toBeNull();
+  });
+});
+
+describe('AF-1 · presentación de la parte guardada', () => {
+  const plato = (id: string, precio: number, bps: number, quantity = 1): MesaItem => ({
+    id, name: 'TACOS', price_cents: precio, quantity, my_bps: bps,
+    category: 'other', status: 'available', remaining_bps: 10000 - bps,
+    locked_by_me: bps > 0, lock_expires_at: null,
+  });
+  const en = (s: string, ...args: unknown[]) => traducir(s, 'en', ...args);
+
+  it('sólo guardados: cantidad, porción y montos cuando la suma es exacta', () => {
+    expect(lineasDeTusPlatos([plato('a', 100, 5000, 2), plato('b', 300, 3333), plato('c', 900, 0)], miParte(200, 0, 0), true))
+      .toEqual([
+        { id: 'a', nombre: '2 × Tacos', porcion: '½', montoCents: 100 },
+        { id: 'b', nombre: 'Tacos', porcion: '⅓', montoCents: 100 },
+      ]);
+  });
+
+  it('el centavo residual no se reasigna: todos los platos quedan sin monto', () => {
+    // La última parte del plato de 100 ¢ es 34 ¢; el nominal de 3334 bps da 33.
+    const items = [plato('a', 100, 3334), plato('b', 200, 10000)];
+    expect(lineasDeTusPlatos(items, miParte(234, 0, 0), true).map((l) => l.montoCents)).toEqual([null, null]);
+    expect(lineasDeTusPlatos(items, miParte(234, 0, 0), true).map((l) => l.nombre)).toEqual(['Tacos', 'Tacos']);
+    expect(lineasDeTusPlatos(items, miParte(233, 0, 0), true).map((l) => l.montoCents)).toEqual([33, 200]);
+  });
+
+  it('sin parte o en igual no atribuye precios a los platos; un plato gratis conserva $0', () => {
+    expect(lineasDeTusPlatos([plato('a', 100, 10000)], null, true)).toEqual([]);
+    expect(lineasDeTusPlatos([plato('a', 100, 10000)], miParte(100, 0, 0), false)).toEqual([]);
+    expect(lineasDeTusPlatos([plato('a', 0, 10000)], miParte(0, 0, 0), true)[0]?.montoCents).toBe(0);
+  });
+
+  it('signo explícito para cargos, descuentos y ±1 ¢; cero sin signo', () => {
+    expect([875, -1161, 1, -1, 0].map(signoDeAjustes)).toEqual(['+', '−', '+', '−', '']);
+  });
+
+  it('N conserva la procedencia y sólo cae a expected cuando original es null', () => {
+    expect(numeroDePartesIguales(4, 3)).toBe(4);
+    expect(numeroDePartesIguales(null, 3)).toBe(3);
+    expect(numeroDePartesIguales(null, 0)).toBeNull();
+    expect(numeroDePartesIguales(51, 3)).toBeNull();
+    expect(rotuloDePartesIguales(4, t)).toBe('Te toca 1 de 4 partes');
+    expect(rotuloDePartesIguales(null, t)).toBe('Tu parte');
+    expect(rotuloDePartesIguales(4, en)).toBe('You get 1 of 4 shares');
+  });
+
+  it('propina por consumo: un decimal sólo si hace falta, sin igualdad ni recálculo del monto', () => {
+    const mesa = totales({ P: 84000, D: 5000, B: 79000, T: 11850 });
+    expect(lineaDeLaPropina(mesa, miParte(19500, -1161, 2751), { tip_bps: 1500 }, true, 4, t))
+      .toBe('Tus platos son el 23.2 % de la mesa; la propina de la mesa es $118.50.');
+    expect(lineaDeLaPropina(mesa, miParte(25200, 0, 3555), { tip_cents: 11850 }, true, 4, t))
+      .toBe('Tus platos son el 30 % de la mesa; la propina de la mesa es $118.50.');
+    expect(lineaDeLaPropina(mesa, miParte(25200, 0, 3555), { tip_cents: 11850 }, true, 4, en))
+      .toBe("Your dishes are 30% of the table; the table's tip is $118.50.");
+  });
+
+  it('propina igual: usa la propina de toda la mesa y el número de partes, también con Otro', () => {
+    const mesa = totales({ P: 84000, B: 79000, T: 7900 });
+    expect(lineaDeLaPropina(mesa, miParte(21000, 875, 1975), { tip_cents: 7900 }, false, 4, t))
+      .toBe('La propina de la mesa, $79, se reparte entre 4.');
+    expect(lineaDeLaPropina(mesa, miParte(21000, 875, 1975), { tip_cents: 7900 }, false, 4, en))
+      .toBe("The table's tip, $79, is split among 4.");
+    expect(lineaDeLaPropina(mesa, miParte(21000, 875, 1975), { tip_bps: 1000 }, false, null, t)).toBeNull();
+  });
+
+  it('sin fijar, 0 %, Otro 0, propina propia cero, sin parte o sin base: no explica una cuenta inexistente', () => {
+    const mesa = totales({ P: 100, B: 100, T: 10 });
+    expect(lineaDeLaPropina(mesa, miParte(100, 0, 10), null, true, 1, t)).toBeNull();
+    for (const setting of [{ tip_bps: 0 }, { tip_cents: 0 }]) {
+      expect(lineaDeLaPropina(totales({ P: 100, B: 100, T: 0 }), miParte(100, 0, 0), setting, true, 1, t)).toBeNull();
+    }
+    expect(lineaDeLaPropina(mesa, miParte(1, 0, 0), { tip_bps: 1000 }, true, 1, t)).toBeNull();
+    expect(lineaDeLaPropina(mesa, null, { tip_bps: 1000 }, true, 1, t)).toBeNull();
+    expect(lineaDeLaPropina(totales({ P: 0, B: 0, T: 10 }), miParte(0, 0, 10), { tip_cents: 10 }, true, 1, t)).toBeNull();
   });
 });
 

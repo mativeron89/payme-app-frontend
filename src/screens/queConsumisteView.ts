@@ -46,3 +46,8 @@ export function etiquetaPorcion(bps: number, t: (s: string, ...a: unknown[]) => 
 export function textoPlatos(n: number, t: (s: string, ...a: unknown[]) => string): string {
   return n === 1 ? t('1 plato') : t('{0} platos', n);
 }
+
+/** AF-1 · en partes iguales, lo elegido no representa la parte que se paga. */
+export function textoPartes(n: number | null, t: (s: string, ...a: unknown[]) => string): string | null {
+  return n === null ? null : t('1 de {0} partes', n);
+}

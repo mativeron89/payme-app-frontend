@@ -327,8 +327,8 @@ export function JoinMesaScreen({
             cuadro={{ icono: 'persona-mas' }}
             titulo={t('Te invitaron a una mesa')}
             cuerpo={formulario.modo === 'register'
-              ? t('Crea tu cuenta o entra para sumarte y pagar tu parte.')
-              : t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
+              ? t('Crea tu cuenta o entra para sumarte y elegir tus platos.')
+              : t('Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.')}
           />
           {formulario.montar && <LoginScreen initialMode={formulario.modo} />}
         </div>
@@ -342,7 +342,7 @@ export function JoinMesaScreen({
             key="signup"
             cuadro={{ icono: 'persona-mas' }}
             titulo={t('Te invitaron a una mesa')}
-            cuerpo={t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
+            cuerpo={t('Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.')}
           >
             {/* D373 · un solo naranja: «Crear cuenta gratis» si hay alta; si no,
                 «Entrar» (blanco sobre naranja, 2,96:1, riesgo aceptado y declarado),

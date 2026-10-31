@@ -357,7 +357,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
 
     await listo(page).click();
     await hoja.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
-    await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
+    await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.')).toBeVisible();
     expect(await llamadas(page, 'lockItems')).toBe(3);
     // La mesa quedó cerrada de verdad (no sólo la pantalla que lee la respuesta):
     // al volver a verla, el dueño (acá el mock) la da por cerrada.

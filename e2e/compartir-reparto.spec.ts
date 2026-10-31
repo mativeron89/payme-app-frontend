@@ -93,7 +93,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
       'Así va la mesa (partes iguales, entre 4)',
       'Mi parte: $238.50',
       '  Mis platos: $210',
-      '  Descuento y cargos del ticket: $8.75',
+      '  Descuento y cargos del ticket: +$8.75',
       '  Propina (10 % de la mesa): $19.75',
       'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',

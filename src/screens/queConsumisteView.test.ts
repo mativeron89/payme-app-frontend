@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PORCIONES, etiquetaPorcion, porcionesDisponibles, textoPlatos } from './queConsumisteView';
+import { PORCIONES, etiquetaPorcion, porcionesDisponibles, textoPartes, textoPlatos } from './queConsumisteView';
 
 /** AF-QUE-CONSUMISTE · decisión 90 y reglas 4 del diseño de Claude Design. */
 const t = (s: string, ...a: unknown[]) => s.replace(/\{(\d+)\}/g, (_, i: string) => String(a[Number(i)]));
@@ -57,6 +57,10 @@ describe('etiquetaPorcion · la píldora', () => {
 });
 
 describe('textoPlatos · «Mi parte · N platos»', () => {
+  it('en igual cuenta partes, y sin N no inventa uno', () => {
+    expect(textoPartes(4, t)).toBe('1 de 4 partes');
+    expect(textoPartes(null, t)).toBeNull();
+  });
   it('singular y plural', () => {
     expect(textoPlatos(1, t)).toBe('1 plato');
     expect(textoPlatos(0, t)).toBe('0 platos');

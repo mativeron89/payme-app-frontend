@@ -61,6 +61,66 @@ async function filasDelDesglose(page: Page): Promise<string[]> {
 }
 
 test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
+  test('AF-1 · el residuo oculta todos los montos por plato; el borrador no reemplaza lo guardado', async ({ page }) => {
+    const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
+    // Contrato sintético local: última tercera parte 34 ¢, nominal 33 ¢. No cambia el motor mock.
+    await page.evaluate(async (codigo) => {
+      const route = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ route) as typeof import('../src/api/index');
+      if (!module.IS_MOCK) throw new Error('esta fixture sólo admite el mock');
+      const getMesa = module.api.getMesa.bind(module.api);
+      module.api.getMesa = async (...args: Parameters<typeof getMesa>) => {
+        const respuesta = await getMesa(...args);
+        if (args[0] !== codigo) return respuesta;
+        const [a, b, c] = respuesta.mesa.items;
+        if (!a || !b || !c) throw new Error('faltan tres platos en la fixture');
+        const mesa: typeof respuesta.mesa = {
+          ...respuesta.mesa, total_cents: 300, total_display: '$3', paid_amount_cents: 0,
+          tip_amount_cents: 0, tip_base_cents: 75, tip_setting: null,
+          items: [
+            { ...a, name: 'Plato fraccionado', price_cents: 100, quantity: 1, status: 'locked',
+              my_bps: 3334, remaining_bps: 0, locked_by_me: true, lock_expires_at: null,
+              my_paid_bps: 0, my_releasable_bps: 3334 },
+            { ...b, name: 'Plato entero', price_cents: 100, quantity: 1, status: 'locked',
+              my_bps: 10000, remaining_bps: 0, locked_by_me: true, lock_expires_at: null,
+              my_paid_bps: 0, my_releasable_bps: 10000 },
+            { ...c, name: 'Plato nuevo', price_cents: 100, quantity: 1, status: 'available',
+              my_bps: 0, remaining_bps: 10000, locked_by_me: false, lock_expires_at: null,
+              my_paid_bps: 0, my_releasable_bps: 0 },
+          ],
+          share_totals: {
+            items_cents: 300, discounts_cents: 0, service_cents: 0, tax_added_cents: 0,
+            adjustments_cents: 0, tip_basis_cents: 300, tip_cents: 0, total_cents: 300,
+            adjustments_omitted: false, adjustments_omitted_reason: null,
+          },
+          my_share: { items_cents: 134, adjustments_cents: 0, tip_cents: 0, total_cents: 134 },
+        };
+        delete mesa.ticket_totals;
+        delete mesa.ticket_adjustments;
+        return { ...respuesta, mesa };
+      };
+    }, code);
+    // Navegación interna para conservar la respuesta sintética en memoria.
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
+    await expect(desglose(page).locator('.desplegable-cabecera')).toHaveAttribute('aria-expanded', 'false');
+    expect(await filasDelDesglose(page)).toEqual(['Tus platos $1.34', 'Propina $0', 'Total $1.34']);
+    const platos = desglose(page).locator('.mi-parte-plato');
+    await expect(platos.locator('dt')).toHaveText(['Plato fraccionado · ⅓', 'Plato entero']);
+    await expect(platos.locator('dd')).toHaveText(['', '']);
+    await expect(desglose(page).locator('.mi-parte-cuenta-propina')).toHaveCount(0);
+    const guardado = await desglose(page).innerText();
+    await abrirTusConsumos(page);
+    await page.getByRole('button', { name: /^Plato nuevo/ }).click();
+    await page.getByRole('radiogroup', { name: 'Porción de Plato nuevo' })
+      .getByRole('radio', { name: '½', exact: true }).click();
+    await expect(page.locator('.qc-renglon').filter({ hasText: 'Plato nuevo' }).locator('.qc-pildora')).toHaveText('½');
+    await expect(desglose(page)).toHaveText(guardado, { useInnerText: true });
+    await expect(platos).toHaveCount(2);
+    await expect(desglose(page)).not.toContainText('Plato nuevo');
+    await capturar(page, 'af1-fraccion-sin-montos', desglose(page));
+  });
+
   test('🔴 el organizador la fija en «Compartir la mesa», con el aviso de servicio y sin el monto para la mesa (D360-3); partes iguales', async ({ page }) => {
     await hastaCompartir(page, { ocr: 'servicio_descuento', modo: 'igual' });
     const selector = selectorDePropina(page);
@@ -94,8 +154,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
     expect(await filasDelDesglose(page)).toEqual([
-      'Tus platos $210',
-      'Descuento y cargos del ticket $8.75',
+      'Te toca 1 de 4 partes $210',
+      'Descuento y cargos del ticket +$8.75',
       'Propina (10 % de la mesa) $19.75',
       'Total $238.50',
     ]);
@@ -104,10 +164,14 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     const pesos = (rotulo: string) => desglose(page).locator('.mi-parte-desglose-fila').filter({ hasText: rotulo })
       .evaluate((fila) => [...fila.children].map((c) => Number(getComputedStyle(c).fontWeight)));
     expect(await pesos('Propina (10 % de la mesa)')).toEqual([700, 700]);
-    const platos = await pesos('Tus platos');
+    const platos = await pesos('Te toca 1 de 4 partes');
     expect(platos).toHaveLength(2);
     for (const peso of platos) expect(peso).toBeLessThan(700);
     await expect(page.locator('.mi-parte-amt')).toHaveText('$238.50');
+    await expect(desglose(page).locator('.mi-parte-plato')).toHaveCount(0);
+    await expect(desglose(page).locator('.mi-parte-cuenta-propina dd')).toHaveText('La propina de la mesa, $79, se reparte entre 4.');
+    await expect(page.locator('.mi-parte-lbl')).toHaveText('Mi parte · 1 de 4 partes');
+    await expect(page.locator('.screen')).not.toContainText(/\bpagar\b/i);
     await capturar(page, 'd344-02-mi-parte-partes-iguales', desglose(page));
   });
 
@@ -138,6 +202,11 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       'Propina (15 % de la mesa) $27.51',
       'Total $210.90',
     ]);
+    await expect(desglose(page).locator('.mi-parte-plato dt')).toHaveText('Tagliatelle Bolognese');
+    await expect(desglose(page).locator('.mi-parte-plato dd')).toHaveText('$195');
+    await expect(desglose(page).locator('.mi-parte-cuenta-propina dd')).toHaveText(
+      'Tus platos son el 23.2 % de la mesa; la propina de la mesa es $118.50.',
+    );
     await capturar(page, 'd344-04-mi-parte-consumo', desglose(page));
 
     // R4 · la mesa corregida: el aviso literal, sin ajustes y la propina sobre los platos.
