@@ -35,7 +35,9 @@ describe('D469 · «Tu mesa»: engranaje y tres desplegables cerrados', () => {
     expect(vista).toContain("<Desplegable className=\"mi-parte-desglose\" titulo={t('Tu parte')} abierto={abierto} onToggle={onToggle}>");
     expect(vista).not.toContain("t('Cómo se arma tu parte')");
     expect(vista).not.toContain('mi-parte-desglose-titulo');
-    expect(vista).toContain("<dt>{t('Tus platos')}</dt>");
+    // AF-1 conserva los platos en consumo y muestra la parte en reparto igual.
+    // La guarda exige ambas ramas y su discriminador, no sólo los literales.
+    expect(vista).toContain("<dt>{esConsumo ? t('Tus platos') : rotuloDePartesIguales(partes, t)}</dt>");
     expect(vista).toContain("<dt>{t('Total')}</dt>");
     expect(EN['Total']).toBe('Total');
     expect(EN['Tu parte']).toBe('Your share');
