@@ -15,8 +15,8 @@
  *     el terminador completo eso pasa siempre. Decodifica igual (lo que difiere
  *     va después del terminador), pero no es lo que manda la norma (§7.4.10).
  *
- *   Script: generar.py, sha256 522107d048cabf52389ea1031070d29bd1b979a4245afea9866137f18db6ee8a.
- *   Salida: referencias.json, sha256 545fc1fc0f097b4a490bfb23b10c1b50b02102e3737ff26dc3da29e71f18627e.
+ *   Script: generar.py, sha256 8a10050e6cb28afae9bbc644634fd1e3dcd407e670809ed8a8455e2e51802c38.
+ *   Salida: referencias.json, sha256 35729eacaaa48a07adf183b04fbfb310d7811683effcd314d495422ea7fb2777.
  *
  * Cada fila es una fila de la matriz SIN la zona de silencio: '1' es un módulo
  * oscuro. Los links son inventados (código, UUID y firma de ejemplo): no abren
@@ -962,21 +962,21 @@ export const MASCARAS_AUTOMATICAS: ReadonlyArray<Pick<ReferenciaQr, 'texto' | 'v
   { texto: "https:", version: 1, mascara: 2 },
   { texto: "https:/", version: 1, mascara: 4 },
   { texto: "https://", version: 1, mascara: 1 },
-  { texto: "https://a", version: 1, mascara: 2 },
-  { texto: "https://ap", version: 1, mascara: 6 },
-  { texto: "https://app", version: 1, mascara: 4 },
-  { texto: "https://app.", version: 1, mascara: 0 },
-  { texto: "https://app.p", version: 1, mascara: 2 },
-  { texto: "https://app.pa", version: 1, mascara: 6 },
-  { texto: "https://app.pay", version: 2, mascara: 1 },
-  { texto: "https://app.paym", version: 2, mascara: 6 },
-  { texto: "https://app.payme", version: 2, mascara: 6 },
-  { texto: "https://app.paymem", version: 2, mascara: 6 },
-  { texto: "https://app.paymemx", version: 2, mascara: 3 },
-  { texto: "https://app.paymemx.", version: 2, mascara: 0 },
-  { texto: "https://app.paymemx.c", version: 2, mascara: 4 },
-  { texto: "https://app.paymemx.co", version: 2, mascara: 2 },
-  { texto: "https://app.paymemx.com", version: 2, mascara: 2 },
+  { texto: "Io0PyRt_E", version: 1, mascara: 2 },
+  { texto: "uIo0PyRt_E", version: 1, mascara: 2 },
+  { texto: "5uIo0PyRt_E", version: 1, mascara: 3 },
+  { texto: "e5uIo0PyRt_E", version: 1, mascara: 6 },
+  { texto: "Ke5uIo0PyRt_E", version: 1, mascara: 4 },
+  { texto: "kKe5uIo0PyRt_E", version: 1, mascara: 3 },
+  { texto: "3kKe5uIo0PyRt_E", version: 2, mascara: 1 },
+  { texto: "j3kKe5uIo0PyRt_E", version: 2, mascara: 6 },
+  { texto: "Hj3kKe5uIo0PyRt_E", version: 2, mascara: 2 },
+  { texto: "gHj3kKe5uIo0PyRt_E", version: 2, mascara: 6 },
+  { texto: "6gHj3kKe5uIo0PyRt_E", version: 2, mascara: 3 },
+  { texto: "f6gHj3kKe5uIo0PyRt_E", version: 2, mascara: 1 },
+  { texto: "Df6gHj3kKe5uIo0PyRt_E", version: 2, mascara: 2 },
+  { texto: "sDf6gHj3kKe5uIo0PyRt_E", version: 2, mascara: 2 },
+  { texto: "1sDf6gHj3kKe5uIo0PyRt_E", version: 2, mascara: 4 },
   { texto: "https://app.paymemx.com/", version: 2, mascara: 4 },
   { texto: "https://app.paymemx.com/#", version: 2, mascara: 0 },
   { texto: "https://app.paymemx.com/#/", version: 2, mascara: 6 },

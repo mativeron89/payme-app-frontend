@@ -53,7 +53,6 @@ export function CodigoQr({ texto, codigo, t }: {
         aria-label={t('QR para unirse a la mesa {0}', codigo)}
         viewBox={`0 0 ${lado} ${lado}`}
         shapeRendering="crispEdges"
-        xmlns="http://www.w3.org/2000/svg"
       >
         <rect width={lado} height={lado} fill="#fff" />
         <path d={d} fill="#000" />
