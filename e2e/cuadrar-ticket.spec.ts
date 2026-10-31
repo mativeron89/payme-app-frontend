@@ -62,6 +62,8 @@ test.describe('D622 · AF-2 · cuadrar el ticket', () => {
     await expect(franja(page)).toHaveText('Cuadra con el ticket: $840.');
     await expect(franja(page)).toHaveClass(/cuadre-ticket--cuadra/);
     await expect(franja(page).locator('svg')).toHaveCount(1);
+    // m4 de E06 (AF-3): con la franja verde, la ayuda «Checa que…» sobra; ya no se ven los dos avisos juntos.
+    await expect(hoja(page).getByText(/Checa que el total coincida/)).toHaveCount(0);
     await franjaALaVista(page);
     await capturar(page, 'cuadre-01-cuadra');
   });
@@ -87,20 +89,31 @@ test.describe('D622 · AF-2 · cuadrar el ticket', () => {
     await expect(franja(page)).toHaveClass(/cuadre-ticket--cuadra/);
   });
 
-  test('🔴 el anuncio para lectores de pantalla cambia sólo cuando cambia el estado', async ({ page }) => {
+  test('🔴 el anuncio para lectores de pantalla cambia sólo cuando cambia el estado, y no deja un monto viejo', async ({ page }) => {
     await hastaElTicket(page, 84000);
     await page.getByRole('button', { name: 'Ver el ticket' }).click();
     await expect(anuncio(page)).toHaveAttribute('aria-live', 'polite');
+    // Cada texto que toma la región viva, en orden (los vacíos también).
+    await anuncio(page).evaluate((el) => {
+      const textos: string[] = [];
+      Object.defineProperty(window, '__anuncios', { value: textos });
+      new MutationObserver(() => textos.push(el.textContent ?? '')).observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    const anuncios = () => page.evaluate(() => (window as unknown as { __anuncios: string[] }).__anuncios.filter((x) => x !== ''));
     await hoja(page).getByRole('button', { name: 'Modificar ítems', exact: true }).click();
     await hoja(page).getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
     await precioDelTagliatelle(page, '240');
     await expect(anuncio(page)).toHaveText('Tus platos suman $885 y el ticket dice $840: sobran $45.');
-    // Sigue sobrando: la franja cambia, el anuncio no se repite con cada tecla.
+    // m2 de E06 (AF-3): después de anunciarse, el texto se va del árbol de accesibilidad; no queda un monto viejo.
+    await expect(anuncio(page)).toHaveText('');
+    // Sigue sobrando: la franja cambia y el anuncio no se repite con cada tecla.
     await precioDelTagliatelle(page, '250');
     await expect(franja(page)).toHaveText('Tus platos suman $895 y el ticket dice $840: sobran $55.');
-    await expect(anuncio(page)).toHaveText('Tus platos suman $885 y el ticket dice $840: sobran $45.');
+    await expect(anuncio(page)).toHaveText('');
     await precioDelTagliatelle(page, '195');
     await expect(anuncio(page)).toHaveText('Cuadra con el ticket: $840.');
+    expect(await anuncios()).toEqual(['Tus platos suman $885 y el ticket dice $840: sobran $45.', 'Cuadra con el ticket: $840.']);
+    await expect(anuncio(page)).toHaveText('');
   });
 
   test('no cuadra no bloquea «Continuar» y ya no hay «Checa que…» en ámbar', async ({ page }) => {

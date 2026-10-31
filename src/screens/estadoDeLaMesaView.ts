@@ -56,9 +56,15 @@ export function estadoDeLaMesa(
   };
 }
 
-/** «Quedan 3 platos sin dueño.»; los a medias se nombran aparte sólo si hay. Sin platos sin dueño, nada. */
+/**
+ * «Quedan 3 platos sin dueño.»; los a medias se nombran aparte sólo si hay. Con todos los platos con dueño y alguno
+ * a medias, sólo los a medias (AF-3, m3 de E06: antes la línea desaparecía y no decía qué faltaba). Sin nada, nada.
+ */
 function lineaDePlatos(sinDueno: number, aMedias: number, t: Traducir): string | null {
-  if (sinDueno === 0) return null;
+  if (sinDueno === 0) {
+    if (aMedias === 0) return null;
+    return aMedias === 1 ? t('Queda 1 plato a medias.') : t('Quedan {0} platos a medias.', aMedias);
+  }
   if (aMedias === 0) {
     return sinDueno === 1 ? t('Queda 1 plato sin dueño.') : t('Quedan {0} platos sin dueño.', sinDueno);
   }

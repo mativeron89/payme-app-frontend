@@ -818,7 +818,7 @@ export const EN: Record<string, string> = {
   "acreditada": "confirmed",
   "adicional": "additional share",
   "ayer": "yesterday",
-  "cada uno lo suyo": "everyone pays their own",
+  "cada uno lo suyo": "each their own",
   "cobro nuevo": "new charge",
   "conflicto": "conflict",
   "consumo {0}": "item {0}",
@@ -1512,4 +1512,8 @@ export const EN: Record<string, string> = {
   // D622 · AF-3 · mejora 6 · el QR de «Compartir la mesa» y del engranaje (textos de la especificación, §7).
   "Que lo escaneen con la cámara.": "Have them scan it with their camera.",
   "QR para unirse a la mesa {0}": "QR code to join table {0}",
+  // D622 · AF-3 · menor m3 de E06 sobre AF-2: todos los platos con dueño, alguno a medias. Texto y EN propios, para
+  // la revisión de textos de Mati (D622).
+  "Queda 1 plato a medias.": "1 dish is partly picked.",
+  "Quedan {0} platos a medias.": "{0} dishes are partly picked.",
 };

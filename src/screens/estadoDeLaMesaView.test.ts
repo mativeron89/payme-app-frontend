@@ -73,10 +73,13 @@ describe('estadoDeLaMesa · las líneas', () => {
       .toBe('Queda 1 plato sin dueño y 2 a medias.');
   });
 
-  it('todos con dueño pero alguno a medias: sin línea de platos (no hay «0 sin dueño»)', () => {
+  it('🔴 todos con dueño pero alguno a medias: dice cuántos quedan a medias, nunca «0 sin dueño» (m3 de E06, AF-3)', () => {
     const r = estadoDeLaMesa(mesa({ items: conElegidos({ a: 0, b: 0, c: 0, d: 5000 }) }), ORG, t);
     expect(r?.titular).toBe('Falta elegir $50 de $840');
-    expect(r?.platos).toBeNull();
+    expect(r?.platos).toBe('Queda 1 plato a medias.');
+    expect(estadoDeLaMesa(mesa({ items: conElegidos({ a: 0, b: 0, c: 5000, d: 5000 }) }), ORG, t)?.platos)
+      .toBe('Quedan 2 platos a medias.');
+    expect(r?.platos).not.toMatch(/sin dueño/);
   });
 
   it('🔴 el consejo: el organizador revisa antes de cerrar; el resto sabe que se cierra sola', () => {

@@ -1219,6 +1219,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     filasCompletas: ticketValid,
   });
   const totalMismatch = cuadre && cuadre.tipo !== 'cuadra' ? cuadre : null;
+  /** La franja del pie se ve con un cuadre medido, salvo en la mesa de ejemplo de la guía. */
+  const franjaDelCuadreVisible = cuadre !== null && !ejemplo;
   const ticketForcedOpen = totalMismatch !== null;
   /**
    * D509 · cuando la suma no cierra con el ticket, las filas que explican la diferencia quedan marcadas para
@@ -3392,8 +3394,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   )}
                 </div>
                 {/* D622 · AF-2 · mejora 4 · la diferencia pasó a la franja del pie (`FranjaDelCuadre`), que se sigue
-                    viendo al editar. Acá queda la ayuda de la hoja, sólo cuando no hay diferencia. */}
-                {!totalMismatch && (
+                    viendo al editar. Acá queda la ayuda de la hoja, sólo cuando no hay diferencia.
+                    AF-3 (m4 de E06): y sólo cuando la franja no está; con «Cuadra con el ticket» los dos avisos decían
+                    lo mismo. Sin total impreso (no se afirma «cuadra») la ayuda sigue. */}
+                {!totalMismatch && !franjaDelCuadreVisible && (
                   <div className="title-card-note">
                     <Icon name="info" size={16} />
                     <span>{t('Checa que el total coincida con el total del ticket')}</span>
@@ -3577,7 +3581,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             </div>
             {/* D622 · AF-2 · mejora 4 · fija al pie de la hoja, fuera del scroll. En el ejemplo de la guía no va
                 (D367: la guía no afirma nada del ticket). */}
-            {cuadre && !ejemplo && <FranjaDelCuadre estado={cuadre} t={t} />}
+            {franjaDelCuadreVisible && cuadre && <FranjaDelCuadre estado={cuadre} t={t} />}
           </div>
           </div>
         )}
