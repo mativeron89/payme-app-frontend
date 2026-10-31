@@ -28,6 +28,8 @@ import {
   progresoConBorrador,
   restanteInformativo,
 } from './mesaItemsView';
+import { estadoDeLaMesa } from './estadoDeLaMesaView';
+import { EstadoDeLaMesa } from '../components/EstadoDeLaMesa';
 import { etiquetaPorcion, porcionesDisponibles, textoPartes, textoPlatos } from './queConsumisteView';
 import {
   elegidosAlGuardar,
@@ -661,6 +663,11 @@ export function MesaDetailView({
    * cambiar, en la hoja del engranaje.
    */
   const parteDelDueno = useMemo(() => leerParteDelDetalle(mesa), [mesa]);
+  /** D622 · AF-2 · mejora 2 · el estado de la mesa (lo registrado, sin identidad), o `null` si no hay tarjeta. */
+  const estadoMesa = useMemo(
+    () => estadoDeLaMesa(mesa, { esOrganizador: esTitular, ejemplo }, t),
+    [mesa, esTitular, ejemplo, t],
+  );
   const propinaLeida = mesa.guarantee_mode === false && parteDelDueno.tipSetting !== undefined
     ? textoDeLaPropinaDeLaMesa(parteDelDueno.tipSetting, t)
     : null;
@@ -1361,6 +1368,9 @@ export function MesaDetailView({
             {avisoOmitidos}
           </div>
         )}
+        {/* D622 · AF-2 · mejora 2 · la tarjeta con el estado de la mesa: antes de «Quiénes están en la mesa» y,
+            para quien no organiza, arriba de la lista. Sin el conteo de personas (espera AB-1). */}
+        {estadoMesa && <EstadoDeLaMesa estado={estadoMesa} />}
         {esTitular ? (
           <>
             {/* D223 · «Tu mesa», en este orden (D469): quiénes están, solicitudes

@@ -241,6 +241,8 @@ test.describe('D363 · el recorrido', () => {
     const e2 = burbuja(page, 'Selecciona lo que consumiste únicamente.');
     await expect(e2).toBeVisible();
     await geometria(page, 'consumos');
+    // D622 · AF-2 · la mesa de ejemplo no lleva la tarjeta del estado de la mesa (D367: la guía no promete).
+    await expect(page.locator('.estado-mesa')).toHaveCount(0);
     await capturar(page, 'd363-2e-tu-mesa');
 
     await page.locator('.qc-lista .qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' }).getByRole('button').first().click();

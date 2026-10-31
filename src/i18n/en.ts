@@ -1497,4 +1497,16 @@ export const EN: Record<string, string> = {
   "Tus platos suman {0} y el ticket dice {1}: sobran {2}.": "The dishes add up to {0} and the receipt says {1}: {2} too much.",
   "Tus platos suman {0} y el ticket dice {1}: faltan {2}.": "The dishes add up to {0} and the receipt says {1}: {2} short.",
   "Cuadra con el ticket: {0}.": "Matches the receipt: {0}.",
+  // D622 · AF-2 · mejora 2 · la tarjeta con el estado de la mesa (textos de la especificación, §2). Los cuatro
+  // «… y N a medias» no están en su tabla: el EN es propio y lo revisa Mati con el resto (D622).
+  "Todavía no eligió nadie": "Nobody has picked yet",
+  "Falta elegir {0} de {1}": "{0} of {1} still to pick",
+  "Queda 1 plato sin dueño.": "1 dish is still unclaimed.",
+  "Quedan {0} platos sin dueño.": "{0} dishes are still unclaimed.",
+  "Queda 1 plato sin dueño y 1 a medias.": "1 dish is still unclaimed and 1 is partly picked.",
+  "Queda 1 plato sin dueño y {0} a medias.": "1 dish is still unclaimed and {0} are partly picked.",
+  "Quedan {0} platos sin dueño y 1 a medias.": "{0} dishes are still unclaimed and 1 is partly picked.",
+  "Quedan {0} platos sin dueño y {1} a medias.": "{0} dishes are still unclaimed and {1} are partly picked.",
+  "Antes de cerrar la mesa, revisa que todos hayan elegido lo suyo.": "Before you close the table, check that everyone has picked theirs.",
+  "Cuando se elija todo, la mesa se cierra sola.": "When everything is picked, the table closes by itself.",
 };

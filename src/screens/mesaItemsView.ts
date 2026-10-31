@@ -286,6 +286,29 @@ export function confirmedConsumptionProgress(
 }
 
 /**
+ * D622 · AF-2 · mejora 2 · cuántos platos (renglones) no tienen dueño —ninguna
+ * parte elegida, `remaining_bps` 10000— y cuántos están a medias. Sale del
+ * agregado del dueño (`locked` + `paid`), sin identidad. Como
+ * `confirmedConsumptionProgress`, en una mesa sin garantía el plato de $0 ya
+ * cuenta como cubierto (D389) y no se nombra. Un restante ilegible no se cuenta
+ * como nada: `null`.
+ */
+export function platosSinDueno(
+  mesa: Pick<MesaDetail, 'items' | 'guarantee_mode'>,
+): { readonly sinDueno: number; readonly aMedias: number } | null {
+  if (!Array.isArray(mesa.items)) return null;
+  let sinDueno = 0;
+  let aMedias = 0;
+  for (const item of mesa.items) {
+    if (!bpsValido(item?.remaining_bps)) return null;
+    if (mesa.guarantee_mode === false && item.price_cents * item.quantity === 0) continue;
+    if (item.remaining_bps === 10000) sinDueno += 1;
+    else if (item.remaining_bps > 0) aMedias += 1;
+  }
+  return { sinDueno, aMedias };
+}
+
+/**
  * AF-BARRA-EN-VIVO · decisión 107, punto 3 (n190) · la barra de «¿Qué
  * consumiste?» suma lo que la persona va eligiendo antes de «Listo».
  *

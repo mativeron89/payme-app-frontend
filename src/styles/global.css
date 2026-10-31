@@ -10248,6 +10248,43 @@ h1.pay-title-lbl {
 /* Quien no es el organizador lee la propina de la mesa, sin poder cambiarla.
    D469 · el organizador la lee en la hoja del engranaje cuando ya no se puede
    cambiar. */
+/* D622 · AF-2 · mejora 2 · la tarjeta con el estado de la mesa: no plegable, con
+   el margen y el radio de los desplegables de «Tu mesa». El titular fuerte; los
+   platos en el texto de siempre y el consejo tenue (--text-muted, 5.43:1 sobre
+   --surface). */
+.estado-mesa {
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  text-align: left;
+}
+
+.estado-mesa p {
+  margin: 0;
+}
+
+.estado-mesa-titular {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.estado-mesa .estado-mesa-platos {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+
+.estado-mesa .estado-mesa-consejo {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
 .propina-mesa-lectura {
   margin: 0 0 12px;
   font-size: var(--fs-sm);

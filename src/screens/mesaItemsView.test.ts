@@ -16,6 +16,7 @@ import {
   restanteInformativo,
   itemsAmountFor,
   nothingLeftFor,
+  platosSinDueno,
   progresoConBorrador,
 } from './mesaItemsView';
 
@@ -721,5 +722,43 @@ describe('F1 · la tolerancia del dueño (COMPLETING_TOLERANCE_BPS)', () => {
     const casi = mesa({ items: [item({ id: 'a', price_cents: 30000, remaining_bps: 3433 })], total_cents: 30000 });
     const r = progresoConBorrador(casi, (i) => i.remaining_bps, () => 0, new Map([['a', 3333]]));
     expect(r.status === 'known' && r.differenceCents).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * D622 · AF-2 · mejora 2 · los platos SIN DUEÑO de la tarjeta del estado de la
+ * mesa: ninguna parte elegida (`remaining_bps` 10000). Uno a medias no entra en
+ * esa cuenta: se cuenta aparte. Sin identidad: sólo el agregado del dueño.
+ */
+describe('platosSinDueno · D622 mejora 2', () => {
+  it('🔴 cuenta los platos sin ninguna parte elegida y, aparte, los que están a medias', () => {
+    const m = mesa({
+      guarantee_mode: false,
+      items: [
+        item({ id: 'a', remaining_bps: 10000 }),
+        item({ id: 'b', remaining_bps: 10000 }),
+        item({ id: 'c', remaining_bps: 5000 }),
+        item({ id: 'd', remaining_bps: 0 }),
+      ],
+    });
+    expect(platosSinDueno(m)).toEqual({ sinDueno: 2, aMedias: 1 });
+  });
+
+  it('una línea con cantidad cuenta como UN plato (el renglón), no por unidad', () => {
+    const m = mesa({ guarantee_mode: false, items: [item({ id: 'a', quantity: 3, remaining_bps: 10000 })] });
+    expect(platosSinDueno(m)).toEqual({ sinDueno: 1, aMedias: 0 });
+  });
+
+  it('🔴 D389 · sin garantía, el plato de $0 ya cuenta como cubierto: no es «sin dueño»', () => {
+    const m = mesa({
+      guarantee_mode: false,
+      items: [item({ id: 'a', price_cents: 0, remaining_bps: 10000 }), item({ id: 'b', remaining_bps: 10000 })],
+    });
+    expect(platosSinDueno(m)).toEqual({ sinDueno: 1, aMedias: 0 });
+  });
+
+  it('un restante ilegible no se cuenta como nada: falla cerrado', () => {
+    const m = mesa({ guarantee_mode: false, items: [item({ id: 'a', remaining_bps: 10001 })] });
+    expect(platosSinDueno(m)).toBeNull();
   });
 });
