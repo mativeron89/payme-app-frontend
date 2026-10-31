@@ -206,6 +206,8 @@ test.describe('D363 · el recorrido', () => {
     const hoja = page.getByRole('dialog', { name: /Ticket · 3 consumos/ });
     await expect(hoja).toHaveAttribute('data-guia-convive', '');
     await expect(hoja.locator('.guia-burbuja')).toHaveCount(1);
+    // D622 · AF-2 · la guía no afirma nada del ticket: sin la franja del cuadre (D367).
+    await expect(hoja.locator('.cuadre-ticket')).toHaveCount(0);
     await expect(page.locator('.guia-capa[data-activa] .guia-punta')).toBeVisible();
     await geometria(page, 'hoja-ticket');
     // P5 · coordenadas de ventana: ya quietas la hoja y la burbuja (sus entradas duran 280 y 200 ms), la burbuja
