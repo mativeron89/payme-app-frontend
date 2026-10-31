@@ -130,8 +130,9 @@ test.describe('D622 · AF-2 · la tarjeta con el estado de la mesa', () => {
     await eligioOtro(page, C540, 5000);
     await refrescar(page);
     await expect(titular(page)).toHaveText('Falta elegir $270 de $840');
-    // Sin platos sin dueño (el agua de $0 ya cuenta como cubierta, D389) no hay «0 sin dueño».
-    await expect(platos(page)).toHaveCount(0);
+    // Sin platos sin dueño (el agua de $0 ya cuenta como cubierta, D389) no hay «0 sin dueño»: AF-3 (m3 de E06)
+    // dice qué falta, el plato que quedó a medias.
+    await expect(platos(page)).toHaveText('Queda 1 plato a medias.');
     // Nunca nombra a nadie ni cuenta personas.
     await expect(tarjeta(page)).not.toContainText(/sumaron|Otra|@/);
   });
