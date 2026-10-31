@@ -13,7 +13,7 @@
   - Con todos los platos con dueño y alguno a medias, la tarjeta dice «Queda 1 plato a medias.» / «Quedan N platos a medias.» (antes no decía qué faltaba). Texto propio, para la revisión de Mati.
   - Con «Cuadra con el ticket» ya no se ve también «Checa que el total coincida…»: la ayuda queda sólo cuando no hay total impreso con el que comparar.
 - **No se tocó** el lema de la pantalla de ingreso («Divide y paga la cuenta…»), que espera a Mati.
-- **Pruebas:** `src/qr/codificarQr.test.ts`, `src/components/CodigoQr.test.tsx`, `estadoDeLaMesaView.test.ts`; `e2e/qr-compartir-la-mesa.spec.ts` (el SVG en los dos lugares, entre el código y los botones, la matriz del link copiado con su zona de silencio, sin red, y ausente sin link), `e2e/sin-promesa-de-pago.spec.ts`, `e2e/cuadrar-ticket.spec.ts` y la guía sin QR. Probado sólo en mock. Que la cámara del iPhone lo lea lo cierra la prueba de Mati (D63).
+- **Pruebas:** `src/qr/codificarQr.test.ts`, `src/components/CodigoQr.test.tsx`, `estadoDeLaMesaView.test.ts`; `e2e/qr-compartir-la-mesa.spec.ts` (el SVG en los dos lugares, entre el código y los botones, la matriz del link copiado con su zona de silencio, sin red, y ausente sin link), `e2e/sin-promesa-de-pago.spec.ts`, `e2e/cuadrar-ticket.spec.ts`, `e2e/estado-de-la-mesa.spec.ts` (la línea «a medias») y la guía sin QR. Probado sólo en mock. Que la cámara del iPhone lo lea lo cierra la prueba de Mati (D63).
 
 ## 0.271.0 · 2026-10-31 (D622 · AF-2: estado de la mesa y cuadrar el ticket)
 
