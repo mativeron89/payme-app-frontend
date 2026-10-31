@@ -274,8 +274,12 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(tc).toHaveText('Tus consumos');
     await tc.click();
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
-    await page.locator('.qc-renglon .qc-fila').first().click();
-    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 plato');
+    // AF-1: el pie informa la parte; D369 conserva la cabecera sin cantidades.
+    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 de 4 partes');
+    const primerPlato = page.locator('.qc-renglon').first();
+    await primerPlato.locator('.qc-fila').click();
+    await expect(primerPlato.locator('.qc-mia')).toBeVisible();
+    await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 de 4 partes');
     await expect(tc).toHaveText('Tus consumos');
     await expect(tc).not.toContainText('toca para modificar');
   });
