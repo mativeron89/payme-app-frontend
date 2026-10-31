@@ -206,7 +206,8 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await dialogo.getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
     await dialogo.getByLabel('Precio por unidad').fill('196');
 
-    await expect(dialogo.getByText(/Checa que el total coincida/)).toContainText('$840');
+    // D622 · AF-2 · la diferencia la dice la franja del pie, con las dos cifras y lo que sobra.
+    await expect(dialogo.locator('.cuadre-ticket')).toHaveText('Tus platos suman $841 y el ticket dice $840: sobran $1.');
     expect(await dialogo.evaluate((node) => node.contains(document.activeElement))).toBe(true);
     await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Cerrar ticket tocando fuera' })).toHaveCount(0);

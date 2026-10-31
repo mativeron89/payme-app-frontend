@@ -9399,6 +9399,50 @@ h1.pay-title-lbl {
   justify-content: flex-end;
 }
 
+/* D622 · AF-2 · mejora 4 · la franja del cuadre, FIJA al pie de la hoja (fuera
+   de `.ticket-sheet-scroll`): se sigue viendo mientras se edita una fila. Ámbar
+   con el aviso si no cuadra, verde con el tilde si cuadra; las dos tintas son
+   las AA del sistema (--warning 5.10:1 y --success 5.21:1 sobre su tinte). */
+.cuadre-ticket {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid currentColor;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.cuadre-ticket svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.cuadre-ticket--no-cuadra {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+
+.cuadre-ticket--cuadra {
+  background: var(--success-tint);
+  color: var(--success);
+}
+
+/* El anuncio para lectores de pantalla: oculto a la vista, cambia sólo con el estado. */
+.cuadre-ticket-anuncio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* P2 · Garantía: la decisión de tarjeta se lee antes que la explicación y el
    CTA usa la misma barra estable del resto del flujo. */
 .gar-title .title-card-title {

@@ -100,6 +100,8 @@ import { AccionesDeCompartirEjemplo, AmigosDeEjemplo } from '../ayuda/ejemplo/Co
 import { CODIGO_EJEMPLO, PLATOS_DE_EJEMPLO, RESTAURANTE_DE_EJEMPLO, TOTAL_DE_EJEMPLO_CENTS } from '../ayuda/ejemplo/fixtureEjemplo';
 import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 import { filasDudosas, type MotivoDeDuda } from './filasDudosas';
+import { estadoDelCuadre } from './cuadreDelTicket';
+import { FranjaDelCuadre } from '../components/FranjaDelCuadre';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import { createInFlightMutex } from '../utils/inFlight';
 import { writeClipboardText } from '../utils/clipboard';
@@ -1203,10 +1205,19 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const notaDelAlta = (aparte: LoQueNoSeReparte): string | null => (sinGarantia
     ? notaNeutraDelAlta(aparte, t)
     : notaDeLoQueNoSeReparte(aparte, t));
-  const totalMismatch =
-    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents && desglose.tipo !== 'cierra'
-      ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
-      : null;
+  /**
+   * D622 · AF-2 · mejora 4 · el cuadre con el ticket: «cuadra», «sobran» o
+   * «faltan». La regla de cuándo NO cuadra es la de siempre (las dos cifras de
+   * fiar y el desglose impreso que no cierra); `totalMismatch` sale de acá para
+   * que la franja y la hoja forzada abierta nunca se contradigan.
+   */
+  const cuadre = estadoDelCuadre({
+    sumaItems: total,
+    impreso: scannedTotalCents,
+    desglose,
+    filasCompletas: ticketValid,
+  });
+  const totalMismatch = cuadre && cuadre.tipo !== 'cuadra' ? cuadre : null;
   const ticketForcedOpen = totalMismatch !== null;
   /**
    * D509 · cuando la suma no cierra con el ticket, las filas que explican la diferencia quedan marcadas para
@@ -3379,14 +3390,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                     </div>
                   )}
                 </div>
-                <div className={`title-card-note ${totalMismatch ? 'warn' : ''}`} aria-live="polite">
-                  <Icon name={totalMismatch ? 'warning' : 'info'} size={16} />
-                  <span>
-                    {totalMismatch
-                      ? <>{t('Checa que el total coincida con el total del ticket')}: {formatMXN(totalMismatch.printed)} · {formatMXN(Math.abs(totalMismatch.diff))} {totalMismatch.diff > 0 ? t('más') : t('menos')}</>
-                      : t('Checa que el total coincida con el total del ticket')}
-                  </span>
-                </div>
+                {/* D622 · AF-2 · mejora 4 · la diferencia pasó a la franja del pie (`FranjaDelCuadre`), que se sigue
+                    viendo al editar. Acá queda la ayuda de la hoja, sólo cuando no hay diferencia. */}
+                {!totalMismatch && (
+                  <div className="title-card-note">
+                    <Icon name="info" size={16} />
+                    <span>{t('Checa que el total coincida con el total del ticket')}</span>
+                  </div>
+                )}
                 {/* D484 · D486 · `pages_overlap_uncertain`: con varias fotos, el dueño no pudo saber con el TOTAL cuántos
                     renglones se repetían entre ellas. La persona corrige acá. */}
                 {solapeIncierto && (
@@ -3563,6 +3574,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               )}
               </div>
             </div>
+            {/* D622 · AF-2 · mejora 4 · fija al pie de la hoja, fuera del scroll. En el ejemplo de la guía no va
+                (D367: la guía no afirma nada del ticket). */}
+            {cuadre && !ejemplo && <FranjaDelCuadre estado={cuadre} t={t} />}
           </div>
           </div>
         )}

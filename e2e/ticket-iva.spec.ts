@@ -36,7 +36,8 @@ async function hastaElTicket(page: Page, ocr?: 'iva_incluido' | 'iva_agregado'):
 
 const hoja = (page: Page) => page.getByRole('dialog').filter({ has: page.locator('.tk-list') });
 const notaIva = (page: Page) => page.locator('.ticket-title-iva');
-const avisoAmbar = (page: Page) => page.locator('.title-card-note.warn');
+// D622 · AF-2 · el aviso de que no cierra pasó a la franja ámbar del pie de la hoja.
+const avisoAmbar = (page: Page) => page.locator('.cuadre-ticket--no-cuadra');
 
 async function abrirHoja(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Ver el ticket' }).click();

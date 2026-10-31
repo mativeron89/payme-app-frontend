@@ -203,7 +203,8 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await page.getByRole('button', { name: 'Leer ticket (2 fotos)', exact: true }).click();
     await expect(ticketListo(page)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Las fotos se superponían: revisa que ningún plato quede repetido.', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Checa que el total coincida con el total del ticket: /)).toBeVisible();
+    // D622 · AF-2 · la diferencia la dice la franja ámbar del pie de la hoja.
+    await expect(page.locator('.cuadre-ticket--no-cuadra')).toContainText('sobran');
     // D509 · la validación de números: el renglón leído dos veces vale justo lo que sobra, y las dos copias quedan
     // marcadas para revisar. No se corrige nada sola: siguen las dos.
     const dudosas = page.locator('.tk-row[data-duda="repetida"]');

@@ -829,12 +829,10 @@ export const EN: Record<string, string> = {
   "hace {0} min": "{0} min ago",
   "integrante": "member",
   "integrantes": "members",
-  "menos": "less",
   "menos de 1 min": "less than 1 min",
   "miembro": "member",
   "miembros": "members",
   "muerta": "dead",
-  "más": "more",
   "necesita que la confirmes con tu banco.": "needs you to confirm it with your bank.",
   "o Apple Pay": "or Apple Pay",
   "partes iguales": "split evenly",
@@ -1495,4 +1493,8 @@ export const EN: Record<string, string> = {
   "La propina de la mesa, {0}, se reparte entre {1}.": "The table's tip, {0}, is split among {1}.",
   "toda la cuenta": "the whole bill",
   "No queda nada por elegir": "Nothing is left to pick",
+  // D622 · AF-2 · mejora 4 · la franja del cuadre del ticket (textos de la especificación, §5).
+  "Tus platos suman {0} y el ticket dice {1}: sobran {2}.": "The dishes add up to {0} and the receipt says {1}: {2} too much.",
+  "Tus platos suman {0} y el ticket dice {1}: faltan {2}.": "The dishes add up to {0} and the receipt says {1}: {2} short.",
+  "Cuadra con el ticket: {0}.": "Matches the receipt: {0}.",
 };
