@@ -22,20 +22,25 @@ type Idioma = 'es' | 'en';
 
 /**
  * Las promesas de pago, como palabra entera:
- * - «pagar» y su familia («pago», «pagues», «pagado», «pagaste», «pagó», …);
+ * - «pagar» y toda su familia por la RAÍZ (`p[aá]g` y lo que siga: «pago», «pagues», «pagarás», «pagamos»,
+ *   «págalo», …), salvo «página(s)» (AF-4, m3 de E06 sobre AF-3: la lista cerrada dejaba pasar el futuro, la
+ *   primera del plural y los enclíticos);
  * - «cobrar» y su familia («cobro», «cobra», «cobramos», «cobrado», «se te cobra», …);
  * - «tarjeta» y «tarjetas».
  */
 const PROMESA_DE_PAGO = new RegExp([
   '(?<!\\p{L})(?:',
-  'pag(?:ar|o|os|a|as|an|ue|ues|uen|ad[oa]s?|aste|aron|ó|ando|arla|arlo)',
+  'p[aá]g(?!in[ao]s?(?!\\p{L}))\\p{L}*',
   '|cobr(?:ar|o|os|a|as|an|amos|e|es|en|ad[oa]s?|aste|aron|ó|ando|arte|arle|arles|ará|arán|aremos)',
   '|tarjetas?',
   ')(?!\\p{L})',
 ].join(''), 'iu');
 
-/** Lo mismo en inglés: «pay», «paid», «payment», «charge», «charged», «card», … («PayMe» no: sigue una letra). */
-const PROMESA_DE_PAGO_EN = /(?<!\p{L})(?:pay|pays|paid|paying|payment|payments|charge|charges|charged|charging|card|cards)(?!\p{L})/iu;
+/**
+ * Lo mismo en inglés: «pay», «paid», «payment», «charge», «charged», «card», … («PayMe» no: sigue una letra). AF-4
+ * (m3): también «billed», «billing», «checkout» y «payout». «bill» sola NO: es «la cuenta» («Split the bill»).
+ */
+const PROMESA_DE_PAGO_EN = /(?<!\p{L})(?:pay|pays|paid|paying|payment|payments|charge|charges|charged|charging|card|cards|billed|billing|checkouts?|payouts?)(?!\p{L})/iu;
 
 const PROMESA: Record<Idioma, RegExp> = { es: PROMESA_DE_PAGO, en: PROMESA_DE_PAGO_EN };
 
@@ -163,8 +168,8 @@ for (const idioma of ['es', 'en'] as const) {
       await expect(page.getByRole('heading', { name: T('Tu mesa'), exact: true })).toBeVisible();
       await abrirRegion(page, T('Quiénes están en la mesa'));
       await abrirRegion(page, T('Tus consumos'));
-      // Testigo: el plato que eligió otra cuenta se ve como tal.
-      await expect(page.getByText(T('Lo eligió otro'), { exact: true })).toBeVisible();
+      // Testigo: el plato que eligió otra cuenta se ve como tal (AF-4: con las iniciales de «los demás» del mock).
+      await expect(page.getByText(idioma === 'en' ? 'AM picked it' : 'Lo eligió AM', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
       await sinPromesa(page, idioma, 'Tu mesa');
       await page.getByRole('button', { name: T('Configuración de la mesa'), exact: true }).click();
@@ -179,7 +184,7 @@ for (const idioma of ['es', 'en'] as const) {
       await sembrar(page, false);
       await page.goto(`/#/mesa/${CODE}`);
       await expect(page.getByRole('heading', { name: T('¿Qué consumiste?'), exact: true })).toBeVisible();
-      await expect(page.getByText(T('Lo eligió otro'), { exact: true })).toBeVisible();
+      await expect(page.getByText(idioma === 'en' ? 'AM picked it' : 'Lo eligió AM', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
       await sinPromesa(page, idioma, '¿Qué consumiste?');
     });
@@ -190,19 +195,26 @@ test.describe('D622 · AF-2 · AF-3 · la expresión de la guarda', () => {
   test('SONDA · caza la familia de «pagar», «cobrar» y «tarjeta» y no confunde otras palabras', () => {
     for (const si of ['Para pagar tu parte', 'Pago sin confirmar', 'No queda nada que pagues', 'Pagado', 'Ya lo pagaste', 'Lo pagó otro',
       'Cuando se elija todo, se te cobra tu parte.', 'Te cobramos al final', 'Cobro pendiente', 'Ya te cobraron', 'Quedó cobrado', 'Ya lo pagaron',
-      'revisa que todos hayan cargado su tarjeta.', 'Tarjetas guardadas']) {
+      'revisa que todos hayan cargado su tarjeta.', 'Tarjetas guardadas',
+      // D622 · AF-4 · m3 de E06 sobre AF-3: las conjugaciones que la lista cerrada dejaba pasar.
+      'Pagarás tu parte', 'Se pagará al final', 'Pagaré después', 'Pagamos entre todos', 'Para pagarte', 'Págalo aquí',
+      'Que lo paguemos', 'Pagarían']) {
       expect(PROMESA_DE_PAGO.test(si), si).toBe(true);
     }
-    for (const no of ['Pagina', 'apagado', 'Propagar', 'empaque', 'Elige tus platos', 'recobrar', 'Tarjetero']) {
+    for (const no of ['Pagina', 'Página', 'páginas', 'paginas', 'apagado', 'Propagar', 'empaque', 'Elige tus platos', 'recobrar', 'Tarjetero']) {
       expect(PROMESA_DE_PAGO.test(no), no).toBe(false);
     }
   });
 
   test('SONDA · en inglés caza «pay», «charge» y «card» y no confunde «PayMe» ni otras palabras', () => {
-    for (const si of ['Pay your share', 'You paid', 'Payment pending', 'We will charge you', 'Charged to the card', 'Saved cards']) {
+    for (const si of ['Pay your share', 'You paid', 'Payment pending', 'We will charge you', 'Charged to the card', 'Saved cards',
+      // D622 · AF-4 · m3 de E06 sobre AF-3.
+      'You will be billed', 'Billing details', 'Go to checkout', 'Checkout', 'Payout pending', 'Payouts']) {
       expect(PROMESA_DE_PAGO_EN.test(si), si).toBe(true);
     }
-    for (const no of ['PayMe', 'Create a PayMe account', 'repay', 'discharge', 'cardinal', 'scorecard', 'Pick your dishes']) {
+    // «bill» sola es «la cuenta» («Split the bill»), un texto legítimo de la app: no es promesa de pago.
+    for (const no of ['PayMe', 'Create a PayMe account', 'repay', 'discharge', 'cardinal', 'scorecard', 'Pick your dishes',
+      'Split the bill', 'the whole bill', 'billboard']) {
       expect(PROMESA_DE_PAGO_EN.test(no), no).toBe(false);
     }
   });

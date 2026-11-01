@@ -102,6 +102,119 @@ async function vaAntes(a: Locator, b: Locator): Promise<boolean> {
   return a.evaluate((x, y) => !!y && (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, hb);
 }
 
+/**
+ * D622 · AF-4 · M1 de E06 sobre AF-3 · un espía sobre la FACHADA (`api.createInvitation`), no un contador de red: en
+ * mock no hay HTTP, y lo que importa es cuántas veces la app le pide el link al dueño. `modo` cambia la respuesta:
+ * - `sinLink`: la invitación sin `link` (el dueño no lo mandó), así la app no lo guarda y cada pedido llega a la
+ *   fachada: mide cuántas veces la HOJA lo pide;
+ * - `vence`: el primero vence a los `venceEnMs` y cada link lleva su número (`&n=1`, `&n=2`…), para distinguirlos.
+ */
+async function espiarCrearInvitacion(page: Page, modo: 'igual' | 'sinLink' | 'vence', venceEnMs = 0): Promise<void> {
+  await page.evaluate(async ({ modo, venceEnMs }) => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, unknown> };
+    const w = window as unknown as { __pedidosDeLink: number; __crearOriginal?: unknown };
+    w.__crearOriginal ??= api.createInvitation;
+    const original = w.__crearOriginal as (...a: unknown[]) => Promise<{ invitation: Record<string, unknown>; link?: string }>;
+    w.__pedidosDeLink = 0;
+    api.createInvitation = async (...a: unknown[]) => {
+      w.__pedidosDeLink += 1;
+      const n = w.__pedidosDeLink;
+      const r = await original(...a);
+      if (modo === 'sinLink') return { ...r, link: undefined };
+      if (modo === 'vence') {
+        const expires_at = new Date(Date.now() + (n === 1 ? venceEnMs : 3_600_000)).toISOString();
+        return { ...r, link: `${r.link}&n=${n}`, invitation: { ...r.invitation, expires_at } };
+      }
+      return r;
+    };
+  }, { modo, venceEnMs });
+}
+
+const pedidosDeLink = (page: Page) => page.evaluate(() => (window as unknown as { __pedidosDeLink: number }).__pedidosDeLink);
+
+async function aTuMesaConLink(page: Page) {
+  await prepararPortapapeles(page);
+  await ingresar(page);
+  const mesa = await abrirMesaConLink(page, { sinGarantia: true });
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  return mesa;
+}
+
+test.describe('D622 · AF-4 · M1 y m2 de E06 · cuántas veces la hoja pide el link y su vencimiento', () => {
+  test('🔴 M1 · la hoja pide el link UNA vez por apertura: ni al releer la mesa (10 s, D79) ni en otro render', async ({ page }) => {
+    await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'sinLink');
+    await abrirConfiguracionDeLaMesa(page);
+    await expect.poll(() => pedidosDeLink(page)).toBe(1);
+    // Más que una relectura completa con la hoja abierta: cada relectura vuelve a dibujar la hoja.
+    await page.waitForTimeout(12_000);
+    expect(await pedidosDeLink(page)).toBe(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
+    expect(await pedidosDeLink(page)).toBe(1);
+    // Otra apertura, otro pedido (sin link guardado).
+    await abrirConfiguracionDeLaMesa(page);
+    await expect.poll(() => pedidosDeLink(page)).toBe(2);
+    await page.waitForTimeout(1_000);
+    expect(await pedidosDeLink(page)).toBe(2);
+  });
+
+  test('🔴 M1 · con el link vigente guardado, reabrir la hoja no lo vuelve a pedir', async ({ page }) => {
+    const mesa = await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'igual');
+    await abrirConfiguracionDeLaMesa(page);
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    await expect(qrDe(hoja, mesa.code)).toBeVisible();
+    expect(await pedidosDeLink(page)).toBe(1);
+    await page.keyboard.press('Escape');
+    await abrirConfiguracionDeLaMesa(page);
+    await expect(qrDe(hoja, mesa.code)).toBeVisible();
+    await page.waitForTimeout(1_000);
+    expect(await pedidosDeLink(page)).toBe(1);
+  });
+
+  test('🔴 m2 · el QR vencido se va, y el de «Copiar link» es el que queda: el mismo link en los dos', async ({ page }) => {
+    const mesa = await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'vence', 4_000);
+    await abrirConfiguracionDeLaMesa(page);
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    const qr = qrDe(hoja, mesa.code);
+    await expect(qr).toBeVisible();
+    esElQrDelLink(await medirElQr(qr, `${mesa.link}&n=1`));
+    // Al vencer, sin QR (con la hoja abierta): no se muestra un link que ya no sirve.
+    await expect(qr).toHaveCount(0, { timeout: 8_000 });
+    await expect(hoja.locator('.codigo-qr')).toHaveCount(0);
+    // «Copiar link» genera el nuevo, y el QR vuelve con ESE link (D631: el mismo que se copia).
+    await hoja.getByRole('button', { name: 'Copiar link de invitación', exact: true }).click();
+    await expect(page.getByText('Link de invitación copiado ✓', { exact: true })).toBeVisible();
+    const copiado = (await copias(page)).at(-1)!;
+    expect(copiado).toBe(`${mesa.link}&n=2`);
+    await expect(qr).toBeVisible();
+    esElQrDelLink(await medirElQr(qr, copiado));
+    // Vigente: reabrir no lo pide otra vez.
+    await page.keyboard.press('Escape');
+    await abrirConfiguracionDeLaMesa(page);
+    await expect(qr).toBeVisible();
+    esElQrDelLink(await medirElQr(qr, copiado));
+    expect(await pedidosDeLink(page)).toBe(2);
+  });
+
+  test('m2 · vencido con la hoja cerrada: la próxima apertura lo pide otra vez', async ({ page }) => {
+    const mesa = await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'vence', 2_000);
+    await abrirConfiguracionDeLaMesa(page);
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    await expect(qrDe(hoja, mesa.code)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(3_000);
+    await abrirConfiguracionDeLaMesa(page);
+    await expect.poll(() => pedidosDeLink(page)).toBe(2);
+    esElQrDelLink(await medirElQr(qrDe(hoja, mesa.code), `${mesa.link}&n=2`));
+  });
+});
+
 test.describe('D622 · AF-3 · el QR de la mesa', () => {
   test('🔴 «Compartir la mesa»: entre el código y los botones, es el link copiado, con su zona de silencio y sin red', async ({ page }) => {
     await prepararPortapapeles(page);

@@ -104,6 +104,7 @@ import { leerParteDelDetalle, type TipSetting } from '../api/miParte';
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
 import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
 import { esCodigoDeEjemplo } from '../ayuda/ejemplo/fixtureEjemplo';
+import { linkDelQrVigente, msHastaQueVenza } from './linkDelQr';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
 import {
   mensajeDeRechazo,
@@ -558,8 +559,12 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   /**
    * D622 · AF-3 · el link del QR de la hoja del engranaje, atado a su mesa. Se pide al abrir la hoja: el dueño
    * reutiliza la invitación por link pendiente de la mesa, así que es el mismo link que copia «Copiar link» (D631).
+   * AF-4 · m2 de E06: con su vencimiento (`expires_at`). Vencido no se muestra, y la próxima apertura lo pide otra
+   * vez; «Copiar link» lo reemplaza por el que copia, así el QR y lo copiado son siempre el mismo link.
    */
-  const [linkDelQr, setLinkDelQr] = useState<{ readonly code: string; readonly link: string } | null>(null);
+  const [linkDelQr, setLinkDelQr] = useState<{
+    readonly code: string; readonly link: string; readonly expiresAt: string;
+  } | null>(null);
   const qrAttemptsRef = useRef<Map<string, string>>(new Map());
   const qrInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
@@ -670,6 +675,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
 
   async function copyInvitationLink() {
     if (!shareInFlightRef.current.tryEnter()) return;
+    const identityEpoch = identityEpochRef.current.capture();
     try {
       let link = shareLinksRef.current.get(code) ?? null;
       if (!link) {
@@ -690,6 +696,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         shareAttemptsRef.current.delete(code);
         link = invitation.link;
         shareLinksRef.current.set(code, link);
+        // D622 · AF-4 · m2 · el QR de la hoja muestra el link que se acaba de copiar (D631), con su vencimiento.
+        if (identityEpochRef.current.isCurrent(identityEpoch)) {
+          setLinkDelQr({ code, link, expiresAt: invitation.invitation.expires_at });
+        }
       }
       try {
         const copied = await writeClipboardText(link);
@@ -720,7 +730,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * «Copiar link» sigue al lado y avisa lo suyo. La clave se conserva sólo cuando no se sabe si se creó.
    */
   async function pedirLinkDelQr(): Promise<void> {
-    if (linkDelQr?.code === code) return;
+    // AF-4 · m2 · un link guardado sólo vale mientras no venza: vencido, se pide otra vez.
+    if (linkDelQr?.code === code && linkDelQrVigente(linkDelQr.expiresAt, Date.now())) return;
     // El candado de ESTA identidad: si cambia la mesa o la sesión, el reinicio pone otro y este pedido no lo suelta.
     const candado = qrInFlightRef.current;
     if (!candado.tryEnter()) return;
@@ -737,7 +748,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!invitation.link) return;
       qrAttemptsRef.current.delete(pedido);
       if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
-      setLinkDelQr({ code: pedido, link: invitation.link });
+      setLinkDelQr({ code: pedido, link: invitation.link, expiresAt: invitation.invitation.expires_at });
     } catch (err) {
       const failure = extractApiError(err);
       if (isDefinitiveMutationError(failure.code, failure.status)) qrAttemptsRef.current.delete(pedido);
@@ -745,6 +756,17 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       candado.leave();
     }
   }
+
+  // AF-4 · m2 · al vencer, el link del QR se descarta: el QR se va de la hoja abierta (sin esperar la relectura) y la
+  // próxima apertura lo pide otra vez.
+  useEffect(() => {
+    if (!linkDelQr) return undefined;
+    const vencido = linkDelQr;
+    const timer = window.setTimeout(() => {
+      setLinkDelQr((actual) => (actual === vencido ? null : actual));
+    }, msHastaQueVenza(vencido.expiresAt, Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [linkDelQr]);
 
   // Una sola lectura completa para carga, Listo y recuperación. La época
   // invalida respuestas anteriores, incluida una lectura silenciosa en vuelo.
@@ -3508,7 +3530,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onCloseInvite={() => setInviteOpen(false)}
       memoriaDeInvitaciones={memoriaDeInvitaciones}
       onCopyInvitationLink={() => void copyInvitationLink()}
-      linkDelQr={linkDelQr?.code === code ? linkDelQr.link : null}
+      linkDelQr={linkDelQr?.code === code && linkDelQrVigente(linkDelQr.expiresAt, Date.now()) ? linkDelQr.link : null}
       onPedirLinkDelQr={() => void pedirLinkDelQr()}
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
