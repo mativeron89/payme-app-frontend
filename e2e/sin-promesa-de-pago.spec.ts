@@ -25,13 +25,15 @@ type Idioma = 'es' | 'en';
  * - «pagar» y toda su familia por la RAÍZ (`p[aá]g` y lo que siga: «pago», «pagues», «pagarás», «pagamos»,
  *   «págalo», …), salvo «página(s)» (AF-4, m3 de E06 sobre AF-3: la lista cerrada dejaba pasar el futuro, la
  *   primera del plural y los enclíticos);
- * - «cobrar» y su familia («cobro», «cobra», «cobramos», «cobrado», «se te cobra», …);
+ * - «cobrar» y toda su familia también por la RAÍZ (`c[oó]br` y lo que siga: «cobro», «cobrarás», «cobraría»,
+ *   «cóbralo», «cobrándote», …). AF-6, m1 de E06 sobre AF-4: la lista cerrada dejaba pasar el futuro, el
+ *   condicional y los enclíticos, la misma clase que m3 en «pagar». «recobrar» sigue afuera (va pegada a una letra);
  * - «tarjeta» y «tarjetas».
  */
 const PROMESA_DE_PAGO = new RegExp([
   '(?<!\\p{L})(?:',
   'p[aá]g(?!in[ao]s?(?!\\p{L}))\\p{L}*',
-  '|cobr(?:ar|o|os|a|as|an|amos|e|es|en|ad[oa]s?|aste|aron|ó|ando|arte|arle|arles|ará|arán|aremos)',
+  '|c[oó]br\\p{L}*',
   '|tarjetas?',
   ')(?!\\p{L})',
 ].join(''), 'iu');
@@ -84,6 +86,17 @@ async function loQueSeLee(page: Page, raiz: string): Promise<string> {
       .filter((v): v is string => !!v);
     return [base.innerText, ...atributos].join('\n');
   }, raiz);
+}
+
+/**
+ * D622 · AF-6 · la banda «Demo · datos de ejemplo, no se cobra dinero real» existe SÓLO en el riel mock
+ * (`LoginScreen.tsx`, `IS_MOCK`): en el build real ese nodo no se renderiza, así que no es algo que la persona vea.
+ * Para medir el formulario de alta como se ve en producción se la saca de la lectura, y sólo a ella.
+ */
+async function sinLaBandaDelMock(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll<HTMLElement>('.ingreso-demo')) el.style.display = 'none';
+  });
 }
 
 async function sinPromesa(page: Page, idioma: Idioma, donde: string, raiz = 'body'): Promise<void> {
@@ -149,9 +162,30 @@ for (const idioma of ['es', 'en'] as const) {
       await sinPromesa(page, idioma, 'A1');
       await page.getByRole('button', { name: T('Crear cuenta gratis'), exact: true }).click();
       await expect(page.locator('.title-card')).toBeVisible();
-      // Sólo la tarjeta del link: debajo va el formulario de alta de siempre, que no es de la mesa (su lema,
-      // «Divide y paga la cuenta…», espera a Mati: no es de esta orden).
-      await sinPromesa(page, idioma, 'alta con link', '.title-card');
+      await sinPromesa(page, idioma, 'alta con link · la tarjeta del link', '.title-card');
+      // AF-6 · D673: también el formulario de alta de debajo, con su lema (antes «Divide y paga la cuenta…»).
+      await expect(page.getByLabel(T('Nombre'), { exact: true })).toBeVisible();
+      await sinLaBandaDelMock(page);
+      await sinPromesa(page, idioma, 'alta con link · el formulario');
+    });
+
+    test('🔴 AF-6 · el formulario de alta pública («Crea tu cuenta»), con su lema', async ({ page }) => {
+      await preparar(page, idioma);
+      await page.addInitScript(() => localStorage.setItem('payme.app.mock.public_signup.v1', 'true'));
+      await page.goto('/');
+      // Testigo de que el config ya llegó (el botón de Google sólo se dibuja con la capability leída): sin él, el
+      // lema del estado inicial —el cerrado— pasaría la guarda antes de que el dueño conteste.
+      await expect(page.getByRole('group', { name: T('Continuar con Google') })).toBeVisible();
+      await page.getByRole('button', { name: T('Crea tu cuenta'), exact: true }).click();
+      await expect(page.getByLabel(T('Nombre'), { exact: true })).toBeVisible();
+      await expect(page.getByLabel(T('Apellido'), { exact: true })).toBeVisible();
+      await sinLaBandaDelMock(page);
+      await sinPromesa(page, idioma, 'alta pública');
+      // Y la pantalla de «Entrar», que comparte el lema.
+      await page.getByRole('button', { name: T('Ya tengo cuenta → entrar'), exact: true }).click();
+      await expect(page.getByLabel(T('Contraseña'), { exact: true })).toBeVisible();
+      await sinLaBandaDelMock(page);
+      await sinPromesa(page, idioma, 'Entrar');
     });
 
     test('🔴 el link sin sesión sin alta pública (A2)', async ({ page }) => {
@@ -198,7 +232,9 @@ test.describe('D622 · AF-2 · AF-3 · la expresión de la guarda', () => {
       'revisa que todos hayan cargado su tarjeta.', 'Tarjetas guardadas',
       // D622 · AF-4 · m3 de E06 sobre AF-3: las conjugaciones que la lista cerrada dejaba pasar.
       'Pagarás tu parte', 'Se pagará al final', 'Pagaré después', 'Pagamos entre todos', 'Para pagarte', 'Págalo aquí',
-      'Que lo paguemos', 'Pagarían']) {
+      'Que lo paguemos', 'Pagarían',
+      // D622 · AF-6 · m1 de E06 sobre AF-4: «cobrar» por la raíz, como «pagar».
+      'Te lo cobrarás', 'Se cobraría al final', 'Cóbralo aquí', 'Cobrándote tu parte', 'Cóbrate', 'COBRAREMOS']) {
       expect(PROMESA_DE_PAGO.test(si), si).toBe(true);
     }
     for (const no of ['Pagina', 'Página', 'páginas', 'paginas', 'apagado', 'Propagar', 'empaque', 'Elige tus platos', 'recobrar', 'Tarjetero']) {
