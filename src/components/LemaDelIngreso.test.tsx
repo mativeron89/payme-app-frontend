@@ -41,7 +41,7 @@ describe('D673 · el lema del ingreso sigue a la capacidad de pagos', () => {
     }
   });
 
-  it('en inglés: «Split the bill with your friends…» sin pagos, y el de siempre con pagos', () => {
+  it('con el idioma EN: «Split the bill with your friends…» sin pagos, y el de siempre con pagos', () => {
     vi.stubGlobal('localStorage', { getItem: () => 'en', setItem: () => undefined, removeItem: () => undefined });
     expect(texto(riel(false))).toBe('<div class="ingreso-sub">Split the bill with your friends, from wherever you are</div>');
     expect(texto(riel(true))).toBe('<div class="ingreso-sub">Split and pay the bill from wherever you are</div>');
