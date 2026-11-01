@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DISPOSITIVOS, archivoDe, hrefDe, leerPng, mediaDe, type PngLeido } from '../scripts/imagenes-de-arranque.mjs';
-import { ingresar } from './_app';
+import { abrirMesaConLink, ingresar } from './_app';
 
 /** El mínimo de D292 (D498: 4 s; la adenda 2 lo había dejado en 2 s) y el fundido de `src/splash.ts`. */
 const MINIMO_MS = 4_000;
@@ -521,4 +521,43 @@ test.describe('🔴 D300 · las imágenes de arranque son la pantalla de carga s
       }
     });
   }
+});
+
+/**
+ * AF-7 · I1 · B1 (auditoría del PR #118): el plazo de 1,5 s de la vista previa del link se cuenta desde que la pantalla
+ * SE VE, que en el build es cuando sale la pantalla de carga (el mínimo de 4 s), no desde que JoinMesaScreen se monta
+ * debajo. Con el mock lento (1,3 s por respuesta), la config y la vista previa llegan unos 2,6 s después de montar:
+ * todavía debajo de la pantalla de carga. Contado desde el montaje, el plazo se vencía y la vista previa no aparecía;
+ * contado desde que se ve, aparece, y nunca cambia después de verse.
+ */
+test.describe('🔴 AF-7 · B1 · la vista previa del link con la pantalla de carga de 4 s', () => {
+  test('con la config y la respuesta lentas (debajo de la pantalla de carga), el título dice quién invita al verse', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+      localStorage.setItem('payme.app.mock.link_preview.v1', 'encendido');
+    });
+    await page.goto('/');
+    await ingresar(page);
+    const mesa = await abrirMesaConLink(page, { sinGarantia: true });
+    const datos = await page.evaluate((code) => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!) as {
+        user: { first_name: string };
+        mesas: Array<{ code: string; restaurant: { name: string } }>;
+      };
+      localStorage.removeItem('payme_app_session__mock');
+      localStorage.setItem('payme.app.mock.latencia.v1', '1300');
+      return { nombre: st.user.first_name, restaurante: st.mesas.find((m) => m.code === code)!.restaurant.name };
+    }, mesa.code);
+    await medirLaCarga(page);
+    await page.goto(`/${mesa.link.slice(mesa.link.indexOf('#'))}`);
+    const titulo = page.getByRole('heading', { level: 1 });
+    await expect(page.locator('#splash')).toHaveCount(0, { timeout: 15_000 });
+    const carga = await page.evaluate(() => (window as unknown as { __carga: Carga }).__carga);
+    expect(carga.retiradoEn ?? 0, 'la pantalla de carga estuvo su mínimo').toBeGreaterThanOrEqual(MINIMO_MS);
+    await expect(titulo).toHaveText(`${datos.nombre} te invitó a su mesa en ${datos.restaurante}`, { timeout: 2_000 });
+    // Y no cambia después: sigue igual pasado el plazo contado desde que se vio.
+    await page.waitForTimeout(2_000);
+    await expect(titulo).toHaveText(`${datos.nombre} te invitó a su mesa en ${datos.restaurante}`);
+  });
 });

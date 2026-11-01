@@ -18,6 +18,7 @@ import {
   type VistaPreviaDelLink,
 } from '../api/vistaPreviaDelLink';
 import { autoridadDeAlta } from './LoginScreen';
+import { seVeLaAppDesde } from '../splash';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { BarraDeLink } from '../components/BarraDeLink';
@@ -218,11 +219,12 @@ export function JoinMesaScreen({
   const [vista, setVista] = useState<{ readonly de: string; readonly v: VistaPreviaDelLink | null }>(
     () => ({ de: token, v: vistaPreviaRecordada(token) }),
   );
-  // AF-7 · I1 · el plazo de 1,5 s se cuenta desde que la pantalla de ESTE token se ve (el primer efecto después de
-  // dibujarla), no desde el pedido: si la config tarda, el título no cambia tarde.
+  // AF-7 · I1 · el plazo de 1,5 s se cuenta desde que la pantalla de ESTE token se ve, no desde el pedido: si la config
+  // tarda, el título no cambia tarde. B1 · «se ve» es el máximo entre el montaje y el retiro de la pantalla de carga
+  // (`seVeLaAppDesde`): en una apertura, la app se monta debajo de ella y se ve unos 4,2 s después.
   const vistaDesde = useRef(Date.now());
   useEffect(() => {
-    vistaDesde.current = Date.now();
+    vistaDesde.current = seVeLaAppDesde();
   }, [token]);
   useEffect(() => {
     if (session || capacidadVista !== 'encendida') return;

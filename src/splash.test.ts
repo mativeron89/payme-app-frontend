@@ -4,8 +4,10 @@ import {
   MINIMO_DE_ESTE_BUILD_MS,
   SPLASH_MINIMO_MS,
   SPLASH_RENDICION_MS,
+  SPLASH_FUNDIDO_MS,
   demoraDeRetiro,
   desdeElPrimerCuadro,
+  momentoEnQueSeVe,
 } from './splash';
 
 const CRUDOS = import.meta.glob(['/index.html', '/src/main.tsx', '/src/styles/global.css'], {
@@ -322,5 +324,40 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 4 segundos (Mati, 
    */
   it('🔴 main.tsx retira el splash, y lo hace después del primer paint', () => {
     expect(MAIN).toContain('requestAnimationFrame(() => retirarSplash())');
+  });
+});
+
+/**
+ * AF-7 · I1 · B1 (auditoría del PR #118): cuándo SE VE lo que la app montó debajo de la pantalla de carga. Es el ancla del
+ * plazo de 1,5 s de la vista previa del link: contado desde el montaje, se vencía todavía debajo de la pantalla de carga.
+ */
+describe('AF-7 · B1 · cuándo se ve la app (momentoEnQueSeVe)', () => {
+  const FCP = [{ name: 'first-contentful-paint', startTime: 30 }];
+  const EPOCA = 1_793_520_000_000;
+
+  it('🔴 con la pantalla de carga puesta: cuando termine su mínimo desde el primer cuadro, más el fundido', () => {
+    // Montó a los 35 ms (performance.now): faltan 4000 − 5 = 3995 ms para fundir, más el fundido.
+    expect(momentoEnQueSeVe({ ahoraEpocaMs: EPOCA, ahoraMs: 35, haySplash: true, entradas: FCP, minimoMs: SPLASH_MINIMO_MS }))
+      .toBe(EPOCA + (SPLASH_MINIMO_MS - 5) + SPLASH_FUNDIDO_MS);
+  });
+
+  it('si la app tardó más que el mínimo, se ve con el fundido, enseguida', () => {
+    expect(momentoEnQueSeVe({ ahoraEpocaMs: EPOCA, ahoraMs: 6_000, haySplash: true, entradas: FCP, minimoMs: SPLASH_MINIMO_MS }))
+      .toBe(EPOCA + SPLASH_FUNDIDO_MS);
+  });
+
+  it('sin la pantalla de carga (ya salió, o la pantalla se monta después): ahora', () => {
+    expect(momentoEnQueSeVe({ ahoraEpocaMs: EPOCA, ahoraMs: 35, haySplash: false, entradas: FCP, minimoMs: SPLASH_MINIMO_MS }))
+      .toBe(EPOCA);
+  });
+
+  it('sin el primer cuadro anotado, el mínimo se cuenta desde ahora (como el retiro)', () => {
+    expect(momentoEnQueSeVe({ ahoraEpocaMs: EPOCA, ahoraMs: 35, haySplash: true, entradas: [], minimoMs: SPLASH_MINIMO_MS }))
+      .toBe(EPOCA + SPLASH_MINIMO_MS + SPLASH_FUNDIDO_MS);
+  });
+
+  it('con el mínimo de este build en 0 (la marca de la e2e), sólo el fundido', () => {
+    expect(momentoEnQueSeVe({ ahoraEpocaMs: EPOCA, ahoraMs: 35, haySplash: true, entradas: FCP, minimoMs: 0 }))
+      .toBe(EPOCA + SPLASH_FUNDIDO_MS);
   });
 });

@@ -72,6 +72,34 @@ export function desdeElPrimerCuadro(entradas: readonly EntradaDePintado[], ahora
   return fcp ? Math.min(fcp.startTime, ahoraMs) : ahoraMs;
 }
 
+/**
+ * AF-7 · I1 · B1 (auditoría del PR #118) · cuándo SE VE lo que la app dibujó debajo de la pantalla de carga, en la escala
+ * de `Date.now()`. Con el `#splash` puesto: cuando termina su mínimo desde el primer cuadro (el mismo cálculo que
+ * `retirarSplash`) más el fundido. Sin el `#splash` (ya salió, o la pantalla se monta después): ahora. Es el ancla del
+ * plazo de 1,5 s de la vista previa del link: la app se monta a los ~35 ms, pero se ve unos 4,2 s después.
+ */
+export function momentoEnQueSeVe({ ahoraEpocaMs, ahoraMs, haySplash, entradas, minimoMs }: {
+  readonly ahoraEpocaMs: number;
+  readonly ahoraMs: number;
+  readonly haySplash: boolean;
+  readonly entradas: readonly EntradaDePintado[];
+  readonly minimoMs: number;
+}): number {
+  if (!haySplash) return ahoraEpocaMs;
+  return ahoraEpocaMs + demoraDeRetiro(ahoraMs - desdeElPrimerCuadro(entradas, ahoraMs), minimoMs) + SPLASH_FUNDIDO_MS;
+}
+
+/** Cáscara de `momentoEnQueSeVe` con el reloj, el DOM y el mínimo de este build. */
+export function seVeLaAppDesde(): number {
+  return momentoEnQueSeVe({
+    ahoraEpocaMs: Date.now(),
+    ahoraMs: performance.now(),
+    haySplash: typeof document !== 'undefined' && document.getElementById('splash') !== null,
+    entradas: entradasDePintado(),
+    minimoMs: MINIMO_DE_ESTE_BUILD_MS,
+  });
+}
+
 /** Las entradas de pintado del navegador; ninguna si no implementa Paint Timing. */
 function entradasDePintado(): readonly EntradaDePintado[] {
   return typeof performance.getEntriesByType === 'function' ? performance.getEntriesByType('paint') : [];

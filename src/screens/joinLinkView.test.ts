@@ -336,7 +336,8 @@ describe('AF-5 · el cableado de la pantalla (guardarraíl de fuente: no hay lib
     const p = pantalla();
     // AF-7 · I1 · con el momento en que se vio la pantalla de este token (no el del pedido).
     expect(p).toContain('vistaPreviaDelLink(token, (tk) => api.getVistaPreviaDelLink(tk), vistaDesde.current)');
-    expect(p).toMatch(/useEffect\(\(\) => \{\s*vistaDesde\.current = Date\.now\(\);\s*\}, \[token\]\);/);
+    // B1 · y «se ve» es el máximo entre el montaje y el retiro de la pantalla de carga.
+    expect(p).toMatch(/useEffect\(\(\) => \{\s*vistaDesde\.current = seVeLaAppDesde\(\);\s*\}, \[token\]\);/);
     expect(p).toMatch(/if \(session \|\| capacidadVista !== 'encendida'\) return;/);
     // La `key` de cada tarjeta no depende de la vista previa: cambiar el título no repite la entrada.
     expect(p).toContain('key="signup"');
