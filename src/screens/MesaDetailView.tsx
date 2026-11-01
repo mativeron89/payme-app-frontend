@@ -57,6 +57,8 @@ import { textoDeLaPropinaDeLaMesa } from './propinaDeLaMesaView';
 import { compartirTexto, montoDeAjustes, textoDelReparto } from './compartirReparto';
 import type { PreparacionListo } from './mesaRecovery';
 import { CodigoQr } from '../components/CodigoQr';
+import { FichasDeIniciales } from '../components/FichasDeIniciales';
+import { FICHAS_POR_PLATO, fichasALaVista, quienEligioDelPlato, textoDeQuienEligio } from './quienEligioView';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -697,8 +699,10 @@ export function MesaDetailView({
     }
   }, [hojaDeLaMesa, hayConfiguracion, onCloseInvite]);
   /**
-   * D622 · AF-3 · al abrir la hoja (y si la mesa recibe gente) se pide el link del QR, una vez por apertura: la
-   * relectura de la mesa cada 10 s (D79) no lo vuelve a pedir. Sin link, la hoja va sin QR.
+   * D622 · AF-3 · al abrir la hoja (y si la mesa recibe gente) se avisa una vez por apertura que hace falta el link
+   * del QR: la relectura de la mesa cada 10 s (D79) y cualquier otro render no lo vuelven a pedir (AF-4, M1 de E06:
+   * lo fija `e2e/qr-compartir-la-mesa.spec.ts` con un espía sobre la fachada). `MesaScreen` no sale a la red si ya
+   * tiene un link vigente (m2). Sin link, la hoja va sin QR.
    */
   const pedirLinkDelQrRef = useRef(onPedirLinkDelQr);
   pedirLinkDelQrRef.current = onPedirLinkDelQr;
@@ -1040,6 +1044,11 @@ export function MesaDetailView({
             del renglón, que se va al elegir la porción; ya no lo reemplaza y,
             mientras está abierta, la lista sí se mueve);
           - reglas 5 y 6: «Queda ½» y «Lo eligió otro», sin nombre;
+          - D622 · AF-4 · D628 · D639: con el dato del dueño (`members_version=1`),
+            las iniciales de quienes eligieron el plato en lugar de «Lo eligió
+            otro» (y debajo del nombre en un plato a medias o en uno propio que
+            comparte alguien más). Nunca el nombre ni montos de otros; sin el
+            dato, como antes;
           - regla 7: se suelta tocando el círculo o «Soltar», sin X roja.
           El estado (selección, límites de D79, bloqueos) sigue siendo de
           `MesaScreen`: acá sólo se dibuja y se avisan intenciones. */}
@@ -1091,6 +1100,20 @@ export function MesaDetailView({
           const queda = !sel && !registrado && !bloqueado && (esConsumo
             ? state === 'parcial'
             : restanteIgual !== null && restanteIgual > 0 && restanteIgual < 10000);
+          // D622 · AF-4 · quién eligió el plato: sólo por consumo, fuera de la guía y con el dato del dueño.
+          const quien = quienEligioDelPlato(i, { esConsumo, ejemplo });
+          const textoQuien = quien ? textoDeQuienEligio(quien, t) : null;
+          const lineaQuien = quien && textoQuien ? (() => {
+            const { visibles, resto } = fichasALaVista(quien, FICHAS_POR_PLATO);
+            return (
+              <span className="qc-quien">
+                <FichasDeIniciales visibles={visibles} resto={resto} t={t} />
+                <span className="qc-etiqueta">{textoQuien}</span>
+              </span>
+            );
+          })() : null;
+          // El nombre accesible con quién: «Pizza, $185, Lo eligieron AM y LP» (el precio de la línea, nunca el de nadie).
+          const ariaQuien = lineaQuien ? `${t(', {0}', formatMXN(fullPrice))}${t(', {0}', textoQuien)}` : '';
 
           if (sel || registrado) {
             const bps = sel ? (selected.get(i.id) ?? 10000) : i.my_bps;
@@ -1150,7 +1173,7 @@ export function MesaDetailView({
                 className="qc-fila qc-mia"
                 data-estado={sel ? 'mio' : 'registrado'}
                 role="group"
-                aria-label={registrado ? `${nombreAria}${t(', {0}', etiquetaDeLoMio(i, t))}` : nombreAria}
+                aria-label={`${registrado ? `${nombreAria}${t(', {0}', etiquetaDeLoMio(i, t))}` : nombreAria}${ariaQuien}`}
               >
                 {sel && !editBloqueado ? (
                   <button
@@ -1181,10 +1204,12 @@ export function MesaDetailView({
                     con palabras en una segunda línea («Pagaste ½ · elegiste ½
                     más»), como «Lo eligió otro»: confundir elegido con pagado es
                     confundir plata. Sin pago, la píldora ya dice la porción. */}
-                {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0 ? (
+                {(registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0) || lineaQuien ? (
                   <span className="qc-cuerpo">
                     {titulo('qc-nombre qc-nombre--mio')}
-                    <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>
+                    {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0
+                      && <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>}
+                    {lineaQuien}
                   </span>
                 ) : titulo('qc-nombre qc-nombre--mio')}
                 {sel && opciones.length > 1 && !editBloqueado ? (
@@ -1210,11 +1235,16 @@ export function MesaDetailView({
 
           if (bloqueado) {
             return (
-              <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
+              <div
+                key={i.id}
+                className="qc-fila qc-otro"
+                data-estado={state}
+                aria-label={state === 'tomado' && lineaQuien ? `${nombreAria}${ariaQuien}` : `${nombreAria}${tag ? t(', {0}', tag) : ''}`}
+              >
                 <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
                 <span className="qc-cuerpo">
                   {titulo('qc-nombre qc-nombre--otro')}
-                  {tag && <span className="qc-etiqueta">{tag}</span>}
+                  {state === 'tomado' && lineaQuien ? lineaQuien : tag && <span className="qc-etiqueta">{tag}</span>}
                 </span>
                 <span className="qc-precio qc-precio--otro">{formatMXN(fullPrice)}</span>
               </div>
@@ -1229,11 +1259,11 @@ export function MesaDetailView({
               data-estado={queda ? 'queda' : 'libre'}
               disabled={editBloqueado}
               aria-pressed={false}
-              aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}
+              aria-label={`${nombreAria}${ariaQuien}${tag ? t(', {0}', tag) : ''}`}
               onClick={() => tomarPlato(i.id, opciones.length)}
             >
               <span className="qc-circulo" aria-hidden="true" />
-              {titulo('qc-nombre')}
+              {lineaQuien ? <span className="qc-cuerpo">{titulo('qc-nombre')}{lineaQuien}</span> : titulo('qc-nombre')}
               {queda && tag && <span className="qc-pildora qc-pildora--queda">{tag}</span>}
               <span className="qc-precio">{formatMXN(fullPrice)}</span>
             </button>

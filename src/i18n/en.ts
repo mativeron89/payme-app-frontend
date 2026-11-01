@@ -1516,4 +1516,10 @@ export const EN: Record<string, string> = {
   // la revisión de textos de Mati (D622).
   "Queda 1 plato a medias.": "1 dish is partly picked.",
   "Quedan {0} platos a medias.": "{0} dishes are partly picked.",
+  // D622 · AF-4 · mejoras 2 y 3 · D628 · D639 · quién eligió cada plato y cuántos se sumaron (textos de la
+  // especificación, §2 y §3). «tú» (quien mira) ya está, en el EN de Viajes (`viajes/viaje.ts`). Para la revisión de textos de Mati (D622).
+  "Lo eligió {0}": "{0} picked it",
+  "Lo eligieron {0} y {1}": "{0} and {1} picked it",
+  "Lo eligieron {0}, {1} y {2} más": "{0}, {1} and {2} more picked it",
+  "Se sumaron {0} de {1}": "{0} of {1} have joined",
 };

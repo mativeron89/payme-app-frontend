@@ -10311,6 +10311,86 @@ h1.pay-title-lbl {
   color: var(--text-muted);
 }
 
+/* D622 · AF-4 · mejoras 2 y 3 · D628 · las fichas de iniciales. Decorativas: lo dice el texto de al lado. Las
+   iniciales en blanco sobre el tono de su orden de llegada (≥ 4.5:1, y el tono ≥ 3:1 contra --surface, --danger-l y
+   --teal-l: lo fija quienEligioView.test.ts). Quien mira es «Tú» con borde --action; el «?» de un esperado que falta,
+   punteado; «+N», sobre --border. Se superponen un poco, con un aro del fondo para separarlas. */
+.qc-quien {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.qc-quien .qc-etiqueta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qc-fichas {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.qc-ficha {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1.5px solid var(--surface);
+  border-radius: var(--r-full);
+  font-family: var(--font-body);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.qc-ficha + .qc-ficha {
+  margin-left: -4px;
+}
+
+.qc-ficha--tu {
+  border-color: var(--action);
+  background: var(--surface);
+  color: var(--action);
+}
+
+.qc-ficha--falta {
+  border: 1.5px dashed var(--text-muted);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.qc-ficha--mas {
+  background: var(--border);
+  color: var(--text);
+}
+
+.estado-mesa .estado-mesa-personas {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+
+.estado-mesa-personas .qc-ficha {
+  min-width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
 .propina-mesa-lectura {
   margin: 0 0 12px;
   font-size: var(--fs-sm);

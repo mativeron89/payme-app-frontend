@@ -1710,6 +1710,10 @@ function ajustesAplicablesMock(m: MockMesa): { D: number; S: number; V: number; 
 }
 
 export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
+  const miembros = miembrosMock(m, identity);
+  const miembrosAntiguos = (() => {
+    try { return localStorage.getItem('payme.app.mock.miembros.v1') === 'antiguo'; } catch { return false; }
+  })();
   const restantesInformativos = admiteSeleccionInformativa(m) ? restanteInformativoPorPlato(m) : null;
   const parteAntigua = (() => {
     try { return localStorage.getItem('payme.app.mock.parte_pagada.v1') === 'antiguo'; } catch { return false; }
@@ -1782,6 +1786,8 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
           my_paid_bps: i.claims.filter((c) => c.who === identity && c.status === 'paid').reduce((s, c) => s + c.fraction_bps, 0),
           my_releasable_bps: i.claims.filter((c) => c.who === identity && c.status === 'locked').reduce((s, c) => s + c.fraction_bps, 0),
         }),
+        // D622 · D628 · AF-4 · `members_version=1`: quienes tienen una parte del plato (en null para el invitado viejo).
+        ...(!miembrosAntiguos && (miembros ? miembros.eligieron(i) : { picked_by: null, picked_by_more: null })),
       };
     }),
     ...(slots && { division_slots: slots }),
@@ -1818,6 +1824,59 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
       : {}),
     // D344 · `share_version=1`: la app siempre lo negocia, así que el mock siempre las publica.
     ...parteDeLaMesaMock(m, identity),
+    // D622 · D628 · AF-4 · `members_version=1`: la app siempre lo negocia, así que el mock siempre lo publica (salvo
+    // con la costura del dueño anterior, `payme.app.mock.miembros.v1 = antiguo`, que no manda las claves).
+    ...(!miembrosAntiguos && { members: miembros ? miembros.members : null }),
+  };
+}
+
+/**
+ * D622 · D628 · AF-4 · «los de la mesa» (`contract/mesa-miembros-v1.json`), con lo que el mock tiene:
+ *   · quien mira ('user'), con las iniciales de su nombre como las arma el dueño (`miembrosDeMesa.iniciales`);
+ *   · «los demás» ('other'), todos juntos, con iniciales inventadas fijas: están en la mesa si la abrieron ellos
+ *     o si tienen alguna parte;
+ *   · el organizador primero (ordinal 0), como el dueño;
+ *   · el invitado viejo sin cuenta (durmiente): `members` y `picked_by` en null, la misma señal que el dueño usa con
+ *     una invitación sin aceptar. Una parte suya vista por otro es «?».
+ * Nunca el nombre: cada ficha tiene exactamente ordinal, initials y mine.
+ */
+const INICIALES_DE_LOS_DEMAS = 'AM';
+
+function inicialMock(texto: string | null | undefined): string | null {
+  const m = /\p{L}/u.exec((texto ?? '').normalize('NFC'));
+  if (!m) return null;
+  const mayuscula = m[0].toLocaleUpperCase('es-MX');
+  return ([...mayuscula].length === 1 ? mayuscula : m[0]).normalize('NFC');
+}
+
+type FichaMock = { ordinal: number; initials: string; mine: boolean };
+
+function miembrosMock(m: MockMesa, identity: MockIdentity): {
+  members: { joined_count: number; expected_count: number | null; list: FichaMock[]; list_more: number };
+  eligieron: (i: MockItem) => { picked_by: FichaMock[]; picked_by_more: number };
+} | null {
+  if (identity === 'guest') return null;
+  const propias = [inicialMock(state.user.first_name), inicialMock(state.user.last_name)].filter((x): x is string => !!x);
+  const iniciales: Record<'user' | 'other' | 'guest', string> = {
+    user: propias.join('') || '?', other: INICIALES_DE_LOS_DEMAS, guest: '?',
+  };
+  const losDemasEstan = !m.openedByUser || m.items.some((i) => i.claims.some((c) => c.who === 'other'));
+  const activos: Array<'user' | 'other'> = m.openedByUser
+    ? (losDemasEstan ? ['user', 'other'] : ['user'])
+    : ['other', 'user'];
+  const orden: Array<'user' | 'other' | 'guest'> = [...activos, 'guest'];
+  const ficha = (who: 'user' | 'other' | 'guest'): FichaMock => ({ ordinal: orden.indexOf(who), initials: iniciales[who], mine: who === identity });
+  return {
+    members: {
+      joined_count: activos.length,
+      expected_count: Number.isSafeInteger(m.original_participants) ? m.original_participants! : null,
+      list: activos.map(ficha),
+      list_more: 0,
+    },
+    eligieron: (i) => {
+      const quienes = orden.filter((who) => i.claims.some((c) => c.who === who));
+      return { picked_by: quienes.map(ficha), picked_by_more: 0 };
+    },
   };
 }
 

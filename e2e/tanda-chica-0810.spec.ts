@@ -193,7 +193,8 @@ test.describe('D240 punto 3 · el listado al elegir', () => {
     expect(pos.color).toBe('rgb(91, 107, 130)');
 
     const tomado = page.locator('.qc-renglon [data-estado="tomado"]').first();
-    await expect(tomado).toContainText('Lo eligió otro');
+    // AF-4 · con el dato del dueño, las iniciales (un invitado viejo sin cuenta: «?») en la misma segunda línea.
+    await expect(tomado).toContainText('Lo eligió ?');
     expect(await tomado.evaluate((e) => e.getBoundingClientRect().height)).toBeCloseTo(56, 0);
     expect(await tomado.locator('.qc-nombre').evaluate((e) => getComputedStyle(e).whiteSpace)).toBe('nowrap');
     await vino.evaluate((el) => el.scrollIntoView({ block: 'center' }));

@@ -133,8 +133,10 @@ test.describe('D622 · AF-2 · la tarjeta con el estado de la mesa', () => {
     // Sin platos sin dueño (el agua de $0 ya cuenta como cubierta, D389) no hay «0 sin dueño»: AF-3 (m3 de E06)
     // dice qué falta, el plato que quedó a medias.
     await expect(platos(page)).toHaveText('Queda 1 plato a medias.');
-    // Nunca nombra a nadie ni cuenta personas.
-    await expect(tarjeta(page)).not.toContainText(/sumaron|Otra|@/);
+    // Nunca nombra a nadie. AF-4 (D628) suma «Se sumaron N de M» con el dato del dueño: quien mira y «los demás» del
+    // mock, de los 2 esperados (lo detalla `e2e/quien-eligio.spec.ts`).
+    await expect(tarjeta(page)).not.toContainText(/Otra|@/);
+    await expect(tarjeta(page).locator('.estado-mesa-personas-texto')).toHaveText('Se sumaron 2 de 2');
   });
 
   test('🔴 el borrador propio no mueve la tarjeta (sí la barra): es lo registrado por la mesa', async ({ page }) => {

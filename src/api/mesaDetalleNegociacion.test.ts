@@ -48,7 +48,7 @@ function capturarUrls(): string[] {
 }
 
 describe('GET /api/mesas/:code · negociación del detalle (D218, L1, D344)', () => {
-  it('🔴 con sesión: adjustments_version=2, totals_version=2 y share_version=1, exactos y una sola vez', async () => {
+  it('🔴 con sesión: adjustments_version=2, totals_version=2, share_version=1 y members_version=1, exactos y una sola vez', async () => {
     const urls = capturarUrls();
     await api.getMesa('PA-1234').catch(() => undefined);
     expect(urls).toHaveLength(1);
@@ -57,7 +57,9 @@ describe('GET /api/mesas/:code · negociación del detalle (D218, L1, D344)', ()
     expect(url.searchParams.getAll('adjustments_version')).toEqual(['2']);
     expect(url.searchParams.getAll('totals_version')).toEqual(['2']);
     expect(url.searchParams.getAll('share_version')).toEqual(['1']);
-    expect([...url.searchParams.keys()].sort()).toEqual(['adjustments_version', 'share_version', 'totals_version']);
+    // D622 · D628 · AF-4 · `members_version=1` (App Backend 2.210.0, `contract/mesa-miembros-v1.json`).
+    expect(url.searchParams.getAll('members_version')).toEqual(['1']);
+    expect([...url.searchParams.keys()].sort()).toEqual(['adjustments_version', 'members_version', 'share_version', 'totals_version']);
   });
 
   it('el camino de invitado (durmiente) negocia lo mismo', async () => {
@@ -68,7 +70,9 @@ describe('GET /api/mesas/:code · negociación del detalle (D218, L1, D344)', ()
     expect(url.searchParams.getAll('adjustments_version')).toEqual(['2']);
     expect(url.searchParams.getAll('totals_version')).toEqual(['2']);
     expect(url.searchParams.getAll('share_version')).toEqual(['1']);
-    expect([...url.searchParams.keys()].sort()).toEqual(['adjustments_version', 'share_version', 'totals_version']);
+    // D622 · D628 · AF-4 · `members_version=1` (App Backend 2.210.0, `contract/mesa-miembros-v1.json`).
+    expect(url.searchParams.getAll('members_version')).toEqual(['1']);
+    expect([...url.searchParams.keys()].sort()).toEqual(['adjustments_version', 'members_version', 'share_version', 'totals_version']);
   });
 
   it('el código sigue escapado: la negociación no se mezcla con el path', async () => {

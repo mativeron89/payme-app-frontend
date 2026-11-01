@@ -24,3 +24,32 @@ describe('EstadoDeLaMesa · la tarjeta', () => {
     expect(html).not.toContain('estado-mesa-platos');
   });
 });
+
+/** D622 · AF-2 · AF-4 · la tarjeta del estado de la mesa, con la tercera línea sólo si hay dato del dueño. */
+const base = { titular: 'Falta elegir $585 de $840', platos: 'Quedan 3 platos sin dueño.', consejo: 'Cuando se elija todo, la mesa se cierra sola.' };
+const f = (ordinal: number, initials: string, mine = false) => ({ ordinal, initials, mine });
+
+describe('EstadoDeLaMesa · AF-4 · «Se sumaron N de M»', () => {
+  it('🔴 con personas: «Se sumaron 3 de 4» entre los platos y el consejo, con las fichas decorativas', () => {
+    const html = renderToStaticMarkup(<EstadoDeLaMesa estado={{
+      ...base, personas: { texto: 'Se sumaron 3 de 4', fichas: [f(0, 'MV', true), f(1, 'AM'), f(2, 'LP')], faltan: 1, resto: 0 },
+    }} />);
+    const platos = html.indexOf('Quedan 3 platos sin dueño.');
+    const personas = html.indexOf('Se sumaron 3 de 4');
+    const consejo = html.indexOf('Cuando se elija todo');
+    expect(platos).toBeGreaterThan(-1);
+    expect(personas).toBeGreaterThan(platos);
+    expect(consejo).toBeGreaterThan(personas);
+    expect(html).toContain('<span class="qc-fichas" aria-hidden="true">');
+    expect(html.match(/qc-ficha--falta/g)).toHaveLength(1);
+    // Sólo el titular se anuncia.
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+  });
+
+  it('🔴 sin personas: la tarjeta de AF-2, sin fichas ni conteo', () => {
+    const html = renderToStaticMarkup(<EstadoDeLaMesa estado={base} />);
+    expect(html).not.toContain('qc-ficha');
+    expect(html).not.toContain('Se sumaron');
+    expect(html).not.toContain('estado-mesa-personas');
+  });
+});

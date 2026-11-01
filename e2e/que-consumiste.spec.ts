@@ -183,6 +183,9 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
 
   test('reglas 5 y 6 · «Queda ½» como píldora que se puede tocar, sin Entero; «Lo eligió otro» en rojo pastel, con candado y sin nombre', async ({ page }) => {
     const code = await abrirMesa(page);
+    // La regla 6 del diseño tal cual, con el dueño anterior a 2.210.0 (sin `picked_by`). Con el dato, el renglón lleva
+    // las iniciales en lugar de «Lo eligió otro» (AF-4, D628): `e2e/quien-eligio.spec.ts`.
+    await page.evaluate(() => localStorage.setItem('payme.app.mock.miembros.v1', 'antiguo'));
     await plantarAjenos(page, code);
 
     const pizza = renglon(page, 'Pizza Margherita');
@@ -225,7 +228,8 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await page.reload();
     await enTuMesaConLaLista(page);
     const agua = renglon(page, 'Agua mineral');
-    await page.getByRole('button', { name: 'Agua mineral, Queda ¼' }).click();
+    // AF-4 · el nombre accesible lleva también quién eligió el resto (acá, un invitado viejo sin cuenta: «?»).
+    await page.getByRole('button', { name: /^Agua mineral, .+, Lo eligió \?, Queda ¼$/ }).click();
     await expect(agua.getByRole('radiogroup')).toHaveCount(0);
     await expect(agua.locator('[data-estado="mio"] .qc-pildora')).toHaveText('¼');
   });

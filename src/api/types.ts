@@ -680,6 +680,14 @@ export interface MesaItem {
    * A PROPÓSITO: se lee sólo con `restanteInformativo`.
    */
   informative_remaining_bps?: unknown;
+  /**
+   * D622 · D628 · App Backend 2.210.0, con `members_version=1`
+   * (`contract/mesa-miembros-v1.json`): las iniciales de quienes tienen una
+   * parte del plato y cuántos más. `unknown` A PROPÓSITO: se leen sólo con
+   * `leerEligieron` (`miembros.ts`).
+   */
+  picked_by?: unknown;
+  picked_by_more?: unknown;
 }
 
 /** v2.68: pedido de fracción natural (2500|3333|5000|6667|7500|10000). */
@@ -785,6 +793,12 @@ export interface MesaDetail {
   tip_setting?: unknown;
   share_totals?: unknown;
   my_share?: unknown;
+  /**
+   * D622 · D628 · App Backend 2.210.0, con `members_version=1`: cuántos se
+   * sumaron y sus iniciales. `unknown` A PROPÓSITO: se lee sólo con
+   * `leerMiembros` (`miembros.ts`).
+   */
+  members?: unknown;
 }
 
 export interface MesaDetailResponse {

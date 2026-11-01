@@ -130,3 +130,34 @@ describe('estadoDeLaMesa · cuándo no hay tarjeta', () => {
     expect(estadoDeLaMesa(mesa({ items: conElegidos({ a: 0, b: 0, c: 0, d: 0 }) }), ORG, t)).toBeNull();
   });
 });
+
+describe('estadoDeLaMesa · AF-4 · «Se sumaron N de M» con members_version=1', () => {
+  const ficha = (ordinal: number, initials: string, mine = false) => ({ ordinal, initials, mine });
+  const members = {
+    joined_count: 3, expected_count: 4, list: [ficha(0, 'MV', true), ficha(1, 'AM'), ficha(2, 'LP')], list_more: 0,
+  };
+
+  it('🔴 con el dato del dueño, la tercera línea: el texto, las fichas y un «?» por el que falta', () => {
+    const r = estadoDeLaMesa({ ...mesa(), members } as MesaDetail, OTRO, t);
+    expect(r?.personas).toEqual({ texto: 'Se sumaron 3 de 4', fichas: members.list, faltan: 1, resto: 0 });
+    expect(r?.titular).toBe('Todavía no eligió nadie');
+  });
+
+  it('🔴 sin el campo, en null o mal formado, la tarjeta queda como hoy: sin tercera línea', () => {
+    for (const m of [undefined, null, { ...members, joined_count: 0 }, { ...members, extra: true }]) {
+      const r = estadoDeLaMesa({ ...mesa(), ...(m !== undefined && { members: m }) } as MesaDetail, OTRO, t);
+      expect(r, JSON.stringify(m)).toEqual({
+        titular: 'Todavía no eligió nadie', platos: null, consejo: 'Cuando se elija todo, la mesa se cierra sola.',
+      });
+    }
+  });
+
+  it('mesa vieja sin esperados: sin tercera línea', () => {
+    const r = estadoDeLaMesa({ ...mesa(), members: { ...members, expected_count: null } } as MesaDetail, OTRO, t);
+    expect(r).not.toHaveProperty('personas');
+  });
+
+  it('la mesa de ejemplo de la guía sigue sin tarjeta aunque traiga el dato', () => {
+    expect(estadoDeLaMesa({ ...mesa(), members } as MesaDetail, { esOrganizador: true, ejemplo: true }, t)).toBeNull();
+  });
+});

@@ -1070,13 +1070,15 @@ const realApi: Api = {
   // la mesa y «Mi parte», que se leen con `leerParteDelDetalle`. Strings exactos
   // y fijos, escritos acá para que la guarda de interpolaciones no tenga nada
   // que eximir: sin ellos el dueño contesta byte por byte como antes.
+  // D622 · D628 · AF-4 · `members_version=1` (2.210.0): «los de la mesa» y quién
+  // eligió cada plato, que se leen con `leerMiembros` y `leerEligieron`.
   getMesa: (code, guestToken) =>
     guestToken
       ? httpGuestRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1`, guestToken,
+        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`, guestToken,
       )
       : httpRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1`,
+        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`,
       ),
   getInformativeSelection: async (code) => informativeSelectionResponse(
     await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),

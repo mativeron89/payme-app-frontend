@@ -1,6 +1,8 @@
 import type { MesaDetail } from '../api/types';
 import { formatMXN } from '../utils/format';
+import { leerMiembros } from '../api/miembros';
 import { confirmedConsumptionProgress, platosSinDueno } from './mesaItemsView';
+import { personasDeLaMesa, type PersonasDeLaMesa } from './quienEligioView';
 
 type Traducir = (s: string, ...a: unknown[]) => string;
 
@@ -10,12 +12,18 @@ export interface EstadoDeLaMesa {
   /** Línea 2: los platos sin dueño (y los a medias), o `null` si no hay qué decir. */
   readonly platos: string | null;
   readonly consejo: string;
+  /**
+   * AF-4 · línea 3: «Se sumaron N de M» con las fichas, sólo con `members` del dueño
+   * (`members_version=1`, 2.210.0) y con esperados. Sin el dato la clave no está y la
+   * tarjeta queda como en AF-2.
+   */
+  readonly personas?: PersonasDeLaMesa;
 }
 
 /**
- * D622 · AF-2 · mejora 2 (§2 de la especificación), SIN el conteo de personas:
- * «Se sumaron N de M» espera el contrato de AB-1 y va en AF-4. Hasta entonces
- * esa línea no existe; no se inventa un conteo.
+ * D622 · AF-2 · mejora 2 (§2 de la especificación). AF-4 suma «Se sumaron N de
+ * M» con el contrato de AB-1 (`mesa.members`, D628): sin ese dato la línea no
+ * existe; no se inventa un conteo.
  *
  * Sólo cuenta lo REGISTRADO por la mesa (`confirmedConsumptionProgress`, con el
  * `remaining_bps` del dueño), no el borrador de quien mira: es el estado de la
@@ -45,6 +53,7 @@ export function estadoDeLaMesa(
   if (!platos) return null;
 
   const nadie = avance.assignedCents === 0;
+  const personas = personasDeLaMesa(leerMiembros(mesa), t);
   return {
     titular: nadie
       ? t('Todavía no eligió nadie')
@@ -53,6 +62,7 @@ export function estadoDeLaMesa(
     consejo: quien.esOrganizador
       ? t('Antes de cerrar la mesa, revisa que todos hayan elegido lo suyo.')
       : t('Cuando se elija todo, la mesa se cierra sola.'),
+    ...(personas && { personas }),
   };
 }
 
