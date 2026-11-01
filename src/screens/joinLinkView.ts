@@ -90,7 +90,9 @@ export interface JoinLinkMessage {
  *
  *   **sin sesión no se ve NADA de la mesa.** Cualquiera sea el resultado del
  *   canje, sin sesión la pantalla es el alta (§1.2-A) y nunca el detalle del
- *   rechazo ni el nombre del restaurante. El orden de estas ramas ES la regla.
+ *   rechazo. El orden de estas ramas ES la regla. La única excepción es la
+ *   vista previa de AF-5 (D629/D676, `tituloDeLaInvitacion`): con un link
+ *   válido de una mesa viva, el título del alta dice quién invita y dónde.
  */
 export type JoinLinkStage =
   /** §1.2-A · 401: hay que crear cuenta o entrar. Genérica, sin datos de mesa. */
@@ -215,4 +217,24 @@ export function formularioDeB(s: {
   const sabido = s.altaDisponible || !s.capacidadPendiente || s.capacidadIntentada;
   if (!sabido) return { montar: false, modo: 'register' };
   return { montar: true, modo: s.altaDisponible ? 'register' : 'login' };
+}
+
+/**
+ * AF-5 · D622 (mejora 5) · D629 · D676 · el título de la tarjeta sin sesión (A y B).
+ *
+ * `vista` es la vista previa del dueño (`src/api/vistaPreviaDelLink.ts`), o `null`: sin la capacidad, mientras llega,
+ * con cualquier fallo o más de 1,5 s. Con `null` el título es **el de hoy, el mismo string**, y la pantalla no cambia
+ * en nada: un desconocido no puede usar la diferencia para saber si una mesa existe. Con la vista previa: quién invita
+ * y dónde, nada más (sin foto, apellido, total, personas ni platos). Con el nombre en `null` (D676), sólo dónde.
+ * Para entrar sigue haciendo falta una cuenta (D583): esto es un saludo, no la mesa.
+ */
+type TraducirConValores = (texto: string, ...valores: unknown[]) => string;
+
+export function tituloDeLaInvitacion(
+  vista: { readonly invitador: string | null; readonly restaurante: string } | null,
+  t: TraducirConValores,
+): string {
+  if (!vista) return t('Te invitaron a una mesa');
+  if (vista.invitador === null) return t('Te invitaron a una mesa en {0}', vista.restaurante);
+  return t('{0} te invitó a su mesa en {1}', vista.invitador, vista.restaurante);
 }

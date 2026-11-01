@@ -116,11 +116,10 @@ test.describe('el 403 es ciego', () => {
    * Y el 401, que es otra pantalla y no hay que confundir con el 403: dice
    * *"necesitás cuenta"*, no *"no sos de esta mesa"*.
    *
-   * La burbuja **no nombra el restaurante**, y eso es deliberado: para saber
-   * que el token es válido habría que preguntarle al backend, y el endpoint que
-   * lo diría sin sesión es el preview público que el cierre del pago sin cuenta
-   * prohíbe. Además, un link reenviado le confirmaría a cualquiera dónde está
-   * comiendo otra persona.
+   * La burbuja **no nombra el restaurante** con un token que no es de una mesa
+   * viva (acá, uno que nadie emitió): la vista previa de AF-5 (D629) sólo existe
+   * para un link válido, y fuera de eso la pantalla es la de siempre
+   * (`e2e/vista-previa-del-link.spec.ts`).
    */
   test('sin sesión, el link no ofrece alta sin autoridad F&F ni cuenta nada de la mesa', async ({ page }) => {
     await page.goto('/#/mesa/PA-0001?t=tok-cualquiera-largo');

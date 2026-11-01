@@ -739,6 +739,8 @@ export const EN: Record<string, string> = {
   "Te invitaron": "You've been invited",
   "Te invitaron a": "You've been invited to",
   "Te invitaron a una mesa": "You've been invited to a table",
+  "Te invitaron a una mesa en {0}": "You've been invited to a table at {0}",
+  "{0} te invitó a su mesa en {1}": "{0} invited you to their table at {1}",
   "Te quieren agregar (": "People want to add you (",
   "Te sumaste a la mesa ✓": "You joined the table ✓",
   "Tienes un pago sin confirmar en esta mesa. Reintenta ese mismo pago antes de cambiar nada.": "You have an unconfirmed payment on this table. Retry that same payment before changing anything.",

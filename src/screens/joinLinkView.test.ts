@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { entrarEnNaranja, formularioDeB, iconoDelResultado, joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
+import { traducir } from '../i18n/idioma';
+import { entrarEnNaranja, formularioDeB, iconoDelResultado, joinLinkMessage, joinLinkStage, tituloDeLaInvitacion, type JoinLinkOutcome } from './joinLinkView';
 
 const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
 
@@ -281,5 +282,63 @@ describe('P02-a · B con el modo recordado', () => {
     [{ elegido: 'register', altaDisponible: false, capacidadPendiente: true, capacidadIntentada: true }, { montar: true, modo: 'login' }],
   ] as const)('🔴 %o → %o', (estado, esperado) => {
     expect(formularioDeB(estado)).toEqual(esperado);
+  });
+});
+
+/**
+ * AF-5 · D629 · D676 · el título de la tarjeta sin sesión. Con la vista previa del dueño dice quién invita y dónde;
+ * sin ella (cualquier fallo, sin la capacidad o mientras llega), el título de hoy, el MISMO string.
+ */
+describe('AF-5 · tituloDeLaInvitacion', () => {
+  const es = (s: string, ...a: unknown[]) => traducir(s, 'es', ...a);
+  const en = (s: string, ...a: unknown[]) => traducir(s, 'en', ...a);
+  const HOY = 'Te invitaron a una mesa';
+
+  it('🔴 sin vista previa, el título de hoy, idéntico (ES y EN)', () => {
+    expect(tituloDeLaInvitacion(null, es)).toBe(HOY);
+    expect(tituloDeLaInvitacion(null, en)).toBe(en(HOY));
+    expect(tituloDeLaInvitacion(null, en)).toBe("You've been invited to a table");
+  });
+
+  it('D629 · con nombre: «{nombre} te invitó a su mesa en {restaurante}»', () => {
+    const v = { invitador: 'Ana', restaurante: 'Tacos El Güero' };
+    expect(tituloDeLaInvitacion(v, es)).toBe('Ana te invitó a su mesa en Tacos El Güero');
+    expect(tituloDeLaInvitacion(v, en)).toBe('Ana invited you to their table at Tacos El Güero');
+  });
+
+  it('D676 · con el nombre en null: «Te invitaron a una mesa en {restaurante}», sin nombre', () => {
+    const v = { invitador: null, restaurante: 'Tacos El Güero' };
+    expect(tituloDeLaInvitacion(v, es)).toBe('Te invitaron a una mesa en Tacos El Güero');
+    expect(tituloDeLaInvitacion(v, en)).toBe("You've been invited to a table at Tacos El Güero");
+  });
+
+  it('un valor del dueño con llaves o signos no se vuelve a interpretar', () => {
+    expect(tituloDeLaInvitacion({ invitador: '{1}', restaurante: '$& {0}' }, es)).toBe('{1} te invitó a su mesa en $& {0}');
+  });
+
+  it('el cuerpo y la etapa no cambian con la vista previa: siguen siendo los de hoy', () => {
+    // La vista previa sólo cambia el título; sin sesión la etapa sigue siendo el alta (D583).
+    for (const o of OUTCOMES) expect(joinLinkStage({ hasSession: false, outcome: o })).toBe('signup');
+  });
+});
+
+describe('AF-5 · el cableado de la pantalla (guardarraíl de fuente: no hay librería de render)', () => {
+  const pantalla = () => readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'JoinMesaScreen.tsx'), 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  it('🔴 las DOS tarjetas sin sesión (A y B) toman el título de la misma función, y ya no hay un título suelto', () => {
+    const p = pantalla();
+    expect(p.match(/titulo=\{tituloDeLaInvitacion\(vistaPrevia, t\)\}/g)).toHaveLength(2);
+    expect(p).not.toContain("t('Te invitaron a una mesa')");
+  });
+
+  it('🔴 la vista previa se pide sólo sin sesión, con la capacidad, por la fachada; y la tarjeta no se vuelve a montar', () => {
+    const p = pantalla();
+    expect(p).toContain('vistaPreviaDelLink(token, (tk) => api.getVistaPreviaDelLink(tk))');
+    expect(p).toMatch(/if \(session \|\| capacidadVista !== 'encendida'\) return;/);
+    // La `key` de cada tarjeta no depende de la vista previa: cambiar el título no repite la entrada.
+    expect(p).toContain('key="signup"');
+    expect(p).toContain('key="alta"');
+    expect(p).not.toMatch(/key=\{[^}]*vista/);
   });
 });

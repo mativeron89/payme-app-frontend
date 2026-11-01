@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { EN } from '../src/i18n/en';
-import { ingresar } from './_app';
+import { abrirMesaConLink, ingresar } from './_app';
 
 /**
  * D622 · AF-2 · la guarda que dejó pendiente AF-1 (GREEN del PR #112): mientras
@@ -16,6 +16,9 @@ import { ingresar } from './_app';
  *
  * D622 · AF-3 (M1 de E06 sobre AF-2): la guarda también caza «cobrar» y
  * «tarjeta», y todo corre además en inglés («pay», «charge», «card»).
+ *
+ * D622 · AF-5: también el link con la vista previa del dueño (D629: «{nombre} te
+ * invitó a su mesa en {restaurante}») y su tarjeta del alta.
  */
 
 type Idioma = 'es' | 'en';
@@ -186,6 +189,27 @@ for (const idioma of ['es', 'en'] as const) {
       await expect(page.getByLabel(T('Contraseña'), { exact: true })).toBeVisible();
       await sinLaBandaDelMock(page);
       await sinPromesa(page, idioma, 'Entrar');
+    });
+
+    test('🔴 AF-5 · el link sin sesión con la vista previa (quién invita y dónde) y su alta', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+        localStorage.setItem('payme.app.mock.link_preview.v1', 'encendido');
+      });
+      await ingresar(page);
+      const mesa = await abrirMesaConLink(page, { sinGarantia: true });
+      await page.evaluate((i) => {
+        localStorage.removeItem('payme_app_session__mock');
+        localStorage.setItem('payme.app.idioma.v1', i);
+      }, idioma);
+      await page.reload();
+      await page.goto(`/${mesa.link.slice(mesa.link.indexOf('#'))}&signup_invitation=signup-token-link-mesa-aaaaaaaa`);
+      // Testigo: el título de la vista previa (sin él, la guarda leería la pantalla de siempre, que ya cubre A1).
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(idioma === 'en' ? /invited you to their table at/ : /te invitó a su mesa en/);
+      await sinPromesa(page, idioma, 'A1 con vista previa');
+      await page.getByRole('button', { name: T('Crear cuenta gratis'), exact: true }).click();
+      await expect(page.getByLabel(T('Nombre'), { exact: true })).toBeVisible();
+      await sinPromesa(page, idioma, 'alta con vista previa · la tarjeta del link', '.title-card');
     });
 
     test('🔴 el link sin sesión sin alta pública (A2)', async ({ page }) => {

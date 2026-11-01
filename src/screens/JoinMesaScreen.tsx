@@ -11,6 +11,12 @@ import {
 } from '../api/retornoTrasIngreso';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { ensureSocialAuthCapability, useSocialAuthCapability } from '../api/socialAuth';
+import {
+  useCapacidadVistaPrevia,
+  vistaPreviaDelLink,
+  vistaPreviaRecordada,
+  type VistaPreviaDelLink,
+} from '../api/vistaPreviaDelLink';
 import { autoridadDeAlta } from './LoginScreen';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
@@ -29,6 +35,7 @@ import {
   iconoDelResultado,
   joinLinkMessage,
   joinLinkStage,
+  tituloDeLaInvitacion,
   type JoinLinkOutcome,
 } from './joinLinkView';
 
@@ -47,11 +54,12 @@ import {
  *
  * ## Lo que hace esta pantalla, y lo que deliberadamente NO hace
  *
- * No pinta **nada** de la mesa antes del canje: ni restaurante, ni total, ni
- * cuánta gente hay. No es prolijidad — `GET /mesas/:code` ahora exige sesión y
- * contesta 401, así que no hay de dónde sacarlo, y **está bien que no lo haya**:
- * mostrarle el nombre del restaurante a cualquiera que tenga un link es
- * justamente lo que el cierre saca de la mesa.
+ * No pinta la mesa antes del canje: ni total, ni cuánta gente hay, ni platos.
+ * `GET /mesas/:code` exige sesión y contesta 401. **AF-5 · D629 · D676** abrió
+ * UNA excepción, decidida por Mati: con un link válido de una mesa viva, el
+ * título dice el primer nombre de quien invita (o nada, si el dueño manda
+ * `null`) y el restaurante, por la ruta pública del dueño
+ * (`POST /api/invitations/link-preview`). Fuera de eso, la pantalla de hoy.
  *
  * Tampoco distingue por qué falló un link. El emisor contesta el MISMO 403 para
  * inválido, vencido, cancelado y supersedido, **a propósito**: separarlos le
@@ -201,6 +209,28 @@ export function JoinMesaScreen({
   const capacidadPendiente = social.status === 'pending';
 
   /**
+   * AF-5 · D629 · D676 · la vista previa del link: quién invita y dónde, sólo SIN sesión (con sesión se canjea y se
+   * entra a la mesa, como hoy) y sólo con `features.link_preview` del dueño. Mientras llega, sin la capacidad, con
+   * cualquier fallo o pasado 1,5 s, `null`: el título de hoy, la pantalla de hoy. Vive en la memoria de la pestaña
+   * (`vistaPreviaDelLink.ts`), una vez por token; la que se guarda acá es de ESTE token y no se hereda.
+   */
+  const capacidadVista = useCapacidadVistaPrevia();
+  const [vista, setVista] = useState<{ readonly de: string; readonly v: VistaPreviaDelLink | null }>(
+    () => ({ de: token, v: vistaPreviaRecordada(token) }),
+  );
+  useEffect(() => {
+    if (session || capacidadVista !== 'encendida') return;
+    let vivo = true;
+    void vistaPreviaDelLink(token, (tk) => api.getVistaPreviaDelLink(tk)).then((v) => {
+      if (vivo) setVista({ de: token, v });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [session, token, capacidadVista]);
+  const vistaPrevia = vista.de === token ? vista.v : null;
+
+  /**
    * ⭐ LA SECUENCIA DE CUSTODIA, Y EL ORDEN NO ES NEGOCIABLE.
    *
    *   1. guardar;
@@ -302,11 +332,13 @@ export function JoinMesaScreen({
 
   /**
    * §1.2-A · 401. Sin sesión no se ve la mesa: se ve esto, con el token ya
-   * guardado. La tarjeta es GENÉRICA a propósito —"Te invitaron a una mesa"—
-   * y no nombra el restaurante: para saber que el token es válido habría que
-   * preguntarle al backend, y el endpoint que lo diría sin sesión es el
-   * preview público que el cierre del pago sin cuenta prohíbe. Además, un link
-   * reenviado le confirmaría a cualquiera dónde está comiendo otra persona.
+   * guardado. La tarjeta es GENÉRICA —"Te invitaron a una mesa"— salvo con la
+   * vista previa del dueño (AF-5, D629): con un link válido de una mesa viva,
+   * el título dice quién invita y dónde (el primer nombre, o sólo el
+   * restaurante si es `null`, D676), y nada más. Mati lo decidió sabiendo que
+   * un link reenviado muestra lo mismo a quien lo abra: el mismo alcance que el
+   * link. Cualquier otro caso, el título de hoy, idéntico. D583 no cambia: para
+   * ver la mesa hace falta una cuenta.
    */
   if (stage === 'signup') {
     if (authMode) {
@@ -325,7 +357,7 @@ export function JoinMesaScreen({
             key="alta"
             suelta
             cuadro={{ icono: 'persona-mas' }}
-            titulo={t('Te invitaron a una mesa')}
+            titulo={tituloDeLaInvitacion(vistaPrevia, t)}
             cuerpo={formulario.modo === 'register'
               ? t('Crea tu cuenta o entra para sumarte y elegir tus platos.')
               : t('Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.')}
@@ -341,7 +373,7 @@ export function JoinMesaScreen({
           <TarjetaDeLink
             key="signup"
             cuadro={{ icono: 'persona-mas' }}
-            titulo={t('Te invitaron a una mesa')}
+            titulo={tituloDeLaInvitacion(vistaPrevia, t)}
             cuerpo={t('Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.')}
           >
             {/* D373 · un solo naranja: «Crear cuenta gratis» si hay alta; si no,
