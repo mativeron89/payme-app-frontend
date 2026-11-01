@@ -100,6 +100,8 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
       'getProfileIdentity', 'getResumenDeViaje', 'getStats', 'getStatsDayparts', 'getStatsDishes',
       'getStatsEvolution', 'getStatsIngredients', 'getStatsRestaurants', 'getTicketDeViaje', 'getUnreadCount',
       'getUsername', 'getUsernameAvatar', 'getUsernameSuggestion', 'getViaje', 'getViajes', 'getVisitasDeViajes',
+      // AF-5 · la vista previa del link: pública, sin sesión ni código de mesa (decidido a mano, como pide este test).
+      'getVistaPreviaDelLink',
       'googleContinue', 'googleContinueLink', 'googleLink', 'googleLinkRedirectComplete', 'googleLinkRedirectStart',
       'googleLogin', 'googleRedirectRedeem', 'googleRedirectSignup', 'googleRegister', 'grantFotoPerfilNoAmigos', 'invitarAlViaje', 'login',
       'logout', 'marcarPresentesEnTicket', 'marcarTransferenciaDeViaje', 'markAllNotificationsRead',

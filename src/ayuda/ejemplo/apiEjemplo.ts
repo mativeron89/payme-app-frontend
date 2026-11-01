@@ -159,6 +159,8 @@ export const CLASIFICACION_DEL_EJEMPLO = {
   getPendingInvitations: 'pasa',
   acceptInvitation: 'pasa',
   acceptInvitationLink: 'pasa',
+  // AF-5 · la vista previa del link: pública, sin sesión y sin código de mesa; no toca el ejemplo.
+  getVistaPreviaDelLink: 'pasa',
 
   // Estadísticas.
   getStats: 'pasa',

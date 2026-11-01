@@ -40,6 +40,7 @@ import {
   setupIntentResponse,
 } from './contractResponses';
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
+import { aplicarConfigVistaPreviaDelLink, PLAZO_VISTA_PREVIA_MS } from './vistaPreviaDelLink';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeMesaCerrada, type MesaCerrada } from './cerrarMesa';
 import { cuerpoDelPutDePropina, leerRespuestaDelPutDePropina, type TipSetting } from './miParte';
@@ -654,6 +655,12 @@ export interface Api {
    * separe (misma doctrina que el 202 ciego de `addFriend`).
    */
   acceptInvitationLink(token: string): Promise<AcceptInvitationLinkResponse>;
+  /**
+   * AF-5 · D629 · D676 · `POST /api/invitations/link-preview` (App Backend 2.211.0), SIN sesión: el token va en el
+   * cuerpo, nunca en la URL. Devuelve la respuesta CRUDA: la lee `vistaPreviaDelLink` (`./vistaPreviaDelLink.ts`), con
+   * el decodificador estricto, la capacidad `features.link_preview` y el plazo de 1,5 s. No canjea nada (D583).
+   */
+  getVistaPreviaDelLink(token: string): Promise<unknown>;
   // stats
   /** AF-31 · con `period`, `?period=` (dueño v2.106.0); sin él, el mes en curso. */
   getStats(period?: ClavePeriodo): Promise<StatsResponse>;
@@ -867,6 +874,8 @@ const realApi: Api = {
     aplicarConfigViajes(config);
     // AF-LINK-DE-INVITACION · la capacidad del link de invitación, igual.
     aplicarConfigLinkDeInvitacion(config);
+    // AF-5 · la de la vista previa del link de la mesa, igual.
+    aplicarConfigVistaPreviaDelLink(config);
     // D464 · D466 · la capacidad de la foto del ticket, igual (apagada hoy).
     aplicarConfigFotoDelTicket(config);
     // D484 · D486 · la de varias fotos por ticket, igual. No dice nada de la foto.
@@ -1382,6 +1391,9 @@ const realApi: Api = {
     acceptInvitationLinkResponse(
       await httpRequest<unknown>('POST', '/invitations/accept-link', { token }),
     ),
+  // AF-5 · pública (sin Authorization aunque haya sesión) y con su propio plazo.
+  getVistaPreviaDelLink: (token) =>
+    httpPublicRequest<unknown>('POST', '/invitations/link-preview', { token }, PLAZO_VISTA_PREVIA_MS),
 
   getStats: (period) => httpRequest<StatsResponse>('GET', rutaConPeriodo('/account/stats', period)),
   // D479/D482 · AF-2 · `dishes_version=2` (platos agrupados) y `stats_version=3` (`quantity`): App Backend 2.195.0.
@@ -1705,6 +1717,7 @@ const mockApi: Api = {
     aplicarConfigOcultar(config);
     aplicarConfigViajes(config);
     aplicarConfigLinkDeInvitacion(config);
+    aplicarConfigVistaPreviaDelLink(config);
     aplicarConfigFotoDelTicket(config);
     aplicarConfigOcrPaginas(config);
     aplicarConfigSugerencias(mockSugerencias.conCapacidadesDelMock(config));
@@ -1944,6 +1957,7 @@ const mockApi: Api = {
   acceptInvitation: async (id) => acceptInvitationResponse(await mock.mockAcceptInvitation(id)),
   acceptInvitationLink: async (token) =>
     acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
+  getVistaPreviaDelLink: (token) => mock.mockVistaPreviaDelLink(token),
 
   getStats: (period) => mock.mockStats(period),
   getStatsDishes: async (period) => decodePlatos(await mock.mockStatsDishes(period)),

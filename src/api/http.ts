@@ -315,9 +315,12 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
   return pending;
 }
 
-/** Request PÚBLICA (sin sesión). Los POST sociales pasan el body sólo por acá. */
-export async function httpPublicRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
-  return rawRequest<T>(method, path, body);
+/**
+ * Request PÚBLICA (sin sesión). Los POST sociales pasan el body sólo por acá.
+ * AF-5 · `timeoutMs` opcional: la vista previa del link corta a 1,5 s (sin él, el de siempre).
+ */
+export async function httpPublicRequest<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
+  return rawRequest<T>(method, path, body, undefined, timeoutMs);
 }
 
 async function authenticatedRequest<T>(

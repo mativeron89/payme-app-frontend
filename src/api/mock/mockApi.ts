@@ -104,6 +104,7 @@ import {
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from './store';
 import { fechaDelTicketMock, huellaDelTicketMock, viajesMockEncendido } from './viajesSeam';
 import { linkDeInvitacionMockEncendido } from '../linkDeInvitacion';
+import { capacidadVistaPreviaMock, vistaPreviaMockSinNombre } from '../vistaPreviaDelLink';
 import {
   admiteSeleccionInformativa,
   availableBalance,
@@ -986,6 +987,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
       viajes: { supported: true, enabled: viajesMockEncendido() },
       // AF-LINK-DE-INVITACION · v2.173.0 · el bloque se sirve siempre, como el dueño; `enabled` sólo con el seam.
       invite_link: { supported: true, enabled: linkDeInvitacionMockEncendido() },
+      // AF-5 · v2.211.0 · seam `payme.app.mock.link_preview.v1` (`encendido`, `sin_nombre`): sin él, el bloque no
+      // existe (el dueño de antes), y la vista previa no se pide.
+      ...(capacidadVistaPreviaMock() === undefined ? {} : { link_preview: capacidadVistaPreviaMock() }),
       // D464 · D466 · v2.193.0 (PR72) · seam `payme.app.mock.ticket_image.v1`: sin él, el bloque no existe (el
       // backend de hoy); `apagado`, el del dueño con su constante en `false`; `encendido`, 90 días + miniatura (D465).
       ...(capacidadFotoDelTicketMock() === undefined ? {} : { ticket_image: capacidadFotoDelTicketMock() }),
@@ -5143,6 +5147,34 @@ export async function mockAcceptInvitationLink(
   // La inscripción es por usuario y el link NO se marca consumido.
   if (!state.joinedMesaCodes.includes(code)) state.joinedMesaCodes.push(code);
   return delay({ joined: true as const, mesa_code: code });
+}
+
+/**
+ * AF-5 · D629 · D676 · `POST /api/invitations/link-preview` del mock, con la forma del contrato
+ * (`contract/invitacion-preview-v1.json`). No mira la sesión, no canjea ni inscribe.
+ * - La misma validación de forma que `accept-link` (400).
+ * - Sin el seam, el dueño de antes: `requireAuth` cubre `/api/invitations`, así que contesta 401 (el front no llega
+ *   acá: sin la capacidad no pide).
+ * - Un token que no es de una mesa del mock, o de una mesa que ya no está viva: el MISMO 403 (sin 410).
+ * - Si no: el nombre de pila de la cuenta del mock (la que abrió las mesas del mock) y el restaurante de la mesa; con
+ *   `sin_nombre`, el nombre en `null` (D676).
+ */
+export async function mockVistaPreviaDelLink(
+  token: string,
+): Promise<{ inviter_first_name: string | null; restaurant_name: string }> {
+  if (typeof token !== 'string' || token.length < 8 || token.length > 200) {
+    return fail(400, 'invitation_token_required');
+  }
+  if (capacidadVistaPreviaMock() === undefined) return fail(401, 'auth_required');
+  const code = state.linkTokens[token];
+  const mesa = code ? findMesa(code) : null;
+  if (!code || !mesa) return fail(403, 'invitation_link_not_valid');
+  settleIfExpired(mesa);
+  if (!mesaViva(mesa.status)) return fail(403, 'invitation_link_not_valid');
+  return delay({
+    inviter_first_name: vistaPreviaMockSinNombre() ? null : state.user.first_name,
+    restaurant_name: mesa.restaurant.name,
+  });
 }
 
 export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {
