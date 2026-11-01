@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "payme.app.invitacion_preview/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de la vista previa del link de la mesa, v2.211.0 · D622 (mejora 5 del benchmark) y D629.",
+    "Mati eligió «Primer nombre + restaurante (Recomendada)» (D629): sólo con un link válido de una mesa abierta; sin foto, apellido ni montos; para entrar igual hay que crear cuenta (D583 sigue).",
+    "D676 (enmienda D629 sólo en esto): si quien invita es menor de edad o no tiene la mayoría verificable, el mismo 200 con inviter_first_name en null y el restaurante. Fuente: ops/bibliotecario-claude-vi-20261023/DECISION_MATI_676_VISTA_PREVIA_SIN_NOMBRE_DE_MENORES_20261031.md.",
+    "Fuente: ops/bibliotecario-claude-vi-20261023/DECISIONES_MATI_628_631_MEJORAS_BENCHMARK_P1_P4_20261031.md y la especificación mejoras-benchmark-d622/ESPECIFICACION_MEJORAS_BENCHMARK_D622.md, §6 (entrega AB-2).",
+    "No canjea nada: el canje sigue siendo POST /api/invitations/accept-link, con sesión. El link de amistad (contract/invitacion-personal-v1.json) es otra cosa y no pasa por acá.",
+    "Una prueba ata este archivo al código (tests/invitacion-preview.test.js): las claves, los cuerpos, la capacidad y el limitador."
+  ],
+  "ruta": "POST /api/invitations/link-preview",
+  "sesion": "No hace falta: la ruta no mira la sesión. Con o sin Authorization responde lo mismo.",
+  "pedido": {
+    "cuerpo": "{\"token\": \"...\"} — el token del link (el `t` de la URL que arma POST /api/mesas/:code/invitations). Viaja sólo en el cuerpo, nunca en la URL.",
+    "forma": "string de 8 a 200 caracteres, la misma validación que accept-link."
+  },
+  "respuesta_200": {
+    "cuando": "El token es un link vigente (pending, no vencido, no cancelado, no supersedido) de una mesa viva (el mismo stateMachine.mesaViva que accept-link: fully_paid pre-cierre está viva) y quien invita tiene su cuenta activa.",
+    "claves": ["inviter_first_name", "restaurant_name"],
+    "tipos": { "inviter_first_name": "string | null", "restaurant_name": "string" },
+    "nombre_null": "D676: inviter_first_name es null cuando quien invita no es mayor de edad conocida (menor, o sin fecha de nacimiento / sin la declaración de mayoría): la misma regla que la foto (D457, consent.edadConocida === true; null cierra). Mismas claves, mismo código 200 y mismas cabeceras: la respuesta no dice si es menor o si no tiene fecha.",
+    "campos": {
+      "inviter_first_name": "El nombre de pila de quien creó el link (el organizador: sólo él invita), o null (D676). Nunca el apellido.",
+      "restaurant_name": "El nombre que ya se ve en los Avisos (displayRestaurantName): el nombre que se le puso a la mesa si el restaurante es privado."
+    },
+    "ejemplo": { "inviter_first_name": "Ana", "restaurant_name": "Tacos El Güero" },
+    "ejemplo_sin_nombre": { "inviter_first_name": null, "restaurant_name": "Tacos El Güero" }
+  },
+  "respuesta_403": {
+    "cuerpo": "{\"error\":\"invitation_link_not_valid\"}",
+    "cuando": "Todo lo demás: firma o forma inválida, token que no existe, vencido, cancelado, supersedido, mesa que ya no está viva, mesa borrada o quien invita sin cuenta activa.",
+    "uniforme": "El mismo cuerpo byte por byte y las mismas cabeceras en todos los casos, y el mismo cuerpo que accept-link: nada distingue «existe» de «no existe». Acá no hay 410 ni mesa_status."
+  },
+  "respuesta_400": {
+    "cuerpo": "{\"error\":\"invitation_token_required\"}",
+    "cuando": "Sin token, o no es un string de 8 a 200 caracteres. El mismo cuerpo que accept-link."
+  },
+  "respuesta_503": {
+    "cuerpo": "{\"error\":\"invitation_link_unavailable\"}",
+    "cuando": "El servidor no puede verificar la firma (falta el secreto). «No pudimos verificar», no «el link no sirve»."
+  },
+  "respuesta_429": {
+    "cuerpo": "{\"error\":\"too_many_link_preview_requests\"}",
+    "cuando": "Pasó el cupo del limitador propio. Además aplica el limitador global de /api."
+  },
+  "cabeceras": "Cache-Control: no-store en todas las respuestas de la ruta.",
+  "limitador": { "por": "ip", "max_por_minuto": 20, "antes_del_token": true },
+  "sin_efectos": "No escribe nada en la base. El log registra el id de la invitación en el 200 (`invitation_link_previewed`) y nunca el token.",
+  "nunca": "apellido, @, payme_id, correo, teléfono, foto, edad, fecha de nacimiento, total, montos, cantidad de personas, platos, código de la mesa ni ids.",
+  "capacidad": { "ruta": "GET /api/config", "path": "features.link_preview", "valor": { "supported": true } },
+  "cliente": "El front la llama sólo si ve features.link_preview.supported, lee las dos claves con un decodificador estricto (cualquier otra cosa = sin vista previa) y ante cualquier otra respuesta deja la pantalla de hoy, idéntica. Con inviter_first_name en null muestra «Te invitaron a una mesa en {restaurante}» (D676)."
+}

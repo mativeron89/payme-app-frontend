@@ -1,4 +1,20 @@
-## AF-4 · D622 · D628 · D639 · el reespejo de 2.210.0 («los de la mesa») · 0.273.0
+## AF-5 · D622 · D629 · D676 · el reespejo de 2.211.0 (la vista previa del link) · 0.275.0
+
+Contenido vigente: `b318b2f9cbf912f11a7ffe94e3cd3b4a491211ef`.
+Inventario íntegro de 173 entradas tomado del `main` del dueño, el servido (App Backend 2.211.0, `main` en
+`a2492b87869afa71469ce706ccc1cda9e8aee9a3`; `contract/mirror-inventory.json`, sha256
+`59d9943c97ca6061fd338cb21bc8458c3624fc8fff6c58aca978454c56f83b33`), adoptado con `--adoptar-inventario` sin editarlo: el inventario publicado declara `b318b2f`. Entre
+`b318b2f` y `a2492b8` no cambia ningún archivo inventariado (cambian `server.js`, que no está inventariado, la prueba
+del dueño, su CHANGELOG y el inventario publicado). **24 archivos espejados**, todos JSON de `contract/`; **149 fuentes
+sólo por hash**, conforme D268.
+Nuevo `contract/invitacion-preview-v1.json` (sha256 `4089994f5e8d17b3636499900c61e5bf4e68070980f01b4ec1abab04158a2c06`: `POST /api/invitations/link-preview`,
+las dos claves `inviter_first_name` (string o `null`, D676) y `restaurant_name`, y la capacidad `features.link_preview`, que
+lee `src/api/vistaPreviaDelLink.ts`). Por hash cambia `routes/config.js` y se suma `routes/invitationPreview.js`. Los hechos
+del dueño se regeneraron en local contra `b318b2f`: cambian el commit y el sha256 de `routes/config.js`, ningún valor.
+`PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al mismo commit: `services/parteDeMesa.js` y `utils/money.js`
+siguen con los sha256 de siempre.
+
+### Refresh anterior · AF-4 · D622 · D628 · D639 · el reespejo de 2.210.0 («los de la mesa») · 0.273.0
 
 Contenido vigente: `f04798f722244b2e28655e6ab9a83f714c1f0d7b`.
 Inventario íntegro de 171 entradas tomado del `main` del dueño, el servido (App Backend 2.210.0, `main` en

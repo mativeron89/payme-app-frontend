@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "f04798f722244b2e28655e6ab9a83f714c1f0d7b",
-  "total": 171,
+  "commit": "b318b2f9cbf912f11a7ffe94e3cd3b4a491211ef",
+  "total": 173,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
@@ -45,6 +45,12 @@
       "destino": "contract/invitacion-personal-v1.json",
       "sha256": "344464b456daa999e4286e6b19ae3c58dd3243e3812f22ea3a84f96559125606",
       "bytes": 5436
+    },
+    {
+      "origen": "contract/invitacion-preview-v1.json",
+      "destino": "contract/invitacion-preview-v1.json",
+      "sha256": "4089994f5e8d17b3636499900c61e5bf4e68070980f01b4ec1abab04158a2c06",
+      "bytes": 4882
     },
     {
       "origen": "contract/mesa-acceso-v1.json",
@@ -559,8 +565,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "2bba626c21472623fc24517fd4e2088a7aef3aebe5637918b83296365cc13513",
-      "bytes": 14868
+      "sha256": "171ecb3a4b8c31be7709a05d2377968e599f49e9a32c84b73fbd001819c01dc5",
+      "bytes": 15280
     },
     {
       "origen": "routes/connect.js",
@@ -585,6 +591,12 @@
       "destino": "routes/groups.js",
       "sha256": "0b7f6335ba4cac61bf22c8de6621c05cd96d33828a9563e9993ef369540f3e7a",
       "bytes": 5745
+    },
+    {
+      "origen": "routes/invitationPreview.js",
+      "destino": "routes/invitationPreview.js",
+      "sha256": "581644fda579a47489f73e4da29fcbf0933928e30a236cb5c5efb5179e46d09a",
+      "bytes": 5822
     },
     {
       "origen": "routes/invitations.js",
