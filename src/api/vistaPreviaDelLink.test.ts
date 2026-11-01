@@ -210,6 +210,48 @@ describe('pedir la vista previa', () => {
     expect(await resultado).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
   });
 
+  /**
+   * AF-7 · I1 (auditoría del PR #117): el plazo de 1,5 s se cuenta desde que SE VE la pantalla, no desde el pedido.
+   * Si `/api/config` tarda, la pantalla de hoy ya está a la vista: la consulta sólo tiene lo que queda del plazo, y si
+   * no queda nada, no se pide. Así el título nunca cambia más de 1,5 s después de verse.
+   */
+  it('🔴 I1 · si la capacidad llega 1 s después de verse la pantalla, la consulta sólo tiene 0,5 s', async () => {
+    vi.useFakeTimers();
+    const m = await modulo();
+    const vistaDesde = Date.now();
+    await vi.advanceTimersByTimeAsync(1000);
+    m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
+    const resultado = m.vistaPreviaDelLink(T_DEL_LINK, () => new Promise((r) => { setTimeout(() => r(BUENA), 600); }), vistaDesde);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(await resultado).toBeNull();
+    expect(m.vistaPreviaRecordada(T_DEL_LINK)).toBeNull();
+  });
+
+  it('I1 · con lo que queda del plazo, sí: la capacidad a 1 s y la respuesta a los 0,4 s', async () => {
+    vi.useFakeTimers();
+    const m = await modulo();
+    const vistaDesde = Date.now();
+    await vi.advanceTimersByTimeAsync(1000);
+    m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
+    const resultado = m.vistaPreviaDelLink(T_DEL_LINK, () => new Promise((r) => { setTimeout(() => r(BUENA), 400); }), vistaDesde);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(await resultado).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
+  });
+
+  it('🔴 I1 · si la capacidad llega pasado el plazo desde que se vio la pantalla, no se pide nada y queda la de hoy', async () => {
+    vi.useFakeTimers();
+    const m = await modulo();
+    const vistaDesde = Date.now();
+    await vi.advanceTimersByTimeAsync(1500);
+    m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
+    const pedir = vi.fn(async () => BUENA);
+    expect(await m.vistaPreviaDelLink(T_DEL_LINK, pedir, vistaDesde)).toBeNull();
+    expect(pedir).not.toHaveBeenCalled();
+    // Y queda recordado para ese token, como un fallo: no cambia tarde al volver a montar.
+    expect(await m.vistaPreviaDelLink(T_DEL_LINK, pedir)).toBeNull();
+    expect(pedir).not.toHaveBeenCalled();
+  });
+
   it('una vez por token en la pestaña: volver a montar la pantalla no vuelve a pedir, ni tras un fallo', async () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));

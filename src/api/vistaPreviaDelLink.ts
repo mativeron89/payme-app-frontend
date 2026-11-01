@@ -111,13 +111,23 @@ function conPlazo(pedido: Promise<unknown>, plazoMs: number): Promise<VistaPrevi
 /**
  * La vista previa de ESTE token, o `null`. Sin la capacidad encendida no llama a `pedir`. `pedir` es la fachada
  * (`api.getVistaPreviaDelLink`), inyectada para poder probar el corte sin red.
+ *
+ * AF-7 · I1 · `vistaDesde` es el momento (`Date.now()`) en que la pantalla se vio: el plazo de 1,5 s se cuenta desde
+ * ahí, no desde el pedido. Si `/api/config` tarda, la consulta sólo tiene lo que queda del plazo; si ya no queda nada,
+ * no se pide y queda recordado como un fallo. Así el título nunca cambia más de 1,5 s después de verse la pantalla.
  */
 export function vistaPreviaDelLink(
   token: string,
   pedir: (token: string) => Promise<unknown>,
+  vistaDesde: number = Date.now(),
 ): Promise<VistaPreviaDelLink | null> {
   if (capacidad !== 'encendida') return Promise.resolve(null);
   if (recordada?.token === token) return recordada.vista;
+  const queda = PLAZO_VISTA_PREVIA_MS - (Date.now() - vistaDesde);
+  if (queda <= 0) {
+    recordada = { token, vista: Promise.resolve(null), resuelta: null };
+    return recordada.vista;
+  }
   let pedido: Promise<unknown>;
   try {
     pedido = pedir(token);
@@ -126,7 +136,7 @@ export function vistaPreviaDelLink(
   }
   const entrada: { token: string; vista: Promise<VistaPreviaDelLink | null>; resuelta?: VistaPreviaDelLink | null } = {
     token,
-    vista: conPlazo(pedido, PLAZO_VISTA_PREVIA_MS),
+    vista: conPlazo(pedido, queda),
   };
   void entrada.vista.then((v) => { entrada.resuelta = v; });
   recordada = entrada;

@@ -276,6 +276,69 @@ test.describe('AF-5 · sin vista previa: la pantalla de hoy, idéntica', () => {
     expect(despues.captura.equals(enVuelo.captura), 'la captura no cambia ni un píxel').toBe(true);
   });
 
+  /**
+   * AF-7 · I1 · el plazo se cuenta desde que SE VE la pantalla. Se simula un `/api/config` lento: la capacidad vuelve a
+   * «pendiente» antes de abrir el link y `api.getConfig` tarda `demoraMs` en contestar (la fachada del mock es la que
+   * publica la capacidad al volver). Después de abrir el link se pide la config una vez, como cualquier pantalla.
+   */
+  async function configLenta(page: Page, demoraMs: number): Promise<void> {
+    await page.evaluate(async (demora) => {
+      const rutaApi = '/src/api/index.ts';
+      const rutaVista = '/src/api/vistaPreviaDelLink.ts';
+      const { api } = await import(/* @vite-ignore */ rutaApi) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
+      const m = await import(/* @vite-ignore */ rutaVista) as { reiniciarVistaPreviaParaTests: () => void };
+      const original = api.getConfig!.bind(api);
+      api.getConfig = (...args: unknown[]) => new Promise((r) => { setTimeout(r, demora); }).then(() => original(...args));
+      m.reiniciarVistaPreviaParaTests();
+    }, demoraMs);
+  }
+  const capacidad = (page: Page) => page.evaluate(async () => {
+    const ruta = '/src/api/vistaPreviaDelLink.ts';
+    const m = await import(/* @vite-ignore */ ruta) as { capacidadVistaPrevia: () => string };
+    return m.capacidadVistaPrevia();
+  });
+  /** Que ninguna config de la carga siga en vuelo (el mock contesta a los 350 ms): si no, encendería la capacidad. */
+  async function sinConfigEnVuelo(page: Page): Promise<void> {
+    await expect.poll(() => capacidad(page)).toBe('encendida');
+    await page.waitForTimeout(1000);
+  }
+  const pedirLaConfig = (page: Page) => page.evaluate(async () => {
+    const rutaApi = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ rutaApi) as { api: Record<string, () => Promise<unknown>> };
+    void api.getConfig!().catch(() => undefined);
+  });
+
+  test('🔴 I1 · si la config llega pasado 1,5 s desde que se ve la pantalla, no se pide y el título no cambia tarde', async ({ page }) => {
+    await conSeam(page, 'encendido');
+    const { hash } = await linkDeUnaMesaViva(page);
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    await reemplazarVistaPrevia(page, 'contar');
+    await sinConfigEnVuelo(page);
+    await configLenta(page, 1700);
+    await alLink(page, `/${hash}`);
+    await expect(titulo(page)).toHaveText(HOY);
+    await pedirLaConfig(page);
+    // La config llega (la capacidad se enciende) pasado el plazo; después, sigue la pantalla de hoy y no se pidió nada.
+    await expect.poll(() => capacidad(page), { timeout: 5000 }).toBe('encendida');
+    await page.waitForTimeout(800);
+    await expect(titulo(page)).toHaveText(HOY);
+    expect(await llamadas(page)).toBe(0);
+  });
+
+  test('I1 · si la config llega antes del plazo, la vista previa todavía entra', async ({ page }) => {
+    await conSeam(page, 'encendido');
+    const { hash, nombre, restaurante } = await linkDeUnaMesaViva(page);
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    await reemplazarVistaPrevia(page, 'contar');
+    await sinConfigEnVuelo(page);
+    await configLenta(page, 300);
+    await alLink(page, `/${hash}`);
+    await expect(titulo(page)).toHaveText(HOY);
+    await pedirLaConfig(page);
+    await expect(titulo(page)).toHaveText(`${nombre} te invitó a su mesa en ${restaurante}`);
+    expect(await llamadas(page)).toBe(1);
+  });
+
   test('🔴 mientras la consulta no vuelve, se puede entrar: el alta no espera', async ({ page }) => {
     await conSeam(page, 'encendido');
     await page.goto('/');

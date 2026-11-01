@@ -218,10 +218,16 @@ export function JoinMesaScreen({
   const [vista, setVista] = useState<{ readonly de: string; readonly v: VistaPreviaDelLink | null }>(
     () => ({ de: token, v: vistaPreviaRecordada(token) }),
   );
+  // AF-7 · I1 · el plazo de 1,5 s se cuenta desde que la pantalla de ESTE token se ve (el primer efecto después de
+  // dibujarla), no desde el pedido: si la config tarda, el título no cambia tarde.
+  const vistaDesde = useRef(Date.now());
+  useEffect(() => {
+    vistaDesde.current = Date.now();
+  }, [token]);
   useEffect(() => {
     if (session || capacidadVista !== 'encendida') return;
     let vivo = true;
-    void vistaPreviaDelLink(token, (tk) => api.getVistaPreviaDelLink(tk)).then((v) => {
+    void vistaPreviaDelLink(token, (tk) => api.getVistaPreviaDelLink(tk), vistaDesde.current).then((v) => {
       if (vivo) setVista({ de: token, v });
     });
     return () => {
