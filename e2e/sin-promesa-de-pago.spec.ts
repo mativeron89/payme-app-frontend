@@ -95,6 +95,8 @@ async function loQueSeLee(page: Page, raiz: string): Promise<string> {
  * D622 · AF-6 · la banda «Demo · datos de ejemplo, no se cobra dinero real» existe SÓLO en el riel mock
  * (`LoginScreen.tsx`, `IS_MOCK`): en el build real ese nodo no se renderiza, así que no es algo que la persona vea.
  * Para medir el formulario de alta como se ve en producción se la saca de la lectura, y sólo a ella.
+ * AF-7 · i1 · esa invariante la fija `src/screens/LoginScreen.bandaDemo.test.tsx`: sin el riel mock, cero nodos
+ * `.ingreso-demo` y cero veces el texto.
  */
 async function sinLaBandaDelMock(page: Page): Promise<void> {
   await page.evaluate(() => {
