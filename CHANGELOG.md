@@ -1,3 +1,9 @@
+## Sin publicar · 2026-11-01 (C65 · estabilidad de n181 y D256)
+
+- **n181, actor fallido:** la prueba conserva al actor pendiente hasta acreditar el CTA deshabilitado y la nota de espera; luego rechaza la barrera y verifica el error, el CTA restaurado y cero mesas/creaciones. El rechazo inmediato queda cubierto por un caso separado. Antes se intentaba observar una espera transitoria después de un fallo que ya podía haber terminado.
+- **D256/D388, respuesta tardía a otro actor:** la sesión sintética conserva identidad entre renders; el Proxy nuevo en cada render provocaba un bucle de `usePuertaLegal` sólo en la fixture. Los casos de éxito y rechazo esperan el reemplazo de la pantalla por actor/familia y acreditan foco antes de liberar la respuesta; conservan las comprobaciones de cero efectos, cero avisos y foco posterior. También detectan un bucle de render de la fixture.
+- **Alcance:** sólo pruebas y esta entrada. Sin cambios en `src`, versión, dependencias, timeouts, reintentos ni skips. Evidencia de base/candidato y diagnósticos en la entrega C65; publicación y GREEN a cargo de VI.
+
 ## 0.275.1 · 2026-11-01 (D677 · AF-7: arreglos chicos)
 
 - **Qué es.** Orden `ORDEN_AF7_ARREGLOS_CHICOS_0_275_1_20261101.md`, lease `AF-CLAUDE-AF7-ARREGLOS-CHICOS-0-275-1-20261101`, con D677 («Arreglos chicos pendientes»): lo que dejaron las auditorías de AF-5 (I1, I2) y AF-6 (i1), y las 3 alertas de Dependabot. Sin backend, pagos, interruptores ni textos nuevos; nada visible fuera de I1.

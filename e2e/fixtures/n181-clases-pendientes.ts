@@ -265,6 +265,25 @@ export async function liberarBarreraN181(page: Page, barrier: 'actor' | 'read'):
   }, barrier);
 }
 
+/** Falla el actor cuando el test ya acreditó la espera; no depende del momento del siguiente poll. */
+export async function fallarActorN181(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const control = (globalThis as typeof globalThis & {
+      __paymeN181?: {
+        mode: N181Mode;
+        actorWaiters: Array<{ reject(error: Error): void }>;
+      };
+    }).__paymeN181;
+    if (!control) throw new Error('n181_control_missing');
+    const waiters = control.actorWaiters.splice(0);
+    if (waiters.length === 0) throw new Error('n181_actor_not_pending');
+    control.mode = 'actor-failed';
+    localStorage.setItem('payme.test.n181.mode', 'actor-failed');
+    waiters.forEach(({ reject }) => reject(new Error('n181_actor_failed')));
+    return waiters.length;
+  });
+}
+
 export async function modoN181EnSiguienteDocumento(page: Page, mode: N181Mode): Promise<void> {
   await page.evaluate((nextMode) => localStorage.setItem('payme.test.n181.mode', nextMode), mode);
 }

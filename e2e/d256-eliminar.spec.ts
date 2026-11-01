@@ -98,12 +98,15 @@ async function contextoControlado(page: Page): Promise<void> {
       export function useAuth() {
         const real = original.useAuth(); revision();
         const actor = window.__d388?.actor;
-        if (!actor || !real.session) return real;
-        return {...real, session: new Proxy(real.session, {get(target, key) {
-          if(key === 'principal_id') return actor.principal;
-          if(key === 'family_id') return actor.familia;
-          return Reflect.get(target, key);
-        }})};
+        // Como la sesión real, conserva identidad entre renders del mismo actor. Un Proxy nuevo
+        // por render disparaba usePuertaLegal sin fin (Maximum update depth) sólo en esta fixture.
+        const session = React.useMemo(() => !actor || !real.session ? real.session
+          : new Proxy(real.session, {get(target, key) {
+            if(key === 'principal_id') return actor.principal;
+            if(key === 'family_id') return actor.familia;
+            return Reflect.get(target, key);
+          }}), [real.session, actor]);
+        return {...real, session};
       }`],
   ] as const) {
     await page.route(`**/src/${archivo}`, async (route) => {
@@ -463,16 +466,27 @@ test('D388 · otro actor/familia antes de confirmar descarta la selección', asy
 
 for (const resultado of ['éxito', 'rechazo'] as const) {
   test(`D388 · ${resultado} tardío no aplica efectos al actor nuevo`, async ({ page }) => {
+    const erroresDeRender: string[] = [];
+    page.on('console', (mensaje) => {
+      if (mensaje.text().includes('Maximum update depth exceeded')) erroresDeRender.push(mensaje.text());
+    });
     await contextoControlado(page); await conViajes(page); await aConsumos(page);
     await page.evaluate(() => { (window as VentanaD388).__d388!.demorar = true; });
     await preguntarBar(page); await confirmar(page);
+    const focoNuevo = page.getByRole('tab', { name: 'Miembros', exact: true });
+    const tabAnterior = await focoNuevo.elementHandle();
+    if (!tabAnterior) throw new Error('Falta la pestaña del actor anterior');
     await page.evaluate(() => {
       (window as VentanaD388).__d388!.actor = { principal: 'actor-inventado-B', familia: 'familia-inventada-B' };
       dispatchEvent(new Event('d388-contexto'));
     });
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    const focoNuevo = page.getByRole('tab', { name: 'Miembros', exact: true });
+    // El diálogo ya se cerró al confirmar: su ausencia no acredita el cambio de actor.
+    // La key principal/familia remonta la pantalla. Esperar ese commit evita enfocar el nodo viejo.
+    await expect.poll(() => tabAnterior.evaluate((tab) => tab.isConnected)).toBe(false);
+    await expect(page.locator('.app')).not.toHaveAttribute('inert');
     await focoNuevo.focus();
+    await expect(focoNuevo).toBeFocused();
     await page.evaluate((r) => {
       const i = (window as VentanaD388).__d388!;
       if (r === 'éxito') i.resolver!(); else i.rechazar!();
@@ -483,6 +497,8 @@ for (const resultado of ['éxito', 'rechazo'] as const) {
     await expect(page.locator('[role="status"]').filter({ hasText: /Ticket eliminado|El viaje ya no está abierto|No pudimos eliminarlo/ })).toHaveCount(0);
     await completarCicloDeFoco(page);
     await expect(focoNuevo).toBeFocused();
+    expect(erroresDeRender, 'la fixture debe conservar la identidad de sesión entre renders').toEqual([]);
+    await tabAnterior.dispose();
   });
 }
 

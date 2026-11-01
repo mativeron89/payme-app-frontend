@@ -5,6 +5,7 @@ import { ingresar } from './_app';
 import { completarDivision, estadoN179 } from './fixtures/ticket-sin-qr';
 import {
   instalarInstrumentacionN181,
+  fallarActorN181,
   liberarBarreraN181,
   modoN181EnSiguienteDocumento,
   probeN181,
@@ -196,14 +197,17 @@ test('1 · actor pendiente muestra espera y sale al liberar la barrera', async (
 
 test('2 · actor fallido explica el bloqueo y restaura el CTA sin crear', async ({ page }, testInfo) => {
   const evidence: Record<string, unknown> = {};
-  const transforms = await instalarInstrumentacionN181(page, { mode: 'actor-failed', moneyRail: 'disabled' });
+  const transforms = await instalarInstrumentacionN181(page, { mode: 'actor-pending', moneyRail: 'disabled' });
   try {
     await abrirTicket(page);
     const before = await estadoN179(page);
     evidence.before = before;
     await clickContinuar(page);
-    await expect(page.getByRole('button', { name: 'Continuando…', exact: true })).toBeDisabled();
+    // El rechazo inmediato podía terminar antes de la observación del CTA. La barrera acredita
+    // primero la espera real y luego el fallo: se conservan ambas aserciones sin apostar al scheduler.
+    evidence.pending = await esperarPendiente(page, 'actor');
     evidence.pendingProbe = await probeN181(page);
+    evidence.actoresRechazados = await fallarActorN181(page);
 
     const safePriorAttemptError = 'No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.';
     await expect(page.getByRole('alert').filter({ hasText: safePriorAttemptError })).toHaveText(safePriorAttemptError);
@@ -218,6 +222,29 @@ test('2 · actor fallido explica el bloqueo y restaura el CTA sin crear', async 
     expect(afterProbe.createCalls).toBe(0);
   } finally {
     await guardarCaso(page, testInfo, '02-actor-fallido', evidence, transforms);
+  }
+});
+
+test('2b · actor ya fallido devuelve el error sin depender de una espera transitoria', async ({ page }, testInfo) => {
+  const evidence: Record<string, unknown> = {};
+  const transforms = await instalarInstrumentacionN181(page, { mode: 'actor-failed', moneyRail: 'disabled' });
+  try {
+    await abrirTicket(page);
+    evidence.before = await estadoN179(page);
+    await clickContinuar(page);
+    const mensaje = 'No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.';
+    await expect(page.getByRole('alert').filter({ hasText: mensaje })).toHaveText(mensaje);
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeEnabled();
+    const after = await estadoN179(page);
+    const afterProbe = await probeN181(page);
+    evidence.after = after;
+    evidence.afterProbe = afterProbe;
+    expect(after.mesas).toHaveLength(0);
+    expect(after.mesaLedgerKeys).toHaveLength(0);
+    expect(afterProbe.actorCalls).toBeGreaterThan(0);
+    expect(afterProbe.createCalls).toBe(0);
+  } finally {
+    await guardarCaso(page, testInfo, '02b-actor-ya-fallido', evidence, transforms);
   }
 });
 
