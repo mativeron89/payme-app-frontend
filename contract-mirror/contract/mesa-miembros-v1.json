@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "payme.app.mesa_miembros/v1",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de «los de la mesa», v2.210.0 · D622 (mejoras 2 y 3 del benchmark) y D628.",
+    "Mati eligió «Visibles para los de la mesa (Recomendada)» (D628): sólo la inicial, nunca el nombre, sin montos; no la ve quien tiene una invitación sin aceptar.",
+    "Fuente: ops/bibliotecario-claude-vi-20261023/DECISIONES_MATI_628_631_MEJORAS_BENCHMARK_P1_P4_20261031.md y la especificación mejoras-benchmark-d622/ESPECIFICACION_MEJORAS_BENCHMARK_D622.md, §4 (entrega AB-1).",
+    "Es de sólo lectura: no cambia quién entra a la mesa (contract/mesa-acceso-v1.json), ni lo que paga nadie, ni GET /api/mesas/:code/participants, que sigue siendo sólo del organizador.",
+    "Una prueba ata este archivo al código (tests/mesa-miembros-v1.test.js): la negociación, los topes y las claves."
+  ],
+  "lectura": {
+    "ruta": "GET /api/mesas/:code",
+    "negociacion": "GET /api/mesas/:code?…&members_version=1 (string exacto). Sin esa negociación, o con otro valor o repetido, la respuesta queda byte por byte como antes. Es independiente de adjustments_version, totals_version y share_version.",
+    "claves": {
+      "mesa.members": "{joined_count, expected_count, list, list_more} | null",
+      "mesa.items[].picked_by": "[{ordinal, initials, mine}] | null",
+      "mesa.items[].picked_by_more": "entero >= 0 | null"
+    },
+    "campos": {
+      "joined_count": "Los participantes activos de la mesa, incluido el organizador y los invitados sin cuenta. No son los esperados.",
+      "expected_count": "original_participants (1..50) o null si la mesa es vieja y no lo guardó.",
+      "list": "Hasta 12 fichas, por orden de llegada: el organizador es el ordinal 0 y después los activos por joined_at. list_more = cuántos activos más hay.",
+      "picked_by": "Hasta 6 fichas por plato, en el mismo orden, sólo de quienes tienen una parte tomada: pagada, o reservada y vigente (el mismo criterio de remaining_bps). Un plato sin partes tomadas: []. picked_by_more = cuántos más.",
+      "ordinal": "El orden de llegada a la mesa (0 = organizador). Quien eligió algo y ya no está activo tiene un ordinal mayor que el de todos los activos, por el orden de su primera parte tomada, y no aparece en list. El ordinal no es un id: cambia de mesa a mesa.",
+      "initials": "De 1 a 2 letras, en MAYÚSCULA: la primera letra del nombre y la del apellido, sólo letras Unicode, en NFC. Sin apellido, una sola. Cuenta eliminada, invitado sin cuenta o sin letras: \"?\". Una mayúscula de dos letras («ß») queda como la letra original. El nombre completo nunca sale.",
+      "mine": "true sólo para quien mira."
+    },
+    "topes": { "list": 12, "picked_by": 6 },
+    "quien": "Lo ven el organizador y los participantes activos. Quien entra a la mesa con una invitación in_app sin aceptar (la señal de requireInvitacionAceptada) recibe members y, en cada plato, picked_by y picked_by_more en null: decide si acepta sin ver quién come qué.",
+    "si_falla": "Si la lectura falla, members, picked_by y picked_by_more salen en null y el resto del detalle sale igual (log `mesa_members_unavailable`, con un código cerrado).",
+    "nunca": "user_id, participant_id, nombre, apellido, correo, teléfono, foto, @, payme_id, fraction_bps, montos ni pagos. Cada ficha tiene exactamente ordinal, initials y mine.",
+    "costo": "Una sola consulta más por pedido (el detalle se relee cada 10 s, D79): participantes activos y partes tomadas de la mesa, unidos a users para las iniciales.",
+    "ejemplo": {
+      "mesa": {
+        "members": {
+          "joined_count": 3,
+          "expected_count": 4,
+          "list": [
+            { "ordinal": 0, "initials": "MV", "mine": true },
+            { "ordinal": 1, "initials": "AM", "mine": false },
+            { "ordinal": 2, "initials": "LP", "mine": false }
+          ],
+          "list_more": 0
+        },
+        "items": [
+          {
+            "id": "…",
+            "picked_by": [ { "ordinal": 1, "initials": "AM", "mine": false } ],
+            "picked_by_more": 0
+          }
+        ]
+      }
+    }
+  },
+  "cliente": "El front suma members_version=1 a las negociaciones que ya manda en getMesa y lee estas claves con un decodificador propio que ignora lo que no entiende: un dato que falta o es raro deja la pantalla como hoy («Lo eligió otro», sin «Se sumaron N de M»). En partes iguales no hay dueño de un plato (selección informativa, D79): el front no muestra picked_by ahí."
+}

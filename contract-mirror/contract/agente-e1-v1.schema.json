@@ -28,7 +28,7 @@
     }
   },
   "errors": {
-    "400": { "error": "validation_error" },
+    "400": { "error": "validation_error", "description": "Cuerpo inválido para la ruta. En POST /api/agente/cerca, cuerpo que no es exactamente { lat, lon } válidos, o (desde 2.209.1) una clave de ubicación en la query aunque el cuerpo sea válido: la ubicación va sólo en el cuerpo. Las claves de ubicación son lat, lon, latitude y longitude, y desde 2.209.2 también lng; se comparan sin mayúsculas, sin espacios y sin la parte desde el primer [ o . (lat[x], lat.x). Sólo se miran las claves de la query, nunca los valores." },
     "403": [{ "error": "account_required" }, { "error": "permission_required", "purpose": "recomendaciones" }],
     "404": [{ "error": "not_found" }, { "error": "mesa_not_found" }],
     "429": [{ "error": "too_many_requests", "endpoint": "POST /api/agente/cerca", "description": "v2.208.1 · límite propio por cuenta (O2 del PR #94): 10 búsquedas en 15 minutos y 40 por día. Cuentan todos los pedidos de la cuenta, también los inválidos; con la función apagada o sin cuenta responde la puerta (404 o 403) y no cuenta. Lleva las cabeceras RateLimit estándar. El límite general de /api, por IP, sigue igual." }]

@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "a33a2e7d445335b179d9c4a6ed7821015debfa5e",
-  "total": 167,
+  "commit": "f04798f722244b2e28655e6ab9a83f714c1f0d7b",
+  "total": 171,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
@@ -13,8 +13,14 @@
     {
       "origen": "contract/agente-e1-v1.schema.json",
       "destino": "contract/agente-e1-v1.schema.json",
-      "sha256": "372b8b1c72fd0549250ec9c5e96e480898c2d38fe56886fabf7b81f4bcf4b094",
-      "bytes": 8594
+      "sha256": "6e9a6c89dbeec6a5523cdb0dab851a792421a47fda1dcfbb15b029e8001be321",
+      "bytes": 9088
+    },
+    {
+      "origen": "contract/agente-e2-v1.schema.json",
+      "destino": "contract/agente-e2-v1.schema.json",
+      "sha256": "f7b1fa67f1d88d8314ab60af1ccf0ad96b0dac5fdb60e434375db3fe438fa84c",
+      "bytes": 6593
     },
     {
       "origen": "contract/cocinas-v1.json",
@@ -57,6 +63,12 @@
       "destino": "contract/mesa-mi-parte-v1.json",
       "sha256": "475258cf7d34b91a874b8a94d4b25107f1c99da236d837ee504d14cf36e9f4bb",
       "bytes": 19027
+    },
+    {
+      "origen": "contract/mesa-miembros-v1.json",
+      "destino": "contract/mesa-miembros-v1.json",
+      "sha256": "06442d0fe15f4eba4048c8a33394af81845b87fb817d2d8e58683ea5a03418bd",
+      "bytes": 4554
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
@@ -535,8 +547,8 @@
     {
       "origen": "routes/agente.js",
       "destino": "routes/agente.js",
-      "sha256": "76b70bf034b3a655d53294faa72e526750c0e54f2d58780d596de10d2783cbb6",
-      "bytes": 6094
+      "sha256": "a21896f048af263a585808c6923ef927e9dc5a52fa2102c1ba45dd2994aa3c2e",
+      "bytes": 8966
     },
     {
       "origen": "routes/auth.js",
@@ -589,8 +601,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "40ae831d11013ef228b377e653e2caa7db395affbc425c1a5c72a43c990570f2",
-      "bytes": 215933
+      "sha256": "275eca4ea91a8c31bf1320c1ed5a2575dda7130d337207911bda0e5ed6ee0612",
+      "bytes": 219079
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -689,6 +701,12 @@
       "bytes": 26620
     },
     {
+      "origen": "services/agenteSeguiProbando.js",
+      "destino": "services/agenteSeguiProbando.js",
+      "sha256": "13f83981e38c6fa47b46670f3b4b5cf6972370a99b2a6dd02cb5ed0628145a09",
+      "bytes": 13359
+    },
+    {
       "origen": "services/authRecovery.js",
       "destino": "services/authRecovery.js",
       "sha256": "94454dbcb8b52c00a200fc9c21fed6f3ee2370cbe306ebfc274f7320553aea53",
@@ -741,6 +759,12 @@
       "destino": "services/facebookIdentity.js",
       "sha256": "b5daa1302d56863db5923596da9313958ca2aea0d6cca511028d661139c9eab5",
       "bytes": 6970
+    },
+    {
+      "origen": "services/familiasPlatos.json",
+      "destino": "services/familiasPlatos.json",
+      "sha256": "162d76b02af1681dad9b504347c869f31076f328a219deb636bc7f9eae1c8fe8",
+      "bytes": 5170
     },
     {
       "origen": "services/fotoPerfilNoAmigos.js",

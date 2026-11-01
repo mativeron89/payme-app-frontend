@@ -1,4 +1,23 @@
-## O2 del PR #95 · D550 · D554 · el reespejo de 2.208.1 · 0.268.1
+## AF-4 · D622 · D628 · D639 · el reespejo de 2.210.0 («los de la mesa») · 0.273.0
+
+Contenido vigente: `f04798f722244b2e28655e6ab9a83f714c1f0d7b`.
+Inventario íntegro de 171 entradas tomado del `main` del dueño, el servido (App Backend 2.210.0, `main` en
+`7da48bb97e330ae227ec87b7d9e4a9ab4814386f`; `contract/mirror-inventory.json`, sha256
+`db00d6bce596f1db7dc00790108ac1008322d084c862cb6bc3dd1a20d03d5e37`), adoptado con `--adoptar-inventario` sin editarlo: la punta sólo publica el
+inventario, que declara `f04798f`. Entre `f04798f` y `7da48bb` no cambia ningún archivo inventariado (sólo el
+inventario publicado). **23 archivos espejados**, todos JSON de `contract/`; **148 fuentes sólo por
+hash**, conforme D268.
+Nuevos `contract/mesa-miembros-v1.json` (sha256 `06442d0fe15f4eba4048c8a33394af81845b87fb817d2d8e58683ea5a03418bd`: `members_version=1`,
+`members`, `picked_by` y `picked_by_more`, que lee `src/api/miembros.ts`) y `contract/agente-e2-v1.schema.json` (sha256
+`f7b1fa67f1d88d8314ab60af1ccf0ad96b0dac5fdb60e434375db3fe438fa84c`: el E2 del agente, que este front todavía no consume). Cambia
+`contract/agente-e1-v1.schema.json` (sha256 `6e9a6c89dbeec6a5523cdb0dab851a792421a47fda1dcfbb15b029e8001be321`: la descripción del 400 de
+`POST /api/agente/cerca`; sin cambio de forma). Por hash cambian `routes/agente.js` y `routes/mesas.js`, y se suman
+`services/agenteSeguiProbando.js` y `services/familiasPlatos.json`. Los hechos del dueño se regeneraron en local contra
+`f04798f`: cambian el commit y el sha256 de `routes/mesas.js`, ningún valor. `PROCEDENCIA.commit` de
+`src/api/mock/parteDeMesa.ts` pasa al mismo commit: `services/parteDeMesa.js` y `utils/money.js` siguen con los sha256
+de siempre.
+
+### Refresh anterior · O2 del PR #95 · D550 · D554 · el reespejo de 2.208.1 · 0.268.1
 
 Contenido vigente: `a33a2e7d445335b179d9c4a6ed7821015debfa5e`.
 Inventario íntegro de 167 entradas tomado del `main` del dueño, el servido (App Backend 2.208.1, `main` en
