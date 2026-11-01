@@ -216,8 +216,44 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await expect(page.getByRole('progressbar', { name: 'Asignado 100% de la mesa' })).toBeVisible();
     await expect(page.getByText('Asignado', { exact: true }).locator('..')).toContainText('$840');
     await expect(page.getByText('Por asignar', { exact: true }).locator('..')).toContainText('$0');
-    await expect(page.getByText('Pagado por los comensales').locator('..')).toContainText('$0');
+    // D674 · con los pagos apagados, «Pagado por los comensales · $0» no aparece (antes de 0.274.0 sí).
+    await expect(page.getByText('Total mesa', { exact: true }).locator('..')).toContainText('$840');
+    await expect(page.getByText('Pagado por los comensales')).toHaveCount(0);
   });
+
+  /**
+   * D674 · el mismo cierre, con los pagos apagados y encendidos: la línea se va sólo cuando el dueño declara los pagos
+   * apagados; el resto del cierre (título, total y reparto) queda igual en los dos.
+   */
+  for (const modo of ['disabled', 'sandbox'] as const) {
+    test(`🔴 D674 · el cierre con los pagos ${modo === 'disabled' ? 'apagados: sin' : 'encendidos: con'} «Pagado por los comensales»`, async ({ page }) => {
+      await preparar(page, modo);
+      const completos = items840.map((item) => ({
+        ...item,
+        claims: [{ who: 'other' as const, fraction_bps: 10000, amount_cents: null, status: 'locked' as const }],
+      }));
+      await sembrarMesa(page, {
+        code: 'PA-8674', total_cents: 84000, items: completos,
+        status: 'expired', guarantee_mode: false, closure_reason: 'all_items_selected',
+      });
+      // El reparto confirmado (la barra «Asignado») se dibuja sólo con el corte declarado: con pagos no hay barra.
+      if (modo === 'disabled') await abrir(page, 'PA-8674');
+      else await page.goto('/#/mesa/PA-8674');
+      await expect(page.getByText('Esta mesa cerró sin cobros')).toBeVisible();
+      await expect(page.getByText('Se eligieron todos los consumos.', { exact: true })).toBeVisible();
+      await expect(page.getByText('Total mesa', { exact: true }).locator('..')).toContainText('$840');
+      const pagado = page.getByText('Pagado por los comensales', { exact: true });
+      if (modo === 'disabled') {
+        await expect(page.getByText('Asignado', { exact: true }).locator('..')).toContainText('$840');
+        await expect(page.getByText('Por asignar', { exact: true }).locator('..')).toContainText('$0');
+        await expect(pagado).toHaveCount(0);
+        const dir = process.env.PAYME_E2E_CAPTURAS;
+        if (dir) await page.screenshot({ path: `${dir}/movil-cierre-sin-pagado.png`, animations: 'disabled' });
+      } else {
+        await expect(pagado.locator('..')).toContainText('$0');
+      }
+    });
+  }
 
   /**
    * Decisión 77 de Mati, punto 1: soltó el consumo con la X y en Mesas ›

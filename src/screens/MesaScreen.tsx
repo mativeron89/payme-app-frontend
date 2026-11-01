@@ -106,6 +106,7 @@ import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
 import { esCodigoDeEjemplo } from '../ayuda/ejemplo/fixtureEjemplo';
 import { linkDelQrVigente, msHastaQueVenza } from './linkDelQr';
 import { PropinaDeLaMesa, dependenciasDePropina, useEstadoDePropina } from '../components/PropinaDeLaMesa';
+import { PagadoPorLosComensales } from '../components/PagadoPorLosComensales';
 import {
   mensajeDeRechazo,
   mismaPropina,
@@ -2671,12 +2672,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
               <span className="lbl">{t('Total mesa')}</span>
               <span className="val">{formatMXN(mesa.total_cents)}</span>
             </div>
-            <div className="receipt-row">
-              <span className="lbl">{t('Pagado por los comensales')}</span>
-              <span className="val" style={{ color: 'var(--green)' }}>
-                {formatMXN(mesa.paid_amount_cents)}
-              </span>
-            </div>
+            {/* D674 · con los pagos apagados, sin «Pagado por los comensales · $0». */}
+            <PagadoPorLosComensales rail={moneyRail} paidCents={mesa.paid_amount_cents} />
             {repartoCierreConocido ? (
               <>
                 <div
