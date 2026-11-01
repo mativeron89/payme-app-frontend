@@ -5414,11 +5414,19 @@ function visitasDelModelo(): VisitaMock[] {
   if (viajesMockEncendido()) {
     const inicio = inicioDeMes(5, ahora);
     const { items, ...visita } = VISITA_DE_VIAJE_MOCK;
+    /**
+     * AF-7 · I2 · hace un día y medio (36 pasos de una hora), sin salir del mes. Hasta 0.275.0 era
+     * `max(inicio + 1 min, ahora − 36 h)`: en el primer minuto del mes quedaba en el futuro y en las primeras 36 h se
+     * pegaba al borde, empatada o por delante de las visitas del modelo. Ahora el paso se achica como en `paso` de
+     * arriba, para que los 36 pasos entren en lo que va del mes: queda la más vieja del mes y se mueve con el reloj;
+     * pasadas 37 h, es la de siempre.
+     */
+    const transcurridoViaje = Math.max(0, ahora.getTime() - inicio.getTime());
+    const pasoViaje = Math.max(1, Math.min(3_600_000, Math.floor(transcurridoViaje / 37)));
     visitas.push({
       ...visita,
       mes: 5,
-      // Hace un día y medio, sin salir del mes.
-      created_at: new Date(Math.max(inicio.getTime() + 60_000, ahora.getTime() - 36 * 3_600_000)).toISOString(),
+      created_at: new Date(Math.max(inicio.getTime(), ahora.getTime() - 36 * pasoViaje)).toISOString(),
       amount_cents: items.reduce((s, i) => s + i.amount_cents, 0),
       items: items.map((i) => ({ ...i })),
     });

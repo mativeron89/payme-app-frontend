@@ -66,3 +66,44 @@ describe('las visitas del mes en curso del mock', () => {
     expect(todas.map((f) => (ahora - f) / 3_600_000)).toEqual(todas.map((_, i) => i + 1));
   });
 });
+
+/**
+ * AF-7 · I2 (auditoría del PR #117): la visita de viaje del mock (con el seam de Viajes) va «hace un día y medio, sin
+ * salir del mes». Hasta 0.275.0 era `max(inicio + 1 min, ahora − 36 h)`: en el primer minuto del mes quedaba en el
+ * futuro y en las primeras 36 h se pegaba a inicio + 1 min, empatada o por delante de las visitas del modelo. Ahora el
+ * paso se achica igual que en `visitasDelModelo`: dentro del mes, nunca en el futuro, la más vieja del mes y moviéndose
+ * con el reloj; pasadas 37 h, las fechas de siempre.
+ */
+describe('la visita de viaje del mock, con Viajes encendido', () => {
+  const VIAJES = 'payme.app.mock.viajes.v1';
+  afterEach(() => { storage.delete(VIAJES); });
+
+  async function conViajes(iso: string): Promise<{ inicio: number; ahora: number; viaje: number; delModelo: number[] }> {
+    storage.set(VIAJES, 'encendido');
+    const { inicio, ahora, restaurantes } = await restaurantesA(iso);
+    const faro = restaurantes.find((r) => r.name === 'Mariscos El Faro');
+    expect(faro, 'la visita de viaje está en el mes').toBeDefined();
+    expect(faro!.visits).toHaveLength(1);
+    const delModelo = restaurantes.filter((r) => r !== faro).flatMap((r) => r.visits.map((v) => Date.parse(v.created_at)));
+    return { inicio, ahora, viaje: Date.parse(faro!.visits[0]!.created_at), delModelo };
+  }
+
+  it.each(MOMENTOS)('🔴 %s · dentro del mes, nunca en el futuro, y la más vieja del mes sin empatar con otra', async (iso) => {
+    const { inicio, ahora, viaje, delModelo } = await conViajes(iso);
+    expect(viaje, 'dentro del mes').toBeGreaterThanOrEqual(inicio);
+    expect(viaje, 'no en el futuro').toBeLessThanOrEqual(ahora);
+    expect(delModelo.length).toBeGreaterThan(0);
+    for (const f of delModelo) expect(viaje, 'más vieja que cada visita del modelo').toBeLessThan(f);
+  });
+
+  it('🔴 en las primeras 36 h no se pega al borde del mes: se mueve con el reloj', async () => {
+    const temprano = await conViajes('2026-11-01T07:30:00Z');
+    const despues = await conViajes('2026-11-01T18:00:00Z');
+    expect(despues.viaje - despues.inicio).toBeGreaterThan(temprano.viaje - temprano.inicio);
+  });
+
+  it('pasadas las horas que hacen falta, la de siempre: hace un día y medio', async () => {
+    const { ahora, viaje } = await conViajes('2026-11-15T18:00:00Z');
+    expect(ahora - viaje).toBe(36 * 3_600_000);
+  });
+});
