@@ -16,7 +16,7 @@ const CONTRATO = JSON.parse(readFileSync(new URL('../../contract-mirror/contract
   capacidad: { ruta: string; path: string; valor: unknown };
 };
 
-const TOKEN = 'v2.tok-de-prueba-largo';
+const CREDENCIAL = 'v2.tok-de-prueba-largo';
 const conf = (link_preview: unknown) => ({ features: { link_preview } });
 
 function almacen() {
@@ -137,9 +137,9 @@ describe('pedir la vista previa', () => {
   it('🔴 sin la capacidad no se llama: ni pendiente ni apagada', async () => {
     const m = await modulo();
     const pedir = vi.fn(async () => BUENA);
-    expect(await m.vistaPreviaDelLink(TOKEN, pedir)).toBeNull();
+    expect(await m.vistaPreviaDelLink(CREDENCIAL, pedir)).toBeNull();
     m.aplicarConfigVistaPreviaDelLink({ features: {} });
-    expect(await m.vistaPreviaDelLink(TOKEN, pedir)).toBeNull();
+    expect(await m.vistaPreviaDelLink(CREDENCIAL, pedir)).toBeNull();
     expect(pedir).not.toHaveBeenCalled();
   });
 
@@ -147,15 +147,15 @@ describe('pedir la vista previa', () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
     const pedir = vi.fn(async () => BUENA);
-    expect(await m.vistaPreviaDelLink(TOKEN, pedir)).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
+    expect(await m.vistaPreviaDelLink(CREDENCIAL, pedir)).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
     expect(pedir).toHaveBeenCalledTimes(1);
-    expect(pedir).toHaveBeenCalledWith(TOKEN);
+    expect(pedir).toHaveBeenCalledWith(CREDENCIAL);
   });
 
   it('D676 · el nombre en null llega como invitador null, con el restaurante', async () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
-    expect(await m.vistaPreviaDelLink(TOKEN, async () => ({ inviter_first_name: null, restaurant_name: 'Tacos El Güero' })))
+    expect(await m.vistaPreviaDelLink(CREDENCIAL, async () => ({ inviter_first_name: null, restaurant_name: 'Tacos El Güero' })))
       .toEqual({ invitador: null, restaurante: 'Tacos El Güero' });
   });
 
@@ -183,7 +183,7 @@ describe('pedir la vista previa', () => {
       vi.resetModules();
       const n = await modulo();
       n.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
-      await expect(n.vistaPreviaDelLink(TOKEN, pedir), nombre).resolves.toBeNull();
+      await expect(n.vistaPreviaDelLink(CREDENCIAL, pedir), nombre).resolves.toBeNull();
     }
   });
 
@@ -193,19 +193,19 @@ describe('pedir la vista previa', () => {
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
     expect(m.PLAZO_VISTA_PREVIA_MS).toBe(1500);
     let soltar: (v: unknown) => void = () => undefined;
-    const resultado = m.vistaPreviaDelLink(TOKEN, () => new Promise((r) => { soltar = r; }));
+    const resultado = m.vistaPreviaDelLink(CREDENCIAL, () => new Promise((r) => { soltar = r; }));
     await vi.advanceTimersByTimeAsync(1500);
     soltar(BUENA);
     expect(await resultado).toBeNull();
     // Y queda así para esa pestaña: no se vuelve a pedir ni cambia tarde.
-    expect(m.vistaPreviaRecordada(TOKEN)).toBeNull();
+    expect(m.vistaPreviaRecordada(CREDENCIAL)).toBeNull();
   });
 
   it('justo antes del plazo, sí', async () => {
     vi.useFakeTimers();
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
-    const resultado = m.vistaPreviaDelLink(TOKEN, () => new Promise((r) => { setTimeout(() => r(BUENA), 1400); }));
+    const resultado = m.vistaPreviaDelLink(CREDENCIAL, () => new Promise((r) => { setTimeout(() => r(BUENA), 1400); }));
     await vi.advanceTimersByTimeAsync(1400);
     expect(await resultado).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
   });
@@ -214,10 +214,10 @@ describe('pedir la vista previa', () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
     const pedir = vi.fn(async () => BUENA);
-    await m.vistaPreviaDelLink(TOKEN, pedir);
-    await m.vistaPreviaDelLink(TOKEN, pedir);
+    await m.vistaPreviaDelLink(CREDENCIAL, pedir);
+    await m.vistaPreviaDelLink(CREDENCIAL, pedir);
     expect(pedir).toHaveBeenCalledTimes(1);
-    expect(m.vistaPreviaRecordada(TOKEN)).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
+    expect(m.vistaPreviaRecordada(CREDENCIAL)).toEqual({ invitador: 'Ana', restaurante: 'Tacos El Güero' });
     const falla = vi.fn(async () => { throw new HttpError(503, { error: 'invitation_link_unavailable' }); });
     await m.vistaPreviaDelLink('v2.otro-token-largo', falla);
     await m.vistaPreviaDelLink('v2.otro-token-largo', falla);
@@ -227,14 +227,14 @@ describe('pedir la vista previa', () => {
   it('lo recordado es de ESE token: otro token no hereda el nombre', async () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
-    await m.vistaPreviaDelLink(TOKEN, async () => BUENA);
+    await m.vistaPreviaDelLink(CREDENCIAL, async () => BUENA);
     expect(m.vistaPreviaRecordada('v2.otro-token-largo')).toBeNull();
   });
 
   it('🔴 la respuesta vive en memoria: no se escribe en localStorage ni en sessionStorage', async () => {
     const m = await modulo();
     m.aplicarConfigVistaPreviaDelLink(conf({ supported: true }));
-    await m.vistaPreviaDelLink(TOKEN, async () => BUENA);
+    await m.vistaPreviaDelLink(CREDENCIAL, async () => BUENA);
     expect([...local.valores.keys()]).toEqual([]);
     expect([...sesion.valores.keys()]).toEqual([]);
   });
