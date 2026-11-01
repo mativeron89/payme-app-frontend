@@ -201,6 +201,54 @@ test.describe('D622 · AF-4 · M1 y m2 de E06 · cuántas veces la hoja pide el 
     expect(await pedidosDeLink(page)).toBe(2);
   });
 
+  /**
+   * D622 · AF-6 · i2 de E06 sobre AF-4 · el QR vencido se va por DOS mecanismos: el temporizador que descarta el link
+   * al vencer (`MesaScreen`, el efecto de `linkDelQr`) y el chequeo de `linkDelQrVigente` al dibujar. Con los dos
+   * juntos, sacar uno solo no rompía nada (MU3 y MU5 sobrevivían por separado). Cada test de abajo deja vivo uno solo:
+   * - corriendo `Date.now` hacia adelante, el temporizador (de 60 s) todavía no salta: lo saca el chequeo al dibujar,
+   *   que es el que sostiene el caso del iPhone, donde una pestaña en segundo plano no corre temporizadores;
+   * - corriéndolo hacia atrás después del vencimiento, el chequeo vuelve a dar «vigente»: si el QR no reaparece es
+   *   porque el temporizador ya descartó el link.
+   */
+  async function desfasarElReloj(page: Page, ms: number): Promise<void> {
+    await page.evaluate((desfase) => {
+      const w = window as unknown as { __dateNowReal?: () => number };
+      w.__dateNowReal ??= Date.now.bind(Date);
+      const real = w.__dateNowReal;
+      Date.now = () => real() + desfase;
+    }, ms);
+  }
+
+  test('🔴 i2 · sólo el chequeo al dibujar: con el reloj pasado el vencimiento y sin que salte el temporizador, el QR se va', async ({ page }) => {
+    const mesa = await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'vence', 60_000);
+    await abrirConfiguracionDeLaMesa(page);
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    const qr = qrDe(hoja, mesa.code);
+    await expect(qr).toBeVisible();
+    await desfasarElReloj(page, 61_000);
+    // Mucho antes de los 60 s del temporizador: lo saca el chequeo, en el próximo dibujo.
+    await expect(qr).toHaveCount(0, { timeout: 5_000 });
+    await expect(hoja).toBeVisible();
+    await expect(hoja.getByRole('button', { name: 'Copiar link de invitación', exact: true })).toBeVisible();
+  });
+
+  test('🔴 i2 · sólo el temporizador: vencido y con el reloj vuelto atrás, el QR no reaparece porque el link ya se descartó', async ({ page }) => {
+    const mesa = await aTuMesaConLink(page);
+    await espiarCrearInvitacion(page, 'vence', 3_000);
+    await abrirConfiguracionDeLaMesa(page);
+    const hoja = page.getByRole('dialog', { name: 'Configuración de la mesa' });
+    const qr = qrDe(hoja, mesa.code);
+    await expect(qr).toBeVisible();
+    await expect(qr).toHaveCount(0, { timeout: 8_000 });
+    // Con el reloj un minuto atrás, `linkDelQrVigente` diría «vigente» otra vez: sólo un link ya descartado lo impide.
+    await desfasarElReloj(page, -60_000);
+    await page.waitForTimeout(3_000);
+    await expect(qr).toHaveCount(0);
+    await expect(hoja).toBeVisible();
+    expect(await pedidosDeLink(page)).toBe(1);
+  });
+
   test('m2 · vencido con la hoja cerrada: la próxima apertura lo pide otra vez', async ({ page }) => {
     const mesa = await aTuMesaConLink(page);
     await espiarCrearInvitacion(page, 'vence', 2_000);
