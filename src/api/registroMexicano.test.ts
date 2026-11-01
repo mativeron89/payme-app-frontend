@@ -291,6 +291,7 @@ describe('el producto habla español mexicano', () => {
       'Toca lo que consumiste. Al elegirlo queda reservado para ti.',
       '¿Primera vez? Crea tu cuenta',
       'Divide y paga la cuenta desde donde quieras',
+      'Divide la cuenta con tus amigos, desde donde quieras',
       'Elige una guardada o usa otra',
       'Súmate a la mesa PA-2847 en PayMe',
     ]) {

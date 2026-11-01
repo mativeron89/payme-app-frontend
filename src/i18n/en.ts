@@ -287,6 +287,8 @@ export const EN: Record<string, string> = {
   "Desde este teléfono ya se pagó una parte de esta mesa.": "A share of this table was already paid from this phone.",
   "Devolución de mesa": "Table refund",
   "Divide y paga la cuenta desde donde quieras": "Split and pay the bill from wherever you are",
+  // D673 · el lema mientras los pagos estén apagados.
+  "Divide la cuenta con tus amigos, desde donde quieras": "Split the bill with your friends, from wherever you are",
   "Débito": "Debit",
   "El banco no autorizó la retención. Prueba con otra tarjeta.": "Your bank didn't authorize the hold. Try another card.",
   "El banco rechazó la tarjeta, pero no pudimos limpiar el intento local. No vamos a reenviarlo.": "The bank declined the card, but we couldn't clear the local attempt. We won't resend it.",

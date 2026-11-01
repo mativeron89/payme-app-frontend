@@ -62,6 +62,8 @@ import { useRecargaPorVersionNueva } from '../api/versionPublicada';
 import type { LegalAcceptanceRequest, LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
+import { LemaDelIngreso } from '../components/LemaDelIngreso';
+import { useMoneyRail } from '../api/moneyRail';
 
 /**
  * Login / registro según el contrato (routes/auth.js):
@@ -468,6 +470,8 @@ export function LoginScreen({
   recargaPorVersion?: boolean;
 } = {}) {
   const { t, idioma } = useIdioma();
+  // D673 · el lema sigue al corte de pagos que declara el dueño (`features.money_rail`), el mismo de todas las pantallas.
+  const moneyRail = useMoneyRail();
   const {
     login,
     register,
@@ -1899,7 +1903,8 @@ export function LoginScreen({
             Pay<span className="t">Me</span>
           </div>
         </div>
-        <div className="ingreso-sub">{t('Divide y paga la cuenta desde donde quieras')}</div>
+        {/* D673 · sin «paga» mientras los pagos estén apagados (lo declara el dueño en `money_rail`). */}
+        <LemaDelIngreso rail={moneyRail} />
       </header>
 
       <div className="ingreso-burbuja">
