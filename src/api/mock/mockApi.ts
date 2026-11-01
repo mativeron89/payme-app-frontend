@@ -5368,6 +5368,15 @@ function visitasDelModelo(): VisitaMock[] {
   const basis = baseDelMock();
   const visitas: VisitaMock[] = [];
   let dia = 0;
+  /**
+   * Las visitas del mes en curso van una hora atrás cada una desde ahora. En las primeras horas del día 1 no entran:
+   * hasta 0.275.0 las que no entraban se pegaban al inicio del mes con un minuto de diferencia y en el orden contrario,
+   * y la más nueva dejaba de ser la primera (los specs de «Tus restaurantes» salían rojos esas horas de cada mes). Ahora
+   * el paso se achica para que todas entren en lo que va del mes, en el mismo orden; con tiempo de sobra, es una hora.
+   */
+  const delMes = categoriasDelMesMock(costuraDeStats()).reduce((s, c) => s + c.visits, 0);
+  const transcurrido = Math.max(0, ahora.getTime() - inicioDeMes(5, ahora).getTime());
+  const paso = Math.max(1, Math.min(3_600_000, Math.floor(transcurrido / (delMes + 1))));
   for (let mes = 0; mes <= 5; mes += 1) {
     const inicio = inicioDeMes(mes, ahora);
     const categorias = mes === 5 ? categoriasDelMesMock(costuraDeStats()) : MESES_PREVIOS_MOCK[mes];
@@ -5376,10 +5385,9 @@ function visitasDelModelo(): VisitaMock[] {
       repartir(c.amount_cents, c.visits).forEach((monto, v) => {
         let creada: Date;
         if (mes === 5) {
-          // Horas hacia atrás desde ahora, sin salir del mes (el día 1 a la
-          // madrugada «ahora menos N horas» caería en el mes anterior).
+          // Un paso atrás por visita desde ahora, sin salir del mes (ver `paso`).
           dia += 1;
-          creada = new Date(Math.max(inicio.getTime() + dia * 60_000, ahora.getTime() - dia * 3_600_000));
+          creada = new Date(Math.max(inicio.getTime(), ahora.getTime() - dia * paso));
         } else {
           creada = new Date(inicio.getTime() + ((4 + v * 3 + idx) * 24 + 20) * 3_600_000);
         }
