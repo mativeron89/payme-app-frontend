@@ -1,3 +1,7 @@
+## 0.275.2 · 2026-11-06
+
+- D748/C119b: archivo de carriles medido en AF y comparador desde la base, con prioridad de prohibidas, modes regulares, versión ascendente y pruebas de mutantes; sin cambios de runtime.
+
 ## Sin publicar · 2026-11-01 (C65 · estabilidad de n181 y D256)
 
 - **n181, actor fallido:** la prueba conserva al actor pendiente hasta acreditar el CTA deshabilitado y la nota de espera; luego rechaza la barrera y verifica el error, el CTA restaurado y cero mesas/creaciones. El rechazo inmediato queda cubierto por un caso separado. Antes se intentaba observar una espera transitoria después de un fallo que ya podía haber terminado.
