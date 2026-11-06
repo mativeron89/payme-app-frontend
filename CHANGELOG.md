@@ -1,5 +1,6 @@
 ## 0.275.2 · 2026-11-06
 
+- C119c: rápido sólo para CHANGELOG; modes independientes del cwd y cerrados ante vacío, borrados normales, versión por texto y sondas separadas de regresión.
 - D748/C119b: archivo de carriles medido en AF y comparador desde la base, con prioridad de prohibidas, modes regulares, versión ascendente y pruebas de mutantes; sin cambios de runtime.
 
 ## Sin publicar · 2026-11-01 (C65 · estabilidad de n181 y D256)

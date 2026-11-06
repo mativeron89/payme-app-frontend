@@ -1,8 +1,6 @@
 {
   "rapido": [
-    "docs/**",
-    "CHANGELOG.md",
-    "e2e/inicio-pestanas-misma-altura.spec.ts"
+    "CHANGELOG.md"
   ],
   "prohibidas": [
     "AGENTS.md",
@@ -297,7 +295,18 @@
     "e2e/vincular-google-redirect.spec.ts",
     "e2e/vista-previa-del-link.spec.ts",
     "docs/DESPLIEGUE_GATEADO.md",
-    "docs/HARDENING_LANDING_LOCAL.md"
+    "docs/HARDENING_LANDING_LOCAL.md",
+    "e2e/inicio-pestanas-misma-altura.spec.ts",
+    "test-fixtures/legal-d457/alta.txt",
+    "test-fixtures/legal-d457/aviso_privacidad.txt",
+    "test-fixtures/legal-d457/aviso_privacidad_simplificado.txt",
+    "test-fixtures/legal-d457/terminos_uso.txt",
+    "vercel.ts",
+    "vite.config.ts",
+    "vite.landing.config.ts",
+    ".env.development",
+    ".env.local.example",
+    ".env.mock"
   ],
   "version_sola": [
     "package.json",
