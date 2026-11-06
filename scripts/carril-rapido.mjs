@@ -19,9 +19,11 @@ function greater(previous, next) {
   return false;
 }
 function regularModes(path) {
-  const mode = sha => git('ls-tree', '-z', sha, '--', `:(literal)${path}`).slice(0, 6);
+  const mode = sha => git('ls-tree', '-z', '--full-tree', sha, '--', `:(literal)${path}`).slice(0, 6);
   const before = mode(base), after = mode(head);
-  // Altas/bajas sólo con el blob regular existente. Nunca symlink, +x ni cambio de mode.
+  if (!before && !after) return false; // Ruta del diff no encontrada: falla cerrada.
+  if (before && !after) return false; // Borrado: requiere carril normal.
+  // Sólo blobs regulares, sin symlink, +x ni cambio de mode.
   return (!before || before === '100644') && (!after || after === '100644') &&
     (!before || !after || before === after);
 }
@@ -36,7 +38,8 @@ function versionOnly(paths) {
   if (oldLock.version !== previous || oldLock.packages?.['']?.version !== previous ||
       nextLock.version !== next || nextLock.packages?.['']?.version !== next) return false;
   nextLock.version = previous; nextLock.packages[''].version = previous;
-  return isDeepStrictEqual(oldLock, nextLock);
+  return isDeepStrictEqual(oldLock, nextLock) && VERSION_PATHS.every(path =>
+    show(head, path).replaceAll(JSON.stringify(next), JSON.stringify(previous)) === show(base, path));
 }
 try {
   if (extra.length || !/^[a-f0-9]{40}$/.test(base) || !/^[a-f0-9]{40}$/.test(head)) {
