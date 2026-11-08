@@ -1,3 +1,8 @@
+## 0.275.3 · 2026-11-08
+
+- C140: el comparador de carriles verifica cada cambio entre un padre y su commit hijo con la política de la base, ignora reemplazos de Git y rechaza grafts. Códigos: 0 rápido, 1 ruta protegida, 2 carril normal, 3 sin cambios y 4 entrada o historia inválida.
+- Las pruebas aíslan Git y cubren cambios intermedios revertidos, opciones locales de diff, renombres y cambios de modo. La única ruta rápida de documentación sigue siendo `CHANGELOG.md`.
+
 ## 0.275.2 · 2026-11-06
 
 - C119c: rápido sólo para CHANGELOG; modes independientes del cwd y cerrados ante vacío, borrados normales, versión por texto y sondas separadas de regresión.
