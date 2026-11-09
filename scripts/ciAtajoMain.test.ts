@@ -33,7 +33,10 @@ function correr(script: string, env: Record<string, string | undefined>, cwd: st
   const dir = mkdtempSync(join(tmpdir(), 'payme-ci-salida-'));
   const salidaArchivo = join(dir, 'output');
   writeFileSync(salidaArchivo, '');
-  const limpio: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: process.env.HOME };
+  const limpio: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH, HOME: cwd, XDG_CONFIG_HOME: cwd,
+    GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+  };
   for (const [k, v] of Object.entries({ GITHUB_OUTPUT: salidaArchivo, ...env })) if (v !== undefined) limpio[k] = v;
   return new Promise((ok) => {
     execFile(process.execPath, [script], { cwd, env: limpio, encoding: 'utf8' }, (err, out, errOut) => {
@@ -87,7 +90,7 @@ describe('D493 · ci-verificar-needs: el primer paso de `build` frena lo que no 
 // ─── un repo con base, head y el merge ref de un PR ──────────────────────────
 
 const GIT_ENV = {
-  ...process.env,
+  PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
   GIT_AUTHOR_NAME: 'sonda', GIT_AUTHOR_EMAIL: 'sonda@ejemplo.invalid',
   GIT_COMMITTER_NAME: 'sonda', GIT_COMMITTER_EMAIL: 'sonda@ejemplo.invalid',
 };

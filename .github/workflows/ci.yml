@@ -173,7 +173,19 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
 
-      # 🔴 Se lee el resultado en un paso APARTE, y el de arriba queda intacto.
+      - name: Verificar población de Playwright
+        run: |
+          node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const { stats } = JSON.parse(readFileSync('test-results/resultados.json', 'utf8'));
+          const counts = [stats?.expected, stats?.unexpected, stats?.flaky];
+          if (!counts.every(n => Number.isSafeInteger(n) && n >= 0) || !counts.some(n => n > 0)) {
+            throw new Error('Playwright no acreditó pruebas ejecutadas en este shard');
+          }
+          console.log(`Playwright ejecutó ${counts.reduce((sum, n) => sum + n, 0)} pruebas en este shard`);
+          NODE
+
+      # 🔴 Se lee el resultado en un paso APARTE, y el comando de Playwright queda intacto.
       # Ese `run:` es el que gatea la publicación: un pipe para capturar su
       # salida le comería el exit code (el shell por defecto es `bash -e`, SIN
       # `pipefail`) y la compuerta quedaría abierta en silencio.

@@ -8,10 +8,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
 const SCRIPT = join(AQUI, 'auditar-secretos.sh');
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const temporales: string[] = [];
 
 function git(dir: string, ...args: string[]): string {
-  const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  const result = spawnSync('git', args, { cwd: dir, env: entornoGit, encoding: 'utf8' });
   expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
   return result.stdout.trim();
 }
@@ -84,6 +85,7 @@ describe('auditoría de secretos', () => {
     const { dir, base } = repoConArchivos(archivos);
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -98,6 +100,7 @@ describe('auditoría de secretos', () => {
     const { dir, base } = repoConArchivos({ [ruta]: contenido });
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -111,6 +114,7 @@ describe('auditoría de secretos', () => {
     const { dir, base } = repoConCambio(`const ${key} = '${value}';`);
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -127,6 +131,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -141,6 +146,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -160,6 +166,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -176,6 +183,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -196,6 +204,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -214,6 +223,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -236,6 +246,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -251,6 +262,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -267,6 +279,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -303,6 +316,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -331,6 +345,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -373,6 +388,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -392,6 +408,7 @@ describe('auditoría de secretos', () => {
 
         const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
           cwd: dir,
+          env: entornoGit,
           encoding: 'utf8',
         });
 
@@ -404,6 +421,7 @@ describe('auditoría de secretos', () => {
 
         const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
           cwd: dir,
+          env: entornoGit,
           encoding: 'utf8',
         });
 
@@ -418,6 +436,7 @@ describe('auditoría de secretos', () => {
 
         const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
           cwd: dir,
+          env: entornoGit,
           encoding: 'utf8',
         });
 
@@ -435,6 +454,7 @@ describe('auditoría de secretos', () => {
 
         const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
           cwd: dir,
+          env: entornoGit,
           encoding: 'utf8',
         });
 
@@ -450,6 +470,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -462,6 +483,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -474,6 +496,7 @@ describe('auditoría de secretos', () => {
 
       const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
         cwd: dir,
+        env: entornoGit,
         encoding: 'utf8',
       });
 
@@ -492,6 +515,7 @@ describe('auditoría de secretos', () => {
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
+      env: entornoGit,
       encoding: 'utf8',
     });
 
@@ -518,7 +542,7 @@ describe('auditoría de secretos', () => {
 
     function auditar(archivos: Record<string, string>) {
       const { dir, base } = repoConArchivos(archivos);
-      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, encoding: 'utf8' });
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, env: entornoGit, encoding: 'utf8' });
       return { status: result.status, salida: `${result.stdout}${result.stderr}` };
     }
 
@@ -624,7 +648,7 @@ describe('auditoría de secretos', () => {
       const listado = spawnSync(
         'git',
         ['ls-files', '--', '*.md', ':(exclude)contract-mirror/*'],
-        { cwd: RAIZ, encoding: 'utf8' },
+        { cwd: RAIZ, env: entornoGit, encoding: 'utf8' },
       );
       return listado.status === 0 ? listado.stdout.split('\n').filter(Boolean) : [];
     }
@@ -670,7 +694,7 @@ describe('auditoría de secretos', () => {
 
     function auditarTramo(tramo: readonly Parte[]) {
       const { dir, base } = repoConArchivos(Object.fromEntries(tramo.map((p) => [p.documento, p.texto])));
-      return spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, encoding: 'utf8' });
+      return spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, env: entornoGit, encoding: 'utf8' });
     }
 
     const DOCUMENTOS = documentosAuditables();
@@ -713,6 +737,53 @@ describe('auditoría de secretos', () => {
         `la documentación real dispara el gate:\n${result.stdout}${result.stderr}`,
       ).toBe(0);
     });
+  });
+
+  it('detecta una adición aunque un commit posterior la borre', () => {
+    const marcador = ['sk', 'live', 'A'.repeat(24)].join('_');
+    const { dir, base } = repoConCambio(marcador);
+    git(dir, 'rm', '--', 'src/probe.tsx');
+    git(dir, 'commit', '-qm', 'retiro');
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, env: entornoGit, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('VALOR con forma de secreto');
+    expect(result.stderr).not.toContain(marcador);
+  });
+
+  it('detecta un valor en el cuerpo de un commit vacío', () => {
+    const marcador = ['sk', 'live', 'A'.repeat(24)].join('_');
+    const { dir, base } = repoConArchivos({ 'README.md': 'cambio limpio\n' });
+    git(dir, 'commit', '--allow-empty', '-qm', 'asunto limpio', '-m', marcador);
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, env: entornoGit, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('VALOR con forma de secreto');
+    expect(result.stderr).not.toContain(marcador);
+  });
+
+  it.each(['ruta', 'mensaje'])('detecta el nombre prohibido en minúsculas en %s', lugar => {
+    const nombre = ['secretos', 'demo', 'railway'].join('_');
+    const { dir, base } = repoConArchivos({
+      [lugar === 'ruta' ? `docs/${nombre}.env` : 'README.md']: 'marcador sintético\n',
+    });
+    let env = entornoGit;
+    if (lugar === 'mensaje') {
+      git(dir, 'commit', '--allow-empty', '-qm', nombre);
+    } else {
+      // El nombre protegido debe cortar antes de pedirle a Git un parche.
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      writeFileSync(join(bin, 'git'), `#!/usr/bin/env node
+const { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+if (args.includes('-p')) process.exit(79);
+const result = spawnSync('git', args, { env: { ...process.env, PATH: ${JSON.stringify(entornoGit.PATH)} }, stdio: 'inherit' });
+process.exit(result.status ?? 78);
+`, { mode: 0o755 });
+      env = { ...entornoGit, PATH: `${bin}:${entornoGit.PATH}` };
+    }
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, env, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('fuera de alcance');
   });
 
   it('CI entrega una base alcanzable y no vacía tanto en push como en PR', () => {

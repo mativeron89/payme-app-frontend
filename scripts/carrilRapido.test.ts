@@ -21,6 +21,7 @@ type Context = {
 type Change = (ctx: Context) => void;
 type Options = {
   policy?: ReturnType<typeof realPolicy>;
+  useBaseCli?: boolean;
   cwd?: string;
   indexOnly?: boolean;
   prepareBase?: Change;
@@ -44,6 +45,10 @@ function scenario(change: Change, options: Options = {}) {
     put('package-lock.json', JSON.stringify({ version: '1.2.3', packages: { '': { version: '1.2.3' } } }));
     options.prepareBase?.({ put, dir, git, base: '', env });
     git('add', '--', 'carriles.json', 'CHANGELOG.md', 'docs/permitido.md', 'docs/DESPLIEGUE_GATEADO.md', 'src/App.tsx', 'package.json', 'package-lock.json');
+    if (options.useBaseCli) {
+      put('scripts/carril-rapido.mjs', readFileSync(cli, 'utf8'));
+      git('add', '--', 'scripts/carril-rapido.mjs');
+    }
     git('commit', '-qm', 'base'); const base = git('rev-parse', 'HEAD');
     const ctx = { put, dir, git, base, env };
     change(ctx);
@@ -53,7 +58,9 @@ function scenario(change: Change, options: Options = {}) {
     }
     git('commit', '--allow-empty', '-qm', 'cambio'); const head = git('rev-parse', 'HEAD');
     const args = options.revisions?.(ctx, head) ?? [base, head];
-    return spawnSync(process.execPath, [cli, ...args], {
+    const baseCli = join(dir, '.git/carril-base.mjs');
+    if (options.useBaseCli) writeFileSync(baseCli, execFileSync('git', ['show', `${base}:scripts/carril-rapido.mjs`], { cwd: dir, env }));
+    return spawnSync(process.execPath, [options.useBaseCli ? baseCli : cli, ...args], {
       cwd: join(dir, options.cwd ?? ''), env: { ...env, ...options.cliEnv?.(ctx) }, encoding: 'utf8',
     });
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -67,19 +74,28 @@ function version(next: string, extra = false): Change {
 const changeLog: Change = ({ put }) => put('CHANGELOG.md', 'cambio\n');
 const deniedDocs = ['docs/CLAUDE.md', 'docs/AGENTS.md', 'docs/.claude/settings.json', 'docs/.env',
   'docs/SECRETOS_EJEMPLO.env', 'docs/usuarios.csv', 'docs/contract-mirror/schemas/x.js', 'docs/sentinela.test.ts'];
-const rejected = (r: ReturnType<typeof scenario>) => {
+const rejected = (r: ReturnType<typeof scenario>, code: 1 | 2) => {
   expect(r.error).toBeUndefined();
-  expect(r.status, r.stderr).toBeGreaterThan(0);
+  expect(r.status, r.stderr).toBe(code);
 };
 describe('D744/D748 · C119c · CLI contra commits', () => {
+  it('el helper falla si el motivo del rechazo cambia de código', () => {
+    const protegida = scenario(({ put }) => put('src/App.tsx', 'cambio'));
+    const vacia = scenario(() => {});
+    const invalida = scenario(changeLog, { revisions: ({ base }, head) => [base, head, 'extra'] });
+    expect(() => rejected(protegida, 2)).toThrow();
+    expect(() => rejected(vacia, 2)).toThrow();
+    expect(() => rejected(invalida, 2)).toThrow();
+  });
+
   it('A1 CHANGELOG positivo; src negativo', () => {
     expect(scenario(changeLog).status).toBe(0);
-    rejected(scenario(({ put }) => put('src/App.tsx', 'cambio\n')));
+    rejected(scenario(({ put }) => put('src/App.tsx', 'cambio\n')), 1);
   });
   it('A2 prohibida gana con permiso sintético y control positivo en la misma política', () => {
     const policy = syntheticPolicy();
     expect(scenario(({ put }) => put('docs/permitido.md', 'cambio\n'), { policy }).status).toBe(0);
-    rejected(scenario(({ put }) => put('docs/DESPLIEGUE_GATEADO.md', 'cambio\n'), { policy }));
+    rejected(scenario(({ put }) => put('docs/DESPLIEGUE_GATEADO.md', 'cambio\n'), { policy }), 1);
   });
   it('política real exacta y spec explícitamente prohibida', () => {
     expect(realPolicy().rapido).toEqual(['CHANGELOG.md']);
@@ -87,20 +103,20 @@ describe('D744/D748 · C119c · CLI contra commits', () => {
   });
   it('A3 docs nuevos y la spec rechazados por conducta', () => {
     for (const path of [...deniedDocs, 'e2e/inicio-pestanas-misma-altura.spec.ts']) {
-      rejected(scenario(({ put }) => put(path, 'MARCADOR SINTÉTICO\n')));
+      rejected(scenario(({ put }) => put(path, 'MARCADOR SINTÉTICO\n')), path === 'e2e/inicio-pestanas-misma-altura.spec.ts' ? 1 : 2);
     }
   });
   it('A3 symlink, +x y submódulo desde docs y src con permiso sintético', () => {
     for (const cwd of ['docs', 'src']) {
-      rejected(scenario(({ dir }) => { rmSync(join(dir, 'CHANGELOG.md')); symlinkSync('destino-inexistente', join(dir, 'CHANGELOG.md')); }, { cwd }));
-      rejected(scenario(({ dir }) => chmodSync(join(dir, 'CHANGELOG.md'), 0o755), { cwd }));
-      rejected(scenario(({ git, base }) => git('update-index', '--add', '--cacheinfo', `160000,${base},docs/submodulo`), { cwd, policy: syntheticPolicy(), indexOnly: true }));
+      rejected(scenario(({ dir }) => { rmSync(join(dir, 'CHANGELOG.md')); symlinkSync('destino-inexistente', join(dir, 'CHANGELOG.md')); }, { cwd }), 2);
+      rejected(scenario(({ dir }) => chmodSync(join(dir, 'CHANGELOG.md'), 0o755), { cwd }), 2);
+      rejected(scenario(({ git, base }) => git('update-index', '--add', '--cacheinfo', `160000,${base},docs/submodulo`), { cwd, policy: syntheticPolicy(), indexOnly: true }), 2);
     }
   });
   it('A3 package +x, borrado de CHANGELOG y desconocidos rechazados', () => {
-    rejected(scenario(ctx => { version('1.2.4')(ctx); chmodSync(join(ctx.dir, 'package.json'), 0o755); }));
-    rejected(scenario(({ dir }) => rmSync(join(dir, 'CHANGELOG.md'))));
-    rejected(scenario(({ put }) => put('sin-clasificar.txt', 'x')));
+    rejected(scenario(ctx => { version('1.2.4')(ctx); chmodSync(join(ctx.dir, 'package.json'), 0o755); }), 2);
+    rejected(scenario(({ dir }) => rmSync(join(dir, 'CHANGELOG.md'))), 2);
+    rejected(scenario(({ put }) => put('sin-clasificar.txt', 'x')), 2);
   });
   it('A3 positivo desde src exige full-tree, sin taparlo con negativos', () => {
     const result = scenario(changeLog, { cwd: 'src' });
@@ -111,26 +127,26 @@ describe('D744/D748 · C119c · CLI contra commits', () => {
       const blob = git('hash-object', '-w', '--stdin');
       // El byte ff sólo se crea en el índice de Git: nunca en el filesystem de macOS.
       execFileSync('bash', ['-c', 'git update-index --add --cacheinfo "120000,$1,$(printf \'docs/\\377.md\')"', 'fixture', blob], { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    }, { policy: syntheticPolicy(), indexOnly: true }));
+    }, { policy: syntheticPolicy(), indexOnly: true }), 2);
   });
   it('A3 versión ascendente estricta y texto exacto; sin cambios extra', () => {
     expect(scenario(version('1.2.4')).status).toBe(0);
-    for (const v of ['1.2.2', 'v1.2.4', '1.2.4-beta', '01.2.4']) rejected(scenario(version(v)));
-    rejected(scenario(version('1.2.4', true)));
-    rejected(scenario(({ put }) => put('package.json', '{"name":"fixture","version":"1.2.4"}')));
-    rejected(scenario(ctx => { version('1.2.4')(ctx); ctx.put('package.json', '{ "name": "fixture", "version": "1.2.4" }'); }));
+    for (const v of ['1.2.2', 'v1.2.4', '1.2.4-beta', '01.2.4']) rejected(scenario(version(v)), 2);
+    rejected(scenario(version('1.2.4', true)), 2);
+    rejected(scenario(({ put }) => put('package.json', '{"name":"fixture","version":"1.2.4"}')), 2);
+    rejected(scenario(ctx => { version('1.2.4')(ctx); ctx.put('package.json', '{ "name": "fixture", "version": "1.2.4" }'); }), 2);
     // Versión igual con diferencia real: no puede morir por rango vacío.
     rejected(scenario(({ put }) => {
       put('package.json', '{ "name":"fixture","version":"1.2.3"}');
       put('package-lock.json', '{ "version":"1.2.3","packages":{"":{"version":"1.2.3"}}}');
-    }));
-    rejected(scenario(ctx => { version('1.2.4')(ctx); ctx.put('package.json', '{"name":"fixture","scripts":{"test":"MARCADOR"},"scripts":{},"version":"1.2.4"}'); }));
+    }), 2);
+    rejected(scenario(ctx => { version('1.2.4')(ctx); ctx.put('package.json', '{"name":"fixture","scripts":{"test":"MARCADOR"},"scripts":{},"version":"1.2.4"}'); }), 2);
   });
   it('A3 política de la base aunque la rama se autoautorice', () => {
     rejected(scenario(({ put }) => {
       put('carriles.json', JSON.stringify({ ...realPolicy(), prohibidas: [], rapido: ['src/App.tsx', 'carriles.json'] }));
       put('src/App.tsx', 'cambio\n');
-    }));
+    }), 1);
   });
 });
 
@@ -141,6 +157,46 @@ describe('C140 · historial y estados del carril', () => {
     expect(scenario(() => {}).status).toBe(3);
     expect(scenario(changeLog, { revisions: ({ base }, head) => [base, head, 'extra'] }).status).toBe(4);
     expect(scenario(changeLog, { revisions: ({ base }, head) => [base.slice(0, 12), head] }).status).toBe(4);
+  });
+
+  it('rechaza el SHA corto de la cabeza antes de consultar Git', () => {
+    const result = scenario(changeLog, { revisions: ({ base }, head) => [base, head.slice(0, 12)] });
+    expect(result.status, result.stderr).toBe(4);
+    expect(result.stderr).toContain('uso:');
+  });
+
+  it.each(['/src/**', 'src\0'])('rechaza la regla prohibida inválida %j', rule => {
+    const result = scenario(changeLog, { policy: { ...realPolicy(), prohibidas: [rule] } });
+    expect(result.status, result.stderr).toBe(4);
+    expect(result.stderr).toContain('política inválida');
+  });
+
+  it('rechaza una raíz huérfana unida por merge aunque no haya delta contra ella', () => {
+    const result = scenario(changeLog, {
+      revisions: ({ base, git }, head) => {
+        const tree = git('rev-parse', `${head}^{tree}`);
+        const orphan = git('commit-tree', tree, '-m', 'raíz ajena');
+        const merge = git('commit-tree', tree, '-p', head, '-p', orphan, '-m', 'merge de raíz ajena');
+        return [base, merge];
+      },
+    });
+    expect(result.status, result.stderr).toBe(4);
+    expect(result.stderr).toContain('commit sin padre');
+  });
+
+  it('desactiva commit-graph en cada llamada a Git', () => {
+    const result = scenario(changeLog, {
+      revisions: ({ put, dir, base }, head) => {
+        put('fixture-bin/git', '#!/bin/sh\ncase " $* " in *" -c core.commitGraph=false "*) ;; *) exit 79 ;; esac\nPATH="$FIXTURE_PATH" exec git "$@"\n');
+        chmodSync(join(dir, 'fixture-bin/git'), 0o755);
+        return [base, head];
+      },
+      cliEnv: ({ dir, env }) => ({
+        PATH: `${join(dir, 'fixture-bin')}:${env.PATH}`,
+        FIXTURE_PATH: env.PATH,
+      }),
+    });
+    expect(result.status, result.stderr).toBe(0);
   });
 
   it('rechaza una base hermana aunque el diff entre puntas sólo tenga CHANGELOG', () => {
@@ -371,7 +427,18 @@ describe('C140 · bordes de la política', () => {
 
   it('usa los bytes de la herramienta de base aunque el candidato sustituya el script', () => {
     const result = scenario(({ put }) => {
-      put('scripts/carril-rapido.mjs', 'process.exit(0);\n'); put('src/App.tsx', 'nuevo');
+      put('scripts/carril-rapido.mjs', 'console.log("cli-candidata");\n');
+      put('src/App.tsx', 'nuevo');
+    }, {
+      useBaseCli: true,
+      revisions: ({ base, dir, env }, head) => {
+        const candidate = spawnSync(process.execPath, [join(dir, 'scripts/carril-rapido.mjs'), base, head], {
+          cwd: dir, env, encoding: 'utf8',
+        });
+        expect(candidate.status, candidate.stderr).toBe(0);
+        expect(candidate.stdout.trim()).toBe('cli-candidata');
+        return [base, head];
+      },
     });
     expect(result.status, result.stderr).toBe(1);
     expect(result.stderr).toContain('src/App.tsx');

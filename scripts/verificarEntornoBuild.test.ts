@@ -4,25 +4,26 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const SCRIPT = resolve('scripts/verificar-entorno-build.mjs');
 const AUTORIZADOS = ['.env.development', '.env.local.example', '.env.mock'];
 
 function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'payme-env-build-'));
   mkdirSync(join(root, 'landing'));
-  execFileSync('git', ['init', '--quiet'], { cwd: root });
+  execFileSync('git', ['init', '--quiet'], { cwd: root, env: entornoGit });
   for (const name of AUTORIZADOS) writeFileSync(join(root, name), '# fixture pública\n');
-  execFileSync('git', ['add', '--', ...AUTORIZADOS], { cwd: root });
+  execFileSync('git', ['add', '--', ...AUTORIZADOS], { cwd: root, env: entornoGit });
   return root;
 }
 
 function ejecutar(root: string) {
-  return spawnSync(process.execPath, [SCRIPT, '--repo', root], { encoding: 'utf8' });
+  return spawnSync(process.execPath, [SCRIPT, '--repo', root], { env: entornoGit, encoding: 'utf8' });
 }
 
 describe('guarda exacta del ambiente de build', () => {
   it('la población versionada real coincide exactamente con la allowlist', () => {
-    const tracked = execFileSync('git', ['ls-files', '-z', '--', '.env*'], { encoding: 'utf8' })
+    const tracked = execFileSync('git', ['ls-files', '-z', '--', '.env*'], { env: entornoGit, encoding: 'utf8' })
       .split('\0').filter(Boolean).sort();
     expect(tracked).toEqual(AUTORIZADOS);
   });
@@ -37,7 +38,7 @@ describe('guarda exacta del ambiente de build', () => {
     const root = fixture();
     const link = join(root, 'guard-link.mjs');
     symlinkSync(SCRIPT, link);
-    const result = spawnSync(process.execPath, [link, '--repo', root], { encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [link, '--repo', root], { env: entornoGit, encoding: 'utf8' });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('entorno build OK');
   });

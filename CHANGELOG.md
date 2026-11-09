@@ -1,3 +1,9 @@
+## 0.275.4 · 2026-11-09
+
+- C153: el comparador de carriles ignora el commit-graph local. Las pruebas ejecutan la copia de la base, distinguen los códigos de salida y cubren un merge con raíz huérfana.
+- El auditor examina cada commit del rango y sus mensajes. La búsqueda del nombre protegido ignora mayúsculas y la salida informa el patrón sin mostrar el valor detectado.
+- Cada shard de Playwright verifica que su reporte acredite pruebas ejecutadas. Las pruebas que invocan Git aíslan el entorno del proceso.
+
 ## 0.275.3 · 2026-11-08
 
 - C140: el comparador de carriles verifica cada cambio entre un padre y su commit hijo con la política de la base, ignora reemplazos de Git y rechaza grafts. Códigos: 0 rápido, 1 ruta protegida, 2 carril normal, 3 sin cambios y 4 entrada o historia inválida.

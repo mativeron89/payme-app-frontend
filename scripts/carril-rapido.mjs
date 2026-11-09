@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 const [base, head, ...extra] = process.argv.slice(2);
-const git = (...args) => execFileSync('git', ['--no-replace-objects', '-c', 'advice.graftFileDeprecated=false', ...args], {
+const git = (...args) => execFileSync('git', ['--no-replace-objects', '-c', 'core.commitGraph=false', '-c', 'advice.graftFileDeprecated=false', ...args], {
   env: { ...process.env, GIT_GRAFT_FILE: '/dev/null' },
   encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
 });

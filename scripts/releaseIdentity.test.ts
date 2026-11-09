@@ -11,6 +11,7 @@ import {
   verificarReleaseBlackBox,
 } from './releaseIdentity';
 
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const COMMIT = 'a'.repeat(40);
 const TREE = 'b'.repeat(40);
 const COMMIT_VIEJO = 'c'.repeat(40);
@@ -33,17 +34,20 @@ describe('marker local de identidad para App y Landing', () => {
 
   it('🔴 fixture Git · modificar `vercel.json` explica el sufijo sucio, no su causa remota', () => {
     const repo = mkdtempSync(join(tmpdir(), 'payme-release-git-'));
+    // La lectura del marcador consulta Git en el mismo proceso.
+    const anterior = process.env;
+    process.env = entornoGit;
     try {
-      execFileSync('git', ['init', '-q'], { cwd: repo });
-      execFileSync('git', ['config', 'user.name', 'PayMe test'], { cwd: repo });
-      execFileSync('git', ['config', 'user.email', 'test@payme.invalid'], { cwd: repo });
+      execFileSync('git', ['init', '-q'], { cwd: repo, env: entornoGit });
+      execFileSync('git', ['config', 'user.name', 'PayMe test'], { cwd: repo, env: entornoGit });
+      execFileSync('git', ['config', 'user.email', 'test@payme.invalid'], { cwd: repo, env: entornoGit });
       writeFileSync(join(repo, 'vercel.json'), '{"git":{"deploymentEnabled":{"main":false}}}\n');
-      execFileSync('git', ['add', 'vercel.json'], { cwd: repo });
+      execFileSync('git', ['add', 'vercel.json'], { cwd: repo, env: entornoGit });
       execFileSync('git', [
         '-c', 'core.hooksPath=/dev/null',
         '-c', 'commit.gpgSign=false',
         'commit', '-qm', 'fixture',
-      ], { cwd: repo });
+      ], { cwd: repo, env: entornoGit });
 
       expect(leerMarcadorGit(repo, 'app').clean).toBe(true);
       writeFileSync(join(repo, 'vercel.json'), '{"git":{"deploymentEnabled":{"main":true}}}\n');
@@ -52,6 +56,7 @@ describe('marker local de identidad para App y Landing', () => {
       if (sucio.clean) throw new Error('el fixture no produjo el marker sucio esperado');
       expect(sucio.dirty_path).toBe('M vercel.json');
     } finally {
+      process.env = anterior;
       rmSync(repo, { recursive: true, force: true });
     }
   });

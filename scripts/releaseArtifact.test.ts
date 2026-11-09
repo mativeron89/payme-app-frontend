@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   calcularDigestRaiz,
   configBosaCanonico,
-  sellarArtefactoRelease,
+  sellarArtefactoRelease as sellarArtefactoConGit,
   serializarJsonCanonico,
   type ArchivoRelease,
   type ManifiestoArtefactoRelease,
@@ -24,6 +24,7 @@ import {
 
 const AQUI = dirname(new URL(import.meta.url).pathname);
 const REPO_REAL = dirname(AQUI);
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const temporales: string[] = [];
 
 interface Fixture {
@@ -36,7 +37,7 @@ interface Fixture {
 }
 
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  return execFileSync('git', args, { cwd, env: entornoGit, encoding: 'utf8' }).trim();
 }
 
 function escribir(ruta: string, contenido: string | Buffer): void {
@@ -71,6 +72,17 @@ function fixture(artifact: 'app' | 'landing' = 'app'): Fixture {
     commit: git(repo, 'rev-parse', 'HEAD'),
     tree: git(repo, 'rev-parse', 'HEAD^{tree}'),
   };
+}
+
+function sellarArtefactoRelease(entrada: Parameters<typeof sellarArtefactoConGit>[0]) {
+  // El sellador consulta Git sincrónicamente en el mismo proceso.
+  const anterior = process.env;
+  process.env = entornoGit;
+  try {
+    return sellarArtefactoConGit(entrada);
+  } finally {
+    process.env = anterior;
+  }
 }
 
 function sellar(f: Fixture, artifact: 'app' | 'landing' = 'app', hook?: () => void) {
@@ -630,7 +642,7 @@ describe('CLI Node 20 con el runner de Vite lockeado y sin logs de secretos', ()
       '--stage', f.stage,
       '--commit', f.commit,
       '--tree', f.tree,
-    ], { cwd: REPO_REAL, encoding: 'utf8' });
+    ], { cwd: REPO_REAL, env: entornoGit, encoding: 'utf8' });
     expect(JSON.parse(salida)).toMatchObject({
       artifact: 'app',
       commit_sha: f.commit,

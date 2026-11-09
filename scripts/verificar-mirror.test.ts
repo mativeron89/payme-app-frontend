@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
  * hacerlo testeable, se probaría otra cosa.
  */
 
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 let raiz: string;
 let scripts: string;
 let espejo: string;
@@ -32,7 +33,7 @@ function correr(...args: string[]): number {
   try {
     execFileSync('node', [join(scripts, 'verificar-mirror.mjs'), ...args], {
       stdio: 'pipe',
-      env: { ...process.env, PAYME_APP_BACKEND_DIR: fuente },
+      env: { ...entornoGit, PAYME_APP_BACKEND_DIR: fuente },
     });
     return 0;
   } catch (e) {
@@ -92,7 +93,7 @@ function hechos(commit: string, extra: Record<string, unknown> = {}) {
 const escribirHechos = (h: unknown) => writeFileSync(join(scripts, 'hechos-del-dueno.json'), JSON.stringify(h, null, 2));
 
 function git(...args: string[]): string {
-  return execFileSync('git', ['-C', fuente, ...args], { encoding: 'utf8' }).trim();
+  return execFileSync('git', ['-C', fuente, ...args], { env: entornoGit, encoding: 'utf8' }).trim();
 }
 
 let commitInicial: string;

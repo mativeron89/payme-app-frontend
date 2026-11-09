@@ -90,33 +90,59 @@ cd "$RAIZ" || exit 2
 # consigo mismo. **No se excluye el CHANGELOG**: un secreto real puede aterrizar
 # ahí igual que en cualquier otro lado, así que el ejemplo se reescribe para que
 # no tenga forma de valor.
-diff_file="$(mktemp)"
-espejo_file="$(mktemp)"
-resto_file="$(mktemp)"
-trap 'rm -f "$diff_file" "$espejo_file" "$resto_file"' EXIT
-git diff "$BASE"..HEAD -- . ':(exclude)scripts/auditar-secretos.sh' > "$diff_file" 2>/dev/null || {
-  echo "🔴 no pude calcular el diff contra $BASE" >&2; exit 2;
+tmp="$(mktemp -d)" || exit 2
+trap 'rm -rf "$tmp"' EXIT
+diff_file="$tmp/diff"
+espejo_file="$tmp/espejo"
+resto_file="$tmp/resto"
+mensajes_file="$tmp/mensajes"
+touch "$diff_file" "$espejo_file" "$resto_file" "$mensajes_file" || exit 2
+
+git_auditoria() {
+  env -i PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_GRAFT_FILE=/dev/null \
+    git --no-replace-objects -c core.commitGraph=false "$@"
 }
-# (b′) · el mismo diff, partido por pathspec: espejo y resto.
-git diff "$BASE"..HEAD -- 'contract-mirror/' > "$espejo_file" 2>/dev/null \
-  && git diff "$BASE"..HEAD -- . ':(exclude)scripts/auditar-secretos.sh' ':(exclude)contract-mirror/' \
-    > "$resto_file" 2>/dev/null || {
-  echo "🔴 no pude partir el diff contra $BASE entre espejo y resto" >&2; exit 2;
+fallo_git() {
+  echo "🔴 no pude auditar la historia Git contra la base" >&2
+  exit 2
+}
+nombre_prohibido() {
+  echo "🔴 el cambio menciona un archivo de secretos fuera de alcance" >&2
+  exit 1
 }
 
-# Control positivo: si el diff está vacío, esto no auditó nada y hay que decirlo
-# en vez de cantar victoria. Un «cero hallazgos» sobre cero líneas no es cero
-# hallazgos.
+commits=$(git_auditoria rev-list "$BASE"..HEAD -- 2>/dev/null) || fallo_git
+# En un merge se examina lo que entra respecto del primer padre. Los demás
+# commits alcanzables del rango también se recorren, incluidos los revertidos.
+delta=(diff-tree --root --diff-merges=first-parent -r --no-commit-id --no-ext-diff --no-textconv
+  --no-renames --no-relative --ignore-submodules=none)
+for commit in $commits; do
+  nombres=$(git_auditoria "${delta[@]}" --name-only "$commit" -- 2>/dev/null) || fallo_git
+  if grep -qi 'SECRETOS_DEMO_RAILWAY' <<< "$nombres"; then nombre_prohibido; fi
+
+  git_auditoria "${delta[@]}" -p "$commit" -- . ':(exclude)scripts/auditar-secretos.sh' \
+    >> "$diff_file" 2>/dev/null || fallo_git
+  git_auditoria "${delta[@]}" -p "$commit" -- 'contract-mirror/' \
+    >> "$espejo_file" 2>/dev/null || fallo_git
+  git_auditoria "${delta[@]}" -p "$commit" -- . ':(exclude)scripts/auditar-secretos.sh' ':(exclude)contract-mirror/' \
+    >> "$resto_file" 2>/dev/null || fallo_git
+  git_auditoria show --no-notes -s --format=%B "$commit" 2>/dev/null \
+    | sed 's/^/+/' >> "$mensajes_file" || fallo_git
+done
+
 lineas=$(grep -c '^+' "$diff_file" || true)
-if [ "${lineas:-0}" -eq 0 ]; then
-  echo "⚠️  el diff contra $BASE no tiene líneas agregadas: NO se auditó nada."
-  exit 0
-fi
 lineas_espejo=$(grep -c '^+' "$espejo_file" || true)
 lineas_resto=$(grep -c '^+' "$resto_file" || true)
-if [ $(( ${lineas_espejo:-0} + ${lineas_resto:-0} )) -ne "$lineas" ]; then
+if [ $(( lineas_espejo + lineas_resto )) -ne "$lineas" ]; then
   echo "🔴 la partición espejo/resto no suma el diff completo ($lineas_espejo + $lineas_resto ≠ $lineas): no audito a ciegas" >&2
   exit 2
+fi
+
+# Un mensaje recibe las mismas reglas que el contenido fuera del espejo.
+cat "$mensajes_file" >> "$diff_file" && cat "$mensajes_file" >> "$resto_file" || exit 2
+if [ -z "$commits" ]; then
+  echo "⚠️  el rango no contiene commits: NO se auditó nada."
+  exit 0
 fi
 
 # VALORES con forma de secreto. Cada patrón exige prefijo Y cuerpo, o
@@ -311,7 +337,6 @@ for entrada in "${PATRONES[@]}"; do
   reales=$(grep '^+' "$diff_file" | cut -c2- | grep "${flags[@]}" -- "$p" || true)
   if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
-    printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2
     hallazgos=$((hallazgos + 1))
   fi
 done
@@ -364,29 +389,23 @@ citadas_de() {
 citadas=$(citadas_de "$CLAVE_CITADA")
 if [ -n "$citadas" ]; then
   echo "🔴 VALOR con forma de secreto: clave entre comillas (JSON/YAML)" >&2
-  printf '%s\n' "$citadas" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
 citadas_es=$(citadas_de "$CLAVE_CITADA_ES")
 if [ -n "$citadas_es" ]; then
   echo "🔴 VALOR con forma de secreto: clave en español entre comillas (JSON/YAML)" >&2
-  printf '%s\n' "$citadas_es" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
 citadas_clave_compuesta=$(citadas_de "$CLAVE_CITADA_COMPUESTA")
 if [ -n "$citadas_clave_compuesta" ]; then
   echo "🔴 VALOR con forma de secreto: clave/llave compuesta entre comillas (JSON/YAML)" >&2
-  printf '%s\n' "$citadas_clave_compuesta" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
 # El archivo prohibido, por nombre: nunca se lee, nunca se cita, nunca se sube.
-if grep -q 'SECRETOS_DEMO_RAILWAY' "$diff_file"; then
-  echo "🔴 el diff menciona SECRETOS_DEMO_RAILWAY.env, que está fuera de alcance" >&2
-  hallazgos=$((hallazgos + 1))
-fi
+if grep -qi 'SECRETOS_DEMO_RAILWAY' "$diff_file"; then nombre_prohibido; fi
 
 if [ "$hallazgos" -gt 0 ]; then
   echo "" >&2
@@ -397,6 +416,6 @@ fi
 
 # Confirmación POSITIVA siempre, también cuando sale bien: un instrumento callado
 # se confunde con un resultado tranquilo.
-echo "✅ auditoría de secretos: $lineas líneas agregadas, cero valores con forma de secreto."
+echo "✅ auditoría de secretos: $lineas líneas del diff y mensajes auditados, cero valores con forma de secreto."
 echo "   ⚠️  Es un piso, no una garantía: un secreto sin forma reconocible pasa."
 exit 0

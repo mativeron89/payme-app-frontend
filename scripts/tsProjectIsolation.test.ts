@@ -184,10 +184,12 @@ describe('censo de cobertura TypeScript', () => {
       .map((l) => relative(RAIZ, resolve(RAIZ, l)));
   }
 
+  const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+
   /** Todo `.ts`/`.tsx` versionado, según git — no un `glob` propio. */
   function archivosDelRepo(): string[] {
     const salida = execFileSync('git', ['ls-files', '*.ts', '*.tsx'], {
-      cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
+      cwd: RAIZ, env: entornoGit, stdio: 'pipe', encoding: 'utf8',
     });
     return salida.split('\n').map((l) => l.trim()).filter(Boolean);
   }
@@ -224,7 +226,7 @@ describe('censo de cobertura TypeScript', () => {
     // Y los proyectos son los que existen de verdad: los tsconfig versionados
     // y los que corre `npm run typecheck`, que es lo que corre la CI.
     const versionados = execFileSync('git', ['ls-files', 'tsconfig*.json', '*/tsconfig*.json'], {
-      cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
+      cwd: RAIZ, env: entornoGit, stdio: 'pipe', encoding: 'utf8',
     }).split('\n').map((l) => l.trim()).filter(Boolean);
     expect(new Set(versionados), 'hay un tsconfig versionado fuera del censo').toEqual(new Set(PROYECTOS));
     const typecheck = (JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as {

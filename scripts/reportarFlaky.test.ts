@@ -1,5 +1,5 @@
-import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
 import { load } from 'js-yaml';
 
+const entornoGit = { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const ejecutar = promisify(execFile);
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -186,8 +187,34 @@ describe('POR LECTURA · el JSON que alimenta el reporte existe en la config', (
   it('🔴 y esa ruta está gitignoreada · un artefacto de corrida no entra al árbol', async () => {
     // `check-ignore` sale 1 si NO está ignorado, así que el rechazo ES el fallo.
     const { stdout } = await ejecutar('git', ['check-ignore', 'test-results/resultados.json'], {
-      cwd: RAIZ,
+      cwd: RAIZ, env: entornoGit,
     });
     expect(stdout.trim()).toBe('test-results/resultados.json');
+  });
+});
+
+describe('C153 · población de cada shard de Playwright', () => {
+  const workflow = load(readFileSync(CI_YML, 'utf8')) as {
+    jobs: { playwright: { steps: Array<{ name?: string; run?: string; 'continue-on-error'?: boolean }> } };
+  };
+
+  it.each([
+    ['ausente', undefined, 1],
+    ['malformado', '{', 1],
+    ['vacío', JSON.stringify({ stats: { expected: 0, unexpected: 0, flaky: 0, skipped: 4 } }), 1],
+    ['estadística inválida', JSON.stringify({ stats: { expected: '3', unexpected: 0, flaky: 0 } }), 1],
+    ['ejecutado', JSON.stringify({ stats: { expected: 0, unexpected: 0, flaky: 1, skipped: 4 } }), 0],
+  ] as const)('el paso real rechaza o acepta el reporte %s', (_caso, json, esperado) => {
+    const steps = workflow.jobs.playwright.steps;
+    const index = steps.findIndex(step => step.name === 'Verificar población de Playwright');
+    expect(index).toBeGreaterThan(0);
+    expect(steps[index - 1]?.run).toContain('playwright test --shard');
+    expect(steps[index]?.['continue-on-error']).toBeUndefined();
+
+    const cwd = mkdtempSync(join(tmp, 'poblacion-'));
+    mkdirSync(join(cwd, 'test-results'));
+    if (json !== undefined) writeFileSync(join(cwd, 'test-results/resultados.json'), json);
+    const result = spawnSync('bash', ['-e', '-c', steps[index]!.run!], { cwd, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(esperado);
   });
 });
