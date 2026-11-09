@@ -1175,6 +1175,7 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   // D493 · el shard viaja por `env` y se consume como `"$SHARD"`: nada se
   // interpola en el shell. La matriz que lo alimenta la fija `fallasDelGrafo`.
   playwright: { SHARD: '${{ matrix.shard }}' },
+  'poblacion-playwright': {},
   reporter: {},
   // D493 · `decidir` consulta las corridas con el token del job (`actions: read`
   // sólo en su job) y el verificador lee el resultado de los needs.
@@ -1187,6 +1188,23 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
     HOOK_LANDING: '${{ secrets.VERCEL_HOOK_LANDING }}',
   },
 };
+
+// Este heredoc se adjudica completo: no se amplía la gramática de comandos.
+const NOMBRE_POBLACION_PLAYWRIGHT = "Verificar población de Playwright";
+const RUN_POBLACION_PLAYWRIGHT = [
+  "node <<'NODE'",
+  "const { readFileSync } = require('node:fs');",
+  "const { stats } = JSON.parse(readFileSync('test-results/resultados.json', 'utf8'));",
+  "const counts = [stats?.expected, stats?.unexpected, stats?.flaky];",
+  "if (!counts.every(n => Number.isSafeInteger(n) && n >= 0) || !counts.some(n => n > 0)) {",
+  "  throw new Error('Playwright no acreditó pruebas ejecutadas en este shard');",
+  "}",
+  "console.log(`Playwright ejecutó ${counts.reduce((sum, n) => sum + n, 0)} pruebas en este shard`);",
+  "NODE",
+].join('\n');
+function esGatePoblacionPlaywright(nombre: unknown, run: unknown): boolean {
+  return nombre === NOMBRE_POBLACION_PLAYWRIGHT && run === RUN_POBLACION_PLAYWRIGHT + '\n';
+}
 
 /**
  * 🔴 P81 · LA POBLACIÓN COMPLETA, CON ROL PARA CADA PASO.
@@ -1286,6 +1304,7 @@ function rolDePaso(claves: { readonly [k: string]: unknown }): string | null {
     return ROL_DE_PASO.find(([re]) => re.test(uses))?.[1] ?? null;
   }
   const run = typeof claves['run'] === 'string' ? (claves['run'] as string) : '';
+  if (esGatePoblacionPlaywright(claves['name'], run)) return 'poblacion-playwright';
   for (const cmd of comandosDe(run)) {
     const ts = tokens(cmd);
     if (ts === null) return null;
@@ -1817,6 +1836,7 @@ function fallasDelCenso(yml: string): string[] {
     const donde = `${p.job}.steps[${p.indice}]`;
     // Los `uses:` se adjudican aparte, sobre el modelo, que conserva su `with`.
     if (p.uses !== null) continue;
+    if (p.job === 'playwright' && esGatePoblacionPlaywright(p.nombre, p.run)) continue;
     const trozos = comandosDe(p.run ?? '');
     if (!trozos.length) { fallas.push(`${donde}: paso sin \`run\` ni \`uses\``); continue; }
     for (const t of trozos) {
@@ -2079,7 +2099,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'poblacion-playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -2163,7 +2183,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'poblacion-playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;
@@ -2251,6 +2271,10 @@ function fallasDelGrafo(yml: string): string[] {
     const cmds = corridas.flatMap((p) => comandosDe(texto(p.claves['run']) ?? ''));
     if (corridas.length !== 1 || cmds.length !== 1 || cmds[0] !== 'npx playwright test --shard "$SHARD/4"') {
       fallas.push(`la corrida de Playwright no es exactamente \`npx playwright test --shard "$SHARD/4"\`: ${JSON.stringify(cmds)}`);
+    }
+    const poblacion = pw.pasos.filter((p) => rolDePaso(p.claves) === 'poblacion-playwright');
+    if (poblacion.length !== 1 || corridas.length !== 1 || poblacion[0]!.indice !== corridas[0]!.indice + 1) {
+      fallas.push('se exige exactamente un gate de población de Playwright justo después de la corrida de cada shard');
     }
   }
 
@@ -3198,6 +3222,14 @@ describe('🔴 D493 · el grafo de jobs y el salteo de main', () => {
     expect(fallasDelCheckout(ci())).toEqual([]);
     expect(fallasDelCenso(ci())).toEqual([]);
     expect(fallasDeMinimoPrivilegio(ci())).toEqual([]);
+  });
+
+  it('🔴 sin el gate de población de Playwright → RECHAZADO', () => {
+    const from = `      - name: ${NOMBRE_POBLACION_PLAYWRIGHT}\n        run: |\n` +
+      RUN_POBLACION_PLAYWRIGHT.split('\n').map(line => `          ${line}\n`).join('');
+    const yml = ci();
+    expect(yml.split(from).length - 1).toBe(1);
+    expect(fallasDelGrafo(yml.replace(from, '')).join(' · ')).toMatch(/población de Playwright/);
   });
 
   const BUILD = '    needs: [decidir, checks, playwright]\n    if: always()';
