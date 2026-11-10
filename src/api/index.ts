@@ -826,6 +826,9 @@ function creacionDesdeError(err: unknown): MesaCreationLookup {
   }
 }
 
+/** Una sola `GET /config` en vuelo: las capacidades que la piden a la vez comparten la respuesta. */
+let configEnVuelo: Promise<AppConfig> | null = null;
+
 const realApi: Api = {
   getFotoPerfilNoAmigos: async (s) => decodePermisoFoto(await httpPrivateJsonRequest<unknown>(
     FOTO_PATH, s, undefined, { requireAuthorizationVary: true },
@@ -865,24 +868,28 @@ const realApi: Api = {
   )),
   // AF-USUARIO-ARROBA · cada config que llega alimenta la capability del @:
   // así el @ no agrega una request propia (`./username.ts`).
-  getConfig: async () => {
-    const config = await httpPublicRequest<AppConfig>('GET', '/config');
-    applyUsernameConfig(config);
-    // AF-BORRAR-MESAS · la capacidad de borrar de la app, sin request propia.
-    aplicarConfigOcultar(config);
-    // AF-VIAJES · la capacidad de Viajes, igual.
-    aplicarConfigViajes(config);
-    // AF-LINK-DE-INVITACION · la capacidad del link de invitación, igual.
-    aplicarConfigLinkDeInvitacion(config);
-    // AF-5 · la de la vista previa del link de la mesa, igual.
-    aplicarConfigVistaPreviaDelLink(config);
-    // D464 · D466 · la capacidad de la foto del ticket, igual (apagada hoy).
-    aplicarConfigFotoDelTicket(config);
-    // D484 · D486 · la de varias fotos por ticket, igual. No dice nada de la foto.
-    aplicarConfigOcrPaginas(config);
-    // n420 · las de sugerencias y análisis interno, igual (apagadas hoy).
-    aplicarConfigSugerencias(config);
-    return config;
+  getConfig: () => {
+    if (configEnVuelo) return configEnVuelo;
+    configEnVuelo = (async () => {
+      const config = await httpPublicRequest<AppConfig>('GET', '/config');
+      applyUsernameConfig(config);
+      // AF-BORRAR-MESAS · la capacidad de borrar de la app, sin request propia.
+      aplicarConfigOcultar(config);
+      // AF-VIAJES · la capacidad de Viajes, igual.
+      aplicarConfigViajes(config);
+      // AF-LINK-DE-INVITACION · la capacidad del link de invitación, igual.
+      aplicarConfigLinkDeInvitacion(config);
+      // AF-5 · la de la vista previa del link de la mesa, igual.
+      aplicarConfigVistaPreviaDelLink(config);
+      // D464 · D466 · la capacidad de la foto del ticket, igual (apagada hoy).
+      aplicarConfigFotoDelTicket(config);
+      // D484 · D486 · la de varias fotos por ticket, igual. No dice nada de la foto.
+      aplicarConfigOcrPaginas(config);
+      // n420 · las de sugerencias y análisis interno, igual (apagadas hoy).
+      aplicarConfigSugerencias(config);
+      return config;
+    })().finally(() => { configEnVuelo = null; });
+    return configEnVuelo;
   },
   getPrivacyNotice: async () => legalTextResponse(
     await httpPublicRequest<unknown>('GET', '/legal/aviso_privacidad'),

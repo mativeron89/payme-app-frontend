@@ -1,3 +1,12 @@
+## 0.275.5 · 2026-11-10 · C169 (D789)
+
+- Base `c7d788993e9f536c231de4f1175812f2bcadcf2a`, revisión total y revisión de código de Fable.
+- AF-P1, AF-P2, AF-P3: el README documenta el script de idioma de la landing y su CSP, las consultas simultáneas de configuración comparten una petición y salen tres scripts de uso único sin referencias activas.
+- AF2-P1: Google espera a los textos legales en el alta. Si el dueño responde 404, el alta conserva el flujo anterior.
+- AF2-P2, AF2-P3: se puede reintentar la lectura de una mesa con sesión y el comprobante actualiza el estado de la mesa.
+- AF2-P4, AF2-P6, AF2-P7: reenvío sin tarjeta cuando la apertura no requiere garantía, aviso cuando el ticket cambió respecto de un intento pendiente y cancelación del «Continuar» anterior al volver a escanear.
+- AF2-P5: la coma decimal se admite en el precio unitario y las líneas con tres decimales quedan incompletas.
+
 ## 0.275.4 · 2026-11-09
 
 - C153: el comparador de carriles ignora el commit-graph local. Las pruebas ejecutan la copia de la base, distinguen los códigos de salida y cubren un merge con raíz huérfana.

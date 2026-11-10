@@ -1578,7 +1578,7 @@ export function LoginScreen({
   useEffect(() => {
     if (hayCodigoAlta()) return;
     const a = googleAuthority;
-    if (a?.purpose === 'continue' && a.redirectAlta && aceptacionLista) {
+    if (a?.purpose === 'continue' && a.redirectAlta && aceptacionLista && !paqueteIncierto) {
       guardarContextoAlta({
         accepted_notice_version: a.noticeVersion,
         ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
@@ -1587,7 +1587,7 @@ export function LoginScreen({
     } else {
       borrarContextoAlta();
     }
-  }, [googleAuthority, aceptacionLista, claveAceptacion]);
+  }, [googleAuthority, aceptacionLista, claveAceptacion, paqueteIncierto]);
 
   /** «Crear mi cuenta» del paso de la vuelta: el mismo código, lo que hay en pantalla. */
   function onTerminarAlta(e: FormEvent) {
@@ -1795,7 +1795,9 @@ export function LoginScreen({
   // o alta con Google) exige las dos casillas ANTES: el botón de Google queda
   // inerte —sin puntero ni foco— hasta marcarlas (`registro_y_puerta.txt`).
   const googlePuedeCrear = googleAuthority?.purpose === 'continue' || googleAuthority?.purpose === 'register';
-  const googleInerte = paqueteVigente && googlePuedeCrear && !aceptacionLista;
+  // Igual que los otros tres botones de alta: mientras los textos legales
+  // cargan o fallaron (`paqueteIncierto`) tampoco se puede crear con Google.
+  const googleInerte = googlePuedeCrear && (paqueteIncierto || (paqueteVigente && !aceptacionLista));
   // AF-ALTA-POPUP-D106 · de vuelta en la pestaña, el botón no responde hasta
   // releer la capability; si el modo cambió, se vuelve a dibujar con el nuevo.
   // Sin atenuarlo: dura lo que tarda `/api/config` y no es un requisito que falte.

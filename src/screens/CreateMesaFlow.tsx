@@ -2038,14 +2038,18 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     // ORDEN 1-B · sin elección explícita no se reenvía. El silencio no puede
     // resolverse con la default: si la creación nunca ocurrió, esa default
     // TERMINA respaldando la garantía.
-    if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {
-      setError(t('Elige con qué tarjeta reenviar esta apertura.'));
-      toast(t('Elige con qué tarjeta garantizar'));
-      cardChoicesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-      setCardChoicePulse(true);
-      createInFlightRef.current.leave();
-      finishTicketContinuation();
-      return;
+    // Sin garantía no viaja ninguna fuente y no hay selector en pantalla: va
+    // anidado para no pedir una tarjeta que no se puede elegir.
+    if (!sinGarantia) {
+      if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {
+        setError(t('Elige con qué tarjeta reenviar esta apertura.'));
+        toast(t('Elige con qué tarjeta garantizar'));
+        cardChoicesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        setCardChoicePulse(true);
+        createInFlightRef.current.leave();
+        finishTicketContinuation();
+        return;
+      }
     }
     /**
      * C3 · sin garantía no hay riel de tarjeta que exigir: `method` conserva su
@@ -2270,6 +2274,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         // segunda mesa con un segundo hold por el total.
         if (intent) freezeMesa(mesaScope, intent);
         setError(t('Tienes una apertura sin confirmar. Reinténtala tal cual antes de cambiar el ticket.'));
+      } else if (code === 'monetary_payload_ambiguous') {
+        // El mismo conflicto, cortado ANTES de la red por el sello local
+        // (`prepareMonetaryRequest`): el ticket cambió respecto del intento vivo.
+        // Sin esta rama caía en «ambiguo» con `setError(null)`: nada en pantalla.
+        if (intent) freezeMesa(mesaScope, intent);
+        setError(t('Tienes una apertura sin confirmar. Reinténtala tal cual antes de cambiar el ticket.'));
       } else if (code === 'restaurant_record_only') {
         setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
       } else if (definitivo) {
@@ -2319,7 +2329,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       let recordOnly = restaurantRecordOnly;
       if (!resolved) {
         try {
-          const result = await resolveTicketRestaurant();
+          const pendiente = resolveTicketRestaurant();
+          // El UUID del ticket ya quedó fijado por la llamada (no tiene awaits propios).
+          const ticketAlContinuar = ticketFallbackRef.current;
+          const result = await pendiente;
+          // «Volver» durante la espera empezó OTRO ticket: este Continuar ya no vale.
+          if (ticketFallbackRef.current !== ticketAlContinuar) return;
           resolved = result?.restaurant ?? null;
           recordOnly = result?.record_only ?? false;
         } catch {
@@ -3483,7 +3498,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             value={it.priceStr}
                             placeholder="0"
                             onChange={(e) =>
-                              updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })
+                              // La coma es el decimal de medio continente: se pasa a punto, como
+                              // `sanearMontoPropio` (tipSelectorView.ts). Borrarla hacía «12,50» → 1250.
+                              updateItem(idx, { priceStr: e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '') })
                             }
                           />
                         </label>

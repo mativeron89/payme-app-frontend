@@ -211,3 +211,65 @@ test.describe('Configuración › Notificaciones (E1/E2)', () => {
     await expect(page.getByRole('status').filter({ hasText: 'no se puede apagar' })).toBeVisible();
   });
 });
+
+test.describe('AF2-P1 · Google respeta la carga del paquete legal', () => {
+  for (const estado of ['demora', '503', '404'] as const) {
+    test(`Google y los términos: ${estado}`, async ({ page }) => {
+      await conPaquete(page, estado !== '404');
+      await page.addInitScript(() => {
+        localStorage.setItem('payme.app.mock.google_sin_cuenta.v1', 'true');
+        localStorage.setItem('payme.app.mock.google_redirect_signup.v1', 'true');
+        localStorage.setItem('payme.app.mock.google_redirect.v1', 'true');
+      });
+      // Instrumentar antes de que se monte React: los textos se piden también
+      // en Entrar cuando la capability publica «Continuar con Google».
+      await page.route('**/src/main.tsx*', async (route) => {
+        const respuesta = await route.fetch();
+        const codigo = await respuesta.text();
+        await route.fulfill({ response: respuesta, body: `
+          import { api as apiC169 } from '/src/api/index.ts';
+          import { MockApiError as ErrorC169 } from '/src/api/mock/mockApi.ts';
+          const getLegalTextC169 = apiC169.getLegalText.bind(apiC169);
+          const terminosC169 = new Promise((resolve) => {
+            document.addEventListener('c169-terminos-listos', resolve, { once: true });
+          });
+          apiC169.getLegalText = async (kind) => {
+            if (kind === 'terminos_uso') {
+              if (${JSON.stringify(estado)} === '503') throw new ErrorC169(503, 'legal_text_unavailable');
+              if (${JSON.stringify(estado)} === 'demora') await terminosC169;
+            }
+            return getLegalTextC169(kind);
+          };
+          ${codigo}` });
+      });
+      await page.goto('/');
+      await expect(page.getByRole('button', { name: 'Continuar con Google', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+      const boton = page.locator('.social-provider-google');
+      await expect(boton).toHaveAttribute('data-state', /^crear:/);
+      const bloqueo = page.locator('.social-google-gated');
+      if (estado === '404') {
+        await expect(bloqueo).toHaveCount(0);
+        await expect(boton).toBeEnabled();
+        return;
+      }
+
+      await expect(bloqueo).toHaveAttribute('inert', '');
+      await expect(bloqueo).toHaveAttribute('aria-disabled', 'true');
+      const clic = await boton.click({ trial: true, timeout: 500 }).then(() => 'permitido', () => 'bloqueado');
+      expect(clic).toBe('bloqueado');
+      expect(await page.evaluate(() => sessionStorage.getItem('payme.app.google_alta_contexto.v1'))).toBeNull();
+      if (estado === '503') {
+        await expect(page.getByRole('button', { name: 'Reintentar', exact: true }).first()).toBeVisible();
+      } else {
+        await page.evaluate(() => document.dispatchEvent(new Event('c169-terminos-listos')));
+        await page.getByRole('checkbox', { name: 'Declaro que tengo 18 años o más.' }).check();
+        await page.getByRole('checkbox', { name: /He leído y acepto los/ }).check();
+        await expect(bloqueo).toHaveCount(0);
+        await expect.poll(() => page.evaluate(
+          () => sessionStorage.getItem('payme.app.google_alta_contexto.v1'),
+        )).toContain('legal_acceptance');
+      }
+    });
+  }
+});

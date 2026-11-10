@@ -2212,6 +2212,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     unfreezePay(intent);
     setView('confirm');
     setBusy(false);
+    // El comprobante dice si la mesa quedó completa: se lee la mesa ya con este pago.
+    reload();
   }
 
   async function doPay() {
@@ -2526,13 +2528,18 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         <div className="empty">
           <div className="emoji"><Icon name="search" size={40} /></div>
           {t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
-          {isGuest && (
-            <div style={{ marginTop: 16 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>
-                {t('Reintentar')}
-              </button>
-            </div>
-          )}
+          <div style={{ marginTop: 16 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                if (isGuest) { window.location.reload(); return; }
+                setNotFound(false);
+                reload();
+              }}
+            >
+              {t('Reintentar')}
+            </button>
+          </div>
         </div>
       </div>
     );

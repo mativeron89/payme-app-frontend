@@ -2,7 +2,7 @@
 
 App web (mobile-first) para dividir y registrar la cuenta de una mesa de restaurante o de un viaje entre amigos: se escanea el ticket, cada persona elige lo que consumió y la app arma la parte de cada uno.
 
-Hecha con React 18, TypeScript y Vite. La landing (`landing/`) es un sitio estático aparte, sin JavaScript.
+Hecha con React 18, TypeScript y Vite. La landing (`landing/`) es un sitio estático aparte: sin React ni llamadas de red, con un único script inline para cambiar de idioma (su hash está en la CSP de `vercel.ts`).
 
 ## Correrla
 
