@@ -9446,7 +9446,8 @@ h1.pay-title-lbl {
   text-align: left;
 }
 .ticket-recovery .tk-edit-link svg { flex: none; }
-.ticket-recovery .tk-edit-link:disabled { opacity: .6; }
+.ticket-recovery[hidden] { display: none; }
+.ticket-cuadre-slot { flex: none; }
 
 /* D622 · AF-2 · mejora 4 · la franja del cuadre, FIJA al pie de la hoja (fuera
    de `.ticket-sheet-scroll`): se sigue viendo mientras se edita una fila. Ámbar

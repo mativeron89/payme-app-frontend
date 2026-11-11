@@ -379,9 +379,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * campo que la persona no ve es lo mismo que no abrirlo: se queda mirando la
    * lista sin entender qué pasó. Verificado a 375px, que es donde ocurre.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (expandedItem === null) return;
     expandedRowRef.current?.scrollIntoView({ block: 'nearest' });
+    // El lápiz se desmontó: la primera tecla tiene que llegar a esta fila.
+    expandedRowRef.current?.querySelector<HTMLInputElement>('input.amt')?.focus();
   }, [expandedItem]);
   // TRES formas en la UI (§1.3-bis) y DOS en el contrato: la traducción vive
   // entera en `divisionModo.ts`, nunca acá.
@@ -1223,6 +1225,18 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const franjaDelCuadreVisible = cuadre !== null && !ejemplo;
   const ticketForcedOpen = totalMismatch !== null;
   const ticketVisible = ticketAbierto || ticketForcedOpen;
+  const cuadreSlotRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const slot = cuadreSlotRef.current;
+    if (!slot) return;
+    // Reservar sólo geometría, nunca un importe viejo, durante entradas incompletas.
+    slot.style.minHeight = editingItems ? `${slot.getBoundingClientRect().height}px` : '';
+    if (editingItems) {
+      const dialog = ticketRef.current;
+      (dialog?.querySelector<HTMLButtonElement>('.tk-row-warning .tk-pencil')
+        ?? dialog?.querySelector<HTMLButtonElement>('.tk-pencil'))?.focus();
+    }
+  }, [editingItems]);
   // Cambiar el cuadre durante el tipeo no vuelve a montar el efecto ni roba el foco.
   const ticketForcedOpenRef = useRef(ticketForcedOpen);
   ticketForcedOpenRef.current = ticketForcedOpen;
@@ -1260,7 +1274,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (event.key !== 'Tab' || !dialog) return;
       const focusables = [...dialog.querySelectorAll<HTMLElement>(
         'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )];
+      )].filter((el) => el.getClientRects().length > 0);
       if (focusables.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -1268,7 +1282,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       }
       const first = focusables[0]!;
       const last = focusables[focusables.length - 1]!;
-      if (document.activeElement === dialog) {
+      if (document.activeElement === dialog || !dialog.contains(document.activeElement)) {
         event.preventDefault();
         (event.shiftKey ? last : first).focus();
       } else if (event.shiftKey && document.activeElement === first) {
@@ -3415,7 +3429,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                     viendo al editar. Acá queda la ayuda de la hoja, sólo cuando no hay diferencia.
                     AF-3 (m4 de E06): y sólo cuando la franja no está; con «Cuadra con el ticket» los dos avisos decían
                     lo mismo. Sin total impreso (no se afirma «cuadra») la ayuda sigue. */}
-                {!totalMismatch && !franjaDelCuadreVisible && (
+                {!editingItems && !totalMismatch && !franjaDelCuadreVisible && (
                   <div className="title-card-note">
                     <Icon name="info" size={16} />
                     <span>{t('Checa que el total coincida con el total del ticket')}</span>
@@ -3602,9 +3616,18 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             </div>
             {/* D622 · AF-2 · mejora 4 · fija al pie de la hoja, fuera del scroll. En el ejemplo de la guía no va
                 (D367: la guía no afirma nada del ticket). */}
-            {franjaDelCuadreVisible && cuadre && <FranjaDelCuadre estado={cuadre} t={t} />}
+            {(franjaDelCuadreVisible || editingItems) && !ejemplo && (
+              <div ref={cuadreSlotRef} className="ticket-cuadre-slot">
+                {cuadre ? <FranjaDelCuadre estado={cuadre} t={t} /> : (
+                  <div className="cuadre-ticket">
+                    <Icon name="info" size={18} />
+                    <span>{t('Checa que el total coincida con el total del ticket')}</span>
+                  </div>
+                )}
+              </div>
+            )}
             {totalMismatch && !ejemplo && (
-              <div className="ticket-recovery">
+              <div className="ticket-recovery" hidden={editingItems}>
                 <p>{t('Para continuar, corrige los consumos o saca otra foto.')}</p>
                 <button className="tk-edit-link" onClick={() => {
                   setTicketAbierto(false);
@@ -3612,7 +3635,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 }}>
                   <Icon name="camera" size={18} /> {t('Sacar otra foto')}
                 </button>
-                <button className="tk-edit-link" disabled={editingItems} onClick={() => {
+                <button className="tk-edit-link" aria-disabled={editingItems} onClick={() => {
+                  if (editingItems) return;
                   setTicketAbierto(true);
                   setEditingItems(true);
                   setExpandedItem(null);

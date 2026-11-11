@@ -105,3 +105,128 @@ for (const idioma of ['es', 'en'] as const) {
     });
   }
 }
+
+
+/** C179: desde que aparece la hoja, sólo teclas; cada paso mantiene el foco modal. */
+async function focoDentro(sheet: Locator) {
+  await expect(sheet).toHaveCount(1);
+  expect(await sheet.evaluate((el) => el.contains(document.activeElement)
+    && document.activeElement !== document.body)).toBe(true);
+}
+async function tecla(page: Page, sheet: Locator, key: string) {
+  await page.keyboard.press(key);
+  await focoDentro(sheet);
+}
+async function tabHasta(page: Page, sheet: Locator, destino: Locator) {
+  for (let i = 0; i < 30; i += 1) {
+    if (await destino.evaluate((el) => el === document.activeElement)) return;
+    await tecla(page, sheet, 'Tab');
+  }
+  throw new Error('El control no se alcanzó dentro de la hoja');
+}
+async function escribirPrecio(page: Page, sheet: Locator, texto: string) {
+  const precio = sheet.getByLabel('Precio por unidad');
+  await expect(precio).toBeFocused();
+  await tecla(page, sheet, 'ControlOrMeta+a');
+  await tecla(page, sheet, 'Backspace');
+  for (const char of texto) {
+    await page.keyboard.type(char);
+    await focoDentro(sheet);
+    await expect(precio).toBeFocused();
+    await expect(sheet.locator('.ticket-recovery')).toBeHidden();
+  }
+  await expect(precio).toHaveValue(texto);
+}
+for (const entrada of ['Corregir a mano', 'Modificar ítems']) {
+  test(`C179 · sólo teclado por ${entrada} hasta Cuadra y Listo`, async ({ page }) => {
+    await ticket(page, 84001);
+    const sheet = page.getByRole('dialog', { name: /Ticket ·/ });
+    await expect(sheet).toBeVisible();
+    await focoDentro(sheet);
+    await tabHasta(page, sheet, sheet.getByRole('button', { name: entrada, exact: true }));
+    await tecla(page, sheet, 'Enter');
+    await expect(sheet.locator('.ticket-recovery')).toBeHidden();
+    await tecla(page, sheet, 'Tab');
+    await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Modificar Tagliatelle Bolognese', exact: true }));
+    await tecla(page, sheet, 'Enter');
+    await escribirPrecio(page, sheet, '195.01');
+    await expect(sheet.locator('.cuadre-ticket')).toContainText('Cuadra con el ticket');
+    await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Listo', exact: true }));
+    await tecla(page, sheet, 'Enter');
+    await expect(sheet).toBeVisible();
+  });
+}
+
+test('C179 · Escape forzado usa el estado actual y después cuadra sin desmontar', async ({ page }) => {
+  await ticket(page, 84000);
+  await page.getByRole('button', { name: 'Ver el ticket' }).click();
+  const sheet = page.getByRole('dialog', { name: /Ticket ·/ });
+  await focoDentro(sheet);
+  await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Modificar ítems', exact: true }));
+  await tecla(page, sheet, 'Enter');
+  await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Modificar Tagliatelle Bolognese', exact: true }));
+  await tecla(page, sheet, 'Enter');
+  await escribirPrecio(page, sheet, '195.01');
+  await expect(sheet.locator('.cuadre-ticket')).toHaveClass(/no-cuadra/);
+  await tecla(page, sheet, 'Escape');
+  await escribirPrecio(page, sheet, '195.00');
+  await expect(sheet.locator('.cuadre-ticket')).toContainText('Cuadra con el ticket');
+  await expect(sheet).toBeVisible();
+  await focoDentro(sheet);
+});
+
+test('C179 · tercera fila conserva su precio y el Tab externo vuelve al diálogo', async ({ page }) => {
+  await ticket(page, 84001);
+  const sheet = page.getByRole('dialog', { name: /Ticket ·/ });
+  await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Corregir a mano', exact: true }));
+  await tecla(page, sheet, 'Enter');
+  await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Modificar Pizza Margherita', exact: true }));
+  await tecla(page, sheet, 'Enter');
+  const precio = sheet.getByLabel('Precio por unidad');
+  await expect(precio).toBeFocused();
+  const antes = await precio.inputValue();
+  await page.keyboard.type('9');
+  await focoDentro(sheet);
+  await expect(precio).toHaveValue(`${antes}9`);
+  await tecla(page, sheet, 'Tab');
+  await expect(sheet.getByRole('button', { name: /Una unidad menos de Pizza/ })).toBeFocused();
+  // Sonda defensiva: simula una pérdida de foco externa y mide ambos sentidos.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await tecla(page, sheet, 'Tab');
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await tecla(page, sheet, 'Shift+Tab');
+});
+
+for (const idioma of ['es', 'en'] as const) {
+  for (const width of [320, 390]) {
+    test(`C179 · edición estable ${idioma} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: width === 320 ? 568 : 844 });
+      await ticket(page, 84001, idioma);
+      const sheet = page.getByRole('dialog', { name: /(?:Ticket|Receipt) ·/ });
+      await tabHasta(page, sheet, sheet.getByRole('button', { name: idioma === 'es' ? 'Corregir a mano' : 'Fix it manually', exact: true }));
+      await tecla(page, sheet, 'Enter');
+      await tabHasta(page, sheet, sheet.getByRole('button', { name: /^(Modificar|Edit) Tagliatelle Bolognese$/ }));
+      await tecla(page, sheet, 'Enter');
+      await expect(sheet.locator('input.amt')).toBeFocused();
+      await expect(sheet.locator('.ticket-recovery')).toBeHidden();
+      const area = await sheet.locator('.ticket-sheet-scroll').evaluate((el) => el.clientHeight);
+      expect(area).toBeGreaterThanOrEqual(124);
+      await tecla(page, sheet, 'ControlOrMeta+a');
+      await tecla(page, sheet, 'Backspace');
+      await expect(sheet.locator('.ticket-recovery')).toBeHidden();
+      const vacia = await sheet.locator('.ticket-sheet-scroll').evaluate((el) => el.clientHeight);
+      expect(vacia).toBe(area);
+      const out = process.env.PAYME_C179_EVIDENCIA;
+      for (const char of '195.01') {
+        await page.keyboard.type(char);
+        await focoDentro(sheet);
+        await expect(sheet.locator('.ticket-recovery')).toBeHidden();
+      }
+      if (out) {
+        await page.screenshot({ path: `${out}/capturas/edicion-${idioma}-${width}.png`, fullPage: true });
+        await writeFile(`${out}/recibos/edicion-${idioma}-${width}.json`, JSON.stringify({ idioma, width, area, vacia,
+          final: await sheet.locator('.ticket-sheet-scroll').evaluate((el) => el.clientHeight), datos: 'mock sintético D542' }, null, 2));
+      }
+    });
+  }
+}

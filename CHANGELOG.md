@@ -1,3 +1,8 @@
+## 0.275.8 · 2026-11-11
+
+- C179 · La hoja del ticket conserva el foco al corregir con teclado, lleva el cursor al precio de la fila y recupera el Tab fuera del diálogo.
+- Durante la edición, ayuda y salidas se ocultan y la franja reserva su espacio con el precio incompleto. Pruebas de teclado, Escape y espacio móvil en ES/EN.
+
 ## 0.275.7 · 2026-11-11
 
 - C176: la hoja del ticket conserva el foco y el teclado durante cada tecla de la corrección manual, abierta por diferencia o por la persona.
