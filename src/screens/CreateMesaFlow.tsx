@@ -1095,6 +1095,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (resultado.liberaJournal) {
         await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
         setFrozen(null);
+        if (resultado.veredicto === 'sin_rastro') toast(t('El servidor confirmó que esta apertura no existe. Ya puedes abrir con el ticket nuevo.'));
         if (resultado.navegarA) {
           setDiagnostico(null);
           toast(t('Esa mesa ya existe: {0}', resultado.navegarA));
@@ -1185,9 +1186,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * alguna fila incompleta (que fuerza `total` a 0), una diferencia no
    * significaría nada y el aviso sería ruido.
    *
-   * El aviso NO bloquea Continuar. Corregir una fila mal leída es exactamente
-   * lo que esta pantalla existe para permitir, y ahí la suma se aparta del
-   * impreso a propósito; lo que el spec prohíbe es ajustar en silencio.
+   * D790: una diferencia medida bloquea Continuar hasta corregir los consumos
+   * o volver a sacar el ticket. Nunca se ajustan importes automáticamente.
    */
   /**
    * D209 · D215 · subtotal e IVA del ticket, sólo si cierran con los ítems de
@@ -3335,6 +3335,22 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </button>
                 )}
               </div>
+              {totalMismatch && !ejemplo && (
+                <div className="tk-foot">
+                  <button className="tk-edit-link" onClick={() => {
+                    setTicketAbierto(false);
+                    back();
+                  }}>
+                    {t('Sacar nuevamente la foto')}
+                  </button>
+                  <button className="tk-edit-link" onClick={() => {
+                    setEditingItems(true);
+                    setExpandedItem(null);
+                  }}>
+                    {t('Corregir consumos a mano')}
+                  </button>
+                </div>
+              )}
               <div className="ticket-sheet-scroll">
                 <div className="tk-fold-body">
                 <div className="tk-fold-restaurant">
@@ -3629,7 +3645,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                * ⚠️ SE ABRE EL ACORDEÓN, y no es un extra: el ticket nace
                * PLEGADO, y abierto se ven las marcas de los campos incompletos.
                */
-              if (!ticketValid) {
+              if (!ticketValid || totalMismatch) {
                 setTicketAbierto(true);
                 setTicketPulse(true);
                 return;
@@ -3644,7 +3660,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               // un callejón con cartel.
               void continueFromTicket();
             },
-            disabled: ticketContinuing,
+            disabled: ticketContinuing || totalMismatch !== null,
             busy: ticketContinuing,
           }}
         />

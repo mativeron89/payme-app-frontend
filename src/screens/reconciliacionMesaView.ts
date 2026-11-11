@@ -35,13 +35,11 @@ import type { MesaCreationLookup } from '../api/types';
  * organizador trabado. Los dos males son reales y no son simétricos: el
  * segundo se arregla con una consulta más, el primero con un refund.
  *
- * 🔴 **`not_found` NO libera, y no es exceso de celo.** El 404 dice que ESA
- * CLAVE no creó nada; no dice nada de una generación anterior. El journal rota
- * la clave ante errores definitivos (`shouldRotateOnError`), así que una mesa
- * creada por la clave previa seguiría existiendo, con su hold, mientras esta
- * consulta contesta "no hay nada". Lo que sí habilita el contrato en ese caso
- * es **reintentar con la MISMA clave**, que por B-06 no puede duplicar: si el
- * 404 era cierto, crea por primera vez; si mintió, devuelve la mesa existente.
+ * D791 enmienda la salida de `not_found`: la confirmación del servidor permite
+ * terminar ese intento y abrir con el ticket nuevo. Una referencia guardada
+ * que contradiga la ausencia mantiene el bloqueo. Red, 5xx, estados inciertos
+ * y garantías pendientes siguen sin liberar.
+
  */
 
 export type VeredictoReconciliacion =
@@ -51,7 +49,7 @@ export type VeredictoReconciliacion =
   | 'muerta'
   /** La mesa existe en `pending_auth`: el hold quedó sin autorizar. */
   | 'a_medias'
-  /** Esa clave no creó nada. NO se libera; se puede reintentar con ella. */
+  /** El servidor confirmó la ausencia: permite abrir con el ticket nuevo (D791). */
   | 'sin_rastro'
   /** La misma clave con otra intención económica. Nada que acreditar. */
   | 'conflicto'
@@ -63,7 +61,7 @@ export interface DecisionReconciliacion {
   /**
    * 🔴 El único campo que mueve plata indirectamente: `true` termina el intento
    * y devuelve al organizador la capacidad de abrir mesas. Sólo lo ponen
-   * `acreditada` y `muerta`, que son las dos ramas con prueba exacta.
+   * `acreditada`, `muerta` y la ausencia confirmada `sin_rastro` (D791).
    */
   readonly liberaJournal: boolean;
   /** Adónde navegar. `null` cuando navegar no tiene sentido o no hay mesa. */
@@ -141,12 +139,13 @@ export function decisionReconciliacion(
           : 'La mesa se creó, pero su garantía quedó sin confirmar. No abrimos otra mesa.',
       };
     case 'not_found':
+      if (referencia) return NO_CONCLUYENTE;
       return {
         veredicto: 'sin_rastro',
-        liberaJournal: false,
+        liberaJournal: true,
         navegarA: null,
-        permiteReintento: lookup.retryWithSameKey,
-        copy: 'No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez.',
+        permiteReintento: false,
+        copy: 'El servidor confirmó que esta apertura no existe. Ya puedes abrir con el ticket nuevo.',
       };
     case 'payload_hash_conflict':
       // Llega sin datos de mesa a propósito. No se libera ni se reintenta: la

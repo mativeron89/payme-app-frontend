@@ -99,7 +99,7 @@ test('AF2-P4 · después de recargar y reconciliar, se reenvía sin pedir tarjet
 
   await page.reload();
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
-  await expect(page.getByRole('status')).toContainText('No encontramos ninguna mesa creada con este intento.');
+  await expect(page.locator('.toast')).toContainText('El servidor confirmó que esta apertura no existe.');
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page);
   await completarDivision(page);

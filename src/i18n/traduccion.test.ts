@@ -339,7 +339,6 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'La mesa todavía está pendiente de cierre y liquidación.',
   'Mesa cancelada', 'Mesa en liquidación', 'Mesa liquidada', 'Mesa vencida',
   'Modo demo:', 'Movimiento',
-  'No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez.',
   'No podemos afirmar que exista un cobro o cierre de la mesa.',
   'No pudimos confirmar la respuesta de tu banco.', 'No pudimos guardar la tarjeta.',
   'No pudimos leer la tarjeta.', 'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',

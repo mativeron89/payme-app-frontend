@@ -470,7 +470,7 @@ export const EN: Record<string, string> = {
   "Ningún grupo coincide con “{0}”.": "No groups match “{0}”.",
   "No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continúas, el próximo intento es un": "We couldn't find that payment on the table: it never claimed your share. If you continue, the next attempt is a",
   "No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.": "We couldn't find this table. The link may have expired, or the bill may already be closed.",
-  "No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez.": "We couldn't find any table created from this attempt. We can resend it as-is: if it did get created, we'll return that same table instead of placing another hold for the full amount.",
+  "El servidor confirmó que esta apertura no existe. Ya puedes abrir con el ticket nuevo.": "The server confirmed that this opening does not exist. You can now open a table with the new receipt.",
   "No es que no sirva: no pudimos comprobarlo ahora. Prueba de nuevo en un momento.": "It's not that it's invalid: we just couldn't check it right now. Try again in a moment.",
   "No podemos afirmar que exista un cobro o cierre de la mesa.": "CLAIM — We can't confirm there's a charge or closing for the table.",
   "No podemos mostrar tus estadísticas ahora": "We can't show your stats right now",
@@ -1526,4 +1526,7 @@ export const EN: Record<string, string> = {
   "Lo eligieron {0} y {1}": "{0} and {1} picked it",
   "Lo eligieron {0}, {1} y {2} más": "{0}, {1} and {2} more picked it",
   "Se sumaron {0} de {1}": "{0} of {1} have joined",
+  // D790 · salidas del ticket con diferencia, ratificadas por Mati.
+  "Sacar nuevamente la foto": "Take the photo again",
+  "Corregir consumos a mano": "Correct items manually",
 };

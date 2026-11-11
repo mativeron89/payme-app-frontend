@@ -7,8 +7,8 @@ import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
  * D622 · AF-2 · mejora 4 (§5 de la especificación): cuánto sobra o falta para
  * cuadrar el ticket. La franja va FIJA al pie de la hoja del ticket (se sigue
  * viendo mientras se edita una fila), dice la diferencia exacta en palabras y,
- * cuando cuadra al centavo con un total impreso, lo dice en verde. No bloquea
- * «Continuar» y la regla de cuándo no cuadra es la de siempre.
+ * cuando cuadra al centavo con un total impreso, lo dice en verde. D790 bloquea
+ * «Continuar» cuando hay diferencia y la regla de cuándo no cuadra es la de siempre.
  *
  * El ticket del mock suma $840 en platos (Tagliatelle Bolognese $195, …). El
  * total impreso se agrega envolviendo `scanTicket`, como `af-diseno-02`.
@@ -116,7 +116,7 @@ test.describe('D622 · AF-2 · cuadrar el ticket', () => {
     await expect(anuncio(page)).toHaveText('');
   });
 
-  test('no cuadra no bloquea «Continuar» y ya no hay «Checa que…» en ámbar', async ({ page }) => {
+  test('D790 · no cuadra bloquea «Continuar» y ya no hay «Checa que…» en ámbar', async ({ page }) => {
     await hastaElTicket(page, 84000);
     await page.getByRole('button', { name: 'Ver el ticket' }).click();
     await hoja(page).getByRole('button', { name: 'Modificar ítems', exact: true }).click();
@@ -125,7 +125,7 @@ test.describe('D622 · AF-2 · cuadrar el ticket', () => {
     await expect(franja(page)).toHaveClass(/cuadre-ticket--no-cuadra/);
     await expect(hoja(page).locator('.title-card-note.warn')).toHaveCount(0);
     await expect(hoja(page).getByText(/Checa que el total coincida/)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Continuar' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Continuar' })).toBeDisabled();
   });
 
   test('control · sin total impreso no se afirma nada: sin franja, con la ayuda de siempre', async ({ page }) => {

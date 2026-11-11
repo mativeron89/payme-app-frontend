@@ -73,14 +73,12 @@ describe('sólo la prueba positiva exacta libera el journal', () => {
     expect(d.permiteReintento).toBe(true);
   });
 
-  it('🔴 MUTANTE · not_found NO libera, aunque el contrato habilite reintentar', () => {
-    // El 404 dice que ESA CLAVE no creó nada. No dice nada de una generación
-    // anterior, y el journal rota la clave ante errores definitivos: una mesa
-    // creada por la clave previa seguiría existiendo con su hold.
+  it('D791 · el servidor confirma not_found: libera para el ticket nuevo, sin reenvío', () => {
     const d = decisionReconciliacion(lookup('not_found'));
     expect(d.veredicto).toBe('sin_rastro');
-    expect(d.liberaJournal).toBe(false);
-    expect(d.permiteReintento).toBe(true);
+    expect(d.liberaJournal).toBe(true);
+    expect(d.permiteReintento).toBe(false);
+    expect(d.navegarA).toBeNull();
   });
 
   it('🔴 MUTANTE · payload_hash_conflict no libera NI reintenta', () => {
@@ -130,7 +128,7 @@ describe('el reintento que se habilita es SIEMPRE con la misma clave', () => {
   it('ninguna rama que libera habilita además reintentar', () => {
     // Liberar + reintentar a la vez sería clave nueva sobre mesa viva: el
     // segundo hold. Las dos cosas nunca pueden ser ciertas juntas.
-    for (const o of ['open', 'partially_paid', 'replayable', 'terminal'] as const) {
+    for (const o of ['open', 'partially_paid', 'replayable', 'terminal', 'not_found'] as const) {
       const d = decisionReconciliacion(lookup(o));
       expect(d.liberaJournal && d.permiteReintento, o).toBe(false);
     }
@@ -157,11 +155,11 @@ describe('dos fuentes que se contradicen no acreditan ninguna', () => {
     }
   });
 
-  it('una referencia sin mesa en la respuesta no bloquea el 404', () => {
-    // `not_found` llega sin datos de mesa: no hay contradicción posible, y el
-    // veredicto sigue siendo el suyo (que tampoco libera).
+  it('D791 · una referencia guardada contradice la ausencia y conserva el bloqueo', () => {
+    // D791 no libera si la respuesta contradice una referencia recibida antes.
     const d = decisionReconciliacion(lookup('not_found'), 'PA-2847');
-    expect(d.veredicto).toBe('sin_rastro');
+    expect(d.veredicto).toBe('no_concluyente');
+    expect(d.liberaJournal).toBe(false);
   });
 });
 
@@ -171,7 +169,7 @@ describe('la copy no afirma lo que no sabemos', () => {
   });
 
   it('ninguna rama no acreditada dice "no existe" ni promete desbloquear', () => {
-    for (const o of ['requires_action', 'not_found', 'payload_hash_conflict'] as const) {
+    for (const o of ['requires_action', 'payload_hash_conflict'] as const) {
       const texto = decisionReconciliacion(lookup(o)).copy!.toLowerCase();
       expect(texto.length).toBeGreaterThan(0);
       for (const prohibida of ['no existe', 'desbloquear', 'no llegó a crearse']) {

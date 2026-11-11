@@ -1,3 +1,11 @@
+# 0.275.6 · C172B · D790 y D791
+
+Base de trabajo: `cc23a4f33826ea10b49914f220be33ab9056928b` (C169, PR 124).
+
+- D790: una diferencia medida con el total impreso bloquea Continuar. La hoja ofrece repetir la foto o corregir los consumos a mano, en ES/EN. Al cuadrar al centavo vuelve a permitir avanzar.
+- D791: la ausencia confirmada por `GET /mesas/creations/:key` termina el intento pendiente y habilita el ticket nuevo. Sin respuesta, ante estados inciertos/garantía pendiente o referencia contradictoria, conserva el bloqueo. Se usa el contrato existente y el journal conserva actor y generación.
+- Pruebas: controles rojos/verde, bordes de un centavo/total igual, recorridos de cámara/corrección y apertura distinta tras consulta incierta y luego confirmada. Pins package/lock 0.275.6. Los cambios visibles esperan prueba de Mati (D63).
+
 ## 0.275.5 · 2026-11-10 · C169 (D789)
 
 - Base `c7d788993e9f536c231de4f1175812f2bcadcf2a`, revisión total y revisión de código de Fable.
