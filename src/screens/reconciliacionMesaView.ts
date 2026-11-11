@@ -145,7 +145,7 @@ export function decisionReconciliacion(
         liberaJournal: true,
         navegarA: null,
         permiteReintento: false,
-        copy: 'El servidor confirmó que esta apertura no existe. Ya puedes abrir con el ticket nuevo.',
+        copy: 'Comprobamos que esa mesa no se llegó a abrir. Ya puedes abrirla con el ticket nuevo.',
       };
     case 'payload_hash_conflict':
       // Llega sin datos de mesa a propósito. No se libera ni se reintenta: la

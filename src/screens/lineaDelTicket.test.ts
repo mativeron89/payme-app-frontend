@@ -3,6 +3,14 @@ import { precioDeLinea, totalDeLinea } from './lineaDelTicket';
 
 /** D360 · P04 · D371 · vacío no es $0; «0» es un plato de $0. Valores escritos a mano. */
 describe('precioDeLinea', () => {
+  it.each([
+    ['12,50', 1250], ['1,250', 125000], ['1,250.00', 125000],
+    ['2,000,000', 200000000], ['1.250,00', 125000], ['0,00', 0],
+    ['1.250', null], ['1,25,0', null],
+  ])('C176 · lector canónico de precio %s → %s centavos', (texto, cents) => {
+    expect(precioDeLinea(texto)).toBe(cents);
+  });
+
   it('🔴 vacío (o sólo espacios) es una línea incompleta, no $0', () => {
     expect(precioDeLinea('')).toBeNull();
     expect(precioDeLinea('   ')).toBeNull();

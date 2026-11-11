@@ -53,3 +53,13 @@ export function leerMonto(texto: string): MontoLeido {
     return { tipo: 'invalido' };
   }
 }
+
+const CERO = /^0+(?:[.,]0{1,2})?$/;
+
+/** `leerMonto`, más el cero («0», «$0», «0.00»): un precio de cortesía o un ajuste en 0. */
+export function leerMontoOCero(texto: string): MontoLeido {
+  const limpio = texto.trim().replace(/[$\s]/g, '');
+  if (limpio === '') return { tipo: 'vacio' };
+  if (CERO.test(limpio)) return { tipo: 'ok', cents: 0 };
+  return leerMonto(texto);
+}

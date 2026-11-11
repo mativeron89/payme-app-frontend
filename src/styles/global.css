@@ -9425,6 +9425,29 @@ h1.pay-title-lbl {
   justify-content: flex-end;
 }
 
+/* D790 · D800–D801 · causa y salidas juntas, con el margen de la hoja. */
+.ticket-recovery {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.ticket-recovery p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.ticket-recovery .tk-edit-link {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: left;
+}
+.ticket-recovery .tk-edit-link svg { flex: none; }
+.ticket-recovery .tk-edit-link:disabled { opacity: .6; }
+
 /* D622 · AF-2 · mejora 4 · la franja del cuadre, FIJA al pie de la hoja (fuera
    de `.ticket-sheet-scroll`): se sigue viendo mientras se edita una fila. Ámbar
    con el aviso si no cuadra, verde con el tilde si cuadra; las dos tintas son

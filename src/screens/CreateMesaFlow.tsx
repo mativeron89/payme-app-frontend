@@ -1095,7 +1095,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (resultado.liberaJournal) {
         await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
         setFrozen(null);
-        if (resultado.veredicto === 'sin_rastro') toast(t('El servidor confirmó que esta apertura no existe. Ya puedes abrir con el ticket nuevo.'));
+        if (resultado.veredicto === 'sin_rastro') toast(t('Comprobamos que esa mesa no se llegó a abrir. Ya puedes abrirla con el ticket nuevo.'));
         if (resultado.navegarA) {
           setDiagnostico(null);
           toast(t('Esa mesa ya existe: {0}', resultado.navegarA));
@@ -1222,6 +1222,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   /** La franja del pie se ve con un cuadre medido, salvo en la mesa de ejemplo de la guía. */
   const franjaDelCuadreVisible = cuadre !== null && !ejemplo;
   const ticketForcedOpen = totalMismatch !== null;
+  const ticketVisible = ticketAbierto || ticketForcedOpen;
+  // Cambiar el cuadre durante el tipeo no vuelve a montar el efecto ni roba el foco.
+  const ticketForcedOpenRef = useRef(ticketForcedOpen);
+  ticketForcedOpenRef.current = ticketForcedOpen;
   /**
    * D509 · cuando la suma no cierra con el ticket, las filas que explican la diferencia quedan marcadas para
    * revisar (`filasDudosas`). Nunca se corrigen solas.
@@ -1243,12 +1247,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         : t('Este importe es mayor que todo el ticket. Revísalo.'));
 
   useEffect(() => {
-    if (!ticketAbierto && !ticketForcedOpen) return;
+    if (!ticketVisible) return;
     const dialog = ticketRef.current;
     // AF-NOMBRE-EN-TICKET · abierta desde «Editar en el ticket», el foco va al campo.
-    (campoNombreRef.current ?? (ticketForcedOpen ? dialog : ticketCloseRef.current))?.focus();
+    (campoNombreRef.current ?? (ticketForcedOpenRef.current ? dialog : ticketCloseRef.current))?.focus();
     const keepFocusInside = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !ticketForcedOpen) {
+      if (event.key === 'Escape' && !ticketForcedOpenRef.current) {
         event.preventDefault();
         setTicketAbierto(false);
         return;
@@ -1280,7 +1284,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       document.removeEventListener('keydown', keepFocusInside);
       ticketTriggerRef.current?.focus();
     };
-  }, [ticketAbierto, ticketForcedOpen]);
+  }, [ticketVisible]);
 
   function updateItem(idx: number, patch: Partial<EditItem>) {
     setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -3084,7 +3088,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    * Toda esa traducción vive en `divisionModo.ts`, en un solo lugar.
    */
   if (step === 'ticket') {
-    const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
       <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
         <AppHeaderFlow
@@ -3335,22 +3338,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </button>
                 )}
               </div>
-              {totalMismatch && !ejemplo && (
-                <div className="tk-foot">
-                  <button className="tk-edit-link" onClick={() => {
-                    setTicketAbierto(false);
-                    back();
-                  }}>
-                    {t('Sacar nuevamente la foto')}
-                  </button>
-                  <button className="tk-edit-link" onClick={() => {
-                    setEditingItems(true);
-                    setExpandedItem(null);
-                  }}>
-                    {t('Corregir consumos a mano')}
-                  </button>
-                </div>
-              )}
               <div className="ticket-sheet-scroll">
                 <div className="tk-fold-body">
                 <div className="tk-fold-restaurant">
@@ -3514,9 +3501,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             value={it.priceStr}
                             placeholder="0"
                             onChange={(e) =>
-                              // La coma es el decimal de medio continente: se pasa a punto, como
-                              // `sanearMontoPropio` (tipSelectorView.ts). Borrarla hacía «12,50» → 1250.
-                              updateItem(idx, { priceStr: e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '') })
+                              // Conservar separadores: el lector canónico distingue decimales de miles.
+                              updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.,]/g, '') })
                             }
                           />
                         </label>
@@ -3596,6 +3582,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 <button
                   className="tk-edit-link"
                   onClick={() => {
+                    // También fija la hoja si se entró por el cuadre forzado (D790).
+                    setTicketAbierto(true);
                     setEditingItems((on) => !on);
                     setExpandedItem(null);
                   }}
@@ -3615,6 +3603,24 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             {/* D622 · AF-2 · mejora 4 · fija al pie de la hoja, fuera del scroll. En el ejemplo de la guía no va
                 (D367: la guía no afirma nada del ticket). */}
             {franjaDelCuadreVisible && cuadre && <FranjaDelCuadre estado={cuadre} t={t} />}
+            {totalMismatch && !ejemplo && (
+              <div className="ticket-recovery">
+                <p>{t('Para continuar, corrige los consumos o saca otra foto.')}</p>
+                <button className="tk-edit-link" onClick={() => {
+                  setTicketAbierto(false);
+                  back();
+                }}>
+                  <Icon name="camera" size={18} /> {t('Sacar otra foto')}
+                </button>
+                <button className="tk-edit-link" disabled={editingItems} onClick={() => {
+                  setTicketAbierto(true);
+                  setEditingItems(true);
+                  setExpandedItem(null);
+                }}>
+                  <Icon name="pencil" size={18} /> {t('Corregir a mano')}
+                </button>
+              </div>
+            )}
           </div>
           </div>
         )}

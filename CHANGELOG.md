@@ -1,3 +1,10 @@
+## 0.275.7 · 2026-11-11
+
+- C176: la hoja del ticket conserva el foco y el teclado durante cada tecla de la corrección manual, abierta por diferencia o por la persona.
+- Precio de un plato con el lector canónico compartido con Viajes: coma decimal, miles mexicanos y $0; sin adivinar formatos ambiguos.
+- D800–D802: salidas apiladas con cámara/lápiz junto al cuadre, ayuda y aviso simple ES/EN. Inventario en docs/COPY_C176.md; e2e de teclado y 320/390 px.
+- D791 en vuelo queda fuera, pendiente antes de encender pagos; sin cambios de contrato ni publicación a main.
+
 # 0.275.6 · C172B · D790 y D791
 
 Base de trabajo: `cc23a4f33826ea10b49914f220be33ab9056928b` (C169, PR 124).

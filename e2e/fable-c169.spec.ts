@@ -87,7 +87,7 @@ test('AF2-P3 · el comprobante permanece visible al releer la mesa y refleja el 
   await expect(recibo).toBeVisible();
 });
 
-test('AF2-P4 · después de recargar y reconciliar, se reenvía sin pedir tarjeta y se abre una mesa', async ({ page }) => {
+test('AF2-P4 · después de confirmar ausencia, abre con el ticket nuevo sin pedir tarjeta', async ({ page }) => {
   await configurarTicketSinQr(page);
   await ingresar(page);
   await perderPrimeraAperturaAntesDeEnviar(page);
@@ -99,7 +99,7 @@ test('AF2-P4 · después de recargar y reconciliar, se reenvía sin pedir tarjet
 
   await page.reload();
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
-  await expect(page.locator('.toast')).toContainText('El servidor confirmó que esta apertura no existe.');
+  await expect(page.locator('.toast')).toContainText('Comprobamos que esa mesa no se llegó a abrir.');
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page);
   await completarDivision(page);
@@ -108,7 +108,7 @@ test('AF2-P4 · después de recargar y reconciliar, se reenvía sin pedir tarjet
   expect((await estadoN179(page)).mesas).toHaveLength(1);
 });
 
-test('AF2-P5 · el precio acepta coma decimal y rechaza tres decimales', async ({ page }) => {
+test('AF2-P5 · el precio comparte coma decimal y miles del lector canónico', async ({ page }) => {
   await configurarTicketSinQr(page, { ocr: 'malformed' });
   await ingresar(page);
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
@@ -118,16 +118,17 @@ test('AF2-P5 · el precio acepta coma decimal y rechaza tres decimales', async (
   await page.getByRole('button', { name: 'Ver el ticket' }).click();
   await page.getByRole('textbox', { name: 'Consumo', exact: true }).fill('Tacos al pastor');
   const precio = page.getByRole('textbox', { name: 'Precio por unidad', exact: true });
-  await precio.pressSequentially('1,250');
-  await expect(precio).toHaveValue('1.250');
+  await precio.click();
+  await page.keyboard.type('1,250');
+  await expect(precio).toHaveValue('1,250');
   await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
-  await continuar(page).click();
-  await expect(precio).toBeVisible();
-  expect((await estadoN179(page)).mesas).toHaveLength(0);
-
-  await precio.fill('');
-  await precio.pressSequentially('12,50');
-  await expect(precio).toHaveValue('12.50');
+  await expect(page.getByText('$1,250', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Ver el ticket' }).click();
+  await precio.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('12,50');
+  await expect(precio).toHaveValue('12,50');
   await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
   await expect(page.getByText('$12.50', { exact: true }).first()).toBeVisible();
   await continuar(page).click();

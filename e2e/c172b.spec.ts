@@ -27,8 +27,8 @@ test('D790 · un centavo bloquea Continuar, permite corregir manualmente y al cu
   await sheet.getByLabel('Precio por unidad').fill('195.01');
   await sheet.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
-  await expect(sheet.getByRole('button', { name: 'Sacar nuevamente la foto', exact: true })).toBeVisible();
-  await sheet.getByRole('button', { name: 'Corregir consumos a mano', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Sacar otra foto', exact: true })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Corregir a mano', exact: true }).click();
   await sheet.getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
   await sheet.getByLabel('Precio por unidad').fill('195');
   await expect(sheet.locator('.cuadre-ticket')).toHaveClass(/cuadre-ticket--cuadra/);
@@ -39,7 +39,7 @@ test('D790 · un centavo bloquea Continuar, permite corregir manualmente y al cu
 
 test('D790 · se puede volver a capturar el ticket con diferencia', async ({ page }) => {
   await ticket(page, 84001);
-  await page.getByRole('button', { name: 'Sacar nuevamente la foto', exact: true }).click();
+  await page.getByRole('button', { name: 'Sacar otra foto', exact: true }).click();
   await expect(page.getByRole('dialog', { name: /Ticket ·/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Sacar foto', exact: true })).toBeVisible();
   expect((await estadoN179(page)).mesas).toHaveLength(0);
@@ -84,7 +84,7 @@ test('D791 · sin confirmación conserva la guarda; con not_found abre con un ti
   await expect(page.getByText(/No pudimos verificar cómo quedó esa apertura/)).toBeVisible();
   expect((await estadoN179(page)).mesas).toHaveLength(0);
   await check.click();
-  await expect(page.locator('.toast')).toContainText('El servidor confirmó que esta apertura no existe.');
+  await expect(page.locator('.toast')).toContainText('Comprobamos que esa mesa no se llegó a abrir.');
   await expect(check).toHaveCount(0);
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page);

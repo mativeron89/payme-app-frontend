@@ -494,3 +494,16 @@ describe('🔴 F-14 · cada traducción interpola lo mismo que su clave', () => 
     expect(traducir('{0}: {1}', 'es', 'Mi parte', '$12.50')).toBe('Mi parte: $12.50');
   });
 });
+
+describe('C176 · textos ratificados D800–D802', () => {
+  it.each([
+    ['Sacar otra foto', 'Take another photo'],
+    ['Corregir a mano', 'Fix it manually'],
+    ['Para continuar, corrige los consumos o saca otra foto.', 'To continue, fix the items or take another photo.'],
+    ['Comprobamos que esa mesa no se llegó a abrir. Ya puedes abrirla con el ticket nuevo.',
+      'We checked: that table was never opened. You can open it now with the new receipt.'],
+  ])('%s', (es, en) => {
+    expect(traducir(es, 'es')).toBe(es);
+    expect(traducir(es, 'en')).toBe(en);
+  });
+});

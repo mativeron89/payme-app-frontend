@@ -1,4 +1,4 @@
-import { stringToCents } from '../utils/money';
+import { leerMontoOCero } from '../utils/montoEscrito';
 
 /**
  * D360 · P04 · D371 · las líneas del ticket al abrir la mesa.
@@ -22,14 +22,8 @@ import { stringToCents } from '../utils/money';
 
 /** El precio de una línea en centavos, o `null` si la línea está incompleta (vacío o ilegible). */
 export function precioDeLinea(priceStr: string): number | null {
-  const limpio = priceStr.trim();
-  if (limpio === '') return null;
-  try {
-    const centavos = stringToCents(limpio);
-    return Number.isSafeInteger(centavos) && centavos >= 0 ? centavos : null;
-  } catch {
-    return null;
-  }
+  const monto = leerMontoOCero(priceStr);
+  return monto.tipo === 'ok' ? monto.cents : null;
 }
 
 /** El total de una línea (precio × cantidad), o `null` si está incompleta o no entra en un entero seguro. */
