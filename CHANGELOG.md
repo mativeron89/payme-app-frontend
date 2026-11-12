@@ -1,3 +1,8 @@
+## 0.275.9 · 2026-11-12
+
+- La hoja conserva el foco cerca al eliminar un consumo o usar su nombre original; al agregar, escribe primero el nombre.
+- Pruebas de Tab desde fuera del diálogo y reserva de alto progresiva durante la edición (mejora parcial: puede crecer una vez).
+
 ## 0.275.8 · 2026-11-11
 
 - C179 · La hoja del ticket conserva el foco al corregir con teclado, lleva el cursor al precio de la fila y recupera el Tab fuera del diálogo.

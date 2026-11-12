@@ -373,6 +373,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const [editingItems, setEditingItems] = useState(false);
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
   const expandedRowRef = useRef<HTMLDivElement | null>(null);
+  const removedItemFocusRef = useRef<number | null>(null);
   /**
    * La fila que se abre puede quedar FUERA de la pantalla — pasa siempre al
    * agregar un consumo, porque nace al final de una lista de seis. Abrir un
@@ -383,7 +384,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (expandedItem === null) return;
     expandedRowRef.current?.scrollIntoView({ block: 'nearest' });
     // El lápiz se desmontó: la primera tecla tiene que llegar a esta fila.
-    expandedRowRef.current?.querySelector<HTMLInputElement>('input.amt')?.focus();
+    const row = expandedRowRef.current;
+    const nombre = row?.querySelector<HTMLInputElement>('input.tk-edit-input:not(.amt)');
+    // Al agregar, la primera tarea es nombrar el consumo; un lápiz conserva el precio.
+    (nombre?.value === '' ? nombre : row?.querySelector<HTMLInputElement>('input.amt'))?.focus();
   }, [expandedItem]);
   // TRES formas en la UI (§1.3-bis) y DOS en el contrato: la traducción vive
   // entera en `divisionModo.ts`, nunca acá.
@@ -1229,8 +1233,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   useLayoutEffect(() => {
     const slot = cuadreSlotRef.current;
     if (!slot) return;
-    // Reservar sólo geometría, nunca un importe viejo, durante entradas incompletas.
-    slot.style.minHeight = editingItems ? `${slot.getBoundingClientRect().height}px` : '';
+    // Trinquete de geometría: también desde Cuadra, al reabrir y con baja confianza.
+    // Mejora parcial: puede crecer una vez al aparecer un aviso más alto; nunca se contrae.
+    slot.style.minHeight = editingItems
+      ? `${Math.max(parseFloat(slot.style.minHeight) || 0, slot.getBoundingClientRect().height)}px` : '';
+  });
+  useLayoutEffect(() => {
     if (editingItems) {
       const dialog = ticketRef.current;
       (dialog?.querySelector<HTMLButtonElement>('.tk-row-warning .tk-pencil')
@@ -1300,10 +1308,21 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     };
   }, [ticketVisible]);
 
+  useLayoutEffect(() => {
+    const removed = removedItemFocusRef.current;
+    if (removed === null) return;
+    removedItemFocusRef.current = null;
+    const dialog = ticketRef.current;
+    const pencils = dialog?.querySelectorAll<HTMLButtonElement>('.tk-pencil');
+    const nearby = pencils?.[Math.min(removed, (pencils?.length ?? 0) - 1)];
+    (nearby ?? dialog?.querySelector<HTMLButtonElement>('.tk-add-item'))?.focus();
+  }, [editItems]);
+
   function updateItem(idx: number, patch: Partial<EditItem>) {
     setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   }
   function removeItem(idx: number) {
+    removedItemFocusRef.current = idx;
     setEditItems((prev) => prev.filter((_, i) => i !== idx));
     // La fila abierta desaparece, y los índices de abajo se corren: dejar
     // `expandedItem` quieto abriría OTRA fila, o una que ya no existe.
@@ -3501,7 +3520,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             <button
                               type="button"
                               className="tk-original-usar"
-                              onClick={() => updateItem(idx, { name: it.originalName })}
+                              onClick={() => {
+                                updateItem(idx, { name: it.originalName });
+                                // El botón se desmonta; Consumo sigue en esta misma fila.
+                                expandedRowRef.current?.querySelector<HTMLInputElement>('input.tk-edit-input:not(.amt)')?.focus();
+                              }}
                             >
                               {t('Usar ese nombre')}
                             </button>
@@ -3606,7 +3629,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   {editingItems ? t('Listo') : t('Modificar ítems')}
                 </button>
                 {editingItems && (
-                  <button className="tk-edit-link" onClick={addItem}>
+                  <button className="tk-edit-link tk-add-item" onClick={addItem}>
                     <Icon name="plus" size={18} /> {t('Agregar consumo')}
                   </button>
                 )}
