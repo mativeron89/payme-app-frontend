@@ -3582,7 +3582,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       {editingItems && (
                         <button
                           className="tk-pencil"
-                          onClick={() => setExpandedItem(idx)}
+                          onClick={() => { setTicketAbierto(true); setExpandedItem(idx); }}
                           aria-label={t('Modificar {0}', etiqueta)}
                         >
                           <Icon name="pencil" size={20} />

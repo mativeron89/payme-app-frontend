@@ -1,6 +1,11 @@
+## 0.275.10 · 2026-11-12
+
+- C182E · El lápiz fija la hoja del ticket para conservar el precio y el foco al vaciarlo con baja confianza.
+- Pruebas en ES/EN a 320/390 px, dirección de Shift+Tab desde afuera y liberación de la reserva de alto al tocar «Listo».
+
 ## 0.275.9 · 2026-11-12
 
-- La hoja conserva el foco cerca al eliminar un consumo o usar su nombre original; al agregar, escribe primero el nombre.
+- C182D · La hoja conserva el foco cerca al eliminar un consumo o usar su nombre original; al agregar, escribe primero el nombre.
 - Pruebas de Tab desde fuera del diálogo y reserva de alto progresiva durante la edición (mejora parcial: puede crecer una vez).
 
 ## 0.275.8 · 2026-11-11

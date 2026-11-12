@@ -96,6 +96,9 @@ for (const key of ['Tab', 'Shift+Tab']) {
     await page.keyboard.press(key);
     expect(await sheet.evaluate(el => el.contains(document.activeElement))).toBe(true);
     await expect(sheet).toBeVisible();
+    if (key === 'Shift+Tab') {
+      await expect(sheet.locator('button:visible:not([disabled]), input:visible:not([disabled]), [tabindex]:visible:not([tabindex="-1"])').last()).toBeFocused();
+    }
   });
 }
 test('C182D H3 · Agregar consumo escribe letras en Consumo y el lápiz mantiene precio', async ({ page }) => {
@@ -146,8 +149,34 @@ for (const width of [320, 390]) {
       expect(changes).toBeLessThanOrEqual(1);
       for (let i = 1; i < sizes.length; i += 1) expect(sizes[i]).toBeLessThanOrEqual(sizes[i - 1]!);
       expect(Math.min(...sizes)).toBeGreaterThanOrEqual(124);
+      await sheet.getByRole('button', { name: 'Listo', exact: true }).click();
+      await expect.poll(() => sheet.locator('.ticket-cuadre-slot').evaluate(el => (el as HTMLElement).style.minHeight)).toBe('');
       const out = process.env.PAYME_C182D_EVIDENCIA;
       if (out) await writeFile(`${out}/recibos/franja-${entrada}-${width}.json`, JSON.stringify({ width, entrada, sizes, changes, improvement: 'parcial: máximo un crecimiento, sin contracción', data: 'mock D542' }, null, 2));
+    });
+  }
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  for (const width of [320, 390]) {
+    test(`C182E R2 · lápiz fija baja confianza al vaciar precio ${idioma} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: width === 320 ? 568 : 844 });
+      await ticket(page, 84001, idioma, 'baja');
+      const sheet = page.getByRole('dialog', { name: /(?:Ticket|Receipt) ·/ });
+      await expect(sheet).toHaveCount(1);
+      await sheet.locator('.tk-pencil').first().click();
+      const precio = sheet.getByLabel(idioma === 'es' ? 'Precio por unidad' : 'Price per unit');
+      await expect(precio).toBeFocused();
+      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.press('Backspace');
+      await expect(sheet).toHaveCount(1);
+      await expect(precio).toBeFocused();
+      await page.keyboard.type('195.01');
+      await expect(precio).toHaveValue('195.01');
+      await expect(precio).toBeFocused();
+      await expect(sheet).toHaveCount(1);
+      await expect(sheet.locator('.cuadre-ticket')).toContainText(idioma === 'es' ? 'Cuadra con el ticket' : 'Matches the receipt');
+      await expect(page.locator('.tk-fold-head')).not.toBeFocused();
     });
   }
 }
