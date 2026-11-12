@@ -385,11 +385,12 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     return { es: registro['es'], en: registro['en'] };
   }
 
-  it('🔴 las 42 claves del DOM coinciden exactamente con ES y EN', () => {
+  it('🔴 las 41 claves del DOM coinciden exactamente con ES y EN', () => {
     // `step2.p` se partió en `p_before`/`p_after` para que el glifo de WhatsApp
     // quede FIJO en el HTML entre las dos mitades. El censo vigente baja a 40
     // al retirar el CTA de restaurante y el caption del panel. D457 suma 2: los
     // dos enlaces legales del pie (`legal.privacy`, `legal.terms`).
+    // D785 resta 1: `comensal.perk5` (renglón «Nadie en la mesa ve qué pediste»).
     // 🔴 El motivo es medido, no estético: `applyLang` asigna con `textContent`,
     // así que un `<svg>` dentro del string del diccionario se escaparía y se
     // vería como texto crudo. La alternativa era pasar esa inserción a
@@ -399,7 +400,7 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     const dict = leerDiccionario();
     const esperadas = [...new Set(dom)].sort();
     expect(dom, 'hay claves data-i18n duplicadas').toHaveLength(esperadas.length);
-    expect(esperadas).toHaveLength(42);
+    expect(esperadas).toHaveLength(41);
     expect(Object.keys(dict.es).sort()).toEqual(esperadas);
     expect(Object.keys(dict.en).sort()).toEqual(esperadas);
     expect(Object.values(dict.es).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);

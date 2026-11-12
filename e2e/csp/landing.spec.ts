@@ -39,3 +39,26 @@ test('control: un script inline ajeno queda bloqueado', async ({ page }) => {
   expect(corrio).toBe(false);
   expect((await violaciones(page)).map((v) => v.directiva)).toContain('script-src-elem');
 });
+
+// D785 · comprueba también los diccionarios servidos: una clave huérfana
+// podría volver a publicar la promesa aunque hoy no tenga nodo visible.
+test('D785: sin promesa de privacidad en ES/EN y los otros perks cambian de idioma', async ({ page }) => {
+  const response = await page.goto('/');
+  const html = await response!.text();
+  expect(html).not.toMatch(/Nadie en la mesa ve qué pediste|sees what you ordered/i);
+  expect(html).not.toContain('comensal.perk5');
+  const keys = [1, 2, 3, 4, 6];
+  for (const lang of ['es', 'en', 'es']) {
+    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    await expect(page.locator('[data-i18n="comensal.perk5"]')).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(/Nadie en la mesa ve qué pediste|sees what you ordered/i);
+    const texts = lang === 'es'
+      ? ['Tomas solo tus platillos de la cuenta', 'Eliges cuánta propina dejar', 'Pagas con tarjeta desde tu teléfono', 'Puedes pagar más de una parte, si te toca', 'Te queda el historial de lo que pagaste']
+      : ['You only take your own dishes off the bill', 'You choose how much tip to leave', 'Pay with your card, right from your phone', "You can pay more than one share, if it's on you", "You keep a history of what you've paid"];
+    for (const [index, key] of keys.entries()) {
+      await expect(page.locator(`[data-i18n="comensal.perk${key}"]`)).toHaveText(texts[index]!);
+    }
+    expect(await violaciones(page)).toEqual([]);
+    await page.locator('#lang-toggle').click();
+  }
+});

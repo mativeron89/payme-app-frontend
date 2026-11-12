@@ -1,7 +1,12 @@
+## 0.275.12 · 2026-11-12
+
+- C183 · D785: se retira «Nadie en la mesa ve qué pediste» de la landing y sus diccionarios ES/EN; se recalcula el hash CSP del script de idioma.
+- Se corrige la descripción de los cierres de la hoja del ticket en 0.275.11.
+
 ## 0.275.11 · 2026-11-12
 
 - C182F · «Agregar consumo» fija la hoja forzada por baja confianza y conserva el foco al crear la fila.
-- Tras el lápiz y tras «Agregar consumo», la hoja queda fijada hasta «Listo», × o Escape.
+- Tras abrir la edición con el lápiz y sin diferencia de total, «Listo» termina la edición sin cerrar la hoja; ×, Escape, tocar fuera o deslizar hacia abajo sí la cierran.
 - Pruebas en ES/EN a 320/390 px, población de primeras entradas y Tab desde afuera al primer control del diálogo.
 
 ## 0.275.10 · 2026-11-12
