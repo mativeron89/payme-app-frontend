@@ -96,9 +96,8 @@ for (const key of ['Tab', 'Shift+Tab']) {
     await page.keyboard.press(key);
     expect(await sheet.evaluate(el => el.contains(document.activeElement))).toBe(true);
     await expect(sheet).toBeVisible();
-    if (key === 'Shift+Tab') {
-      await expect(sheet.locator('button:visible:not([disabled]), input:visible:not([disabled]), [tabindex]:visible:not([tabindex="-1"])').last()).toBeFocused();
-    }
+    const controls = sheet.locator('button:visible:not([disabled]), input:visible:not([disabled]), [tabindex]:visible:not([tabindex="-1"])');
+    await expect(key === 'Shift+Tab' ? controls.last() : controls.first()).toBeFocused();
   });
 }
 test('C182D H3 · Agregar consumo escribe letras en Consumo y el lápiz mantiene precio', async ({ page }) => {
@@ -179,4 +178,38 @@ for (const idioma of ['es', 'en'] as const) {
       await expect(page.locator('.tk-fold-head')).not.toBeFocused();
     });
   }
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  for (const width of [320, 390]) {
+    test(`C182F H1 · agregar primero fija la hoja forzada ${idioma} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: width === 320 ? 568 : 844 });
+      await ticket(page, 84001, idioma, 'baja');
+      const sheet = page.getByRole('dialog', { name: /(?:Ticket|Receipt) ·/ });
+      await expect(sheet).toHaveCount(1);
+      await expect(sheet.locator('.tk-edit')).toHaveCount(0);
+      await sheet.getByRole('button', { name: idioma === 'es' ? 'Agregar consumo' : 'Add item', exact: true }).click();
+      await expect(sheet).toHaveCount(1);
+      const nombre = sheet.getByLabel(idioma === 'es' ? 'Consumo' : 'Item', { exact: true });
+      await expect(nombre).toBeFocused();
+      expect(await sheet.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      await page.keyboard.type('Agua 35');
+      await expect(nombre).toHaveValue('Agua 35');
+      await expect(page.locator('.tk-fold-head')).not.toBeFocused();
+    });
+  }
+}
+// Universo inicial: ninguna fila expandida; cada lápiz es una entrada de la clase.
+for (let index = 0; index < 6; index += 1) {
+  test(`C182F clase · primer control lápiz ${index + 1}`, async ({ page }) => {
+    await ticket(page, 84001, 'es', 'baja');
+    const sheet = page.getByRole('dialog', { name: /Ticket ·/ });
+    await expect(sheet.locator('.tk-edit')).toHaveCount(0);
+    await expect(sheet.locator('.tk-pencil')).toHaveCount(6);
+    await sheet.locator('.tk-pencil').nth(index).click();
+    const precio = sheet.getByLabel('Precio por unidad');
+    await precio.fill('');
+    await expect(sheet).toHaveCount(1);
+    await expect(precio).toBeFocused();
+  });
 }

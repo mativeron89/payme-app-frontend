@@ -1,3 +1,9 @@
+## 0.275.11 · 2026-11-12
+
+- C182F · «Agregar consumo» fija la hoja forzada por baja confianza y conserva el foco al crear la fila.
+- Tras el lápiz y tras «Agregar consumo», la hoja queda fijada hasta «Listo», × o Escape.
+- Pruebas en ES/EN a 320/390 px, población de primeras entradas y Tab desde afuera al primer control del diálogo.
+
 ## 0.275.10 · 2026-11-12
 
 - C182E · El lápiz fija la hoja del ticket para conservar el precio y el foco al vaciarlo con baja confianza.

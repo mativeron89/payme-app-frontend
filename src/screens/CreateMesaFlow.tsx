@@ -3629,7 +3629,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   {editingItems ? t('Listo') : t('Modificar ítems')}
                 </button>
                 {editingItems && (
-                  <button className="tk-edit-link tk-add-item" onClick={addItem}>
+                  <button className="tk-edit-link tk-add-item" onClick={() => { setTicketAbierto(true); addItem(); }}>
                     <Icon name="plus" size={18} /> {t('Agregar consumo')}
                   </button>
                 )}
