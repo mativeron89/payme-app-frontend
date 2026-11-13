@@ -90,7 +90,7 @@ describe('D363 · la clasificación cubre toda la fachada', () => {
       'completeRecovery', 'corregirTicketDeViaje', 'crearNotaDeViaje', 'crearViaje', 'createGroup',
       'deleteAllNotifications', 'deleteGroup', 'deleteNotification', 'deletePresupuesto', 'deleteProfileAvatar', 'editarNotaDeViaje',
       'editarViaje', 'elegirEnTicketDeViaje', 'eliminarTicketDeViaje', 'facebookLoginComplete', 'facebookLoginStart',
-      'facebookRegisterComplete', 'facebookRegisterStart', 'getAvatarDeMiembroDeViaje', 'getCalificacionDeMesa',
+      'facebookRegisterComplete', 'facebookRegisterStart', 'getAvatarDeMiembroDeViaje', 'getBlockedUsers', 'getCalificacionDeMesa',
       'getCierreDeViaje', 'getConfig', 'getEstadoDelAgente', 'getFotoDeViaje', 'getFotoPerfilNoAmigos', 'getFriendAvatar', 'getFriendAvatarNotice', 'getFriends', 'getGroup',
       'getGroups', 'getHistory', 'getIncomingFriendRequests', 'getInvitacionesAViajes', 'getInvitationInviterAvatar',
       'getInviterAvatar', 'getLegalAcceptance', 'getLegalText', 'getLinkDeInvitacion', 'getLinkedProviders', 'getMe',

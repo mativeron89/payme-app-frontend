@@ -90,7 +90,7 @@ for (const ancho of [375, 390] as const) {
       await ingresar(page);
       await irEnLaApp(page, '/amigos');
       await expect(page.getByRole('button', { name: 'Nuevo amigo', exact: true })).toBeVisible();
-      enNegrita(await lanzadores(page), ['Nuevo amigo'], ancho);
+      enNegrita(await lanzadores(page), ['Nuevo amigo', 'Bloqueados'], ancho);
       await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Nuevo grupo', exact: true })).toBeVisible();
       enNegrita(await lanzadores(page), ['Nuevo grupo'], ancho);
