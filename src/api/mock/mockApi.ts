@@ -1,3 +1,4 @@
+import type { BlockedUser, BlockedUsersResponse } from '../index';
 import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
 import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock } from '../fotoDelTicket';
 import { capacidadOcrPaginasMock } from '../ocrPaginas';
@@ -6202,12 +6203,36 @@ export async function mockCancelFriendRequest(requestId: string): Promise<Friend
  * Bloquear rompe la amistad en ambos sentidos y borra cualquier solicitud viva
  * con esa persona, igual que el backend.
  */
+// Lista privada de fixtures, únicamente en memoria y separada por sesión.
+const blockedPeopleMock = new Map<string, Map<string, BlockedUser>>();
+function ownBlockedPeopleMock(): Map<string, BlockedUser> {
+  const session = loadSession();
+  if (!session) throw new MockApiError(401, 'unauthorized');
+  const key = `${session.principal_id}:${session.family_id}`;
+  let people = blockedPeopleMock.get(key);
+  if (!people) { people = new Map(); blockedPeopleMock.set(key, people); }
+  return people;
+}
+export async function mockBlockedUsers(): Promise<BlockedUsersResponse> {
+  return delay({ blocked: [...ownBlockedPeopleMock().values()]
+    .filter(p => state.blockedUserIds.includes(p.id))
+    .sort((a, b) => b.blocked_at.localeCompare(a.blocked_at) || a.id.localeCompare(b.id))
+    .map(({ username, ...p }) => ({ ...p, ...(usernameMock() && leerSeam(CLAVE_LISTAS_SIN_ARROBA_MOCK) !== 'true' ? { username } : {}) })) });
+}
+
 export async function mockBlockUser(userId: string): Promise<void> {
   if (userId === state.user.id) return fail(400, 'cannot_block_self');
   const conocido =
     state.friends.some((f) => f.id === userId) ||
     state.friendRequests.some((r) => r.person.id === userId);
   if (!conocido) return fail(404, 'user_not_found');
+  const person = state.friends.find(f => f.id === userId)
+    ?? state.friendRequests.find(r => r.person.id === userId)?.person;
+  if (person) ownBlockedPeopleMock().set(userId, {
+    id: person.id, payme_id: person.payme_id, first_name: person.first_name,
+    last_name: person.last_name, full_name: person.full_name,
+    username: arrobaPorPaymeMock(person.payme_id), blocked_at: new Date().toISOString(),
+  });
   state.friends = state.friends.filter((f) => f.id !== userId);
   state.friendRequests = state.friendRequests.filter((r) => r.person.id !== userId);
   if (!state.blockedUserIds.includes(userId)) state.blockedUserIds.push(userId);
@@ -6217,6 +6242,7 @@ export async function mockBlockUser(userId: string): Promise<void> {
 export async function mockUnblockUser(userId: string): Promise<void> {
   if (!state.blockedUserIds.includes(userId)) return fail(404, 'block_not_found');
   state.blockedUserIds = state.blockedUserIds.filter((id) => id !== userId);
+  ownBlockedPeopleMock().delete(userId);
   return delay(undefined);
 }
 

@@ -355,6 +355,37 @@ function assertGoogleLinkRedirectEnabled(): void {
   if (!socialAuthSnapshot().googleRedirectLink.enabled) throw new Error('google_link_redirect_not_available');
 }
 
+/** D787 · dueño AB 2502fab9, routes/friends.js:142–157. Sólo memoria. */
+export interface BlockedUser {
+  readonly id: string;
+  readonly payme_id: string | null;
+  readonly first_name: string;
+  readonly last_name: string;
+  readonly full_name: string;
+  readonly username?: string | null;
+  readonly blocked_at: string;
+}
+export interface BlockedUsersResponse { readonly blocked: BlockedUser[] }
+
+/** Proyección cerrada: campos ajenos al contrato nunca llegan a la pantalla. */
+export function decodeBlockedUsers(value: unknown): BlockedUsersResponse {
+  const invalid = (): never => { throw new Error('contract_response_invalid:friends/blocked'); };
+  if (!value || typeof value !== 'object' || !('blocked' in value) || !Array.isArray(value.blocked)) return invalid();
+  return { blocked: value.blocked.map((entry: unknown): BlockedUser => {
+    if (!entry || typeof entry !== 'object') return invalid();
+    const p = entry as Record<string, unknown>;
+    if (typeof p.id !== 'string' || !p.id || (p.payme_id !== null && typeof p.payme_id !== 'string')
+      || typeof p.first_name !== 'string' || typeof p.last_name !== 'string' || typeof p.full_name !== 'string'
+      || typeof p.blocked_at !== 'string' || !Number.isFinite(Date.parse(p.blocked_at))
+      || ('username' in p && p.username !== null && typeof p.username !== 'string')) return invalid();
+    return {
+      id: p.id, payme_id: p.payme_id, first_name: p.first_name, last_name: p.last_name,
+      full_name: p.full_name, blocked_at: p.blocked_at,
+      ...('username' in p ? { username: p.username as string | null } : {}),
+    };
+  }) };
+}
+
 export interface Api {
   /**
    * `GET /api/config`. Público (sin sesión) y de solo lectura. Lo consume
@@ -690,6 +721,7 @@ export interface Api {
   putCalificacionDeMesa(code: string, estrellas: number, expectedSession: StoredSession): Promise<CalificacionDeMesa>;
   // social
   getFriends(): Promise<FriendsResponse>;
+  getBlockedUsers(): Promise<BlockedUsersResponse>;
   /** Estado privado del acuse específico de la audiencia de fotos entre amigos. */
   getFriendAvatarNotice(expectedSession: StoredSession): Promise<FriendAvatarNoticeState>;
   /** Único acto que registra el acuse: versión y hash efectivamente mostrados. */
@@ -1441,6 +1473,7 @@ const realApi: Api = {
     ),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
+  getBlockedUsers: async () => decodeBlockedUsers(await httpPrivateJsonRequest<unknown>('/friends/blocked')),
   getFriendAvatarNotice: async (expectedSession) => decodeFriendAvatarNotice(
     await httpPrivateJsonRequest<unknown>(
       '/friends/avatar-notice', expectedSession, 30_000,
@@ -1988,6 +2021,7 @@ const mockApi: Api = {
   getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period, { statsVersion: 2 })),
 
   getFriends: () => mock.mockFriends(),
+  getBlockedUsers: async () => decodeBlockedUsers(await mock.mockBlockedUsers()),
   getFriendAvatarNotice: async (expectedSession) => decodeFriendAvatarNotice(
     await mock.mockFriendAvatarNotice(expectedSession),
   ),

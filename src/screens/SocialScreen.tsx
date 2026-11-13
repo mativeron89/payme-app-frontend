@@ -29,6 +29,7 @@ import { BuscarPorArroba } from '../components/BuscarPorArroba';
 import { arrobaCoincide, useUsernameCapability } from '../api/username';
 import { ArrobaDebajo } from '../components/ArrobaDebajo';
 import { TarjetaInvitarConLink } from './InvitarConLink';
+import { Bloqueados } from './Bloqueados';
 
 /**
  * §1.9 · La sección social — **UNA pantalla con tres pestañas**: Amigos, Grupos
@@ -85,6 +86,15 @@ export function SocialScreen() {
   // OLA 5D · el atajo "transferir" es riel saldo: lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const blockedOpener = useRef<HTMLDivElement>(null);
+  const restoreBlockedFocus = useRef(false);
+  useEffect(() => {
+    if (!blockedOpen && restoreBlockedFocus.current) {
+      blockedOpener.current?.querySelector('button')?.focus();
+      restoreBlockedFocus.current = false;
+    }
+  }, [blockedOpen]);
   const [tab, setTab] = useState<SocialTabId>('amigos');
 
   // ─── Amigos ───
@@ -344,6 +354,9 @@ export function SocialScreen() {
     { id: 'solicitudes', label: t('Solicitudes'), badge: pendientes },
   ];
 
+  if (blockedOpen && session) return <Bloqueados key={`${session.principal_id}:${session.family_id}`}
+    onBack={() => { restoreBlockedFocus.current = true; setBlockedOpen(false); }} />;
+
   // ─── Detalle de un grupo ───
   // Es SUBpantalla: lleva flecha de volver y por eso va sin logo (§5 bis · A).
   if (detail) {
@@ -468,6 +481,7 @@ export function SocialScreen() {
                visible en su propia burbuja, acá abajo. */
             <div className="launch-stack">
               <Launcher icon="users" label={t('Nuevo amigo')} onClick={() => setAdding(true)} />
+              <div ref={blockedOpener}><Launcher icon="users" label={t('Bloqueados')} onClick={() => setBlockedOpen(true)} /></div>
             </div>
           )}
 

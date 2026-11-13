@@ -182,6 +182,7 @@ export const CLASIFICACION_DEL_EJEMPLO = {
 
   // Amigos y grupos.
   getFriends: 'pasa',
+  getBlockedUsers: 'pasa',
   getFriendAvatarNotice: 'pasa',
   acknowledgeFriendAvatarNotice: 'pasa',
   getFriendAvatar: 'pasa',

@@ -1529,4 +1529,12 @@ export const EN: Record<string, string> = {
   // D790 · salidas del ticket con diferencia, ratificadas por Mati.
   "Corregir a mano": "Fix it manually",
   "Para continuar, corrige los consumos o saca otra foto.": "To continue, fix the items or take another photo.",
+  "Bloqueados": "Blocked people",
+  "No bloqueaste a nadie": "You haven't blocked anyone",
+  "No pudimos cargar tus bloqueados": "We couldn't load your blocked people",
+  "¿Desbloquear a {0}? Va a poder volver a mandarte solicitudes.": "Unblock {0}? They will be able to send you requests again.",
+  "{0} ya no está bloqueado": "{0} is no longer blocked",
+  "No pudimos desbloquear a {0}": "We couldn't unblock {0}",
+  "Desbloquear a {0}": "Unblock {0}",
+  "Desbloquear": "Unblock",
 };

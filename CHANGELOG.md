@@ -1,3 +1,10 @@
+## 0.275.13 · 2026-11-12
+
+- D787: lista privada «Bloqueados», con nombre y @ opcional, confirmación para desbloquear y recarga posterior.
+- Estados de carga, vacío y error reintentable distintos; textos ES/EN y foco al entrar y volver.
+- Fachada real y mock del contrato AB 2502fab9, proyección cerrada y lista únicamente en memoria.
+- Pruebas A1–A6, control rojo sobre la base y mutantes de error, confirmación y recarga.
+
 ## 0.275.12 · 2026-11-12
 
 - C183 · D785: se retira «Nadie en la mesa ve qué pediste» de la landing y sus diccionarios ES/EN; se recalcula el hash CSP del script de idioma.
