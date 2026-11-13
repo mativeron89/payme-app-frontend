@@ -1,5 +1,6 @@
+import { Bloqueados } from './Bloqueados';
 import { SeccionPrivacidad } from '../components/SeccionPrivacidad';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IS_MOCK } from '../api';
 import { SelectorIdioma } from '../components/SelectorIdioma';
 import { useIdioma } from '../i18n/idioma';
@@ -74,6 +75,18 @@ export function MasScreen() {
   const profileIdentity = useProfileIdentityCapability();
   const social = useSocialAuthCapability();
   const user = session?.user;
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const blockedOpener = useRef<HTMLButtonElement>(null);
+  const restoreBlockedFocus = useRef(false);
+  useEffect(() => {
+    if (!blockedOpen && restoreBlockedFocus.current) {
+      blockedOpener.current?.focus();
+      restoreBlockedFocus.current = false;
+    }
+  }, [blockedOpen]);
+  if (blockedOpen && session) return <Bloqueados key={`${session.principal_id}:${session.family_id}`}
+    onBack={() => { restoreBlockedFocus.current = true; setBlockedOpen(false); }} />;
+
 
   return (
     <div className="screen has-appbar">
@@ -171,6 +184,11 @@ export function MasScreen() {
             </div>
             <FlechaDeFila />
           </button>
+          {session && <button ref={blockedOpener} className="list-row" type="button" onClick={() => setBlockedOpen(true)}>
+            <span><Icon name="lock" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Bloqueados')}</div>
+            <FlechaDeFila />
+          </button>}
           {corteDeclarado && (
             <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
               <span><Icon name="card" size={16} /></span>

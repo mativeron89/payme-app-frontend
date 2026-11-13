@@ -1,3 +1,4 @@
+import type { BlockedUser } from '../index';
 import { centsToDisplay, fractionAmount, splitEqual } from '../../utils/money';
 import { calcular as calcularParteDeMesa } from './parteDeMesa';
 import type {
@@ -226,6 +227,8 @@ export interface MockState {
   }>;
   /** Ids de usuario que YO bloqueé. */
   blockedUserIds: string[];
+  /** Proyección privada del backend simulado, separada por sesión. */
+  blockedPeopleBySession: Record<string, BlockedUser[]>;
   groups: Array<Group & { memberIds: string[] }>;
   mesas: MockMesa[];
   /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
@@ -944,6 +947,7 @@ function seedState(): MockState {
     ],
     friendRequestReceipts: [],
     blockedUserIds: [],
+    blockedPeopleBySession: {},
     groups: [
       {
         id: mockId('a'),
@@ -1385,6 +1389,9 @@ function loadPersisted(): MockState | null {
         .filter((request) => request.direction === 'incoming');
     }
     if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
+    if (!parsed.blockedPeopleBySession || typeof parsed.blockedPeopleBySession !== 'object' || Array.isArray(parsed.blockedPeopleBySession)) {
+      parsed.blockedPeopleBySession = {};
+    }
     // El directorio de personas que existen sin ser amigas.
     if (!Array.isArray(parsed.directory)) parsed.directory = seedDirectory();
     // OLA 5C(b), corrección: sin esto el apagado del riel saldo no alcanzaba a

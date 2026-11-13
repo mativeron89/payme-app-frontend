@@ -1,3 +1,5 @@
+import { EN } from '../i18n/en';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodeBlockedUsers, type BlockedUser } from '../api';
 
@@ -27,4 +29,16 @@ describe('A5 · contrato D787 AB 2502fab9 routes/friends.js:142–157', () => {
     { blocked: [{ ...person, full_name: undefined }] }])('rechaza un cuerpo incompleto: %j', body => {
     expect(() => decodeBlockedUsers(body)).toThrow('contract_response_invalid:friends/blocked');
   });
+});
+
+// La persistencia de payme_mock_state_v1 pertenece al backend simulado, no a la pantalla.
+it('la pantalla nunca usa localStorage, sessionStorage ni IndexedDB (M13)', () => {
+  const source = readFileSync(new URL('./Bloqueados.tsx', import.meta.url), 'utf8');
+  expect(source).not.toMatch(/\b(?:localStorage|sessionStorage|indexedDB)\b/);
+});
+
+it('D812/D813 conservan los textos aprobados en español y en idioma EN', () => {
+  expect(EN['Desbloqueaste a {0}']).toBe('You unblocked {0}');
+  expect(EN['¿Desbloquear a {0}? No vuelve sola a tus amigos, pero va a poder mandarte solicitudes de nuevo.'])
+    .toBe("Unblock {0}? They won't be added back to your friends, but they'll be able to send you requests again.");
 });
