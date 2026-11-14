@@ -403,6 +403,8 @@ test('1o/1p · «No me llegó» y «Recibí»: con todo pagado pasa a Cerrados',
   await expect(page.getByText('Luis marcó que te pagó. Revisa tu banco y confírmalo.', { exact: true })).toHaveCount(0);
   for (let i = 0; i < 2; i += 1) {
     await page.getByRole('button', { name: 'Recibí', exact: true }).first().click();
+    // ESPERA_RECIBI_MS = 350: deja pasar la protección contra el doble toque con margen.
+    await page.waitForTimeout(450);
     await page.getByRole('dialog').getByRole('button', { name: 'Sí, recibí', exact: true }).click();
   }
   await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${MONTERREY}$`));
@@ -463,6 +465,8 @@ test('🔴 H02 · con todo confirmado se sale de un viaje cerrado: Inicio › Vi
   await ir(page, `/viaje/${MONTERREY}`);
   for (let i = 0; i < 2; i += 1) {
     await page.getByRole('button', { name: 'Recibí', exact: true }).first().click();
+    // ESPERA_RECIBI_MS = 350: deja pasar la protección contra el doble toque con margen.
+    await page.waitForTimeout(450);
     await page.getByRole('dialog').getByRole('button', { name: 'Sí, recibí', exact: true }).click();
   }
   await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${MONTERREY}$`));

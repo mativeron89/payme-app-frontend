@@ -1,3 +1,8 @@
+## 0.275.16 · 2026-11-14
+
+- Viajes: la confirmación de «Recibí» ignora el doble toque inicial durante 350 ms, cierra al responder el pago antes del refresco y conserva el foco durante el envío y al volver.
+- Pruebas separadas de doble toque, Escape en envío, segunda confirmación, refresco demorado y foco; «Recibí» queda fuera de las acciones directas por tipo.
+
 ## 0.275.15 · 2026-11-14
 
 - D809 #15 · Viajes: los dos botones «Recibí» piden confirmación antes de registrar el pago, con monto y nombre de pila en español e inglés.

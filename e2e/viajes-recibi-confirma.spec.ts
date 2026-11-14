@@ -5,6 +5,7 @@ const VIAJE = 'd1000000-0000-4000-8000-000000000002';
 type Llamada = [string, string, string];
 interface Instrumento {
   llamadas: Llamada[];
+  idsFixture: { luis: string; sofia: string };
   demorar: boolean;
   fallar: boolean;
   resolver: (() => void) | null;
@@ -29,8 +30,9 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
   await page.evaluate(async () => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const idsFixture = { luis: '', sofia: '' };
     const original = api.marcarTransferenciaDeViaje;
-    const i: Instrumento = { llamadas: [], demorar: false, fallar: false, resolver: null,
+    const i: Instrumento = { idsFixture, llamadas: [], demorar: false, fallar: false, resolver: null,
       restaurar: () => { api.marcarTransferenciaDeViaje = original; } };
     (window as unknown as Ventana).__c194 = i;
     api.marcarTransferenciaDeViaje = (viaje, transferencia, accion) => {
@@ -43,9 +45,22 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const fixture = await api.getViaje('d1000000-0000-4000-8000-000000000002');
+    // La semilla crea UUID nuevos: expectativa exacta tomada ANTES de confirmar.
+    (window as unknown as Ventana).__c194.idsFixture = {
+      luis: fixture.transferencias.find((tr) => tr.de === 'd4000000-0000-4000-8000-000000000045')!.id,
+      sofia: fixture.transferencias.find((tr) => tr.de === 'd4000000-0000-4000-8000-000000000046')!.id,
+    };
+  });
+
+
 }
 const fila = (page: Page, nombre: string) => page.locator('.vjv-tr-item').filter({ has: page.locator('.vjv-tr-nombre', { hasText: nombre }) });
 const boton = (page: Page, nombre: string) => fila(page, nombre).getByRole('button', { name: 'Recibí', exact: true });
+const idFixture = (page: Page, nombre: 'luis' | 'sofia') => page.evaluate((n) => (window as unknown as Ventana).__c194.idsFixture[n], nombre);
 const llamadas = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__c194.llamadas);
 
 async function comprobarHoja(page: Page, nombre: string, monto: string) {
@@ -95,29 +110,50 @@ for (const nombre of ['Sofía', 'Luis']) {
   }
 }
 
-test('C194 A4 A6 · confirmar una vez, doble toque bloqueado, Pagado y última transferencia a Cerrados', async ({ page }) => {
+async function confirmar(page: Page) {
+  await page.waitForTimeout(360);
+  await page.getByRole('button', { name: 'Sí, recibí', exact: true }).click();
+}
+
+// A4 y A6 conservan sus aserciones en pruebas independientes (H2).
+test('C194 A4 · doble clic sincrónico confirma una sola vez', async ({ page }) => {
   await preparar(page);
   await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
   await boton(page, 'Luis').click();
   await comprobarHoja(page, 'Luis', '$750');
-  const confirmar = page.getByRole('button', { name: 'Sí, recibí', exact: true });
-  await confirmar.evaluate((el) => { (el as HTMLButtonElement).click(); (el as HTMLButtonElement).click(); });
-  await expect(confirmar).toBeDisabled();
-  expect(await llamadas(page)).toEqual([[VIAJE, expect.any(String), 'recibi']]);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.waitForTimeout(360);
+  const aceptar = page.getByRole('button', { name: 'Sí, recibí', exact: true });
+  await aceptar.evaluate((el) => { (el as HTMLButtonElement).click(); (el as HTMLButtonElement).click(); });
+  await expect(aceptar).toBeDisabled();
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
   await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(fila(page, 'Luis')).toContainText('Pagado');
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = false; });
+});
+
+test('C194 A4 · Escape mientras guarda no cierra ni permite cancelar', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('button', { name: 'Cancelar', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('C194 A6 · segunda confirmación y última transferencia a Cerrados', async ({ page }) => {
+  await preparar(page);
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(fila(page, 'Luis')).toContainText('Pagado');
   await boton(page, 'Sofía').click();
-  await page.getByRole('button', { name: 'Sí, recibí', exact: true }).click();
+  await confirmar(page);
   await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${VIAJE}$`));
   await expect(page.getByText('Monterrey fin de semana quedó cerrado. Todos pagaron y ya está en Cerrados.', { exact: true })).toBeVisible();
-  const pedidos = await llamadas(page);
-  expect(pedidos).toHaveLength(2);
-  expect(pedidos[1]).toEqual([VIAJE, expect.any(String), 'recibi']);
-  expect(pedidos[0]?.[1]).not.toBe(pedidos[1]?.[1]);
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi'], [VIAJE, await idFixture(page, 'sofia'), 'recibi']]);
 });
 
 test('C194 A5 · confirmación en inglés con el texto exacto', async ({ page }) => {
@@ -136,9 +172,77 @@ test('C194 · un error conserva el aviso y el refresco existentes sin dar por pa
   await preparar(page);
   await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
   await boton(page, 'Luis').click();
-  await page.getByRole('button', { name: 'Sí, recibí', exact: true }).click();
+  await confirmar(page);
   await expect(page.getByText('No pudimos guardarlo. Prueba de nuevo.', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(boton(page, 'Luis')).toBeEnabled();
-  expect(await llamadas(page)).toEqual([[VIAJE, expect.any(String), 'recibi']]);
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
 });
+
+for (const y of [715, 730]) for (const demora of [100, 250]) {
+  test(`C195 B1 · doble toque en y=${y} a +${demora} ms no confirma`, async ({ page }) => {
+    await preparar(page);
+    const origen = boton(page, 'Luis');
+    await origen.evaluate((el, destino) => {
+      const scroller = document.querySelector<HTMLElement>('.vj-scroll')!;
+      const espacio = document.createElement('div');
+      espacio.style.cssText = 'height:1000px;flex:none';
+      scroller.prepend(espacio);
+      const r = el.getBoundingClientRect();
+      scroller.scrollTop += r.y + r.height / 2 - destino;
+    }, y);
+    const r = await origen.boundingBox();
+    expect(r).not.toBeNull();
+    const x = r!.x + r!.width / 2;
+    expect(r!.y + r!.height / 2).toBeCloseTo(y, 0);
+    await page.touchscreen.tap(x, y);
+    await page.waitForTimeout(demora);
+    await page.touchscreen.tap(x, y);
+    expect(await llamadas(page)).toEqual([]);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await confirmar(page);
+    await expect.poll(() => llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
+  });
+}
+
+test('C195 M2 · Cancelar inmediatamente no espera 350 ms', async ({ page }) => {
+  await preparar(page);
+  await boton(page, 'Luis').evaluate((el) => (el as HTMLButtonElement).click());
+  // Disparo DOM sin espera de estabilidad de Playwright: dentro de los 350 ms.
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).evaluate((el) => (el as HTMLButtonElement).click());
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(boton(page, 'Luis')).toBeFocused();
+  expect(await llamadas(page)).toEqual([]);
+});
+
+test('C195 B2 · POST resuelto y GET colgado libera la app a 3,5 s', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    api.getViaje = () => new Promise(() => {});
+  });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await page.waitForTimeout(3500);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
+  await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeFocused();
+});
+
+for (const fallo of [false, true]) {
+  test(`C195 B3 · foco durante envío y tras ${fallo ? 'error' : 'éxito'} nunca body`, async ({ page }) => {
+    await preparar(page);
+    await page.evaluate((fallar) => { Object.assign((window as unknown as Ventana).__c194, { demorar: true, fallar }); }, fallo);
+    await boton(page, 'Luis').click();
+    await confirmar(page);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+    await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    if (fallo) await expect(boton(page, 'Luis')).toBeFocused();
+    else await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+  });
+}

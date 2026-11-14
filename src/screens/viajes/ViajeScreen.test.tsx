@@ -615,3 +615,13 @@ describe('C194 · D809 #15 · texto de confirmar lo recibido', () => {
     expect(traducir('Cancelar', 'en')).toBe('Cancel');
   });
 });
+
+// B4: Recibí sólo se puede ofrecer por onRecibir (la hoja), nunca por onMarcar.
+function comprobarAccionesDirectas(onMarcar: ViajeVistaProps['onMarcar']) {
+  onMarcar('transferencia-fixture', 'pague');
+  onMarcar('transferencia-fixture', 'deshacer');
+  onMarcar('transferencia-fixture', 'no-llego');
+  // @ts-expect-error Recibí requiere su hoja de confirmación.
+  onMarcar('transferencia-fixture', 'recibi');
+}
+void comprobarAccionesDirectas;

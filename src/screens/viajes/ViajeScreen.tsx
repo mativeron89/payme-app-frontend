@@ -1,5 +1,5 @@
 import { AyudaDeBalance } from '../../ayuda/AyudaContextual';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api';
 import {
@@ -165,9 +165,13 @@ export function useFotosDeMiembros(
 
 type Hoja =
   | { readonly tipo: 'cerrar'; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
-  | { readonly tipo: 'recibi'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement }
+  | { readonly tipo: 'recibi'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement; readonly abiertaEn: number }
   | { readonly tipo: 'salir' }
   | { readonly tipo: 'no_puede_salir'; readonly razon: PorQueNoPuedeSalir };
+
+// La hoja puede abrir debajo del dedo: ignorar el segundo toque sin deshabilitar ni mover el foco.
+const ESPERA_RECIBI_MS = 350;
+type AccionDirecta = Exclude<AccionTransferencia, 'recibi'>;
 
 export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const { t } = useIdioma();
@@ -178,6 +182,26 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const [enviando, setEnviando] = useState(false);
   const [marcando, setMarcando] = useState<string | null>(null);
   const confirmandoRecibi = useRef(false);
+  const pantalla = useRef<HTMLDivElement | null>(null);
+  const tituloRecibi = useRef<HTMLHeadingElement | null>(null);
+  const focoAlCerrar = useRef<'titulo' | HTMLButtonElement | null>(null);
+
+  useLayoutEffect(() => {
+    // Los botones conservan su disabled de envío; el título sostiene el foco dentro de la hoja.
+    if (hoja?.tipo === 'recibi' && enviando) tituloRecibi.current?.focus();
+  }, [hoja, enviando]);
+
+  useEffect(() => {
+    if (hoja || !focoAlCerrar.current) return;
+    // Tras desmontar la hoja, useHojaModal ya quitó inert de la app.
+    const destino = focoAlCerrar.current === 'titulo'
+      ? pantalla.current?.querySelector<HTMLElement>('h1') : focoAlCerrar.current;
+    focoAlCerrar.current = null;
+    if (destino) {
+      destino.tabIndex = -1;
+      destino.focus();
+    }
+  }, [hoja]);
   /** D255-8 · Configuración, una vista dentro del viaje (no una ruta). */
   const [configuracion, setConfiguracion] = useState(false);
   const inicial = useRef<HTMLButtonElement | null>(null);
@@ -265,11 +289,12 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     }
   }
 
-  async function marcar(transferenciaId: string, accion: AccionTransferencia) {
+  async function marcar(transferenciaId: string, accion: AccionTransferencia, alConfirmar?: () => void) {
     if (marcando) return;
     setMarcando(transferenciaId);
     try {
       const r = await api.marcarTransferenciaDeViaje(viajeId, transferenciaId, accion);
+      alConfirmar?.();
       if (r.viaje_estado === 'cerrado') {
         toast(t('{0} quedó cerrado. Todos pagaron y ya está en Cerrados.', nombre));
         replaceRoute('viaje-cerrado', viajeId);
@@ -301,13 +326,23 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 
   async function confirmarRecibi() {
     if (hoja?.tipo !== 'recibi' || confirmandoRecibi.current || marcando) return;
+    if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
     // Consumir antes del await: también cubre dos toques dentro del mismo render.
     confirmandoRecibi.current = true;
     setEnviando(true);
+    let confirmado = false;
     try {
-      await marcar(hoja.transferencia.id, 'recibi');
-      setHoja(null);
+      await marcar(hoja.transferencia.id, 'recibi', () => {
+        confirmado = true;
+        focoAlCerrar.current = 'titulo';
+        // El POST ya asentó el pago: el GET posterior no debe mantener la app inerte.
+        setHoja(null);
+      });
     } finally {
+      if (!confirmado) {
+        focoAlCerrar.current = hoja.disparador;
+        setHoja(null);
+      }
       confirmandoRecibi.current = false;
       setEnviando(false);
     }
@@ -334,7 +369,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         <HojaModal key="recibi" etiqueta={t('¿Recibiste {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))} inicial={inicial} onCerrar={cerrarHoja}>
           <div className="vjv-hoja">
             <span className="vjv-hoja-asa" aria-hidden="true" />
-            <h2 className="vjv-hoja-titulo">{t('¿Recibiste {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</h2>
+            <h2 ref={tituloRecibi} tabIndex={-1} className="vjv-hoja-titulo">{t('¿Recibiste {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</h2>
             <p className="vjv-hoja-texto">{t('Queda como pagado y no se puede deshacer.')}</p>
             <div className="vjv-hoja-botones">
               <button type="button" className="btn btn-navy" disabled={enviando} onClick={() => void confirmarRecibi()}>
@@ -390,7 +425,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }
 
   return (
-    <div className="screen has-appbar">
+    <div ref={pantalla} className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('viajes', 'abiertos')} />
       <ViajeVista
         carga={carga}
@@ -406,7 +441,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
-        onRecibir={(transferencia, disparador) => setHoja({ tipo: 'recibi', transferencia, disparador })}
+        onRecibir={(transferencia, disparador) => setHoja({ tipo: 'recibi', transferencia, disparador, abiertaEn: performance.now() })}
       />
       {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}
       <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
@@ -551,7 +586,7 @@ export interface ViajeVistaProps {
   readonly fotoDelViaje?: string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onSalir: () => void;
-  readonly onMarcar: (transferenciaId: string, accion: AccionTransferencia) => void;
+  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta) => void;
   readonly onRecibir: (transferencia: TransferenciaViaje, disparador: HTMLButtonElement) => void;
 }
 
@@ -876,7 +911,7 @@ interface FilaDeTransferencia {
   readonly miembros: readonly MiembroViaje[];
   readonly ocupado: boolean;
   readonly enviando: boolean;
-  readonly onMarcar: (transferenciaId: string, accion: AccionTransferencia) => void;
+  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta) => void;
 }
 
 /** 1n · la mía: «Tú le transfieres $542 a Luis Pérez» con «Ya pagué» / «Deshacer». */
