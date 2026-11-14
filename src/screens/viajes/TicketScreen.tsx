@@ -530,6 +530,7 @@ function Totales({ ticket }: { ticket: TicketDelViaje }) {
         <span className="vjt-total-rotulo">{t('Te toca')}</span>
         <span className="vjt-total-monto">{formatMXN(ticket.te_toca_cents)}</span>
       </div>
+      {ticket.descuentos_cents > 0 && <p className="vjt-toca-detalle">{t('Este ticket tiene un descuento de {0} que se reparte entre todos.', formatMXN(ticket.descuentos_cents))}</p>}
       {filas.length > 0 && <p className="vjt-toca-detalle">{detalleDeTeToca(ticket, t)}</p>}
     </section>
   );
@@ -538,9 +539,7 @@ function Totales({ ticket }: { ticket: TicketDelViaje }) {
 /** D278-2 · «Tus platos $X · Tu parte del resto $Y»: el resto (servicio, IVA y descuentos) puede ser negativo. */
 function detalleDeTeToca(ticket: TicketDelViaje, t: T): string {
   const resto = ticket.te_toca_cents - ticket.te_toca_platos_cents;
-  return t(ticket.descuentos_cents > 0
-    ? 'Tus platos, con descuento, {0} · Tu parte del resto {1}'
-    : 'Tus platos {0} · Tu parte del resto {1}', formatMXN(ticket.te_toca_platos_cents),
+  return t('Tus platos {0} · Tu parte del resto {1}', formatMXN(ticket.te_toca_platos_cents),
     resto < 0 ? montoDeDescuento(-resto) : formatMXN(resto));
 }
 

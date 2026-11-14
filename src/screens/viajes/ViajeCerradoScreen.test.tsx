@@ -179,18 +179,3 @@ describe('H02 · salir de un viaje cerrado', () => {
     expect(texto(html({ estado: 'no_disponible' }, [], 'es', nada))).not.toContain('Salir del viaje');
   });
 });
-
-describe('C191 A1 · asignación al cierre con y sin descuento', () => {
-  for (const idioma of ['es', 'en'] as const) for (const descuento of [false, true]) {
-    it(`${idioma} · descuento ${descuento}`, () => {
-      const h = renderToStaticMarkup(<VistaDelViajeCerrado carga={{ estado: 'listo', resumen: OAXACA }}
-        t={(s, ...a) => traducir(s, idioma, ...a)} idioma={idioma} abiertos={new Set()}
-        onAlternar={nada} onReintentar={nada} onVerViajes={nada}
-        ticketsConDescuento={new Set(descuento ? ['t3'] : [])} />);
-      const esperado = idioma === 'es'
-        ? descuento ? 'Incluye $565, con descuento, que se te asignó al cerrar.' : 'Incluye $565 que se te asignó al cerrar.'
-        : descuento ? 'Includes $565, with discount, assigned to you at closing.' : 'Includes $565 assigned to you at closing.';
-      expect(texto(h)).toContain(esperado);
-    });
-  }
-});

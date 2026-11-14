@@ -55,6 +55,9 @@ for (const idioma of ['es', 'en'] as const) {
     await captura(page, `${idioma}-lista`);
     await page.getByRole('button', { name: t.back, exact: true }).click();
     await expect(page.getByRole('button', { name: t.title, exact: true })).toBeFocused();
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: t.title, exact: true })).toHaveCount(0);
+    await expect(page).not.toHaveURL(/\/mas\/bloqueados$/);
   });
   test(`A2 cancelar conserva, confirmar quita y recarga · ${idioma}`, async ({ page }) => {
     await preparar(page, idioma);

@@ -80,7 +80,7 @@ export const EN_VIAJES_TICKET: Record<string, string> = {
   'Ya elegiste: no te puedes desmarcar.': "You already chose: you can't be unchecked.",
   // D278-2 · D284 · el total impreso del ticket del viaje.
   'Tus platos {0} · Tu parte del resto {1}': 'Your dishes {0} · Your share of the rest {1}',
-  'Tus platos, con descuento, {0} · Tu parte del resto {1}': 'Your dishes, with discount, {0} · Your share of the rest {1}',
+  'Este ticket tiene un descuento de {0} que se reparte entre todos.': "This receipt has a {0} discount that's shared by everyone.",
   // D278-3 · D282-2 · corregir un ticket o un gasto ya cargado.
   'Corregir ticket': 'Correct ticket',
   'Corregir gasto': 'Correct expense',

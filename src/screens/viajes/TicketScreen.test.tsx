@@ -375,13 +375,13 @@ describe('🔴 D278-2 · D284 · el total impreso en el ticket del viaje', () =>
     const html = render(CON_AJUSTES);
     const totales = html.slice(html.indexOf('vjt-totales'));
     expect(totales).toContain('<dl class="vjt-ajustes">');
-    expect(texto(totales)).toMatch(/Platos \$2,200 IVA \$352 Cargo por servicio \$150 Descuento −\$100 Total del ticket \$2,602 Te toca \$627 Tus platos, con descuento, \$530 · Tu parte del resto \$97/);
+    expect(texto(totales)).toMatch(/Platos \$2,200 IVA \$352 Cargo por servicio \$150 Descuento −\$100 Total del ticket \$2,602 Te toca \$627 Este ticket tiene un descuento de \$100 que se reparte entre todos\. Tus platos \$530 · Tu parte del resto \$97/);
   });
 
   it('el resto puede ser negativo (descuentos mayores que el servicio y el IVA): con el signo menos', () => {
     const html = render({ ...CON_AJUSTES, iva_aparte_cents: 0, servicio_cents: 0, descuentos_cents: 20000, total_cents: 200000,
       te_toca_cents: 48200, pagadores: [{ miembro_id: 'm-luis', monto_cents: 200000 }] });
-    expect(texto(html)).toContain('Tus platos, con descuento, $530 · Tu parte del resto −$48');
+    expect(texto(html)).toContain('Tus platos $530 · Tu parte del resto −$48');
   });
 
   it('sin ajustes, como antes: ni filas ni detalle, y el total es la suma de los renglones', () => {
@@ -397,19 +397,40 @@ describe('🔴 D278-2 · D284 · el total impreso en el ticket del viaje', () =>
   });
 });
 
-// C191 · D814: los importes vienen del dueño; sólo cambia el rótulo.
-describe('C191 A1 · rótulo del ticket con y sin descuento', () => {
-  for (const idioma of ['es', 'en'] as const) for (const descuento of [0, 100]) {
-    it(`${idioma} · descuento ${descuento}`, () => {
+// D816: el aviso describe el ticket, sin cambiar los importes por persona.
+describe('C191D D816 · descuento del ticket por espectador e idioma', () => {
+  for (const idioma of ['es', 'en'] as const) for (const descuento of [0, 150]) for (const eligio of [false, true]) {
+    const caso = `${idioma} · descuento ${descuento} · eligió ${eligio}`;
+    const ticket: TicketDelViaje = { ...MARISCOS, puedo_elegir: false,
+      servicio_cents: 200, descuentos_cents: descuento, total_cents: 220200 - descuento,
+      personas: MARISCOS.personas.map(p => ({ ...p, ya_eligio: p.miembro_id === 'm-ana' ? eligio : p.ya_eligio })),
+      items: eligio ? MARISCOS.items : MARISCOS.items.map(i => ({ ...i, my_bps: 0, my_amount_cents: 0 })),
+      te_toca_cents: eligio ? 53000 : 1350, te_toca_platos_cents: eligio ? 53000 : 1350 };
+    const obtener = () => {
       vi.stubGlobal('localStorage', { getItem: () => idioma });
-      let h: string;
-      try { h = render({ ...MARISCOS, puedo_elegir: false, servicio_cents: 200,
-        descuentos_cents: descuento, total_cents: 220200 - descuento }); }
-      finally { vi.unstubAllGlobals(); }
-      const esperado = idioma === 'es'
-        ? descuento ? 'Tus platos, con descuento, $530 · Tu parte del resto $0' : 'Tus platos $530 · Tu parte del resto $0'
-        : descuento ? 'Your dishes, with discount, $530 · Your share of the rest $0' : 'Your dishes $530 · Your share of the rest $0';
-      expect(h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')).toContain(esperado);
+      try { return render(ticket); } finally { vi.unstubAllGlobals(); }
+    };
+    it(`aviso D816 · ${caso}`, () => {
+      const h = obtener().replace(/&#x27;/g, "'");
+      const aviso = idioma === 'es'
+        ? 'Este ticket tiene un descuento de $1.50 que se reparte entre todos.'
+        : "This receipt has a $1.50 discount that's shared by everyone.";
+      expect(h.includes(aviso)).toBe(descuento > 0);
+      expect(h.includes(idioma === 'es' ? 'Este ticket tiene un descuento de' : 'This receipt has a')).toBe(descuento > 0);
+      expect(h).not.toContain('con descuento');
+      expect(h).not.toContain('with discount');
+      if (descuento > 0) {
+        expect(h.indexOf(aviso)).toBeGreaterThan(h.indexOf('vjt-total-fila--toca'));
+        expect(h.indexOf(aviso)).toBeLessThan(h.lastIndexOf('vjt-toca-detalle'));
+      }
+    });
+    it(`importes idénticos a la base · ${caso}`, () => {
+      const h = obtener();
+      const importes = [...h.matchAll(/class="vjt-total-monto">([^<]+)</g)].map(m => m[1]);
+      expect(importes).toEqual([descuento ? '$2,200.50' : '$2,202', eligio ? '$530' : '$13.50']);
+      expect(h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')).toContain(idioma === 'es'
+        ? `Tus platos ${eligio ? '$530' : '$13.50'} · Tu parte del resto $0`
+        : `Your dishes ${eligio ? '$530' : '$13.50'} · Your share of the rest $0`);
     });
   }
 });

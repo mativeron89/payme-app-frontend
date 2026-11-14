@@ -633,6 +633,7 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     'viaje-notas',
     // D252 · el link de invitación, `/invitacion/<código>`.
     'invitacion',
+    'mas',
   ] as const;
   /** D457 · los Términos públicos: ruta exacta de la app, sin las cabeceras Meta. */
   const RUTAS_LEGALES = ['/terminos'] as const;
@@ -648,6 +649,33 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     source: '/auth/google/redirect',
     destination: 'https://payme-app-backend-production.up.railway.app/api/auth/google/redirect',
   } as const;
+
+  it('C191D N1 · cada navigate con página literal y parámetro tiene rewrite', () => {
+    const faltantes: string[] = [];
+    const recorrer = (directorio: string): void => {
+      for (const entrada of readdirSync(directorio, { withFileTypes: true })) {
+        const ruta = join(directorio, entrada.name);
+        if (entrada.isDirectory()) recorrer(ruta);
+        else if (entrada.isFile() && /\.[cm]?[jt]sx?$/.test(entrada.name)) {
+          const sf = ts.createSourceFile(ruta, readFileSync(ruta, 'utf8'), ts.ScriptTarget.Latest, true);
+          const visitar = (n: ts.Node): void => {
+            if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'navigate'
+                && n.arguments.length >= 2 && ts.isStringLiteral(n.arguments[0]!)) {
+              const pagina = n.arguments[0].text;
+              if (!(PAGINAS_CON_PARAMETRO as readonly string[]).includes(pagina)) {
+                faltantes.push(`${ruta.slice(RAIZ.length + 1)}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}: ${pagina}`);
+              }
+            }
+            ts.forEachChild(n, visitar);
+          };
+          visitar(sf);
+        }
+      }
+    };
+    recorrer(join(RAIZ, 'src'));
+    // Alcance: llamadas navigate con página literal; las páginas variables no se cubren.
+    expect(faltantes).toEqual([]);
+  });
 
   it('🔴 las claves de primer nivel son EXACTAMENTE tres', () => {
     // `redirects`, `cleanUrls`, `trailingSlash`, `routes` o `functions` nuevos

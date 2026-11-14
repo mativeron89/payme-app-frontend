@@ -86,6 +86,7 @@ const PAGINAS_CON_PARAMETRO = [
   'viaje-notas',
   // D252 · `/invitacion/<código>`.
   'invitacion',
+  'mas',
 ];
 const rutasApp = [
   ...PAGINAS_APP.map((p) => `/${p}`),
