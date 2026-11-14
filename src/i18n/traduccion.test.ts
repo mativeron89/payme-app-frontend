@@ -92,6 +92,14 @@ function familiasDinamicas(): Record<string, string[]> {
     // 2026-09-18: ver nota arriba, no es texto de backend. AF-26 (2026-09-19):
     // el mismo sitio sirve también al anillo de cocinas; AF-29: y a «Tus
     // restaurantes», movido a `utils/` para las dos pantallas. Sigue siendo UNO.
+    // C191 · D814: dos sitios condicionales, cada uno con sus dos rótulos;
+    // TicketScreen.test.tsx y ViajeCerradoScreen.test.tsx renderizan las 8 combinaciones ES/EN.
+    'rótulos D814 (ticket y Cerrados)': [
+      'Tus platos {0} · Tu parte del resto {1}',
+      'Tus platos, con descuento, {0} · Tu parte del resto {1}',
+      'Incluye {0} que se te asignó al cerrar.',
+      'Incluye {0}, con descuento, que se te asignó al cerrar.',
+    ],
     'categoryLabel (utils/labels)': deModulo('../utils/labels.ts', 'const CATEGORIA'),
   };
 }
@@ -175,7 +183,8 @@ function envueltos(): { ruta: string; texto: string }[] {
 // tanto en pantalla como en el nombre accesible. La maqueta fija una única
 // pregunta para las tres divisiones; se retiró esa familia dinámica, no una
 // cobertura de traducción.
-const T_SIN_LITERAL = 18;
+// C191 · D814: +2 sitios medidos (Ticket y Cerrados), cubiertos por la familia anterior.
+const T_SIN_LITERAL = 20;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];
@@ -223,7 +232,7 @@ describe('🔴 los `t()` que NO reciben literal · el extractor no los ve', () =
    * y `CATEGORIA` en `utils/labels.ts` (vía `categoryLabel()`) — sobre un
    * código/enum que sí viene del backend, pero el TEXTO en español que se le
    * pasa a `t()` es 100% local y enumerable. Las dos familias ya están abajo.
-   * No queda ningún sitio deliberadamente afuera: los 18 de `T_SIN_LITERAL`
+   * No queda ningún sitio deliberadamente afuera: los 20 de `T_SIN_LITERAL`
    * están cubiertos por alguna familia.
    */
   it('🔴 cada valor que puede entrar a un `t(VARIABLE)` tiene traducción EN', () => {

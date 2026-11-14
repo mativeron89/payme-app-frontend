@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ItemDelTicket, MiembroViaje, PersonaDelTicket, TicketDelViaje } from '../../api/viajes';
-import { traducir } from '../../i18n/idioma';
+import { IdiomaProvider, traducir } from '../../i18n/idioma';
 import { avisoDelTicket, textoYaEligio, TicketEstadoVista, TicketVista, type TicketVistaProps } from './TicketScreen';
 import { ausentesDelTicket, seleccionGuardada } from './ticketView';
 
@@ -43,7 +43,7 @@ const MARISCOS: TicketDelViaje = {
 
 function render(ticket: TicketDelViaje, extra: Partial<TicketVistaProps> = {}) {
   return renderToStaticMarkup(
-    <TicketVista
+    <IdiomaProvider><TicketVista
       ticket={ticket}
       miembros={MIEMBROS}
       seleccion={seleccionGuardada(ticket.items)}
@@ -58,7 +58,7 @@ function render(ticket: TicketDelViaje, extra: Partial<TicketVistaProps> = {}) {
       onPresente={nada}
       onGuardarPresentes={nada}
       {...extra}
-    />,
+    /></IdiomaProvider>,
   );
 }
 
@@ -375,13 +375,13 @@ describe('🔴 D278-2 · D284 · el total impreso en el ticket del viaje', () =>
     const html = render(CON_AJUSTES);
     const totales = html.slice(html.indexOf('vjt-totales'));
     expect(totales).toContain('<dl class="vjt-ajustes">');
-    expect(texto(totales)).toMatch(/Platos \$2,200 IVA \$352 Cargo por servicio \$150 Descuento −\$100 Total del ticket \$2,602 Te toca \$627 Tus platos \$530 · Tu parte del resto \$97/);
+    expect(texto(totales)).toMatch(/Platos \$2,200 IVA \$352 Cargo por servicio \$150 Descuento −\$100 Total del ticket \$2,602 Te toca \$627 Tus platos, con descuento, \$530 · Tu parte del resto \$97/);
   });
 
   it('el resto puede ser negativo (descuentos mayores que el servicio y el IVA): con el signo menos', () => {
     const html = render({ ...CON_AJUSTES, iva_aparte_cents: 0, servicio_cents: 0, descuentos_cents: 20000, total_cents: 200000,
       te_toca_cents: 48200, pagadores: [{ miembro_id: 'm-luis', monto_cents: 200000 }] });
-    expect(texto(html)).toContain('Tus platos $530 · Tu parte del resto −$48');
+    expect(texto(html)).toContain('Tus platos, con descuento, $530 · Tu parte del resto −$48');
   });
 
   it('sin ajustes, como antes: ni filas ni detalle, y el total es la suma de los renglones', () => {
@@ -395,4 +395,21 @@ describe('🔴 D278-2 · D284 · el total impreso en el ticket del viaje', () =>
     const html = render({ ...CON_AJUSTES, puedo_elegir: true });
     expect(html).toContain('<span class="vjt-sub">Total del ticket $2,602</span>');
   });
+});
+
+// C191 · D814: los importes vienen del dueño; sólo cambia el rótulo.
+describe('C191 A1 · rótulo del ticket con y sin descuento', () => {
+  for (const idioma of ['es', 'en'] as const) for (const descuento of [0, 100]) {
+    it(`${idioma} · descuento ${descuento}`, () => {
+      vi.stubGlobal('localStorage', { getItem: () => idioma });
+      let h: string;
+      try { h = render({ ...MARISCOS, puedo_elegir: false, servicio_cents: 200,
+        descuentos_cents: descuento, total_cents: 220200 - descuento }); }
+      finally { vi.unstubAllGlobals(); }
+      const esperado = idioma === 'es'
+        ? descuento ? 'Tus platos, con descuento, $530 · Tu parte del resto $0' : 'Tus platos $530 · Tu parte del resto $0'
+        : descuento ? 'Your dishes, with discount, $530 · Your share of the rest $0' : 'Your dishes $530 · Your share of the rest $0';
+      expect(h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')).toContain(esperado);
+    });
+  }
 });

@@ -10,7 +10,7 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
-import { goBack, navigate } from '../router';
+import { goBack, navigate, useRoute } from '../router';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { useMoneyRail } from '../api/moneyRail';
@@ -75,17 +75,20 @@ export function MasScreen() {
   const profileIdentity = useProfileIdentityCapability();
   const social = useSocialAuthCapability();
   const user = session?.user;
-  const [blockedOpen, setBlockedOpen] = useState(false);
+  const route = useRoute();
+  const blockedOpen = route.page === 'mas' && route.param === 'bloqueados';
   const blockedOpener = useRef<HTMLButtonElement>(null);
   const restoreBlockedFocus = useRef(false);
   useEffect(() => {
-    if (!blockedOpen && restoreBlockedFocus.current) {
+    if (blockedOpen) restoreBlockedFocus.current = true;
+    else if (restoreBlockedFocus.current) {
       blockedOpener.current?.focus();
       restoreBlockedFocus.current = false;
     }
   }, [blockedOpen]);
+  // La ruta mantiene Configuración en el historial para el gesto de atrás.
   if (blockedOpen && session) return <Bloqueados key={`${session.principal_id}:${session.family_id}`}
-    onBack={() => { restoreBlockedFocus.current = true; setBlockedOpen(false); }} />;
+    onBack={() => goBack('mas')} />;
 
 
   return (
@@ -184,7 +187,7 @@ export function MasScreen() {
             </div>
             <FlechaDeFila />
           </button>
-          {session && <button ref={blockedOpener} className="list-row" type="button" onClick={() => setBlockedOpen(true)}>
+          {session && <button ref={blockedOpener} className="list-row" type="button" onClick={() => navigate('mas', 'bloqueados')}>
             <span><Icon name="lock" size={16} /></span>
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Bloqueados')}</div>
             <FlechaDeFila />

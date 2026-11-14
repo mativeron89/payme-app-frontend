@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { omitirGuiaEnFixture, irEnLaApp } from './_app';
 
 const textos = {
-  es: { title: 'Bloqueados', empty: 'No bloqueaste a nadie', error: 'No pudimos cargar tus bloqueados', retry: 'Reintentar', unblock: 'Desbloquear a Juan López', back: 'Volver', confirm: '¿Desbloquear a Juan López? No vuelve sola a tus amigos, pero va a poder mandarte solicitudes de nuevo.', notice: 'Desbloqueaste a Juan López' },
+  es: { title: 'Bloqueados', empty: 'No bloqueaste a nadie', error: 'No pudimos cargar tus bloqueados', retry: 'Reintentar', unblock: 'Desbloquear a Juan López', back: 'Volver', confirm: '¿Desbloquear a Juan López? No se va a sumar a tus amigos, pero va a poder mandarte solicitudes de nuevo.', notice: 'Desbloqueaste a Juan López' },
   en: { title: 'Blocked people', empty: "You haven't blocked anyone", error: "We couldn't load your blocked people", retry: 'Retry', unblock: 'Unblock Juan López', back: 'Back', confirm: "Unblock Juan López? They won't be added back to your friends, but they'll be able to send you requests again.", notice: 'You unblocked Juan López' },
 };
 
@@ -161,5 +161,19 @@ for (const idioma of ['es', 'en'] as const) for (const width of [320, 390]) {
     await expect(fila.locator('.fr-name .id')).toHaveText('@juan.lopez');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     expect(await page.locator('.scroll').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  });
+}
+
+for (const idioma of ['es', 'en'] as const) for (const salida of ['Más', 'atrás'] as const) {
+  test(`C191 A3 · ${salida} vuelve a Configuración y conserva el foco · ${idioma}`, async ({ page }) => {
+    await preparar(page, idioma);
+    const entrada = page.getByRole('button', { name: textos[idioma].title, exact: true });
+    await entrada.click();
+    await expect(page.getByRole('heading', { name: textos[idioma].title, exact: true })).toBeFocused();
+    if (salida === 'Más') await page.getByRole('button', { name: idioma === 'es' ? 'Más' : 'More', exact: true }).click();
+    else await page.goBack();
+    await expect(page.getByRole('heading', { name: idioma === 'es' ? 'Configuración' : 'Settings', exact: true })).toBeVisible();
+    await expect(entrada).toBeFocused();
+    await expect(page.getByRole('heading', { name: textos[idioma].title, exact: true })).toHaveCount(0);
   });
 }

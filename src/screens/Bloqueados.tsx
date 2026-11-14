@@ -43,7 +43,7 @@ export function Bloqueados({ onBack }: { onBack: () => void }) {
 
   async function unblock(person: BlockedUser) {
     if (busy || !session || !isCurrentSession(session)) return;
-    if (!window.confirm(t('¿Desbloquear a {0}? No vuelve sola a tus amigos, pero va a poder mandarte solicitudes de nuevo.', person.full_name))) return;
+    if (!window.confirm(t('¿Desbloquear a {0}? No se va a sumar a tus amigos, pero va a poder mandarte solicitudes de nuevo.', person.full_name))) return;
     setBusy(true);
     try {
       await api.unblockUser(person.id);

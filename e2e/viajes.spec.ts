@@ -526,3 +526,32 @@ test.describe('🔴 D274 · a 375: «Cerrados» sin la cantidad', () => {
     if (dir) await page.screenshot({ path: `${dir}/d274-cerrados-sin-cantidad.png`, fullPage: true });
   });
 });
+
+for (const idioma of ['es', 'en'] as const) for (const descuento of [0, 150]) {
+  test(`C191 A1 · Cerrados usa el descuento del detalle existente · ${idioma} · ${descuento}`, async ({ page }) => {
+    await conViajes(page);
+    await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toBeVisible();
+    if (idioma === 'en') {
+      await ir(page, '/mas');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+    }
+    const coincide = await page.evaluate(async ({ id, descuento }) => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta);
+      const resumen = await api.getResumenDeViaje(id);
+      const viaje = await api.getViaje(id);
+      const ticketId = resumen.lugares[0]!.ticket_id;
+      api.getResumenDeViaje = async () => ({ ...resumen, lugares: resumen.lugares.map((l: { ticket_id: string }) => ({ ...l,
+        asignado_al_cierre_cents: l.ticket_id === ticketId ? 1350 : 0 })) });
+      api.getViaje = async () => ({ ...viaje, tickets: viaje.tickets.map((ticket: { id: string }) => ({ ...ticket,
+        descuentos_cents: ticket.id === ticketId ? descuento : 0 })) });
+      return viaje.tickets.some((ticket: { id: string }) => ticket.id === ticketId);
+    }, { id: OAXACA, descuento });
+    expect(coincide).toBe(true);
+    await ir(page, `/viaje-cerrado/${OAXACA}`);
+    const esperado = idioma === 'es'
+      ? descuento ? 'Incluye $13.50, con descuento, que se te asignó al cerrar.' : 'Incluye $13.50 que se te asignó al cerrar.'
+      : descuento ? 'Includes $13.50, with discount, assigned to you at closing.' : 'Includes $13.50 assigned to you at closing.';
+    await expect(page.locator('.vjd-asignado')).toHaveText(esperado);
+  });
+}

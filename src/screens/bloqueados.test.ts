@@ -37,8 +37,8 @@ it('la pantalla nunca usa localStorage, sessionStorage ni IndexedDB (M13)', () =
   expect(source).not.toMatch(/\b(?:localStorage|sessionStorage|indexedDB)\b/);
 });
 
-it('D812/D813 conservan los textos aprobados en español y en idioma EN', () => {
+it('D812/D815 conservan los textos aprobados en español y en idioma EN', () => {
   expect(EN['Desbloqueaste a {0}']).toBe('You unblocked {0}');
-  expect(EN['¿Desbloquear a {0}? No vuelve sola a tus amigos, pero va a poder mandarte solicitudes de nuevo.'])
+  expect(EN['¿Desbloquear a {0}? No se va a sumar a tus amigos, pero va a poder mandarte solicitudes de nuevo.'])
     .toBe("Unblock {0}? They won't be added back to your friends, but they'll be able to send you requests again.");
 });

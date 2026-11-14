@@ -67,6 +67,7 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
     readonly color: ColorViaje | null;
     readonly has_photo: boolean;
     readonly notas: ResumenDeNotas;
+    readonly ticketsConDescuento: ReadonlySet<string>;
   } | null>(null);
   const fotos = useFotosDeViajes(delViaje?.has_photo ? [{ id: viajeId, has_photo: true }] : null);
   const [intento, setIntento] = useState(0);
@@ -117,7 +118,8 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   useEffect(() => {
     let vivo = true;
     api.getViaje(viajeId)
-      .then((v) => { if (vivo) setDelViaje({ color: v.color, has_photo: v.has_photo, notas: v.notas }); })
+      .then((v) => { if (vivo) setDelViaje({ color: v.color, has_photo: v.has_photo, notas: v.notas,
+        ticketsConDescuento: new Set(v.tickets.filter(ticket => ticket.descuentos_cents > 0).map(ticket => ticket.id)) }); })
       .catch(() => { /* sin el detalle, el cuadro lleva la inicial: no es un error de la pantalla */ });
     return () => { vivo = false; };
   }, [viajeId]);
@@ -145,6 +147,7 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         onSalir={() => setHoja({ tipo: 'salir' })}
         color={delViaje?.color ?? null}
         foto={delViaje?.has_photo ? fotos.fotoDe(viajeId) : null}
+        ticketsConDescuento={delViaje?.ticketsConDescuento}
         notas={delViaje?.notas ?? null}
         onNotas={() => navigate('viaje-notas', viajeId)}
       />
@@ -186,11 +189,13 @@ export interface VistaDelViajeCerradoProps {
   /** D290 · el resumen de las notas (del detalle; `null` mientras no llega) y la fila que abre el pizarrón. */
   readonly notas?: ResumenDeNotas | null;
   readonly onNotas?: () => void;
+  /** D814 · dato del detalle existente del viaje; no cambia importes ni el resumen. */
+  readonly ticketsConDescuento?: ReadonlySet<string>;
 }
 
 /** La tarjeta de título y el contenido: pura, sin red ni efectos. */
 export function VistaDelViajeCerrado({
-  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir, color = null, foto = null, notas = null, onNotas,
+  carga, t, idioma, abiertos, onAlternar, onReintentar, onVerViajes, onSalir, color = null, foto = null, notas = null, onNotas, ticketsConDescuento,
 }: VistaDelViajeCerradoProps) {
   if (carga.estado !== 'listo') {
     return (
@@ -306,6 +311,7 @@ export function VistaDelViajeCerrado({
                 <RenglonDeLugar
                   key={l.ticket_id}
                   lugar={l}
+                  conDescuento={ticketsConDescuento?.has(l.ticket_id) ?? false}
                   t={t}
                   idioma={idioma}
                   abierto={abiertos.has(l.ticket_id)}
@@ -327,8 +333,8 @@ export function VistaDelViajeCerrado({
   );
 }
 
-function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar }: {
-  lugar: ResumenDeViaje['lugares'][number]; t: T; idioma: Idioma; abierto: boolean; onAlternar: () => void;
+function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar, conDescuento }: {
+  lugar: ResumenDeViaje['lugares'][number]; conDescuento: boolean; t: T; idioma: Idioma; abierto: boolean; onAlternar: () => void;
 }) {
   const fecha = fechaCortaViaje(l.fecha_ticket, idioma);
   const desplegable = l.items.length > 0;
@@ -381,7 +387,9 @@ function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar }: {
         </ul>
       )}
       {l.asignado_al_cierre_cents > 0 && (
-        <p className="vjd-asignado">{t('Incluye {0} que se te asignó al cerrar.', formatMXN(l.asignado_al_cierre_cents))}</p>
+        <p className="vjd-asignado">{t(conDescuento
+          ? 'Incluye {0}, con descuento, que se te asignó al cerrar.'
+          : 'Incluye {0} que se te asignó al cerrar.', formatMXN(l.asignado_al_cierre_cents))}</p>
       )}
     </li>
   );

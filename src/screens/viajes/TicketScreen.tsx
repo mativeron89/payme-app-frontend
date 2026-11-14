@@ -538,7 +538,9 @@ function Totales({ ticket }: { ticket: TicketDelViaje }) {
 /** D278-2 · «Tus platos $X · Tu parte del resto $Y»: el resto (servicio, IVA y descuentos) puede ser negativo. */
 function detalleDeTeToca(ticket: TicketDelViaje, t: T): string {
   const resto = ticket.te_toca_cents - ticket.te_toca_platos_cents;
-  return t('Tus platos {0} · Tu parte del resto {1}', formatMXN(ticket.te_toca_platos_cents),
+  return t(ticket.descuentos_cents > 0
+    ? 'Tus platos, con descuento, {0} · Tu parte del resto {1}'
+    : 'Tus platos {0} · Tu parte del resto {1}', formatMXN(ticket.te_toca_platos_cents),
     resto < 0 ? montoDeDescuento(-resto) : formatMXN(resto));
 }
 

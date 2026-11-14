@@ -9,4 +9,5 @@ export const EN_VIAJES_CERRADO: Record<string, string> = {
   'Por tipo de lugar': 'By type of place',
   'Lugares visitados · {0}': 'Places visited · {0}',
   'Incluye {0} que se te asignó al cerrar.': 'Includes {0} assigned to you at closing.',
+  'Incluye {0}, con descuento, que se te asignó al cerrar.': 'Includes {0}, with discount, assigned to you at closing.',
 };

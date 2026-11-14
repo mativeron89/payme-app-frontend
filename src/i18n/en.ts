@@ -1532,7 +1532,7 @@ export const EN: Record<string, string> = {
   "Bloqueados": "Blocked people",
   "No bloqueaste a nadie": "You haven't blocked anyone",
   "No pudimos cargar tus bloqueados": "We couldn't load your blocked people",
-  "¿Desbloquear a {0}? No vuelve sola a tus amigos, pero va a poder mandarte solicitudes de nuevo.": "Unblock {0}? They won't be added back to your friends, but they'll be able to send you requests again.",
+  "¿Desbloquear a {0}? No se va a sumar a tus amigos, pero va a poder mandarte solicitudes de nuevo.": "Unblock {0}? They won't be added back to your friends, but they'll be able to send you requests again.",
   "Desbloqueaste a {0}": "You unblocked {0}",
   "No pudimos desbloquear a {0}": "We couldn't unblock {0}",
   "Desbloquear a {0}": "Unblock {0}",

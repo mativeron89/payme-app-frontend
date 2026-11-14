@@ -1,3 +1,9 @@
+## 0.275.14 · 2026-11-13
+
+- D814: en los tickets de Viajes con descuento, «Tus platos» aclara que el monto ya lo incluye; en Cerrados, lo aclara también la asignación al cierre. Usa el descuento del detalle ya consultado, sin recalcular importes. Los rótulos sin descuento se conservan en español e inglés.
+- D815: confirmación neutra «No se va a sumar a tus amigos…»; el texto en inglés se conserva.
+- Más › Configuración › Bloqueados: tocar «Más» o volver con el historial regresa a Configuración y devuelve el foco a la entrada. La lista de Bloqueados de 0.275.13 sigue en esa ubicación; el mock persiste sus datos simulados.
+
 ## 0.275.13 · 2026-11-12
 
 - D787: lista privada «Bloqueados», con nombre y @ opcional, confirmación para desbloquear y recarga posterior.
