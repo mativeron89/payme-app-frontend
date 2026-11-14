@@ -198,7 +198,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       ? pantalla.current?.querySelector<HTMLElement>('h1') : focoAlCerrar.current;
     focoAlCerrar.current = null;
     if (destino) {
-      destino.tabIndex = -1;
+      if (destino.tagName === 'H1') destino.tabIndex = -1;
       destino.focus();
     }
   }, [hoja]);
@@ -289,7 +289,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     }
   }
 
-  async function marcar(transferenciaId: string, accion: AccionTransferencia, alConfirmar?: () => void) {
+  async function marcar(transferenciaId: string, accion: AccionTransferencia, alConfirmar?: () => void, alFallar?: () => void) {
     if (marcando) return;
     setMarcando(transferenciaId);
     try {
@@ -306,7 +306,10 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       if (e.tipo === 'no_disponible') noDisponible();
       else {
         // `no_abierto`: ya no espera pagos (quedó cerrado); el refresco lleva a Cerrados.
-        if (e.tipo !== 'no_abierto') toast(t('No pudimos guardarlo. Prueba de nuevo.'));
+        if (e.tipo !== 'no_abierto') {
+          alFallar?.();
+          toast(t('No pudimos guardarlo. Prueba de nuevo.'));
+        }
         await refrescar();
       }
     } finally {
@@ -330,16 +333,26 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     // Consumir antes del await: también cubre dos toques dentro del mismo render.
     confirmandoRecibi.current = true;
     setEnviando(true);
-    let confirmado = false;
+    let hojaCerrada = false;
     try {
       await marcar(hoja.transferencia.id, 'recibi', () => {
-        confirmado = true;
+        hojaCerrada = true;
         focoAlCerrar.current = 'titulo';
         // El POST ya asentó el pago: el GET posterior no debe mantener la app inerte.
+        confirmandoRecibi.current = false;
+        setEnviando(false);
+        setHoja(null);
+      }, () => {
+        hojaCerrada = true;
+        focoAlCerrar.current = hoja.disparador;
+        // El POST falló: habilitar el origen antes de devolverle el foco, sin esperar el GET.
+        setMarcando(null);
+        confirmandoRecibi.current = false;
+        setEnviando(false);
         setHoja(null);
       });
     } finally {
-      if (!confirmado) {
+      if (!hojaCerrada) {
         focoAlCerrar.current = hoja.disparador;
         setHoja(null);
       }

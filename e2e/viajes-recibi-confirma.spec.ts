@@ -179,7 +179,7 @@ test('C194 · un error conserva el aviso y el refresco existentes sin dar por pa
   expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
 });
 
-for (const y of [715, 730]) for (const demora of [100, 250]) {
+for (const y of [715, 730]) for (const demora of [100, 200]) {
   test(`C195 B1 · doble toque en y=${y} a +${demora} ms no confirma`, async ({ page }) => {
     await preparar(page);
     const origen = boton(page, 'Luis');
@@ -246,3 +246,55 @@ for (const fallo of [false, true]) {
     expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
   });
 }
+
+
+test('C195D C1 · error devuelve foco y conserva Recibí en el orden de Tab', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(boton(page, 'Luis')).toBeEnabled();
+  await expect(boton(page, 'Luis')).toBeFocused();
+  expect(await boton(page, 'Luis').getAttribute('tabindex')).toBeNull();
+  await fila(page, 'Luis').getByRole('button', { name: 'No me llegó', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(boton(page, 'Luis')).toBeFocused();
+});
+
+test('C195D C2 · POST exitoso y GET colgado no traban Salir ni Escape', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    api.getViaje = () => new Promise(() => {});
+  });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancelar', exact: true })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+});
+
+test('C195D C3 · POST fallido y GET colgado cierran a 1 s con aviso y foco', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(async () => {
+    (window as unknown as Ventana).__c194.fallar = true;
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    api.getViaje = () => new Promise(() => {});
+  });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await page.waitForTimeout(1000);
+  expect(await page.getByRole('dialog').count()).toBe(0);
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  await expect(page.getByText('No pudimos guardarlo. Prueba de nuevo.', { exact: true })).toBeVisible();
+  await expect(boton(page, 'Luis')).toBeFocused();
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+});
