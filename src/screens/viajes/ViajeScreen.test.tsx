@@ -71,7 +71,7 @@ function tr(id: string, de: string, a: string, cents: number, estado: Transferen
 const nada = () => undefined;
 const ACCIONES: Omit<ViajeVistaProps, 'carga' | 'marcando'> = {
   onReintentar: nada, onVerViajes: nada, onVerBalance: nada, onCargaManual: nada, onConfiguracion: nada, onAbrirTicket: nada,
-  onSalir: nada, onMarcar: nada, onNotas: nada,
+  onSalir: nada, onMarcar: nada, onRecibir: nada, onNotas: nada,
 };
 
 const listo = (v: DetalleViaje): CargaDeViaje => ({ tipo: 'listo', viaje: v });
@@ -602,5 +602,16 @@ describe('🔴 D297 · el engranaje de la Configuración, en la tarjeta del viaj
     expect(regla('.title-card.vjv-titulo-con-engranaje')).not.toContain('padding');
     expect(regla('.vjv-titulo-divisor')).toMatch(/width: 1px;\s*margin: -16px 0 -16px 12px;\s*background: var\(--border\);/);
     expect(regla('.vjv-titulo-engranaje')).toMatch(/width: 76px;\s*margin: -16px -18px -16px 0;/);
+  });
+});
+
+
+describe('C194 · D809 #15 · texto de confirmar lo recibido', () => {
+  it('traduce la confirmación exacta y conserva el formato de moneda de la pantalla', () => {
+    expect(traducir('¿Recibiste {0} de {1}?', 'es', '$1,819.50', 'Luis')).toBe('¿Recibiste $1,819.50 de Luis?');
+    expect(traducir('¿Recibiste {0} de {1}?', 'en', '$1,819.50', 'Luis')).toBe('Did you receive $1,819.50 from Luis?');
+    expect(traducir('Queda como pagado y no se puede deshacer.', 'en')).toBe("It will be marked as paid and can't be undone.");
+    expect(traducir('Sí, recibí', 'en')).toBe('Yes, I received it');
+    expect(traducir('Cancelar', 'en')).toBe('Cancel');
   });
 });

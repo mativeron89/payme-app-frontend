@@ -1,3 +1,9 @@
+## 0.275.15 · 2026-11-14
+
+- D809 #15 · Viajes: los dos botones «Recibí» piden confirmación antes de registrar el pago, con monto y nombre de pila en español e inglés.
+- Cancelar, Escape y tocar afuera devuelven el foco al botón de origen sin marcar; confirmar bloquea el doble toque y conserva los avisos, el refresco y el paso a Cerrados existentes.
+- Pruebas de los dos estados, las salidas sin marcar, el doble toque, errores y el recorrido mock hasta «Pagado» y Cerrados.
+
 ## 0.275.14 · 2026-11-13
 
 - D816 (precisa D814): debajo de «Te toca», sólo con descuento, se informa el descuento del ticket que se reparte entre todos. «Tus platos» y Cerrados conservan los rótulos de la base, sin cambiar importes; ES y EN.

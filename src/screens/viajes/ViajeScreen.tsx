@@ -165,6 +165,7 @@ export function useFotosDeMiembros(
 
 type Hoja =
   | { readonly tipo: 'cerrar'; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
+  | { readonly tipo: 'recibi'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement }
   | { readonly tipo: 'salir' }
   | { readonly tipo: 'no_puede_salir'; readonly razon: PorQueNoPuedeSalir };
 
@@ -176,6 +177,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const [hoja, setHoja] = useState<Hoja | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [marcando, setMarcando] = useState<string | null>(null);
+  const confirmandoRecibi = useRef(false);
   /** D255-8 · Configuración, una vista dentro del viaje (no una ruta). */
   const [configuracion, setConfiguracion] = useState(false);
   const inicial = useRef<HTMLButtonElement | null>(null);
@@ -288,8 +290,28 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }
 
   const cerrarHoja = () => {
-    if (!enviando) setHoja(null);
+    if (enviando || confirmandoRecibi.current) return;
+    if (hoja?.tipo === 'recibi') {
+      const disparador = hoja.disparador;
+      // El toque en Safari no asegura foco previo; guardamos el botón que abrió esta hoja.
+      requestAnimationFrame(() => disparador.focus());
+    }
+    setHoja(null);
   };
+
+  async function confirmarRecibi() {
+    if (hoja?.tipo !== 'recibi' || confirmandoRecibi.current || marcando) return;
+    // Consumir antes del await: también cubre dos toques dentro del mismo render.
+    confirmandoRecibi.current = true;
+    setEnviando(true);
+    try {
+      await marcar(hoja.transferencia.id, 'recibi');
+      setHoja(null);
+    } finally {
+      confirmandoRecibi.current = false;
+      setEnviando(false);
+    }
+  }
 
   /** Las hojas de cerrar y salir: las mismas en la pantalla del viaje y en Configuración (D279). */
   const hojas = (
@@ -306,6 +328,23 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
             onRevisar={cerrarHoja}
             onReintentar={pedirCierre}
           />
+        </HojaModal>
+      )}
+      {viaje && hoja?.tipo === 'recibi' && (
+        <HojaModal key="recibi" etiqueta={t('¿Recibiste {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))} inicial={inicial} onCerrar={cerrarHoja}>
+          <div className="vjv-hoja">
+            <span className="vjv-hoja-asa" aria-hidden="true" />
+            <h2 className="vjv-hoja-titulo">{t('¿Recibiste {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</h2>
+            <p className="vjv-hoja-texto">{t('Queda como pagado y no se puede deshacer.')}</p>
+            <div className="vjv-hoja-botones">
+              <button type="button" className="btn btn-navy" disabled={enviando} onClick={() => void confirmarRecibi()}>
+                {t('Sí, recibí')}
+              </button>
+              <button ref={inicial} type="button" className="btn btn-ghost" disabled={enviando} onClick={cerrarHoja}>
+                {t('Cancelar')}
+              </button>
+            </div>
+          </div>
         </HojaModal>
       )}
       {viaje && hoja?.tipo === 'salir' && (
@@ -367,6 +406,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
         onSalir={() => setHoja({ tipo: 'salir' })}
         onMarcar={(id, accion) => void marcar(id, accion)}
+        onRecibir={(transferencia, disparador) => setHoja({ tipo: 'recibi', transferencia, disparador })}
       />
       {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}
       <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
@@ -512,6 +552,7 @@ export interface ViajeVistaProps {
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onSalir: () => void;
   readonly onMarcar: (transferenciaId: string, accion: AccionTransferencia) => void;
+  readonly onRecibir: (transferencia: TransferenciaViaje, disparador: HTMLButtonElement) => void;
 }
 
 export function ViajeVista(props: ViajeVistaProps) {
@@ -695,7 +736,7 @@ export function DesplegableMiembros({ miembros, abiertoInicial = false, fotoDe }
   );
 }
 
-function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir, onNotas }: ViajeVistaProps & { viaje: DetalleViaje }) {
+function EsperandoPagos({ viaje: v, marcando, onMarcar, onRecibir, onSalir, onNotas }: ViajeVistaProps & { viaje: DetalleViaje }) {
   const { t } = useIdioma();
   const vista = vistaDePagos(v.transferencias);
   const mias = v.transferencias.filter((tr) => tr.mia === 'debo');
@@ -783,7 +824,7 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar, onSalir, onNotas }: Viaj
               className={tramo.destacada ? 'vjv-tr vjv-tr-destacada' : 'vjv-tr vjv-tr-blanca vjv-tr-grupo'}
             >
               {tramo.filas.map((tr) => (
-                <TransferenciaAMi key={tr.id} tr={tr} miembros={v.miembros} ocupado={ocupado} enviando={marcando === tr.id} onMarcar={onMarcar} />
+                <TransferenciaAMi key={tr.id} tr={tr} miembros={v.miembros} ocupado={ocupado} enviando={marcando === tr.id} onMarcar={onMarcar} onRecibir={onRecibir} />
               ))}
             </article>
           ))}
@@ -875,7 +916,7 @@ function TransferenciaMia({ tr, miembros, ocupado, enviando, onMarcar }: FilaDeT
 }
 
 /** 1o · una que me pagan: con «Recibí» (también desde pendiente, D242-1) y, si la marcaron, «No me llegó». */
-function TransferenciaAMi({ tr, miembros, ocupado, enviando, onMarcar }: FilaDeTransferencia) {
+function TransferenciaAMi({ tr, miembros, ocupado, enviando, onMarcar, onRecibir }: FilaDeTransferencia & Pick<ViajeVistaProps, 'onRecibir'>) {
   const { t } = useIdioma();
   const de = miembroPorId(miembros, tr.de);
   return (
@@ -898,7 +939,7 @@ function TransferenciaAMi({ tr, miembros, ocupado, enviando, onMarcar }: FilaDeT
             <button type="button" className="btn btn-ghost" disabled={ocupado} onClick={() => onMarcar(tr.id, 'no-llego')}>
               {t('No me llegó')}
             </button>
-            <button type="button" className="btn btn-navy" disabled={ocupado} onClick={() => onMarcar(tr.id, 'recibi')}>
+            <button type="button" className="btn btn-navy" disabled={ocupado} onClick={(e) => onRecibir(tr, e.currentTarget)}>
               {t('Recibí')}
             </button>
           </div>
@@ -907,7 +948,7 @@ function TransferenciaAMi({ tr, miembros, ocupado, enviando, onMarcar }: FilaDeT
       {tr.estado === 'pendiente' && (
         <div className="vjv-tr-pie">
           <ChipDeEstado tr={tr} />
-          <button type="button" className="btn btn-ghost btn-sm btn-fit" disabled={ocupado} onClick={() => onMarcar(tr.id, 'recibi')}>
+          <button type="button" className="btn btn-ghost btn-sm btn-fit" disabled={ocupado} onClick={(e) => onRecibir(tr, e.currentTarget)}>
             {t('Recibí')}
           </button>
         </div>

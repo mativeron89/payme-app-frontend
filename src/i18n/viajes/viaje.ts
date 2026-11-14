@@ -59,6 +59,10 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   '{0} marcó que te pagó. Revisa tu banco y confírmalo.': '{0} marked that they paid you. Check your bank and confirm it.',
   'No me llegó': "I didn't get it",
   'Recibí': 'I got it',
+  // D809 #15 · confirmar siempre antes de registrar lo recibido.
+  '¿Recibiste {0} de {1}?': 'Did you receive {0} from {1}?',
+  'Queda como pagado y no se puede deshacer.': "It will be marked as paid and can't be undone.",
+  'Sí, recibí': 'Yes, I received it',
   'Faltan {0} de {1}': '{0} of {1} left',
   'transferencias': 'transfers',
   'Cuando todas estén pagadas, el viaje pasa a Cerrados.': 'Once they are all paid, the trip moves to Closed.',
