@@ -1,7 +1,7 @@
 {
   "name": "payme-app-frontend",
   "private": true,
-  "version": "0.275.14",
+  "version": "0.275.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
