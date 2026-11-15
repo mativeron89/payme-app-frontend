@@ -1,3 +1,4 @@
+import { mockGetConsentimientos } from './mock/mockSugerencias';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -90,6 +91,13 @@ describe('n420 · la sugerencia (`GET /api/sugerencias/dividir`)', () => {
 });
 
 describe('O1 · la lista `GET /api/account/consents` (auditoría de PR103, punto 4 b)', () => {
+  it('K4 · el mock omite campañas nunca otorgadas de la lista de permisos', async () => {
+    const lista = await mockGetConsentimientos();
+    expect(lista).toHaveProperty('consents');
+    expect(lista).not.toHaveProperty('consents.perfilado_campanas');
+    expect(() => decodeConsentimientosOpcionales(lista)).not.toThrow();
+  });
+
   const campanas = { purpose_key: 'perfilado_campanas', granted: false, state: 'never', since: null, notice_version: null, notice_hash: null };
 
   it('🔴 descarta las finalidades que no usa ANTES de validar, y valida las suyas estrictas', () => {

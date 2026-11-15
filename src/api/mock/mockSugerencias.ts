@@ -93,9 +93,7 @@ export async function mockGetConsentimiento(f: FinalidadOpcional): Promise<unkno
 /** La lista, con la regla del dueño (`behavior.listing`): sólo lo que hoy se puede otorgar o lo que está otorgado. */
 export async function mockGetConsentimientos(): Promise<unknown> {
   sembrar();
-  const consents: Record<string, unknown> = {
-    perfilado_campanas: { purpose_key: 'perfilado_campanas', ...NUNCA },
-  };
+  const consents: Record<string, unknown> = {};
   for (const f of ['sugerencias', 'analisis_interno', 'recomendaciones'] as const) {
     const r = permisos.get(f);
     if (encendida(f) || r?.state === 'granted') consents[f] = { purpose_key: f, ...(r ?? NUNCA) };

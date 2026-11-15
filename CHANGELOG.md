@@ -1,3 +1,8 @@
+## 0.275.18 · 2026-11-15
+
+- Actualizado el espejo del contrato a App Backend 2.213.4 y su procedencia.
+- La lista de permisos del mock omite campañas nunca otorgadas, como el servidor.
+
 ## 0.275.17 · 2026-11-14
 
 - D807: una corrida nueva de un PR cancela su predecesora; main y las corridas manuales conservan sus ejecuciones.

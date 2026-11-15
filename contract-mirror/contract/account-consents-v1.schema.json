@@ -218,9 +218,7 @@
         "consents": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "perfilado_campanas"
-          ],
+          "required": [],
           "properties": {
             "perfilado_campanas": {
               "$ref": "#/$defs/state"

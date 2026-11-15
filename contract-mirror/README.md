@@ -1,4 +1,47 @@
-## AF-5 · D622 · D629 · D676 · el reespejo de 2.211.0 (la vista previa del link) · 0.275.0
+## AF-6 · D809 · el reespejo de 2.213.4 · 0.275.18
+
+Contenido vigente: `e84c390cfe3fdb6bf94eea38dc68ffe7c6384e9d`.
+Inventario íntegro de 175 entradas tomado del dueño App Backend 2.213.4, `main` en
+`8635d6a9fbc4a7eaaba6f4ca80da5a619fad257e` (servido según la medición de VI del 2026-11-15),
+`contract/mirror-inventory.json`, sha256 `b8715f27ecda676ab4adf12aca2d81357957c2a52d6b1a0f2c90a1750c5ed946`,
+adoptado con `--adoptar-inventario`, sin editarlo. **25 archivos espejados**, todos JSON de `contract/`;
+**150 fuentes sólo por hash**, conforme D268. El commit del inventario identifica el contenido; el SHA de main
+identifica la publicación del inventario, y no se confunden.
+
+Cambia `contract/account-consents-v1.schema.json` (sha256 `86ac77921f7e4b97a21043f1cfcabfb218ed83ab6e2e7f16f04bd5614cf71cbd`).
+Entra `contract/agente-plan-con-amigos-v1.schema.json` (sha256 `2b54ce0457fa622e5acbe1e8d4d57b680b5893f64a5809b79baa5f5ea74893fc`).
+El schema de consents deja campañas fuera de las claves obligatorias; el nuevo schema documenta Plan con amigos.
+
+Cambios sólo por hash:
+
+- `docs/HANDOFF_G25_SOLICITUDES_SALIENTES_V2.71.0.md`: `beca0dd68212bc5bb8145b2b28b8848de379ef733b1a6cfbecfac0844222378d`.
+- `docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md`: `0bb09e74f439f6f8c811d5f74c958455234d473b58b296e9049a944a33c735a1`.
+- `docs/history/README.md`: `3ee14a75910a872ebf0ba71e734a39a238e9c97dc9f6ffd573c8921de233ca40`.
+- `services/settlement.js`: `c9b9dcd7e8a6dfa97263de65075eecc01216777d6188234eb98f866194507c44`.
+- `middleware/auth.js`: `cf3f518f3cec0b7444c0fa17c520f096d47120fc217b5b1a0b9ea496dfb7fdff`.
+- `routes/agente.js`: `53cd8830c38c2e78710faf0028eb8a3f78f4cc17bc68b7074ae15c0f389bd08c`.
+- `routes/auth.js`: `bb2c17a18422b530b2a11a637446b291b64bbe52e92b631500c7508f2058d121`.
+- `routes/connect.js`: `e4b3b1bbf4865608cce1e913862c6264a2079082a08aae6523db70fe79b8d286`.
+- `routes/friends.js`: `16842df446f71357594ce7ca864a9bfeb1d1de372e1f05dfb3d7f8eaf7939f3e`.
+- `routes/groups.js`: `c8f9176cdc4530e21da56cd3dbe5202c3859a96e3af1ce94ede57600bf184be1`.
+- `routes/mesas.js`: `af18079dc06d2589a90caa6548a43ca4004c2ff6c421f274831988fdc64687d3`.
+- `routes/notifications.js`: `2d12aab67653b767c2869914db68fc74ce060fcbb8d1145ce6aaae464f460bd7`.
+- `routes/social-auth.js`: `7d1e5b26ecaa90e26b75974650e9649f4acf88d1c64dcf36d72c58636ab41185`.
+- `routes/staff.js`: `6475e7e0f94e40cdcf514cab6bae1aeb88e15b4ddd938067e519a44708b930ab`.
+- `routes/topup.js`: `6168a0e62f408bfe77b8a777b9ea66ba4e5bc799885939989c10744caab85929`.
+- `routes/transfers.js`: `eb545495484e88c51661491959ebc756c6a229cb20b48ecbceeca4a1d9fb4246`.
+- `routes/webhooks.js`: `e734d7e38202793475c1c4fa1fa1bcb08ceb8f93db083d0434dd89273b37edb2`.
+- `services/agenteComensal.js`: `15973431ccfe7847e47b2dd341b703dab99b2c6a4c94542fd9388cdda241f9cc`.
+- `services/consent.js`: `470ac4f79d65422410ba66ab9b879efb4607f210d7a112c6f447b38a88eeb6d0`.
+- `services/externalIdentities.js`: `99bd48752adcca16af5a9d858d5225d2d90df708bb79ac865a7f4b5e6416c9e3`.
+- `services/invitationAuthority.js`: `2fd83dfe7283ff2c7eadabab850f065b9afdcc71273deede03ca6aa123e1a727`.
+- `services/legalAcceptance.js`: `e0d1175faec08009fb6dd5b03450b48339e9e6caa094966209c54e602f061741`.
+- `services/viajes.js`: `b2489d71dfd4d908bd0f451852c11995b5e0894e3713ced87739beaab1448b95`.
+
+Los hechos se regeneraron en local contra `e84c390`: cambia el commit y los sha256 de `routes/friends.js`, `routes/mesas.js`, `routes/notifications.js`, `services/invitationAuthority.js`, ningún valor. `PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al mismo commit;
+`services/parteDeMesa.js` y `utils/money.js` conservan sus sha256.
+
+### Refresh anterior · AF-5 · D622 · D629 · D676 · el reespejo de 2.211.0 (la vista previa del link) · 0.275.0
 
 Contenido vigente: `b318b2f9cbf912f11a7ffe94e3cd3b4a491211ef`.
 Inventario íntegro de 173 entradas tomado del `main` del dueño, el servido (App Backend 2.211.0, `main` en
