@@ -1,7 +1,7 @@
-import { mockGetConsentimientos } from './mock/mockSugerencias';
+import { mockGetConsentimientos, reiniciarMockSugerencias } from './mock/mockSugerencias';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { traducir } from '../i18n/idioma';
 import {
   aplicarConfigSugerencias, capacidadOpcional, confirmarConsentimiento, decodeCapacidadOpcional, decodeConsentimiento,
@@ -91,11 +91,41 @@ describe('n420 · la sugerencia (`GET /api/sugerencias/dividir`)', () => {
 });
 
 describe('O1 · la lista `GET /api/account/consents` (auditoría de PR103, punto 4 b)', () => {
-  it('K4 · el mock omite campañas nunca otorgadas de la lista de permisos', async () => {
-    const lista = await mockGetConsentimientos();
-    expect(lista).toHaveProperty('consents');
-    expect(lista).not.toHaveProperty('consents.perfilado_campanas');
-    expect(() => decodeConsentimientosOpcionales(lista)).not.toThrow();
+  describe('K4 · conjunto exacto de finalidades del mock', () => {
+    let valores: Map<string, string>;
+
+    beforeEach(() => {
+      valores = new Map<string, string>();
+      vi.stubGlobal('localStorage', {
+        getItem: (clave: string) => valores.get(clave) ?? null,
+        setItem: (clave: string, valor: string) => { valores.set(clave, valor); },
+        removeItem: (clave: string) => { valores.delete(clave); },
+        clear: () => valores.clear(),
+        key: (indice: number) => [...valores.keys()][indice] ?? null,
+        get length() { return valores.size; },
+      });
+      reiniciarMockSugerencias();
+    });
+
+    afterEach(() => {
+      reiniciarMockSugerencias();
+      vi.unstubAllGlobals();
+    });
+
+    it.each([
+      { escenario: 'E1 · sin costuras', sugerencias: null, otorgados: null, agente: null, esperadas: [] },
+      { escenario: 'E2 · sugerencias y tres permisos otorgados', sugerencias: 'encendido', otorgados: 'sugerencias,analisis_interno,recomendaciones', agente: null, esperadas: ['analisis_interno', 'recomendaciones', 'sugerencias'] },
+      { escenario: 'E3 · también agente encendido', sugerencias: 'encendido', otorgados: 'sugerencias,analisis_interno,recomendaciones', agente: 'encendido', esperadas: ['analisis_interno', 'recomendaciones', 'sugerencias'] },
+      { escenario: 'E4 · sugerencias apagadas', sugerencias: 'apagado', otorgados: null, agente: null, esperadas: [] },
+    ])('$escenario', async ({ sugerencias, otorgados, agente, esperadas }) => {
+      if (sugerencias !== null) localStorage.setItem('payme.app.mock.sugerencias.v1', sugerencias);
+      if (otorgados !== null) localStorage.setItem('payme.app.mock.consentimientos_otorgados.v1', otorgados);
+      if (agente !== null) localStorage.setItem('payme.app.mock.agente.v1', agente);
+      const lista = await mockGetConsentimientos() as { consents: Record<string, { purpose_key: string }> };
+      const claves = Object.values(lista.consents).map((consentimiento) => consentimiento.purpose_key).sort();
+      expect(claves).toEqual(esperadas);
+      expect(() => decodeConsentimientosOpcionales(lista)).not.toThrow();
+    });
   });
 
   const campanas = { purpose_key: 'perfilado_campanas', granted: false, state: 'never', since: null, notice_version: null, notice_hash: null };
