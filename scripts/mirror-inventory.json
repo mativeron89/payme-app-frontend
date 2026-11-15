@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "e84c390cfe3fdb6bf94eea38dc68ffe7c6384e9d",
+  "commit": "6a75187f94c7bd29a69a56197c3b8d9722beb2bb",
   "total": 175,
   "archivos": [
     {
@@ -493,8 +493,8 @@
     {
       "origen": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
       "destino": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
-      "sha256": "0bb09e74f439f6f8c811d5f74c958455234d473b58b296e9049a944a33c735a1",
-      "bytes": 8225
+      "sha256": "5c6a8e81c1b1ad6385f7b6c8101b23874a20762250d9b7ed9d35dd785fcf693b",
+      "bytes": 8242
     },
     {
       "origen": "docs/history/README.md",

@@ -1,4 +1,20 @@
-## AF-6 · D809 · el reespejo de 2.213.4 · 0.275.18
+## AF-7 · D809 · el reespejo de 2.213.5 · 0.275.19
+
+Contenido vigente: `6a75187f94c7bd29a69a56197c3b8d9722beb2bb`.
+Inventario íntegro de 175 entradas tomado del dueño App Backend 2.213.5, `main` en
+`5dbb484ced335a39fbbc44509886ba9f50def244` (servido según la medición de VI del 2026-11-15),
+`contract/mirror-inventory.json`, sha256 `8d20c8047130ff2268e9be0d43605452b46d3e644ec119d63fa9cfd84145c4bd`,
+adoptado con `--adoptar-inventario`, sin editarlo. **25 archivos espejados**, todos JSON de `contract/`;
+**150 fuentes sólo por hash**, conforme D268. El commit del inventario identifica el contenido; el SHA de main
+identifica la publicación del inventario, y no se confunden.
+
+Cambia sólo por hash `docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md`, sha256
+`5c6a8e81c1b1ad6385f7b6c8101b23874a20762250d9b7ed9d35dd785fcf693b`: el dueño lo marca como histórico.
+No hay entradas nuevas ni contratos que copiar. Los 25 archivos espejados conservan sus bytes.
+Los hechos se regeneraron en local contra `6a75187`: cambia sólo el commit, sin cambiar valores ni sha256
+de las fuentes. `PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al mismo commit.
+
+### Refresh anterior · AF-6 · D809 · el reespejo de 2.213.4 · 0.275.18
 
 Contenido vigente: `e84c390cfe3fdb6bf94eea38dc68ffe7c6384e9d`.
 Inventario íntegro de 175 entradas tomado del dueño App Backend 2.213.4, `main` en
@@ -12,11 +28,13 @@ Cambia `contract/account-consents-v1.schema.json` (sha256 `86ac77921f7e4b97a2104
 Entra `contract/agente-plan-con-amigos-v1.schema.json` (sha256 `2b54ce0457fa622e5acbe1e8d4d57b680b5893f64a5809b79baa5f5ea74893fc`).
 El schema de consents deja campañas fuera de las claves obligatorias; el nuevo schema documenta Plan con amigos.
 
+Entrada nueva sólo por hash: `docs/history/README.md` → `docs/README_HISTORICOS.md`, sha256
+`3ee14a75910a872ebf0ba71e734a39a238e9c97dc9f6ffd573c8921de233ca40`.
+
 Cambios sólo por hash:
 
 - `docs/HANDOFF_G25_SOLICITUDES_SALIENTES_V2.71.0.md`: `beca0dd68212bc5bb8145b2b28b8848de379ef733b1a6cfbecfac0844222378d`.
 - `docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md`: `0bb09e74f439f6f8c811d5f74c958455234d473b58b296e9049a944a33c735a1`.
-- `docs/history/README.md`: `3ee14a75910a872ebf0ba71e734a39a238e9c97dc9f6ffd573c8921de233ca40`.
 - `services/settlement.js`: `c9b9dcd7e8a6dfa97263de65075eecc01216777d6188234eb98f866194507c44`.
 - `middleware/auth.js`: `cf3f518f3cec0b7444c0fa17c520f096d47120fc217b5b1a0b9ea496dfb7fdff`.
 - `routes/agente.js`: `53cd8830c38c2e78710faf0028eb8a3f78f4cc17bc68b7074ae15c0f389bd08c`.

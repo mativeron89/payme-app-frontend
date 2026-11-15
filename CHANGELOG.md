@@ -1,3 +1,9 @@
+## 0.275.19 · 2026-11-15
+
+- Actualiza el inventario del espejo a App Backend 2.213.5, sin nuevas copias de contratos ni cambios de hechos.
+- Verifica el conjunto exacto de permisos del mock en cuatro escenarios con sugerencias y agente encendidos o apagados.
+- Corrige la clasificación de la entrada histórica en la procedencia del espejo.
+
 ## 0.275.18 · 2026-11-15
 
 - Actualizado el espejo del contrato a App Backend 2.213.4 y su procedencia.

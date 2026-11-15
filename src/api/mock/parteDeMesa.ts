@@ -51,7 +51,7 @@ import { splitEqual, tipFromBps } from '../../utils/money';
 
 // D450 · D466: pin adoptado; parteDeMesa.js, money.js y vectores puros siguen byte-idénticos (sha256 del inventario).
 export const PROCEDENCIA = {
-  commit: 'e84c390cfe3fdb6bf94eea38dc68ffe7c6384e9d',
+  commit: '6a75187f94c7bd29a69a56197c3b8d9722beb2bb',
   ruta: 'services/parteDeMesa.js',
   sha256: '447ea41a867edd808dc7f2e0fcf79571d743b98f3e13a1cc25608fd478c75fdd',
   dinero: { ruta: 'utils/money.js', sha256: '86542329793934a1866a7d101d0c21002f99cf838ca7aef2cf2dcf5a2a432891' },
