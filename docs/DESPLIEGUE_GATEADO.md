@@ -400,6 +400,11 @@ merge-base de base y head contra head; en push compara before y after. Sólo
 `scripts/**/*.test.ts` permiten omitir los cuatro shards. `.github/**`,
 `package*.json` y scripts que no sean tests siempre requieren navegador,
 aunque tengan extensión documental. Los renombres comprueban ambos extremos.
+El salteo por `visible=false` exige un PR con `pull_request.base.ref` exactamente
+`main`, o un push con `ref` exactamente `refs/heads/main`: la marca D493 hereda
+la validación de esa base. Otra rama, un ref ausente o vacío, o un payload
+ilegible dan `visible=true` antes de calcular el diff.
+
 Un diff vacío, error, evento no admitido o base inaccesible da `visible=true`.
 
 Con `visible=false`, `checks` y `build` siguen corriendo. El verificador del

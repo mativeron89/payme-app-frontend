@@ -14,6 +14,9 @@ function decidir() {
   const event = process.env.GITHUB_EVENT_NAME;
   if (event !== 'pull_request' && event !== 'push') return true;
   const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+  // La marca D493 sólo puede heredar la validación de main.
+  if (event === 'pull_request' && payload.pull_request?.base?.ref !== 'main') return true;
+  if (event === 'push' && payload.ref !== 'refs/heads/main') return true;
   const base = event === 'pull_request' ? payload.pull_request?.base?.sha : payload.before;
   const head = event === 'pull_request' ? payload.pull_request?.head?.sha : payload.after;
   if (!HEX40.test(base) || !HEX40.test(head)) throw new Error('base o cabeza inválida');
