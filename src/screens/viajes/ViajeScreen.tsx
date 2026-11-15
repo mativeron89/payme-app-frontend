@@ -181,7 +181,15 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   const [hoja, setHoja] = useState<Hoja | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [marcando, setMarcando] = useState<string | null>(null);
-  const confirmandoRecibi = useRef(false);
+  const confirmandoRecibi = useRef<symbol | null>(null);
+  const duenoEnvio = useRef<symbol | null>(null);
+  const duenoMarca = useRef<symbol | null>(null);
+
+  function liberarEnvio(propio: symbol) {
+    if (duenoEnvio.current !== propio) return;
+    duenoEnvio.current = null;
+    setEnviando(false);
+  }
   const pantalla = useRef<HTMLDivElement | null>(null);
   const tituloRecibi = useRef<HTMLHeadingElement | null>(null);
   const focoAlCerrar = useRef<'titulo' | HTMLButtonElement | null>(null);
@@ -236,6 +244,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 
   async function confirmarCierre() {
     if (enviando) return;
+    const propio = Symbol();
+    duenoEnvio.current = propio;
     setEnviando(true);
     try {
       const v = await api.cerrarViaje(viajeId);
@@ -258,12 +268,14 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         void refrescar();
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
     } finally {
-      setEnviando(false);
+      liberarEnvio(propio);
     }
   }
 
   async function confirmarSalida() {
     if (enviando) return;
+    const propio = Symbol();
+    duenoEnvio.current = propio;
     setEnviando(true);
     try {
       await api.salirDeViaje(viajeId);
@@ -285,13 +297,20 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         noDisponible();
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
     } finally {
-      setEnviando(false);
+      liberarEnvio(propio);
     }
   }
 
-  async function marcar(transferenciaId: string, accion: AccionTransferencia, alConfirmar?: () => void, alFallar?: () => void) {
+  async function marcar(transferenciaId: string, accion: AccionTransferencia, alConfirmar?: () => void, alFallar?: (liberarMarca: () => void) => void) {
     if (marcando) return;
+    const propio = Symbol();
+    duenoMarca.current = propio;
     setMarcando(transferenciaId);
+    const liberarMarca = () => {
+      if (duenoMarca.current !== propio) return;
+      duenoMarca.current = null;
+      setMarcando(null);
+    };
     try {
       const r = await api.marcarTransferenciaDeViaje(viajeId, transferenciaId, accion);
       alConfirmar?.();
@@ -307,13 +326,13 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       else {
         // `no_abierto`: ya no espera pagos (quedó cerrado); el refresco lleva a Cerrados.
         if (e.tipo !== 'no_abierto') {
-          alFallar?.();
+          alFallar?.(liberarMarca);
           toast(t('No pudimos guardarlo. Prueba de nuevo.'));
         }
         await refrescar();
       }
     } finally {
-      setMarcando(null);
+      liberarMarca();
     }
   }
 
@@ -331,7 +350,9 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     if (hoja?.tipo !== 'recibi' || confirmandoRecibi.current || marcando) return;
     if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
     // Consumir antes del await: también cubre dos toques dentro del mismo render.
-    confirmandoRecibi.current = true;
+    const propio = Symbol();
+    confirmandoRecibi.current = propio;
+    duenoEnvio.current = propio;
     setEnviando(true);
     let hojaCerrada = false;
     try {
@@ -339,25 +360,25 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         hojaCerrada = true;
         focoAlCerrar.current = 'titulo';
         // El POST ya asentó el pago: el GET posterior no debe mantener la app inerte.
-        confirmandoRecibi.current = false;
-        setEnviando(false);
+        if (confirmandoRecibi.current === propio) confirmandoRecibi.current = null;
+        liberarEnvio(propio);
         setHoja(null);
-      }, () => {
+      }, (liberarMarca) => {
         hojaCerrada = true;
         focoAlCerrar.current = hoja.disparador;
         // El POST falló: habilitar el origen antes de devolverle el foco, sin esperar el GET.
-        setMarcando(null);
-        confirmandoRecibi.current = false;
-        setEnviando(false);
+        liberarMarca();
+        if (confirmandoRecibi.current === propio) confirmandoRecibi.current = null;
+        liberarEnvio(propio);
         setHoja(null);
       });
     } finally {
       if (!hojaCerrada) {
         focoAlCerrar.current = hoja.disparador;
         setHoja(null);
+        if (confirmandoRecibi.current === propio) confirmandoRecibi.current = null;
+        liberarEnvio(propio);
       }
-      confirmandoRecibi.current = false;
-      setEnviando(false);
     }
   }
 

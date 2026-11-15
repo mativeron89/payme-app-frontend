@@ -298,3 +298,105 @@ test('C195D C3 · POST fallido y GET colgado cierran a 1 s con aviso y foco', as
   await expect(boton(page, 'Luis')).toBeFocused();
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
 });
+
+// El GET viejo se resuelve a mano mientras el segundo POST conserva su promesa pendiente.
+type RefrescoRetenido = Window & { __c195e: { resolverGet: () => Promise<void>; salidas: number } };
+async function retenerRefresco(page: Page, fallar: boolean) {
+  await page.evaluate(async (fallo) => {
+    (window as unknown as Ventana).__c194.fallar = fallo;
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const original = api.getViaje;
+    let resolver: (v: Awaited<ReturnType<typeof original>>) => void = () => {};
+    const pendiente = new Promise<Awaited<ReturnType<typeof original>>>((resolve) => { resolver = resolve; });
+    api.getViaje = () => pendiente;
+    (window as unknown as RefrescoRetenido).__c195e = {
+      resolverGet: async () => { resolver(await original('d1000000-0000-4000-8000-000000000002')); },
+      salidas: 0,
+    };
+  }, fallar);
+}
+async function soltarRefresco(page: Page) {
+  await page.evaluate(() => (window as unknown as RefrescoRetenido).__c195e.resolverGet());
+  // Dejar terminar la cadena del GET y ambos finally, sin resolver el segundo POST.
+  await page.waitForTimeout(200);
+}
+
+test('C195E D1 · GET viejo no libera el segundo Recibí en vuelo ni permite un tercer POST', async ({ page }) => {
+  await preparar(page);
+  await retenerRefresco(page, true);
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  const aceptar = page.getByRole('button', { name: 'Sí, recibí', exact: true });
+  await expect(aceptar).toBeDisabled();
+  await soltarRefresco(page);
+  const deshabilitado = await aceptar.isDisabled();
+  await aceptar.evaluate((el) => (el as HTMLButtonElement).click());
+  const pedidos = await llamadas(page);
+  console.log('D1', JSON.stringify({ deshabilitado, pedidos }));
+  expect(deshabilitado).toBe(true);
+  expect(pedidos).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi'], [VIAJE, await idFixture(page, 'luis'), 'recibi']]);
+});
+
+test('C195E D2 · GET viejo no libera Salir en vuelo ni permite una segunda salida', async ({ page }) => {
+  await preparar(page);
+  await retenerRefresco(page, false);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    api.salirDeViaje = () => {
+      (window as unknown as RefrescoRetenido).__c195e.salidas++;
+      return new Promise(() => {});
+    };
+  });
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  const salir = page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true });
+  await salir.click();
+  await expect(salir).toBeDisabled();
+  await soltarRefresco(page);
+  const deshabilitado = await salir.isDisabled();
+  await salir.evaluate((el) => (el as HTMLButtonElement).click());
+  const pedidos = await page.evaluate(() => (window as unknown as RefrescoRetenido).__c195e.salidas);
+  console.log('D2', JSON.stringify({ deshabilitado, pedidos }));
+  expect(deshabilitado).toBe(true);
+  expect(pedidos).toBe(1);
+});
+
+test('C195E D3 · GET viejo no libera No me llegó de otra fila ni duplica su POST', async ({ page }) => {
+  await preparar(page);
+  await retenerRefresco(page, true);
+  await boton(page, 'Sofía').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  const noLlego = fila(page, 'Luis').getByRole('button', { name: 'No me llegó', exact: true });
+  await noLlego.click();
+  await expect(noLlego).toBeDisabled();
+  await soltarRefresco(page);
+  const deshabilitado = await noLlego.isDisabled();
+  await noLlego.evaluate((el) => (el as HTMLButtonElement).click());
+  const pedidos = (await llamadas(page)).filter((p) => p[2] === 'no-llego');
+  console.log('D3', JSON.stringify({ deshabilitado, pedidos }));
+  expect(deshabilitado).toBe(true);
+  expect(pedidos).toEqual([[VIAJE, await idFixture(page, 'luis'), 'no-llego']]);
+});
+
+test('C195E D4 · error con GET colgado permite Cancelar y Escape en Salir', async ({ page }) => {
+  await preparar(page);
+  await retenerRefresco(page, true);
+  await boton(page, 'Luis').click();
+  await confirmar(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cancelar', exact: true })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+});
