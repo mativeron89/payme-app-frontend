@@ -385,3 +385,37 @@ censo admite exactamente dos archivos, con autoridad distinta: `ci.yml` es el
 único que puede mover los dominios y `release-prebuilt-stage.yml` sólo puede
 crear y verificar URLs staged sin promoción. **Un tercer camino sigue poniendo
 la suite en rojo**: una lista abierta de lo conocido fallaría abierta.
+
+
+## D807 · minutos de CI (0.275.17)
+
+La concurrencia agrupa por workflow, evento y número de PR. Sólo `pull_request`
+lleva cancelación en curso. `push` y `workflow_dispatch` usan el ID de corrida y
+no cancelan otras ejecuciones. La corrida más nueva del PR debe acreditar sus
+propios gates; no se relanza ninguna corrida ni se cambia un check obligatorio.
+
+`decidir` expone `visible` desde `ci-alcance-visible.mjs`. En PR compara el
+merge-base de base y head contra head; en push compara before y after. Sólo
+`docs/**`, `*.md`, `src/**/*.test.ts`, `src/**/*.test.tsx` y
+`scripts/**/*.test.ts` permiten omitir los cuatro shards. `.github/**`,
+`package*.json` y scripts que no sean tests siempre requieren navegador,
+aunque tengan extensión documental. Los renombres comprueban ambos extremos.
+Un diff vacío, error, evento no admitido o base inaccesible da `visible=true`.
+
+Con `visible=false`, `checks` y `build` siguen corriendo. El verificador del
+primer paso de `build` exige `decidir=success`, `probado=false`, `checks=success`
+y Playwright exitoso o salteado por esa salida exacta. El camino D493
+`probado=true` conserva su restricción a push en main. Cualquier failure o
+cancelled sigue bloqueando. `build` conserva `always()`.
+
+La marca de árbol probado se genera y sube también en el PR documental o de
+tests con navegador omitido: la corrida cubrió todo lo que podía afectar ese
+diff. Main sólo reutiliza la marca con el árbol y la base verificados por D493.
+Los hooks y la publicación conservan sus condiciones y permisos.
+
+No se agregó caché de navegadores. En la ventana medida desde 15/10 hubo 304
+instalaciones exitosas: media 45,76 s, mediana 23 s, 16 superiores a 60 s. La
+instalación cancelada de 13.603 s se conserva separada; no acredita costo de
+instalación exitosa. El criterio del paso 5 se aplicó a la media exitosa por
+shard, menor a un minuto. No se atribuye ahorro de caché ni se infiere costo en
+USD. Los JSON del paquete C196 conservan comandos, duración y limitaciones.

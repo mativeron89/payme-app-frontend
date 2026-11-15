@@ -1188,6 +1188,7 @@ const envDe = (n: unknown): unknown => {
 const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   checkout: {},
   scanner: {},
+  alcance: {},
   setup: {},
   instalacion: {},
   espejo: {},
@@ -1260,6 +1261,7 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   // D493 · la marca del árbol probado (sólo en PR) y su artefacto.
   [/^actions\/upload-artifact@/, 'subir-marca'],
   [/^node scripts\/ci-ya-probado\.mjs$/, 'decidir'],
+  [/^node scripts\/ci-alcance-visible\.mjs$/, 'alcance'],
   [/^node scripts\/ci-verificar-needs\.mjs$/, 'verificar-needs'],
   [/^node scripts\/ci-marcar-probado\.mjs$/, 'marca'],
   [/^bash scripts\/auditar-secretos\.sh$/, 'scanner'],
@@ -1321,6 +1323,7 @@ const ROLES_QUE_NO_BLOQUEAN: ReadonlySet<string> = new Set(['reporter']);
  *   · la marca del árbol probado, sólo en PR y sólo con todo en verde.
  */
 const CONDICION_SALTEO = "needs.decidir.outputs.probado != 'true'";
+const CONDICION_NAVEGADOR = `${CONDICION_SALTEO} && needs.decidir.outputs.visible != 'false'`;
 const CONDICION_JOB_DEL_PUBLICADOR = 'always()';
 const CONDICION_MARCA = "success() && github.event_name == 'pull_request'";
 const ROLES_CON_CONDICION_DE_MARCA: ReadonlySet<string> = new Set(['marca', 'subir-marca']);
@@ -1844,6 +1847,7 @@ function fallasDelCenso(yml: string): string[] {
     ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
     ['node', 'scripts/verificar-aliases.mjs'], // gate del alias→herramienta (P88)
     ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
+    ['node', 'scripts/ci-alcance-visible.mjs'],
     ['node', 'scripts/ci-ya-probado.mjs'], // D493 · decidir
     ['node', 'scripts/ci-verificar-needs.mjs'], // D493 · el verificador de needs
     ['node', 'scripts/ci-marcar-probado.mjs'], // D493 · la marca del árbol probado
@@ -2166,7 +2170,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
     }
     for (const j of jobs) {
       if (j.nombre === pub.job || !esperaA(jobs, pub.job, j.nombre) || j.condicion === undefined) continue;
-      if (j.condicion !== CONDICION_SALTEO) {
+      if (j.condicion !== (j.nombre === 'playwright' ? CONDICION_NAVEGADOR : CONDICION_SALTEO)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: el job «${j.nombre}» lleva \`if: ${JSON.stringify(j.condicion)}\` — ` +
             'la única condición adjudicada para un job de gates es la del salteo de D493',
@@ -2262,8 +2266,13 @@ function fallasDelGrafo(yml: string): string[] {
     if (decidir.condicion !== undefined) fallas.push('«decidir» no puede llevar `if:`: se saltearía y todo quedaría sin decidir');
     if (decidir.estrategia !== undefined) fallas.push('«decidir» no puede llevar `strategy`');
     const crudo = jobCrudo(yml, 'decidir');
-    if (!mismoMapping(crudo?.['outputs'], { probado: '${{ steps.consulta.outputs.probado }}' })) {
+    if (!mismoMapping(crudo?.['outputs'], { probado: '${{ steps.consulta.outputs.probado }}', visible: '${{ steps.alcance.outputs.visible }}' })) {
       fallas.push(`los outputs de «decidir» no son exactamente probado ← steps.consulta: ${JSON.stringify(crudo?.['outputs'])}`);
+    }
+    const alcance = decidir.pasos.filter((p) => p.claves['id'] === 'alcance');
+    if (alcance.length !== 1 || alcance[0]!.claves['if'] !== undefined ||
+      texto(alcance[0]!.claves['run']) !== 'node scripts/ci-alcance-visible.mjs') {
+      fallas.push('el paso alcance de decidir debe ejecutar exactamente ci-alcance-visible sin condición');
     }
     const consulta = decidir.pasos.filter((p) => p.claves['id'] === 'consulta');
     if (consulta.length !== 1 || rolDePaso(consulta[0]!.claves) !== 'decidir' ||
@@ -2276,7 +2285,7 @@ function fallasDelGrafo(yml: string): string[] {
     const j = job(n);
     if (j === undefined) continue;
     mismasNecesidades(n, ['decidir']);
-    if (j.condicion !== CONDICION_SALTEO) {
+    if (j.condicion !== (j.nombre === 'playwright' ? CONDICION_NAVEGADOR : CONDICION_SALTEO)) {
       fallas.push(`«${n}» lleva \`if: ${JSON.stringify(j.condicion)}\` y la única adjudicada es «${CONDICION_SALTEO}»`);
     }
   }

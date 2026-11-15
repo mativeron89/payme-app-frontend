@@ -8,7 +8,8 @@
  * Lee `NEEDS` (el `toJSON(needs)` del job) y sale ≠0 salvo que:
  *
  *   · `decidir` terminó en success, y
- *   · con `probado=false`: `checks` y `playwright` terminaron en success
+ *   · con `probado=false`: `checks` terminó en success; `playwright` en success o skipped sólo
+ *     si decidir entregó visible=false en esta corrida
  *     (con la matriz, `playwright` es success sólo si los 4 shards lo son);
  *   · con `probado=true`: es un push a main y `checks`/`playwright` no fallaron
  *     (salteados, o success si corrieron igual).
@@ -36,7 +37,9 @@ function verificar(env) {
 
   if (probado === 'false') {
     for (const j of ['checks', 'playwright']) {
-      if (resultado(j) !== 'success') return `${j} terminó en ${resultado(j)}`;
+      if (resultado(j) === 'success') continue;
+      if (j === 'playwright' && resultado(j) === 'skipped' && needs.decidir?.outputs?.visible === 'false') continue;
+      return `${j} terminó en ${resultado(j)}`;
     }
     return null;
   }

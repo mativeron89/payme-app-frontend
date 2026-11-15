@@ -1,3 +1,4 @@
+import { load } from 'js-yaml';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { esperaA, leerWorkflow, pasosDeWorkflow } from './yamlWorkflow';
@@ -126,5 +127,22 @@ jobs:
 `);
     expect(esperaA(ciclo, 'a', 'inexistente')).toBe(false);
     expect(esperaA(ciclo, 'a', 'b')).toBe(true);
+  });
+});
+
+
+describe('D807 K3 · concurrencia sólo de PR y cuatro shards intactos', () => {
+  const yaml = () => load(readFileSync('.github/workflows/ci.yml', 'utf8')) as { concurrency: Record<string, unknown>; jobs: Record<string, { strategy?: unknown; steps: Array<{run?: string}> }> };
+  it('sólo pull_request cancela; push y workflow_dispatch tienen grupo por run_id', () => {
+    expect(yaml().concurrency).toEqual({
+      group: '${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}',
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
+    });
+  });
+  it('mismos jobs y cobertura 1..4 con denominador 4', () => {
+    const jobs = yaml().jobs;
+    expect(Object.keys(jobs).sort()).toEqual(['build', 'checks', 'decidir', 'playwright']);
+    expect(jobs['playwright']!.strategy).toEqual({ 'fail-fast': false, matrix: { shard: [1, 2, 3, 4] } });
+    expect(jobs['playwright']!.steps.filter(s => s.run?.startsWith('npx playwright test')).map(s => s.run)).toEqual(['npx playwright test --shard "$SHARD/4"']);
   });
 });

@@ -1,3 +1,10 @@
+## 0.275.17 · 2026-11-14
+
+- D807: una corrida nueva de un PR cancela su predecesora; main y las corridas manuales conservan sus ejecuciones.
+- Navegador sólo se omite si el diff completo es documental o de tests permitidos. Errores, bases inaccesibles, renombres fuera de la lista y diff vacío corren los cuatro shards.
+- `build` conserva su verificador obligatorio y sólo acepta el skip adicional con `visible=false` y `checks` exitoso. La marca de árbol probado también se conserva en esos PR.
+- Sin caché nueva: instalación exitosa de Chromium media 45,76 s y mediana 23 s en la ventana desde 15/10; valores largos y cancelados se conservan en la evidencia.
+
 ## 0.275.16 · 2026-11-14
 
 - Viajes: la confirmación de «Recibí» ignora el doble toque inicial durante 350 ms, cierra al responder el pago antes del refresco y conserva el foco durante el envío y al volver.

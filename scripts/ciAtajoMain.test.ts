@@ -264,3 +264,17 @@ describe('D493 · ci-marcar-probado: la marca sale del merge ref del PR', () => 
     expect(r.salida).toBe('');
   });
 });
+
+describe('D807 K2 · skip de navegador sólo acreditado por decidir', () => {
+  for (const [visible, checks, pw, expected] of [
+    ['false', 'success', 'skipped', 0], ['true', 'success', 'skipped', 1],
+    [undefined, 'success', 'skipped', 1], ['no', 'success', 'skipped', 1],
+    ['false', 'failure', 'skipped', 1], ['false', 'skipped', 'skipped', 1],
+    ['false', 'cancelled', 'skipped', 1], ['false', 'success', 'failure', 1],
+    ['false', 'success', 'cancelled', 1], ['false', 'success', 'success', 0],
+  ] as const) it(`visible=${visible}, checks=${checks}, playwright=${pw} → ${expected}`, async () => {
+    const n = JSON.parse(needs('success', 'false', checks, pw));
+    n.decidir.outputs.visible = visible;
+    expect((await correr(VERIFICAR, { ...PR, NEEDS: JSON.stringify(n) }, AQUI)).code).toBe(expected);
+  });
+});
