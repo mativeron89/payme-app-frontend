@@ -214,7 +214,8 @@ describe('🔴 D279 · «Cerrar viaje» y «Salir del viaje», al pie de Configu
   it('cada botón abre su hoja de siempre: la pantalla del viaje pasa las mismas', () => {
     const fuente = readFileSync(new URL('./ViajeScreen.tsx', import.meta.url), 'utf8');
     expect(fuente).toContain('onCerrarViaje={pedirCierre}');
-    expect(fuente).toContain("onSalirDelViaje={() => setHoja({ tipo: 'salir' })}");
+    expect(fuente).toContain("onSalirDelViaje={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}");
+    expect(fuente).toMatch(/async function confirmarSalida\(\) \{[^]*?if \(performance\.now\(\) - hoja\.abiertaEn < ESPERA_RECIBI_MS\) return;/);
     // Las hojas se dibujan también con Configuración abierta.
     expect(fuente.match(/\{hojas\}/g)).toHaveLength(2);
     // Al cerrar, se vuelve a la pantalla del viaje (que ya espera pagos).

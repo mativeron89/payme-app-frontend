@@ -701,7 +701,10 @@ describe('K1 · cerrar y salir: espera y un solo POST por confirmación', () => 
     if (accion === 'cerrar') {
       (m.componente(ViajeVista).props.onConfiguracion as () => void)(); m.render();
       (m.nodos().find((n) => typeof n.type === 'function' && n.type.name === 'ConfiguracionDelViaje')!.props.onCerrarViaje as () => void)();
-    } else (m.componente(ViajeVista).props.onSalir as () => void)();
+    } else {
+      (m.componente(ViajeVista).props.onConfiguracion as () => void)(); m.render();
+      (m.nodos().find((n) => typeof n.type === 'function' && n.type.name === 'ConfiguracionDelViaje')!.props.onSalirDelViaje as () => void)();
+    }
     m.render();
     const confirmar = m.componente(accion === 'cerrar' ? HojaCerrarVista : HojaSalirVista).props.onConfirmar as () => void;
     ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
