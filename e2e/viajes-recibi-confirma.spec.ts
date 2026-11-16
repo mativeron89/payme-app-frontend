@@ -407,7 +407,7 @@ test('C195E D4 · error con GET colgado permite Cancelar y Escape en Salir', asy
 for (const idioma of ['es', 'en'] as const) test(`K2 navegador · No me llegó, ${idioma}, espera y confirma una vez`, async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await preparar(page, idioma);
-  await fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "Didn't get it", exact: true }).click();
+  await fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "I didn't get it", exact: true }).click();
   const hoja = page.getByRole('dialog');
   await expect(hoja.getByRole('heading')).toHaveText(idioma === 'es' ? '¿No te llegaron $750 de Luis?' : "Didn't get $750 from Luis?");
   await expect(hoja.getByText(idioma === 'es' ? 'Le avisamos a Luis y el aviso no se puede retirar.' : "We'll let Luis know, and the notice can't be taken back.", { exact: true })).toBeVisible();
