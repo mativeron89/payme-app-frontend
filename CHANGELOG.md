@@ -1,8 +1,8 @@
 ## 0.275.20 · 2026-11-16
 
-- Cerrar y salir de un viaje esperan el segundo toque; «No me llegó» pide confirmación.
+- Cerrar y salir de un viaje ignoran un toque doble; «No me llegó» pide confirmación.
 - Al confirmar lo recibido aparece «Listo, quedó guardado», salvo cuando el viaje queda cerrado.
-- Las invitaciones avisan al alcanzar el límite y conservan el intento para volver a probar más tarde.
+- Copiar el link de la mesa, crear el link al abrirla e invitar a un amigo avisan al alcanzar el límite y conservan el intento para volver a probar más tarde. El QR sigue sin aviso.
 - Contrato actualizado a App Backend 2.214.0 y mayor cobertura de finalidades opcionales y procedencia.
 
 ## 0.275.19 · 2026-11-15

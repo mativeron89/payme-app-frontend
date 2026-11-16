@@ -19,12 +19,12 @@ function handler(archivo: string, nombre: string, entorno: Record<string, unknow
 }
 const mensaje = 'Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.';
 describe('K5 · 429 de invitaciones: mensaje, sin reintento y misma clave', () => {
-  for (const nombre of ['copyInvitationLink', 'pedirLinkDelQr', 'makeLink']) for (const idioma of ['es', 'en'] as const) it(`${nombre} ${idioma}`, async () => {
+  for (const code of ['mesa_invitations_rate_limited', 'otro_rate_limited']) for (const nombre of ['copyInvitationLink', 'pedirLinkDelQr', 'makeLink']) for (const idioma of ['es', 'en'] as const) it(`${nombre} ${idioma} ${code}`, async () => {
     const avisos: string[] = []; const errors: Array<string | null> = []; const estados: string[] = [];
     const intentos = new Map<string, string>(); let qr: unknown = null;
     let ocupado = false;
     const cerrojo = () => ({ current: { tryEnter: () => { if (ocupado) return false; ocupado = true; return true; }, leave: () => { ocupado = false; } } });
-    const createInvitation = vi.fn().mockRejectedValue(new MockApiError(429, 'mesa_invitations_rate_limited'));
+    const createInvitation = vi.fn().mockRejectedValue(new MockApiError(429, code));
     const entorno = {
       code: 'MESA-EJEMPLO', api: { createInvitation }, extractApiError, isDefinitiveMutationError, isServiceUnavailable,
       t: (s: string, ...a: unknown[]) => traducir(s, idioma, ...a), toast: (s: string) => avisos.push(s),
@@ -39,7 +39,9 @@ describe('K5 · 429 de invitaciones: mensaje, sin reintento y misma clave', () =
     await ejecutar('MESA-EJEMPLO');
     expect(createInvitation).toHaveBeenCalledTimes(1);
     expect(intentos.get('MESA-EJEMPLO')).toBe('clave-ejemplo');
-    const esperado = idioma === 'es' ? mensaje : "You've sent a lot of invites in a row. Wait a few minutes and try again.";
+    const esperado = code === 'mesa_invitations_rate_limited'
+      ? traducir(mensaje, idioma)
+      : traducir(nombre === 'makeLink' ? 'No pudimos confirmar el link. Reintenta la misma operación: vamos a reutilizarla para no crear otra invitación.' : 'No pudimos confirmar el link. Reintenta la misma operación: vamos a reutilizarla.', idioma);
     if (nombre === 'pedirLinkDelQr') { expect(avisos).toEqual([]); expect(qr).toBeNull(); }
     else if (nombre === 'copyInvitationLink') expect(avisos).toEqual([esperado]);
     else { expect(errors.at(-1)).toBe(esperado); expect(estados.at(-1)).toBe('error'); }

@@ -1,3 +1,6 @@
+import ts from 'typescript';
+import { isServiceUnavailable } from '../api/mutationRetry';
+import { traducir } from '../i18n/idioma';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -186,5 +189,35 @@ describe('D379 · la memoria de las invitaciones sobrevive a cerrar y reabrir la
     for (const linea of resto.split('\n').filter((l) => /\bset[A-Z]\w*\(/.test(l))) {
       expect(linea, linea).toMatch(/if \(montado\.current\) set[A-Z]\w*\(/);
     }
+  });
+});
+
+
+describe('límite de invitaciones en el panel de amigos', () => {
+  for (const code of ['mesa_invitations_rate_limited', 'otro_rate_limited']) for (const idioma of ['es', 'en'] as const) it(`${code} ${idioma}: mensaje, sin reintento y misma clave`, async () => {
+    const fuente = readFileSync(join(RAIZ, 'src/components/InviteFriends.tsx'), 'utf8');
+    const ast = ts.createSourceFile('InviteFriends.tsx', fuente, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const funciones: ts.FunctionDeclaration[] = [];
+    function visitar(n: ts.Node) { if (ts.isFunctionDeclaration(n) && n.name?.text === 'invite') funciones.push(n); ts.forEachChild(n, visitar); }
+    visitar(ast); expect(funciones).toHaveLength(1);
+    const codigo = ts.transpileModule(funciones[0]!.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+    const memoria = crearMemoriaDeInvitaciones('MESA-EJEMPLO');
+    const inviteFriend = vi.fn().mockRejectedValue(new HttpError(429, { error: code } as never));
+    const avisos: string[] = []; const antes = claves;
+    const entorno = { invitarConMemoria, memoria, code: 'MESA-EJEMPLO', api: { inviteFriend }, isServiceUnavailable,
+      toast: (s: string) => avisos.push(s), t: (s: string, ...a: unknown[]) => traducir(s, idioma, ...a) };
+    const invitar = new Function(...Object.keys(entorno), `${codigo}; return invite;`)(...Object.values(entorno)) as (f: { payme_id: string; first_name: string }) => Promise<void>;
+    const amigo = { payme_id: 'amigo-ejemplo', first_name: 'Luis' };
+    await invitar(amigo);
+    expect(inviteFriend).toHaveBeenCalledTimes(1);
+    const esperado = code === 'mesa_invitations_rate_limited'
+      ? 'Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.'
+      : 'No pudimos confirmar la invitación a {0}. Reintenta la misma: vamos a reutilizarla.';
+    expect(avisos).toEqual([traducir(esperado, idioma, 'Luis')]);
+    await invitar(amigo);
+    expect(inviteFriend).toHaveBeenCalledTimes(2);
+    expect(inviteFriend.mock.calls[1]).toEqual(inviteFriend.mock.calls[0]);
+    expect(claves - antes).toBe(1);
+    expect(memoria.claves.size).toBe(1);
   });
 });

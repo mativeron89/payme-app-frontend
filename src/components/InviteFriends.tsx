@@ -266,7 +266,9 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
       return;
     }
     toast(
-      r.code === 'mesa_not_invitable'
+      r.status === 429 && r.code === 'mesa_invitations_rate_limited'
+        ? t('Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.')
+        : r.code === 'mesa_not_invitable'
         ? t('La mesa ya no acepta invitados')
         : isServiceUnavailable(r.status)
           ? t('El servicio no pudo confirmar la invitación a {0}. Reintenta esta misma invitación; no generes otra.', f.first_name)
