@@ -167,7 +167,7 @@ type Hoja =
   | { readonly tipo: 'cerrar'; readonly abiertaEn: number; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
   | { readonly tipo: 'recibi'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement; readonly abiertaEn: number }
   | { readonly tipo: 'salir'; readonly abiertaEn: number }
-  | { readonly tipo: 'no_llego'; readonly transferencia: TransferenciaViaje; readonly abiertaEn: number }
+  | { readonly tipo: 'no_llego'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement | null; readonly abiertaEn: number }
   | { readonly tipo: 'no_puede_salir'; readonly razon: PorQueNoPuedeSalir };
 
 // La hoja puede abrir debajo del dedo: ignorar el segundo toque sin deshabilitar ni mover el foco.
@@ -322,7 +322,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         replaceRoute('viaje-cerrado', viajeId);
         return;
       }
-      if (accion === 'recibi') toast(t('Listo, quedó guardado'));
+      if (accion === 'recibi') toast(t('Listo, quedó guardado'), { sobreLaBarra: true });
       await refrescar();
     } catch (err) {
       const e = errorDeViaje(err);
@@ -342,10 +342,10 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 
   const cerrarHoja = () => {
     if (enviando || duenoEnvio.current || confirmandoRecibi.current) return;
-    if (hoja?.tipo === 'recibi') {
+    if (hoja?.tipo === 'recibi' || hoja?.tipo === 'no_llego') {
       const disparador = hoja.disparador;
       // El toque en Safari no asegura foco previo; guardamos el botón que abrió esta hoja.
-      requestAnimationFrame(() => disparador.focus());
+      if (disparador) requestAnimationFrame(() => disparador.focus());
     }
     setHoja(null);
   };
@@ -392,19 +392,26 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     const propio = Symbol();
     duenoEnvio.current = propio;
     setEnviando(true);
+    let hojaCerrada = false;
     try {
       await marcar(hoja.transferencia.id, 'no-llego', () => {
+        hojaCerrada = true;
         focoAlCerrar.current = 'titulo';
         liberarEnvio(propio);
         setHoja(null);
       }, (liberarMarca) => {
-        focoAlCerrar.current = 'titulo';
+        hojaCerrada = true;
+        focoAlCerrar.current = hoja.disparador;
         liberarMarca();
         liberarEnvio(propio);
         setHoja(null);
       });
     } finally {
-      liberarEnvio(propio);
+      if (!hojaCerrada) {
+        focoAlCerrar.current = hoja.disparador;
+        setHoja(null);
+        liberarEnvio(propio);
+      }
     }
   }
 
@@ -447,7 +454,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
           <div className="vjv-hoja">
             <span className="vjv-hoja-asa" aria-hidden="true" />
             <h2 ref={tituloRecibi} tabIndex={-1} className="vjv-hoja-titulo">{t('¿No te llegaron {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</h2>
-            <p className="vjv-hoja-texto">{t('Le avisamos a {1} y el aviso no se puede retirar.', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</p>
+            <p className="vjv-hoja-texto">{t('Le vamos a avisar a {1} y el aviso no se puede retirar.', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</p>
             <div className="vjv-hoja-botones">
               <button type="button" className="btn btn-navy" disabled={enviando} onClick={() => void confirmarNoLlego()}>
                 {t('Sí, no me llegó')}
@@ -517,10 +524,10 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         fotoDe={fotoDe}
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
         onSalir={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
-        onMarcar={(id, accion) => {
+        onMarcar={(id, accion, disparador) => {
           if (accion === 'no-llego') {
             const transferencia = viaje?.transferencias.find((tr) => tr.id === id);
-            if (transferencia) setHoja({ tipo: 'no_llego', transferencia, abiertaEn: performance.now() });
+            if (transferencia) setHoja({ tipo: 'no_llego', transferencia, disparador: disparador ?? null, abiertaEn: performance.now() });
           } else void marcar(id, accion);
         }}
         onRecibir={(transferencia, disparador) => setHoja({ tipo: 'recibi', transferencia, disparador, abiertaEn: performance.now() })}
@@ -668,7 +675,7 @@ export interface ViajeVistaProps {
   readonly fotoDelViaje?: string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
   readonly onSalir: () => void;
-  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta) => void;
+  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta, disparador?: HTMLButtonElement) => void;
   readonly onRecibir: (transferencia: TransferenciaViaje, disparador: HTMLButtonElement) => void;
 }
 
@@ -993,7 +1000,7 @@ interface FilaDeTransferencia {
   readonly miembros: readonly MiembroViaje[];
   readonly ocupado: boolean;
   readonly enviando: boolean;
-  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta) => void;
+  readonly onMarcar: (transferenciaId: string, accion: AccionDirecta, disparador?: HTMLButtonElement) => void;
 }
 
 /** 1n · la mía: «Tú le transfieres $542 a Luis Pérez» con «Ya pagué» / «Deshacer». */
@@ -1053,7 +1060,7 @@ function TransferenciaAMi({ tr, miembros, ocupado, enviando, onMarcar, onRecibir
             <span>{t('{0} marcó que te pagó. Revisa tu banco y confírmalo.', nombreDePilaDeId(miembros, tr.de, t))}</span>
           </p>
           <div className="vjv-tr-botones">
-            <button type="button" className="btn btn-ghost" disabled={ocupado} onClick={() => onMarcar(tr.id, 'no-llego')}>
+            <button type="button" className="btn btn-ghost" disabled={ocupado} onClick={(e) => onMarcar(tr.id, 'no-llego', e.currentTarget)}>
               {t('No me llegó')}
             </button>
             <button type="button" className="btn btn-navy" disabled={ocupado} onClick={(e) => onRecibir(tr, e.currentTarget)}>

@@ -410,7 +410,7 @@ for (const idioma of ['es', 'en'] as const) test(`K2 navegador · No me llegó, 
   await fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "I didn't get it", exact: true }).click();
   const hoja = page.getByRole('dialog');
   await expect(hoja.getByRole('heading')).toHaveText(idioma === 'es' ? '¿No te llegaron $750 de Luis?' : "Didn't get $750 from Luis?");
-  await expect(hoja.getByText(idioma === 'es' ? 'Le avisamos a Luis y el aviso no se puede retirar.' : "We'll let Luis know, and the notice can't be taken back.", { exact: true })).toBeVisible();
+  await expect(hoja.getByText(idioma === 'es' ? 'Le vamos a avisar a Luis y el aviso no se puede retirar.' : "We'll let Luis know, and the notice can't be taken back.", { exact: true })).toBeVisible();
   expect(await llamadas(page)).toEqual([]);
   if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/no-me-llego-${idioma}.png` });
   await page.waitForTimeout(360);
@@ -426,5 +426,36 @@ for (const idioma of ['es', 'en'] as const) test(`K3 navegador · aviso guardado
   await page.waitForTimeout(360);
   await page.getByRole('dialog').getByRole('button', { name: idioma === 'es' ? 'Sí, recibí' : 'Yes, I received it', exact: true }).click();
   await expect(page.getByText(idioma === 'es' ? 'Listo, quedó guardado' : "Done, it's saved", { exact: true })).toBeVisible();
+  await expect(page.locator('.toast')).toHaveClass(/toast--sobre-barra/);
   if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/listo-${idioma}.png` });
+});
+
+for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco al cancelar o Escape · ${idioma}`, async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await preparar(page, idioma);
+  const origen = fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "I didn't get it", exact: true });
+  for (const cerrar of ['escape', 'cancelar', 'afuera'] as const) {
+    await origen.click();
+    const hoja = page.getByRole('dialog');
+    await expect(hoja).toBeVisible();
+    if (cerrar === 'escape') await page.keyboard.press('Escape');
+    else if (cerrar === 'cancelar') await hoja.getByRole('button', { name: idioma === 'es' ? 'Cancelar' : 'Cancel', exact: true }).click();
+    else await page.locator('.sheet-overlay').click({ position: { x: 5, y: 5 } });
+    await expect(hoja).toHaveCount(0);
+    await expect(origen).toBeFocused();
+    expect(await llamadas(page)).toEqual([]);
+  }
+  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/foco-devuelto-${idioma}.png` });
+});
+
+for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco tras error · ${idioma}`, async ({ page }) => {
+  await preparar(page, idioma);
+  await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
+  const origen = fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "I didn't get it", exact: true });
+  await origen.click();
+  await page.waitForTimeout(360);
+  await page.getByRole('dialog').getByRole('button', { name: idioma === 'es' ? 'Sí, no me llegó' : "Yes, I didn't get it", exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(origen).toBeFocused();
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'no-llego']]);
 });

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
+import { MockApiError } from '../../api/mock/mockApi';
 import { traducir } from '../../i18n/idioma';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
 import { BalanceVista, LugarAgrupado, PestanasDeBalance } from './BalanceScreen';
@@ -745,4 +746,58 @@ describe('K3 · aviso al confirmar Recibí', () => {
     if (resultado === 'exito') expect(avisosPrueba).toEqual([listoTexto]);
     else { expect(avisosPrueba).not.toContain(listoTexto); expect(avisosPrueba).toHaveLength(1); }
   });
+});
+
+
+describe('salidas de la hoja No me llegó', () => {
+  for (const error of ['viaje_not_waiting_payments', 'viaje_not_found', 'red']) it(`cierra tras ${error} y no repite el POST`, async () => {
+    let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    // El refresco caído conserva el viaje viejo: no simula un desmontaje inexistente.
+    vi.spyOn(api, 'getViaje').mockRejectedValue(new Error('red'));
+    const enviar = vi.spyOn(api, 'marcarTransferenciaDeViaje').mockRejectedValue(error === 'red' ? new Error('red') : new MockApiError(error === 'viaje_not_found' ? 404 : 409, error));
+    const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+    const disparador = { focus: vi.fn() } as unknown as HTMLButtonElement;
+    (m.componente(ViajeVista).props.onMarcar as (id: string, accion: string, b: HTMLButtonElement) => void)('tr-1', 'no-llego', disparador); m.render();
+    ahora = 1350;
+    (m.boton('Sí, no me llegó').props.onClick as () => void)();
+    await microtareas(); m.render();
+    expect(m.componente(HojaModal)).toBeUndefined();
+    expect(m.boton('Sí, no me llegó')).toBeUndefined();
+    expect(enviar).toHaveBeenCalledTimes(1);
+    expect(avisosPrueba).not.toContain('Listo, quedó guardado');
+  });
+
+  for (const cerrar of ['cancelar', 'escape'] as const) it(`no permite ${cerrar} con el POST en vuelo`, () => {
+    let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    vi.spyOn(api, 'marcarTransferenciaDeViaje').mockImplementation(() => new Promise(() => {}));
+    const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+    (m.componente(ViajeVista).props.onMarcar as (id: string, accion: string) => void)('tr-1', 'no-llego'); m.render();
+    const cerrarHoja = (cerrar === 'cancelar' ? m.boton('Cancelar').props.onClick : m.componente(HojaModal).props.onCerrar) as () => void;
+    ahora = 1350; (m.boton('Sí, no me llegó').props.onClick as () => void)();
+    // Conserva el cierre del render que recibió confirmar, para ejercer la ref síncrona.
+    cerrarHoja(); m.render();
+    expect(m.componente(HojaModal)).toBeDefined();
+  });
+
+  it('No me llegó exitoso no muestra Listo', async () => {
+    let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    vi.spyOn(api, 'getViaje').mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, 'marcarTransferenciaDeViaje').mockResolvedValue({ viaje_estado: 'esperando_pagos' } as Awaited<ReturnType<typeof api.marcarTransferenciaDeViaje>>);
+    const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+    (m.componente(ViajeVista).props.onMarcar as (id: string, accion: string) => void)('tr-1', 'no-llego'); m.render();
+    ahora = 1350; (m.boton('Sí, no me llegó').props.onClick as () => void)(); await microtareas();
+    expect(avisosPrueba).toEqual([]);
+  });
+});
+it('K1 · Salir del pie de esperando pagos también cuenta la espera desde abrir', () => {
+  let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+  const enviar = vi.spyOn(api, 'salirDeViaje').mockImplementation(() => new Promise(() => {}));
+  const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos' })));
+  (m.componente(ViajeVista).props.onSalir as () => void)(); m.render();
+  const confirmar = m.componente(HojaSalirVista).props.onConfirmar as () => void;
+  ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
+  ahora = 1350; confirmar(); confirmar(); expect(enviar).toHaveBeenCalledTimes(1);
 });

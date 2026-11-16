@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
-import { HojaSalirVista } from './ViajeScreen';
+import { HojaModal, HojaSalirVista } from './ViajeScreen';
 import { MockApiError } from '../../api/mock/mockApi';
 import type { ResumenDeViaje } from '../../api/viajes';
 import { traducir, type Idioma } from '../../i18n/idioma';
@@ -249,4 +249,29 @@ it('K1 · salir del viaje cerrado: espera 350 ms y cerrojo antes del await', () 
   const confirmar = m.componente(HojaSalirVista).props.onConfirmar as () => void;
   ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
   ahora = 1350; confirmar(); confirmar(); expect(enviar).toHaveBeenCalledTimes(1);
+});
+
+for (const cerrar of ['cancelar', 'escape'] as const) it(`salida cerrada: ${cerrar} no cierra mientras envía`, () => {
+  let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+  vi.spyOn(api, 'salirDeViaje').mockImplementation(() => new Promise(() => {}));
+  const m = montarPrueba(() => ViajeCerradoScreen({ viajeId: 'oax' }), { estado: 'listo', resumen: OAXACA });
+  (m.componente(VistaDelViajeCerrado).props.onSalir as () => void)(); m.render();
+  const cerrarHoja = (cerrar === 'cancelar' ? m.componente(HojaSalirVista).props.onCancelar : m.componente(HojaModal).props.onCerrar) as () => void;
+  ahora = 1350; (m.componente(HojaSalirVista).props.onConfirmar as () => void)(); cerrarHoja(); m.render();
+  expect(m.componente(HojaModal)).toBeDefined();
+});
+it('salida cerrada fallida libera el cerrojo: reintentar y después cancelar', async () => {
+  let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+  const enviar = vi.spyOn(api, 'salirDeViaje').mockRejectedValue(new Error('red'));
+  const m = montarPrueba(() => ViajeCerradoScreen({ viajeId: 'oax' }), { estado: 'listo', resumen: OAXACA });
+  (m.componente(VistaDelViajeCerrado).props.onSalir as () => void)(); m.render();
+  ahora = 1350; (m.componente(HojaSalirVista).props.onConfirmar as () => void)();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+  m.render();
+  expect(m.componente(HojaModal)).toBeDefined();
+  ahora = 1700; (m.componente(HojaSalirVista).props.onConfirmar as () => void)();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+  m.render(); expect(enviar).toHaveBeenCalledTimes(2);
+  (m.componente(HojaSalirVista).props.onCancelar as () => void)(); m.render();
+  expect(m.componente(HojaModal)).toBeUndefined();
 });
