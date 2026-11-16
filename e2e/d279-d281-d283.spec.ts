@@ -69,6 +69,7 @@ test.describe('🔴 D279 · «Cerrar viaje» sólo para quien creó el viaje', (
     }, CANCUN);
     await cerrarViaje(page).click();
     const hoja = page.getByRole('dialog');
+    await page.waitForTimeout(360); // Protección temporal de la confirmación.
     await hoja.getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
     await expect(page.getByText('Sólo quien creó el viaje puede cerrarlo.', { exact: true })).toBeVisible();
     await expect(hoja).toHaveCount(0);

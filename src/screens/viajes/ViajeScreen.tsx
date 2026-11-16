@@ -164,13 +164,14 @@ export function useFotosDeMiembros(
 }
 
 type Hoja =
-  | { readonly tipo: 'cerrar'; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
+  | { readonly tipo: 'cerrar'; readonly abiertaEn: number; readonly preview: VistaPreviaCierre | null; readonly fallo: boolean }
   | { readonly tipo: 'recibi'; readonly transferencia: TransferenciaViaje; readonly disparador: HTMLButtonElement; readonly abiertaEn: number }
-  | { readonly tipo: 'salir' }
+  | { readonly tipo: 'salir'; readonly abiertaEn: number }
+  | { readonly tipo: 'no_llego'; readonly transferencia: TransferenciaViaje; readonly abiertaEn: number }
   | { readonly tipo: 'no_puede_salir'; readonly razon: PorQueNoPuedeSalir };
 
 // La hoja puede abrir debajo del dedo: ignorar el segundo toque sin deshabilitar ni mover el foco.
-const ESPERA_RECIBI_MS = 350;
+export const ESPERA_RECIBI_MS = 350;
 type AccionDirecta = Exclude<AccionTransferencia, 'recibi'>;
 
 export function ViajeScreen({ viajeId }: { viajeId: string }) {
@@ -196,7 +197,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
 
   useLayoutEffect(() => {
     // Los botones conservan su disabled de envío; el título sostiene el foco dentro de la hoja.
-    if (hoja?.tipo === 'recibi' && enviando) tituloRecibi.current?.focus();
+    if ((hoja?.tipo === 'recibi' || hoja?.tipo === 'no_llego') && enviando) tituloRecibi.current?.focus();
   }, [hoja, enviando]);
 
   useEffect(() => {
@@ -229,7 +230,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }, [refrescar, t, toast]);
 
   const pedirCierre = useCallback(() => {
-    setHoja({ tipo: 'cerrar', preview: null, fallo: false });
+    setHoja({ tipo: 'cerrar', abiertaEn: performance.now(), preview: null, fallo: false });
     api.getCierreDeViaje(viajeId)
       .then((preview) => setHoja((h) => (h?.tipo === 'cerrar' ? { ...h, preview, fallo: false } : h)))
       .catch((err: unknown) => {
@@ -243,7 +244,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }, [noDisponible, viajeId, yaSeCerro]);
 
   async function confirmarCierre() {
-    if (enviando) return;
+    if (hoja?.tipo !== 'cerrar' || duenoEnvio.current || enviando) return;
+    if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
     const propio = Symbol();
     duenoEnvio.current = propio;
     setEnviando(true);
@@ -273,7 +275,8 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }
 
   async function confirmarSalida() {
-    if (enviando) return;
+    if (hoja?.tipo !== 'salir' || duenoEnvio.current || enviando) return;
+    if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
     const propio = Symbol();
     duenoEnvio.current = propio;
     setEnviando(true);
@@ -319,6 +322,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         replaceRoute('viaje-cerrado', viajeId);
         return;
       }
+      if (accion === 'recibi') toast(t('Listo, quedó guardado'));
       await refrescar();
     } catch (err) {
       const e = errorDeViaje(err);
@@ -337,7 +341,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
   }
 
   const cerrarHoja = () => {
-    if (enviando || confirmandoRecibi.current) return;
+    if (enviando || duenoEnvio.current || confirmandoRecibi.current) return;
     if (hoja?.tipo === 'recibi') {
       const disparador = hoja.disparador;
       // El toque en Safari no asegura foco previo; guardamos el botón que abrió esta hoja.
@@ -382,6 +386,28 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     }
   }
 
+  async function confirmarNoLlego() {
+    if (hoja?.tipo !== 'no_llego' || duenoEnvio.current || marcando) return;
+    if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
+    const propio = Symbol();
+    duenoEnvio.current = propio;
+    setEnviando(true);
+    try {
+      await marcar(hoja.transferencia.id, 'no-llego', () => {
+        focoAlCerrar.current = 'titulo';
+        liberarEnvio(propio);
+        setHoja(null);
+      }, (liberarMarca) => {
+        focoAlCerrar.current = 'titulo';
+        liberarMarca();
+        liberarEnvio(propio);
+        setHoja(null);
+      });
+    } finally {
+      liberarEnvio(propio);
+    }
+  }
+
   /** Las hojas de cerrar y salir: las mismas en la pantalla del viaje y en Configuración (D279). */
   const hojas = (
     <>
@@ -408,6 +434,23 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
             <div className="vjv-hoja-botones">
               <button type="button" className="btn btn-navy" disabled={enviando} onClick={() => void confirmarRecibi()}>
                 {t('Sí, recibí')}
+              </button>
+              <button ref={inicial} type="button" className="btn btn-ghost" disabled={enviando} onClick={cerrarHoja}>
+                {t('Cancelar')}
+              </button>
+            </div>
+          </div>
+        </HojaModal>
+      )}
+      {viaje && hoja?.tipo === 'no_llego' && (
+        <HojaModal key="no_llego" etiqueta={t('¿No te llegaron {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))} inicial={inicial} onCerrar={cerrarHoja}>
+          <div className="vjv-hoja">
+            <span className="vjv-hoja-asa" aria-hidden="true" />
+            <h2 ref={tituloRecibi} tabIndex={-1} className="vjv-hoja-titulo">{t('¿No te llegaron {0} de {1}?', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</h2>
+            <p className="vjv-hoja-texto">{t('Le avisamos a {1} y el aviso no se puede retirar.', formatMXN(hoja.transferencia.monto_cents), nombreDePilaDeId(viaje.miembros, hoja.transferencia.de, t))}</p>
+            <div className="vjv-hoja-botones">
+              <button type="button" className="btn btn-navy" disabled={enviando} onClick={() => void confirmarNoLlego()}>
+                {t('Sí, no me llegó')}
               </button>
               <button ref={inicial} type="button" className="btn btn-ghost" disabled={enviando} onClick={cerrarHoja}>
                 {t('Cancelar')}
@@ -450,7 +493,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
             yaSeCerro();
           }}
           onCerrarViaje={pedirCierre}
-          onSalirDelViaje={() => setHoja({ tipo: 'salir' })}
+          onSalirDelViaje={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
         />
         <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
         {hojas}
@@ -473,8 +516,13 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onNotas={() => navigate('viaje-notas', viajeId)}
         fotoDe={fotoDe}
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
-        onSalir={() => setHoja({ tipo: 'salir' })}
-        onMarcar={(id, accion) => void marcar(id, accion)}
+        onSalir={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
+        onMarcar={(id, accion) => {
+          if (accion === 'no-llego') {
+            const transferencia = viaje?.transferencias.find((tr) => tr.id === id);
+            if (transferencia) setHoja({ tipo: 'no_llego', transferencia, abiertaEn: performance.now() });
+          } else void marcar(id, accion);
+        }}
         onRecibir={(transferencia, disparador) => setHoja({ tipo: 'recibi', transferencia, disparador, abiertaEn: performance.now() })}
       />
       {/* D250 · el círculo de la cámara escanea para este viaje mientras está abierto. */}

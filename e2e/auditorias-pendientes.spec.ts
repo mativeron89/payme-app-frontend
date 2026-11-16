@@ -211,6 +211,7 @@ async function cancunEnCerrados(page: Page): Promise<void> {
   await ir(page, `/viaje/${CANCUN}`);
   await page.getByRole('button', { name: 'Configuración' }).click();
   await page.getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
   // D279 · se vuelve a la pantalla del viaje, que ya espera pagos.
   await expect(page.getByText(/Tú le transfieres \$542 a Luis Pérez/)).toBeVisible();
@@ -280,6 +281,7 @@ test.describe('🔴 6 · D279 · cerrar y salir en Configuración; en el viaje, 
     await capturar(page, 'd279-configuracion');
     // Salir: la hoja, y con consumos no se puede (H02), sin salir de Configuración.
     await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+    await page.waitForTimeout(360); // Protección temporal de la confirmación.
     await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
     await expect(page.getByText('Todavía no puedes salir de Cancún 2026', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Entendido', exact: true }).click();
@@ -287,6 +289,7 @@ test.describe('🔴 6 · D279 · cerrar y salir en Configuración; en el viaje, 
     // Cerrar: la vista previa y, al confirmar, la pantalla del viaje esperando pagos.
     await page.getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
     await expect(page.getByRole('dialog').getByText('¿Cerrar Cancún 2026?', { exact: true })).toBeVisible();
+    await page.waitForTimeout(360); // Protección temporal de la confirmación.
     await page.getByRole('dialog').getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
     await expect(page.getByText(/Tú le transfieres \$542 a Luis Pérez/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toHaveCount(0);

@@ -1,5 +1,10 @@
 /** AF-VIAJES · EN de las pantallas de Viajes (viaje). El diseño no trae inglés: lo escribió App Frontend. */
 export const EN_VIAJES_VIAJE: Record<string, string> = {
+  '¿No te llegaron {0} de {1}?': "Didn't get {0} from {1}?",
+  'Le avisamos a {1} y el aviso no se puede retirar.': "We'll let {1} know, and the notice can't be taken back.",
+  'Sí, no me llegó': "Yes, I didn't get it",
+  'Listo, quedó guardado': "Done, it's saved",
+
   // 1g · el viaje abierto. «Escanear ticket», «Pagó {0}» y «Te toca» los usa también el ticket (1i, 1k):
   // viven acá. «Pagaste tú» es de otro archivo de Viajes y «Esperando pagos · faltan {0}» de `listas.ts`.
   'Escanear ticket': 'Scan ticket',

@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../../api';
 import { traducir } from '../../i18n/idioma';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
 import { BalanceVista, LugarAgrupado, PestanasDeBalance } from './BalanceScreen';
 import { agruparConsumos } from './consumosPorLugar';
 import {
+  ViajeScreen,
+  HojaModal,
   HojaCerrarVista,
   HojaNoPuedeSalirVista,
   HojaSalirVista,
@@ -625,3 +628,118 @@ function comprobarAccionesDirectas(onMarcar: ViajeVistaProps['onMarcar']) {
   onMarcar('transferencia-fixture', 'recibi');
 }
 void comprobarAccionesDirectas;
+
+// Ciclo mínimo de hooks, sin DOM ni reemplazar los handlers de producción.
+let montaje: { slots: unknown[]; i: number; initial: unknown } | null = null;
+let idiomaPrueba: 'es' | 'en' = 'es';
+const avisosPrueba: string[] = [];
+vi.mock('react', async (original) => {
+  const real = await original<typeof import('react')>();
+  return { ...real,
+    useState: (initial: unknown) => {
+      if (!montaje) return real.useState(initial);
+      const m = montaje; const k = m.i++;
+      if (!(k in m.slots)) m.slots[k] = k === 0 ? m.initial : typeof initial === 'function' ? (initial as () => unknown)() : initial;
+      return [m.slots[k], (v: unknown) => { m.slots[k] = typeof v === 'function' ? (v as (x: unknown) => unknown)(m.slots[k]) : v; }];
+    },
+    useRef: (initial: unknown) => {
+      if (!montaje) return real.useRef(initial);
+      const m = montaje; const k = m.i++;
+      if (!(k in m.slots)) m.slots[k] = { current: initial };
+      return m.slots[k];
+    },
+    useEffect: (...args: Parameters<typeof real.useEffect>) => { if (!montaje) real.useEffect(...args); },
+    useLayoutEffect: (...args: Parameters<typeof real.useLayoutEffect>) => { if (!montaje) real.useLayoutEffect(...args); },
+    useCallback: <T,>(fn: T, deps: readonly unknown[]) => montaje ? fn : real.useCallback(fn as (...args: unknown[]) => unknown, deps),
+    useMemo: <T,>(fn: () => T, deps: readonly unknown[]) => montaje ? fn() : real.useMemo(fn, deps),
+  };
+});
+vi.mock('../../auth/AuthContext', async (original) => {
+  const real = await original<typeof import('../../auth/AuthContext')>();
+  return { ...real, useAuth: () => montaje ? { session: null } : real.useAuth() };
+});
+vi.mock('../../components/ui', async (original) => {
+  const real = await original<typeof import('../../components/ui')>();
+  return { ...real, useToast: () => montaje ? (s: string) => avisosPrueba.push(s) : real.useToast() };
+});
+vi.mock('../../i18n/idioma', async (original) => {
+  const real = await original<typeof import('../../i18n/idioma')>();
+  return { ...real, useIdioma: () => montaje ? { idioma: idiomaPrueba, t: (s: string, ...a: unknown[]) => real.traducir(s, idiomaPrueba, ...a) } : real.useIdioma() };
+});
+vi.mock('../../router', async (original) => {
+  const real = await original<typeof import('../../router')>();
+  return { ...real, navigate: vi.fn(), replaceRoute: vi.fn() };
+});
+type NodoPrueba = { type: unknown; props: Record<string, unknown> };
+function nodosPrueba(node: unknown): NodoPrueba[] {
+  if (Array.isArray(node)) return node.flatMap(nodosPrueba);
+  if (!node || typeof node !== 'object' || !('props' in node)) return [];
+  const n = node as NodoPrueba;
+  return [n, ...nodosPrueba(n.props.children)];
+}
+function montarPrueba(component: () => unknown, initial: unknown) {
+  const state = { slots: [] as unknown[], i: 0, initial };
+  let tree: unknown;
+  const render = () => { state.i = 0; montaje = state; try { tree = component(); } finally { montaje = null; } };
+  render();
+  return { render, componente: (type: unknown) => nodosPrueba(tree).find((n) => n.type === type)!,
+    boton: (text: string) => nodosPrueba(tree).find((n) => n.type === 'button' && n.props.children === text)!,
+    nodos: () => nodosPrueba(tree) };
+}
+const microtareas = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+
+afterEach(() => { vi.restoreAllMocks(); avisosPrueba.length = 0; idiomaPrueba = 'es'; });
+describe('K1 · cerrar y salir: espera y un solo POST por confirmación', () => {
+  for (const accion of ['cerrar', 'salir'] as const) it(accion, async () => {
+    let ahora = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    const enviar = accion === 'cerrar'
+      ? vi.spyOn(api, 'cerrarViaje').mockImplementation(() => new Promise<DetalleViaje>(() => {}))
+      : vi.spyOn(api, 'salirDeViaje').mockImplementation(() => new Promise<void>(() => {}));
+    vi.spyOn(api, 'getCierreDeViaje').mockImplementation(() => new Promise(() => {}));
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje()));
+    if (accion === 'cerrar') {
+      (m.componente(ViajeVista).props.onConfiguracion as () => void)(); m.render();
+      (m.nodos().find((n) => typeof n.type === 'function' && n.type.name === 'ConfiguracionDelViaje')!.props.onCerrarViaje as () => void)();
+    } else (m.componente(ViajeVista).props.onSalir as () => void)();
+    m.render();
+    const confirmar = m.componente(accion === 'cerrar' ? HojaCerrarVista : HojaSalirVista).props.onConfirmar as () => void;
+    ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
+    ahora = 1350; confirmar(); confirmar();
+    expect(enviar).toHaveBeenCalledTimes(1);
+  });
+});
+describe('K2 · No me llegó confirma, espera, cancela y no duplica', () => {
+  for (const cancelar of [true, false]) it(cancelar ? 'cancelar no manda' : 'confirmar manda una vez', async () => {
+    let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    const enviar = vi.spyOn(api, 'marcarTransferenciaDeViaje').mockImplementation(() => new Promise(() => {}));
+    const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+    (m.componente(ViajeVista).props.onMarcar as (id: string, accion: string) => void)('tr-1', 'no-llego'); m.render();
+    expect(enviar).not.toHaveBeenCalled();
+    expect(m.componente(HojaModal).props.etiqueta).toBe('¿No te llegaron $750 de Luis?');
+    if (cancelar) { (m.boton('Cancelar').props.onClick as () => void)(); m.render(); expect(m.componente(HojaModal)).toBeUndefined(); }
+    else {
+      const confirmar = m.boton('Sí, no me llegó').props.onClick as () => void;
+      ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
+      ahora = 1350; confirmar(); confirmar(); expect(enviar).toHaveBeenCalledTimes(1);
+      expect(enviar).toHaveBeenCalledWith('v-1', 'tr-1', 'no-llego');
+    }
+    if (cancelar) expect(enviar).not.toHaveBeenCalled();
+  });
+});
+describe('K3 · aviso al confirmar Recibí', () => {
+  for (const idioma of ['es', 'en'] as const) for (const resultado of ['exito', 'error', 'cerrado'] as const) it(`${idioma} ${resultado}`, async () => {
+    idiomaPrueba = idioma; let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    vi.spyOn(api, 'getViaje').mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, 'marcarTransferenciaDeViaje').mockImplementation(() => resultado === 'error' ? Promise.reject(new Error('sintetico')) : Promise.resolve({ viaje_estado: resultado === 'cerrado' ? 'cerrado' : 'esperando_pagos' } as Awaited<ReturnType<typeof api.marcarTransferenciaDeViaje>>));
+    const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+    (m.componente(ViajeVista).props.onRecibir as (tr: TransferenciaViaje, b: HTMLButtonElement) => void)(transferencia, { focus: () => {} } as HTMLButtonElement); m.render();
+    ahora = 1350;
+    (m.boton(idioma === 'es' ? 'Sí, recibí' : 'Yes, I received it').props.onClick as () => void)(); await microtareas();
+    const listoTexto = idioma === 'es' ? 'Listo, quedó guardado' : "Done, it's saved";
+    if (resultado === 'exito') expect(avisosPrueba).toEqual([listoTexto]);
+    else { expect(avisosPrueba).not.toContain(listoTexto); expect(avisosPrueba).toHaveLength(1); }
+  });
+});

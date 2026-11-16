@@ -1,9 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../../api';
+import { HojaSalirVista } from './ViajeScreen';
 import { MockApiError } from '../../api/mock/mockApi';
 import type { ResumenDeViaje } from '../../api/viajes';
 import { traducir, type Idioma } from '../../i18n/idioma';
-import { VistaDelViajeCerrado, destinoDelError, type CargaDeResumen } from './ViajeCerradoScreen';
+import { ViajeCerradoScreen, VistaDelViajeCerrado, destinoDelError, type CargaDeResumen } from './ViajeCerradoScreen';
 
 /**
  * AF-VIAJES · 1s · el detalle de un viaje cerrado. Sólo lo propio (D240-17).
@@ -178,4 +180,73 @@ describe('H02 · salir de un viaje cerrado', () => {
     expect(texto(html({ estado: 'cargando' }, [], 'es', nada))).not.toContain('Salir del viaje');
     expect(texto(html({ estado: 'no_disponible' }, [], 'es', nada))).not.toContain('Salir del viaje');
   });
+});
+
+// Ciclo mínimo de hooks, sin DOM ni reemplazar los handlers de producción.
+let montaje: { slots: unknown[]; i: number; initial: unknown } | null = null;
+let idiomaPrueba: 'es' | 'en' = 'es';
+const avisosPrueba: string[] = [];
+vi.mock('react', async (original) => {
+  const real = await original<typeof import('react')>();
+  return { ...real,
+    useState: (initial: unknown) => {
+      if (!montaje) return real.useState(initial);
+      const m = montaje; const k = m.i++;
+      if (!(k in m.slots)) m.slots[k] = k === 0 ? m.initial : typeof initial === 'function' ? (initial as () => unknown)() : initial;
+      return [m.slots[k], (v: unknown) => { m.slots[k] = typeof v === 'function' ? (v as (x: unknown) => unknown)(m.slots[k]) : v; }];
+    },
+    useRef: (initial: unknown) => {
+      if (!montaje) return real.useRef(initial);
+      const m = montaje; const k = m.i++;
+      if (!(k in m.slots)) m.slots[k] = { current: initial };
+      return m.slots[k];
+    },
+    useEffect: (...args: Parameters<typeof real.useEffect>) => { if (!montaje) real.useEffect(...args); },
+    useLayoutEffect: (...args: Parameters<typeof real.useLayoutEffect>) => { if (!montaje) real.useLayoutEffect(...args); },
+    useCallback: <T,>(fn: T, deps: readonly unknown[]) => montaje ? fn : real.useCallback(fn as (...args: unknown[]) => unknown, deps),
+    useMemo: <T,>(fn: () => T, deps: readonly unknown[]) => montaje ? fn() : real.useMemo(fn, deps),
+  };
+});
+vi.mock('../../auth/AuthContext', async (original) => {
+  const real = await original<typeof import('../../auth/AuthContext')>();
+  return { ...real, useAuth: () => montaje ? { session: null } : real.useAuth() };
+});
+vi.mock('../../components/ui', async (original) => {
+  const real = await original<typeof import('../../components/ui')>();
+  return { ...real, useToast: () => montaje ? (s: string) => avisosPrueba.push(s) : real.useToast() };
+});
+vi.mock('../../i18n/idioma', async (original) => {
+  const real = await original<typeof import('../../i18n/idioma')>();
+  return { ...real, useIdioma: () => montaje ? { idioma: idiomaPrueba, t: (s: string, ...a: unknown[]) => real.traducir(s, idiomaPrueba, ...a) } : real.useIdioma() };
+});
+vi.mock('../../router', async (original) => {
+  const real = await original<typeof import('../../router')>();
+  return { ...real, navigate: vi.fn(), replaceRoute: vi.fn() };
+});
+type NodoPrueba = { type: unknown; props: Record<string, unknown> };
+function nodosPrueba(node: unknown): NodoPrueba[] {
+  if (Array.isArray(node)) return node.flatMap(nodosPrueba);
+  if (!node || typeof node !== 'object' || !('props' in node)) return [];
+  const n = node as NodoPrueba;
+  return [n, ...nodosPrueba(n.props.children)];
+}
+function montarPrueba(component: () => unknown, initial: unknown) {
+  const state = { slots: [] as unknown[], i: 0, initial };
+  let tree: unknown;
+  const render = () => { state.i = 0; montaje = state; try { tree = component(); } finally { montaje = null; } };
+  render();
+  return { render, componente: (type: unknown) => nodosPrueba(tree).find((n) => n.type === type)!,
+    boton: (text: string) => nodosPrueba(tree).find((n) => n.type === 'button' && n.props.children === text)!,
+    nodos: () => nodosPrueba(tree) };
+}
+
+afterEach(() => { vi.restoreAllMocks(); });
+it('K1 · salir del viaje cerrado: espera 350 ms y cerrojo antes del await', () => {
+  let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+  const enviar = vi.spyOn(api, 'salirDeViaje').mockImplementation(() => new Promise(() => {}));
+  const m = montarPrueba(() => ViajeCerradoScreen({ viajeId: 'oax' }), { estado: 'listo', resumen: OAXACA });
+  (m.componente(VistaDelViajeCerrado).props.onSalir as () => void)(); m.render();
+  const confirmar = m.componente(HojaSalirVista).props.onConfirmar as () => void;
+  ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
+  ahora = 1350; confirmar(); confirmar(); expect(enviar).toHaveBeenCalledTimes(1);
 });

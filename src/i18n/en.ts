@@ -54,6 +54,8 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  'Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.': "You've sent a lot of invites in a row. Wait a few minutes and try again.",
+
   // D457 · UI del permiso opcional (documentos legales en español).
   "Privacidad": "Privacy",
   "Mostrar mi foto a personas que no son mis amigos": "Show my photo to people who are not my friends",

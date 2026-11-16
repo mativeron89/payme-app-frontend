@@ -15,7 +15,7 @@ import { etiquetaPorcion } from '../queConsumisteView';
 import { anchoDeBarra, lineaDelViaje } from './listasView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
 import { CuadroDelViaje, useFotosDeViajes } from './InsigniaDelViaje';
-import { HojaModal, HojaNoPuedeSalirVista, HojaSalirVista } from './ViajeScreen';
+import { ESPERA_RECIBI_MS, HojaModal, HojaNoPuedeSalirVista, HojaSalirVista } from './ViajeScreen';
 import { FilaDeNotas } from './FilaDeNotas';
 import type { PorQueNoPuedeSalir } from './viajeView';
 import { etiquetaTipoLugar, fechaCortaViaje, iconoTipoLugar, nombreDelLugar, type T } from './viajesView';
@@ -40,7 +40,7 @@ import { nombreDePlato } from '../../utils/nombreDePlato';
  * salir con las transferencias propias confirmadas; salir no borra nada, y el
  * viaje deja de aparecer para quien sale (vuelve a Inicio › Viajes).
  */
-type HojaDeSalida = { readonly tipo: 'salir' } | { readonly tipo: 'no_puede'; readonly razon: PorQueNoPuedeSalir };
+type HojaDeSalida = { readonly tipo: 'salir'; readonly abiertaEn: number } | { readonly tipo: 'no_puede'; readonly razon: PorQueNoPuedeSalir };
 
 export type CargaDeResumen =
   | { readonly estado: 'cargando' }
@@ -76,10 +76,13 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
   const [enviando, setEnviando] = useState(false);
   const inicial = useRef<HTMLButtonElement | null>(null);
   const nombre = carga.estado === 'listo' ? carga.resumen.nombre : '';
-  const cerrarHoja = () => setHoja(null);
+  const confirmandoSalida = useRef(false);
+  const cerrarHoja = () => { if (!confirmandoSalida.current) setHoja(null); };
 
   async function confirmarSalida() {
-    if (enviando) return;
+    if (hoja?.tipo !== 'salir' || confirmandoSalida.current || enviando) return;
+    if (performance.now() - hoja.abiertaEn < ESPERA_RECIBI_MS) return;
+    confirmandoSalida.current = true;
     setEnviando(true);
     try {
       await api.salirDeViaje(viajeId);
@@ -96,6 +99,7 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         setCarga({ estado: 'no_disponible' });
       } else toast(t('No pudimos guardarlo. Prueba de nuevo.'));
     } finally {
+      confirmandoSalida.current = false;
       setEnviando(false);
     }
   }
@@ -142,7 +146,7 @@ export function ViajeCerradoScreen({ viajeId }: { viajeId: string }) {
         onAlternar={alternar}
         onReintentar={() => setIntento((n) => n + 1)}
         onVerViajes={() => navigate('viajes', 'abiertos')}
-        onSalir={() => setHoja({ tipo: 'salir' })}
+        onSalir={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
         color={delViaje?.color ?? null}
         foto={delViaje?.has_photo ? fotos.fotoDe(viajeId) : null}
         notas={delViaje?.notas ?? null}

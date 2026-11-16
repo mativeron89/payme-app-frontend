@@ -1,3 +1,10 @@
+## 0.275.20 · 2026-11-16
+
+- Cerrar y salir de un viaje esperan el segundo toque; «No me llegó» pide confirmación.
+- Al confirmar lo recibido aparece «Listo, quedó guardado», salvo cuando el viaje queda cerrado.
+- Las invitaciones avisan al alcanzar el límite y conservan el intento para volver a probar más tarde.
+- Contrato actualizado a App Backend 2.214.0 y mayor cobertura de finalidades opcionales y procedencia.
+
 ## 0.275.19 · 2026-11-15
 
 - Actualiza el inventario del espejo a App Backend 2.213.5, sin nuevas copias de contratos ni cambios de hechos.

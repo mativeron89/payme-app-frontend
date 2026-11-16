@@ -715,7 +715,9 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       const definitive = isDefinitiveMutationError(failure.code, failure.status);
       if (definitive) shareAttemptsRef.current.delete(code);
       toast(
-        isServiceUnavailable(failure.status)
+        failure.status === 429 && failure.code === 'mesa_invitations_rate_limited'
+          ? t('Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.')
+          : isServiceUnavailable(failure.status)
           ? t('El servicio no pudo confirmar el link. Reintenta esta misma operación; no generes otra.')
           : definitive
             ? t('No se pudo generar el link')

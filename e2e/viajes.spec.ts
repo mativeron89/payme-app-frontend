@@ -387,6 +387,7 @@ test('1m/1n · cerrar con alguien sin elegir y el ida y vuelta de «Ya pagué»'
   await aConfiguracion(page);
   await page.getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
   await expect(page.getByText(/Diego Torres todavía no eligió en Mariscos El Faro del 8 oct\. Si cierras ahora, los \$565 que faltan se le asignan a Diego\./)).toBeVisible();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Cerrar viaje', exact: true }).click();
   await expect(page.getByText(/Tú le transfieres \$542 a Luis Pérez/)).toBeVisible();
   await page.getByRole('button', { name: 'Ya pagué', exact: true }).click();
@@ -400,6 +401,8 @@ test('1o/1p · «No me llegó» y «Recibí»: con todo pagado pasa a Cerrados',
   await ir(page, `/viaje/${MONTERREY}`);
   await expect(page.getByText('Luis marcó que te pagó. Revisa tu banco y confírmalo.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'No me llegó', exact: true }).click();
+  await page.waitForTimeout(360);
+  await page.getByRole('dialog').getByRole('button', { name: 'Sí, no me llegó', exact: true }).click();
   await expect(page.getByText('Luis marcó que te pagó. Revisa tu banco y confírmalo.', { exact: true })).toHaveCount(0);
   for (let i = 0; i < 2; i += 1) {
     await page.getByRole('button', { name: 'Recibí', exact: true }).first().click();
@@ -415,6 +418,7 @@ test('1q · salir: con consumos no; sin consumos sí', async ({ page }) => {
   await ir(page, `/viaje/${CANCUN}`);
   await aConfiguracion(page);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByText('Todavía no puedes salir de Cancún 2026', { exact: true })).toBeVisible();
   // H02 · D242-1: marcar «Ya pagué» solo no alcanza.
@@ -441,6 +445,7 @@ test('1q · sin consumos se sale: la invitación aceptada y salir del viaje', as
   await ir(page, `/viaje/${MAZATLAN}`);
   await aConfiguracion(page);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   // H02 · a Inicio, con la pestaña Viajes, y el viaje ya no está: ni su burbuja (D265) ni en la pestaña.
   await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -452,6 +457,7 @@ test('🔴 H02 · esperando pagos: «Salir del viaje» al pie; con transferencia
   await conViajes(page);
   await ir(page, `/viaje/${MONTERREY}`);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByText('Todavía no puedes salir de Monterrey fin de semana', { exact: true })).toBeVisible();
   await expect(page.getByText('Tienes 2 transferencias sin confirmar. Podrás salir cuando todas estén confirmadas.', { exact: true }))
@@ -472,6 +478,7 @@ test('🔴 H02 · con todo confirmado se sale de un viaje cerrado: Inicio › Vi
   await expect(page).toHaveURL(new RegExp(`/viaje-cerrado/${MONTERREY}$`));
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByRole('dialog').getByText('¿Salir de Monterrey fin de semana?', { exact: true })).toBeVisible();
+  await page.waitForTimeout(360); // Protección temporal de la confirmación.
   await page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   await expect(page.getByText('Saliste de Monterrey fin de semana.', { exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Viajes', exact: true })).toHaveAttribute('aria-selected', 'true');

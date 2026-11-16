@@ -358,6 +358,7 @@ test('C195E D2 · GET viejo no libera Salir en vuelo ni permite una segunda sali
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Salir del viaje', exact: true }).click();
   const salir = page.getByRole('dialog').getByRole('button', { name: 'Salir del viaje', exact: true });
+  await page.waitForTimeout(360);
   await salir.click();
   await expect(salir).toBeDisabled();
   await soltarRefresco(page);
@@ -378,6 +379,8 @@ test('C195E D3 · GET viejo no libera No me llegó de otra fila ni duplica su PO
   await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
   const noLlego = fila(page, 'Luis').getByRole('button', { name: 'No me llegó', exact: true });
   await noLlego.click();
+  await page.waitForTimeout(360);
+  await page.getByRole('dialog').getByRole('button', { name: 'Sí, no me llegó', exact: true }).click();
   await expect(noLlego).toBeDisabled();
   await soltarRefresco(page);
   const deshabilitado = await noLlego.isDisabled();
@@ -399,4 +402,29 @@ test('C195E D4 · error con GET colgado permite Cancelar y Escape en Salir', asy
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+});
+
+for (const idioma of ['es', 'en'] as const) test(`K2 navegador · No me llegó, ${idioma}, espera y confirma una vez`, async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await preparar(page, idioma);
+  await fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "Didn't get it", exact: true }).click();
+  const hoja = page.getByRole('dialog');
+  await expect(hoja.getByRole('heading')).toHaveText(idioma === 'es' ? '¿No te llegaron $750 de Luis?' : "Didn't get $750 from Luis?");
+  await expect(hoja.getByText(idioma === 'es' ? 'Le avisamos a Luis y el aviso no se puede retirar.' : "We'll let Luis know, and the notice can't be taken back.", { exact: true })).toBeVisible();
+  expect(await llamadas(page)).toEqual([]);
+  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/no-me-llego-${idioma}.png` });
+  await page.waitForTimeout(360);
+  const confirmar = hoja.getByRole('button', { name: idioma === 'es' ? 'Sí, no me llegó' : "Yes, I didn't get it", exact: true });
+  await confirmar.evaluate((el) => { (el as HTMLButtonElement).click(); (el as HTMLButtonElement).click(); });
+  await expect(hoja).toHaveCount(0);
+  expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'no-llego']]);
+});
+for (const idioma of ['es', 'en'] as const) test(`K3 navegador · aviso guardado ${idioma}`, async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await preparar(page, idioma);
+  await fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'Recibí' : 'I got it', exact: true }).click();
+  await page.waitForTimeout(360);
+  await page.getByRole('dialog').getByRole('button', { name: idioma === 'es' ? 'Sí, recibí' : 'Yes, I received it', exact: true }).click();
+  await expect(page.getByText(idioma === 'es' ? 'Listo, quedó guardado' : "Done, it's saved", { exact: true })).toBeVisible();
+  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/listo-${idioma}.png` });
 });

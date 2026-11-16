@@ -2486,7 +2486,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       if (definitive) linkAttemptsRef.current.delete(code);
       setLinkState('error');
       setLinkError(
-        isServiceUnavailable(failure.status)
+        failure.status === 429 && failure.code === 'mesa_invitations_rate_limited'
+          ? t('Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.')
+          : isServiceUnavailable(failure.status)
           ? t('El servicio no pudo confirmar el link. Reintenta esta misma operación; no generes otra.')
           : definitive
             ? t('No pudimos generar el link. Prueba de nuevo.')

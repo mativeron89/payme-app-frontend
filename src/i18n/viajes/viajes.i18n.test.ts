@@ -46,3 +46,10 @@ describe('AF-VIAJES · el EN de Viajes', () => {
     expect(todo).not.toMatch(/saldo/i);
   });
 });
+
+it('K7 · textos de confirmación y guardado exactos en inglés', () => {
+  expect(EN_VIAJES_VIAJE['¿No te llegaron {0} de {1}?']).toBe("Didn't get {0} from {1}?");
+  expect(EN_VIAJES_VIAJE['Le avisamos a {1} y el aviso no se puede retirar.']).toBe("We'll let {1} know, and the notice can't be taken back.");
+  expect(EN_VIAJES_VIAJE['Sí, no me llegó']).toBe("Yes, I didn't get it");
+  expect(EN_VIAJES_VIAJE['Listo, quedó guardado']).toBe("Done, it's saved");
+});
