@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "6a75187f94c7bd29a69a56197c3b8d9722beb2bb",
+  "commit": "8a82fd0a23dbd41c36e0144da4bd48086fff2c78",
   "total": 175,
   "archivos": [
     {
@@ -61,14 +61,14 @@
     {
       "origen": "contract/mesa-acceso-v1.json",
       "destino": "contract/mesa-acceso-v1.json",
-      "sha256": "92607615ca43ae51cb2ee69cd83fdcc7b5f0ab9f72824ce124fbe3be08311374",
-      "bytes": 4865
+      "sha256": "e71cc570db586e1aecef7722f21a9da02f0ccf23a2d149bf3e47048172891d83",
+      "bytes": 5037
     },
     {
       "origen": "contract/mesa-join-requests-v1.json",
       "destino": "contract/mesa-join-requests-v1.json",
-      "sha256": "1d8579f0a4f352c37d45ffa193ec23f4854aeba3c8e46f135a5b8e0f3c60a6a2",
-      "bytes": 6417
+      "sha256": "a1b0fc1e91d29a001dc6bd792b0173068135b6b1d10d1edb5e2dc705bd8b875e",
+      "bytes": 6494
     },
     {
       "origen": "contract/mesa-mi-parte-v1.json",
@@ -595,8 +595,8 @@
     {
       "origen": "routes/friends.js",
       "destino": "routes/friends.js",
-      "sha256": "16842df446f71357594ce7ca864a9bfeb1d1de372e1f05dfb3d7f8eaf7939f3e",
-      "bytes": 28907
+      "sha256": "00d554d6c67f049c634fb3c980e1cdf26a8348fb5bd2a4410bd7d02bd74b797b",
+      "bytes": 30360
     },
     {
       "origen": "routes/groups.js",
@@ -625,8 +625,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "af18079dc06d2589a90caa6548a43ca4004c2ff6c421f274831988fdc64687d3",
-      "bytes": 219471
+      "sha256": "6635a24dc17a81dac8d13380a23096559fafaeed1607856345ca50beed1ab953",
+      "bytes": 219901
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -817,8 +817,8 @@
     {
       "origen": "services/invitationAuthority.js",
       "destino": "services/invitationAuthority.js",
-      "sha256": "2fd83dfe7283ff2c7eadabab850f065b9afdcc71273deede03ca6aa123e1a727",
-      "bytes": 16486
+      "sha256": "f0bd1be79fcaf049c1958eceb6a7af88ebdbe2327a20317bd89cb94bd39363d4",
+      "bytes": 18069
     },
     {
       "origen": "services/itemClaims.js",
@@ -829,8 +829,8 @@
     {
       "origen": "services/joinRequests.js",
       "destino": "services/joinRequests.js",
-      "sha256": "832d627eeb06ea56b54ae005b38d4d1d86a6d14bd9c62313cd477c601b4630b4",
-      "bytes": 17238
+      "sha256": "fdadcbc41198c3eb44af8b963e8ed438a965fc8844daa1fe289bf667d0dd811f",
+      "bytes": 17802
     },
     {
       "origen": "services/legalAcceptance.js",

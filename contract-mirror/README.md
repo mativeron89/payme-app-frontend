@@ -1,4 +1,20 @@
-## AF-7 · D809 · el reespejo de 2.213.5 · 0.275.19
+## AF-8 · protecciones de Viajes y el reespejo de 2.214.0 · 0.275.20
+
+Contenido vigente: `8a82fd0a23dbd41c36e0144da4bd48086fff2c78`.
+Inventario íntegro de 175 entradas tomado del dueño App Backend 2.214.0, `main` en
+`9288b9130cbc94d81950b94cd6ff2fbc67103545` (servido según la medición de VI del 2026-11-16),
+`contract/mirror-inventory.json`, sha256 `df3d760576c1eeeae5d3ade2be293c4bace6a0c36a6b061e4c1e0fa2ddf2342f`,
+adoptado con `--adoptar-inventario`, sin editarlo. **25 archivos espejados**, todos JSON de `contract/`;
+**150 fuentes sólo por hash**, conforme D268. El commit del inventario identifica el contenido; el SHA de main
+identifica la publicación del inventario, y no se confunden.
+
+Se copian `contract/mesa-acceso-v1.json` y `contract/mesa-join-requests-v1.json`.
+Cambian sólo por hash `routes/friends.js`, `routes/mesas.js`, `services/joinRequests.js`
+y `services/invitationAuthority.js`. El dueño agrega el límite de invitaciones y las protecciones de bloqueos.
+Los hechos se regeneran en local contra `8a82fd0`: sólo procedencia y sha256 de fuentes;
+ningún valor. `PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al mismo commit.
+
+### Refresh anterior · AF-7 · D809 · el reespejo de 2.213.5 · 0.275.19
 
 Contenido vigente: `6a75187f94c7bd29a69a56197c3b8d9722beb2bb`.
 Inventario íntegro de 175 entradas tomado del dueño App Backend 2.213.5, `main` en

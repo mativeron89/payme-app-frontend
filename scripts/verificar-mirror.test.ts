@@ -325,3 +325,12 @@ describe('adoptar inventario · nunca bendice sin verificar', () => {
     expect(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8')).toBe(antes);
   });
 });
+
+// La procedencia vigente fija también las entradas que no se copian (sólo hash).
+it('K6 · sha256 del inventario completo contra la sección vigente del README', () => {
+  const vigente = readFileSync(join(__dirname, '../contract-mirror/README.md'), 'utf8').split('### Refresh anterior')[0]!;
+  const declarado = /sha256 `([a-f0-9]{64})`/.exec(vigente)?.[1];
+  expect(declarado).toBeDefined();
+  const real = createHash('sha256').update(readFileSync(join(__dirname, 'mirror-inventory.json'))).digest('hex');
+  expect(real).toBe(declarado);
+});

@@ -1,4 +1,4 @@
-import { mockGetConsentimientos, reiniciarMockSugerencias } from './mock/mockSugerencias';
+import { mockGetConsentimientos, mockRevokeConsentimiento, reiniciarMockSugerencias } from './mock/mockSugerencias';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -117,13 +117,21 @@ describe('O1 · la lista `GET /api/account/consents` (auditoría de PR103, punto
       { escenario: 'E2 · sugerencias y tres permisos otorgados', sugerencias: 'encendido', otorgados: 'sugerencias,analisis_interno,recomendaciones', agente: null, esperadas: ['analisis_interno', 'recomendaciones', 'sugerencias'] },
       { escenario: 'E3 · también agente encendido', sugerencias: 'encendido', otorgados: 'sugerencias,analisis_interno,recomendaciones', agente: 'encendido', esperadas: ['analisis_interno', 'recomendaciones', 'sugerencias'] },
       { escenario: 'E4 · sugerencias apagadas', sugerencias: 'apagado', otorgados: null, agente: null, esperadas: [] },
-    ])('$escenario', async ({ sugerencias, otorgados, agente, esperadas }) => {
+      { escenario: 'E5 · apagado conserva otorgadas', sugerencias: 'apagado', otorgados: 'sugerencias,analisis_interno', agente: null, esperadas: ['analisis_interno', 'sugerencias'] },
+      { escenario: 'E6 · apagado y revocada', sugerencias: 'apagado', otorgados: 'sugerencias,analisis_interno', agente: null, revocar: true, esperadas: ['analisis_interno'] },
+      { escenario: 'E7 · encendido sin otorgadas ni agente', sugerencias: 'encendido', otorgados: null, agente: 'ausente', esperadas: ['analisis_interno', 'sugerencias'] },
+      { escenario: 'E8 · agente encendido solo', sugerencias: null, otorgados: null, agente: 'encendido', esperadas: ['recomendaciones'] },
+      { escenario: 'E9 · agente recomendaciones solo', sugerencias: null, otorgados: null, agente: 'recomendaciones', esperadas: ['recomendaciones'] },
+      { escenario: 'E10 · encendido después de revocar', sugerencias: 'encendido', otorgados: 'sugerencias', agente: null, revocar: true, esperadas: ['analisis_interno', 'sugerencias'] },
+    ])('$escenario', async ({ sugerencias, otorgados, agente, esperadas, revocar }) => {
       if (sugerencias !== null) localStorage.setItem('payme.app.mock.sugerencias.v1', sugerencias);
       if (otorgados !== null) localStorage.setItem('payme.app.mock.consentimientos_otorgados.v1', otorgados);
       if (agente !== null) localStorage.setItem('payme.app.mock.agente.v1', agente);
+      if (revocar) await mockRevokeConsentimiento('sugerencias');
       const lista = await mockGetConsentimientos() as { consents: Record<string, { purpose_key: string }> };
       const claves = Object.values(lista.consents).map((consentimiento) => consentimiento.purpose_key).sort();
       expect(claves).toEqual(esperadas);
+      expect(Object.keys(lista.consents).sort()).toEqual(claves);
       expect(() => decodeConsentimientosOpcionales(lista)).not.toThrow();
     });
   });
