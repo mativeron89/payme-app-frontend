@@ -4,7 +4,7 @@ import { navigate, type PageId } from '../router';
 import { abrirCamaraNativa } from '../camara/camaraNativa';
 import { useSolicitudesPendientes } from '../amigos/solicitudesPendientes';
 import { textoDeLaBurbuja } from './burbuja';
-import { centroPorFechas } from '../screens/viajes/circuloDelViaje';
+import { elegirAccionDelCentro } from './accionDelCentro';
 import { useViajesDeHoy } from '../screens/viajes/useViajesDeHoy';
 
 // D230 · la regla de la burbuja vive en `./burbuja`, compartida con la campana
@@ -108,20 +108,11 @@ export interface AppBottomBarProps {
   above?: React.ReactNode;
 }
 
-export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
+/** La misma acción ya resuelta para el aviso de Inicio y el círculo de la barra. */
+export function useAccionDelCentro(center?: AppBottomBarProps['center']): NonNullable<AppBottomBarProps['center']> {
   const { t } = useIdioma();
-  /**
-   * D276-1 · Mati: «siempre que estes dentro de las fechas del viaje y seleccionas la cámara para escanear ticket, por
-   * default se tiene que ir a los gastos del viaje». Sin un centro propio de la pantalla (el de adentro de un viaje,
-   * D250, manda), si hoy cae dentro de las fechas de un viaje abierto, la cámara es la de ese viaje; con dos, pregunta
-   * a cuál (la hoja vive en `App`: la barra sólo la abre). Sin dato todavía, o fuera de las fechas, la de siempre.
-   */
   const deHoy = useViajesDeHoy();
-  const porFechas = centroPorFechas(deHoy, center, t);
-  // D230 · solicitudes de amistad recibidas sin responder; `null` si no hay un
-  // número confirmado (sin sesión, otra cuenta o la consulta falló).
-  const pendientes = useSolicitudesPendientes();
-  const centro = center ?? porFechas ?? {
+  return elegirAccionDelCentro(deHoy, center, t, {
     label: t('Escanear'),
     // D249 · Mati: «cambiá el símbolo de + por una cámara». Lleva al escaneo: la cámara lo dice.
     icon: 'camera' as IconName,
@@ -137,7 +128,13 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
     },
     disabled: false,
     busy: false,
-  };
+  });
+}
+
+export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
+  const { t } = useIdioma();
+  const centro = useAccionDelCentro(center);
+  const pendientes = useSolicitudesPendientes();
 
   const item = (it: SideItem) => {
     const on = active === it.slot;

@@ -552,6 +552,7 @@ export const EN: Record<string, string> = {
   "No se pudo quitar del grupo": "Couldn't remove from the group",
   "No tienes acceso a este detalle.": "You don't have access to these details.",
   "No tienes avisos.": "You have no notifications.",
+  "No tienes mesas abiertas. Escanear un ticket": "You have no open tables. Scan a receipt",
   "No tienes mesas abiertas": "You have no open tables",
   "No tienes solicitudes pendientes.": "You have no pending requests.",
   "Noche": "Evening",

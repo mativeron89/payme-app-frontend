@@ -3163,6 +3163,12 @@ html.app-de-inicio-ios .app {
    24 px de aire arriba y abajo, y se desplaza con todo lo demás. Supersede la franja
    de D275, 40 px sobre la barra. */
 .aviso-sin-mesas {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
@@ -3172,6 +3178,8 @@ html.app-de-inicio-ios .app {
   padding: var(--sp-6) var(--sp-4);
   text-align: center;
 }
+.aviso-sin-mesas:focus-visible { outline: 2px solid var(--action); outline-offset: -3px; }
+.aviso-sin-mesas:disabled { cursor: default; }
 .aviso-sin-mesas-titulo {
   font-family: var(--font-display);
   font-size: 18px;

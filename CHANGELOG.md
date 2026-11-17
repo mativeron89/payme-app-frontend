@@ -1,3 +1,7 @@
+## 0.275.21 · 2026-11-17
+
+- El aviso «No tienes mesas abiertas» permite escanear un ticket con la misma acción que la barra, también durante un viaje. Incluye foco de teclado y nombre accesible en español e inglés.
+
 ## 0.275.20 · 2026-11-16
 
 - Cerrar y salir de un viaje ignoran un toque doble; «No me llegó» pide confirmación.

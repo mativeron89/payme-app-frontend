@@ -1,3 +1,4 @@
+import type { AppBottomBarProps } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import { useIdioma } from '../i18n/idioma';
 
@@ -10,18 +11,23 @@ import { useIdioma } from '../i18n/idioma';
  * final del contenido de Inicio, en el flujo, y toma el resto del alto: el texto queda centrado entre lo último de
  * arriba y el círculo de Nueva. Con mucho contenido, va debajo, con el aire mínimo (`.aviso-sin-mesas`).
  */
-export function AvisoSinMesas() {
+export function AvisoSinMesas({ accion }: { accion: NonNullable<AppBottomBarProps['center']> }) {
   const { t } = useIdioma();
   return (
-    <div className="aviso-sin-mesas">
-      <div className="aviso-sin-mesas-titulo">{t('No tienes mesas abiertas')}</div>
-      <div className="aviso-sin-mesas-cuerpo">
+    <button type="button" className="aviso-sin-mesas btn"
+      onClick={accion.onClick}
+      disabled={accion.disabled || accion.busy}
+      aria-busy={accion.busy || undefined}
+      aria-label={t('No tienes mesas abiertas. Escanear un ticket')}
+    >
+      <span className="aviso-sin-mesas-titulo">{t('No tienes mesas abiertas')}</span>
+      <span className="aviso-sin-mesas-cuerpo">
         <span>{t('Toca el')}</span>
         <span className="aviso-sin-mesas-camara" role="img" aria-label={t('ícono de cámara')}>
           <Icon name="camera" size={20} />
         </span>
         <span>{t('para abrir una')}</span>
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }

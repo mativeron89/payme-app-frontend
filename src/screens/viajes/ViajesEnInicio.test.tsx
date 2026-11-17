@@ -385,9 +385,9 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
   const de = (selector: string) => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
 
   it('el texto, con el ícono de la cámara de Nueva en lugar del «+», en su caja', () => {
-    const html = renderToStaticMarkup(<AvisoSinMesas />);
+    const html = renderToStaticMarkup(<AvisoSinMesas accion={{ label: 'Escanear', icon: 'camera', onClick: () => undefined }} />);
     expect(texto(html)).toBe('No tienes mesas abiertas Toca el para abrir una');
-    expect(html).toMatch(/^<div class="aviso-sin-mesas"><div class="aviso-sin-mesas-titulo">/);
+    expect(html).toMatch(/^<button type="button" class="aviso-sin-mesas btn" aria-label="No tienes mesas abiertas. Escanear un ticket"><span class="aviso-sin-mesas-titulo">/);
     expect(html).toContain('<span class="aviso-sin-mesas-camara" role="img" aria-label="ícono de cámara"><svg');
     expect(html).not.toContain('+');
   });
@@ -397,7 +397,7 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
     // D275 §3 (1g) · con un restaurante pendiente, o mientras los pendientes no se leyeron, tampoco. D302 · sin contar los
     // viajes que todavía no empezaron (`viajesEnInicio`).
     expect(home).toContain("const sinPendientesDeViajes = !conViajes\n    || hayRestaurantesPendientes(viajesEnInicio, pendientesDeViajes, viajesFallaron) === false;");
-    expect(home).toContain('{avisoSinMesas && <AvisoSinMesas />}');
+    expect(home).toContain('{avisoSinMesas && <AvisoSinMesas accion={accionDelCentro} />}');
     // Ya no vive en la sección de la mesa.
     expect(home).not.toContain('mesa-empty');
     expect(home).not.toContain("t('Toca el + para abrir una')");
@@ -407,8 +407,8 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
     // Lo último del `.scroll`, después de todo lo demás.
     const scroll = home.slice(home.indexOf("<div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>"));
     const cierre = scroll.indexOf('<AppBottomBar');
-    expect(scroll.slice(0, cierre)).toMatch(/\{avisoSinMesas && <AvisoSinMesas \/>\}\s*<\/div>\s*$/);
-    expect(home).toContain('<AppBottomBar active="home" />');
+    expect(scroll.slice(0, cierre)).toMatch(/\{avisoSinMesas && <AvisoSinMesas accion=\{accionDelCentro\} \/>\}\s*<\/div>\s*$/);
+    expect(home).toContain('<AppBottomBar active="home" center={accionDelCentro} />');
     // La barra es la de siempre: sin la franja de D275.
     expect(renderToStaticMarkup(<AppBottomBar active="home" />)).toMatch(/^<div class="appbar-block">/);
     expect(css).not.toContain('.appbar-aviso');

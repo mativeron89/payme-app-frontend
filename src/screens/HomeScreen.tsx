@@ -21,7 +21,7 @@ import {
 import type { OpenMesa } from '../api/types';
 import { ordenarPorUrgencia } from './homeMesasView';
 import { Icon } from '../components/Icon';
-import { AppBottomBar } from '../components/AppBottomBar';
+import { AppBottomBar, useAccionDelCentro } from '../components/AppBottomBar';
 import {
   AppHeader, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
@@ -132,6 +132,7 @@ function avanceDeMesa(m: OpenMesa): { readonly cents: number; readonly percent: 
 }
 
 export function HomeScreen() {
+  const accionDelCentro = useAccionDelCentro();
   const { t, locale } = useIdioma();
   const { session } = useAuth();
   /**
@@ -656,10 +657,10 @@ export function HomeScreen() {
 
 
         {/* D277 · lo último del contenido: centrado en el espacio libre entre lo de arriba y el círculo de Nueva. */}
-        {avisoSinMesas && <AvisoSinMesas />}
+        {avisoSinMesas && <AvisoSinMesas accion={accionDelCentro} />}
       </div>
 
-      <AppBottomBar active="home" />
+      <AppBottomBar active="home" center={accionDelCentro} />
 
     </div>
   );
