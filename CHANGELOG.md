@@ -1,3 +1,11 @@
+## 0.276.0 · 2026-11-17
+
+- En la mesa, los consumos quedan a la vista al entrar por primera vez. «Mi parte» destaca el importe, «Continuar» guarda en la misma mesa y el aviso espera el monto confirmado. Al cerrar, se muestran los platos que quedan sin dueño.
+- El pago muestra el desglose y el monto en el botón. La propina es voluntaria y la pantalla de compartir explica cómo se reparte.
+- Inicio prioriza la invitación pendiente. El tutorial deja libres las invitaciones, las mesas y el aviso sin mesas. El botón de escanear se apoya en la barra y la lectura del ticket tiene su propio aviso.
+- Los links de mesa abren más rápido. Los mensajes de apertura, tarjeta e invitación explican qué pasó y cuándo sirve volver a intentar.
+- Las acciones de amigos se explican con texto y se confirman en la app. «Legal y ayuda» reúne los avisos y el contacto de soporte.
+
 ## 0.275.21 · 2026-11-17
 
 - El aviso «No tienes mesas abiertas» permite escanear un ticket con la misma acción que la barra, también durante un viaje. Incluye foco de teclado y nombre accesible en español e inglés.

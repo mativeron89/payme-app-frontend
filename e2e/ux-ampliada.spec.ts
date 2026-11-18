@@ -1,3 +1,5 @@
+import { abrirTusConsumos } from './_mesa';
+import { sacarFoto } from './_camara';
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
@@ -81,4 +83,35 @@ test('K20 · el menú del último amigo queda visible fuera de la tarjeta', asyn
   await expect(quitar).toBeFocused(); await expect(quitar).toBeInViewport();
   await quitar.click(); await expect(page.getByRole('dialog', { name: /¿Quitar a / })).toBeVisible();
   await page.keyboard.press('Escape'); await expect(mas).toBeFocused();
+});
+test('K22 · apertura sin jerga en el caso correcto', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+  await ingresar(page);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts'; const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const errores = '/src/api/http.ts'; const { HttpError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/http');
+    api.createMesa = async () => { throw new HttpError(400, { error: 'invalid_items' }); };
+  });
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click(); await sacarFoto(page);
+  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('No pudimos abrir la mesa. Prueba de nuevo.');
+  await foto(page, '22-apertura-error');
+});
+test('K22 · tarjeta pendiente conserva bloqueo y mensaje de un solo intento', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox'));
+  await ingresar(page); await irEnLaApp(page, '/mesa/PA-2847'); await abrirTusConsumos(page);
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('radio', { name: '10%', exact: true }).click();
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts'; const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const errores = '/src/api/http.ts'; const { HttpError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/http');
+    api.payMesa = async () => { throw new HttpError(409, { error: 'monetary_family_reconciliation_required' }); };
+  });
+  await page.getByRole('button', { name: 'Pagar $216', exact: true }).click();
+  await expect(page.getByText('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.', { exact: true }).first()).toBeVisible();
+  await foto(page, '22-tarjeta-intento-anterior');
 });

@@ -330,7 +330,6 @@ const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
   'Entrega en proceso', 'Esa apertura terminó sin quedar en pie. Ya puedes abrir una nueva.',
   'Estado de la mesa', 'Estadísticas',
   'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escríbenos para resolverlo.',
-  'Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.',
   'Garantía en confirmación', 'Garantía no confirmada',
   'La garantía ya no está vigente.',
   'La liquidación sigue en proceso; todavía no está confirmada.',

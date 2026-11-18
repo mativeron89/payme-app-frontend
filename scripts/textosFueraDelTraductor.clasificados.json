@@ -239,13 +239,6 @@
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
-  "texto": "Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.",
-  "grupo": "b",
-  "veces": 1,
-  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
- },
- {
-  "archivo": "src/screens/CreateMesaFlow.tsx",
   "texto": "consumo",
   "grupo": "token",
   "veces": 1,

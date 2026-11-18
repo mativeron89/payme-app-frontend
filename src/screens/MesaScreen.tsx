@@ -1923,7 +1923,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         setJournalPendiente(false);
         aplicarAtribucion();
         if (attempt?.reconciliationRequired) {
-          setError(t('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.'));
+          setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
         }
       })
       .catch(() => {
@@ -1931,7 +1931,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         // 🔴 Un journal ilegible NO habilita la atribución: si no se pudo leer,
         // no se sabe si hay replay, y en la duda no se afirma una tarjeta.
         // `journalResueltoRef` queda en false a propósito.
-        setError(t('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.'));
+        setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       });
     return () => { alive = false; };
   }, [payArea, code, aplicarAtribucion]);
@@ -2271,7 +2271,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (puerta.reason === 'no_actor') {
         setError(actorError ? t('No pudimos verificar una identidad segura para este pago.') : t('Preparando una identidad segura para este pago…'));
       } else if (puerta.reason === 'frozen_reconcile') {
-        setError(t('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.'));
+        setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       } else {
         // N-08: no se emite una clave nueva sobre una mesa donde este
         // dispositivo (o esta identidad) ya tiene un pago, sin confirmarlo.
@@ -2470,7 +2470,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         unfreezePay(intent);
       }
       if (ec === 'monetary_family_reconciliation_required') {
-        setError(t('El pago pertenece a una sesión anterior. No lo reenviamos ni iniciamos otro hasta reconciliarlo.'));
+        setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       } else if (ec === 'idempotency_key_terminal') {
         // El backend usa 409 tanto para conflicto VIVO como para intento
         // terminal. Este último sí murió: conservar su clave deja al usuario
@@ -2944,7 +2944,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
                 que vino a arreglarse. Mismo patrón que scan, Garantía y 3DS. */}
             <FilaDeTitulo icono="tarjeta">
               <h1 className="title-card-title pay-title-lbl">
-                {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagar mi parte')}
+                {frozenRequiresReconciliation || frozenScope ? t('Pendiente de confirmar') : t('Pagar mi parte')}
               </h1>
               {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
                   de método. Es el dato que dice DÓNDE se está pagando. */}
@@ -2973,7 +2973,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
                 </div>
                 <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, marginTop: 4, fontFamily: 'var(--font-body)' }}>
                   {frozenRequiresReconciliation
-                    ? t('No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.')
+                    ? t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.')
                     : t('Reinténtalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.')}
                 </div>
                 {/* N-07: la salida. Antes este estado no tenía ninguna y el
@@ -2986,7 +2986,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
                     onClick={() => void checkReconciliation()}
                     disabled={reconciling}
                   >
-                    {reconciling ? t('Consultando…') : t('Revisar si se cobró')}
+                    {reconciling ? t('Consultando…') : t('Revisar de nuevo')}
                   </button>
                 )}
                 {frozenRequiresReconciliation && reconcileVerdict === 'absent' && (
@@ -3415,7 +3415,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             label: busy
               ? t('Procesando…')
               : frozenRequiresReconciliation
-                ? t('Reconciliación necesaria')
+                ? t('Pendiente de confirmar')
                 : frozenScope
                   ? t('Reintentar el pago sin confirmar')
                   : refundedNotice
@@ -3426,7 +3426,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
             if (refundedNotice) {
-              setError(t('Ese intento reembolsado requiere reconciliación antes de iniciar otro pago.'));
+              setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
               return;
             }
             await doPay();

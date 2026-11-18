@@ -818,7 +818,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         setRestaurantRecordOnly(false);
       })
       .catch(() =>
-        alive && setRestaurantError(t('Este QR no corresponde a un restaurante disponible.')),
+        alive && setRestaurantError(t('No encontramos ese restaurante.')),
       );
     return () => {
       alive = false;
@@ -922,7 +922,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       })
       .catch((err) => {
         if (resolutionRef.current?.promise === promise) resolutionRef.current = null;
-        setRestaurantError(t('Este QR no corresponde a un restaurante disponible.'));
+        setRestaurantError(t('No encontramos ese restaurante.'));
         throw err;
       });
     resolutionRef.current = { sessionId, fingerprint, promise };
@@ -1001,7 +1001,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         if (!alive) return;
         setPriorAttemptCheckFailedFor(mesaScopeBase);
         setPriorAttemptCheckedFor(mesaScopeBase);
-        setError(t('Hay una apertura anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de abrir otra.'));
+        setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       });
     return () => { alive = false; };
   }, [mesaScopeBase]);
@@ -1029,7 +1029,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (!createRequested || !sinGarantia || !restaurant) return;
     if (priorAttemptCheckFailed) {
       setCreateRequested(false);
-      setError(t('No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.'));
+      setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       finishTicketContinuation();
       return;
     }
@@ -1149,7 +1149,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             <b>{t('Hay una apertura de una sesión anterior.')}</b> {t('Puede que la garantía ya exista.')}
             {replayHabilitado
               ? ' Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.'
-              : ' Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.'}
+              : t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.')}
             {/* N-07: la salida. Antes este estado dejaba al organizador sin
                 poder abrir NINGUNA mesa en este navegador.
                 ORDEN 2A · el veredicto ya no se infiere de `/mesas/open`
@@ -1166,7 +1166,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 onClick={() => void checkMesaReconciliation()}
                 disabled={reconciling}
               >
-                {reconciling ? t('Consultando…') : t('Revisar cómo quedó esa apertura')}
+                {reconciling ? t('Consultando…') : t('Revisar de nuevo')}
               </button>
             </div>
           </>
@@ -2048,7 +2048,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
     if (!priorAttemptChecked || priorAttemptCheckFailed) {
       setError(priorAttemptCheckFailed
-        ? t('No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.')
+        ? t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.')
         : t('Estamos verificando que no exista otra apertura. Espera un momento.'));
       createInFlightRef.current.leave();
       finishTicketContinuation();
@@ -2068,7 +2068,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     // texto viejo describía un límite que dejó de existir, y un comentario que
     // describe un estado que no es, es una orden latente.
     if (frozenRequiresReconciliation && !replayHabilitado) {
-      setError(t('Esta apertura pertenece a una sesión anterior. Está bloqueada hasta reconciliar su resultado; no abrimos otra mesa.'));
+      setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       createInFlightRef.current.leave();
       finishTicketContinuation();
       return;
@@ -2270,7 +2270,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         unfreezeMesa(intent);
       }
       if (code === 'monetary_family_reconciliation_required') {
-        setError(t('La apertura pertenece a una sesión anterior. No la reenviamos ni iniciamos otra hasta reconciliarla.'));
+        setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       } else if (code === 'restaurant_label_not_allowed') {
         // AF-NOMBRE-EN-TICKET · el dueño rechaza el nombre en una creación
         // NUEVA y antes de crear nada: sin mesa ni hold (AB `routes/mesas.js`,
@@ -2319,10 +2319,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         if (intent) freezeMesa(mesaScope, intent);
         setError(t('Tienes una apertura sin confirmar. Reinténtala tal cual antes de cambiar el ticket.'));
       } else if (code === 'restaurant_record_only') {
-        setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
+        setError(t('No pudimos abrir la mesa. Prueba de nuevo.'));
       } else if (definitivo) {
         // 4xx sin código propio: el backend rechazó y no creó nada.
-        setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
+        setError(t('No pudimos abrir la mesa. Prueba de nuevo.'));
       } else {
         // Ambiguo (5xx, red, timeout): la mesa PUEDE existir ya —y, cuando el
         // riel monetario está vivo, también su garantía—. Se congela el intento:
@@ -2390,7 +2390,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         return;
       }
       if (route === 'record_only_blocked') {
-        setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
+        setError(t('No pudimos abrir la mesa. Prueba de nuevo.'));
         return;
       }
       if (route === 'create_without_money') {
@@ -2409,7 +2409,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (!created) return;
     const intent = frozen?.handle;
     if (!intent) {
-      setError(t('No pudimos atribuir esta garantía a una intención segura. Espera la reconciliación antes de continuar.'));
+      setError(t('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.'));
       return;
     }
     if (!confirm3dsInFlightRef.current.tryEnter()) return;
@@ -3906,7 +3906,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             label: busy
               ? t('Autorizando…')
               : frozenRequiresReconciliation && !replayHabilitado
-                ? t('Reconciliación necesaria')
+                ? t('Pendiente de confirmar')
                 : frozen
                   ? t('Reintentar esta apertura')
                   : t('Garantizar'),

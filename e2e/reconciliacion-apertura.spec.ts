@@ -87,7 +87,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toHaveCount(0);
 
   // El diagnóstico: se pregunta por la clave, no se adivina por el listado.
-  await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
+  await page.getByRole('button', { name: 'Revisar de nuevo' }).click();
 
   // El veredicto dice la verdad completa: la mesa se creó, la garantía no.
   const aviso = page.getByText(/se creó, pero su garantía quedó sin confirmar/);
@@ -99,7 +99,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await expect(page.getByText(/puedes reenviarla tal cual/)).toBeVisible();
 
   // Y la salida existe de verdad: rehecho el ticket, el CTA deja de decir
-  // "Reconciliación necesaria" y pasa a ofrecer reenviar ESTE intento —con SU
+  // "Pendiente de confirmar" y pasa a ofrecer reenviar ESTE intento —con SU
   // clave, que es lo único que no puede duplicar la garantía—. D212 · tras la
   // recarga la cámara nativa no se abre sola: la abre «Sacar foto».
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
@@ -112,7 +112,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await otroMas.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Reconciliación necesaria/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Pendiente de confirmar', exact: true })).toHaveCount(0);
 
   // ⭐ ORDEN 2-A · EL REENVÍO SE COMPLETA DE VERDAD, no se verifica que el
   // botón esté habilitado y listo. Acá es donde vivía la divergencia: tras el

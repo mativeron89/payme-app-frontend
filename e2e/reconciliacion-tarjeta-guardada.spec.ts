@@ -68,7 +68,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   // ⚡ Muere la pestaña con el hold ya puesto sobre la NO-default.
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
-  await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
+  await page.getByRole('button', { name: 'Revisar de nuevo' }).click();
   await expect(page.getByText(/se creó, pero su garantía quedó sin confirmar/)).toBeVisible();
 
   // Se rehace el ticket para llegar a la pantalla de garantía. D212 · tras la

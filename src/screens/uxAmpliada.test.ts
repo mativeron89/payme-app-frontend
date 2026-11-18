@@ -35,6 +35,16 @@ describe('UX ampliada', () => {
     expect(s).toContain('href={PATH_PRIVACIDAD}'); expect(s).toContain('href={PATH_TERMINOS}');
     expect(s).toContain('mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
   });
+  it('K22 · errores sin jerga y familia única de tarjeta', () => {
+    const create = source('./CreateMesaFlow.tsx'); const pay = source('./MesaScreen.tsx');
+    expect(create).toContain("t('No pudimos abrir la mesa. Prueba de nuevo.')");
+    expect(create).toContain("t('No encontramos ese restaurante.')");
+    for (const s of [create, pay]) {
+      expect(s).not.toMatch(/t\('([^']*(?:tokenizar|reconciliación|reconciliar)[^']*)'\)/i);
+      expect(s).toContain('Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.');
+      expect(s).toContain("t('Revisar de nuevo')");
+    }
+  });
   it('K23 · 403,409,410 neutros; solicitudes llenas distintas; red reintentable', () => {
     for (const status of [403,409,410]) {
       const m = joinLinkMessage(settleInvitationFailure(status));
