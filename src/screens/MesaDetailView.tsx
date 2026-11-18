@@ -233,7 +233,7 @@ export interface MesaDetailViewProps {
   leyendoListo?: boolean;
   recuperacion?: ReactNode;
   /** Guardado confirmado por el dueño, nunca una intención local. */
-  avisoGuardado?: boolean;
+  avisoGuardado?: { importeCents: number | null } | null;
   onRetryFrozenPay: () => void;
   onOpenInvite: () => void;
   /** D379 · al cerrar la hoja del engranaje, el panel de invitar se pliega. */
@@ -621,7 +621,7 @@ export function MesaDetailView({
   onCancelarCierreSeleccion,
   leyendoListo = false,
   recuperacion = null,
-  avisoGuardado = false,
+  avisoGuardado = null,
   onRetryFrozenPay,
   onOpenInvite,
   onCloseInvite,
@@ -1383,7 +1383,7 @@ export function MesaDetailView({
           <div className="card mesa-guardado" role="status">
             <Icon name="check" size={24} />
             <div><strong>{t('Listo, quedó guardado')}</strong>
-              <p>{t('Tu parte: {0}', formatMXN(mia?.total_cents ?? montoDeMiParte))}</p>
+              {avisoGuardado.importeCents !== null && <p>{t('Tu parte: {0}', formatMXN(avisoGuardado.importeCents))}</p>}
             </div>
           </div>
         )}

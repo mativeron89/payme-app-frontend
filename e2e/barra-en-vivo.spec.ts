@@ -28,9 +28,12 @@ type VueloDeBarra = {
   refrescoRetenido: boolean;
   refrescoEntregado: boolean;
   lockRetenido: boolean;
+  lockLiberado: boolean;
+  confirmacionRetenida: boolean;
   cuerpo: Parameters<(typeof import('../src/api'))['api']['lockItems']>[1] | null;
   liberarRefresco: () => void;
   liberarLock: () => void;
+  liberarConfirmacion: () => void;
 };
 type VentanaDeBarra = typeof window & { __barraEnVuelo: VueloDeBarra };
 
@@ -229,22 +232,31 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
       const lockItems = module.api.lockItems.bind(module.api);
       let liberarRefresco!: () => void;
       let liberarLock!: () => void;
+      let liberarConfirmacion!: () => void;
       const esperaRefresco = new Promise<void>((resolve) => { liberarRefresco = resolve; });
       const esperaLock = new Promise<void>((resolve) => { liberarLock = resolve; });
+      const esperaConfirmacion = new Promise<void>((resolve) => { liberarConfirmacion = resolve; });
       const control: VueloDeBarra = {
         lecturas: 0, locks: 0, refrescoRetenido: false, refrescoEntregado: false,
-        lockRetenido: false, cuerpo: null, liberarRefresco, liberarLock,
+        lockRetenido: false, lockLiberado: false, confirmacionRetenida: false,
+        cuerpo: null, liberarRefresco, liberarLock, liberarConfirmacion,
       };
       (window as VentanaDeBarra).__barraEnVuelo = control;
       module.api.getMesa = async (...args: Parameters<typeof getMesa>) => {
         if (args[0] !== code) return getMesa(...args);
         const ordinal = ++control.lecturas;
-        if (ordinal > 2) throw new Error('lectura de mesa fuera del censo de esta fixture');
+        if (ordinal > 3 || (ordinal === 3 && !control.lockLiberado)) {
+          throw new Error('lectura de mesa fuera del censo de esta fixture');
+        }
         const respuesta = await getMesa(...args);
         if (ordinal === 1) {
           control.refrescoRetenido = true;
           await esperaRefresco;
           control.refrescoEntregado = true;
+        }
+        if (ordinal === 3) {
+          control.confirmacionRetenida = true;
+          await esperaConfirmacion;
         }
         return respuesta;
       };
@@ -255,6 +267,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
         const respuesta = await lockItems(...args);
         control.lockRetenido = true;
         await esperaLock;
+        control.lockLiberado = true;
         return respuesta;
       };
     }, CONSUMO);
@@ -277,7 +290,16 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
     await expect(barra(page)).toHaveText('Elegido $150 de $840');
     await page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.liberarLock());
-    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.confirmacionRetenida)).toBe(true);
+    const aviso = page.locator('.mesa-guardado');
+    await expect(aviso).toHaveCount(0);
+    await page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.liberarConfirmacion());
+    await expect(aviso).toHaveText('Listo, quedó guardadoTu parte: $150');
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
+    expect(await page.evaluate(() => {
+      const { lecturas, locks } = (window as VentanaDeBarra).__barraEnVuelo;
+      return { lecturas, locks };
+    })).toEqual({ lecturas: 3, locks: 1 });
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   });

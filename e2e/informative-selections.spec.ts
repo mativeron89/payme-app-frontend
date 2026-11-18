@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar, irEnLaApp } from './_app';
+import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
 import { enTuMesaConLaLista } from './_mesa';
 
@@ -314,12 +314,13 @@ test.describe('Listo · selección informativa v2', () => {
       const originalGet = module.api.getInformativeSelection.bind(module.api);
       const originalPut = module.api.replaceInformativeSelection.bind(module.api);
       let getCalls = 0;
+      let putCalls = 0;
       module.api.getInformativeSelection = async (...args: Parameters<typeof originalGet>) => {
         getCalls += 1;
         localStorage.setItem('payme.app.e2e.r3.get.calls', String(getCalls));
-        // El segundo GET es el preflight obligatorio de Listo, no el reingreso.
+        // Segundo GET: verificación previa. Tercero: recarga después del PUT.
         if (getCalls === 2) return originalGet(...args);
-        if (getCalls > 3) throw new Error('GET propio fuera del censo inicial/preflight/reingreso');
+        if (getCalls > 3) throw new Error('GET propio fuera del censo inicial/preflight/recarga');
         const phase = getCalls === 1 ? 'initial' : 'reload';
         localStorage.setItem(`payme.app.e2e.r3.${phase}.waiting`, '1');
         return new Promise((resolve, reject) => {
@@ -329,6 +330,7 @@ test.describe('Listo · selección informativa v2', () => {
         });
       };
       module.api.replaceInformativeSelection = async (...args: Parameters<typeof originalPut>) => {
+        if (++putCalls !== 1) throw new Error('PUT repetido en esta fixture');
         const saved = await originalPut(...args);
         localStorage.setItem('payme.app.e2e.r3.put.waiting', '1');
         localStorage.setItem('payme.app.e2e.r3.put.body', JSON.stringify(args[1]));
@@ -352,18 +354,15 @@ test.describe('Listo · selección informativa v2', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.put.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
-    // Decisión 32 · con el PUT OK se vuelve a Inicio; la lectura diferida que
-    // antes era la recarga es ahora la del reingreso, y bloquea igual.
-    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
-    // n130 · sin recargar: el `api` parchado en memoria tiene que seguir vivo.
-    await irEnLaApp(page, '/mesa/PA-3121');
-    await enTuMesaConLaLista(page);
-
+    // D845 · la lectura posterior al PUT confirma el importe en esta mesa.
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.reload.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
+    const aviso = page.locator('.mesa-guardado');
+    await expect(aviso).toHaveCount(0);
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_reload)());
+    await expect(aviso).toHaveText('Listo, quedó guardadoTu parte: $155');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/mesa/PA-3121');
+    await enTuMesaConLaLista(page);
     await expect(second).toBeEnabled();
     await expect(mio(page, 'Omakase para dos')).toBeVisible();
     await expect(renglon(page, 'Sashimi mixto').locator('[data-estado="libre"]')).toBeVisible();

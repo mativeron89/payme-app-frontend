@@ -95,6 +95,42 @@ test('K5 · guardar con éxito confirma en la mesa; error sin aviso', async ({ p
   await expect(page.locator('.mesa-guardado')).toContainText('Your share: $201.73');
 });
 
+for (const caso of ['lectura fallida', 'importe cero', 'importe ausente'] as const) {
+  test(`K5 · ${caso} después de guardar deja el aviso sin importe`, async ({ page }) => {
+    const code = await mesa(page);
+    await elegir(page);
+    await page.evaluate(async ({ code, caso }) => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const leer = api.getMesa.bind(api);
+      const guardar = api.lockItems.bind(api);
+      let guardado = false;
+      api.lockItems = async (...args) => {
+        const respuesta = await guardar(...args);
+        if (args[0] === code) guardado = true;
+        return respuesta;
+      };
+      api.getMesa = async (...args) => {
+        if (!guardado || args[0] !== code) return leer(...args);
+        api.getMesa = leer;
+        if (caso === 'lectura fallida') throw new TypeError('falló la lectura posterior al lock del mock');
+        const respuesta = await leer(...args);
+        const my_share = caso === 'importe cero'
+          ? { items_cents: 0, adjustments_cents: 0, tip_cents: 0, total_cents: 0 }
+          : null;
+        return { ...respuesta, mesa: { ...respuesta.mesa, my_share } };
+      };
+    }, { code, caso });
+    await continuar(page).click();
+    const aviso = page.locator('.mesa-guardado');
+    await expect(aviso).toHaveText('Listo, quedó guardado');
+    await expect(aviso.locator('p')).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
+    await expect(page.getByRole('button', { name: 'Tus consumos' })).toBeEnabled();
+    if (caso === 'lectura fallida') await captura(page, '05b-guardado-sin-importe');
+  });
+}
+
 test('K6 · cerrar avisa sólo los platos sin dueño confirmados', async ({ page }) => {
   const code = await mesa(page); await elegir(page); await continuar(page).click();
   await expect.poll(() => page.evaluate(async (c) => {

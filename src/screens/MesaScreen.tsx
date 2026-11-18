@@ -101,6 +101,7 @@ import {
 import { consumoConfirmado, lecturaCompatible, mismoBorrador, rechazoDefinitivoSeleccion, type PreparacionListo } from './mesaRecovery';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { leerParteDelDetalle, type TipSetting } from '../api/miParte';
+import { miParteDelDueno } from './miParteView';
 import { guardarPropinaDeLaMesa } from '../api/propinaDeLaMesa';
 import { ejemploLocal, useEjemplo } from '../ayuda/ejemplo/estadoEjemplo';
 import { esCodigoDeEjemplo } from '../ayuda/ejemplo/fixtureEjemplo';
@@ -471,7 +472,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * el riel apagado: la vista lo ignora fuera de ese caso.
    */
   const [informativeSaved, setInformativeSaved] = useState(false);
-  const [avisoGuardado, setAvisoGuardado] = useState(false);
+  const [avisoGuardado, setAvisoGuardado] = useState<{ importeCents: number | null } | null>(null);
   /**
    * Decisión 79 · la selección informativa YA GUARDADA (no el borrador de
    * `selected`). El restante que publica el dueño la incluye, así que hace falta
@@ -652,7 +653,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     borradorEditadoRef.current = false;
     descartarSolicitudCierre();
     intentoSeleccionRef.current = null;
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     setSeleccionIncierta(false); setLeyendoListo(false); listoEnVueloRef.current = false;
     setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
     setInformativasGuardadas(new Map()); setCierrePropio(false);
@@ -1214,7 +1215,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     setSelected(next);
     denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     setInformativeSaved(false);
   }
 
@@ -1242,7 +1243,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     nextDenominators.delete(id);
     denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     setInformativeSaved(false);
   }
 
@@ -1266,7 +1267,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     denominadoresRef.current = new Map(selectedDenominators).set(id, denominator);
     setSelected(seleccionRef.current);
     setSelectedDenominators(denominadoresRef.current);
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     setInformativeSaved(false);
   }
 
@@ -1356,17 +1357,23 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     registrarPrimeraMesa();
     // El tutorial conserva su recorrido local (D363).
     if (ejemplo) { ejemploLocal.irA('listo'); navigate('home'); return; }
+    const identidad = identidadActualRef.current;
+    const identityEpoch = identityEpochRef.current.capture();
+    const revision = revisionBorradorRef.current;
     const foto = await reload();
-    if (foto && identityEpochRef.current.isCurrent(foto.identityEpoch)
-        && mesaReadEpochRef.current.isCurrent(foto.readEpoch)
-        && revisionBorradorRef.current === foto.revision) {
-      setAvisoGuardado(true);
-    }
+    if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad
+        || revisionBorradorRef.current !== revision) return;
+
+    // El lock o PUT ya confirmó el guardado. La recarga sólo acredita su importe.
+    const parte = foto && mesaReadEpochRef.current.isCurrent(foto.readEpoch)
+      ? miParteDelDueno(leerParteDelDetalle(foto.mesa), foto.mesa.guarantee_mode)
+      : null;
+    setAvisoGuardado({ importeCents: parte && parte.total_cents > 0 ? parte.total_cents : null });
   }
 
   async function prepararListo(): Promise<PreparacionListo | null> {
     if (listoEnVueloRef.current || intentoSeleccionRef.current || busy || propinaGuardando) return null;
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     listoEnVueloRef.current = true; setLeyendoListo(true);
     const identityEpoch = identityEpochRef.current.capture();
     try {
@@ -1560,7 +1567,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
      * reserva y se sigue al pago, como siempre. Lo que **nunca** ocurre es
      * llegar a `pay` con el corte activo: eso lo cierra `allowsPay` abajo.
      */
-    setAvisoGuardado(false);
+    setAvisoGuardado(null);
     setError(null);
     if (mesa.division_mode === 'consumo') {
       if (selected.size === 0) {
