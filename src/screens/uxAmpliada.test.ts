@@ -27,4 +27,10 @@ describe('UX ampliada', () => {
     expect(s).toContain("t('Bloquear a {0}'");
     expect(s).toContain('aria-expanded={');
   });
+  it('K21 · enlaces vigentes y correo de baja con asunto fijo', () => {
+    const s = source('./MasScreen.tsx');
+    for (const text of ['Legal y ayuda', 'Aviso de privacidad', 'Términos de uso', 'Escríbenos: soporte@paymemx.com', 'Eliminar mi cuenta']) expect(s).toContain(text);
+    expect(s).toContain('href={PATH_PRIVACIDAD}'); expect(s).toContain('href={PATH_TERMINOS}');
+    expect(s).toContain('mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
+  });
 });

@@ -55,6 +55,10 @@ import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
   "Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.": "We're confirming a previous attempt. No new charge was made. Try again in a few minutes.",
+  "Eliminar mi cuenta": "Delete my account",
+  "Escríbenos: soporte@paymemx.com": "Write to us: soporte@paymemx.com",
+  "Términos de uso": "Terms of use",
+  "Legal y ayuda": "Legal and help",
   "Más acciones de {0}": "More actions for {0}",
   "Bloquear": "Block",
   "Quitar de amigos": "Remove friend",

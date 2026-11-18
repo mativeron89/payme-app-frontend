@@ -1,3 +1,4 @@
+import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
 import { Bloqueados } from './Bloqueados';
 import { SeccionPrivacidad } from '../components/SeccionPrivacidad';
 import { useEffect, useRef, useState } from 'react';
@@ -240,6 +241,13 @@ export function MasScreen() {
         {/* Configuración › Privacidad. D499 b5 · el permiso de foto vuelve como fila simple (D468 había quitado el
             bloque grande). n420 · debajo, las filas de los permisos opcionales, sólo con su capacidad (hoy apagadas). */}
         {session && <SeccionPrivacidad session={session} />}
+        <section className="card config-card legal-ayuda" aria-label={t('Legal y ayuda')}>
+          <h2 className="sectlabel">{t('Legal y ayuda')}</h2>
+          <a className="list-row" href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
+          <a className="list-row" href={PATH_TERMINOS}>{t('Términos de uso')}</a>
+          <a className="list-row" href="mailto:soporte@paymemx.com">{t('Escríbenos: soporte@paymemx.com')}</a>
+          <a className="list-row" href="mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe">{t('Eliminar mi cuenta')}</a>
+        </section>
         <AccesoGuia />
         {IS_MOCK && (
           <button

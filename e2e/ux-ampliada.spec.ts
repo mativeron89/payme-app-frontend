@@ -47,6 +47,15 @@ test('K20 · menú de amigo y solicitud; confirmación propia y foco', async ({ 
   const mas = page.getByRole('button', { name: /^Más acciones de / }).first(); await mas.click();
   await expect(page.getByRole('button', { name: /^Bloquear a / })).toBeVisible();
 });
+test('K21 · Legal y ayuda conserva enlaces vigentes y correo fijo', async ({ page }) => {
+  await ingresar(page); await irEnLaApp(page, '/mas');
+  const seccion = page.getByRole('region', { name: 'Legal y ayuda', exact: true });
+  await expect(seccion.getByRole('link', { name: 'Aviso de privacidad', exact: true })).toHaveAttribute('href', '/privacy');
+  await expect(seccion.getByRole('link', { name: 'Términos de uso', exact: true })).toHaveAttribute('href', '/terminos');
+  await expect(seccion.getByRole('link', { name: 'Escríbenos: soporte@paymemx.com', exact: true })).toHaveAttribute('href', 'mailto:soporte@paymemx.com');
+  await expect(seccion.getByRole('link', { name: 'Eliminar mi cuenta', exact: true })).toHaveAttribute('href', 'mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
+  await foto(page, '21-legal-y-ayuda');
+});
 test('K20 · el menú del último amigo queda visible fuera de la tarjeta', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/amigos');
   const mas = page.getByRole('button', { name: /^Más acciones de / }).last();

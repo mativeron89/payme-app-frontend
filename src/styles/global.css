@@ -12626,9 +12626,11 @@ h1.pay-title-lbl {
 .pay-total-desglose dt { color: var(--text-muted); }
 .pay-total-desglose dd { margin: 0; font-weight: 700; }
 
+/* D852–D855: native sharing, social actions and help on narrow screens. */
 .share-tip-help { margin: -4px 0 16px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .share-actions { flex-wrap: wrap; }
 .share-native { flex-basis: 100%; }
+.legal-ayuda a { color: var(--action); text-decoration: none; overflow-wrap: anywhere; }
 .social-menu { position: relative; flex-shrink: 0; }
 .social-menu-actions { position: absolute; right: 0; top: 100%; z-index: 1000; width: min(240px, 70vw); padding: 8px; background: var(--surface); box-shadow: var(--sh-2); border: 1px solid var(--border); border-radius: 12px; }
 .social-menu-actions button { text-align: left; justify-content: flex-start; }
