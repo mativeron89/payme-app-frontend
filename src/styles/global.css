@@ -12626,6 +12626,9 @@ h1.pay-title-lbl {
 .pay-total-desglose dt { color: var(--text-muted); }
 .pay-total-desglose dd { margin: 0; font-weight: 700; }
 
+.share-tip-help { margin: -4px 0 16px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+.share-actions { flex-wrap: wrap; }
+.share-native { flex-basis: 100%; }
 /* El aire de las pantallas con cámara se mide contra el nuevo saliente de 32px. */
 .screen.has-appbar .scroll.vjv-scroll-abierto,
 .screen.has-appbar .scroll.vjcfg-scroll { padding-bottom: calc(56px + var(--appbar-pie) + 32px + var(--sp-3)); }

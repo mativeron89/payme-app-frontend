@@ -55,8 +55,10 @@ export function PropinaDeLaMesa({
   estado,
   onElegir,
   onReintentar,
+  ayuda,
 }: {
   /** Lo que publica el dueño en el detalle (`tip_setting`). */
+  readonly ayuda?: string;
   readonly guardada: TipSetting | null;
   readonly totales: ShareTotals | null | undefined;
   readonly estado: EstadoDePropina;
@@ -93,6 +95,7 @@ export function PropinaDeLaMesa({
   return (
     <section className="card propina-mesa" aria-labelledby={tituloId}>
       <div className="propina-mesa-titulo" id={tituloId}>{t('Propina de la mesa')}</div>
+      {ayuda && <p className="share-tip-help">{ayuda}</p>}
       {servicio !== null && (
         <p className="propina-mesa-servicio" role="note">
           {t('El ticket ya trae un cargo por servicio de {0}.', formatMXN(servicio))}

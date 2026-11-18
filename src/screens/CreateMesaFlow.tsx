@@ -1,3 +1,4 @@
+import { compartirTexto } from './compartirReparto';
 import '../ayuda/ayuda.css';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useOcrRail } from '../api/ocrRail';
@@ -4162,6 +4163,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         <div className="scroll flow-scroll share-flow-scroll">
           {ofrecePropina && (
             <PropinaDeLaMesa
+              ayuda={t('La eliges tú para toda la mesa y se reparte según lo que consumió cada quien. Es voluntaria y puedes cambiarla después.')}
               guardada={propinaGuardada}
               totales={parteAlCompartir?.shareTotals}
               estado={estadoPropina}
@@ -4219,6 +4221,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               >
                 <Icon name="message" size={18} className="ico-inline" /> {t('WhatsApp')}
               </a>
+              {typeof navigator.share === 'function' && <button type="button" className="btn btn-ghost share-native" disabled={!link}
+                onClick={() => { if (link) void compartirTexto(t('Súmate a la mesa {0} en PayMe: {1}', code, link)); }}>
+                <Icon name="share" size={18} /> {t('Compartir…')}
+              </button>}
             </div>
             )}
           </div>

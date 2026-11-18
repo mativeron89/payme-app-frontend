@@ -55,6 +55,8 @@ import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
   "Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.": "We're confirming a previous attempt. No new charge was made. Try again in a few minutes.",
+  "Compartir…": "Share…",
+  "La eliges tú para toda la mesa y se reparte según lo que consumió cada quien. Es voluntaria y puedes cambiarla después.": "You set it for the whole table and it's split by what each person had. It's optional and you can change it later.",
   'Elige una opción para continuar': 'Choose an option to continue',
   'Leyendo el ticket…': 'Reading the receipt…',
   'Suele tardar unos segundos.': 'This usually takes a few seconds.',
