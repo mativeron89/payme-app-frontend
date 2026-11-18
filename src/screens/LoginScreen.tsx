@@ -460,8 +460,10 @@ export function modeAfterSignupSnapshot(
 export function LoginScreen({
   initialMode,
   recargaPorVersion = false,
+  entradaDesdeMesa = false,
 }: {
   initialMode?: 'login' | 'register';
+  entradaDesdeMesa?: boolean;
   /**
    * AF-VERSION-NUEVA · sólo el ingreso que monta `App` puede recargar la
    * pestaña si hay una versión publicada más nueva. El de `JoinMesaScreen` no:
@@ -2053,11 +2055,11 @@ export function LoginScreen({
             </div>
           </form>
         ) : (
-        <form className="ingreso-tarjeta" onSubmit={onSubmit}>
+        <form className={`ingreso-tarjeta${entradaDesdeMesa && googleEligible ? ' ingreso-desde-mesa' : ''}`} onSubmit={onSubmit}>
           {/* 🔴 AF-16 · addendum 1 · en «Crea tu cuenta», Google PRIMERO, antes
               de cualquier campo y sin depender de nada escrito. El formulario
               con contraseña queda debajo, como alternativa. */}
-          {capturaGoogle && (
+          {(capturaGoogle || entradaDesdeMesa) && googleEligible && (
             <section className="social-auth-options ingreso-alta-google" aria-busy={socialBusy}>
               {ranuraGoogle}
               <div className="social-auth-divider ingreso-alta-google-divisor" aria-hidden="true">
@@ -2281,7 +2283,7 @@ export function LoginScreen({
                     {t('Escribe tu nombre y apellido aquí arriba para continuar con Google.')}
                   </p>
                 )}
-                {googleEligible && !capturaGoogle && ranuraGoogle}
+                {googleEligible && !capturaGoogle && !entradaDesdeMesa && ranuraGoogle}
                 {facebookEligible && (
                   <button
                     type="button"

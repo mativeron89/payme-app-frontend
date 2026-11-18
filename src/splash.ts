@@ -33,13 +33,18 @@ export const SPLASH_FUNDIDO_MS = 160;
 export const SPLASH_RENDICION_MS = 12_000;
 
 /**
- * El mínimo de ESTE build. Siempre 4 s (D498), salvo en el servidor de desarrollo de la e2e, que arranca con
+ * El mínimo de ESTE build. D853: 1 s por link/QR de mesa; 4 s en el resto (D498), salvo en el servidor de desarrollo de la e2e, que arranca con
  * `VITE_E2E_CARGA_SIN_MINIMO=1` (`playwright.config.ts`): ahí las ~1300 pruebas de siempre no esperan el mínimo en cada
  * carga. 🔴 Con `DEV` delante (condición del Bibliotecario, 2026-10-12T13:40:42Z): en un `vite build` `DEV` es `false`
  * constante, así que aunque alguien ponga la variable en Vercel o en el CI, el build que se publica aplica el mínimo. La
  * pantalla de carga misma se prueba contra el build (`e2e/splash.spec.ts`, proyecto `pantalla-de-carga`), sin la marca.
  */
-export const MINIMO_DE_ESTE_BUILD_MS = import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : SPLASH_MINIMO_MS;
+export function minimoPorEntrada(hash: string, pathname = '', search = ''): number {
+  return /^#\/mesa\/[^/?#]+(?:\?.*)?$/.test(hash) || /^\/mesa\/[^/?#]+$/.test(pathname)
+    || Boolean(new URLSearchParams(search).get('r')) ? 1_000 : SPLASH_MINIMO_MS;
+}
+
+export const MINIMO_DE_ESTE_BUILD_MS = import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : (typeof location === 'undefined' ? SPLASH_MINIMO_MS : minimoPorEntrada(location.hash, location.pathname, location.search));
 
 /**
  * Cuánto falta para empezar a fundir el splash, dado cuánto pasó desde que se pintó por primera vez: lo que falta para

@@ -145,7 +145,7 @@ describe('🔴 D292 · la pantalla de carga siempre, al menos 4 segundos (Mati, 
     expect(spec.split('\n').filter((l) => l.includes('VITE_E2E_CARGA_SIN_MINIMO')).map((l) => l.trim()))
       .toEqual(["expect(codigo).not.toContain('VITE_E2E_CARGA_SIN_MINIMO');"]);
     const fuente = FUENTES['/src/splash.ts']!.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(fuente).toContain("import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : SPLASH_MINIMO_MS");
+    expect(fuente).toContain("import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : (typeof location === 'undefined' ? SPLASH_MINIMO_MS : minimoPorEntrada(location.hash, location.pathname, location.search))");
     expect(fuente.match(/VITE_E2E_CARGA_SIN_MINIMO/g)).toHaveLength(1);
     // En la configuración, sólo en el servidor de desarrollo (5176): ni en los builds de la CSP ni en otro lado.
     // Sólo el código de la configuración: los comentarios que la explican no la ponen.

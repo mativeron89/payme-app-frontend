@@ -112,12 +112,12 @@ async function demorarLaApp(page: Page, ms: number): Promise<void> {
  * Lo común: se vio desde el primer cuadro, entero hasta cumplir el mínimo, y se fue con el fundido. 🔴 D300 · el mínimo
  * se cuenta desde el primer cuadro con el `#splash` (`vistoEn`), no desde que empezó la navegación.
  */
-function esperarElMinimoEntero(c: Carga): void {
+function esperarElMinimoEntero(c: Carga, minimoMs = MINIMO_MS): void {
   expect(c.vistoEn, 'el #splash nunca estuvo en el árbol').not.toBeNull();
   // 🔴 Desde el primer cuadro: entero, sin aparecer de a poco (antes nacía en 0 y aparecía a los 300 ms).
   expect(c.muestras[0]!.opacidad, 'el primer cuadro con el #splash no lo muestra entero').toBe(1);
   // Entero hasta cumplir el mínimo, contado desde ese primer cuadro.
-  const finDelMinimo = c.vistoEn! + MINIMO_MS;
+  const finDelMinimo = c.vistoEn! + minimoMs;
   const antesDelMinimo = c.muestras.filter((m) => m.t < finDelMinimo);
   expect(antesDelMinimo.length).toBeGreaterThan(0);
   expect(antesDelMinimo.filter((m) => m.opacidad !== 1), 'el #splash dejó de verse entero antes del mínimo').toEqual([]);
@@ -225,8 +225,8 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada ap
       await medirLaCarga(page);
       await page.goto(ruta);
       const c = await laCarga(page);
-      expect(c.montoEn!).toBeLessThan(MINIMO_MS);
-      esperarElMinimoEntero(c);
+      expect(c.montoEn!).toBeLessThan(1000);
+      esperarElMinimoEntero(c, 1000);
     });
   }
 

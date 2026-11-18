@@ -370,7 +370,7 @@ export function JoinMesaScreen({
               ? t('Crea tu cuenta o entra para sumarte y elegir tus platos.')
               : t('Para ver la mesa y elegir tus platos, necesitas una cuenta de PayMe.')}
           />
-          {formulario.montar && <LoginScreen initialMode={formulario.modo} />}
+          {formulario.montar && <LoginScreen initialMode={formulario.modo} entradaDesdeMesa />}
         </div>
       );
     }

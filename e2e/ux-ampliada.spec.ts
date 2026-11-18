@@ -23,3 +23,13 @@ test('K18 · sin soporte no ofrece Compartir…', async ({ page }) => {
   await expect(page.getByText(TIP, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Compartir…', exact: true })).toHaveCount(0);
 });
+test('K19 · Google principal en cuenta de entrada por link', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.setItem('payme.app.mock.public_signup.v1', 'true'); });
+  await page.goto('/#/mesa/PA-1234?t=ejemplo-link-de-mesa');
+  await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
+  const google = page.getByRole('group', { name: 'Continuar con Google', exact: true });
+  await expect(google).toBeVisible();
+  expect(await google.evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('input[type=email]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.locator('.ingreso-desde-mesa .ingreso-entrar')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await foto(page, '19-cuenta-desde-link');
+});
