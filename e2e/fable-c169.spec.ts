@@ -54,7 +54,7 @@ test('AF2-P3 · el comprobante permanece visible al releer la mesa y refleja el 
   await page.goto('/#/mesa/PA-2847');
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
   await page.evaluate(async () => {
     const ruta = '/src/api/index.ts';
@@ -78,7 +78,7 @@ test('AF2-P3 · el comprobante permanece visible al releer la mesa y refleja el 
     };
   });
   await page.getByRole('radio', { name: '0%', exact: true }).click();
-  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
   const recibo = page.getByRole('heading', { name: '¡Listo!', exact: true });
   await expect(recibo).toBeVisible();
   await expect(page.getByText('La mesa sigue abierta para los demás.')).toBeVisible();
@@ -98,7 +98,7 @@ test('AF2-P4 · después de confirmar ausencia, abre con el ticket nuevo sin ped
   expect((await estadoN179(page)).mesas).toHaveLength(0);
 
   await page.reload();
-  await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
+  await page.getByRole('button', { name: 'Revisar de nuevo' }).click();
   await expect(page.locator('.toast')).toContainText('Comprobamos que esa mesa no se llegó a abrir.');
   await page.getByRole('button', { name: 'Sacar foto', exact: true }).click();
   await sacarFoto(page);

@@ -36,7 +36,9 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   // Decisión 32 · «Listo» registra y vuelve a Inicio; se vuelve a la mesa para mirar lo tomado.
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(`/#/mesa/${mesa.code}`);
   await enTuMesaConLaLista(page);
@@ -198,7 +200,9 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
   test('un 404 de ÍTEM (item_not_found) no se confunde con un backend sin la ruta', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
     await enTuMesaConLaLista(page);

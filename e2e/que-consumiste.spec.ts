@@ -198,7 +198,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await expect(otro).toBeVisible();
     await expect(otro).toContainText('Lo eligió otro');
     await expect(otro.locator('.qc-candado')).toBeVisible();
-    expect(await otro.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe('rgb(251, 231, 227)');
+    expect(await otro.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe('rgb(248, 250, 252)');
     // No es tocable: el renglón no tiene ningún botón.
     await expect(tiramisu.getByRole('button')).toHaveCount(0);
     await capturar(page, 'qc-05-queda-y-otro');
@@ -284,6 +284,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
       const abajo = document.elementFromPoint(x, r.bottom + 6);
       return { visible: Math.round(r.height), arriba: arriba === e, abajo: abajo === e };
     });
+    await tagliatelle.evaluate(el => el.scrollIntoView({ block: 'center' }));
     expect(await medir(opcion)).toEqual({ visible: 28, arriba: true, abajo: true });
     expect(await medir(soltar)).toEqual({ visible: 30, arriba: true, abajo: true });
     await opcion.click();
@@ -295,7 +296,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await abrirMesa(page);
     const burbuja = page.locator('.mesa-selection-title');
     await expect(burbuja.getByRole('progressbar')).toBeVisible();
-    await expect(burbuja.locator('.mi-meta-amt')).toHaveText(/^\$\d+(?:\.\d{2})? \/ \$840 \(\d+%\)$/);
+    await expect(burbuja.locator('.mi-meta-amt')).toHaveText(/^Elegido \$\d+(?:\.\d{2})? de \$840$/);
     await expect(burbuja.locator('.mi-count')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await renglon(page, 'Tagliatelle Bolognese').getByRole('radio', { name: 'Entero' }).click();
@@ -303,7 +304,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await renglon(page, 'Risotto ai Funghi').getByRole('radio', { name: '½' }).click();
     await expect(page.locator('.mi-parte')).toContainText('Mi parte · 2 platos');
     await expect(page.locator('.mi-parte-amt')).toHaveText('$305');
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
     await capturar(page, 'qc-08-mi-parte');
   });
 

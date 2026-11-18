@@ -73,15 +73,17 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // como reemplazo explícito. Con el guardado OK vuelve a Inicio (decisión
     // 32); al reentrar, la nota fija lo dice. Desde la decisión 90 el círculo
     // dice «Listo» con o sin pagos: el corte se mide por a dónde lleva.
-    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto('/#/mesa/PA-3121');
     await enTuMesaConLaLista(page);
     // Vacío→vacío no deja fila ni `updated_at`: al reentrar no hay nota, el
     // círculo vuelve a ser «Listo». El éxito lo acreditó la vuelta a Inicio.
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeEnabled();
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-3121$/);
     // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
     // fila: el éxito se acredita por la respuesta canónica, no por una fila.
@@ -148,12 +150,12 @@ test.describe('Continuar en la mesa (H-14)', () => {
         return original(...args);
       };
     });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
     await expect(page.getByText('Tu parte · $155', { exact: true })).toBeVisible();
     await page.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('radio', { name: /Santander.*4532/ }).click();
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+    await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
 
     const body = await page.evaluate(() => JSON.parse(
@@ -188,7 +190,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     // La única salida del círculo es «Listo», y lleva a Inicio (abajo).
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeEnabled();
 
     const claimsDe = () => page.evaluate(() => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
@@ -210,8 +212,10 @@ test.describe('Continuar en la mesa (H-14)', () => {
 
     // Con la selección hecha sigue sin haber pago.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // Decisión 32 · registra y vuelve a Inicio.
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
 
     /**

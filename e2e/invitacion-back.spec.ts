@@ -42,7 +42,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
     await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
 
     // El 403 ciego. Los cuatro motivos comparten esta pantalla a propósito.
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
 
     // ⭐ Lo primero: la credencial muerta salió de la URL.
     expect(tokenDeLaUrl(page.url())).toBeNull();
@@ -66,7 +66,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
       window.location.hash = `#/mesa/PA-9999?t=${t}`;
     }, TOKEN_MUERTO);
 
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
     expect(tokenDeLaUrl(page.url())).toBeNull();
 
     await page.goBack();
@@ -84,7 +84,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
   test('recargar después del terminal no vuelve a intentar con el token', async ({ page }) => {
     await ingresar(page);
     await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
 
     await page.reload();
 
@@ -92,7 +92,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
     // Sin token no hay canje: la app muestra la mesa (que no existe) o el hub,
     // pero NUNCA vuelve a la pantalla del link. Lo que no puede pasar es que
     // reaparezca el rechazo, porque eso significaría que reintentó.
-    await expect(page.getByText('Este link ya no funciona')).toHaveCount(0);
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toHaveCount(0);
   });
 
   /**
@@ -139,7 +139,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
 
     await ingresar(page);
     await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
 
     // Sin el arreglo de 4B, acá el `?t=` sigue vivo: el storage nunca lo tuvo.
     expect(tokenDeLaUrl(page.url())).toBeNull();
@@ -185,7 +185,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
   test('el respaldo en sessionStorage también queda vacío', async ({ page }) => {
     await ingresar(page);
     await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
 
     const guardado = await page.evaluate(() =>
       window.sessionStorage.getItem('payme_pending_invitation_link'),

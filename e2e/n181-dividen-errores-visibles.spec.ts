@@ -75,7 +75,7 @@ test.describe('n181 · «¿Cómo dividen?» dice por qué no abre la mesa', () =
     await completarDivision(page);
 
     await continuar(page).click();
-    await expect(page.getByRole('alert')).toContainText('Este QR no corresponde a un restaurante disponible.');
+    await expect(page.getByRole('alert')).toContainText('No encontramos ese restaurante.');
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa', exact: true })).toHaveCount(0);
     await expect(continuar(page)).toBeEnabled();
@@ -90,7 +90,7 @@ test.describe('n181 · «¿Cómo dividen?» dice por qué no abre la mesa', () =
     await fallar(page, 'createMesa', 422, 'validation_error');
 
     await continuar(page).click();
-    await expect(page.getByRole('alert')).toContainText('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.');
+    await expect(page.getByRole('alert')).toContainText('No pudimos abrir la mesa. Prueba de nuevo.');
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa', exact: true })).toHaveCount(0);
     await expect(continuar(page)).toBeEnabled();

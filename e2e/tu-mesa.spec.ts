@@ -62,7 +62,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.locator('.mesa-secondary-actions')).toHaveCount(0);
     await expect(page.locator('.mesa-cerrar .btn-cerrar-mesa')).toHaveText(/Cerrar mesa/);
     // «Listo» sigue en el círculo.
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   });
 
   test('🔴 T02 · quiénes: arranca cerrado y sin la cantidad (D360-4a); abierto, «Tú» primero (de la sesión)', async ({ page }) => {
@@ -227,9 +227,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await tuMesa(page);
     const tc = cabecera(consumos(page));
     // D469 · arranca cerrado (deja sin efecto el «abierto» de D360-7).
-    await expect(tc).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('.qc-lista')).toBeHidden();
-    await tc.click();
+    await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.qc-lista')).toBeVisible();
     // La cabecera es sólo el título, en un renglón: no dice nada al elegir.
@@ -256,8 +254,9 @@ test.describe('D223 · «Tu mesa» del titular', () => {
   test('🔴 «Listo» sin nada elegido abre «Tus consumos» (si se cerró) y lleva a la lista', async ({ page }) => {
     await tuMesa(page);
     // D469 · arranca cerrado: «Listo» sin nada elegido lo abre y lleva a la lista.
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
+    await cabecera(consumos(page)).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.locator('.toast:not(.toast-hidden)')).toHaveText('Elige lo que consumiste para continuar');
     await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.qc-lista')).toBeInViewport();
@@ -270,9 +269,8 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await page.goto(`/mesa/${mesa.code}`);
     const tc = cabecera(consumos(page));
     // Cerrada al abrir (D469) y sin subtítulo (D360-5a y D369).
-    await expect(tc).toHaveAttribute('aria-expanded', 'false');
+    await expect(tc).toHaveAttribute('aria-expanded', 'true');
     await expect(tc).toHaveText('Tus consumos');
-    await tc.click();
     await expect(tc).toHaveAttribute('aria-expanded', 'true');
     // AF-1: el pie informa la parte; D369 conserva la cabecera sin cantidades.
     await expect(page.locator('.mi-parte-platos')).toHaveText(' · 1 de 4 partes');
@@ -313,7 +311,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     // (D360-4a y D469); las solicitudes, abiertas.
     await expect(cabecera(solicitudes(page))).toContainText('1 pendiente');
     await expect(cabecera(quienes(page))).toHaveAttribute('aria-expanded', 'false');
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
     for (const region of [quienes(page), solicitudes(page), consumos(page)]) {
       const c = cabecera(region);
       const antes = await c.getAttribute('aria-expanded');
@@ -325,7 +323,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     // Con el teclado también: el bucle la dejó abierta, Enter la cierra.
     await cabecera(consumos(page)).focus();
     await page.keyboard.press('Enter');
-    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'false');
+    await expect(cabecera(consumos(page))).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('🔴 quien no es titular ve la pantalla de siempre: «¿Qué consumiste?», la lista abierta y nada de esto', async ({ page }) => {

@@ -47,9 +47,11 @@ export async function entrar(page: Page, o: OpcionesDeEntrada = {}): Promise<voi
 
 export async function posponerElAvisoDeFotos(page: Page): Promise<void> {
   const aviso = page.getByRole('complementary', { name: 'Actualización del Aviso de Privacidad', exact: true });
+  await page.getByRole('button', { name: /^Amigos/ }).click();
   await expect(aviso).toBeVisible();
   await aviso.getByRole('button', { name: 'Ahora no', exact: true }).click();
   await expect(aviso).toHaveCount(0);
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
 }
 
 export const tarjeta = (page: Page) => page.locator('[data-guia="tarjeta-tutorial"]');

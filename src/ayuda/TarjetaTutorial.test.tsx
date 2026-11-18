@@ -111,7 +111,7 @@ describe('D363 · el cableado en Inicio', () => {
     expect(invitacion).toBeGreaterThan(-1);
     expect(tarjeta).toBeGreaterThan(invitacion);
     expect(ejemplo).toBeGreaterThan(tarjeta);
-    expect(ejemplo).toBeLessThan(inicio.indexOf('<FriendAvatarNotice />'));
+    expect(ejemplo).toBeLessThan(inicio.indexOf('<FriendAvatarNotice '));
   });
   it('enmienda 2 · con la mesa de ejemplo en Inicio no se dice «No tienes mesas abiertas»', () => {
     expect(inicio).toContain('const ejemploEnInicio = mesaDeEjemploEnInicio(useEjemplo());');

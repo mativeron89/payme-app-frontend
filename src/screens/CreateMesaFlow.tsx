@@ -2605,7 +2605,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           <h1 className="camara-titulo">{tituloDelEscaneo}</h1>
           <div className="camara-sub" aria-live="polite" aria-atomic="true">
             {scanning
-              ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
+              ? (uploadPercentage === 100 || (IS_MOCK && uploadProgress === null)
+                ? t('Leyendo el ticket…')
+                : `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`)
               : capturando
                 ? t('Preparando la foto…')
                 : recortando
@@ -2756,6 +2758,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               <span>{t('No pudimos recortar la foto. Mandamos la foto entera.')}</span>
             </div>
           )}
+          {scanning && uploadPercentage === 100 && <p className="camara-sub">{t('Suele tardar unos segundos.')}</p>}
           {scanning && uploadProgress && uploadProgress.totalBytes !== null && (
             <div className="scan-upload-progress">
               <progress

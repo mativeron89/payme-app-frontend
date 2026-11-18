@@ -82,7 +82,7 @@ test.describe('el camino de pago completo', () => {
      */
     await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enTuMesaConLaLista(page);
     const seleccion = page.locator('.mesa-selection-title');
     // Decisión 77 de Mati: restaurante · modalidad, sin el código de mesa.
@@ -123,15 +123,17 @@ test.describe('el camino de pago completo', () => {
      * registra la selección y el recorrido termina donde está, con el aviso
      * que lo dice. Salir sin registrar dejaría ese aviso mintiendo.
      */
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // Decisión 32 (2026-09-24) · registra y vuelve a Inicio: Mati lo pidió literal.
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // La barra de «igual» ya no mide lo pagado sino lo ELEGIDO (decisiones 77 y
     // 79): la mitad del Tagliatelle, $97.50 de $840.
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.locator('.mi-meta-amt')).toHaveText('$97.50 / $840 (12%)');
+    await expect(page.locator('.mi-meta-amt')).toHaveText('Elegido $97.50 de $840');
     // Y nada se cobró: se mide en el dueño simulado, no en la barra.
     expect(await page.evaluate(async (code) => {
       const storePath = '/src/api/mock/store.ts';
@@ -150,10 +152,10 @@ test.describe('el camino de pago completo', () => {
     test.skip(CORTE.pagosCortados, MOTIVO);
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
     // opciones excluyentes y así la anuncia un lector de pantalla.
@@ -178,10 +180,10 @@ test.describe('el camino de pago completo', () => {
     test.skip(CORTE.pagosCortados, MOTIVO);
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(0);
@@ -195,7 +197,7 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('Elige tu propina', { exact: true })).toHaveCount(0);
 
     // Y paga, sin pedir nada más.
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+    await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
     // 🔴 CAMBIÓ CON LA TANDA 4 (2026-08-20) y el propósito del test NO: el
     // comprobante **ya no lista la propina cuando no hubo** —decisión
@@ -235,7 +237,7 @@ test.describe('el camino de pago completo', () => {
 
     // D387 · se llegó directamente, sin un toque de confirmación.
     await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   });
 
   /**

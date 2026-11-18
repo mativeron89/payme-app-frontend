@@ -182,3 +182,20 @@ export function lineasElegidas(elegidos: readonly Elegido[]): { key: string; tex
       : `${nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))} · ${bpsLabel(g.primero.bps)}`,
   }));
 }
+
+/** Platos enteramente sin dueño, del estado confirmado; no incluye el borrador ni los de $0. */
+export function sinDuenoAntesDeCerrar(mesa: Pick<MesaDetail, 'items' | 'guarantee_mode' | 'division_mode'>): { cantidad: number; montoCents: number } | null {
+  let cantidad = 0;
+  let montoCents = 0;
+  for (const item of mesa.items) {
+    const restante = mesa.division_mode === 'igual' ? item.informative_remaining_bps : item.remaining_bps;
+    if (!bpsValido(restante)) return null;
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) return null;
+    const monto = item.price_cents * item.quantity;
+    if (!Number.isSafeInteger(monto) || monto < 0) return null;
+    if (mesa.guarantee_mode === false && monto === 0) continue;
+    if (restante === 10000) { cantidad += item.quantity; montoCents += monto; }
+    if (!Number.isSafeInteger(cantidad) || !Number.isSafeInteger(montoCents)) return null;
+  }
+  return cantidad > 0 ? { cantidad, montoCents } : null;
+}

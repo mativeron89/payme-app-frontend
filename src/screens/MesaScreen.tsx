@@ -277,17 +277,17 @@ function TipSelector({
        propio y quedaría de segunda clase — justo lo que el acta prohíbe. */
     <div
       ref={sectionRef}
-      className={`tip-block${pending ? ' tip-block--pending' : ''}${pulse ? ' tip-block--pulse' : ''}`}
+      className={`tip-block${pulse ? ' tip-block--pulse' : ''}`}
       onAnimationEnd={onPulseEnd}
     >
       <div className="sectlabel tip-block-title" id="lbl-propina">
-        {pending && <Icon name="warning" size={14} aria-hidden="true" />}
-        {pending ? t('Elige tu propina') : t('Propina')}
+        {t('Propina')}
       </div>
       <div className="caption" style={{ margin: '0 2px 8px' }}>
         {t('Base')} {formatMXN(baseCents)}
         {!pending && <> · {t('propina')} {formatMXN(selectedTipCents)}</>}
       </div>
+      {pending && pulse && <p className="tip-ayuda" role="status">{t('Elige una opción para continuar')}</p>}
       <div className="tip-row tip-choices" role="radiogroup" aria-labelledby="lbl-propina">
         {TIP_OPTIONS.map((pct) => {
           const elegida = tip.mode === 'pct' && tip.pct === pct;
@@ -471,6 +471,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * el riel apagado: la vista lo ignora fuera de ese caso.
    */
   const [informativeSaved, setInformativeSaved] = useState(false);
+  const [avisoGuardado, setAvisoGuardado] = useState(false);
   /**
    * Decisión 79 · la selección informativa YA GUARDADA (no el borrador de
    * `selected`). El restante que publica el dueño la incluye, así que hace falta
@@ -651,6 +652,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     borradorEditadoRef.current = false;
     descartarSolicitudCierre();
     intentoSeleccionRef.current = null;
+    setAvisoGuardado(false);
     setSeleccionIncierta(false); setLeyendoListo(false); listoEnVueloRef.current = false;
     setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
     setInformativasGuardadas(new Map()); setCierrePropio(false);
@@ -832,17 +834,20 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     }
   }, [guestToken]);
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     setInformativeState('loading');
     const identityEpoch = identityEpochRef.current.capture();
     const identidad = identidadActualRef.current;
-    void leerMesaPropia().then((foto) => {
+    try {
+      const foto = await leerMesaPropia();
       if (foto) aplicarFotoPropia(foto);
-    }).catch(() => {
-      if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return;
+      return foto;
+    } catch {
+      if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return null;
       if (!mesaActualRef.current) { setNotFound(true); resolverAviso.current(); }
       else setInformativeState('error');
-    });
+      return null;
+    }
   }, [leerMesaPropia, aplicarFotoPropia]);
 
   useEffect(() => {
@@ -1209,6 +1214,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     setSelected(next);
     denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
+    setAvisoGuardado(false);
     setInformativeSaved(false);
   }
 
@@ -1236,6 +1242,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     nextDenominators.delete(id);
     denominadoresRef.current = nextDenominators;
     setSelectedDenominators(nextDenominators);
+    setAvisoGuardado(false);
     setInformativeSaved(false);
   }
 
@@ -1259,6 +1266,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     denominadoresRef.current = new Map(selectedDenominators).set(id, denominator);
     setSelected(seleccionRef.current);
     setSelectedDenominators(denominadoresRef.current);
+    setAvisoGuardado(false);
     setInformativeSaved(false);
   }
 
@@ -1337,20 +1345,28 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   }
 
   /**
-   * Decisión 32 (Mati, 2026-09-24): con el guardado OK, «Listo» vuelve a
-   * Inicio; si falla, no navega y muestra el error. El invitado (rama
-   * durmiente) no puede salir a 'home' —`navigate()` reescribe el hash sin
-   * el token— así que conserva la recarga de siempre.
+   * D845 · el guardado confirmado se anuncia en esta mesa; el error conserva
+   * la selección y no anuncia éxito. La guía mantiene su recorrido local.
    */
-  function volverAInicio(): void {
-    if (isGuest) { reload(); return; }
-    // D363 · el «Listo» del ejemplo también termina en Inicio, donde sigue la guía (4a).
-    if (ejemplo) ejemploLocal.irA('listo');
-    navigate('home');
+  function registrarPrimeraMesa(): void {
+    if (!ejemplo) try { localStorage.setItem('payme.app.mesa-guardada.v1', '1'); } catch { /* preferencia no durable */ }
+  }
+
+  async function confirmarGuardado(): Promise<void> {
+    registrarPrimeraMesa();
+    // El tutorial conserva su recorrido local (D363).
+    if (ejemplo) { ejemploLocal.irA('listo'); navigate('home'); return; }
+    const foto = await reload();
+    if (foto && identityEpochRef.current.isCurrent(foto.identityEpoch)
+        && mesaReadEpochRef.current.isCurrent(foto.readEpoch)
+        && revisionBorradorRef.current === foto.revision) {
+      setAvisoGuardado(true);
+    }
   }
 
   async function prepararListo(): Promise<PreparacionListo | null> {
     if (listoEnVueloRef.current || intentoSeleccionRef.current || busy || propinaGuardando) return null;
+    setAvisoGuardado(false);
     listoEnVueloRef.current = true; setLeyendoListo(true);
     const identityEpoch = identityEpochRef.current.capture();
     try {
@@ -1387,6 +1403,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   }
 
   function confirmarInformativa(saved: InformativeSelectionResponse, revision: number): void {
+    registrarPrimeraMesa();
     const guardadas = selectionMap(saved);
     setInformativasGuardadas(guardadas);
     const sinEdicionPosterior = revisionBorradorRef.current === revision;
@@ -1399,7 +1416,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     setInformativeSaved(sinEdicionPosterior);
     if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
       setCierrePropio(true); reload();
-    } else if (sinEdicionPosterior) volverAInicio();
+    } else if (sinEdicionPosterior) confirmarGuardado();
   }
 
   async function reconciliarSeleccion(): Promise<boolean> {
@@ -1426,7 +1443,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         }
         if (cerroPorSeleccion({ mesa_status: foto.mesa.status, closure_reason: foto.mesa.closure_reason })) {
           setCierrePropio(true);
-        } else if (sinEdicionPosterior) volverAInicio();
+        } else if (sinEdicionPosterior) confirmarGuardado();
       }
       return true;
     } catch {
@@ -1543,14 +1560,13 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
      * reserva y se sigue al pago, como siempre. Lo que **nunca** ocurre es
      * llegar a `pay` con el corte activo: eso lo cierra `allowsPay` abajo.
      */
+    setAvisoGuardado(false);
     setError(null);
     if (mesa.division_mode === 'consumo') {
       if (selected.size === 0) {
-        // Decisión 32 · ya registrado y sin nada nuevo: «Listo» también lleva
-        // a Inicio; nunca un retorno mudo (medido el 24/09: el círculo quedaba
-        // vivo sin hacer nada). Sin nada registrado, la vista frena explicando
-        // antes de llegar acá, con la misma guarda que «Continuar».
-        if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) volverAInicio();
+        // D845 · ya registrado y sin nada nuevo: se confirma en la mesa.
+        // Sin nada registrado, la vista explica qué falta antes de llegar acá.
+        if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) confirmarGuardado();
         return;
       }
       const request = cierre?.operacion.modo === 'consumo' ? cierre.operacion.request : freezeSelectionRequest({
@@ -1567,6 +1583,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         const r = await api.lockItems(code, requests, guestToken, cierre ? selectionClosureConfirmation(cierre.challenge) : undefined);
         if (!vigente()) return;
         intentoSeleccionRef.current = null; setSeleccionIncierta(false); borradorEditadoRef.current = false;
+        registrarPrimeraMesa();
         setLockTokens([r.lock_token]);
         // F-2 (decisión 80) · la última selección cerró la mesa: el dueño lo dice
         // en esta misma respuesta (`mesa_status`), y se muestra en vez de volver
@@ -1585,9 +1602,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         // Antes quedaba marcada con un selector de porción vacío y «Tu parte:
         // $0.00», porque lo que quedaba libre del ítem ya era 0 (medido).
         //
-        // Decisión 32 · con el lock OK se vuelve a Inicio: el detalle sigue
-        // accesible desde Inicio o Mesas, y al volver la fila dice «Lo elegiste».
-        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); volverAInicio(); return; }
+        // D845 · el lock confirmado recarga la mesa y muestra el aviso de éxito.
+        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); confirmarGuardado(); return; }
         setView('pay');
       } catch (err) {
         if (!vigente()) return;
@@ -1660,7 +1676,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!CORTE.allowsPay) {
         // Decisión 32 · lo guardado sigue igual (ninguna edición desde el último
         // guardado acreditado): «Guardado» lleva a Inicio sin volver a enviar.
-        if (preparada?.informativeSaved) { volverAInicio(); return; }
+        if (preparada?.informativeSaved) { confirmarGuardado(); return; }
         if (!preparada && (informativeState === 'unsupported' || informativeState === 'idle')) {
           toast(t('Guardar esta selección todavía no está disponible.'));
           return;
@@ -3350,6 +3366,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             <div className="card pay-total-card" aria-live="polite">
               <span>{t('Total a pagar')}</span>
               <strong>{tipPending ? '—' : formatMXN(gross)}</strong>
+              {!tipPending && <dl className="pay-total-desglose">
+                <div><dt>{mesa.division_mode === 'igual' ? t('Tu parte') : t('Consumos propios')}</dt><dd>{formatMXN(itemsAmount)}</dd></div>
+                <div><dt>{t('Propina')}</dt><dd>{formatMXN(tipCents)}</dd></div>
+              </dl>}
             </div>
           )}
           {/* 🔴 Defecto 4: acá había un segundo aviso de demo, en amarillo,
@@ -3390,6 +3410,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
             iguales.** Lo único que cambia es el envoltorio. */}
         <AppBottomBar
           active={null}
+          accionAncha
           center={{
             label: busy
               ? t('Procesando…')
@@ -3399,7 +3420,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
                   ? t('Reintentar el pago sin confirmar')
                   : refundedNotice
                     ? t('Pagar de nuevo')
-                    : t('Pagar'),
+                    : t('Pagar {0}', formatMXN(gross)),
             icon: 'card',
             onClick: () => { void (async () => {
             // Reembolsado: volver a pagar es una decisión explícita del
@@ -3477,6 +3498,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       selected={selected}
       selectedDenominators={selectedDenominators}
       itemsAmount={itemsAmount}
+      avisoGuardado={avisoGuardado}
       mySlotsTaken={mySlotsTaken}
       frozenScope={frozenScope}
       frozenRequiresReconciliation={frozenRequiresReconciliation}

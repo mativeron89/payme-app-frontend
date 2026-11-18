@@ -97,7 +97,7 @@ test.describe('D209 · «Ver el ticket» con subtotal e IVA', () => {
     // Se borra un plato: la suma deja de ser el subtotal.
     await hoja(page).getByRole('button', { name: 'Modificar Agua mineral' }).click();
     await hoja(page).getByRole('button', { name: 'Eliminar' }).click();
-    await hoja(page).getByRole('button', { name: 'Listo' }).click();
+    await hoja(page).getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
     await expect(hoja(page).locator('.tk-desglose')).toHaveCount(0);
     await expect(notaIva(page)).toHaveCount(0);
     await expect(avisoAmbar(page)).toBeVisible();

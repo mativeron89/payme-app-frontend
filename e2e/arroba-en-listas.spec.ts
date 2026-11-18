@@ -44,7 +44,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 async function entrar(page: Page): Promise<void> {
-  await ingresar(page);
+  await ingresar(page, { sinInvitaciones: true });
   const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
   await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
   await expect(aviso).toHaveCount(0);

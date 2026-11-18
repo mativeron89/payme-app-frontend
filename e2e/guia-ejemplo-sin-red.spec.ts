@@ -127,7 +127,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('1');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(burbuja(page, TEXTO_2D)).toBeVisible();
     await compartirDelEjemplo(page);
     await hastaTuMesa(page);
@@ -138,7 +138,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await expect(renglones).toHaveCount(3);
     for (let i = 0; i < 3; i += 1) await renglones.nth(i).getByRole('button').first().click();
     await expect(page.locator('.qc-lista .qc-renglon [data-estado="mio"]')).toHaveCount(3);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => pathname(page)).toBe('/home');
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toHaveCount(0);
     expect(await fase(page)).toBe('listo');
@@ -170,7 +170,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     // T3 · el contador en «igual» (como en ff5dec7).
     await expect(page.getByRole('group', { name: /¿Cuántos pagan\?/ })).toContainText('2');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(burbuja(page, TEXTO_2D)).toBeVisible();
     await compartirDelEjemplo(page);
     await hastaTuMesa(page);
@@ -178,7 +178,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
 
     await page.getByRole('button', { name: /^Tagliatelle Bolognese(,|$)/ }).click();
     await page.getByRole('radio', { name: '½', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => pathname(page)).toBe('/home');
     const guardado = await page.evaluate(async () => {
       const ruta = '/src/ayuda/ejemplo/estadoEjemplo.ts';
@@ -284,13 +284,13 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
     await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
     await page.getByRole('button', { name: 'Un comensal más' }).click();
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copiar link' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'WhatsApp' })).toBeVisible();
     await expect(page.getByRole('tablist', { name: 'Elegir a quién invitar' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     // D469 · con una mesa de verdad «Tus consumos» arranca cerrado (en el ejemplo, abierto para el paso de la guía).
     await abrirTusConsumos(page);
@@ -300,7 +300,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     const renglones = page.locator('.qc-lista .qc-renglon');
     const total = await renglones.count();
     for (let i = 0; i < total; i += 1) await renglones.nth(i).getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // Punto 2 · sin la bandera, elegir todo abre la hoja antes de cerrar.
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
 

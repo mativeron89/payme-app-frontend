@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar as ingresarBase } from './_app';
+
+// Esta familia prueba instalación después de la primera mesa guardada (D845/UX-17).
+async function ingresar(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mesa-guardada.v1', '1'));
+  await ingresarBase(page, { sinInvitaciones: true });
+  const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
+  await expect(aviso).toBeVisible();
+  await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
+}
+
 
 /**
  * AF-E173-4-E176 · decisión 176 de Mati · la guía «Agregar a inicio».
@@ -68,7 +78,7 @@ test.describe('en Safari de iPhone', () => {
     await expect(guia(page).getByRole('listitem')).toHaveText(['1Toca Compartir', '2Elige «Agregar a inicio»']);
     await expect(entendido(page)).toBeFocused();
     // El naranja, sólo en la acción (--orange #ff6b35).
-    await expect(entendido(page)).toHaveCSS('background-color', 'rgb(240, 112, 60)');
+    await expect(entendido(page)).toHaveCSS('background-color', 'rgb(16, 30, 59)');
     // En el iPhone, Compartir está en la barra de abajo de Safari.
     await expect(guia(page).locator('.guia-inicio-flecha.abajo')).toBeVisible();
     await expect(page.locator('.guia-inicio-flecha.arriba')).toHaveCount(0);
@@ -156,6 +166,10 @@ test.describe('en Safari de iPhone', () => {
 
     // Al recargar no hay dónde recordarlo: vuelve a salir.
     await page.reload();
+    // Tras la recarga, el aviso de fotos vuelve a pedir atención antes que instalación.
+    const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
+    await expect(aviso).toBeVisible();
+    await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
     await expect(guia(page)).toBeVisible();
   });
 

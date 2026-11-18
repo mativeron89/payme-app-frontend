@@ -31,7 +31,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
   await abrirTusConsumos(page);
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
@@ -49,7 +49,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
   await expect(page.getByText('$1,429.00', { exact: true })).toHaveCount(0);
 
   // Y la plata cuadra hasta el comprobante.
-  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
   await expect(page.getByText('$12.34')).toBeVisible();
   await expect(page.getByText('$207.34')).toBeVisible();

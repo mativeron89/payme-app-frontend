@@ -25,7 +25,7 @@ async function persistido(page: Page, code: string) {
 for (const mode of ['consumo', 'igual'] as const) {
   test(`n422 ${mode}: Revisar cancela sin persistencia; cambiar borrador no hereda confirmación`, async ({ page }) => {
     const code = await preparar(page, mode); const before = await persistido(page, code);
-    await elegirTodo(page); await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await elegirTodo(page); await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
     await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Revisar', exact: true })).toBeFocused();
     expect(await persistido(page, code)).toEqual(before);
@@ -33,13 +33,15 @@ for (const mode of ['consumo', 'igual'] as const) {
     await expect(dialog).toHaveCount(0); expect(await persistido(page, code)).toEqual(before);
     // Quitar un plato hace que el nuevo pedido no complete: no hereda el token anterior.
     await page.locator('.qc-renglon').first().locator('button.qc-circulo--marcado').click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect(page).toHaveURL(/\/home$/); expect((await persistido(page, code)).status).toBe('open');
   });
 
   test(`n422 ${mode}: recargar descarta el desafío y la selección rechazada no aparece guardada`, async ({ page }) => {
     const code = await preparar(page, mode); const before = await persistido(page, code);
-    await elegirTodo(page); await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await elegirTodo(page); await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
     const serialized = await page.evaluate(() => Object.values(localStorage).join(' ') + Object.values(sessionStorage).join(' '));
     expect(serialized).not.toContain('payme.app.selection-closure/v1');
@@ -54,9 +56,10 @@ test('n422 inglés: Escape devuelve foco y Enter confirma sólo desde Save and c
   const code = await preparar(page, 'consumo');
   await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
   // D469 · «My items» arranca cerrado: se abre por su cabecera (el helper espera los títulos en español).
-  await page.reload(); await page.locator('.desplegable.tus-consumos .desplegable-cabecera').click();
+  await page.reload();
+  await expect(page.locator('.desplegable.tus-consumos .desplegable-cabecera')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.qc-renglon').first()).toBeVisible();
-  await elegirTodo(page); const done = page.getByRole('button', { name: 'Done', exact: true });
+  await elegirTodo(page); const done = page.getByRole('button', { name: 'Continue', exact: true });
   await done.click(); const dialog = page.getByRole('dialog', { name: 'This closes the table' });
   await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Review', exact: true })).toBeFocused();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(done).toBeFocused();

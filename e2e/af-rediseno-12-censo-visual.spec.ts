@@ -52,16 +52,21 @@ async function acreditar(
   const identity = header.locator('.hdr-user').first();
   const bell = header.locator('.hdr-bell');
   const [box, headerBox, navBox, fabBox, markBox, identityBox, bellBox] = await Promise.all([
-    app.boundingBox(), header.boundingBox(), nav.boundingBox(), fab.boundingBox(),
+    app.boundingBox(), header.boundingBox(), nav.boundingBox(), (await fab.count()) ? fab.boundingBox() : Promise.resolve(null),
     mark.boundingBox(), identity.boundingBox(), bell.boundingBox(),
   ]);
   expect(box?.width).toBe(390);
   expect(box?.height).toBe(844);
   expect(headerBox?.height).toBe(154);
   expect(navBox?.height).toBe(64);
-  expect(fabBox?.width).toBe(56);
-  expect(fabBox?.height).toBe(56);
-  expect((navBox?.y ?? 0) - (fabBox?.y ?? 0)).toBe(26);
+  if (fabBox) {
+    const camara = await nav.locator('[data-guia=camara]').count();
+    expect(fabBox.width).toBe(camara ? 64 : 56);
+    expect(fabBox.height).toBe(camara ? 64 : 56);
+    expect((navBox?.y ?? 0) - fabBox.y).toBe(camara ? 32 : 26);
+  } else {
+    expect((await page.locator('.appbar-continuar').boundingBox())!.width).toBeGreaterThan(340);
+  }
   expect(markBox?.x).toBe(16);
   expect(markBox?.height).toBe(34);
   // M04 (`AF-M01-M03-M04-20260921`, v0.184.0, `9c78a7b`; recepción del Coordinador
@@ -285,7 +290,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   // Mis ítems: 08-pago y 09-comprobante quedan fuera mientras el checkout esté
   // cerrado. El círculo dice «Listo» (desde la decisión 90, con o sin pagos) y
   // no hay pantalla de pago que alcanzar.
-  await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toHaveCount(0);
 
   await page.goto('/#/mas');

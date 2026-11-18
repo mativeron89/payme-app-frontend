@@ -67,7 +67,7 @@ test.describe('🔴 D265 · D267 · el viaje abierto en Inicio', () => {
     await ir(page, `/viaje-gasto/${CANCUN}`);
     await page.getByLabel('Descripción', { exact: true }).fill('Hotel');
     await page.getByLabel('Monto', { exact: true }).fill('5000');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
     await ir(page, '/');
     // −$542 + $5,000 − $1,250 = $3,208 a favor.

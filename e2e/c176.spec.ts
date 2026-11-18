@@ -56,7 +56,7 @@ for (const forzada of [true, false]) {
     await expect(precio).toHaveValue(nuevo);
     await expect(sheet.locator('.cuadre-ticket')).toHaveClass(/cuadre-ticket--cuadra/);
     await expect(sheet.locator('.cuadre-ticket')).toContainText('Cuadra con el ticket');
-    await sheet.getByRole('button', { name: 'Listo', exact: true }).click();
+    await sheet.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(sheet).toBeVisible();
     await sheet.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
     await expect(sheet).toHaveCount(0);
@@ -151,7 +151,7 @@ for (const entrada of ['Corregir a mano', 'Modificar ítems']) {
     await tecla(page, sheet, 'Enter');
     await escribirPrecio(page, sheet, '195.01');
     await expect(sheet.locator('.cuadre-ticket')).toContainText('Cuadra con el ticket');
-    await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Listo', exact: true }));
+    await tabHasta(page, sheet, sheet.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }));
     await tecla(page, sheet, 'Enter');
     await expect(sheet).toBeVisible();
   });

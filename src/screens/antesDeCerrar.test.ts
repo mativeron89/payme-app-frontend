@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MesaItem } from '../api/types';
-import { elegidosAlGuardar, elegidosRegistrados, lineasElegidas, propioEnConsumo, seleccionCierraLaMesa } from './antesDeCerrar';
+import { elegidosAlGuardar, elegidosRegistrados, lineasElegidas, propioEnConsumo, seleccionCierraLaMesa, sinDuenoAntesDeCerrar } from './antesDeCerrar';
 
 /**
  * D240 punto 8 · la hoja antes de que la mesa se cierre. Lo que se prueba acá:
@@ -31,6 +31,13 @@ const consumo = (items: MesaItem[], borrador: Array<[string, number]>) => selecc
   () => 0,
   new Map(borrador),
 );
+
+it('K6 · suma las unidades de un renglón sin dueño y excluye las ya elegidas o en cero', () => {
+  expect(sinDuenoAntesDeCerrar({
+    division_mode: 'consumo', guarantee_mode: false,
+    items: [item({ quantity: 2, price_cents: 5700 }), item({ remaining_bps: 5000 }), item({ price_cents: 0 })],
+  })).toEqual({ cantidad: 2, montoCents: 11400 });
+});
 
 describe('D240 punto 8 · seleccionCierraLaMesa (consumo)', () => {
   it('los dos platos libres, elegidos enteros: cierra', () => {

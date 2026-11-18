@@ -97,7 +97,7 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   await masUno.click();
   await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('2');
 
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
@@ -157,7 +157,7 @@ test('la tarjeta de estado del 3DS explica la transición antes de abrir el banc
   await hastaLaPantallaFusionada(page);
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
@@ -185,7 +185,7 @@ test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se a
   await expect(grupo).toContainText('1');
 
   // El caso llega hasta el final: si el backend rechazara el 1, la mesa no abriría.
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
@@ -259,7 +259,7 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena sin decir por qué 
 
   // Se cierra la edición y luego la hoja por su control modal para poder
   // afirmar que la rama de Continuar la ABRE de nuevo.
-  await page.getByRole('button', { name: 'Listo' }).click();
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 

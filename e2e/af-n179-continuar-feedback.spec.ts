@@ -121,7 +121,7 @@ test('doble toque conserva pending visible y una sola apertura', async ({ page }
 
 test('fallo sintético de resolución restaura el CTA y deja error visible', async ({ page }, testInfo) => {
   await hastaConsumoDos(page, { respuestaResolverInvalida: true });
-  await expect(page.getByRole('alert')).toHaveText('Este QR no corresponde a un restaurante disponible.');
+  await expect(page.getByRole('alert')).toHaveText('No encontramos ese restaurante.');
   await page.evaluate(async () => {
     const apiPath = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ apiPath);
@@ -140,7 +140,7 @@ test('fallo sintético de resolución restaura el CTA y deja error visible', asy
   await expect(page.locator('[role="status"].note')).toHaveText('Continuando…');
 
   const alert = page.getByRole('alert');
-  await expect(alert).toHaveText('Este QR no corresponde a un restaurante disponible.');
+  await expect(alert).toHaveText('No encontramos ese restaurante.');
   const restored = page.getByRole('button', { name: 'Continuar', exact: true });
   await expect(restored).toBeEnabled();
   await expect(restored).not.toHaveAttribute('aria-busy', 'true');

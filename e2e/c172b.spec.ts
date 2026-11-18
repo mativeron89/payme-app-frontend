@@ -25,7 +25,7 @@ test('D790 · un centavo bloquea Continuar, permite corregir manualmente y al cu
   await sheet.getByRole('button', { name: 'Modificar ítems', exact: true }).click();
   await sheet.getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
   await sheet.getByLabel('Precio por unidad').fill('195.01');
-  await sheet.getByRole('button', { name: 'Listo', exact: true }).click();
+  await sheet.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
   await expect(sheet.getByRole('button', { name: 'Sacar otra foto', exact: true })).toBeVisible();
   await sheet.getByRole('button', { name: 'Corregir a mano', exact: true }).click();
@@ -79,7 +79,7 @@ test('D791 · sin confirmación conserva la guarda; con not_found abre con un ti
       throw new TypeError('c172b-lectura-no-confirmada');
     };
   });
-  const check = page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' });
+  const check = page.getByRole('button', { name: 'Revisar de nuevo' });
   await check.click();
   await expect(page.getByText(/No pudimos verificar cómo quedó esa apertura/)).toBeVisible();
   expect((await estadoN179(page)).mesas).toHaveLength(0);

@@ -16,7 +16,7 @@ async function capturar(page: Page, nombre: string): Promise<void> {
 }
 
 async function abrirCompartir(page: Page): Promise<void> {
-  await ingresar(page);
+  await ingresar(page, { sinInvitaciones: true });
   const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
   await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
   await expect(aviso).toHaveCount(0);
@@ -28,7 +28,7 @@ async function abrirCompartir(page: Page): Promise<void> {
 
 test.describe('compartir mesa · la foto de los amigos', () => {
   test('control positivo: en Amigos, Sofía tiene foto y María no', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     await page.getByLabel('Actualización del Aviso de Privacidad').getByRole('button', { name: 'Entendido', exact: true }).click();
     await page.getByRole('button', { name: /^Amigos/ }).click();
     await expect(page.locator('.friend-row').filter({ hasText: 'Sofía Fernández' }).locator('.friend-avatar-image')).toBeVisible();

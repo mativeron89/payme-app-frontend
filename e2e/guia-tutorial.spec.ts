@@ -246,7 +246,7 @@ test.describe('D363 · el recorrido', () => {
     await capturar(page, 'd363-2e-tu-mesa');
 
     await page.locator('.qc-lista .qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' }).getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
 
     // 4a · la mesa de ejemplo en el lugar de la tarjeta, con lo elegido.

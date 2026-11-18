@@ -101,7 +101,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
       };
     }, code);
     // Navegación interna para conservar la respuesta sintética en memoria.
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     await expect(desglose(page).locator('.desplegable-cabecera')).toHaveAttribute('aria-expanded', 'false');
     expect(await filasDelDesglose(page)).toEqual(['Tus platos $1.34', 'Propina $0', 'Total $1.34']);
@@ -137,13 +137,13 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     // se guardó (el pedido salió y «Guardando…» se fue), después la ausencia.
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selector.getByRole('status')).toHaveCount(0);
-    await expect(selector).not.toContainText('para toda la mesa');
+    await expect(selector).not.toContainText(/Son \$[\d,.]+ para toda la mesa/);
     await expect(selector).not.toContainText('$79');
     // El aviso del cargo por servicio sí queda (respuesta 11 de V).
     await expect(selector).toContainText('El ticket ya trae un cargo por servicio de $85.');
     await capturar(page, 'd344-01-selector-compartir-servicio');
 
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     // D360-4b · el selector, en el engranaje. D469 · la línea «Propina de la mesa» ya no está en la página.
     await expect(page.getByText('Propina de la mesa: 10 %', { exact: true })).toHaveCount(0);
@@ -170,7 +170,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(page.locator('.mi-parte-amt')).toHaveText('$238.50');
     await expect(desglose(page).locator('.mi-parte-plato')).toHaveCount(0);
     await expect(desglose(page).locator('.mi-parte-cuenta-propina dd')).toHaveText('La propina de la mesa, $79, se reparte entre 4.');
-    await expect(page.locator('.mi-parte-lbl')).toHaveText('Mi parte · 1 de 4 partes');
+    await expect(page.locator('.mi-parte-lbl')).toHaveText('Mi parte · 1 de 4 partescon propina');
     await expect(page.locator('.screen')).not.toContainText(/\bpagar\b/i);
     await capturar(page, 'd344-02-mi-parte-partes-iguales', desglose(page));
   });
@@ -181,8 +181,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
-    await expect(selectorDePropina(page)).not.toContainText('para toda la mesa');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(selectorDePropina(page)).not.toContainText(/Son \$[\d,.]+ para toda la mesa/);
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     // Sin nada elegido, no hay desglose: la fila de abajo guía.
     await expect(desglose(page)).toHaveCount(0);
@@ -192,7 +192,9 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(page.locator('.mi-parte-amt')).toHaveText('$210.90');
     await capturar(page, 'd344-03-mi-parte-consumo-vista-previa');
 
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
@@ -230,10 +232,12 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
 
     await verComoParticipante(page, code);
@@ -254,7 +258,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
   test('mientras se guarda no se eligen platos; con fallas transitorias, tres intentos y se destraba', async ({ page }) => {
     await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     await abrirTusConsumos(page);
     await page.evaluate(() => { localStorage.setItem('payme.app.mock.propina_mesa.v1', 'error'); });

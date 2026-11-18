@@ -108,6 +108,7 @@ const enInicio = async (page: Page) => {
 async function sumadoALaMesa(page: Page, mesa: MesaAbierta): Promise<void> {
   await expect(page.getByRole('heading', { name: /^(Tu mesa|¿Qué consumiste\?)$/ })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
+  await expect(page.locator('.tus-consumos .desplegable-cabecera')).toHaveAttribute('aria-expanded', 'true');
   expect(page.url()).not.toContain(mesa.token);
   expect(await almacenado(page)).toEqual(VACIO);
 }
@@ -152,7 +153,7 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · con Google en la misma pestaña, el 
       persist();
     }, mesa.code);
     await google(page).click();
-    await expect(page.getByText('Esta mesa ya cerró')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
     expect(await almacenado(page)).toEqual(VACIO);
   });
@@ -256,7 +257,7 @@ test.describe('AF-INVITACION-TRAS-GOOGLE · la marca se borra', () => {
     await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
     expect(JSON.parse((await marca(page)) ?? 'null')?.code, 'testigo: la marca se escribió').toBe(mesa.code);
     await entrarConCorreo(page);
-    await expect(page.getByText('Esta mesa ya cerró')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
     expect(await almacenado(page)).toEqual(VACIO);
   });
 

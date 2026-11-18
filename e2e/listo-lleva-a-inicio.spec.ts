@@ -23,8 +23,8 @@ async function conRielApagado(page: Page): Promise<void> {
 }
 
 async function enInicio(page: Page): Promise<void> {
-  await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
-  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/mesa\/PA-/);
 }
 
 async function sigueEnLaMesa(page: Page, code: string): Promise<void> {
@@ -96,7 +96,7 @@ async function vencerAlEntrarEnMutacion(
   }, { code, metodo });
 }
 
-test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
+test.describe('D845 · guardar confirma en la mesa', () => {
   test('consumo · elegir → Listo registra y vuelve a Inicio; al volver, la fila se ve como propia', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
@@ -105,7 +105,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'lockItems');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
@@ -123,14 +123,14 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
 
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="registrado"]')).toBeVisible();
     await contarLlamadas(page, 'lockItems');
-    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
     await enInicio(page);
@@ -144,7 +144,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'lockItems');
-    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
     await expect(page.getByRole('status').filter({ hasText: 'Elige lo que consumiste para continuar' })).toBeVisible();
@@ -163,7 +163,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     // vencimiento al ingresar y produce su 409 real `mesa_not_active`.
     await sinRefresco(page, async () => {
       await vencerAlEntrarEnMutacion(page, mesa.code, 'lockItems');
-      await page.getByRole('button', { name: 'Listo', exact: true }).click();
+      await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
       await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
       await sigueEnLaMesa(page, mesa.code);
       expect(await llamadas(page, 'lockItems')).toBe(1);
@@ -178,7 +178,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'replaceInformativeSelection');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
 
@@ -186,7 +186,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await enTuMesaConLaLista(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await contarLlamadas(page, 'replaceInformativeSelection');
-    const guardado = page.getByRole('button', { name: 'Guardado', exact: true });
+    const guardado = page.getByRole('button', { name: 'Continuar', exact: true });
     await expect(guardado).toBeEnabled();
     await guardado.click();
     await enInicio(page);
@@ -203,7 +203,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     // Igual: se vence al ingresar al PUT, después de ambas lecturas previas.
     await sinRefresco(page, async () => {
       await vencerAlEntrarEnMutacion(page, mesa.code, 'replaceInformativeSelection');
-      await page.getByRole('button', { name: 'Listo', exact: true }).click();
+      await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
       await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
       await page.waitForTimeout(600);
       expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);

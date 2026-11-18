@@ -37,7 +37,7 @@ type FixtureWindow = typeof window & {
 };
 interface ObservacionFixture { inesperadas: string[]; peticiones: string[] }
 const observaciones = new WeakMap<Page, ObservacionFixture>();
-const listo = (page: Page) => page.getByRole('button', { name: 'Listo', exact: true });
+const listo = (page: Page) => page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
 const hoja = (page: Page) => page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
 const fila = (page: Page, nombre: string) => page.locator(`.qc-renglon[data-plato="${nombre}"]`);
 
@@ -303,7 +303,7 @@ async function fixture(page: Page, modo: 'igual' | 'consumo') {
 async function entrar(page: Page) {
   await page.goto(`/mesa/${CODE}`);
   await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^(Listo|Guardado)$/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Continuar$/ })).toBeEnabled();
   const witness = await page.evaluate(async () => {
     const path = '/src/api/index.ts'; const railPath = '/src/api/moneyRail.ts';
     const cortePath = '/src/api/releaseGates.ts'; const ejemploPath = '/src/ayuda/ejemplo/estadoEjemplo.ts';
@@ -356,6 +356,8 @@ test('GET atrasado conserva una edición posterior y usa el borrador vigente', a
   expect(f.cuerpos).toEqual([{ items: [
     { item_id: A, declared_fraction_bps: 10000 }, { item_id: B, declared_fraction_bps: 10000 },
   ], confirm_closure: true }]);
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/);
 });
 
@@ -390,6 +392,8 @@ test('lock guardado con respuesta perdida y GET fallido bloquea otra escritura h
   await expect(fila(page, 'Plato B').locator('.qc-libre')).toBeDisabled();
   f.fallar(false);
   await page.getByRole('button', { name: 'Actualizar estado', exact: true }).click();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/); expect(f.writes).toBe(1);
 });
 
@@ -428,6 +432,8 @@ test('T3 · A propio completo + agua $0 libre + borrador vacío: Listo no escrib
   f.mesa.items = [{ ...item(A, 'Plato A'), remaining_bps: 0, my_bps: 10000,
     my_releasable_bps: 10000, locked_by_me: true, status: 'locked' }, { ...item(B, 'Agua'), price_cents: 0 }];
   await entrar(page); await listo(page).click();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/); expect(f.writes).toBe(0); await expect(hoja(page)).toHaveCount(0);
 });
 

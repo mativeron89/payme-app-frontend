@@ -685,6 +685,16 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
           ).toBe('centro.disabled');
         },
       },
+      {
+        // D845: el botón ancho conserva el mismo seam, handler y disabled del círculo.
+        tag: 'AppBottomBar > button',
+        clase: 'raw-sin-guarda',
+        identifica: (s) => atributoLiteral(s, 'className') === 'btn btn-navy appbar-continuar',
+        afirmar: (s) => {
+          expect(expresionDe(atributo(s, 'disabled'), s.sf)).toBe('centro.disabled');
+          expect(expresionDe(atributo(s, 'onClick'), s.sf)).toBe('centro.onClick');
+        },
+      },
     ];
 
     /** La ruta sin números de línea: `AppBottomBar@2167 > button@132` → `AppBottomBar > button`. */

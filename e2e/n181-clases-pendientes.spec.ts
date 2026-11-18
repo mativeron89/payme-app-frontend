@@ -209,7 +209,7 @@ test('2 · actor fallido explica el bloqueo y restaura el CTA sin crear', async 
     evidence.pendingProbe = await probeN181(page);
     evidence.actoresRechazados = await fallarActorN181(page);
 
-    const safePriorAttemptError = 'No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.';
+    const safePriorAttemptError = 'Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.';
     await expect(page.getByRole('alert').filter({ hasText: safePriorAttemptError })).toHaveText(safePriorAttemptError);
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeEnabled();
     const after = await estadoN179(page);
@@ -232,7 +232,7 @@ test('2b · actor ya fallido devuelve el error sin depender de una espera transi
     await abrirTicket(page);
     evidence.before = await estadoN179(page);
     await clickContinuar(page);
-    const mensaje = 'No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.';
+    const mensaje = 'Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.';
     await expect(page.getByRole('alert').filter({ hasText: mensaje })).toHaveText(mensaje);
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeEnabled();
     const after = await estadoN179(page);
@@ -279,7 +279,7 @@ test('4 · readUnconfirmed fallido muestra salida segura y no crea', async ({ pa
     evidence.before = before;
     await clickContinuar(page);
     await expect(page.getByRole('alert')).toHaveText(
-      'No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.',
+      'Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.',
     );
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeEnabled();
     const after = await estadoN179(page);
@@ -316,12 +316,12 @@ test('5 · otra familia y consulta fallida conservan el intento sin duplicar', a
     await page.reload();
 
     await expect(page.getByText('Hay una apertura de una sesión anterior.')).toBeVisible();
-    await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura', exact: true }).click();
+    await page.getByRole('button', { name: 'Revisar de nuevo', exact: true }).click();
     await expect(page.getByText(
       'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
       { exact: true },
     )).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Revisar cómo quedó esa apertura', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Revisar de nuevo', exact: true })).toBeEnabled();
     const afterFailure = await snapshot(page);
     evidence.afterFailure = afterFailure;
     expect(afterFailure.mesas).toBe(beforeReload.mesas);
@@ -356,7 +356,7 @@ test('5b · el diagnóstico de la consulta no se pierde si el restaurante termin
       const hay = document.body?.innerText.includes(AVISO) ?? false;
       if (!w.__n181Toque.tocado) {
         const boton = [...document.querySelectorAll('button')]
-          .find((b) => b.textContent === 'Revisar cómo quedó esa apertura');
+          .find((b) => b.textContent === 'Revisar de nuevo');
         if (hay && boton) {
           w.__n181Toque.tocado = true;
           localStorage.removeItem('payme.test.n181.toque_inmediato');

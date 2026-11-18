@@ -58,7 +58,7 @@ test.describe('C3 · mesa sin garantía', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el
     // corte es que no hay pantalla de pago, no el rótulo del círculo.
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   });
 });
 

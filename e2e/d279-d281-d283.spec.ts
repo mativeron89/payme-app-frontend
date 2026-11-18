@@ -170,7 +170,7 @@ test.describe('🔴 D281 · Balance › Consumos: el mismo lugar en una fila que
     await ir(page, `/viaje-gasto/${CANCUN}`);
     await page.getByLabel('Descripción', { exact: true }).fill(descripcion);
     await page.getByLabel('Monto', { exact: true }).fill(monto);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   }
 

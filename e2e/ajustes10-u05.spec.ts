@@ -8,7 +8,7 @@ async function capturar(page: import('@playwright/test').Page, name: string): Pr
 
 test.describe('U05 · foto entre amigos y acuse explícito', () => {
   test('Ahora no conserva toda la app y no persiste un acuse local', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     const notice = page.getByLabel('Actualización del Aviso de Privacidad');
     await expect(notice).toBeVisible();
     await expect(notice.getByRole('link', { name: /Ver Aviso de Privacidad/ })).toHaveAttribute('href', '/privacy');
@@ -26,7 +26,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
   });
 
   test('Entendido acusa el texto mostrado; el acuse del lector no inventa fotos ajenas', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     const notice = page.getByLabel('Actualización del Aviso de Privacidad');
     await expect(notice).toContainText('2.5.5');
     await notice.getByRole('button', { name: 'Entendido', exact: true }).click();
@@ -84,6 +84,7 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
 
   test('pin tolerante · con el par 3.0.0 el cartel se muestra y «Entendido» acusa ese par exacto', async ({ page }) => {
     await conServidorQueDevuelve(page, '3.0.0', HASH_300);
+    await page.getByRole('button', { name: /^Amigos/ }).click();
     const notice = page.getByLabel('Actualización del Aviso de Privacidad');
     await expect(notice).toBeVisible();
     await expect(notice).toContainText('3.0.0');

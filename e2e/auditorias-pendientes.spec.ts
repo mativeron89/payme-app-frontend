@@ -45,7 +45,7 @@ test.describe('🔴 1 · F-03 · la coma decimal en la Carga manual', () => {
     await page.getByLabel('Monto', { exact: true }).fill('12,50');
     await expect(page.getByText('Total $12.50', { exact: true })).toBeVisible();
     await capturar(page, 'f03-coma');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
     await ir(page, `/viaje-balance/${CANCUN}`);
     await expect(page.locator('.vjb-consumo').filter({ hasText: 'Taxi coma' })).toContainText('$12.50');
@@ -60,7 +60,7 @@ test.describe('🔴 1 · F-03 · la coma decimal en la Carga manual', () => {
     await monto.fill('1.250');
     await expect(page.getByText(AMBIGUO, { exact: true })).toBeVisible();
     await expect(page.getByText(/^Total \$/)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeDisabled();
     await capturar(page, 'f03-ambiguo');
     for (const [texto, total] of [['1250', '$1,250'], ['1.250,00', '$1,250'], ['1,250', '$1,250']] as const) {
       await monto.fill(texto);
@@ -239,7 +239,7 @@ test.describe('🔴 5 · V-02 · «Ver todo el ticket» con el viaje en Cerrados
     await expect(page.getByRole('heading', { name: 'Mariscos El Faro', level: 1 })).toBeVisible();
     await expect(page.locator('.vjt-aviso-ticket')).toHaveText('Este viaje ya se cerró: el ticket es sólo para ver.');
     // Nada para elegir, marcar ni borrar.
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toHaveCount(0);
     await expect(page.getByText('¿Quiénes estuvieron?', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Eliminar/ })).toHaveCount(0);
     await expect(page.getByText(/falta elegir/)).toHaveCount(0);

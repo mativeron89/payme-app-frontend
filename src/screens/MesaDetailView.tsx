@@ -35,6 +35,7 @@ import {
   elegidosAlGuardar,
   elegidosRegistrados,
   lineasElegidas,
+  sinDuenoAntesDeCerrar,
 } from './antesDeCerrar';
 import { FilaDeTitulo } from '../components/TarjetaDeTitulo';
 import { HojaDeLaMesa } from '../components/HojaDeLaMesa';
@@ -231,6 +232,8 @@ export interface MesaDetailViewProps {
   onCancelarCierreSeleccion?: () => void;
   leyendoListo?: boolean;
   recuperacion?: ReactNode;
+  /** Guardado confirmado por el dueño, nunca una intención local. */
+  avisoGuardado?: boolean;
   onRetryFrozenPay: () => void;
   onOpenInvite: () => void;
   /** D379 · al cerrar la hoja del engranaje, el panel de invitar se pliega. */
@@ -399,6 +402,7 @@ export function sePuedeCerrar(mesa: Pick<MesaDetail, 'my_role' | 'guarantee_mode
  */
 function HojaAntesDeCerrar({
   titulo,
+  sinDueno,
   renglones,
   mios,
   sinGuardar,
@@ -409,6 +413,7 @@ function HojaAntesDeCerrar({
   onConfirmar,
 }: {
   titulo: string;
+  sinDueno?: { cantidad: number; montoCents: number } | null;
   renglones: readonly string[];
   mios: readonly { key: string; texto: string }[];
   sinGuardar: boolean;
@@ -439,6 +444,14 @@ function HojaAntesDeCerrar({
           <span className="sheet-title">{titulo}</span>
           <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onSalir}>✕</button>
         </div>
+        {sinDueno && (
+          <p className="note note-amber cerrar-mesa-sin-dueno">
+            <strong>{sinDueno.cantidad === 1
+              ? t('Queda 1 plato sin dueño ({0})', formatMXN(sinDueno.montoCents))
+              : t('Quedan {0} platos sin dueño ({1})', sinDueno.cantidad, formatMXN(sinDueno.montoCents))}</strong>
+            {' '}{t('Si cierras ahora, esos platos quedan fuera de las partes.')}
+          </p>
+        )}
         <p className="cerrar-mesa-aviso">{t('Revisa lo que elegiste: después de cerrar ya no se puede modificar.')}</p>
         <div className="cerrar-mesa-mios">
           <p className="cerrar-mesa-mios-titulo">{t('Lo que elegiste')}</p>
@@ -608,6 +621,7 @@ export function MesaDetailView({
   onCancelarCierreSeleccion,
   leyendoListo = false,
   recuperacion = null,
+  avisoGuardado = false,
   onRetryFrozenPay,
   onOpenInvite,
   onCloseInvite,
@@ -642,13 +656,16 @@ export function MesaDetailView({
    */
   const esTitular = !isGuest && mesa.my_role === 'opener';
   /**
-   * D469 · «Tus consumos» arranca CERRADO, como «Quiénes están en la mesa» y
-   * «Tu parte» (deja sin efecto el «abierto» de D360-7). La excepción es la mesa
-   * de ejemplo de la guía: su paso «consumos» señala la lista para elegir.
+   * D845 · sin elecciones, la lista arranca abierta y guía el primer toque.
+   * La mesa de ejemplo conserva la lista abierta para el recorrido de la guía.
    */
-  const [consumosAbierto, setConsumosAbierto] = useState(ejemplo);
+  const [consumosAbierto, setConsumosAbierto] = useState(() => ejemplo
+    || (selected.size === 0 && informativasGuardadas.size === 0 && !mesa.items.some((item) => item.my_bps > 0)));
   /** D469 · «Tu parte» (el desglose de D344) arranca cerrado. */
   const [miParteAbierta, setMiParteAbierta] = useState(false);
+  useEffect(() => {
+    if (avisoGuardado) { setMiParteAbierta(true); setConsumosAbierto(false); }
+  }, [avisoGuardado]);
   /**
    * D360-4a · «Quiénes están en la mesa» arranca CERRADO siempre, haya o no
    * solicitudes (revisa la disposición de D223, turno 2 · 2.10–2.11). Las
@@ -762,7 +779,9 @@ export function MesaDetailView({
   const mia = miParteDelDueno(parteDelDueno, mesa.guarantee_mode);
   const partes = numeroDePartesIguales(mesa.original_participants, mesa.expected_participants);
   // Sin la parte publicada (también en el tutorial), conserva la presentación anterior.
-  const resumenMiParte = esConsumo || !mia ? textoPlatos(selected.size, t) : textoPartes(partes, t);
+  const resumenMiParte = esConsumo || !mia
+    ? textoPlatos(selected.size || mesa.items.filter((item) => item.my_bps > 0).length, t)
+    : textoPartes(partes, t);
   const montoDeMiParte = esConsumo
     ? (totales ? vistaPreviaPorConsumo(itemsAmount, totales) ?? itemsAmount : itemsAmount)
     : (totales && mia ? mia.total_cents : itemsAmount);
@@ -930,7 +949,7 @@ export function MesaDetailView({
    * casillero. El contrato acompaña: `payMesa` acepta `item_ids: []`
    * (`schemas/index.js:233`, default []).
    */
-  const faltaElegir = esConsumo && selected.size === 0;
+  const faltaElegir = esConsumo && selected.size === 0 && !mia?.items_cents;
 
   const miParte = faltaElegir ? null : (
     <div data-guia="mi-parte" className="mi-parte">
@@ -946,8 +965,9 @@ export function MesaDetailView({
             {resumenMiParte !== null && (
               <span className="mi-parte-platos"> · {resumenMiParte}</span>
             )}
+            {totales !== null && totales.tip_cents > 0 && <span className="mi-parte-propina">{t('con propina')}</span>}
           </span>
-          <span className="mi-parte-amt">{formatMXN(montoDeMiParte)}</span>
+          <span className="mi-parte-amt">{formatMXN(esConsumo && selected.size === 0 && mia ? mia.total_cents : montoDeMiParte)}</span>
         </>
       )}
     </div>
@@ -1003,7 +1023,7 @@ export function MesaDetailView({
   // La estimación local sigue sirviendo para mostrar avance, nunca para confirmar.
   /** Vuelve el foco al círculo «Listo» (el de esta pantalla). */
   const enfocarListo = (): void => {
-    requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('.appbar-center')?.focus());
+    requestAnimationFrame(() => pantallaRef.current?.querySelector<HTMLButtonElement>('[data-guia="continuar"]')?.focus());
   };
   const preparandoRef = useRef(false);
   const intencionListoRef = useRef(0);
@@ -1285,7 +1305,7 @@ export function MesaDetailView({
   );
 
   return (
-    <div ref={pantallaRef} className="screen has-appbar">
+    <div ref={pantallaRef} className={`screen has-appbar${ejemplo ? '' : ' mesa-con-accion-ancha'}`}>
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         {/* D469 · el engranaje del organizador va ARRIBA A LA DERECHA de la
@@ -1344,7 +1364,7 @@ export function MesaDetailView({
                 (porcentaje)», sin «asignados» ni «por asignar». */}
             {/* Regla 8 · «$X / $840.00 (N%)»: lo elegido fuerte, el resto tenue. */}
             {repartoConocido ? (
-              <><b>{formatMXN(repartoConocido.assignedCents)}</b><span className="mi-meta-resto"> / {formatMXN(mesa.total_cents)} ({pct}%)</span></>
+              <>{t('Elegido {0} de {1}', formatMXN(repartoConocido.assignedCents), formatMXN(mesa.total_cents))}</>
             ) : reparto ? (
               t('No pudimos calcular el reparto confirmado')
             ) : (
@@ -1359,6 +1379,14 @@ export function MesaDetailView({
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
         {recuperacion}
+        {avisoGuardado && (
+          <div className="card mesa-guardado" role="status">
+            <Icon name="check" size={24} />
+            <div><strong>{t('Listo, quedó guardado')}</strong>
+              <p>{t('Tu parte: {0}', formatMXN(mia?.total_cents ?? montoDeMiParte))}</p>
+            </div>
+          </div>
+        )}
         <div className="toast-ingreso-reserva" aria-hidden="true" />
         {avisoPagoCongelado}
         {invitacionPendiente && (
@@ -1553,6 +1581,7 @@ export function MesaDetailView({
               abierto={consumosAbierto}
               onToggle={() => setConsumosAbierto((a) => !a)}
             >
+              <p className="tus-consumos-guia">{t('Toca lo que consumiste')}</p>
               {listaDeConsumos}
             </Desplegable>
             {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
@@ -1596,6 +1625,7 @@ export function MesaDetailView({
       {hojaCierre === 'cerrar' && onCerrarMesa && (
         <HojaAntesDeCerrar
           titulo={t('¿Cerrar la mesa?')}
+          sinDueno={sinDuenoAntesDeCerrar(mesa)}
           renglones={[
             t('La mesa se cierra para todos.'),
             t('Lo que cada quien eligió queda como su consumo.'),
@@ -1635,17 +1665,18 @@ export function MesaDetailView({
         />
       )}
       {/* Con pagos apagados, Listo es el único acto explícito de persistencia.
-          No cobra; con el guardado OK vuelve a Inicio (decisión 32) y si falla
+          No cobra; con el guardado OK confirma en la mesa (D845) y si falla
           se queda mostrando el error; cerrado/lectura/error lo deshabilitan
           hasta que el estado propio sea conocido. */}
       <AppBottomBar
         active={null}
+        accionAncha={!ejemplo}
         above={miParte}
         center={pagosCortados ? {
           // P1 · con lo guardado a la vista el círculo lo dice; la primera
           // edición lo devuelve a «Listo». Decisión 32 · «Guardado» sigue
           // tocable: lleva a Inicio sin volver a enviar lo mismo.
-          label: !esConsumo && informativeSaved ? t('Guardado') : t('Listo'),
+          label: ejemplo ? t('Listo') : t('Continuar'),
           // Diseño de Claude Design: el círculo central lleva la flecha.
           icon: 'arrow-right',
           /**
@@ -1661,7 +1692,7 @@ export function MesaDetailView({
         } : {
           // Decisión 90 de Mati, definición 1: el círculo dice «Listo» también
           // cuando sigue al pago.
-          label: t('Listo'),
+          label: ejemplo ? t('Listo') : t('Continuar'),
           icon: 'arrow-right',
           onClick: () => {
             if (faltaElegirConsumos) { frenarSinEleccion(); return; }

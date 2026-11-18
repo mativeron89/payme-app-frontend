@@ -88,6 +88,8 @@ export interface AppBottomBarProps {
    * dónde está el usuario (SPEC_APP.md §1.3, §1.8).
    */
   active?: BottomBarSlot | null;
+  /** Acción ancha sobre la navegación, sólo cuando la pantalla la solicita. */
+  accionAncha?: boolean;
   /** Acción del círculo central. Por defecto, abrir una mesa nueva. */
   center?: {
     label: string;
@@ -131,7 +133,7 @@ export function useAccionDelCentro(center?: AppBottomBarProps['center']): NonNul
   });
 }
 
-export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
+export function AppBottomBar({ active = null, center, above, accionAncha = false }: AppBottomBarProps) {
   const { t } = useIdioma();
   const centro = useAccionDelCentro(center);
   const pendientes = useSolicitudesPendientes();
@@ -165,11 +167,20 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
   };
 
   return (
-    <div className="appbar-block">
+    <div className={`appbar-block${accionAncha ? ' appbar-block--accion-ancha' : ''}`}>
       {above && <div className="appbar-above">{above}</div>}
+      {accionAncha && (
+        <div className="appbar-accion">
+          <button type="button" className="btn btn-navy appbar-continuar" data-guia="continuar"
+            onClick={centro.onClick} disabled={centro.disabled} aria-busy={centro.busy || undefined}
+            aria-label={centro.ariaLabel || centro.label}>
+            {centro.label}
+          </button>
+        </div>
+      )}
       <nav className="appbar" aria-label={t('Navegación principal')}>
         {LEFT.map(item)}
-        <button
+        {!accionAncha && <button
           type="button"
           className="appbar-center"
           data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
@@ -184,7 +195,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             <Icon name={centro.icon} size={24} />
           </span>
           <span className="appbar-label">{t(centro.label)}</span>
-        </button>
+        </button>}
         {RIGHT.map(item)}
       </nav>
     </div>

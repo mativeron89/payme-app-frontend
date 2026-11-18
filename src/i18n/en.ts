@@ -54,6 +54,20 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  "Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.": "We're confirming a previous attempt. No new charge was made. Try again in a few minutes.",
+  'Elige una opción para continuar': 'Choose an option to continue',
+  'Leyendo el ticket…': 'Reading the receipt…',
+  'Suele tardar unos segundos.': 'This usually takes a few seconds.',
+  'Pagar {0}': 'Pay {0}',
+
+  'Toca lo que consumiste': 'Tap what you had',
+  'Elegido {0} de {1}': 'Chosen {0} of {1}',
+  'con propina': 'tip included',
+  'Tu parte: {0}': 'Your share: {0}',
+  'Queda 1 plato sin dueño ({0})': '1 dish has no owner ({0})',
+  'Quedan {0} platos sin dueño ({1})': '{0} dishes have no owner ({1})',
+  'Si cierras ahora, esos platos quedan fuera de las partes.': "If you close now, they won't be in anyone's share.",
+
   'Enviaste muchas invitaciones seguidas. Espera unos minutos y vuelve a intentarlo.': "You've sent a lot of invites in a row. Wait a few minutes and try again.",
 
   // D457 · UI del permiso opcional (documentos legales en español).
@@ -309,7 +323,6 @@ export const EN: Record<string, string> = {
   "Elige con qué tarjeta reenviar esta apertura.": "Choose which card to resend this opening with.",
   "Elige cuántos son": "Choose how many you are",
   "Elige tu método de pago": "Choose your payment method",
-  "Elige tu propina": "Choose your tip",
   "Elige tu propina para pagar": "Choose your tip to pay",
   "Cambiar": "Change",
   "Eliminar": "Remove",
@@ -628,7 +641,6 @@ export const EN: Record<string, string> = {
   "Elige lo que consumiste para continuar": "Choose what you had to continue",
   "{0} consumos": "{0} items",
   "Tarjeta que se autoriza": "Card being authorized",
-  "Pagar": "Pay",
   "Pagar de nuevo": "Pay again",
   "Esperando a tu banco": "Waiting for your bank",
   "La tarjeta que elegiste para garantizar": "The card you chose for the guarantee",
@@ -1072,7 +1084,6 @@ export const EN: Record<string, string> = {
   "Estamos leyendo tu selección. Intenta de nuevo en un momento.": "We're loading your selection. Try again in a moment.",
   "Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.": "This table is closed. Your saved selection is read-only.",
   "Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».": "Your selection was saved. If you change anything, tap “Done” again.",
-  "Guardado": "Saved",
   "La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.": "The table is closed. We kept your local selection without replacing the saved one.",
   "No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.": "We couldn't confirm the save. We kept your selection so you can retry.",
   "Esta mesa ya cerró. Lo guardado es sólo de lectura.": "This table is closed. Saved data is read-only.",

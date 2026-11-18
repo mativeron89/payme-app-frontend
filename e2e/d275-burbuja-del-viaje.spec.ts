@@ -105,7 +105,7 @@ for (const ancho of [375, 390]) {
       // Lo de arriba que la semilla trae y el prototipo no (la invitación y el aviso de la foto) se oculta, para medir
       // contra la tarjeta como el prototipo. Con CSS: sacarlos del DOM pelearía con React.
       await expect(page.locator('section[aria-label="Te invitaron"]')).toBeVisible();
-      await expect(page.locator('.friend-avatar-notice')).toBeVisible();
+      await expect(page.locator('.friend-avatar-notice')).toHaveCount(0);
       await page.addStyleTag({ content: 'section[aria-label="Te invitaron"], .friend-avatar-notice { display: none !important; }' });
       await expect(burbuja(page, 'Cancún 2026')).toBeVisible();
       const tarjeta = await caja(page, '.mounted-card');

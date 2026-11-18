@@ -416,7 +416,7 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
 
   it('🔴 D277 · la columna: el aviso toma el resto del alto y centra el texto; abajo, la barra y el círculo de Nueva', () => {
     const columna = de('.has-appbar .scroll.con-aviso-sin-mesas');
-    for (const m of ['display: flex;', 'flex-direction: column;', 'padding-bottom: calc(var(--appbar-alto) + 26px);']) {
+    for (const m of ['display: flex;', 'flex-direction: column;', 'padding-bottom: calc(var(--appbar-alto) + 32px);']) {
       expect(columna, m).toContain(m);
     }
     // Lo que sobresale el círculo es lo mismo que suma la columna.

@@ -56,7 +56,7 @@ test.describe('D255 · tramo 2', () => {
     await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
     await page.getByLabel('Monto', { exact: true }).fill('900');
     await pagoSolo(page, 'Luis Pérez');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
     await ir(page, `/viaje-balance/${CANCUN}`);
     await page.locator('header.hdr').getByRole('tab', { name: 'Miembros', exact: true }).click();

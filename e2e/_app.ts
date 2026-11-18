@@ -45,7 +45,7 @@ export async function omitirGuiaEnFixture(page: Page): Promise<void> {
  * la cámara en vivo, y el Chromium de la suite no tiene cámara. Un test que
  * quiere otro modo (negada, sin cámara, sin soporte) lo pide antes de esto.
  */
-export async function ingresar(page: Page, opciones: { tutorial?: 'inicio' | 'omitido' } = {}): Promise<void> {
+export async function ingresar(page: Page, opciones: { tutorial?: 'inicio' | 'omitido'; sinInvitaciones?: boolean } = {}): Promise<void> {
   // D328: los recorridos de otros flujos usan una cuenta que ya eligió no repetir
   // la guía. Es estado explícito de la fixture, no un bypass del producto. La
   // spec de guía entra sin esta exclusión y prueba casilla/inicio/legacy/retorno.
@@ -55,6 +55,13 @@ export async function ingresar(page: Page, opciones: { tutorial?: 'inicio' | 'om
   await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  if (opciones.sinInvitaciones) {
+    await page.evaluate(async () => {
+      const ruta = '/src/api/mock/store.ts'; const { state, persist } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/store');
+      state.pendingInvitations = []; persist();
+    });
+    await page.reload();
+  }
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 }
 

@@ -119,7 +119,7 @@ for (const vp of [{ nombre: 'Chrome 1280×720', width: 1280, height: 720 }, { no
  * interruptor, sin el bloque grande que quitó D468. Usa la misma lógica (`useControlFoto`) y la misma fachada.
  */
 async function aConfiguracion(page: Page, opciones: Parameters<typeof instrumentar>[1]) {
-  await ingresar(page);
+  await ingresar(page, { sinInvitaciones: true });
   const acuse = page.getByLabel('Actualización del Aviso de Privacidad');
   if (await acuse.count()) await acuse.getByRole('button', { name: 'Entendido', exact: true }).click();
   await instrumentar(page, opciones);
@@ -170,7 +170,7 @@ test('sin la finalidad en el servidor (404): ni la fila ni la sección', async (
 });
 
 test('EN · la fila traducida', async ({ page }) => {
-  await ingresar(page);
+  await ingresar(page, { sinInvitaciones: true });
   await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
   await page.reload();
   const acuse = page.getByLabel(/Privacy Notice update|Actualización del Aviso de Privacidad/);

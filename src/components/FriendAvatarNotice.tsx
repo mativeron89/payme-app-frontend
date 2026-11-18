@@ -62,7 +62,7 @@ export function FriendAvatarNoticeView({
           </div>
         )}
         <div className="friend-avatar-notice-actions">
-          <button type="button" className="btn btn-primary btn-fit" disabled={busy} onClick={onAcknowledge}>
+          <button type="button" className="btn btn-navy btn-fit" disabled={busy} onClick={onAcknowledge}>
             {busy ? t('Guardando…') : t('Entendido')}
           </button>
           <button type="button" className="btn btn-ghost btn-fit" disabled={busy} onClick={onDefer}>
@@ -78,7 +78,7 @@ export function FriendAvatarNoticeView({
  * Presentación no bloqueante del cambio U05. Sólo el botón «Entendido» hace
  * POST; abrir el enlace, navegar, iniciar sesión o elegir «Ahora no» no acusan.
  */
-export function FriendAvatarNotice() {
+export function FriendAvatarNotice({ visible = true }: { visible?: boolean } = {}) {
   const { session } = useAuth();
   const [ready, setReady] = useState<ReadyNotice | null>(null);
   // D363 · enmienda 10: la guía nunca tapa este aviso. Mientras se consulta, «sin saber»; a la vista, pendiente.
@@ -120,7 +120,7 @@ export function FriendAvatarNotice() {
     return () => { epoch.current.next(); };
   }, [session, reload, load]);
 
-  if (!session || !ready) return null;
+  if (!session || !ready || !visible) return null;
 
   const acknowledge = async () => {
     const expected = session;

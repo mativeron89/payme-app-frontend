@@ -97,7 +97,7 @@ test.describe('D218 · «Ver el ticket» con el descuento aparte', () => {
     await hoja(page).getByRole('button', { name: 'Modificar ítems' }).click();
     await hoja(page).getByRole('button', { name: 'Modificar Agua mineral' }).click();
     await hoja(page).getByRole('button', { name: 'Eliminar' }).click();
-    await hoja(page).getByRole('button', { name: 'Listo' }).click();
+    await hoja(page).getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
     await expect(hoja(page).locator('.tk-desglose')).toHaveCount(0);
     await expect(nota(page)).toHaveCount(0);
     await expect(avisoAmbar(page)).toBeVisible();

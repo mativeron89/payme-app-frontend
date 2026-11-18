@@ -135,7 +135,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('radio', { name: '15%', exact: true }))
       .toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('status')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
@@ -143,7 +143,9 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     // Elegido pero sin «Listo»: no hay «Tu parte» guardada, no hay botón.
     await expect(page.getByRole('button', { name: 'Compartir', exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();

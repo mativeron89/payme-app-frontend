@@ -10,7 +10,9 @@ import { enTuMesaConLaLista } from './_mesa';
 async function listoYVolver(page: Page): Promise<void> {
   // n130 · la ruta vive en el path, no en el fragmento.
   const enMesa = await page.evaluate(() => location.pathname);
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(enMesa);
   await enTuMesaConLaLista(page);
@@ -55,7 +57,7 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
   const toques = forma === 'Pagar el total' ? participantes : Math.max(1, participantes - 1);
   for (let i = 0; i < toques; i += 1) await mas.click();
   await expect(page.getByRole('group', { name: /¿Cuántos pagan\?/ })).toContainText(String(participantes));
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
   const href = await page.getByRole('link', { name: 'WhatsApp', exact: true }).getAttribute('href');
@@ -69,7 +71,7 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
     return { code: mesa.code as string, mode: mesa.division_mode, n: mesa.expected_participants };
   }, code);
   expect(created).toMatchObject({ mode: 'igual', n: participantes });
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await enTuMesaConLaLista(page);
   return created.code;
 }
@@ -124,7 +126,7 @@ test.describe('Listo · selección informativa v2', () => {
     // Vacío→vacío es replay exacto sin fila en el dueño: al reentrar no hay nada
     // guardado que mostrar (sin `updated_at`), así que el círculo vuelve a ser
     // «Listo». El éxito lo acreditó la vuelta a Inicio (decisión 32).
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(
       localStorage.getItem('payme.app.e2e.informative-put.v2') ?? 'null',
     ))).toEqual({ items: [], confirm_closure: true });
@@ -159,7 +161,7 @@ test.describe('Listo · selección informativa v2', () => {
     await page.goto('/#/mesa/PA-3121');
     await enTuMesaConLaLista(page);
     await expect(page.getByText('Ahora no podemos guardar lo que elegiste. No se guardó nada: inténtalo de nuevo en un rato.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
     await expect(page.getByText('Tu selección quedó guardada.')).toHaveCount(0);
   });
@@ -176,7 +178,7 @@ test.describe('Listo · selección informativa v2', () => {
     // volver mudo a Inicio se dice «¡Listo! Ya se eligió todo y la mesa se cerró.»; «Ver la mesa» lleva a
     // la vista de sólo lectura.
     const enMesa = await page.evaluate(() => location.pathname);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
@@ -186,7 +188,7 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     await enTuMesaConLaLista(page);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeDisabled();
     await expect(rows).toHaveCount(total);
     // Sólo lectura: cada renglón es propio y no queda nada tocable adentro.
     for (let index = 0; index < total; index += 1) {
@@ -271,7 +273,7 @@ test.describe('Listo · selección informativa v2', () => {
 
     await expect(page.getByText('No pudimos recuperar lo que habías elegido. No lo borramos: vuelve a intentarlo.')).toBeVisible();
     await enTuMesaConLaLista(page);
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeDisabled();
     await expect(page.locator('.qc-libre').first()).toBeDisabled();
     expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.r2.puts'))).toBeNull();
 
@@ -285,7 +287,7 @@ test.describe('Listo · selección informativa v2', () => {
     // El vaciado borra la fila del dueño: al reentrar no queda `updated_at` ni
     // nota; el éxito lo acreditó la vuelta a Inicio y el PUT medido abajo.
     await expect(renglon(page, 'Omakase para dos').locator('[data-estado="libre"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeEnabled();
     expect(await page.evaluate(() => ({
       calls: localStorage.getItem('payme.app.e2e.r2.puts'),
       body: JSON.parse(localStorage.getItem('payme.app.e2e.r2.body') ?? 'null'),
@@ -346,12 +348,14 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(first).toBeEnabled();
 
     await first.click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.put.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
     // Decisión 32 · con el PUT OK se vuelve a Inicio; la lectura diferida que
     // antes era la recarga es ahora la del reingreso, y bloquea igual.
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     // n130 · sin recargar: el `api` parchado en memoria tiene que seguir vivo.
     await irEnLaApp(page, '/mesa/PA-3121');
@@ -384,8 +388,8 @@ test.describe('Listo · selección informativa v2', () => {
     const first = page.getByRole('button', { name: plato('Tagliatelle Bolognese') });
     const second = page.getByRole('button', { name: plato('Risotto ai Funghi') });
     const nota = page.getByText('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
-    const guardado = page.getByRole('button', { name: 'Guardado', exact: true });
-    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    const guardado = page.getByRole('button', { name: 'Continuar', exact: true });
+    const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
 
     await expect(nota).toHaveCount(0);
     await first.click();
@@ -393,7 +397,7 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(nota).toBeVisible();
     // Decisión 32 · «Guardado» sigue tocable: lleva a Inicio sin reenviar lo mismo.
     await expect(guardado).toBeEnabled();
-    await expect(listo).toHaveCount(0);
+    await expect(listo).toHaveCount(1);
     // De vuelta en la mesa, con la fila guardada a la vista.
     await enTuMesaConLaLista(page);
     await expect(mio(page, 'Tagliatelle Bolognese')).toBeVisible();
@@ -409,7 +413,7 @@ test.describe('Listo · selección informativa v2', () => {
     // La primera edición vuelve a «Listo» y retira la nota: lo que se ve ya no es lo guardado.
     await second.click();
     await expect(nota).toHaveCount(0);
-    await expect(guardado).toHaveCount(0);
+    await expect(guardado).toHaveCount(1);
     await expect(listo).toBeEnabled();
   });
 
@@ -463,7 +467,7 @@ test.describe('Listo · selección informativa v2', () => {
         return original(code, forzado as Parameters<typeof original>[1]);
       };
     });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Esa porción no es válida para esta mesa.')).toBeVisible();
     expect(await page.evaluate((mesaCode) => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);

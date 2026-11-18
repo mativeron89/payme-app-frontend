@@ -81,7 +81,7 @@ async function contarLlamadas(page: Page, metodo: 'lockItems' | 'closeMesa'): Pr
 }
 const llamadas = (page: Page, metodo: string) => page.evaluate((m) => (window as unknown as { __llamadas: Record<string, number> }).__llamadas[m], metodo);
 
-const listo = (page: Page) => page.getByRole('button', { name: 'Listo', exact: true });
+const listo = (page: Page) => page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
 
 async function tocarCerrarMesa(page: Page): Promise<void> {
   await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
@@ -322,7 +322,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await renglon(page, 'Agua mineral').locator('button.qc-libre').click();
     await renglon(page, 'Agua mineral').getByRole('radio', { name: '½' }).click();
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await tocarCerrarMesa(page);
@@ -385,7 +385,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await contarLlamadas(page, 'lockItems');
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     expect(await llamadas(page, 'lockItems')).toBe(1);
     expect(await hojasVistas(page)).toEqual([]);
   });
@@ -513,7 +513,7 @@ test.describe('D240 punto 16 · los ítems iguales juntos en el detalle de Mesas
     await elegirEntero(renglon(page, 'Tiramisú', 1));
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
-    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);
     await tocarCerrarMesa(page);

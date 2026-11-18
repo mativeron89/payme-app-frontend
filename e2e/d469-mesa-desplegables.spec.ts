@@ -34,13 +34,15 @@ async function tuMesaDespuesDeListo(page: Page): Promise<string> {
   await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
   await expect.poll(() => pedidosDePropina(page)).toBe(1);
   await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
   // Al abrir la mesa, «Tus consumos» también arranca cerrado.
-  await expect(cabecera(page, 'Tus consumos')).toHaveAttribute('aria-expanded', 'false');
+  await expect(cabecera(page, 'Tus consumos')).toHaveAttribute('aria-expanded', 'true');
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(`/#/mesa/${code}`);
   await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
@@ -152,11 +154,13 @@ test.describe('D469 · «Tu mesa»: engranaje arriba a la derecha y tres despleg
     await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await laMesaVencio(page, code);
 

@@ -156,7 +156,7 @@ test('D387 · 200 retenido no revela detalle; cierra ambas custodias antes de sa
     'payme_pending_invitation_link', 'payme.app.retorno_mesa.v1', 'payme.app.retorno_mesa_modo.v1', 'payme.app.google_salida.v1',
   ].map((k) => sessionStorage.getItem(k)))).toEqual([null, null, null, null]);
   await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   await expect(page.locator('[data-guia-overlay]')).toHaveCount(0);
   await aviso(page).getByRole('button').click();
   await expect(aviso(page)).toBeHidden();
@@ -354,7 +354,7 @@ for (const [idioma, width, height] of [['es', 390, 844], ['en', 375, 667]] as co
         { x: r.x + r.width / 2, y: r.y + r.height / 2 },
         { x: r.right - 3, y: r.y + r.height / 2 },
       ].map((p) => ({ ...p, alcanzaBoton: boton.contains(document.elementFromPoint(p.x, p.y)) }));
-      return { aviso: rect('.toast'), volver: rect('.hdr-row-2'), logo: rect('.hdr-row'), barra: rect('.appbar'), listo: rect('.appbar-fab'), primeraFila: rect('.qc-lista .qc-fila'), circulo: rect('.qc-lista .qc-fila .qc-circulo'), primeraEsBoton: boton.tagName === 'BUTTON', puntos, reserva: rect('.toast-ingreso-reserva').height, viewport: innerWidth, animation: getComputedStyle(document.querySelector('.toast')!).animationName };
+      return { aviso: rect('.toast'), volver: rect('.hdr-row-2'), logo: rect('.hdr-row'), barra: rect('.appbar'), listo: rect('.appbar-continuar'), primeraFila: rect('.qc-lista .qc-fila'), circulo: rect('.qc-lista .qc-fila .qc-circulo'), primeraEsBoton: boton.tagName === 'BUTTON', puntos, reserva: rect('.toast-ingreso-reserva').height, viewport: innerWidth, animation: getComputedStyle(document.querySelector('.toast')!).animationName };
     });
     await testInfo.attach('geometria', { body: JSON.stringify(geometria, null, 2), contentType: 'application/json' });
     // El workflow conserva logs, pero no sube el HTML/JSON de Playwright.

@@ -148,7 +148,7 @@ for (const width of [320, 390]) {
       expect(changes).toBeLessThanOrEqual(1);
       for (let i = 1; i < sizes.length; i += 1) expect(sizes[i]).toBeLessThanOrEqual(sizes[i - 1]!);
       expect(Math.min(...sizes)).toBeGreaterThanOrEqual(124);
-      await sheet.getByRole('button', { name: 'Listo', exact: true }).click();
+      await sheet.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
       await expect.poll(() => sheet.locator('.ticket-cuadre-slot').evaluate(el => (el as HTMLElement).style.minHeight)).toBe('');
       const out = process.env.PAYME_C182D_EVIDENCIA;
       if (out) await writeFile(`${out}/recibos/franja-${entrada}-${width}.json`, JSON.stringify({ width, entrada, sizes, changes, improvement: 'parcial: máximo un crecimiento, sin contracción', data: 'mock D542' }, null, 2));

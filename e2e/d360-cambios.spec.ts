@@ -24,7 +24,7 @@ async function capturar(page: Page, nombre: string, mostrar?: Locator): Promise<
 
 async function hastaComoDividen(page: Page): Promise<void> {
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
-  await ingresar(page);
+  await ingresar(page, { sinInvitaciones: true });
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
@@ -188,7 +188,7 @@ test.describe('P04 · D371 · el plato en $0', () => {
     // El piso de partes iguales es 2: tres toques dan 4.
     for (let i = 0; i < 3; i += 1) await mas.click();
     await expect(page.getByRole('group', { name: '¿Cuántos pagan?', exact: true }).locator('.val')).toHaveText('4');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
     const code = (await page.locator('.share-code-txt').innerText()).trim();
     // La mesa del mock lleva el agua en $0 y el total de $800.
@@ -233,9 +233,9 @@ test.describe('P04 · D371 · el plato en $0', () => {
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     for (let i = 0; i < 4; i += 1) await mas.click();
     await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('4');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
     // D469 · «Tus consumos» arranca cerrado.
     await abrirTusConsumos(page);
@@ -244,7 +244,7 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await expect(conPrecio).toHaveCount(6);
     for (let i = 0; i < 6; i += 1) await conPrecio.nth(i).getByRole('button').first().click();
     await expect(page.locator('.qc-lista .qc-renglon [data-estado="mio"]')).toHaveCount(6);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // La hoja sale ANTES de mandar nada: la mesa sigue en «Tu mesa» y lo elegido se puede revisar.
     const hoja = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
     await expect(hoja).toBeVisible();
@@ -266,7 +266,7 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await page.getByRole('radio', { name: /En partes iguales/ }).click();
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     for (let i = 0; i < 4; i += 1) await mas.click();
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: '¿Cómo dividen?' })).toBeVisible();
   });
@@ -298,7 +298,7 @@ async function platosEnMayusculas(page: Page): Promise<void> {
 
 test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
   test('🔴 en «Tu mesa»: «100 Hugel copa», «Zifon natural 900 ML», «Cerveza IPA»; lo guardado no cambia', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     await page.goto('/mesa/PA-2847');
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
     await platosEnMayusculas(page);
@@ -345,7 +345,7 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
 test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () => {
   test('🔴 la mesa «En partes iguales» y la que no tiene nada elegido abren su pantalla del ticket, con «Ver detalle digital»', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     await page.goto('/#/mesas');
     const tusMesas = page.getByRole('region', { name: 'Tus mesas' });
     const tacuba = tusMesas.locator('.tu-mesa').filter({ hasText: 'Café Tacuba' });
@@ -388,7 +388,7 @@ test.describe('D360 · P09 · el detalle de las mesas que no son de viaje', () =
 
 test.describe('D536 · el «Escanear» de la barra abre la cámara directo', () => {
   test('🔴 con `capture` e image/*; la foto llega como de la cámara («Sacar otra»); el carrete sigue en «Elegir de la galería», sin `capture`', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     const [camara] = await Promise.all([
       page.waitForEvent('filechooser'),
       page.getByRole('button', { name: 'Escanear', exact: true }).click(),
@@ -407,7 +407,7 @@ test.describe('D536 · el «Escanear» de la barra abre la cámara directo', () 
   });
 
   test('🔴 si se cancela la cámara, el carrete es «Elegir de la galería» de la pantalla de abajo (sin `capture`)', async ({ page }) => {
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     await Promise.all([
       page.waitForEvent('filechooser'),
       page.getByRole('button', { name: 'Escanear', exact: true }).click(),
@@ -430,7 +430,7 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     await selectorDePropina(page).getByRole('radio', { name: '10%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
 
     const engranaje = page.getByRole('button', { name: 'Configuración de la mesa', exact: true });
@@ -513,7 +513,7 @@ test.describe('D360-5a · sin «¿Compartieron un plato?» en el ticket de un vi
   test('🔴 «¿Qué consumiste?» con sus platos y sin la ayuda de porciones', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.viajes.v1', 'encendido'));
     await relojFueraDeLasFechasDeLosViajes(page);
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     // «Mariscos El Faro», de Cancún 2026 (mock): un ticket por consumos que todavía se puede elegir.
     await irEnLaApp(page, '/viaje-ticket/d1000000-0000-4000-8000-000000000001.d2000000-0000-4000-8000-000000000105');
     // Control positivo: la tarjeta donde vivía la ayuda, con un plato a la vista.
@@ -531,7 +531,7 @@ test.describe('D379 · «Invitar amigos» en la hoja del engranaje conserva lo e
     // pintar la suscripción del panel a la memoria: con el reloj quieto no corren ni el tick de 1 s de MesaScreen ni su
     // refresco de 10 s, que repintan todo y taparían una suscripción rota.
     await page.clock.install();
-    await ingresar(page);
+    await ingresar(page, { sinInvitaciones: true });
     const aviso = page.getByLabel('Actualización del Aviso de Privacidad');
     await aviso.getByRole('button', { name: 'Entendido', exact: true }).click();
     await expect(aviso).toHaveCount(0);

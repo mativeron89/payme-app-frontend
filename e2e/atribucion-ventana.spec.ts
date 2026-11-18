@@ -58,10 +58,10 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   // Pagar. Poniéndolo más tarde la carrera ya había terminado y el test medía
   // una ventana cerrada — verde por la razón equivocada.
   await frenarJournal(page, 1_500);
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
   /**
@@ -144,11 +144,11 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   }
 
   // Y el CTA tampoco se ofrece: la puerta lo rechazaría (AF-04).
-  await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true })).toBeDisabled();
 
   // Cuando el journal contesta, la pantalla vuelve a ofrecer todo.
   await expect(filaTarjeta).toBeEnabled({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true })).toBeEnabled();
 });
 
 /**
@@ -169,10 +169,10 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await ingresar(page);
   const mesa = await abrirMesaConLink(page);
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: '10%', exact: true }).click();
@@ -181,7 +181,7 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   if (await paraQuien.count()) {
     await paraQuien.getByRole('button').first().click();
   }
-  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
 
   // ① PANTALLA

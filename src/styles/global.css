@@ -563,7 +563,7 @@ html.app-de-inicio-ios .app {
   transform: scale(0.98);
 }
 .btn-primary {
-  background: var(--orange);
+  background: var(--action);
   color: #fff;
 }
 .btn-teal {
@@ -3799,7 +3799,7 @@ html.app-de-inicio-ios .app {
   height: 18px;
   padding: 0 5px;
   border-radius: var(--r-full);
-  background: var(--brand);
+  background: var(--action);
   color: var(--brand-fg);
   font-size: var(--fs-xs);
   font-weight: 700;
@@ -5674,7 +5674,7 @@ button.qc-circulo::after {
 /* Regla 6 · «Lo eligió otro»: rojo pastel, candado, sin nombre de quién.
    D310 · #FBE7E3 ya tiene token: --danger-l, compartido con los avisos. */
 .qc-otro {
-  background: var(--danger-l);
+  background: var(--surface-2);
 }
 
 .qc-candado {
@@ -6165,12 +6165,12 @@ button.qc-circulo::after {
 .mi-parte-amt {
   margin-left: auto;
   font-family: var(--font-display);
-  font-size: 21px;
+  font-size: var(--fs-h1);
   line-height: var(--lh-h2);
   font-weight: 800;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--link);
+  color: var(--text);
 }
 
 .mesa-selection-title .title-card-sub strong {
@@ -7897,7 +7897,7 @@ button.qc-circulo::after {
 /* `aria-pressed` ya dice cuál está activo para quien no ve el color; esto es
    la contraparte visual, no la única señal. */
 .lang-btn-on {
-  background: var(--brand);
+  background: var(--action);
   color: var(--brand-fg);
 }
 
@@ -12597,3 +12597,24 @@ h1.pay-title-lbl {
 .visor-ticket-partes-puntos span.on {
   background: var(--white);
 }
+
+/* Mesa: la acción propia queda sobre los cuatro destinos de siempre. */
+.appbar-block--accion-ancha .appbar { grid-template-columns: repeat(4, 1fr); }
+.appbar-accion { padding: 0 var(--sp-4) var(--sp-3); }
+.appbar-continuar { width: 100%; min-height: 52px; border-radius: var(--r-md); font-size: var(--fs-body); }
+.mi-parte-propina { display: block; font-size: var(--fs-sm); }
+.tus-consumos-guia { margin: 0; padding: var(--sp-3) var(--sp-4); color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--border); }
+.mesa-guardado { display: flex; align-items: center; gap: var(--sp-3); }
+.mesa-guardado > svg { color: var(--success); }
+.mesa-guardado p { margin: var(--sp-1) 0 0; color: var(--text-muted); }
+.mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }
+
+.tip-block-title { font-size: var(--fs-h2); text-transform: none; color: var(--text); }
+.tip-ayuda { color: var(--warning); font-size: var(--fs-sm); }
+.pay-total-card { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+.pay-total-card > span { color: var(--text-muted); }
+.pay-total-card > strong { font-size: var(--fs-display); font-weight: 800; line-height: 1.05; }
+.pay-total-desglose { border-top: 1px solid var(--border); margin: var(--sp-2) 0 0; padding-top: var(--sp-2); font-size: var(--fs-body); }
+.pay-total-desglose > div { display: flex; justify-content: space-between; gap: var(--sp-3); }
+.pay-total-desglose dt { color: var(--text-muted); }
+.pay-total-desglose dd { margin: 0; font-weight: 700; }

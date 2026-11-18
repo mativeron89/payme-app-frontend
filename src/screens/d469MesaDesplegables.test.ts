@@ -27,7 +27,7 @@ describe('D469 · «Tu mesa»: engranaje y tres desplegables cerrados', () => {
   it('los tres desplegables arrancan cerrados (la lista sólo abierta en la mesa de ejemplo de la guía)', () => {
     expect(vista).toContain('const [quienesAbierto, setQuienesAbierto] = useState(false);');
     expect(vista).toContain('const [miParteAbierta, setMiParteAbierta] = useState(false);');
-    expect(vista).toContain('const [consumosAbierto, setConsumosAbierto] = useState(ejemplo);');
+    expect(vista).toContain('const [consumosAbierto, setConsumosAbierto] = useState(() => ejemplo');
     expect(vista).not.toContain('useState(true);\n  /** D469');
   });
 

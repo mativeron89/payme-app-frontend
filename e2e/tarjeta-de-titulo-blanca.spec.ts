@@ -235,7 +235,7 @@ test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ 
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
   await medir(page, '05', tarjeta(page), ESPERADO['05']!);
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await enTuMesaConLaLista(page);
   await medir(page, '06', tarjeta(page), ESPERADO['06']!);
   // La barra a todo el ancho de la tarjeta (menos el padding y el borde) y, debajo, el reloj en --brand-ink.
@@ -268,12 +268,12 @@ test('mesa · pagar mi parte → ¡Listo!', async ({ page }) => {
   await enTuMesaConLaLista(page);
   await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
   await page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' }).getByRole('radio', { name: '⅓', exact: true }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
   await medir(page, '08', page.locator('.title-card.pay-title'), ESPERADO['08']!);
   await page.getByRole('radio', { name: '0%', exact: true }).click();
   await page.getByRole('radio', { name: /Santander.*4532/ }).click();
-  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
   await medir(page, '09', page.locator('.title-card.recibo-cierre'), ESPERADO['09']!);
 });
@@ -535,7 +535,7 @@ test('viajes · corregir ticket y corregir gasto (fila 41)', async ({ page }) =>
   await ir(page, `/viaje-gasto/${CANCUN}`);
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
   await ir(page, `/viaje-balance/${CANCUN}`);
   await page.locator('.vjb-consumo').filter({ hasText: 'Gasolina' }).click();

@@ -72,7 +72,7 @@ test.describe('D263 · «¿Quién pagó?» con varios', () => {
     await expect(mio).toHaveValue('300.01');
     await expect(luis).toHaveValue('300');
     await expect(sofia).toHaveValue('300');
-    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
     await expect(listo).toBeEnabled();
     await mio.fill('500');
     // El aviso, junto al botón apagado; arriba, lo que suman.

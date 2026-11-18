@@ -134,7 +134,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
     await page.screenshot({ path: testInfo.outputPath('v04-fraccion-un-tercio.png'), fullPage: true });
 
     await grabarLocks(page);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => fraccionGuardada(page, 'PA-9207')).toBe(3333);
     expect(await page.evaluate(() => (window as unknown as { __locks: unknown[] }).__locks))
       .toEqual([[{ item_id: ITEM_ID, fraction_denominator: 3 }]]);
@@ -148,7 +148,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
     await sinOtroEnLasPorciones(page);
     await page.getByRole('radio', { name: '¼' }).click();
     await grabarLocks(page);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => fraccionGuardada(page, 'PA-9299')).toBe(2500);
     const locks = await page.evaluate(() => (window as unknown as { __locks: Array<Array<Record<string, unknown>>> }).__locks);
     expect(locks).toHaveLength(1);

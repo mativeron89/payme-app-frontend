@@ -90,7 +90,7 @@ async function abrirGarantia(page: Page, modo: 'igual' | 'consumo' = 'igual'): P
   for (let i = 0; i < toques; i += 1) await sumar.click();
   const pregunta = modo === 'igual' ? '¿Cuántos pagan?' : '¿Cuántos son en la mesa?';
   await expect(page.getByRole('group', { name: pregunta })).toContainText('4');
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa', exact: true })).toBeVisible();
 }
 
@@ -115,11 +115,11 @@ async function abrirCompartir(page: Page, modo: 'igual' | 'consumo' = 'igual'): 
 
 async function abrirPago(page: Page): Promise<void> {
   await abrirCompartir(page, 'consumo');
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
 }
 
@@ -374,9 +374,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(destinatario).toContainText('¿Para quién?');
     await expect(destinatario.locator('.sectlabel')).toHaveCSS('text-transform', 'uppercase');
 
-    const pagar = page.getByRole('button', { name: 'Pagar', exact: true });
-    await expect(pagar.locator('svg')).toHaveCount(1);
-    await expect(pagar.locator('path').first()).toHaveAttribute('d', 'M3 6.5h18v11H3z');
+    const pagar = page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true });
+    await expect(pagar).toHaveText('Pagar $265.50');
+    expect((await pagar.boundingBox())!.width).toBeGreaterThan(340);
     await capturarSiCorresponde(page, '05-pagar-parte.png');
   });
 
@@ -385,7 +385,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrirPago(page);
     await page.getByRole('radio', { name: '5%', exact: true }).click();
     await page.getByRole('button', { name: 'Lupita', exact: true }).click();
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+    await page.getByRole('button', { name: /^Pagar(?: \$[\d,.]+)?$/, exact: true }).click();
 
     const cierre = page.locator('.title-card.recibo-cierre');
     await expect(cierre).toContainText('¡Listo!');

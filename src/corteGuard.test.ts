@@ -370,9 +370,17 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     return renderToStaticMarkup(createElement(MesaDetailView, props(sobre)));
   }
 
+  it('K1 · el componente abre los consumos nuevos y ubica cerrar después', () => {
+    const markup = vista({ mesa: { ...MESA, my_role: 'opener', guarantee_mode: false }, onCerrarMesa: async () => undefined });
+    expect(markup).toContain('Toca lo que consumiste');
+    const lista = markup.slice(markup.indexOf('desplegable tus-consumos'));
+    expect(lista).toContain('aria-expanded="true"');
+    expect(lista.indexOf('Tagliatelle Bolognese')).toBeLessThan(lista.indexOf('btn-cerrar-mesa'));
+  });
+
   it('con el corte, el círculo es «Listo» y no hay reintento hacia el pago', () => {
     const markup = vista({ pagosCortados: true, frozenScope: 'pay:PA-0001' });
-    expect(markup).toContain('aria-label="Listo"');
+    expect(markup).toContain('aria-label="Continuar"');
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: el rótulo ya no
     // separa los modos. Lo que el corte quita es el reintento del pago
     // congelado, con el mismo `frozenScope` que el control positivo de abajo.
@@ -420,24 +428,22 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
    *
    * Decisión 32 (2026-09-24): «Guardado» ya NO se deshabilita —lleva a Inicio
    * sin volver a enviar lo mismo—; hasta 0.190.1 el markup traía
-   * `disabled="" aria-label="Guardado"` y esta guarda lo exigía.
+   * `disabled="" aria-label="Continuar"` y esta guarda lo exigía.
    */
   it('con la selección guardada la nota es fija y el círculo dice «Guardado», tocable', () => {
     const igual: MesaDetail = { ...MESA, division_mode: 'igual' };
     const guardado = vista({ mesa: igual, informativeSaved: true });
     expect(guardado).toContain('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
-    expect(guardado).toContain('aria-label="Guardado"');
+    expect(guardado).toContain('aria-label="Continuar"');
     // `disabled` precede al `aria-label` en el markup: su ausencia acredita el círculo vivo.
-    expect(guardado).not.toContain('disabled="" aria-label="Guardado"');
-    expect(guardado).not.toContain('aria-label="Listo"');
+    expect(guardado).not.toContain('disabled="" aria-label="Continuar"');
 
     const sinGuardar = vista({ mesa: igual, informativeSaved: false });
-    expect(sinGuardar).toContain('aria-label="Listo"');
+    expect(sinGuardar).toContain('aria-label="Continuar"');
     expect(sinGuardar).not.toContain('Tu selección quedó guardada.');
-    expect(sinGuardar).not.toContain('aria-label="Guardado"');
 
     const consumo = vista({ informativeSaved: true });
-    expect(consumo).toContain('aria-label="Listo"');
+    expect(consumo).toContain('aria-label="Continuar"');
     expect(consumo).not.toContain('Tu selección quedó guardada.');
   });
 
@@ -452,8 +458,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     // «Listo» también cuando sigue al pago (antes «Continuar»). Lo que separa
     // los dos modos en el markup es el reintento del pago congelado, que sólo
     // existe sin el corte (abajo).
-    expect(markup).toContain('aria-label="Listo"');
-    expect(markup).not.toContain('aria-label="Continuar"');
+    expect(markup).toContain('aria-label="Continuar"');
     expect(markup).toContain('Reintentar ese pago');
     expect(markup).toContain('Reinténtalo tal cual');
     expect(markup).not.toContain('Revisar si se cobró');

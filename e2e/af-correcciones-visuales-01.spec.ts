@@ -290,7 +290,7 @@ async function hastaGarantia(page: Page) {
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await sumar.click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 }
 
 test('Garantía agrupa tarjetas, omite el rótulo redundante y usa flecha', async ({ page }) => {
@@ -331,11 +331,11 @@ test('Pagar separa resumen, propina, método y total sin duplicar el monto', asy
   await page.getByRole('radio', { name: /Santander.*4532/ }).click();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
   const title = page.locator('.pay-title');
   await expect(title).toContainText('Consumos propios · $255');

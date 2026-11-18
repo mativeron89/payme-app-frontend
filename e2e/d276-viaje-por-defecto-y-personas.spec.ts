@@ -314,7 +314,7 @@ test.describe('🔴 D276-2 · cambiar quiénes estuvieron en el detalle', () => 
     const detalle = new URL(page.url()).pathname;
     // Elijo algo: ya elegí. «Listo» vuelve atrás (acá, a Inicio).
     await page.getByText('Tagliatelle Bolognese', { exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Guardamos lo que consumiste.', { exact: true })).toBeVisible();
     await ir(page, detalle);
     await expect(page.getByRole('heading', { name: '¿Quiénes estuvieron?' })).toBeVisible();
@@ -355,10 +355,10 @@ test.describe('🔴 D276-4 · el que no estuvo', () => {
     await entrar(page, DENTRO, { 'payme.app.mock.viajes.seleccion.v1': 'me_desmarcaron' });
     await ir(page, `/viaje-ticket/${CANCUN}.${MARISCOS}`);
     await expect(page.getByText('¿Qué consumiste?', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // El aviso del toque y, en el ticket recargado, la línea fija.
     await expect(page.locator('.vjt-aviso-ticket')).toHaveText('No estuviste en este ticket: no eliges nada.');
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.${MARISCOS}$`));
     await capturar(page, 'detalle-no-presente');
   });

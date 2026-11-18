@@ -144,7 +144,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await expect(page.getByText('Tomado', { exact: true })).toHaveCount(0);
     await capturar(page, 'v03-v05-ultimo-consumo-seleccionado');
 
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // D240 punto 8 (reemplaza a V05 en este momento): el «Listo» que completa la
     // mesa avisa ANTES de enviar, con lo elegido para revisar; marcar sigue
     // siendo local (arriba) y nada se registra hasta confirmar.

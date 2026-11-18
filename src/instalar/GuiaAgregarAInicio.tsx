@@ -72,7 +72,7 @@ export function GuiaAgregarAInicio({ plataforma, onCerrar }: { plataforma: Plata
           ))}
         </ol>
         {nota && <p className="guia-inicio-nota">{nota}</p>}
-        <button ref={entendido} type="button" className="btn btn-primary guia-inicio-entendido" onClick={() => alCerrar.current()}>
+        <button ref={entendido} type="button" className="btn btn-navy guia-inicio-entendido" onClick={() => alCerrar.current()}>
           {t('Entendido')}
         </button>
         {ios && !ipad && <span className="guia-inicio-flecha abajo" aria-hidden="true" />}
@@ -93,14 +93,14 @@ export function GuiaAgregarAInicio({ plataforma, onCerrar }: { plataforma: Plata
  * evento con la hoja abierta, la plataforma pasa a `android_prompt`, pero la
  * hoja no desaparece de golpe debajo del dedo.
  */
-export function AvisoAgregarAInicio() {
+export function AvisoAgregarAInicio({ habilitado = true }: { habilitado?: boolean } = {}) {
   const plataforma = usePlataformaDeInstalacion();
   const [abierto, setAbierto] = useState(() => !avisoYaVisto(almacenLocal()));
   const [fijada, setFijada] = useState<PlataformaConGuia | null>(null);
   const actual = tieneGuia(plataforma) ? plataforma : null;
-  if (abierto && fijada === null && actual !== null) setFijada(actual);
+  if (habilitado && abierto && fijada === null && actual !== null) setFijada(actual);
   const guia = fijada ?? actual;
-  if (guia === null || !abierto || plataforma === null) return null;
+  if (!habilitado || guia === null || !abierto || plataforma === null) return null;
   return (
     <GuiaAgregarAInicio
       plataforma={guia}

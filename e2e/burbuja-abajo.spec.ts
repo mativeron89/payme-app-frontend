@@ -150,7 +150,7 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
       await page.getByRole('button', { name: /Ver el ticket/ }).click();
       await page.getByRole('button', { name: 'Modificar ítems' }).click();
       await page.getByRole('button', { name: 'Agregar consumo' }).click();
-      await page.getByRole('button', { name: 'Listo' }).click();
+      await page.getByRole('button', { name: 'Listo', exact: true }).click();
       await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
 
       await expect(page.locator('.appbar-above')).toHaveCount(0);
@@ -200,7 +200,7 @@ test.describe('D222 · la burbuja «¿Cuántos son en la mesa?», abajo, encima 
       else break;
     }
     await expect(page.locator('.tk-row, .tk-edit')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Listo' }).click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
 
     await expect(page.locator('.appbar-above')).toHaveCount(0);

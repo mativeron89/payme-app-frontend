@@ -124,7 +124,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.goto(`/#/mesa/${CODIGO}`);
     await enTuMesaConLaLista(page);
     await expect(fila(page, 'Pizza para compartir')).toContainText('Queda ½');
-    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
     await expect(page.locator('main, .screen').first()).not.toContainText(OTRA_CUENTA);
     await capturar(page, 'd79-02-queda-medio');
 
@@ -142,10 +142,10 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // mesa se relee sola: la barra cambia sin recargar la página.
     await otraCuentaDeclara(page, [[PIZZA, 10000]]);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
 
     // El borrador de ½ quedó viejo: el dueño rechaza con 409 y se dice claro.
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Ese plato ya está completo')).toBeVisible();
     await expect(fila(page, 'Pizza para compartir')).toContainText('Lo eligió otro');
     // Bloqueado: el renglón «Lo eligió otro» no tiene nada tocable.
@@ -155,7 +155,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
 
     // Se completa la mesa con la parrillada: cierre con pantalla (F-2).
     await page.getByRole('button', { name: /^Parrillada/ }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
@@ -195,16 +195,16 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.goto(`/#/mesa/${CODIGO}`);
     await abrirTusConsumos(page);
     await page.clock.runFor(3_000);
-    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
+    await expect(barra(page)).toHaveText('Elegido $0 de $840');
     await otraCuentaDeclara(page, [[PARRILLADA, 5000]]);
     // T0 + 8 s: el primer tick no puede haber pasado (nace en T0 o después).
     await page.clock.runFor(5_000);
-    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
+    await expect(barra(page)).toHaveText('Elegido $0 de $840');
     // T0 + 14 s: pasó el tick de los 10 s y su lectura, con margen por si el
     // intervalo se reinició durante la carga (hasta T0 + 3 s); el segundo tick
     // no llega antes de T0 + 20 s.
     await page.clock.runFor(6_000);
-    await expect(barra(page)).toHaveText('$270 / $840 (32%)');
+    await expect(barra(page)).toHaveText('Elegido $270 de $840');
     await expect(fila(page, 'Parrillada')).toContainText('Queda ½');
   });
 
