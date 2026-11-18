@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { camarasAbiertas } from './_camara';
 import {
   abrirDesdeLaTarjeta, abrirUnaMesaReal, botonTutorial, burbuja, capaVisible, createMesaRealSinDatosDelEjemplo, ejemploSePrendio,
@@ -22,6 +22,16 @@ import {
 
 const MOTOR = /\/src\/ayuda\/GuiaContenido\.tsx(\?|$)/;
 const ESCANEAR = 'Escanear';
+
+async function noTapa(burbuja: Locator, superficie: Locator): Promise<void> {
+  await expect(burbuja).toBeVisible();
+  await expect(superficie).toBeVisible();
+  await expect.poll(async () => {
+    const [b, s] = await Promise.all([burbuja.boundingBox(), superficie.boundingBox()]);
+    if (!b || !s) return null;
+    return b.y + b.height <= s.y || b.y >= s.y + s.height || b.x + b.width <= s.x || b.x >= s.x + s.width;
+  }).toBe(true);
+}
 
 test.describe('revisión de V · el ejemplo arranca con la primera burbuja', () => {
   test('🔴 con el motor caído el ejemplo nunca se prende: el aviso, «Cerrar guía», y Escanear da el flujo real sin rebotar', async ({ page }) => {
@@ -140,6 +150,7 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
       await abrirDesdeLaTarjeta(page);
       await expect.poll(() => fase(page)).toBe('foto');
       await expect(invitacion).toBeVisible();
+      await page.evaluate(() => Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined))));
       const cajas = await page.evaluate(() => {
         const b = document.querySelector('.guia-capa[data-activa] .guia-burbuja')!.getBoundingClientRect();
         const i = document.querySelector('section[aria-label="Te invitaron"]')!.getBoundingClientRect();
@@ -150,6 +161,33 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
       expect(seTocan, JSON.stringify(cajas)).toBe(false);
     });
   }
+
+  test('a 375 × 667, la 2a deja libres las tarjetas de mesas abiertas', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await entrar(page);
+    const mesas = page.locator('.home-mesas .mesa-card');
+    await expect(mesas.first()).toBeVisible();
+    const guia = await abrirDesdeLaTarjeta(page);
+    for (const mesa of await mesas.all()) await noTapa(guia, mesa);
+  });
+
+  test('a 375 × 667, la 2a deja libre el aviso sin mesas abiertas', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await entrar(page, {
+      antesDeEntrar: (p) => p.evaluate(async () => {
+        const ruta = '/src/api/mock/store.ts';
+        const { state, persist } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/store');
+        for (const mesa of state.mesas) mesa.openedByUser = false;
+        state.joinedMesaCodes = [];
+        persist();
+        localStorage.setItem('payme.app.mock.viajes.v1', 'apagado');
+      }),
+    });
+    const aviso = page.getByRole('button', { name: 'No tienes mesas abiertas. Escanear un ticket' });
+    await expect(aviso).toBeVisible();
+    const guia = await abrirDesdeLaTarjeta(page);
+    await noTapa(guia, aviso);
+  });
 
   // Enmienda 10 (V, 19/10): un aviso de privacidad no puede quedar tapado nunca. Midió que la 2a tapaba el aviso
   // «Tu foto entre amigos» (a 390 × 844, también sus botones): mientras está pendiente, la guía no se ofrece.
@@ -241,7 +279,7 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
     await hastaCompartir(page);
     await hastaTuMesa(page);
     await page.locator('.qc-lista .qc-renglon').first().getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => pathname(page)).toBe('/home');
     // Inicio se monta en 4a y recién ahí aparece el aviso: la capa no se pinta y los botones del aviso se tocan.
     await expect(aviso).toBeVisible();

@@ -201,7 +201,7 @@ test.describe('🔴 D278-3 · un gasto a mano con dos pagadores', () => {
     await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
     await page.getByLabel('Monto', { exact: true }).fill('900');
     await page.getByRole('group', { name: '¿Quién pagó?', exact: true }).getByRole('checkbox', { name: /^Luis Pérez( |$)/ }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
     await ir(page, `/viaje-balance/${CANCUN}`);
     await page.locator('.vjb-consumo').filter({ hasText: 'Gasolina' }).click();

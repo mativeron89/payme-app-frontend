@@ -269,7 +269,7 @@ test('1i · elegir lo que consumí cambia el balance; nunca se ve qué eligió o
   await expect(page.getByText('Diego · falta elegir', { exact: true })).toBeVisible();
   await expect(page.getByText('¿Qué consumiste?', { exact: true })).toBeVisible();
   await page.getByText('Tacos de pescado (3)', { exact: true }).click();
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   // $542 + $285 de los tacos, en rojo con el «−».
   await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^\u2212\$827/);
@@ -278,7 +278,7 @@ test('1i · elegir lo que consumí cambia el balance; nunca se ve qué eligió o
 test('D244 · carga manual: «Listo» pide una descripción y un monto mayor que cero', async ({ page }) => {
   await conViajes(page);
   await ir(page, `/viaje-gasto/${CANCUN}`);
-  const listo = page.getByRole('button', { name: 'Listo', exact: true });
+  const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
   const descripcion = page.getByLabel('Descripción', { exact: true });
   const monto = page.getByLabel('Monto', { exact: true });
   await expect(listo).toBeDisabled();
@@ -303,7 +303,7 @@ test('D244 · carga manual de punta a punta: «Listo» guarda, vuelve al viaje y
   await presente(page, /Diego Torres/).click();
   await expect(presente(page, /Diego Torres/)).toHaveAttribute('aria-checked', 'false');
   // Un doble toque es un solo gasto (la llave de idempotencia y el botón apagado mientras guarda).
-  await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).dblclick();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
   // −$542 + $900 − $300 = $58 a favor.
@@ -328,7 +328,7 @@ test('D244 · si alguien de los elegidos salió del viaje: se avisa, se vuelve a
   await expect(presente(page, /Diego Torres/)).toBeVisible();
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByText('Alguien ya no está en el viaje. Revisa entre quiénes.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
   // Diego ya no está en la lista; lo escrito sigue.
@@ -336,7 +336,7 @@ test('D244 · si alguien de los elegidos salió del viaje: se avisa, se vuelve a
   await expect(page.getByLabel('Descripción', { exact: true })).toHaveValue('Gasolina');
   await expect(page.getByLabel('Monto', { exact: true })).toHaveValue('900');
   // Y ahora sí se carga, entre los tres que quedan.
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   await expect(page.getByText('Cargaste el gasto.', { exact: true })).toBeVisible();
 });
@@ -346,10 +346,10 @@ test('D244 · si la respuesta se pierde, reintentar es el mismo gasto (la misma 
   await ir(page, `/viaje-gasto/${CANCUN}`);
   await page.getByLabel('Descripción', { exact: true }).fill('Gasolina');
   await page.getByLabel('Monto', { exact: true }).fill('900');
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByText('No pudimos guardarlo. Prueba de nuevo.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/viaje-gasto/${CANCUN}$`));
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   await page.getByRole('button', { name: 'Ver balance del viaje', exact: true }).click();
   await expect(page.locator('.vjb-consumo').first()).toContainText('Gasolina');

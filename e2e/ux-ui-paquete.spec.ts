@@ -91,3 +91,16 @@ test('K15 · lectura del ticket con su propio texto', async ({ page }) => {
   await expect(page.getByText('Leyendo el ticket…', { exact: true })).toBeVisible();
   await captura(page, '13-escanear-leyendo');
 });
+
+test('K16 · círculo de 64 px medio apoyado, degradé y cuatro destinos parejos', async ({ page }) => {
+  await ingresar(page);
+  const fab = page.locator('.appbar-fab'); await expect(fab).toHaveCSS('width', '64px');
+  await expect(fab).toHaveCSS('height', '64px');
+  expect(await fab.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('linear-gradient');
+  const circulo = await fab.boundingBox(); const barra = await page.locator('.appbar').boundingBox();
+  expect(barra!.y - circulo!.y).toBe(32);
+  const items = await page.locator('.appbar-item').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+  expect(items).toHaveLength(4); expect(Math.max(...items) - Math.min(...items)).toBeLessThan(1);
+  await expect(page.locator('.appbar-item').last().locator('svg path').first()).toHaveAttribute('d', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z');
+  await captura(page, '15-barra-ui');
+});

@@ -40,7 +40,7 @@ for (const caso of [
       const pie = parseFloat(getComputedStyle(el).paddingBottom);
       return {
         alto: box.height, fab: [f.width, f.height, box.top - f.top], pie,
-        fondo: getComputedStyle(fab).backgroundColor,
+        fondo: getComputedStyle(fab).backgroundColor, degradado: getComputedStyle(fab).backgroundImage,
         sombra: getComputedStyle(fab).boxShadow,
         items: Array.from(el.querySelectorAll('button')).map((b) => {
           const r = b.getBoundingClientRect();
@@ -51,8 +51,8 @@ for (const caso of [
       };
     });
     expect(geometria.alto).toBe(caso.bottom ? 78 : 64);
-    expect(geometria.fab).toEqual([56, 56, 26]);
-    expect(geometria.fondo).toBe('rgb(240, 112, 60)');
+    expect(geometria.fab).toEqual([64, 64, 32]);
+    expect(geometria.degradado).toContain('linear-gradient');
     expect(geometria.sombra).toBe('rgba(240, 112, 60, 0.34) 0px 6px 16px 0px');
     for (const item of geometria.items) {
       expect(item.ancho).toBeGreaterThanOrEqual(44);

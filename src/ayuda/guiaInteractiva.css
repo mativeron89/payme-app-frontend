@@ -30,6 +30,9 @@ body:has([data-guia-espera]) .guia-capa { visibility: hidden; }
 .guia-burbuja:focus { outline: none; }
 .guia-burbuja :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .guia-texto { max-height: inherit; overflow: auto; }
+.guia-burbuja[data-compacta] { overflow: auto; }
+.guia-burbuja[data-compacta] .guia-texto { max-height: none; }
+.guia-burbuja[data-compacta] .guia-punta { display: none; }
 .guia-texto--con-equis { padding: 0 40px; }
 .guia-texto p { margin: 0; font-size: 16px; line-height: 1.5; color: var(--text); }
 .guia-texto p + p { margin-top: 4px; }

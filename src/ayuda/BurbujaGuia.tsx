@@ -76,6 +76,7 @@ export function BurbujaGuia({
       tabIndex={-1}
       data-paso={paso.id}
       data-lado={posicion.lado}
+      data-compacta={posicion.compacta ? '' : undefined}
       style={estilo}
     >
       {paso.senal === 'punta' && <span className="guia-punta" aria-hidden="true" />}

@@ -78,7 +78,7 @@ const RIGHT_DESTINO_MAS = 'mas' as const;
 
 const RIGHT: SideItem[] = [
   { slot: 'amigos', label: 'Amigos', icon: 'users', page: 'amigos' },
-  { slot: 'mas', label: 'Más', icon: 'grid-dots', page: RIGHT_DESTINO_MAS },
+  { slot: 'mas', label: 'Más', icon: 'settings', page: RIGHT_DESTINO_MAS },
 ];
 
 export interface AppBottomBarProps {

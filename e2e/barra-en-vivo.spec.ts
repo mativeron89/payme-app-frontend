@@ -148,10 +148,10 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
+    await expect(barra(page)).toHaveText('Elegido $0 de $840');
 
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
     await expect(page.locator('.mi-progress-fill')).toHaveAttribute('style', /width: 36%/);
     expect(await claimsDe(page, C300)).toEqual([]);
@@ -164,11 +164,11 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await renglon(page, 'Consumo de 300').getByRole('button', { name: 'Soltar', exact: true }).click();
-    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
+    await expect(barra(page)).toHaveText('Elegido $0 de $840');
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
   });
 
   test('cambiar la porción cambia la barra', async ({ page }) => {
@@ -178,10 +178,10 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     const fila = renglon(page, 'Consumo de 300');
     await fila.getByRole('radio', { name: '½' }).click();
-    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
     await fila.getByRole('button', { name: /^Cambiar la porción de Consumo de 300/ }).click();
     await fila.getByRole('radio', { name: '¼' }).click();
-    await expect(barra(page)).toHaveText('$75 / $840 (9%)');
+    await expect(barra(page)).toHaveText('Elegido $75 de $840');
   });
 
   test('🔴 otra cuenta elige y llega el refresco: suma las dos, y el borrador no la lleva a 100 (tope 99)', async ({ page }) => {
@@ -189,10 +189,10 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await claim(page, C540, 'other', 10000);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(barra(page)).toHaveText('$840 / $840 (99%)');
+    await expect(barra(page)).toHaveText('Elegido $840 de $840');
     await expect(page.getByRole('progressbar', { name: 'Asignado 99% de la mesa' })).toBeVisible();
   });
 
@@ -201,13 +201,15 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await abrir(page, CONSUMO);
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toBeVisible();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
-    await expect(barra(page)).toHaveText('$840 / $840 (99%)');
+    await expect(barra(page)).toHaveText('Elegido $840 de $840');
   });
 
   test('🔴 nunca doble conteo mientras «Listo» viaja: un refresco que ya trae lo registrado no lo suma otra vez', async ({ page }) => {
@@ -216,7 +218,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await renglon(page, 'Consumo de 300').getByRole('radio', { name: '½' }).click();
-    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
 
     await claim(page, C300, 'user', 5000);
     await page.evaluate(async (code) => {
@@ -259,7 +261,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     // El primer GET salió antes de Listo; el segundo es su preflight real.
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.refrescoRetenido)).toBe(true);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.lockRetenido)).toBe(true);
     expect(await page.evaluate(() => {
       const c = (window as VentanaDeBarra).__barraEnVuelo;
@@ -272,9 +274,11 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await page.evaluate(() => new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     }));
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
-    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
     await page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.liberarLock());
+    await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   });
 });
@@ -287,17 +291,17 @@ test.describe('AF-BARRA-EN-VIVO · partes iguales', () => {
     await abrir(page, IGUAL);
     // El borrador nace con lo guardado (½ pizza): la barra es lo registrado.
     await expect(renglon(page, 'Pizza para compartir').locator('[data-estado="mio"] .qc-pildora')).toHaveText('½');
-    await expect(barra(page)).toHaveText('$150 / $840 (18%)');
+    await expect(barra(page)).toHaveText('Elegido $150 de $840');
 
     const pizza = renglon(page, 'Pizza para compartir');
     await pizza.getByRole('button', { name: /^Cambiar la porción de Pizza para compartir/ }).click();
     await pizza.getByRole('radio', { name: 'Entero' }).click();
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await capturar(page, 'barra-en-vivo-02-igual');
 
     await pizza.getByRole('button', { name: /^Cambiar la porción de Pizza para compartir/ }).click();
     await pizza.getByRole('button', { name: 'Soltar', exact: true }).click();
-    await expect(barra(page)).toHaveText('$0 / $840 (0%)');
+    await expect(barra(page)).toHaveText('Elegido $0 de $840');
   });
 
   test('otra cuenta declara y llega el refresco: suma lo de la otra y mi borrador', async ({ page }) => {
@@ -306,10 +310,10 @@ test.describe('AF-BARRA-EN-VIVO · partes iguales', () => {
     await abrir(page, IGUAL);
     await page.getByRole('button', { name: /^Parrillada/ }).click();
     await renglon(page, 'Parrillada').getByRole('radio', { name: '½' }).click();
-    await expect(barra(page)).toHaveText('$270 / $840 (32%)');
+    await expect(barra(page)).toHaveText('Elegido $270 de $840');
     await declara(page, 'otra', [[PIZZA, 10000]]);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(barra(page)).toHaveText('$570 / $840 (68%)');
+    await expect(barra(page)).toHaveText('Elegido $570 de $840');
   });
 
   test('🔴 el borrador que completa la mesa no la lleva a 100 si lo registrado no está completo', async ({ page }) => {
@@ -317,8 +321,8 @@ test.describe('AF-BARRA-EN-VIVO · partes iguales', () => {
     await sembrar(page, 'igual');
     await declara(page, 'otra', [[PIZZA, 10000]]);
     await abrir(page, IGUAL);
-    await expect(barra(page)).toHaveText('$300 / $840 (36%)');
+    await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await page.getByRole('button', { name: /^Parrillada/ }).click();
-    await expect(barra(page)).toHaveText('$840 / $840 (99%)');
+    await expect(barra(page)).toHaveText('Elegido $840 de $840');
   });
 });

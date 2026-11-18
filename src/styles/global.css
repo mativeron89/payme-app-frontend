@@ -3208,7 +3208,7 @@ html.app-de-inicio-ios .app {
 .has-appbar .scroll.con-aviso-sin-mesas {
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(var(--appbar-alto) + 26px);
+  padding-bottom: calc(var(--appbar-alto) + 32px);
 }
 /* En columna, cada uno conserva su alto (con mucho contenido, el scroll crece). */
 .has-appbar .scroll.con-aviso-sin-mesas > * {
@@ -3399,7 +3399,7 @@ html.app-de-inicio-ios .app {
    pantallas con composición propia conservan sus reglas más específicas.
    La barra sigue siendo hermana del scroll: nunca se recorta una lista. */
 .has-appbar .scroll {
-  padding-bottom: calc(var(--appbar-alto) + 26px + var(--sp-3));
+  padding-bottom: calc(var(--appbar-alto) + var(--appbar-saliente, 26px) + var(--sp-3));
 }
 
 /* 🔴 AF-34 (2026-09-19) · la regla histórica quedó en 84px desde `90ae05c`
@@ -12609,6 +12609,13 @@ h1.pay-title-lbl {
 .mesa-guardado p { margin: var(--sp-1) 0 0; color: var(--text-muted); }
 .mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }
 
+/* D846: sólo el escaneo cambia de tamaño; los otros pasos conservan sus controles. */
+.appbar-center[data-guia="camara"] .appbar-fab {
+  width: 64px; height: 64px; top: -32px;
+  background: linear-gradient(135deg, var(--brand) 0%, #cf4f17 100%);
+}
+.appbar-label { font-size: var(--fs-xs); }
+.appbar-item { font-weight: 600; }
 .tip-block-title { font-size: var(--fs-h2); text-transform: none; color: var(--text); }
 .tip-ayuda { color: var(--warning); font-size: var(--fs-sm); }
 .pay-total-card { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-2); }
@@ -12618,3 +12625,10 @@ h1.pay-title-lbl {
 .pay-total-desglose > div { display: flex; justify-content: space-between; gap: var(--sp-3); }
 .pay-total-desglose dt { color: var(--text-muted); }
 .pay-total-desglose dd { margin: 0; font-weight: 700; }
+
+/* El aire de las pantallas con cámara se mide contra el nuevo saliente de 32px. */
+.screen.has-appbar .scroll.vjv-scroll-abierto,
+.screen.has-appbar .scroll.vjcfg-scroll { padding-bottom: calc(56px + var(--appbar-pie) + 32px + var(--sp-3)); }
+
+/* D846: sólo las pantallas cuyo centro es la cámara reservan sus 32px. */
+.screen.has-appbar:has(> .appbar-block .appbar-center[data-guia="camara"]) { --appbar-saliente: 32px; }

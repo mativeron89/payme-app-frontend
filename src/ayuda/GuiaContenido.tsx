@@ -99,12 +99,26 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
     if (!paso) { setMedida(inicial); setDestino(null); return undefined; }
     let raf = 0;
     let desplazado = false;
+    let volvioAlInicioDelContenido = false;
+    const observados = new Set<HTMLElement>();
     // Antes de empezar a observar: la sonda entra y sale del `body` sin despertar al observador.
     const areaSegura = areaSeguraArriba();
     const medir = () => {
       raf = 0;
       const modal = espera || hayModal();
       const control = buscar(paso.ancla);
+      // Inicio comparte pantalla con invitaciones, mesas abiertas y el aviso
+      // sin mesas. Medimos sus cajas incluso si aparecieron después del paso.
+      const superficies = pagina === 'home'
+        ? Array.from(document.querySelectorAll<HTMLElement>('.home-mesa:not(.home-mesa-ejemplo), .aviso-sin-mesas')).filter(visible)
+        : [];
+      const nuevosObservados = new Set([control, burbuja.current, ...superficies].filter((e) => e !== null));
+      for (const e of observados) {
+        if (!nuevosObservados.has(e)) { resize.unobserve(e); observados.delete(e); }
+      }
+      for (const e of nuevosObservados) {
+        if (!observados.has(e)) { resize.observe(e); observados.add(e); }
+      }
       const dondeMontar = paso.dentroDeLaHoja ? control : document.body;
       setDestino((prev) => (prev === dondeMontar ? prev : dondeMontar));
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
@@ -139,15 +153,28 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
         control.scrollIntoView({ block: alto > altoVentana / 2 ? 'nearest' : 'center', inline: 'nearest', behavior: sinMovimiento() ? 'auto' : 'smooth' });
       }
       const ancho = espacio.right - espacio.left;
-      const alto = burbuja.current?.scrollHeight ?? 160;
+      const alto = burbuja.current
+        ? burbuja.current.scrollHeight + burbuja.current.offsetHeight - burbuja.current.clientHeight
+        : 160;
       const separacion = paso.senal === 'flecha' ? SEPARACION_CON_FLECHA : SEPARACION_CON_PUNTA;
       // 2b · la leyenda se ubica a 12 arriba de la galería; la flecha va al costado del disparador.
       const referencia = paso.referencia ? buscar(paso.referencia)?.getBoundingClientRect() : null;
       const posicion = rect && aLaVista
         ? referencia
           ? posicionGuia({ left: referencia.left, top: referencia.top, right: referencia.right, bottom: referencia.bottom }, espacio, ancho, alto, paso.lado, 12)
-          : posicionGuia(rect, espacio, ancho, alto, paso.lado, separacion)
+          : posicionGuia(rect, espacio, ancho, alto, paso.lado, separacion,
+            superficies.map((e) => e.getBoundingClientRect()).filter((caja) => caja.height > 0))
         : null;
+      // Al cerrar un aviso la pantalla puede quedar desplazada, sin hueco
+      // entre el ejemplo y las mesas. Recupera el espacio de arriba una vez.
+      if ((!posicion || posicion.compacta) && !modal && pagina === 'home' && !volvioAlInicioDelContenido) {
+        const contenido = control?.closest('.scroll');
+        if (contenido && contenido.scrollTop > 0) {
+          volvioAlInicioDelContenido = true;
+          contenido.scrollTo({ top: 0, behavior: 'instant' });
+          pedir();
+        }
+      }
       const next: Medida = {
         objetivo: rect && aLaVista ? rect : null,
         posicion,
@@ -164,9 +191,6 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
     });
     mutation.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'open', 'class', 'style', 'aria-modal', 'data-guia', 'data-guia-convive'] });
     const resize = new ResizeObserver(pedir);
-    if (burbuja.current) resize.observe(burbuja.current);
-    const control = buscar(paso.ancla);
-    if (control) resize.observe(control);
     window.addEventListener('resize', pedir);
     document.addEventListener('scroll', pedir, true);
     window.visualViewport?.addEventListener('resize', pedir);
@@ -178,7 +202,7 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
       window.visualViewport?.removeEventListener('resize', pedir); window.visualViewport?.removeEventListener('scroll', pedir);
     };
     // `paso` cambia de identidad en cada render; `clave` es su identidad real.
-  }, [clave, espera]);
+  }, [clave, espera, pagina]);
 
   const activa = !!paso && !medida.modal && !!medida.posicion && !!medida.objetivo;
 
