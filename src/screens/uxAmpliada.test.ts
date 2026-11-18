@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { minimoPorEntrada } from '../splash';
+import { joinLinkMessage } from './joinLinkView';
+import { settleInvitationFailure } from './invitationCustody';
 import { traducir } from '../i18n/idioma';
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
 describe('UX ampliada', () => {
@@ -32,5 +34,17 @@ describe('UX ampliada', () => {
     for (const text of ['Legal y ayuda', 'Aviso de privacidad', 'Términos de uso', 'Escríbenos: soporte@paymemx.com', 'Eliminar mi cuenta']) expect(s).toContain(text);
     expect(s).toContain('href={PATH_PRIVACIDAD}'); expect(s).toContain('href={PATH_TERMINOS}');
     expect(s).toContain('mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
+  });
+  it('K23 · 403,409,410 neutros; solicitudes llenas distintas; red reintentable', () => {
+    for (const status of [403,409,410]) {
+      const m = joinLinkMessage(settleInvitationFailure(status));
+      expect(m.title).toBe('No pudimos sumarte a esta mesa.'); expect(m.body).toBe(''); expect(m.retryable).toBe(false);
+    }
+    const m = joinLinkMessage(settleInvitationFailure(409, 'join_requests_full'));
+    expect(m.title).toBe('Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.');
+    expect(m.retryable).toBe(false);
+    expect(joinLinkMessage(settleInvitationFailure(null)).retryable).toBe(true);
+    expect(traducir(m.title, 'en')).toBe('This table has a lot of pending requests. Ask whoever opened it to accept the ones they have.');
+    const code = source('../components/UnirmeConCodigo.tsx'); expect(code).toContain("code === 'join_requests_full'"); expect(code).toContain(m.title);
   });
 });

@@ -47,10 +47,10 @@ test.describe('el 403 es ciego', () => {
        * palabra por palabra en `SPEC_APP.md` §1.2-B justamente porque no puede
        * variar según el motivo: exigirla exacta es la forma honesta de decirlo.
        */
-      await expect(page.getByText('Este link ya no funciona', { exact: true })).toBeVisible();
+      await expect(page.getByText('No pudimos sumarte a esta mesa.', { exact: true })).toBeVisible();
       await expect(
         page.getByText('Pídele a quien te invitó que te comparta uno nuevo.', { exact: true }),
-      ).toBeVisible();
+      ).toHaveCount(0);
 
       const cuerpo = await page.locator('body').innerText();
       // Ningún restaurante del seed. Nombrar uno diría que la mesa existe.
@@ -85,11 +85,11 @@ test.describe('el 403 es ciego', () => {
     const mesa = await abrirMesaConLink(page);
 
     await page.goto(`/#/mesa/${mesa.code}?t=tok-invalido-para-mesa-real`);
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
     const conMesaReal = await page.locator('body').innerText();
 
     await page.goto('/#/mesa/PA-0000?t=tok-invalido-para-mesa-real');
-    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
     const conMesaInexistente = await page.locator('body').innerText();
 
     expect(conMesaInexistente).toBe(conMesaReal);

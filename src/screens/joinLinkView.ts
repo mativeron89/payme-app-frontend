@@ -36,6 +36,8 @@ export type JoinLinkOutcome =
   | 'joining'
   /** 403 · los CUATRO motivos del contrato, indistinguibles a propósito. */
   | 'rejected'
+  /** D856/C213D: límite de solicitudes pendientes, no de comensales. */
+  | 'solicitudes_llenas'
   /**
    * 400 `invitation_token_required` · el token no tiene forma de token (vacío,
    * o fuera de 8..200 caracteres). Es TERMINAL, no un problema de red.
@@ -133,33 +135,21 @@ export function joinLinkMessage(outcome: JoinLinkOutcome, t: Traducir = enEspano
         body: t('Un segundo.'),
         retryable: false,
       };
-    case 'rejected':
-      // UN solo texto para los cuatro motivos. Si alguien viene a "mejorar" esto
-      // distinguiendo vencido de cancelado: el backend no se lo dice, y no se lo
-      // dice a propósito.
-      // La copy es la del SPEC_APP.md §1.2-B, textual. Decía "Este link ya no
-      // sirve · Pedile al organizador…"; el spec la cerró como "…ya no
-      // funciona · Pedile a quien te invitó…", que además no nombra un rol de
-      // la mesa: coherente con que esta pantalla no acredita que la mesa exista.
+    case 'solicitudes_llenas':
       return {
-        title: t('Este link ya no funciona'),
-        body: t('Pídele a quien te invitó que te comparta uno nuevo.'),
+        title: t('Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.'),
+        body: '',
         retryable: false,
       };
+    case 'rejected':
+    case 'mesa_cerrada':
+      // D817/D856: el rechazo no publica el motivo ni ofrece reintentar.
+      return { title: t('No pudimos sumarte a esta mesa.'), body: '', retryable: false };
     case 'invalid':
       return {
         title: t('Este link está incompleto'),
         body: t('Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.'),
         retryable: false,
-      };
-    case 'mesa_cerrada':
-      // Copy de Diseño, textual (§1.2-D, 2026-08-06). Genérica, sin nombrar
-      // restaurante —misma cautela que A—, pero sí dice que ES esta mesa.
-      return {
-        title: t('Esta mesa ya cerró'),
-        body: t('Habla con quien te invitó si crees que es un error.'),
-        retryable: false,
-        nota: t('Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.'),
       };
     case 'unavailable':
       return {
@@ -182,7 +172,6 @@ export function joinLinkMessage(outcome: JoinLinkOutcome, t: Traducir = enEspano
  * La mesa cerrada (E3) lleva la tienda. Lo reintentable (F), «reintentar».
  */
 export function iconoDelResultado(outcome: Exclude<JoinLinkOutcome, 'joining'>): 'link-cortado' | 'tienda' | 'reintentar' {
-  if (outcome === 'mesa_cerrada') return 'tienda';
   return joinLinkMessage(outcome).retryable ? 'reintentar' : 'link-cortado';
 }
 

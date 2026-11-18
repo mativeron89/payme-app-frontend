@@ -283,7 +283,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await expect(espera(page)).toBeVisible();
     await volverALaApp(page);
     const noSePudo = page.locator('.unirse-no-se-pudo');
-    await expect(noSePudo).toHaveText(/No pudimos unirte a esa mesa\. Pídele a quien la abrió que te comparta el link\./);
+    await expect(noSePudo).toHaveText(/No pudimos sumarte a esta mesa\./);
     await capturar(page, 'unirse-no-se-pudo-375');
     await noSePudo.getByRole('button', { name: 'Escribir otro código', exact: true }).click();
     await expect(campo(page)).toHaveValue('');
@@ -297,7 +297,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await solicitar(page).click();
     await expect(espera(page)).toBeVisible();
     await volverALaApp(page);
-    await expect(page.getByText('No pudimos unirte a esa mesa. Pídele a quien la abrió que te comparta el link.')).toBeVisible();
+    await expect(page.getByText('No pudimos sumarte a esta mesa.')).toBeVisible();
   });
 
   test('🔴 A18 · aceptada: entra directo a la mesa, con «Te aceptaron» arriba de la barra', async ({ page }) => {
@@ -345,7 +345,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
       await enMesas(page);
       await abrirYEscribir(page, '12345');
       await solicitar(page).click();
-      await expect(page.locator('.unirse-no-se-pudo')).toHaveText(/No pudimos unirte a esa mesa/);
+      await expect(page.locator('.unirse-no-se-pudo')).toHaveText(pedir === 'full' ? /Esta mesa tiene muchas solicitudes pendientes/ : /No pudimos sumarte a esta mesa/);
       await expect(page.getByText('Hiciste muchos intentos')).toHaveCount(0);
       await expect(espera(page)).toHaveCount(0);
     });
@@ -357,9 +357,10 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
       await enMesas(page);
       await abrirYEscribir(page, '12345');
       await solicitar(page).click();
-      await expect(page.getByRole('alert').filter({ hasText: 'No pudimos confirmar el resultado. Intenta de nuevo.' })).toBeVisible();
+      if (pedir === 'suspended') await expect(page.getByText('No pudimos sumarte a esta mesa.', { exact: true })).toBeVisible();
+      else await expect(page.getByRole('alert').filter({ hasText: 'No pudimos confirmar el resultado. Intenta de nuevo.' })).toBeVisible();
       await expect(espera(page)).toHaveCount(0);
-      await expect(solicitar(page)).toBeEnabled();
+      if (pedir !== 'suspended') await expect(solicitar(page)).toBeEnabled();
     });
   }
 

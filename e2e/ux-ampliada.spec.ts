@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
 const TIP = 'La eliges tú para toda la mesa y se reparte según lo que consumió cada quien. Es voluntaria y puedes cambiarla después.';
+const FULL = 'Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.';
+const NEUTRO = 'No pudimos sumarte a esta mesa.';
 async function foto(page: Page, nombre: string) {
   if (process.env.PAYME_E2E_CAPTURAS) {
     await page.locator('.hdr-user').evaluateAll(xs => xs.forEach(x => { x.textContent = 'Demo'; }));
@@ -56,6 +58,21 @@ test('K21 · Legal y ayuda conserva enlaces vigentes y correo fijo', async ({ pa
   await expect(seccion.getByRole('link', { name: 'Eliminar mi cuenta', exact: true })).toHaveAttribute('href', 'mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
   await foto(page, '21-legal-y-ayuda');
 });
+for (const [status, code] of [[403, 'invitation_link_not_valid'], [409, 'join_request_not_allowed'], [410, 'mesa_not_joinable'], [409, 'join_requests_full']] as const) {
+  test(`K23 · link ${status} ${code}: texto y sin reintento`, async ({ page }) => {
+    await ingresar(page);
+    await page.evaluate(async ({ status: s, code: c }) => {
+      const ruta = '/src/api/index.ts'; const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const errores = '/src/api/http.ts'; const { HttpError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/http');
+      api.acceptInvitationLink = async () => { throw new HttpError(s, { error: c }); };
+    }, { status, code });
+    await irEnLaApp(page, '/mesa/PA-1234?t=ejemplo-link-de-mesa');
+    await expect(page.getByRole('heading', { name: code === 'join_requests_full' ? FULL : NEUTRO, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reintentar', exact: true })).toHaveCount(0);
+    if (code === 'join_requests_full') await foto(page, '23-solicitudes-pendientes');
+  });
+}
+
 test('K20 · el menú del último amigo queda visible fuera de la tarjeta', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/amigos');
   const mas = page.getByRole('button', { name: /^Más acciones de / }).last();

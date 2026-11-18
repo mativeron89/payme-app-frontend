@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { traducir } from '../i18n/idioma';
 import { entrarEnNaranja, formularioDeB, iconoDelResultado, joinLinkMessage, joinLinkStage, tituloDeLaInvitacion, type JoinLinkOutcome } from './joinLinkView';
 
-const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
+const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'solicitudes_llenas', 'unavailable', 'error'];
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · lo que se fija acá es una regla de PRIVACIDAD,
@@ -29,8 +29,8 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
     // v2.45.0 agregó 'mesa_cerrada' y ESTE bloque se vino a leer: NO es un
     // quinto motivo del 403 — es otro STATUS (410), que sólo llega con token
     // validado como genuino. El rechazo ciego sigue siendo UNO.
-    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
-    expect(todos).toHaveLength(6);
+    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'solicitudes_llenas', 'unavailable', 'error'];
+    expect(todos).toHaveLength(7);
   });
 
   /**
@@ -172,47 +172,19 @@ describe('todos los estados tienen mensaje', () => {
     (outcome) => {
       const m = joinLinkMessage(outcome);
       expect(m.title.length).toBeGreaterThan(0);
-      expect(m.body.length).toBeGreaterThan(0);
+      if (['rejected', 'mesa_cerrada', 'solicitudes_llenas'].includes(outcome)) expect(m.body).toBe('');
+      else expect(m.body.length).toBeGreaterThan(0);
     },
   );
 });
 
-describe('§1.2-D · la mesa muerta con token genuino (v2.45.0)', () => {
-  /**
-   * El 410 NO se funde con el rechazo ciego, a propósito: el 403 protege al
-   * desconocido (no acredita que la mesa exista); el 410 sólo llega después
-   * de validar el token, así que decir "esta mesa ya cerró" no regala el
-   * oráculo que el 403 paga.
-   */
-  it('tiene copy propia y dice que ES esta mesa — no el link — lo que murió', () => {
-    const m = joinLinkMessage('mesa_cerrada');
-    expect(m.title).toBe('Esta mesa ya cerró');
-    expect(m.body).toBe('Habla con quien te invitó si crees que es un error.');
-    expect(m.retryable).toBe(false);
+describe('D817/D856 · terminal neutro, sin motivo ni nota', () => {
+  it('403 y 410 comparten el mensaje neutro y no se reintentan', () => {
+    expect(joinLinkMessage('mesa_cerrada')).toEqual(joinLinkMessage('rejected'));
+    expect(joinLinkMessage('mesa_cerrada')).toEqual({ title: 'No pudimos sumarte a esta mesa.', body: '', retryable: false });
   });
-
-  it('se distingue del rechazo ciego: no comparten ni título ni cuerpo', () => {
-    const d = joinLinkMessage('mesa_cerrada');
-    const b = joinLinkMessage('rejected');
-    expect(d.title).not.toBe(b.title);
-    expect(d.body).not.toBe(b.body);
-  });
-
-  it('cierra el círculo del recién registrado: la nota de cuenta-lista existe SOLO aquí', () => {
-    // Diseño (2026-08-06): la explicación del Inicio vacío vive en la
-    // pantalla que sabe qué pasó — Inicio no adivina. Y ninguna otra pantalla
-    // la necesita: sus caminos no nacen de un alta hecha para este link.
-    expect(joinLinkMessage('mesa_cerrada').nota).toBe(
-      'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.',
-    );
-    for (const outcome of ['joining', 'rejected', 'invalid', 'unavailable', 'error'] as const) {
-      expect(joinLinkMessage(outcome).nota).toBeUndefined();
-    }
-  });
-
-  it('sin nombrar restaurante: la cautela de A se conserva', () => {
-    const m = joinLinkMessage('mesa_cerrada');
-    expect(`${m.title} ${m.body} ${m.nota}`).not.toMatch(/Parolaccia|Hanzo|restaurante/i);
+  it('los rechazos no conservan la nota que distinguía una mesa cerrada', () => {
+    for (const o of OUTCOMES) expect(joinLinkMessage(o).nota).toBeUndefined();
   });
 });
 
@@ -222,7 +194,7 @@ describe('D372 · los textos del canje pasan por t()', () => {
     for (const o of OUTCOMES) {
       const m = joinLinkMessage(o, marca);
       expect(m.title, o).toMatch(/^EN:/);
-      expect(m.body, o).toMatch(/^EN:/);
+      if (m.body) expect(m.body, o).toMatch(/^EN:/);
       if (m.nota !== undefined) expect(m.nota, o).toMatch(/^EN:/);
     }
   });
@@ -240,7 +212,7 @@ describe('D372 · los textos del canje pasan por t()', () => {
       expect(joinLinkMessage(o).title).not.toMatch(/^EN:/);
       expect(joinLinkMessage(o, marca).retryable).toBe(joinLinkMessage(o).retryable);
     }
-    expect(joinLinkMessage('mesa_cerrada').nota).toBe('Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.');
+    expect(joinLinkMessage('mesa_cerrada').nota).toBeUndefined();
   });
 });
 
@@ -248,7 +220,7 @@ describe('D372 · el ícono de E y F', () => {
   it('🔴 un solo ícono para los rechazos (sin pistas del motivo); la tienda para la mesa cerrada; reintentar para lo reintentable', () => {
     expect(iconoDelResultado('rejected')).toBe('link-cortado');
     expect(iconoDelResultado('invalid')).toBe('link-cortado');
-    expect(iconoDelResultado('mesa_cerrada')).toBe('tienda');
+    expect(iconoDelResultado('mesa_cerrada')).toBe('link-cortado');
     expect(iconoDelResultado('unavailable')).toBe('reintentar');
     expect(iconoDelResultado('error')).toBe('reintentar');
   });

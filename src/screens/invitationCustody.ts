@@ -104,14 +104,14 @@ export function closeInvitationCustody(): void {
  * respuesta malformada, que es exactamente el conjunto que NO dice nada sobre
  * si el token sirve.
  */
-export function settleInvitationFailure(status: number | null): JoinLinkOutcome {
+export function settleInvitationFailure(status: number | null, code?: string): JoinLinkOutcome {
   // TERMINAL = el emisor ya decidió que este canje no va a cerrar. Nada de lo
   // que haga la persona lo va a cambiar, así que la credencial se suelta
   // ENTERA. El 410 (v2.45.0, `mesa_not_joinable`) es terminal por lo mismo:
   // el token era genuino pero la mesa no revive — "no hay replay útil", dice
   // el propio emisor. En ESTA puerta el 410 sólo puede ser mesa_not_joinable
   // (el `invitation_expired` 410 vive en la puerta in-app, otra pantalla).
-  const terminal = status === 400 || status === 403 || status === 410;
+  const terminal = status === 400 || status === 403 || status === 409 || status === 410;
   if (terminal) {
     clearPendingInvitationLink();
     olvidarRetornoAMesa();
@@ -119,9 +119,9 @@ export function settleInvitationFailure(status: number | null): JoinLinkOutcome 
     // `?t=` de un token muerto cada vez que el storage no había persistido.
     stripTokenFromUrl();
   }
-  return status === 400
+  return code === 'join_requests_full' ? 'solicitudes_llenas' : status === 400
     ? 'invalid'
-    : status === 403
+    : status === 403 || status === 409
       ? 'rejected'
       : status === 410
         ? 'mesa_cerrada'

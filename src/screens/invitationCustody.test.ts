@@ -404,7 +404,7 @@ describe('ORDEN 4B · la pantalla delega, no reimplementa', () => {
     const texto = cuerpo();
     expect(texto).toContain('openInvitationCustody(code, token)');
     expect(texto).toContain('closeInvitationCustody()');
-    expect(texto).toContain('settleInvitationFailure(status)');
+    expect(texto).toContain('settleInvitationFailure(status, motivo)');
   });
 
   /**
@@ -429,7 +429,7 @@ describe('ORDEN 4B · la pantalla delega, no reimplementa', () => {
     const senal = codigo.indexOf('onIngreso?.(r.mesa_code)');
     const sale = codigo.indexOf('salirAMisItems(r.mesa_code)');
     const alFallar = codigo.indexOf('.catch(', canjea);
-    const resuelve = codigo.indexOf('settleInvitationFailure(status)');
+    const resuelve = codigo.indexOf('settleInvitationFailure(status, motivo)');
     // Control positivo: las seis marcas están.
     for (const [nombre, i] of Object.entries({ abre, canjea, alCanjear, cierra, senal, sale, alFallar, resuelve })) expect(i, nombre).toBeGreaterThan(-1);
     expect([abre < canjea, canjea < alCanjear, alCanjear < cierra, cierra < senal, senal < sale, sale < alFallar, alFallar < resuelve])

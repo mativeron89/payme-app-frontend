@@ -54,6 +54,8 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  "Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.": "This table has a lot of pending requests. Ask whoever opened it to accept the ones they have.",
+  "No pudimos sumarte a esta mesa.": "We couldn't add you to this table.",
   "Estamos confirmando un intento anterior. No se hizo ningún cobro nuevo. Vuelve a intentar en unos minutos.": "We're confirming a previous attempt. No new charge was made. Try again in a few minutes.",
   "Eliminar mi cuenta": "Delete my account",
   "Escríbenos: soporte@paymemx.com": "Write to us: soporte@paymemx.com",
@@ -367,7 +369,6 @@ export const EN: Record<string, string> = {
   "Ese plato ya está completo": "That dish is fully claimed",
   "Esta alta quedó sin confirmar. Reintenta la misma operación: conservamos su clave.": "This setup was left unconfirmed. Retry the same action: we're keeping its key.",
   "Esta apertura pertenece a una sesión anterior. Está bloqueada hasta reconciliar su resultado; no abrimos otra mesa.": "This opening belongs to a previous session. It's blocked until its result is reconciled; we won't open another table.",
-  "Esta mesa ya cerró": "This table already closed",
   "Esta mesa ya cerró.": "This table already closed.",
   "Esta tarjeta quedó sin confirmar. Reintenta la misma operación: conservamos el mismo registro y no vamos a generar otra.": "This card was left unconfirmed. Retry the same action: we're keeping the same record and won't generate another.",
   "Estado de la mesa": "Table status",
@@ -401,7 +402,6 @@ export const EN: Record<string, string> = {
   "Guardando…": "Saving…",
   "Guardar esta tarjeta para la próxima": "Save this card for next time",
   "Guardar tarjeta": "Save card",
-  "Habla con quien te invitó si crees que es un error.": "Talk to whoever invited you if you think this is a mistake.",
   "Hacer principal": "Make primary",
   "Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.": "There's a previous payment we can't securely attribute. Wait for reconciliation before paying.",
   "Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.": "There's a payment from a previous session. We won't resend it or start another until it's reconciled.",
@@ -694,7 +694,6 @@ export const EN: Record<string, string> = {
   "Puede que ya se haya cobrado. Reinténtalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no puedes cambiar propina, método ni consumos.": "It may have already been charged. Retry it exactly as it is: if it already went through, we won't charge you again. Until it's resolved, you can't change the tip, method, or items.",
   "Puede ser la conexión. Prueba de nuevo.": "It might be your connection. Try again.",
   "Puedes compartir el link igual mientras tanto.": "You can still share the link in the meantime.",
-  "Pídele a quien te invitó que te comparta uno nuevo.": "Ask whoever invited you to share a new one.",
   "Queda {0}": "{0} left",
   "Quedó todo pago": "Everything was paid",
   "Quitar a {0} del grupo": "Remove {0} from the group",
@@ -802,7 +801,6 @@ export const EN: Record<string, string> = {
   "Tu banco pudo haber autorizado la retención; todavía la estamos verificando.": "Your bank may have authorized the hold; we're still verifying it.",
   "Tu cuenta": "Your account",
   "Tu cuenta está suspendida. Escríbenos.": "Your account is suspended. Contact us.",
-  "Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.": "Your account is ready — you can open your own table whenever you want.",
   "Tu garantía cubrió": "Your guarantee covered",
   "Tu mesa abierta": "Your open table",
   "Tu parte": "Your share",
@@ -1255,7 +1253,6 @@ export const EN: Record<string, string> = {
   "Esperando respuesta": "Waiting for an answer",
   "Vence en {0}": "Expires in {0}",
   "Listo, le avisamos a quien abrió la mesa. Cuando te acepte, entras directo.": "Done, we let the person who opened the table know. Once they accept you, you're in.",
-  "No pudimos unirte a esa mesa. Pídele a quien la abrió que te comparta el link.": "We couldn't add you to that table. Ask the person who opened it to share the link.",
   "Escribir otro código": "Type another code",
   "Te aceptaron. Ya estás en la mesa.": "You were accepted. You're at the table.",
   "Tu mesa": "Your table",

@@ -58,7 +58,8 @@ type Estado =
     readonly cancelando: boolean;
     readonly reintento: boolean;
   }
-  | { readonly paso: 'no_se_pudo' };
+  | { readonly paso: 'no_se_pudo' }
+  | { readonly paso: 'solicitudes_llenas' };
 
 const CAMPO_VACIO: Estado = { paso: 'campo', error: null };
 
@@ -215,7 +216,8 @@ export function UnirmeConCodigo() {
       const { status, code } = extractApiError(err);
       if (status === 404 || code === 'join_code_invalid') setEstado({ paso: 'campo', error: 'codigo' });
       else if (status === 429) setEstado({ paso: 'campo', error: 'limite' });
-      else if (code === 'join_request_not_allowed' || code === 'join_requests_full') setEstado({ paso: 'no_se_pudo' });
+      else if (code === 'join_requests_full') setEstado({ paso: 'solicitudes_llenas' });
+      else if (status === 403 || status === 409 || status === 410 || code === 'join_request_not_allowed') setEstado({ paso: 'no_se_pudo' });
       // Sin red, cuenta suspendida, error o respuesta mal formada: ningún
       // resultado inventado (A23, A24).
       else setEstado({ paso: 'campo', error: 'reintento' });
@@ -373,9 +375,11 @@ export function UnirmeConCodigo() {
             </button>
           </div>
         )}
-        {estado.paso === 'no_se_pudo' && (
+        {(estado.paso === 'no_se_pudo' || estado.paso === 'solicitudes_llenas') && (
           <div className="unirse-no-se-pudo" role="status">
-            <p className="unirse-texto">{t('No pudimos unirte a esa mesa. Pídele a quien la abrió que te comparta el link.')}</p>
+            <p className="unirse-texto">{estado.paso === 'solicitudes_llenas'
+              ? t('Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.')
+              : t('No pudimos sumarte a esta mesa.')}</p>
             <button type="button" className="unirse-otro" onClick={() => volverAlCampo(null)}>
               {t('Escribir otro código')}
             </button>

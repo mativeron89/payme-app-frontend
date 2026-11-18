@@ -308,7 +308,7 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
     await expect(aviso).toHaveText('Te sumaste a La Parolaccia');
     await expect(aviso).toHaveCSS('background-color', BLANCO);
     await expect(aviso.locator('.toast-ingreso-icono')).toHaveCSS('background-color', EXITO);
-    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
     await capturar(page, 'd387-con-nombre');
   });
 
@@ -325,14 +325,14 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
   });
 
   for (const [id, ruta, tit, cuerpo] of [
-    ['08-e1', '/#/mesa/PA-0001?t=tok-inventado-por-cualquiera', 'Este link ya no funciona', 'Pídele a quien te invitó que te comparta uno nuevo.'],
+    ['08-e1', '/#/mesa/PA-0001?t=tok-inventado-por-cualquiera', 'No pudimos sumarte a esta mesa.', ''],
     ['09-e2', '/#/mesa/PA-0001?t=corto', 'Este link está incompleto', 'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.'],
   ] as const) {
     test(`${id}: «${tit}», el link cortado, un solo control (el círculo «Ir a PayMe»), sin «Reintentar»`, async ({ page }) => {
       await ingresar(page);
       await page.goto(ruta);
       const t = tarjeta(page, tit);
-      await expect(t.getByText(cuerpo, { exact: true })).toBeVisible();
+      if (cuerpo) await expect(t.getByText(cuerpo, { exact: true })).toBeVisible();
       await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'link-cortado');
       const b = await medirBarra(page, 'Ir a PayMe', 64);
       const ct = await caja(t);
@@ -357,15 +357,11 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
       persist();
     }, mesa.code);
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
-    const t = tarjeta(page, 'Esta mesa ya cerró');
-    await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'tienda');
-    const nota = page.getByText(NOTA_E3, { exact: true });
-    await expect(nota).toBeVisible();
-    await expect(t.getByText(NOTA_E3, { exact: true })).toHaveCount(0);
-    await expect(nota).toHaveCSS('text-align', 'center');
+    const t = tarjeta(page, 'No pudimos sumarte a esta mesa.');
+    await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'link-cortado');
+    await expect(page.getByText(NOTA_E3, { exact: true })).toHaveCount(0);
     const b = await medirBarra(page, 'Ir a PayMe', 64);
-    const cn = await caja(nota);
-    expect(cn.y + cn.height).toBeLessThanOrEqual(b.y);
+    const ct = await caja(t); expect(ct.y + ct.height).toBeLessThanOrEqual(b.y);
     await capturar(page, 'd372-10-e3');
     await page.getByRole('button', { name: 'Ir a PayMe', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
@@ -492,7 +488,7 @@ test.describe('área segura (CDP)', () => {
     } });
     await ingresar(page);
     await page.goto('/#/mesa/PA-0001?t=tok-inventado-por-cualquiera');
-    await expect(titulo(page, 'Este link ya no funciona')).toBeVisible();
+    await expect(titulo(page, 'No pudimos sumarte a esta mesa.')).toBeVisible();
     await medirBarra(page, 'Ir a PayMe', 56 + 34 - 12);
   });
 });

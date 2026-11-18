@@ -326,7 +326,7 @@ export function JoinMesaScreen({
          * declarado inservible. La decisión y su ejecución ahora son la misma
          * función y no pueden divergir.
          */
-        setOutcome(settleInvitationFailure(status));
+        setOutcome(settleInvitationFailure(status, motivo));
       });
     return () => {
       alive = false;
