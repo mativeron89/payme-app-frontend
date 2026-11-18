@@ -235,7 +235,7 @@ test('🔴 D256 · un gasto a mano que cargué: «Gasto eliminado»', async ({ p
   await page.getByRole('button', { name: 'Agregar gasto', exact: true }).click();
   await page.getByLabel('Descripción', { exact: true }).fill('Taxi al aeropuerto');
   await page.getByLabel('Monto', { exact: true }).fill('300');
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/viaje/${CANCUN}$`));
   await aConsumos(page);
   const taxi = consumo(page, 'Taxi al aeropuerto');

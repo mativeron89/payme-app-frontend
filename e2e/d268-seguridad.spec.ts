@@ -295,7 +295,7 @@ test.describe('🔴 D268 · S-05 · la invitación a la mesa sigue pendiente', (
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     const aviso = page.getByRole('alert').filter({ hasText: 'Primero acepta la invitación a esta mesa.' });
     await expect(aviso).toHaveCount(0);
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     await expect(aviso).toBeVisible();
     // No volvió a Inicio como tras un «Listo» aceptado: sigue en la mesa.

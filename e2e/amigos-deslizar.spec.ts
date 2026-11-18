@@ -52,7 +52,7 @@ for (const ancho of [375, 390] as const) {
       const filas = page.locator('.friend-row');
       await expect(filas).toHaveCount(await page.locator('.amigo-deslizable').count());
       expect(await filas.count()).toBeGreaterThan(1);
-      await expect(page.locator('.friend-row button')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^Más acciones de / })).toHaveCount(await filas.count());
       await expect(page.getByRole('button', { name: /^Quitar a / })).toHaveCount(0);
       expect(await lista(page).textContent()).not.toContain('✕');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(ancho);
@@ -102,11 +102,9 @@ for (const ancho of [375, 390] as const) {
     test('🔴 tocar «Eliminar» hace lo que hacía la ✕: la misma confirmación, quita al amigo y avisa', async ({ page }) => {
       await aAmigos(page);
       await deslizar(page, fila(page, 'Juan López'), -120);
-      const pregunta = page.waitForEvent('dialog');
-      void eliminar(page, 'Juan López').click();
-      const d = await pregunta;
-      expect([d.type(), d.message()]).toEqual(['confirm', '¿Quitar a Juan López de tus amigos?']);
-      await d.accept();
+      await eliminar(page, 'Juan López').click();
+      await expect(page.getByRole('dialog', { name: '¿Quitar a Juan López de tus amigos?', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
       await expect(toast(page)).toContainText('Amigo quitado');
       await expect(fila(page, 'Juan López')).toHaveCount(0);
       await expect(fila(page, 'María Ruiz')).toBeVisible();
@@ -116,8 +114,8 @@ for (const ancho of [375, 390] as const) {
     test('cancelar la confirmación no quita a nadie', async ({ page }) => {
       await aAmigos(page);
       await deslizar(page, fila(page, 'Juan López'), -120);
-      page.once('dialog', (d) => { void d.dismiss(); });
       await eliminar(page, 'Juan López').click();
+      await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
       await expect(abiertas(page)).toHaveCount(0);
       await expect(fila(page, 'Juan López')).toBeVisible();
       // Una recarga confirma que el dueño (el mock) no lo quitó.
@@ -134,8 +132,8 @@ for (const ancho of [375, 390] as const) {
         m.api.removeFriend = async () => { throw new Error('caido'); };
       });
       await deslizar(page, fila(page, 'Juan López'), -120);
-      page.once('dialog', (d) => { void d.accept(); });
       await eliminar(page, 'Juan López').click();
+      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
       await expect(toast(page)).toContainText('No se pudo quitar de tus amigos');
       await expect(fila(page, 'Juan López')).toBeVisible();
     });
@@ -147,8 +145,8 @@ for (const ancho of [375, 390] as const) {
       await expect(boton).toBeFocused();
       await expect(fila(page, 'Juan López')).toHaveClass(/deslizable--abierta/);
       await expect(boton).toBeVisible();
-      page.once('dialog', (d) => { void d.accept(); });
       await page.keyboard.press('Enter');
+      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
       await expect(toast(page)).toContainText('Amigo quitado');
       await expect(fila(page, 'Juan López')).toHaveCount(0);
     });

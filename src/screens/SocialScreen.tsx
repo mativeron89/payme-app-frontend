@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import { useHojaModal } from '../components/useHojaModal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
@@ -86,6 +88,18 @@ export function SocialScreen() {
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
   const [tab, setTab] = useState<SocialTabId>('amigos');
+  const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void> } | null>(null);
+  const disparadorConfirmacion = useRef<HTMLElement | null>(null);
+  const cerrarConfirmacion = () => {
+    setConfirmacion(null);
+    requestAnimationFrame(() => disparadorConfirmacion.current?.isConnected && disparadorConfirmacion.current.focus());
+  };
+  const confirmar = (texto: string, accion: () => Promise<void>) => {
+    disparadorConfirmacion.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirmacion({ texto, accion });
+  };
+  const hojaConfirmacion = confirmacion && <ConfirmacionSocial texto={confirmacion.texto}
+    onCerrar={cerrarConfirmacion} onConfirmar={confirmacion.accion} />;
 
   // ─── Amigos ───
   // D237 · lo último visto de esta cuenta: al volver a Amigos la lista está
@@ -261,7 +275,6 @@ export function SocialScreen() {
   }
 
   async function block(userId: string, quien: string) {
-    if (!window.confirm(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien))) return;
     olvidarLoDeAmigos();
     try {
       await api.blockUser(userId);
@@ -271,6 +284,18 @@ export function SocialScreen() {
     } catch {
       toast(t('No pudimos bloquear a esa persona'));
     }
+  }
+
+  function pedirBloqueo(userId: string, quien: string) {
+    confirmar(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien), () => block(userId, quien));
+  }
+  function pedirQuitar(f: Friend) {
+    setAmigoDeslizado(null);
+    confirmar(t('¿Quitar a {0} de tus amigos?', f.full_name), async () => {
+      olvidarLoDeAmigos();
+      try { await api.removeFriend(f.id); toast(t('Amigo quitado')); loadFriends(); loadRequests(); }
+      catch { toast(t('No se pudo quitar de tus amigos')); }
+    });
   }
 
   async function addFriend() {
@@ -425,8 +450,7 @@ export function SocialScreen() {
           )}
           <button
             className="btn btn-ghost"
-            onClick={async () => {
-              if (!window.confirm(t('¿Eliminar el grupo "{0}"?', detail.group.name))) return;
+            onClick={() => confirmar(t('¿Eliminar el grupo "{0}"?', detail.group.name), async () => {
               try {
                 olvidarLoDeAmigos();
                 await api.deleteGroup(detail.group.id);
@@ -436,14 +460,15 @@ export function SocialScreen() {
               } catch {
                 toast(t('No se pudo eliminar el grupo'));
               }
-            }}
+            })}
           >
             <Icon name="trash" size={16} className="ico-inline" /> {t('Eliminar grupo')}
           </button>
         </div>
         {/* El detalle TAMBIÉN la lleva: que tenga flecha de volver no alcanza,
             esa vuelve a la lista y no sale de la sección. */}
-        <AppBottomBar active="amigos" />
+        {hojaConfirmacion}
+      <AppBottomBar active="amigos" />
       </div>
     );
   }
@@ -485,7 +510,7 @@ export function SocialScreen() {
               outgoing={outgoing}
               reqBusy={reqBusy}
               onResolve={resolveRequest}
-              onBlock={block}
+              onBlock={pedirBloqueo}
             />
           )}
         </MountedCard>
@@ -562,18 +587,7 @@ export function SocialScreen() {
                   onAbrir={() => setAmigoDeslizado(f.id)}
                   onCerrar={() => setAmigoDeslizado((actual) => (actual === f.id ? null : actual))}
                   nombre={f.full_name}
-                  onEliminar={async () => {
-                    setAmigoDeslizado(null);
-                    if (!window.confirm(t('¿Quitar a {0} de tus amigos?', f.full_name))) return;
-                    try {
-                      await api.removeFriend(f.id);
-                      toast(t('Amigo quitado'));
-                      loadFriends();
-                      loadRequests();
-                    } catch {
-                      toast(t('No se pudo quitar de tus amigos'));
-                    }
-                  }}
+                  onEliminar={() => pedirQuitar(f)}
                 >
                   <div className="friend-row" style={{ cursor: 'default' }}>
                     <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} hasAvatar={f.has_avatar} />
@@ -581,6 +595,7 @@ export function SocialScreen() {
                       <div className="n">{f.full_name}</div>
                       <ArrobaDebajo username={f.username} />
                     </div>
+                    <MenuSocial nombre={f.full_name} onQuitar={() => pedirQuitar(f)} onBloquear={() => pedirBloqueo(f.id, f.full_name)} />
                     {walletRailEnabled && (
                       <button
                         className="btn"
@@ -690,6 +705,7 @@ export function SocialScreen() {
         )}
       </div>
 
+      {hojaConfirmacion}
       <AppBottomBar active="amigos" />
     </div>
   );
@@ -766,14 +782,7 @@ function SolicitudesPanel({
                 >
                   {t('Rechazar')}
                 </button>
-                <button
-                  className="btn btn-ghost btn-sm btn-fit"
-                  aria-label={t('Bloquear a {0}', r.fullName)}
-                  disabled={reqBusy === r.requestId}
-                  onClick={() => onBlock(r.userId, r.firstName)}
-                >
-                  <Icon name="x-circle" size={16} />
-                </button>
+                <MenuSocial nombre={r.fullName} disabled={reqBusy === r.requestId} onBloquear={() => onBlock(r.userId, r.firstName)} />
               </div>
             </div>
           ))}
@@ -815,4 +824,72 @@ function SolicitudesPanel({
       )}
     </div>
   );
+}
+
+/** D854: explicit text actions; one local menu per row. */
+function MenuSocial({ nombre, disabled = false, onBloquear, onQuitar }: {
+  nombre: string; disabled?: boolean; onBloquear: () => void; onQuitar?: () => void;
+}) {
+  const { t } = useIdioma();
+  const [abierto, setAbierto] = useState(false);
+  const [posicion, setPosicion] = useState({ top: 0, left: 0, width: 240 });
+  const boton = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!abierto) return;
+    menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const afuera = (e: PointerEvent) => {
+      if (e.target instanceof Node && !boton.current?.contains(e.target) && !menu.current?.contains(e.target)) setAbierto(false);
+    };
+    const cerrar = () => setAbierto(false);
+    document.addEventListener('pointerdown', afuera);
+    window.addEventListener('resize', cerrar);
+    document.addEventListener('scroll', cerrar, true);
+    return () => {
+      document.removeEventListener('pointerdown', afuera);
+      window.removeEventListener('resize', cerrar);
+      document.removeEventListener('scroll', cerrar, true);
+    };
+  }, [abierto]);
+  const elegir = (accion: () => void) => { setAbierto(false); boton.current?.focus(); accion(); };
+  const teclado = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { setAbierto(false); boton.current?.focus(); } };
+  return <div className="social-menu" onKeyDown={teclado}>
+    <button ref={boton} type="button" className="btn btn-ghost btn-sm btn-fit" aria-label={t('Más acciones de {0}', nombre)}
+      aria-expanded={abierto} disabled={disabled} onClick={() => {
+        const r = boton.current?.getBoundingClientRect();
+        if (r) {
+          const width = Math.min(240, innerWidth - 24);
+          setPosicion({ top: Math.max(12, Math.min(r.bottom + 4, innerHeight - (onQuitar ? 128 : 76))),
+            left: Math.max(12, Math.min(r.right - width, innerWidth - width - 12)), width });
+        }
+        setAbierto(v => !v);
+      }}>⋯</button>
+    {abierto && createPortal(<div ref={menu} className="social-menu-actions" style={{ position: 'fixed', right: 'auto', ...posicion }}
+      onKeyDown={teclado} onPointerDown={e => e.stopPropagation()}>
+      {onQuitar && <button type="button" className="btn btn-ghost btn-sm" onClick={() => elegir(onQuitar)}>{t('Quitar de amigos')}</button>}
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => elegir(onBloquear)}>{onQuitar ? t('Bloquear') : t('Bloquear a {0}', nombre)}</button>
+    </div>, document.body)}
+  </div>;
+}
+
+function ConfirmacionSocial({ texto, onCerrar, onConfirmar }: { texto: string; onCerrar: () => void; onConfirmar: () => Promise<void> }) {
+  const { t } = useIdioma();
+  const hoja = useRef<HTMLDivElement>(null);
+  const cancelar = useRef<HTMLButtonElement>(null);
+  const [busy, setBusy] = useState(false);
+  const enviando = useRef(false);
+  useHojaModal(hoja, cancelar, () => { if (!enviando.current) onCerrar(); });
+  return createPortal(<div className="sheet-overlay" onClick={() => { if (!enviando.current) onCerrar(); }}>
+    <div ref={hoja} className="sheet social-confirmacion" role="dialog" aria-modal="true" aria-label={texto} onClick={e => e.stopPropagation()}>
+      <p>{texto}</p>
+      <div className="social-confirmacion-actions">
+        <button ref={cancelar} type="button" className="btn btn-ghost" disabled={busy} onClick={onCerrar}>{t('Cancelar')}</button>
+        <button type="button" className="btn btn-navy" disabled={busy} onClick={() => {
+          if (enviando.current) return;
+          enviando.current = true; setBusy(true);
+          void onConfirmar().finally(onCerrar);
+        }}>{busy ? t('Un segundo…') : t('Confirmar')}</button>
+      </div>
+    </div>
+  </div>, document.body);
 }

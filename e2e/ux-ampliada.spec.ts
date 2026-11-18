@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { ingresar, irEnLaApp } from './_app';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
 const TIP = 'La eliges tú para toda la mesa y se reparte según lo que consumió cada quien. Es voluntaria y puedes cambiarla después.';
 async function foto(page: Page, nombre: string) {
@@ -32,4 +33,26 @@ test('K19 · Google principal en cuenta de entrada por link', async ({ page }) =
   expect(await google.evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('input[type=email]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   await expect(page.locator('.ingreso-desde-mesa .ingreso-entrar')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await foto(page, '19-cuenta-desde-link');
+});
+test('K20 · menú de amigo y solicitud; confirmación propia y foco', async ({ page }) => {
+  await ingresar(page); await irEnLaApp(page, '/amigos');
+  const amigo = page.getByRole('button', { name: 'Más acciones de Juan López', exact: true });
+  await amigo.click(); await page.getByRole('button', { name: 'Bloquear', exact: true }).click();
+  const hoja = page.getByRole('dialog', { name: /¿Bloquear a Juan López/ });
+  await expect(hoja).toBeVisible();
+  await expect(hoja.getByRole('button', { name: 'Cancelar', exact: true })).toBeFocused();
+  await foto(page, '20-confirmar-bloqueo');
+  await page.keyboard.press('Escape'); await expect(amigo).toBeFocused();
+  await page.getByRole('tab', { name: /Solicitudes/ }).click();
+  const mas = page.getByRole('button', { name: /^Más acciones de / }).first(); await mas.click();
+  await expect(page.getByRole('button', { name: /^Bloquear a / })).toBeVisible();
+});
+test('K20 · el menú del último amigo queda visible fuera de la tarjeta', async ({ page }) => {
+  await ingresar(page); await irEnLaApp(page, '/amigos');
+  const mas = page.getByRole('button', { name: /^Más acciones de / }).last();
+  await mas.scrollIntoViewIfNeeded(); await mas.click();
+  const quitar = page.getByRole('button', { name: 'Quitar de amigos', exact: true });
+  await expect(quitar).toBeFocused(); await expect(quitar).toBeInViewport();
+  await quitar.click(); await expect(page.getByRole('dialog', { name: /¿Quitar a / })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(mas).toBeFocused();
 });

@@ -12629,6 +12629,11 @@ h1.pay-title-lbl {
 .share-tip-help { margin: -4px 0 16px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .share-actions { flex-wrap: wrap; }
 .share-native { flex-basis: 100%; }
+.social-menu { position: relative; flex-shrink: 0; }
+.social-menu-actions { position: absolute; right: 0; top: 100%; z-index: 1000; width: min(240px, 70vw); padding: 8px; background: var(--surface); box-shadow: var(--sh-2); border: 1px solid var(--border); border-radius: 12px; }
+.social-menu-actions button { text-align: left; justify-content: flex-start; }
+.social-confirmacion { padding: 24px; }
+.social-confirmacion-actions { display: flex; gap: 12px; }
 .ingreso-desde-mesa .ingreso-entrar { background: var(--surface); color: var(--action); border: 1px solid var(--border); box-shadow: none; }
 .ingreso-desde-mesa .social-google-container { border: 2px solid var(--action); border-radius: 8px; padding: 4px; }
 

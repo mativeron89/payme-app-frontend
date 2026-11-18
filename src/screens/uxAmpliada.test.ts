@@ -19,4 +19,12 @@ describe('UX ampliada', () => {
     for (const hash of ['', '#/home', '#/mas']) expect(minimoPorEntrada(hash)).toBe(4000);
     expect(source('./LoginScreen.tsx')).toContain('ingreso-desde-mesa');
   });
+  it('K20 · acciones de texto y confirmación dentro de la app', () => {
+    const s = source('./SocialScreen.tsx');
+    expect(s).not.toContain('window.confirm');
+    expect(s).toContain('useHojaModal');
+    expect(s).toContain("t('Quitar de amigos')");
+    expect(s).toContain("t('Bloquear a {0}'");
+    expect(s).toContain('aria-expanded={');
+  });
 });
