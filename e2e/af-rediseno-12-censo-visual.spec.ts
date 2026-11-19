@@ -153,7 +153,7 @@ async function acreditar(
     await expect(title).toHaveCSS('padding-left', titlePadding.left);
     await expect(title).toHaveCSS('justify-content', titleJustify);
   }
-  await expect(page.locator('.screen > .scroll')).toHaveCount(1);
+  await expect(page.locator('.screen > .scroll, .screen > .ticket-flow-body > .scroll')).toHaveCount(1);
   await expect(page.locator('.screen > .appbar-block')).toHaveCount(1);
   const appbarBlock = nav.locator('..');
   await expect(appbarBlock).toHaveCSS('position', 'absolute');

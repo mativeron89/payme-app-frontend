@@ -352,12 +352,12 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
   }
 
   for (const [id, pedir] of [['A23', 'suspended'], ['A24', 'error'], ['P08', 'malformed']] as const) {
-    test(`🔴 ${id} · ${pedir}: «No pudimos confirmar el resultado», sin espera ni éxito inventados`, async ({ page }) => {
+    test(`🔴 ${id} · ${pedir}: el aviso correspondiente, sin espera ni éxito inventados`, async ({ page }) => {
       await costura(page, { pedir });
       await enMesas(page);
       await abrirYEscribir(page, '12345');
       await solicitar(page).click();
-      if (pedir === 'suspended') await expect(page.getByText('No pudimos sumarte a esta mesa.', { exact: true })).toBeVisible();
+      if (pedir === 'suspended') await expect(page.getByText('Tu cuenta está suspendida. Escríbenos.', { exact: true })).toBeVisible();
       else await expect(page.getByRole('alert').filter({ hasText: 'No pudimos confirmar el resultado. Intenta de nuevo.' })).toBeVisible();
       await expect(espera(page)).toHaveCount(0);
       if (pedir !== 'suspended') await expect(solicitar(page)).toBeEnabled();

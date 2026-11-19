@@ -86,7 +86,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // arriba (lo que se desplaza empieza ahí): su burbuja va abajo, entera, y la
     // ✕ se puede tocar (arriba quedaba recortada y la tapaba la tarjeta del total).
     await ayuda(page, 'Cada uno lo suyo').click();
-    await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems y paga por lo que consumió.');
+    await expect(explicacion(page)).toHaveText('Cada uno marca lo que consumió.');
     await expect(explicacion(page)).toHaveClass(/ayuda-opcion-burbuja--abajo/);
     const [abajo, primera] = await Promise.all([explicacion(page).boundingBox(), consumo.boundingBox()]);
     expect(abajo!.y, 'la explicación va abajo de la primera opción').toBeGreaterThanOrEqual(primera!.y + primera!.height);

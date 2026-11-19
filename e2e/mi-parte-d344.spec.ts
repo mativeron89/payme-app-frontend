@@ -113,7 +113,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /^Plato nuevo/ }).click();
     await page.getByRole('radiogroup', { name: 'Porción de Plato nuevo' })
-      .getByRole('button', { name: '½', exact: true }).click();
+      .getByRole('radio', { name: '½', exact: true }).click();
     await expect(page.locator('.qc-renglon').filter({ hasText: 'Plato nuevo' }).locator('.qc-pildora')).toHaveText('½');
     await expect(desglose(page)).toHaveText(guardado, { useInnerText: true });
     await expect(platos).toHaveCount(2);
