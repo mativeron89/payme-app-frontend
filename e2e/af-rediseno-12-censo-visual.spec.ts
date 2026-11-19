@@ -160,9 +160,12 @@ async function acreditar(
   await expect(appbarBlock).toHaveCSS('border-top-left-radius', '24px');
   await expect(appbarBlock).toHaveCSS('border-top-right-radius', '24px');
   expect(await page.locator('.screen').evaluate((screen) => {
-    const scroll = screen.querySelector(':scope > .scroll');
+    const scroll = screen.querySelector(':scope > .scroll, :scope > .ticket-flow-body > .scroll');
     const bar = screen.querySelector(':scope > .appbar-block');
-    return Boolean(scroll && bar && scroll.parentElement === bar.parentElement);
+    const padre = scroll?.parentElement;
+    // A tamaño normal, la envoltura de División no agrega una caja al layout.
+    return Boolean(bar && padre && (padre === screen
+      || (padre.parentElement === screen && getComputedStyle(padre).display === 'contents')));
   })).toBe(true);
   const shell = await app.evaluate((node) => ({
     clientHeight: node.clientHeight,
