@@ -28,7 +28,7 @@ describe('UX ampliada', () => {
     expect(minimoPorEntrada('', '/home', '?t=ejemplo')).toBe(4000);
     expect(minimoPorEntrada('', '/', '?r=')).toBe(4000);
   });
-  it('los cuatro mensajes de mesa nombran el botón Continuar en español e inglés', () => {
+  it('los cuatro mensajes de mesa nombran el botón Continuar en los dos idiomas', () => {
     for (const [archivo, texto] of [
       ['./MesaDetailView.tsx', 'Marcaste consumos sin tocar «Continuar»: si cierras ahora, no quedan registrados.'],
       ['./MesaDetailView.tsx', 'Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».'],

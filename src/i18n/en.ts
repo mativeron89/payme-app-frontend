@@ -418,7 +418,6 @@ export const EN: Record<string, string> = {
   "Invitar amigos de PayMe": "Invite PayMe friends",
   "Ir a Cuenta": "Go to Account",
   "Ir a Inicio": "Go to Home",
-  "Ir a PayMe": "Go to PayMe",
   "Italiana": "Italian",
   "Japonesa": "Japanese",
   "Española": "Spanish",
