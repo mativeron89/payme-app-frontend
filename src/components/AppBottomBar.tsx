@@ -140,10 +140,9 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
   const centro = useAccionDelCentro(center);
   const pendientes = useSolicitudesPendientes();
 
-  const ejecutar = (slot: BottomBarSlot | 'centro', accion: () => void, disparador: HTMLButtonElement) => {
-    if (onAccion) onAccion(slot, accion, disparador);
-    else accion();
-  };
+  const clickCentro = onAccion
+    ? (event: React.MouseEvent<HTMLButtonElement>) => onAccion('centro', centro.onClick, event.currentTarget)
+    : centro.onClick;
 
   const item = (it: SideItem) => {
     const on = active === it.slot;
@@ -154,7 +153,9 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
         data-guia={`nav-${it.slot}`}
         type="button"
         className={`appbar-item ${on ? 'on' : ''}`}
-        onClick={(event) => ejecutar(it.slot, () => navigate(it.page), event.currentTarget)}
+        onClick={onAccion
+          ? (event) => onAccion(it.slot, () => navigate(it.page), event.currentTarget)
+          : () => navigate(it.page)}
         aria-current={on ? 'page' : undefined}
         // D230 · el nombre dice cuántas hay, con el número exacto aunque se vea «9+».
         aria-label={burbuja === 0 ? undefined
@@ -179,7 +180,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
       {accionAncha && (
         <div className="appbar-accion">
           <button type="button" className="btn btn-navy appbar-continuar" data-guia="continuar"
-            onClick={(event) => ejecutar('centro', centro.onClick, event.currentTarget)} disabled={centro.disabled} aria-busy={centro.busy || undefined}
+            onClick={clickCentro} disabled={centro.disabled} aria-busy={centro.busy || undefined}
             aria-label={centro.ariaLabel || centro.label}>
             {centro.label}
           </button>
@@ -192,7 +193,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
           ref={centerRef}
           className="appbar-center"
           data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
-          onClick={(event) => ejecutar('centro', centro.onClick, event.currentTarget)}
+          onClick={clickCentro}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}
           // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.

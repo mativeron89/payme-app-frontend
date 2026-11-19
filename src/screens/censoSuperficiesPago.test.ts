@@ -683,6 +683,7 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
             expresionDe(atributo(s, 'disabled'), s.sf),
             'el CTA dejó de leer el seam que el llamador prueba',
           ).toBe('centro.disabled');
+          expect(expresionDe(atributo(s, 'onClick'), s.sf)).toBe('clickCentro');
         },
       },
       {
@@ -692,7 +693,7 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
         identifica: (s) => atributoLiteral(s, 'className') === 'btn btn-navy appbar-continuar',
         afirmar: (s) => {
           expect(expresionDe(atributo(s, 'disabled'), s.sf)).toBe('centro.disabled');
-          expect(expresionDe(atributo(s, 'onClick'), s.sf)).toBe('centro.onClick');
+          expect(expresionDe(atributo(s, 'onClick'), s.sf)).toBe('clickCentro');
         },
       },
     ];

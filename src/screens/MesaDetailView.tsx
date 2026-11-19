@@ -1067,7 +1067,7 @@ export function MesaDetailView({
         frenarSinEleccion(); return;
       }
       setHojaCierre(null);
-      onGoToPay({ ...foto, alGuardar });
+      onGoToPay(alGuardar ? { ...foto, alGuardar } : foto);
     } finally { preparandoRef.current = false; }
   }
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);

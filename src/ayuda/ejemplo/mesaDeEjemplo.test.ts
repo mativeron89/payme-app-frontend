@@ -149,7 +149,7 @@ describe('D363 · reservar y soltar en «por lo que pidió cada uno»', () => {
       && lectura.expression.arguments.length === 0).toBe(true);
     const envios = pasos.filter((n): n is ts.CallExpression => ts.isCallExpression(n) && n.expression.getText(sf) === 'onGoToPay');
     expect(envios).toHaveLength(1);
-    expect(envios[0].arguments.map((a) => a.getText(sf))).toEqual(['foto']);
+    expect(envios[0].arguments.map((a) => a.getText(sf))).toEqual(['alGuardar ? { ...foto, alGuardar } : foto']);
     expect(fotos[0].getEnd() < envios[0].getStart(sf)).toBe(true);
     const confirms = nodos.filter((n): n is ts.CallExpression =>
       ts.isCallExpression(n) && n.expression.getText(sf) === 'onConfirmarCierreSeleccion');
