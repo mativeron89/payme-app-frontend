@@ -40,8 +40,15 @@ export const SPLASH_RENDICION_MS = 12_000;
  * pantalla de carga misma se prueba contra el build (`e2e/splash.spec.ts`, proyecto `pantalla-de-carga`), sin la marca.
  */
 export function minimoPorEntrada(hash: string, pathname = '', search = ''): number {
-  return /^#\/mesa\/[^/?#]+(?:\?.*)?$/.test(hash) || /^\/mesa\/[^/?#]+$/.test(pathname)
-    || Boolean(new URLSearchParams(search).get('r')) ? 1_000 : SPLASH_MINIMO_MS;
+  const [rutaDelFragmento, consultaDelFragmento] = hash.replace(/^#\/?/, '').split('?');
+  const ruta = rutaDelFragmento ? `/${rutaDelFragmento}` : (pathname || '/');
+  const consulta = new URLSearchParams(search);
+  const fragmento = new URLSearchParams(consultaDelFragmento);
+  const linkDeMesa = /^\/mesa\/[^/?#]+\/?$/.test(ruta) && Boolean(fragmento.get('t') ?? consulta.get('t'));
+  // El router conserva la consulta al navegar. Sólo la raíz y el escaneo
+  // son entradas por QR; una mesa abierta puede conservar el parámetro.
+  const qr = /^\/(?:scan\/?)?$/.test(ruta) && Boolean(consulta.get('r') || fragmento.get('r'));
+  return linkDeMesa || qr ? 1_000 : SPLASH_MINIMO_MS;
 }
 
 export const MINIMO_DE_ESTE_BUILD_MS = import.meta.env.DEV && import.meta.env.VITE_E2E_CARGA_SIN_MINIMO === '1' ? 0 : (typeof location === 'undefined' ? SPLASH_MINIMO_MS : minimoPorEntrada(location.hash, location.pathname, location.search));

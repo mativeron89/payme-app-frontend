@@ -295,7 +295,7 @@ async function inicioConAvisosEn(page: Page, n: number): Promise<void> {
 }
 
 test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
-  test('«Cerrar mesa» con algo marcado sin «Listo»: lo dice, y «Revisar» lleva a la lista sin cerrar', async ({ page }) => {
+  test('«Cerrar mesa» con algo marcado sin «Continuar»: lo dice, y «Revisar» lleva a la lista sin cerrar', async ({ page }) => {
     await abrirMesa(page);
     await contarLlamadas(page, 'closeMesa');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
@@ -303,7 +303,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     const hoja = page.getByRole('dialog', { name: '¿Cerrar la mesa?' });
     await expect(hoja.getByText('Revisa lo que elegiste: después de cerrar ya no se puede modificar.')).toBeVisible();
     await expect(hoja.getByText('Todavía no elegiste nada.')).toBeVisible();
-    await expect(hoja.getByText('Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.')).toBeVisible();
+    await expect(hoja.getByText('Marcaste consumos sin tocar «Continuar»: si cierras ahora, no quedan registrados.')).toBeVisible();
     await expect(hoja.getByRole('button', { name: 'Revisar', exact: true })).toBeFocused();
     await expect(hoja.getByRole('button', { name: 'Volver', exact: true })).toHaveCount(0);
     await capturar(page, '08-cerrar-sin-listo');

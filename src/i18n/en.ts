@@ -54,6 +54,9 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  "Esta mesa tiene muchas solicitudes pendientes.": "This table has a lot of pending requests.",
+  "Pídele a quien la abrió que acepte las que tiene.": "Ask whoever opened it to accept the ones they have.",
+  "Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.": "Your account is ready. Ask whoever invited you for a new link, or open your own table.",
   "Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.": "This table has a lot of pending requests. Ask whoever opened it to accept the ones they have.",
   "No pudimos sumarte a esta mesa.": "We couldn't add you to this table.",
   "Revisar de nuevo": "Check again",
@@ -923,6 +926,7 @@ export const EN: Record<string, string> = {
   "Toca «Continuar con Google» otra vez para crear tu cuenta.": "Tap “Continue with Google” again to create your account.",
   "Escribe tu nombre y apellido aquí arriba para continuar con Google.": "Enter your first and last name above to continue with Google.",
   "No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.": "We couldn't sign you in with Google. Try again or sign in with your email and password.",
+  "O entra con tu correo": "Or log in with your email",
   "O regístrate con tu correo": "Or sign up with your email",
   // AF-17 · «Continuar con Google» en un toque (dueño v2.92.0).
   "Al continuar aceptas el": "By continuing you accept the",
@@ -1077,7 +1081,7 @@ export const EN: Record<string, string> = {
   "Guardar esta selección todavía no está disponible.": "Saving this selection isn't available yet.",
   "Estamos leyendo tu selección. Intenta de nuevo en un momento.": "We're loading your selection. Try again in a moment.",
   "Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.": "This table is closed. Your saved selection is read-only.",
-  "Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».": "Your selection was saved. If you change anything, tap “Done” again.",
+  "Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».": "Your selection was saved. If you change anything, tap “Continue” again.",
   "La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.": "The table is closed. We kept your local selection without replacing the saved one.",
   "No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.": "We couldn't confirm the save. We kept your selection so you can retry.",
   "Esta mesa ya cerró. Lo guardado es sólo de lectura.": "This table is closed. Saved data is read-only.",
@@ -1300,14 +1304,14 @@ export const EN: Record<string, string> = {
   "Revisar": "Review",
   "Revisa lo que elegiste: después de cerrar ya no se puede modificar.": "Check what you chose: once it closes, it can't be changed.",
   "Todavía no elegiste nada.": "You haven't chosen anything yet.",
-  "Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.": "You marked items without tapping «Done»: if you close now, they won't be saved.",
+  "Marcaste consumos sin tocar «Continuar»: si cierras ahora, no quedan registrados.": "You marked items without tapping «Continue»: if you close now, they won't be saved.",
   "Con esto se cierra la mesa": "This closes the table",
   "Con tu selección ya se eligió todo lo de la mesa.": "With your selection, everything on the table has been chosen.",
   "Al guardar, la mesa se cierra para todos.": "When you save, the table closes for everyone.",
-  "No pudimos verificar la confirmación de cierre. Revisa tu selección y toca Listo de nuevo.": "We could not verify the closing confirmation. Review your selection and tap Done again.",
+  "No pudimos verificar la confirmación de cierre. Revisa tu selección y toca «Continuar» de nuevo.": "We could not verify the closing confirmation. Review your selection and tap Continue again.",
   "La mesa cambió. Conservamos tu selección; revísala antes de continuar.": "The table changed. We kept your selection; review it before continuing.",
   "La mesa cambió. Revisa la selección y confirma de nuevo si quieres cerrarla.": "The table changed. Review your selection and confirm again if you want to close it.",
-  "La confirmación venció. Revisa tu selección y toca Listo de nuevo.": "The confirmation expired. Review your selection and tap Done again.",
+  "La confirmación venció. Revisa tu selección y toca «Continuar» de nuevo.": "The confirmation expired. Review your selection and tap Continue again.",
   "Guardar y cerrar": "Save and close",
   // AF-BORRAR-MESAS · D238/D239 · borrar de la app.
   "Eliminar {0}": "Delete {0}",

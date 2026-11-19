@@ -466,7 +466,7 @@ function HojaAntesDeCerrar({
         </div>
         {sinGuardar && (
           <p className="note note-amber cerrar-mesa-sin-guardar">
-            {t('Marcaste consumos sin tocar «Listo»: si cierras ahora, no quedan registrados.')}
+            {t('Marcaste consumos sin tocar «Continuar»: si cierras ahora, no quedan registrados.')}
           </p>
         )}
         <ul className="cerrar-mesa-lista">
@@ -663,8 +663,12 @@ export function MesaDetailView({
     || (selected.size === 0 && informativasGuardadas.size === 0 && !mesa.items.some((item) => item.my_bps > 0)));
   /** D469 · «Tu parte» (el desglose de D344) arranca cerrado. */
   const [miParteAbierta, setMiParteAbierta] = useState(false);
-  useEffect(() => {
-    if (avisoGuardado) { setMiParteAbierta(true); setConsumosAbierto(false); }
+  const avisoGuardadoRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!avisoGuardado) return;
+    setMiParteAbierta(true);
+    setConsumosAbierto(false);
+    avisoGuardadoRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
   }, [avisoGuardado]);
   /**
    * D360-4a · «Quiénes están en la mesa» arranca CERRADO siempre, haya o no
@@ -1380,8 +1384,8 @@ export function MesaDetailView({
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
         {recuperacion}
         {avisoGuardado && (
-          <div className="card mesa-guardado" role="status">
-            <Icon name="check" size={24} />
+          <div ref={avisoGuardadoRef} className="card mesa-guardado" role="status">
+            <span className="mesa-guardado-check" aria-hidden="true"><Icon name="check" size={24} /></span>
             <div><strong>{t('Listo, quedó guardado')}</strong>
               {avisoGuardado.importeCents !== null && <p>{t('Tu parte: {0}', formatMXN(avisoGuardado.importeCents))}</p>}
             </div>
@@ -1410,7 +1414,7 @@ export function MesaDetailView({
         {calificacion}
         {!esConsumo && informativeSaved && (
           <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
-            {t('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».')}
+            {t('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».')}
           </div>
         )}
         {!esConsumo && informativeLoading && !informativeSaved && (

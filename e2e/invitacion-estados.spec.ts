@@ -125,24 +125,6 @@ async function toquesChicos(raiz: Locator): Promise<string[]> {
   }).filter((x) => x.w < 44 || x.h < 44).map((x) => x.n));
 }
 
-/** La barra reducida: abajo de todo, de borde a borde, con su alto; el círculo de 56 montado a −16 y sin nada encima. */
-async function medirBarra(page: Page, nombre: string, alto: number) {
-  await quietas(page);
-  const vp = page.viewportSize()!;
-  const [b, c] = await Promise.all([caja(barra(page)), caja(page.getByRole('button', { name: nombre, exact: true }))]);
-  expect(Math.abs(b.y + b.height - vp.height), 'pegada abajo').toBeLessThanOrEqual(1);
-  expect([Math.round(b.x), Math.round(b.width)], 'de borde a borde').toEqual([0, vp.width]);
-  expect(Math.abs(b.height - alto), `alto ${alto}`).toBeLessThanOrEqual(1);
-  await expect(barra(page)).toHaveCSS('border-top-left-radius', '24px');
-  expect([Math.round(c.width), Math.round(c.height)]).toEqual([56, 56]);
-  expect(Math.abs(c.y - b.y + 16), 'el círculo montado a −16').toBeLessThanOrEqual(1);
-  const enElCentro = await page.evaluate(([x, y]) =>
-    document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null,
-  [c.x + c.width / 2, c.y + c.height / 2] as const);
-  expect(enElCentro, 'nada tapa el círculo').toBe(nombre);
-  return b;
-}
-
 test.describe('A y B · sin sesión (390 × 844)', () => {
   test('🔴 A1: una tarjeta montada en la banda, dos botones adentro, un solo naranja, sin barra; el logo sigue a mano', async ({ page }) => {
     await page.goto(`${A_SIN_SESION}&signup_invitation=${SIGNUP}`);
@@ -325,26 +307,26 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
   });
 
   for (const [id, ruta, tit, cuerpo] of [
-    ['08-e1', '/#/mesa/PA-0001?t=tok-inventado-por-cualquiera', 'No pudimos sumarte a esta mesa.', ''],
+    ['08-e1', '/#/mesa/PA-0001?t=tok-inventado-por-cualquiera', 'No pudimos sumarte a esta mesa.', 'Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.'],
     ['09-e2', '/#/mesa/PA-0001?t=corto', 'Este link está incompleto', 'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.'],
   ] as const) {
-    test(`${id}: «${tit}», el link cortado, un solo control (el círculo «Ir a PayMe»), sin «Reintentar»`, async ({ page }) => {
+    test(`${id}: «${tit}», el link cortado, un solo control visible («Ir a Inicio»), sin «Reintentar»`, async ({ page }) => {
       await ingresar(page);
       await page.goto(ruta);
       const t = tarjeta(page, tit);
       if (cuerpo) await expect(t.getByText(cuerpo, { exact: true })).toBeVisible();
       await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'link-cortado');
-      const b = await medirBarra(page, 'Ir a PayMe', 64);
-      const ct = await caja(t);
-      expect(ct.y + ct.height).toBeLessThanOrEqual(b.y);
-      await expect(pantalla(page).getByRole('button')).toHaveCount(0);
+      const salida = t.getByRole('button', { name: 'Ir a Inicio', exact: true });
+      await expect(salida).toHaveText('Ir a Inicio');
+      await expect(salida).toBeInViewport({ ratio: 1 });
+      await expect(pantalla(page).getByRole('button')).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Reintentar', exact: true })).toHaveCount(0);
-      expect((await colores(page)).naranjas).toEqual(['Ir a PayMe']);
+      expect((await colores(page)).naranjas).toEqual([]);
       await capturar(page, `d372-${id}`);
     });
   }
 
-  test('E3: la tienda, la nota FUERA de la tarjeta, centrada y arriba de la barra; el círculo lleva a Inicio', async ({ page }) => {
+  test('E3: copia neutra, texto de cuenta y botón visible que lleva a Inicio', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await page.evaluate(async (code) => {
@@ -360,10 +342,11 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
     const t = tarjeta(page, 'No pudimos sumarte a esta mesa.');
     await expect(t.locator('.title-card-cuadro')).toHaveAttribute('data-icono', 'link-cortado');
     await expect(page.getByText(NOTA_E3, { exact: true })).toHaveCount(0);
-    const b = await medirBarra(page, 'Ir a PayMe', 64);
-    const ct = await caja(t); expect(ct.y + ct.height).toBeLessThanOrEqual(b.y);
+    await expect(t.getByText('Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.', { exact: true })).toBeVisible();
+    const salida = t.getByRole('button', { name: 'Ir a Inicio', exact: true });
+    await expect(salida).toBeInViewport({ ratio: 1 });
     await capturar(page, 'd372-10-e3');
-    await page.getByRole('button', { name: 'Ir a PayMe', exact: true }).click();
+    await salida.click();
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   });
 
@@ -423,7 +406,7 @@ test.describe('375 × 667', () => {
     await capturar(page, 'd372-14-b-alta-375');
   });
 
-  test('E2 en inglés: el texto más largo, sin pasar abajo de la barra', async ({ page }) => {
+  test('E2 en inglés: el texto largo y el botón quedan a la vista', async ({ page }) => {
     await ingresar(page);
     // El idioma se lee al cargar: después de `ingresar` (sus rótulos están en español), se recarga.
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
@@ -433,9 +416,9 @@ test.describe('375 × 667', () => {
     const t = tarjeta(page, 'This link is incomplete');
     await expect(t.getByText('It may have gotten cut off when copied. Ask them to send it again and open it in full.', { exact: true })).toBeVisible();
     await expect(page.getByText('Este link está incompleto', { exact: true })).toHaveCount(0);
-    const b = await medirBarra(page, 'Go to PayMe', 64);
-    const ct = await caja(t);
-    expect(ct.y + ct.height).toBeLessThanOrEqual(b.y);
+    const salida = t.getByRole('button', { name: 'Go to Home', exact: true });
+    await expect(salida).toHaveText('Go to Home');
+    await expect(salida).toBeInViewport({ ratio: 1 });
     await capturar(page, 'd372-15-e2-en-375');
   });
 });
@@ -481,7 +464,7 @@ test.describe('área segura (CDP)', () => {
     expect((await caja(page.locator('.hdr-mark-toques'))).y).toBeGreaterThanOrEqual(47);
   });
 
-  test('la barra reducida sigue la regla del área segura de la barra principal (56 + inset − 12)', async ({ page }) => {
+  test('la salida del rechazo queda dentro del área segura', async ({ page }) => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: {
       top: 0, topMax: 0, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0,
@@ -489,6 +472,10 @@ test.describe('área segura (CDP)', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-0001?t=tok-inventado-por-cualquiera');
     await expect(titulo(page, 'No pudimos sumarte a esta mesa.')).toBeVisible();
-    await medirBarra(page, 'Ir a PayMe', 56 + 34 - 12);
+    const salida = page.getByRole('button', { name: 'Ir a Inicio', exact: true });
+    await expect(salida).toBeInViewport({ ratio: 1 });
+    const cajaSalida = await caja(salida);
+    expect(cajaSalida.height).toBeGreaterThanOrEqual(44);
+    expect(cajaSalida.y + cajaSalida.height).toBeLessThanOrEqual(page.viewportSize()!.height - 34);
   });
 });

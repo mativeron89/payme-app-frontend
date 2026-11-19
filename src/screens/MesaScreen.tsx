@@ -776,7 +776,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
 
   // Una sola lectura completa para carga, Listo y recuperación. La época
   // invalida respuestas anteriores, incluida una lectura silenciosa en vuelo.
-  const leerMesaPropia = useCallback(async () => {
+  type EstadoGuardado = Extract<InformativeSelectionState, 'available' | 'readonly'>;
+  const leerMesaPropia = useCallback(async (estadoGuardado?: EstadoGuardado) => {
     const readEpoch = mesaReadEpochRef.current.next();
     const identityEpoch = identityEpochRef.current.capture();
     const identidad = identidadActualRef.current;
@@ -789,19 +790,19 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!vigente()) return null;
       const capability = readInformativeSelectionCapability(r.mesa.informative_selection_capability);
       let propia: InformativeSelectionResponse | null = null;
-      const lecturaPropiaFallida = () => {
+      const lecturaPropiaFallida = (estado: EstadoGuardado | 'error' = 'error') => {
         if (!vigente() || intentoSeleccionRef.current) return;
         // En la carga inicial se conserva la mesa sólo para presentar el error
         // y su botón de lectura. No es un par utilizable por Listo.
         if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
-        setInformativeState('error');
+        setInformativeState(estado);
       };
       if (r.mesa.division_mode === 'igual' && !guestToken && capability?.supported) {
         // Sólo presenta la mesa inicial; loading impide editar o guardar hasta
         // recibir la propia. No devuelve una foto utilizable antes de ese GET.
         if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
         try { propia = await api.getInformativeSelection(code); }
-        catch { lecturaPropiaFallida(); return null; }
+        catch { lecturaPropiaFallida(estadoGuardado); return null; }
       }
       if (!vigente()) return null;
       if (propia && !lecturaCompatible(r.mesa, propia)) { lecturaPropiaFallida(); return null; }
@@ -835,18 +836,18 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     }
   }, [guestToken]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (estadoGuardado?: EstadoGuardado) => {
     setInformativeState('loading');
     const identityEpoch = identityEpochRef.current.capture();
     const identidad = identidadActualRef.current;
     try {
-      const foto = await leerMesaPropia();
+      const foto = await leerMesaPropia(estadoGuardado);
       if (foto) aplicarFotoPropia(foto);
       return foto;
     } catch {
       if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return null;
       if (!mesaActualRef.current) { setNotFound(true); resolverAviso.current(); }
-      else setInformativeState('error');
+      else setInformativeState(estadoGuardado ?? 'error');
       return null;
     }
   }, [leerMesaPropia, aplicarFotoPropia]);
@@ -1353,14 +1354,14 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     if (!ejemplo) try { localStorage.setItem('payme.app.mesa-guardada.v1', '1'); } catch { /* preferencia no durable */ }
   }
 
-  async function confirmarGuardado(): Promise<void> {
+  async function confirmarGuardado(estadoGuardado?: EstadoGuardado): Promise<void> {
     registrarPrimeraMesa();
     // El tutorial conserva su recorrido local (D363).
     if (ejemplo) { ejemploLocal.irA('listo'); navigate('home'); return; }
     const identidad = identidadActualRef.current;
     const identityEpoch = identityEpochRef.current.capture();
     const revision = revisionBorradorRef.current;
-    const foto = await reload();
+    const foto = await reload(estadoGuardado);
     if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad
         || revisionBorradorRef.current !== revision) return;
 
@@ -1419,11 +1420,12 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       seleccionRef.current = guardadas; denominadoresRef.current = new Map();
       setSelected(guardadas); setSelectedDenominators(new Map());
     }
-    setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+    const estadoGuardado = saved.mesa.mutable ? 'available' : 'readonly';
+    setInformativeState(estadoGuardado);
     setInformativeSaved(sinEdicionPosterior);
     if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
       setCierrePropio(true); reload();
-    } else if (sinEdicionPosterior) confirmarGuardado();
+    } else if (sinEdicionPosterior) confirmarGuardado(estadoGuardado);
   }
 
   async function reconciliarSeleccion(): Promise<boolean> {
@@ -1491,7 +1493,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     const rechazo = decodeSelectionClosureRejection(failure.code, failure.status, failure.extra,
       { mesaCode: code, mode: operacion.modo });
     if (!rechazo || !preparada || ejemplo || isGuest || preparada.mesa.guarantee_mode !== false) {
-      toast(t('No pudimos verificar la confirmación de cierre. Revisa tu selección y toca Listo de nuevo.'));
+      toast(t('No pudimos verificar la confirmación de cierre. Revisa tu selección y toca «Continuar» de nuevo.'));
       return true;
     }
     let fotoParaConfirmar = preparada;
@@ -1526,7 +1528,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     if (!solicitud || busy || propinaGuardando) return;
     descartarSolicitudCierre(); // Consume antes del await: doble toque no duplica el pedido.
     if (!solicitudCierreVigente(solicitud) || !closureDeadlineValid(solicitud.challenge.valid_until, Date.now())) {
-      toast(t('La confirmación venció. Revisa tu selección y toca Listo de nuevo.'));
+      toast(t('La confirmación venció. Revisa tu selección y toca «Continuar» de nuevo.'));
       return;
     }
     void goToPay(solicitud.preparada, solicitud);
@@ -1683,7 +1685,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!CORTE.allowsPay) {
         // Decisión 32 · lo guardado sigue igual (ninguna edición desde el último
         // guardado acreditado): «Guardado» lleva a Inicio sin volver a enviar.
-        if (preparada?.informativeSaved) { confirmarGuardado(); return; }
+        if (preparada?.informativeSaved) { confirmarGuardado('available'); return; }
         if (!preparada && (informativeState === 'unsupported' || informativeState === 'idle')) {
           toast(t('Guardar esta selección todavía no está disponible.'));
           return;
@@ -3556,7 +3558,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         && (informativeState === 'idle' || informativeState === 'loading')}
       informativeUnsupported={!!informativePersistenceActive && informativeState === 'unsupported'}
       informativeLoadError={!!informativePersistenceActive && informativeState === 'error'}
-      onRetryInformative={reload}
+      onRetryInformative={() => { void reload(); }}
       cierreSeleccion={solicitudCierre && solicitudCierreVigente(solicitudCierre)
         ? { mesa: solicitudCierre.preparada.mesa, selected: solicitudCierre.preparada.selected } : null}
       onConfirmarCierreSeleccion={confirmarCierreSeleccion}

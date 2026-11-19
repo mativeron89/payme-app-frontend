@@ -2,7 +2,7 @@
  * La pantalla de carga en un navegador real · D292 (Mati, 2026-10-12, «Siempre al abrir (Recomendada)»; la adenda 1 la
  * dejó en 1 s, la adenda 2, «Aumenta a dos segundos el icono de carga inicial», en 2 s, y D498, «dejala dos segundos mas
  * luego», en 4 s): aparece en cada apertura o
- * recarga, también por un link o un QR de mesa, desde el primer cuadro, y queda al menos 4 s. Si la app tarda más, sigue
+ * recarga, desde el primer cuadro. Queda al menos 4 s, o 1 s al entrar por link o QR (D853). Si la app tarda más, sigue
  * hasta que monte. Después, el fundido.
  *
  * 🔴 D300 · los 4 s se cuentan desde el primer cuadro pintado, no desde que empezó la navegación; y cada imagen de
@@ -221,6 +221,7 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada ap
   for (const [nombre, ruta] of [
     ['un link de mesa', '/mesa/PA-1234?t=token-de-prueba'],
     ['un QR de mesa', '/?r=qr-de-prueba'],
+    ['un QR que abre el escaneo', '/scan?r=qr-de-prueba'],
   ] as const) {
     test(`por ${nombre}: desde el primer cuadro y al menos 1 s`, async ({ page }) => {
       await medirLaCarga(page);
@@ -229,6 +230,21 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada ap
       expect(c.montoEn!).toBeLessThan(1000);
       esperarElMinimoEntero(c, MINIMO_LINK_MS);
       expect(c.retiradoEn! - c.vistoEn!).toBeLessThan(MINIMO_MS);
+    });
+  }
+
+  for (const [caso, consulta] of [['sin consulta', ''], ['con el QR conservado', '?r=qr-de-prueba']] as const) {
+    test(`D853 · al recargar una mesa ${caso} vuelve el mínimo de 4 s`, async ({ page }) => {
+      await ingresar(page);
+      const ruta = `/mesa/PA-2847${consulta}`;
+      await page.goto(ruta);
+      await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+      await medirLaCarga(page);
+      await page.reload();
+      const c = await laCarga(page);
+      expect(c.montoEn!).toBeLessThan(c.vistoEn! + MINIMO_MS);
+      esperarElMinimoEntero(c);
+      expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe(ruta);
     });
   }
 

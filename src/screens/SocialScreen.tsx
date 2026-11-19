@@ -88,17 +88,17 @@ export function SocialScreen() {
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
   const [tab, setTab] = useState<SocialTabId>('amigos');
-  const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void> } | null>(null);
+  const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void>; etiqueta: string } | null>(null);
   const disparadorConfirmacion = useRef<HTMLElement | null>(null);
   const cerrarConfirmacion = () => {
     setConfirmacion(null);
     requestAnimationFrame(() => disparadorConfirmacion.current?.isConnected && disparadorConfirmacion.current.focus());
   };
-  const confirmar = (texto: string, accion: () => Promise<void>) => {
+  const confirmar = (texto: string, accion: () => Promise<void>, etiqueta = t('Confirmar')) => {
     disparadorConfirmacion.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setConfirmacion({ texto, accion });
+    setConfirmacion({ texto, accion, etiqueta });
   };
-  const hojaConfirmacion = confirmacion && <ConfirmacionSocial texto={confirmacion.texto}
+  const hojaConfirmacion = confirmacion && <ConfirmacionSocial texto={confirmacion.texto} etiqueta={confirmacion.etiqueta}
     onCerrar={cerrarConfirmacion} onConfirmar={confirmacion.accion} />;
 
   // ─── Amigos ───
@@ -287,7 +287,7 @@ export function SocialScreen() {
   }
 
   function pedirBloqueo(userId: string, quien: string) {
-    confirmar(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien), () => block(userId, quien));
+    confirmar(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien), () => block(userId, quien), t('Bloquear'));
   }
   function pedirQuitar(f: Friend) {
     setAmigoDeslizado(null);
@@ -872,7 +872,7 @@ function MenuSocial({ nombre, disabled = false, onBloquear, onQuitar }: {
   </div>;
 }
 
-function ConfirmacionSocial({ texto, onCerrar, onConfirmar }: { texto: string; onCerrar: () => void; onConfirmar: () => Promise<void> }) {
+function ConfirmacionSocial({ texto, etiqueta, onCerrar, onConfirmar }: { texto: string; etiqueta: string; onCerrar: () => void; onConfirmar: () => Promise<void> }) {
   const { t } = useIdioma();
   const hoja = useRef<HTMLDivElement>(null);
   const cancelar = useRef<HTMLButtonElement>(null);
@@ -888,7 +888,7 @@ function ConfirmacionSocial({ texto, onCerrar, onConfirmar }: { texto: string; o
           if (enviando.current) return;
           enviando.current = true; setBusy(true);
           void onConfirmar().finally(onCerrar);
-        }}>{busy ? t('Un segundo…') : t('Confirmar')}</button>
+        }}>{busy ? t('Un segundo…') : etiqueta}</button>
       </div>
     </div>
   </div>, document.body);

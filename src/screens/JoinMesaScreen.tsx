@@ -21,7 +21,6 @@ import { autoridadDeAlta } from './LoginScreen';
 import { seVeLaAppDesde } from '../splash';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
-import { BarraDeLink } from '../components/BarraDeLink';
 import { TarjetaDeLink } from '../components/TarjetaDeLink';
 import { EVENTO_RUTA, navigate, ubicacionActual } from '../router';
 import {
@@ -429,34 +428,30 @@ export function JoinMesaScreen({
    */
   const message = joinLinkMessage(outcome, t);
   return (
-    <>
-      <div className={stage === 'blocked' ? 'link-screen link-screen--con-barra' : 'link-screen'}>
-        <AppHeader compact />
-        <TarjetaDeLink
-          key={outcome}
-          cuadro={outcome === 'joining' ? { aro: message.title } : { icono: iconoDelResultado(outcome) }}
-          titulo={message.title}
-          cuerpo={message.body}
-          nota={message.nota}
-        >
-          {stage === 'retry' && (
-            <button
-              type="button"
-              className="link-btn link-btn-outline"
-              onClick={() => setAttempt((n) => n + 1)}
-            >
-              {t('Reintentar')}
-            </button>
-          )}
-        </TarjetaDeLink>
-      </div>
-      {/**
-       * §1.2-B · la salida del terminal es el círculo, no un botón de texto.
-       * El spec la manda a login si no hay sesión y a Inicio si la hay; acá
-       * sólo se llega con sesión —sin ella la rama de arriba muestra el 401—,
-       * así que el destino es Inicio.
-       */}
-      {stage === 'blocked' && <BarraDeLink etiqueta={t('Ir a PayMe')} alTocar={() => navigate('home')} />}
-    </>
+    <div className="link-screen">
+      <AppHeader compact />
+      <TarjetaDeLink
+        key={outcome}
+        cuadro={outcome === 'joining' ? { aro: message.title } : { icono: iconoDelResultado(outcome) }}
+        titulo={message.title}
+        cuerpo={message.body}
+        nota={message.nota}
+      >
+        {stage === 'retry' && (
+          <button
+            type="button"
+            className="link-btn link-btn-outline"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t('Reintentar')}
+          </button>
+        )}
+        {stage === 'blocked' && (
+          <button type="button" className="link-btn link-btn-outline" onClick={() => navigate('home')}>
+            {t('Ir a Inicio')}
+          </button>
+        )}
+      </TarjetaDeLink>
+    </div>
   );
 }

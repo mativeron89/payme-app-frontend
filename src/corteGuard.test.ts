@@ -433,7 +433,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
   it('con la selección guardada la nota es fija y el círculo dice «Guardado», tocable', () => {
     const igual: MesaDetail = { ...MESA, division_mode: 'igual' };
     const guardado = vista({ mesa: igual, informativeSaved: true });
-    expect(guardado).toContain('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
+    expect(guardado).toContain('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».');
     expect(guardado).toContain('aria-label="Continuar"');
     // `disabled` precede al `aria-label` en el markup: su ausencia acredita el círculo vivo.
     expect(guardado).not.toContain('disabled="" aria-label="Continuar"');

@@ -52,6 +52,9 @@ test.describe('el 403 es ciego', () => {
         page.getByText('Pídele a quien te invitó que te comparta uno nuevo.', { exact: true }),
       ).toHaveCount(0);
 
+      await expect(page.getByText('Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Ir a Inicio', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Reintentar', exact: true })).toHaveCount(0);
       const cuerpo = await page.locator('body').innerText();
       // Ningún restaurante del seed. Nombrar uno diría que la mesa existe.
       for (const r of ['La Parolaccia', 'Hanzo Sushi', 'Tacos El Güero']) {

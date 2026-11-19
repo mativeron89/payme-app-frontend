@@ -3897,12 +3897,6 @@ html.app-de-inicio-ios .app {
   padding-bottom: var(--sp-6);
 }
 
-/* D y E · el resguardo de la barra: su alto más 40 (104 en Safari, fuera de
-   escala, declarado). */
-.link-screen--con-barra {
-  padding-bottom: calc(var(--appbar-alto) + 40px);
-}
-
 /* B · la tarjeta suelta arriba del formulario, sobre el fondo de la app. */
 .link-alta {
   background: var(--bg);
@@ -12604,9 +12598,24 @@ h1.pay-title-lbl {
 .appbar-continuar { width: 100%; min-height: 52px; border-radius: var(--r-md); font-size: var(--fs-body); }
 .mi-parte-propina { display: block; font-size: var(--fs-sm); }
 .tus-consumos-guia { margin: 0; padding: var(--sp-3) var(--sp-4); color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--border); }
-.mesa-guardado { display: flex; align-items: center; gap: var(--sp-3); }
-.mesa-guardado > svg { color: var(--success); }
-.mesa-guardado p { margin: var(--sp-1) 0 0; color: var(--text-muted); }
+.mesa-guardado {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  scroll-margin-top: var(--sp-3);
+}
+.mesa-guardado-check {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--success-tint);
+  color: var(--success);
+}
+.mesa-guardado p { margin: var(--sp-1) 0 0; font-weight: 700; }
 .mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }
 
 /* D846: sólo el escaneo cambia de tamaño; los otros pasos conservan sus controles. */
@@ -12630,7 +12639,15 @@ h1.pay-title-lbl {
 .share-tip-help { margin: -4px 0 16px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .share-actions { flex-wrap: wrap; }
 .share-native { flex-basis: 100%; }
-.legal-ayuda a { color: var(--action); text-decoration: none; overflow-wrap: anywhere; }
+.legal-ayuda .sectlabel { padding: var(--sp-3) var(--sp-4) 0; }
+.legal-ayuda a { color: var(--action); text-decoration: none; }
+.legal-ayuda-texto {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-legacy-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .social-menu { position: relative; flex-shrink: 0; }
 .social-menu-actions { position: absolute; right: 0; top: 100%; z-index: 1000; width: min(240px, 70vw); padding: 8px; background: var(--surface); box-shadow: var(--sh-2); border: 1px solid var(--border); border-radius: 12px; }
 .social-menu-actions button { text-align: left; justify-content: flex-start; }

@@ -243,10 +243,26 @@ export function MasScreen() {
         {session && <SeccionPrivacidad session={session} />}
         <section className="card config-card legal-ayuda" aria-label={t('Legal y ayuda')}>
           <h2 className="sectlabel">{t('Legal y ayuda')}</h2>
-          <a className="list-row" href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
-          <a className="list-row" href={PATH_TERMINOS}>{t('Términos de uso')}</a>
-          <a className="list-row" href="mailto:soporte@paymemx.com">{t('Escríbenos: soporte@paymemx.com')}</a>
-          <a className="list-row" href="mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe">{t('Eliminar mi cuenta')}</a>
+          <a className="list-row" href={PATH_PRIVACIDAD}>
+            <span aria-hidden="true"><Icon name="lock" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Aviso de privacidad')}</span>
+            <FlechaDeFila />
+          </a>
+          <a className="list-row" href={PATH_TERMINOS}>
+            <span aria-hidden="true"><Icon name="receipt" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Términos de uso')}</span>
+            <FlechaDeFila />
+          </a>
+          <a className="list-row" href="mailto:soporte@paymemx.com">
+            <span aria-hidden="true"><Icon name="mail" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Escríbenos: soporte@paymemx.com')}</span>
+            <FlechaDeFila />
+          </a>
+          <a className="list-row" href="mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe">
+            <span aria-hidden="true"><Icon name="trash" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Eliminar mi cuenta')}</span>
+            <FlechaDeFila />
+          </a>
         </section>
         <AccesoGuia />
         {IS_MOCK && (

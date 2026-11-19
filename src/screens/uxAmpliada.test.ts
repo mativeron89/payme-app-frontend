@@ -15,11 +15,29 @@ describe('UX ampliada', () => {
     expect(s).toContain('compartirTexto(');
   });
   it('K19 · link y QR 1 s; resto 4 s; Google principal sin alterar autoridad', () => {
-    for (const hash of ['#/mesa/PA-2847?t=ejemplo', '#/mesa/PA-2847']) expect(minimoPorEntrada(hash)).toBe(1000);
-    expect(minimoPorEntrada('', '/mesa/PA-2847')).toBe(1000);
+    expect(minimoPorEntrada('#/mesa/PA-2847?t=ejemplo')).toBe(1000);
+    expect(minimoPorEntrada('', '/mesa/PA-2847', '?t=ejemplo')).toBe(1000);
     expect(minimoPorEntrada('', '/', '?r=ejemplo')).toBe(1000);
-    for (const hash of ['', '#/home', '#/mas']) expect(minimoPorEntrada(hash)).toBe(4000);
-    expect(source('./LoginScreen.tsx')).toContain('ingreso-desde-mesa');
+    expect(minimoPorEntrada('', '/scan', '?r=ejemplo')).toBe(1000);
+    expect(minimoPorEntrada('#/scan?r=ejemplo')).toBe(1000);
+    for (const hash of ['', '#/home', '#/mas', '#/mesa/PA-2847', '#/mesa/PA-2847?t=']) {
+      expect(minimoPorEntrada(hash)).toBe(4000);
+    }
+    expect(minimoPorEntrada('', '/mesa/PA-2847')).toBe(4000);
+    expect(minimoPorEntrada('', '/mesa/PA-2847', '?r=ejemplo')).toBe(4000);
+    expect(minimoPorEntrada('', '/home', '?t=ejemplo')).toBe(4000);
+    expect(minimoPorEntrada('', '/', '?r=')).toBe(4000);
+  });
+  it('los cuatro mensajes de mesa nombran el botón Continuar en español e inglés', () => {
+    for (const [archivo, texto] of [
+      ['./MesaDetailView.tsx', 'Marcaste consumos sin tocar «Continuar»: si cierras ahora, no quedan registrados.'],
+      ['./MesaDetailView.tsx', 'Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».'],
+      ['./MesaScreen.tsx', 'No pudimos verificar la confirmación de cierre. Revisa tu selección y toca «Continuar» de nuevo.'],
+      ['./MesaScreen.tsx', 'La confirmación venció. Revisa tu selección y toca «Continuar» de nuevo.'],
+    ]) {
+      expect(source(archivo)).toContain(`t('${texto}')`);
+      expect(traducir(texto, 'en')).toMatch(/\bContinue\b/);
+    }
   });
   it('K20 · acciones de texto y confirmación dentro de la app', () => {
     const s = source('./SocialScreen.tsx');
@@ -48,13 +66,20 @@ describe('UX ampliada', () => {
   it('K23 · 403,409,410 neutros; solicitudes llenas distintas; red reintentable', () => {
     for (const status of [403,409,410]) {
       const m = joinLinkMessage(settleInvitationFailure(status));
-      expect(m.title).toBe('No pudimos sumarte a esta mesa.'); expect(m.body).toBe(''); expect(m.retryable).toBe(false);
+      expect(m.title).toBe('No pudimos sumarte a esta mesa.');
+      expect(m.body).toBe('Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.');
+      expect(traducir(m.body, 'en')).toBe('Your account is ready. Ask whoever invited you for a new link, or open your own table.');
+      expect(m.retryable).toBe(false);
     }
     const m = joinLinkMessage(settleInvitationFailure(409, 'join_requests_full'));
-    expect(m.title).toBe('Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.');
+    expect(m.title).toBe('Esta mesa tiene muchas solicitudes pendientes.');
+    expect(m.body).toBe('Pídele a quien la abrió que acepte las que tiene.');
     expect(m.retryable).toBe(false);
     expect(joinLinkMessage(settleInvitationFailure(null)).retryable).toBe(true);
-    expect(traducir(m.title, 'en')).toBe('This table has a lot of pending requests. Ask whoever opened it to accept the ones they have.');
-    const code = source('../components/UnirmeConCodigo.tsx'); expect(code).toContain("code === 'join_requests_full'"); expect(code).toContain(m.title);
+    expect(traducir(m.title, 'en')).toBe('This table has a lot of pending requests.');
+    expect(traducir(m.body, 'en')).toBe('Ask whoever opened it to accept the ones they have.');
+    const code = source('../components/UnirmeConCodigo.tsx');
+    expect(code).toContain("code === 'join_requests_full'");
+    expect(code).toContain(`${m.title} ${m.body}`);
   });
 });

@@ -1767,14 +1767,6 @@ export function LoginScreen({
   }
 
   /**
-   * 🔴 EL SEPARADOR «O CONTINÚA CON» SÓLO EXISTE SI HAY ALGO DEBAJO.
-   *
-   * Es la misma condición que monta el bloque social, y por eso se calcula una
-   * sola vez: una línea que anuncia alternativas sobre el vacío es peor que no
-   * tener línea. Hoy, en producción, `/api/config` trae Google y Facebook
-   * apagados y esto es `false`: la tarjeta termina en «¿Olvidaste…?».
-   */
-  /**
    * AF-16 · en el paso de Google no hay «Registrarme»: si el botón de Google
    * todavía no aparece —falta nombre o apellido; el correo tiene su propio
    * aviso—, la pantalla quedaría sin ninguna acción. Se dice qué falta.
@@ -1785,7 +1777,8 @@ export function LoginScreen({
     && !tieneCredencial
     && legal.status === 'ready'
     && !googleEligible;
-  const haySocial = (googleEligible && !capturaGoogle) || facebookEligible || faltanDatosParaGoogle;
+  const googleDebajoDelFormulario = googleEligible && !capturaGoogle && !entradaDesdeMesa;
+  const hayAlternativaSocial = googleDebajoDelFormulario || facebookEligible;
 
   /**
    * El contenedor de GIS existe UNA sola vez en la pantalla: arriba en «Crea tu
@@ -2063,7 +2056,7 @@ export function LoginScreen({
             <section className="social-auth-options ingreso-alta-google" aria-busy={socialBusy}>
               {ranuraGoogle}
               <div className="social-auth-divider ingreso-alta-google-divisor" aria-hidden="true">
-                <span>{t('O regístrate con tu correo')}</span>
+                <span>{mode === 'login' ? t('O entra con tu correo') : t('O regístrate con tu correo')}</span>
               </div>
             </section>
           )}
@@ -2260,11 +2253,11 @@ export function LoginScreen({
             </div>
           )}
 
-          {haySocial && (
+          {(hayAlternativaSocial || faltanDatosParaGoogle) && (
             <>
               {/* En el paso de Google no hay acción principal de la que Google
                   sea la alternativa: el «O» no tiene a qué oponerse. */}
-              {!pasoGoogle && (
+              {!pasoGoogle && hayAlternativaSocial && (
                 <div className="social-auth-divider" aria-hidden="true">
                   <span>{t('O continúa con')}</span>
                 </div>
@@ -2283,7 +2276,7 @@ export function LoginScreen({
                     {t('Escribe tu nombre y apellido aquí arriba para continuar con Google.')}
                   </p>
                 )}
-                {googleEligible && !capturaGoogle && !entradaDesdeMesa && ranuraGoogle}
+                {googleDebajoDelFormulario && ranuraGoogle}
                 {facebookEligible && (
                   <button
                     type="button"

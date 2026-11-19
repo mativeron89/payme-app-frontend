@@ -172,8 +172,7 @@ describe('todos los estados tienen mensaje', () => {
     (outcome) => {
       const m = joinLinkMessage(outcome);
       expect(m.title.length).toBeGreaterThan(0);
-      if (['rejected', 'mesa_cerrada', 'solicitudes_llenas'].includes(outcome)) expect(m.body).toBe('');
-      else expect(m.body.length).toBeGreaterThan(0);
+      expect(m.body.length).toBeGreaterThan(0);
     },
   );
 });
@@ -181,7 +180,7 @@ describe('todos los estados tienen mensaje', () => {
 describe('D817/D856 · terminal neutro, sin motivo ni nota', () => {
   it('403 y 410 comparten el mensaje neutro y no se reintentan', () => {
     expect(joinLinkMessage('mesa_cerrada')).toEqual(joinLinkMessage('rejected'));
-    expect(joinLinkMessage('mesa_cerrada')).toEqual({ title: 'No pudimos sumarte a esta mesa.', body: '', retryable: false });
+    expect(joinLinkMessage('mesa_cerrada')).toEqual({ title: 'No pudimos sumarte a esta mesa.', body: 'Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.', retryable: false });
   });
   it('los rechazos no conservan la nota que distinguía una mesa cerrada', () => {
     for (const o of OUTCOMES) expect(joinLinkMessage(o).nota).toBeUndefined();

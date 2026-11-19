@@ -75,7 +75,7 @@ test('pantalla D: el link a una mesa muerta lo dice, cierra el círculo y no ofr
   await expect(page.getByRole('button', { name: 'Reintentar' })).toHaveCount(0);
 
   // La salida es el círculo, y funciona.
-  await page.getByRole('button', { name: 'Ir a PayMe' }).click();
+  await page.getByRole('button', { name: 'Ir a Inicio' }).click();
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
 });
 

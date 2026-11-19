@@ -36,7 +36,7 @@ export type JoinLinkOutcome =
   | 'joining'
   /** 403 · los CUATRO motivos del contrato, indistinguibles a propósito. */
   | 'rejected'
-  /** D856/C213D: límite de solicitudes pendientes, no de comensales. */
+  /** D856: límite de solicitudes pendientes, no de comensales. */
   | 'solicitudes_llenas'
   /**
    * 400 `invitation_token_required` · el token no tiene forma de token (vacío,
@@ -137,14 +137,18 @@ export function joinLinkMessage(outcome: JoinLinkOutcome, t: Traducir = enEspano
       };
     case 'solicitudes_llenas':
       return {
-        title: t('Esta mesa tiene muchas solicitudes pendientes. Pídele a quien la abrió que acepte las que tiene.'),
-        body: '',
+        title: t('Esta mesa tiene muchas solicitudes pendientes.'),
+        body: t('Pídele a quien la abrió que acepte las que tiene.'),
         retryable: false,
       };
     case 'rejected':
     case 'mesa_cerrada':
       // D817/D856: el rechazo no publica el motivo ni ofrece reintentar.
-      return { title: t('No pudimos sumarte a esta mesa.'), body: '', retryable: false };
+      return {
+        title: t('No pudimos sumarte a esta mesa.'),
+        body: t('Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.'),
+        retryable: false,
+      };
     case 'invalid':
       return {
         title: t('Este link está incompleto'),

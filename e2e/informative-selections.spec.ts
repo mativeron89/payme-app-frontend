@@ -76,6 +76,41 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
   return created.code;
 }
 
+for (const [forma, personas] of [['En partes iguales', 2], ['Pagar el total', 1]] as const) {
+  test(`K5 · ${forma}: guardado confirmado y falla la lectura propia posterior`, async ({ page }) => {
+    const code = await abrirInformativa(page, forma, personas);
+    await page.getByRole('button', { name: plato('Tagliatelle Bolognese') }).click();
+    await page.evaluate(async (code) => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const guardar = api.replaceInformativeSelection.bind(api);
+      const leer = api.getInformativeSelection.bind(api);
+      api.replaceInformativeSelection = async (...args) => {
+        const guardado = await guardar(...args);
+        if (args[0] === code) {
+          sessionStorage.setItem('k5-puts', String(Number(sessionStorage.getItem('k5-puts')) + 1));
+          api.getInformativeSelection = async (...lectura) => {
+            if (lectura[0] !== code) return leer(...lectura);
+            api.getInformativeSelection = leer;
+            sessionStorage.setItem('k5-lectura-fallo', '1');
+            throw new TypeError('falló la lectura posterior al PUT del mock');
+          };
+        }
+        return guardado;
+      };
+    }, code);
+    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
+    await continuar.click();
+    const aviso = page.locator('.mesa-guardado');
+    await expect(aviso).toHaveText('Listo, quedó guardado');
+    await expect(aviso.locator('p')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(continuar).toBeEnabled();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
+    expect(await page.evaluate(() => [sessionStorage.getItem('k5-puts'), sessionStorage.getItem('k5-lectura-fallo')])).toEqual(['1', '1']);
+  });
+}
+
 test.describe('Listo · selección informativa v2', () => {
   test('En partes iguales N≥2 guarda pares exactos, reconcilia respuesta incierta y rehidrata', async ({ page }) => {
     const code = await abrirInformativa(page, 'En partes iguales', 2);
@@ -386,7 +421,7 @@ test.describe('Listo · selección informativa v2', () => {
     await abrirInformativa(page, 'En partes iguales', 2);
     const first = page.getByRole('button', { name: plato('Tagliatelle Bolognese') });
     const second = page.getByRole('button', { name: plato('Risotto ai Funghi') });
-    const nota = page.getByText('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
+    const nota = page.getByText('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Continuar».');
     const guardado = page.getByRole('button', { name: 'Continuar', exact: true });
     const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
 

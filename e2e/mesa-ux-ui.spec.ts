@@ -95,6 +95,34 @@ test('K5 · guardar con éxito confirma en la mesa; error sin aviso', async ({ p
   await expect(page.locator('.mesa-guardado')).toContainText('Your share: $201.73');
 });
 
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+  test(`K5 · aviso dentro de la vista después de elegir abajo a ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    if (viewport.width === 320) await page.emulateMedia({ reducedMotion: 'reduce' });
+    await mesa(page);
+    const lista = page.locator('.qc-renglon');
+    await expect(lista).toHaveCount(7);
+    const plato = lista.last().locator('.qc-libre');
+    await plato.scrollIntoViewIfNeeded();
+    await plato.click();
+    expect(await page.locator('.mesa-selection-scroll').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    await continuar(page).click();
+    const aviso = page.locator('.mesa-guardado');
+    await expect(aviso).toBeVisible();
+    await expect(aviso).toBeInViewport({ ratio: 1 });
+    expect(await aviso.evaluate(el => {
+      const { left, top, width, height } = el.getBoundingClientRect();
+      const scroll = el.closest('.mesa-selection-scroll')!.getBoundingClientRect();
+      const hit = document.elementFromPoint(left + width / 2, top + height / 2);
+      return top >= scroll.top && top + height <= scroll.bottom && el.contains(hit);
+    })).toBe(true);
+    await expect(aviso).toHaveCSS('padding-top', '12px');
+    await expect(aviso.locator('p')).toHaveCSS('font-weight', '700');
+    await expect(aviso.locator('.mesa-guardado-check svg')).toBeVisible();
+    await captura(page, `05c-guardado-${viewport.width}`);
+  });
+}
+
 for (const caso of ['lectura fallida', 'importe cero', 'importe ausente'] as const) {
   test(`K5 · ${caso} después de guardar deja el aviso sin importe`, async ({ page }) => {
     const code = await mesa(page);
