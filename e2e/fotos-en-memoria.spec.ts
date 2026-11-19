@@ -198,7 +198,8 @@ test.describe('E173-3 · fotos de Amigos en memoria (decisión 175)', () => {
     const eliminar = page.getByRole('button', { name: 'Eliminar Juan López', exact: true });
     await eliminar.focus();
     await page.keyboard.press('Enter');
-    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await page.getByRole('dialog', { name: '¿Quitar a Juan López de tus amigos?', exact: true })
+      .getByRole('button', { name: 'Quitar', exact: true }).click();
     await expect(fila(page, 'Juan López')).toHaveCount(0);
     // La lista recién traída ya no lo tiene: su foto se revoca.
     await expect.poll(() => blobVivo(page, srcJuan!)).toBe(false);
