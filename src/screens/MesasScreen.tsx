@@ -931,7 +931,11 @@ export function MesasScreen() {
           onCancelar={() => {
             setPreguntaMesa(null);
             setDeslizada(null);
-            requestAnimationFrame(() => volverDeBorrar.current?.focus({ preventScroll: true }));
+            requestAnimationFrame(() => {
+              if (!document.activeElement || document.activeElement === document.body) {
+                volverDeBorrar.current?.focus({ preventScroll: true });
+              }
+            });
           }}
         />
       )}

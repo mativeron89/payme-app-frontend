@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, sinRefresco } from './_app';
-import { abrirTusConsumos } from './_mesa';
+import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
 
 interface SyntheticClaim {
   who: 'user' | 'other';
@@ -121,7 +121,9 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await expect(page.getByText('Elegido $300 de $840', { exact: true })).toBeVisible();
 
     // Dos eventos no duplican el claim: el owner reemplaza el lock propio.
-    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).dblclick();
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await page.getByRole('dialog', { name: 'Tienes cambios sin guardar' })
+      .getByRole('button', { name: 'Guardar', exact: true }).dblclick();
     // Decisión 32 · con el lock OK se vuelve a Inicio; se reentra para mirar la barra.
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -177,6 +179,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
         persist();
       });
       await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+      await confirmarGuardadoDeMesa(page);
 
       await expect(page.getByText('De ese plato queda solo ½')).toBeVisible();
       await expect(page.getByRole('progressbar', { name: 'Asignado 18% de la mesa' })).toBeVisible();
@@ -283,6 +286,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await abrir(page, 'PA-8407');
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

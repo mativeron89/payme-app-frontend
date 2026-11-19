@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { enTuMesaConLaLista } from './_mesa';
+import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
 
 /**
  * AF-BARRA-EN-VIVO · decisión 107, punto 3 (n190), «Sí, en vivo»: en «¿Qué
@@ -205,6 +205,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await abrir(page, CONSUMO);
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
@@ -275,6 +276,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.refrescoRetenido)).toBe(true);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect.poll(() => page.evaluate(() => (window as VentanaDeBarra).__barraEnVuelo.lockRetenido)).toBe(true);
     expect(await page.evaluate(() => {
       const c = (window as VentanaDeBarra).__barraEnVuelo;

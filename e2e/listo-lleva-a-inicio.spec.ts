@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, sinRefresco } from './_app';
-import { enTuMesaConLaLista } from './_mesa';
+import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
 
 /**
  * Decisión 32 de Mati (2026-09-24): «En esa pantalla ya muestra lo que elegí,
@@ -106,6 +106,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await contarLlamadas(page, 'lockItems');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await enInicio(page);
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
@@ -124,6 +125,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await enInicio(page);
 
     await page.goto(`/#/mesa/${mesa.code}`);
@@ -164,6 +166,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await sinRefresco(page, async () => {
       await vencerAlEntrarEnMutacion(page, mesa.code, 'lockItems');
       await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+      await confirmarGuardadoDeMesa(page);
       await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
       await sigueEnLaMesa(page, mesa.code);
       expect(await llamadas(page, 'lockItems')).toBe(1);
@@ -179,6 +182,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await contarLlamadas(page, 'replaceInformativeSelection');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await enInicio(page);
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
 
@@ -204,6 +208,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await sinRefresco(page, async () => {
       await vencerAlEntrarEnMutacion(page, mesa.code, 'replaceInformativeSelection');
       await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+      await confirmarGuardadoDeMesa(page);
       await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
       await page.waitForTimeout(600);
       expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);

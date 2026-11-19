@@ -1,3 +1,4 @@
+import { cerrarAntesDelFrame } from './_foco';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp } from './_app';
 
@@ -209,8 +210,8 @@ test.describe('D238 · la mesa: «¿Borrar también su historial?»', () => {
   test('el ✕ y Escape no borran nada', async ({ page }) => {
     await aMesas(page);
     await abrirYEliminar(page, tarjetaDeLaMesa(page));
-    await pregunta(page).getByRole('button', { name: 'Cerrar', exact: true }).click();
-    await expect(pregunta(page)).toHaveCount(0);
+    await cerrarAntesDelFrame(page, pregunta(page).getByRole('button', { name: 'Cerrar', exact: true }),
+      pregunta(page), page.getByRole('button', { name: 'Inicio', exact: true }));
     await tarjetaDeLaMesa(page).locator('.deslizable-eliminar').focus();
     await page.keyboard.press('Enter');
     await expect(pregunta(page)).toBeVisible();

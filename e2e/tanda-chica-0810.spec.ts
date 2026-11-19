@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, irEnLaApp } from './_app';
-import { enTuMesaConLaLista } from './_mesa';
+import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
 
 /**
  * AF-TANDA-CHICA-0810-20261008 · D240 · los siete arreglos de la lista de Mati
@@ -322,6 +322,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await renglon(page, 'Agua mineral').locator('button.qc-libre').click();
     await renglon(page, 'Agua mineral').getByRole('radio', { name: '½' }).click();
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);
@@ -340,6 +341,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await contarLlamadas(page, 'lockItems');
     await elegirTodo(page);
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     const hoja = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
     await expect(hoja).toBeVisible();
     await expect(hoja.getByText('Con tu selección ya se eligió todo lo de la mesa.')).toBeVisible();
@@ -357,6 +359,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await hoja.getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.')).toBeVisible();
     expect(await llamadas(page, 'lockItems')).toBe(3);
@@ -372,6 +375,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     await contarLlamadas(page, 'lockItems');
     await elegirTodo(page);
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -379,15 +383,16 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
   });
 
-  test('un «Listo» que no completa la mesa guarda y vuelve a Inicio sin ninguna hoja', async ({ page }) => {
+  test('un «Continuar» que no completa la mesa guarda sin mostrar el aviso de cierre', async ({ page }) => {
     await espiarHojas(page);
     await abrirMesa(page);
     await contarLlamadas(page, 'lockItems');
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     expect(await llamadas(page, 'lockItems')).toBe(1);
-    expect(await hojasVistas(page)).toEqual([]);
+    expect(await hojasVistas(page)).toEqual(['Tienes cambios sin guardar']);
   });
 });
 
@@ -513,6 +518,7 @@ test.describe('D240 punto 16 · los ítems iguales juntos en el detalle de Mesas
     await elegirEntero(renglon(page, 'Tiramisú', 1));
     await elegirEntero(renglon(page, 'Tagliatelle Bolognese'));
     await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.goto(`/mesa/${code}`);
     await enTuMesaConLaLista(page);

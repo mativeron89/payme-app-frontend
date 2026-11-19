@@ -12,6 +12,7 @@ export interface PreparacionListo {
   readonly identityEpoch: number;
   readonly readEpoch: number;
   readonly revision: number;
+  readonly alGuardar?: () => void;
 }
 
 export function mismoBorrador(a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>): boolean {

@@ -1,3 +1,4 @@
+import { confirmarGuardadoDeMesa } from './_mesa';
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
@@ -296,6 +297,7 @@ test.describe('🔴 D268 · S-05 · la invitación a la mesa sigue pendiente', (
     const aviso = page.getByRole('alert').filter({ hasText: 'Primero acepta la invitación a esta mesa.' });
     await expect(aviso).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
 
     await expect(aviso).toBeVisible();
     // No volvió a Inicio como tras un «Listo» aceptado: sigue en la mesa.

@@ -83,6 +83,7 @@ const RIGHT: SideItem[] = [
 
 export interface AppBottomBarProps {
   centerRef?: React.Ref<HTMLButtonElement>;
+  onAccion?: (slot: BottomBarSlot | 'centro', accion: () => void, disparador: HTMLButtonElement) => void;
   /**
    * Qué posición se marca activa. `null` en pasos de flujo: ninguna de las
    * cinco representa "estoy en el Ticket", y marcar una sería mentir sobre
@@ -134,10 +135,15 @@ export function useAccionDelCentro(center?: AppBottomBarProps['center']): NonNul
   });
 }
 
-export function AppBottomBar({ active = null, center, centerRef, above, accionAncha = false }: AppBottomBarProps) {
+export function AppBottomBar({ active = null, center, centerRef, above, accionAncha = false, onAccion }: AppBottomBarProps) {
   const { t } = useIdioma();
   const centro = useAccionDelCentro(center);
   const pendientes = useSolicitudesPendientes();
+
+  const ejecutar = (slot: BottomBarSlot | 'centro', accion: () => void, disparador: HTMLButtonElement) => {
+    if (onAccion) onAccion(slot, accion, disparador);
+    else accion();
+  };
 
   const item = (it: SideItem) => {
     const on = active === it.slot;
@@ -148,7 +154,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
         data-guia={`nav-${it.slot}`}
         type="button"
         className={`appbar-item ${on ? 'on' : ''}`}
-        onClick={() => navigate(it.page)}
+        onClick={(event) => ejecutar(it.slot, () => navigate(it.page), event.currentTarget)}
         aria-current={on ? 'page' : undefined}
         // D230 · el nombre dice cuántas hay, con el número exacto aunque se vea «9+».
         aria-label={burbuja === 0 ? undefined
@@ -173,7 +179,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
       {accionAncha && (
         <div className="appbar-accion">
           <button type="button" className="btn btn-navy appbar-continuar" data-guia="continuar"
-            onClick={centro.onClick} disabled={centro.disabled} aria-busy={centro.busy || undefined}
+            onClick={(event) => ejecutar('centro', centro.onClick, event.currentTarget)} disabled={centro.disabled} aria-busy={centro.busy || undefined}
             aria-label={centro.ariaLabel || centro.label}>
             {centro.label}
           </button>
@@ -186,7 +192,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
           ref={centerRef}
           className="appbar-center"
           data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
-          onClick={centro.onClick}
+          onClick={(event) => ejecutar('centro', centro.onClick, event.currentTarget)}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}
           // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.

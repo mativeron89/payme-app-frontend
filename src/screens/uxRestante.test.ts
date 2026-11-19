@@ -49,3 +49,8 @@ it('U21 · Quitar se traduce desde el diccionario común', () => {
   expect(EN.Quitar).toBe('Remove');
   expect(EN_VIAJES_CREAR).not.toHaveProperty('Quitar');
 });
+
+it('el separador conserva el punto en navegadores sin texto alternativo de CSS', () => {
+  const css = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
+  expect(css).toMatch(/\.mesa-selection-context strong::before\s*\{\s*content: '·';\s*content: '·' \/ '';/);
+});

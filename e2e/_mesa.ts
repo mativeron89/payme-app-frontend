@@ -59,3 +59,9 @@ export async function enTuMesaConLaLista(page: Page): Promise<void> {
   await expect(tituloTuMesa(page)).toBeVisible();
   await abrirTusConsumos(page);
 }
+
+/** Confirma el aviso de la barra cuando «Continuar» parte de una selección local. */
+export async function confirmarGuardadoDeMesa(page: Page): Promise<void> {
+  await page.getByRole('dialog', { name: /^(Tienes cambios sin guardar|You have unsaved changes)$/ })
+    .getByRole('button', { name: /^(Guardar|Save)$/, exact: true }).click();
+}

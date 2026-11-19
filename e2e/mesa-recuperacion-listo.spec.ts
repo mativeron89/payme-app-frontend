@@ -1,3 +1,4 @@
+import { confirmarGuardadoDeMesa } from './_mesa';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import type { AppConfig, InformativeSelectionResponse, LockItemsResponse, MesaDetail, MesaItem } from '../src/api/types';
@@ -339,6 +340,7 @@ test('T1 · propia obsoleta de otra pestaña: lee antes de decidir hoja y no esc
   f.guardarEnOtraPestana([{ item_id: A, declared_fraction_bps: 5000 }]);
   const antesMesa = f.mesaGets; const antesPropia = f.propiaGets;
   await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
   await expect(hoja(page)).toBeVisible();
   expect(f.mesaGets).toBeGreaterThan(antesMesa); expect(f.propiaGets).toBeGreaterThan(antesPropia);
   expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
@@ -349,7 +351,9 @@ test('T1 · propia obsoleta de otra pestaña: lee antes de decidir hoja y no esc
 test('GET atrasado conserva una edición posterior y usa el borrador vigente', async ({ page }) => {
   const f = await fixture(page, 'igual'); await entrar(page); await elegir(page);
   const b = f.retener(); const antes = f.mesaGets;
-  await listo(page).click(); await b.entrado; await expect.poll(() => f.mesaGets).toBeGreaterThan(antes);
+  await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
+  await b.entrado; await expect.poll(() => f.mesaGets).toBeGreaterThan(antes);
   await elegir(page, 'Plato B'); expect(f.writes).toBe(0);
   b.abrir();
   await expect.poll(() => f.writes).toBe(1);
@@ -364,7 +368,9 @@ test('GET atrasado conserva una edición posterior y usa el borrador vigente', a
 test('GET de otra identidad resuelto tarde no pisa la cuenta nueva ni dispara una mutación', async ({ page }) => {
   const f = await fixture(page, 'consumo'); await entrar(page); await elegir(page);
   const b = f.retener(); const antes = f.mesaGets;
-  await listo(page).click(); await b.entrado; await expect.poll(() => f.mesaGets).toBeGreaterThan(antes);
+  await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
+  await b.entrado; await expect.poll(() => f.mesaGets).toBeGreaterThan(antes);
   f.mesa.restaurant.name = 'Cuenta B';
   await page.evaluate(async () => {
     const path = '/src/api/storage.ts';
@@ -387,6 +393,7 @@ test('lock guardado con respuesta perdida y GET fallido bloquea otra escritura h
   // El preflight termina; el fallo de lectura se activa AL salir el POST.
   page.on('request', (r) => { if (r.method() === 'POST' && r.url().endsWith('/items/lock')) f.fallar(true); });
   await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
   await expect(page.getByRole('button', { name: 'Actualizar estado', exact: true })).toBeEnabled();
   await expect(listo(page)).toBeDisabled(); expect(f.writes).toBe(1);
   await expect(fila(page, 'Plato B').locator('.qc-libre')).toBeDisabled();
@@ -400,6 +407,7 @@ test('lock guardado con respuesta perdida y GET fallido bloquea otra escritura h
 test('rechazo definitivo sin commit conserva borrador y no navega ni reenvía automáticamente', async ({ page }) => {
   const f = await fixture(page, 'consumo'); await entrar(page); await elegir(page);
   f.comportamiento('rechazo'); await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
   await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
   await expect(listo(page)).toBeEnabled();
   await expect(fila(page, 'Plato A').locator('[data-estado="mio"]')).toBeVisible();
@@ -410,7 +418,9 @@ test('rechazo definitivo sin commit conserva borrador y no navega ni reenvía au
 test('PUT informativo guardado y cerrado con respuesta perdida converge al éxito normal', async ({ page }) => {
   const f = await fixture(page, 'igual'); f.mesa.items = [f.mesa.items[0]!];
   await entrar(page); await elegir(page); f.comportamiento('commit_perdido');
-  await listo(page).click(); await expect(hoja(page)).toBeVisible();
+  await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
+  await expect(hoja(page)).toBeVisible();
   await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
   await expect(page.getByText('¡Listo! Ya se eligió todo y la mesa se cerró.', { exact: true })).toBeVisible();
   expect(f.writes).toBe(2); expect(f.mutations).toBe(1); await expect(page).toHaveURL(new RegExp(`/mesa/${CODE}$`));
@@ -419,6 +429,7 @@ test('PUT informativo guardado y cerrado con respuesta perdida converge al éxit
 test('selección contradictoria tras resultado ambiguo mantiene bloqueo aun tras otro GET exitoso', async ({ page }) => {
   const f = await fixture(page, 'igual'); await entrar(page); await elegir(page);
   f.comportamiento('incierto'); f.contradecir(); await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
   const actualizar = page.getByRole('button', { name: 'Actualizar estado', exact: true });
   await expect(actualizar).toBeEnabled(); await expect(listo(page)).toBeDisabled();
   const antes = f.propiaGets; await actualizar.click();
@@ -446,6 +457,7 @@ test('consumo propio repetido: el servidor exige hoja antes de registrar otro lo
     i.locked_by_me = true; i.status = 'locked';
   }
   const antes = f.mesaGets; await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
   await expect(hoja(page)).toBeVisible(); expect(f.mesaGets).toBeGreaterThan(antes);
   expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
   // El desafío aún no registró A/B/C. Revisar no confirma ni modifica lo propio.
@@ -456,7 +468,9 @@ test('consumo propio repetido: el servidor exige hoja antes de registrar otro lo
 for (const mode of ['consumo', 'igual'] as const) {
   test(`n422 ${mode}: desafío obsoleto exige otro gesto y conserva exactamente el pedido`, async ({ page }) => {
     const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!];
-    await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+    await entrar(page); await elegir(page); await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
+    await expect(hoja(page)).toBeVisible();
     expect(f.writes).toBe(1); expect(f.mutations).toBe(0);
     const initial = f.cuerpos[0] as { items: unknown[] };
     f.mesa.restaurant.name = 'Mesa actualizada';
@@ -477,6 +491,7 @@ for (const mode of ['consumo', 'igual'] as const) {
   test(`n422 ${mode}: desafío malformado falla cerrado sin incertidumbre ni reenvío`, async ({ page }) => {
     const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!]; f.malformarDesafio();
     await entrar(page); await elegir(page); await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByRole('status').filter({ hasText: 'No pudimos verificar la confirmación de cierre.' })).toBeVisible();
     await expect(hoja(page)).toHaveCount(0); await expect(listo(page)).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Actualizar estado', exact: true })).toHaveCount(0);
@@ -485,7 +500,9 @@ for (const mode of ['consumo', 'igual'] as const) {
 
   test(`n422 ${mode}: 503 tras confirmar se reconcilia sólo por lectura`, async ({ page }) => {
     const f = await fixture(page, mode); f.mesa.items = [f.mesa.items[0]!];
-    await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+    await entrar(page); await elegir(page); await listo(page).click();
+    await confirmarGuardadoDeMesa(page);
+    await expect(hoja(page)).toBeVisible();
     f.comportamiento('incierto');
     await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
     const actualizar = page.getByRole('button', { name: 'Actualizar estado', exact: true });
@@ -498,7 +515,9 @@ for (const mode of ['consumo', 'igual'] as const) {
 
 test('n422 changed sin desafío conserva borrador, no finge cierre ni reenvía', async ({ page }) => {
   const f = await fixture(page, 'consumo'); f.mesa.items = [f.mesa.items[0]!];
-  await entrar(page); await elegir(page); await listo(page).click(); await expect(hoja(page)).toBeVisible();
+  await entrar(page); await elegir(page); await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
+  await expect(hoja(page)).toBeVisible();
   f.mesa.items.push(item(B, 'Plato B'));
   await hoja(page).getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
   await expect(fila(page, 'Plato B')).toBeVisible(); await expect(hoja(page)).toHaveCount(0);
@@ -509,7 +528,9 @@ test('n422 changed sin desafío conserva borrador, no finge cierre ni reenvía',
 test('n422 rechazo tardío de otra identidad no abre una hoja para la nueva cuenta', async ({ page }) => {
   const f = await fixture(page, 'consumo'); f.mesa.items = [f.mesa.items[0]!];
   await entrar(page); await elegir(page); const held = f.retenerRechazo();
-  await listo(page).click(); await held.entrado;
+  await listo(page).click();
+  await confirmarGuardadoDeMesa(page);
+  await held.entrado;
   f.mesa.restaurant.name = 'Cuenta B';
   await page.evaluate(async () => {
     const path = '/src/api/storage.ts'; const storage = await import(/* @vite-ignore */ path) as typeof import('../src/api/storage');

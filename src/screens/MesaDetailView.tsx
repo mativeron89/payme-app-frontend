@@ -226,6 +226,7 @@ export interface MesaDetailViewProps {
   onSetFraction: (id: string, bps: number) => void;
   onSetDenominator: (id: string, denominator: number) => void;
   onGoToPay: (preparada?: PreparacionListo) => void;
+  onDescartarBorrador?: () => void;
   /** Lecturas completas antes de decidir hoja/guardado; opcional sólo para vistas inertes. */
   onPrepararListo?: () => Promise<PreparacionListo | null>;
   cierreSeleccion?: { mesa: MesaDetail; selected: ReadonlyMap<string, number> } | null;
@@ -617,6 +618,7 @@ export function MesaDetailView({
   onSetFraction,
   onSetDenominator,
   onGoToPay,
+  onDescartarBorrador,
   onPrepararListo,
   cierreSeleccion = null,
   onConfirmarCierreSeleccion,
@@ -652,13 +654,23 @@ export function MesaDetailView({
   const [hojaCierre, setHojaCierre] = useState<null | 'cerrar'>(null);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const volverRef = useRef<HTMLButtonElement>(null);
-  const [salidaPendiente, setSalidaPendiente] = useState(false);
+  const [salidaPendiente, setSalidaPendiente] = useState<{
+    tipo: 'volver' | 'navegar' | 'centro';
+    accion: () => void;
+    disparador: HTMLButtonElement | null;
+  } | null>(null);
   const seguirEditando = () => {
-    setSalidaPendiente(false);
-    requestAnimationFrame(() => volverRef.current?.focus({ preventScroll: true }));
+    const disparador = salidaPendiente?.disparador;
+    setSalidaPendiente(null);
+    requestAnimationFrame(() => {
+      if (!document.activeElement || document.activeElement === document.body) {
+        disparador?.focus({ preventScroll: true });
+      }
+    });
   };
   const pantallaRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
+  const contextoRef = useRef<HTMLDivElement>(null);
   /**
    * D223 · «Tu mesa» es la del TITULAR. Quien no lo es ve la pantalla de
    * siempre, con «¿Qué consumiste?» y la lista abierta.
@@ -1042,7 +1054,7 @@ export function MesaDetailView({
   };
   const preparandoRef = useRef(false);
   const intencionListoRef = useRef(0);
-  async function terminarListo(): Promise<void> {
+  async function terminarListo(alGuardar?: () => void): Promise<void> {
     if (preparandoRef.current || busy || propinaGuardando || !onPrepararListo) return;
     preparandoRef.current = true;
     const intencion = ++intencionListoRef.current;
@@ -1055,10 +1067,33 @@ export function MesaDetailView({
         frenarSinEleccion(); return;
       }
       setHojaCierre(null);
-      onGoToPay(foto);
+      onGoToPay({ ...foto, alGuardar });
     } finally { preparandoRef.current = false; }
   }
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
+
+  useLayoutEffect(() => {
+    const contexto = contextoRef.current;
+    const nombre = contexto?.firstElementChild;
+    if (!(nombre instanceof HTMLElement) || !contexto) return;
+    const angosto = window.matchMedia('(max-width: 359px)');
+    function ajustar() {
+      if (!contexto || !(nombre instanceof HTMLElement)) return;
+      contexto.removeAttribute('data-modalidad-en-otra-linea');
+      contexto.toggleAttribute('data-modalidad-en-otra-linea',
+        angosto.matches && nombre.scrollWidth > nombre.clientWidth);
+    }
+    ajustar();
+    const resize = new ResizeObserver(ajustar);
+    resize.observe(contexto);
+    angosto.addEventListener('change', ajustar);
+    document.fonts.addEventListener('loadingdone', ajustar);
+    return () => {
+      resize.disconnect();
+      angosto.removeEventListener('change', ajustar);
+      document.fonts.removeEventListener('loadingdone', ajustar);
+    };
+  }, [mesa.restaurant.name, divisionLabel]);
 
   /**
    * La lista de «¿Qué consumiste?» (y la nota de «Ya pagaste»). Quien no es
@@ -1324,7 +1359,11 @@ export function MesaDetailView({
       <AppHeaderFlow
         userName={userName}
         backRef={volverRef}
-        onBack={() => { if (tieneBorrador) setSalidaPendiente(true); else onBack(); }}
+        onBack={() => {
+          if (tieneBorrador) {
+            setSalidaPendiente({ tipo: 'volver', accion: onBack, disparador: volverRef.current });
+          } else onBack();
+        }}
         bellBlocked={busy || !!frozenScope}
       />
       <div className="title-card mesa-selection-title">
@@ -1354,7 +1393,7 @@ export function MesaDetailView({
           <h1 className={`title-card-title${hayConfiguracion ? ' title-card-title--con-engranaje' : ''}`}>
             {esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}
           </h1>
-          <div className="title-card-sub mesa-selection-context">
+          <div className="title-card-sub mesa-selection-context" ref={contextoRef}>
             <span className="mesa-selection-context-main">{mesa.restaurant.name}</span>
             <strong>{divisionLabel}</strong>
           </div>
@@ -1643,12 +1682,20 @@ export function MesaDetailView({
           <button type="button" className="btn btn-navy"
             disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
             onClick={() => {
-              seguirEditando();
-              void terminarListo();
+              setSalidaPendiente(null);
+              void terminarListo(salidaPendiente.tipo === 'navegar' ? salidaPendiente.accion : undefined);
             }}>
             {t('Guardar')}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={onBack}>{t('Salir sin guardar')}</button>
+          <button type="button" className="btn btn-ghost" onClick={() => {
+            if (salidaPendiente.tipo === 'centro') {
+              onDescartarBorrador?.();
+              seguirEditando();
+            } else {
+              setSalidaPendiente(null);
+              salidaPendiente.accion();
+            }
+          }}>{t('Salir sin guardar')}</button>
         </HojaDeDecision>
       )}
       {hojaDeLaMesa && hayConfiguracion && (
@@ -1710,6 +1757,10 @@ export function MesaDetailView({
         active={null}
         accionAncha={!ejemplo}
         above={miParte}
+        onAccion={(slot, accion, disparador) => {
+          if (tieneBorrador) setSalidaPendiente({ tipo: slot === 'centro' ? 'centro' : 'navegar', accion, disparador });
+          else accion();
+        }}
         center={pagosCortados ? {
           // P1 · con lo guardado a la vista el círculo lo dice; la primera
           // edición lo devuelve a «Listo». Decisión 32 · «Guardado» sigue

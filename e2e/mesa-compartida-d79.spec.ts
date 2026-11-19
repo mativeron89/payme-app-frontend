@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
+import { abrirTusConsumos, enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
 
 /**
  * AF-MESA-D79 · decisiones 76 y 79 a 81 de Mati, con el mock que replica al
@@ -146,6 +146,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
 
     // El borrador de ½ quedó viejo: el dueño rechaza con 409 y se dice claro.
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Ese plato ya está completo')).toBeVisible();
     await expect(fila(page, 'Pizza para compartir')).toContainText('Lo eligió otro');
     // Bloqueado: el renglón «Lo eligió otro» no tiene nada tocable.
@@ -156,6 +157,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // Se completa la mesa con la parrillada: cierre con pantalla (F-2).
     await page.getByRole('button', { name: /^Parrillada/ }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();

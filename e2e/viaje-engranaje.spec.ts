@@ -1,3 +1,4 @@
+import { cerrarAntesDelFrame } from './_foco';
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 
@@ -162,6 +163,9 @@ for (const lang of ['es', 'en'] as const) {
     await confirmar.getByRole('button', { name: en ? 'Cancel' : 'Cancelar', exact: true }).click();
     await expect(eliminar).toBeFocused();
     expect(await page.evaluate(() => sessionStorage.getItem('borrado-de-prueba'))).toBeNull();
+    await eliminar.click();
+    await cerrarAntesDelFrame(page, confirmar.getByRole('button', { name: en ? 'Cancel' : 'Cancelar', exact: true }),
+      confirmar, page.getByRole('button', { name: en ? 'Back' : 'Volver', exact: true }));
     await eliminar.click();
     await confirmar.getByRole('button', { name: en ? 'Delete' : 'Borrar', exact: true }).click();
     await expect(eliminar).toHaveCount(0);

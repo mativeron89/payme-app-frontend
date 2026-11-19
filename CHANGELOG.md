@@ -1,7 +1,7 @@
 ## 0.277.0 · 2026-11-19
 
-- El nombre del restaurante se lee completo y la división aprovecha mejor las pantallas chicas con texto grande.
-- La mesa avisa mientras comprueba el cierre y brinda tres opciones al volver con consumos sin guardar.
+- En pantallas de hasta 359 px, la modalidad baja a otro renglón si hace falta para leer completo el nombre del restaurante.
+- La mesa avisa mientras comprueba el cierre. Con consumos sin guardar, Volver y la barra inferior ofrecen guardar, seguir editando o descartar.
 - «Cada uno lo suyo» identifica el mismo reparto al crear la mesa, verla y compartirlo.
 - El tutorial indica cómo volver a abrirlo. Las mesas terminadas ofrecen acciones desde un botón visible.
 - Viajes pide confirmación al borrar notas, listas o fotos y usa las mismas frases de saldo con lector de pantalla.

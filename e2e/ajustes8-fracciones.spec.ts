@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
-import { abrirTusConsumos } from './_mesa';
+import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
 
 const ITEM_ID = '70000000-0000-4000-8000-000000000007';
 
@@ -135,6 +135,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
 
     await grabarLocks(page);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect.poll(() => fraccionGuardada(page, 'PA-9207')).toBe(3333);
     expect(await page.evaluate(() => (window as unknown as { __locks: unknown[] }).__locks))
       .toEqual([[{ item_id: ITEM_ID, fraction_denominator: 3 }]]);
@@ -149,6 +150,7 @@ test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () 
     await page.getByRole('radio', { name: '¼' }).click();
     await grabarLocks(page);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     await expect.poll(() => fraccionGuardada(page, 'PA-9299')).toBe(2500);
     const locks = await page.evaluate(() => (window as unknown as { __locks: Array<Array<Record<string, unknown>>> }).__locks);
     expect(locks).toHaveLength(1);

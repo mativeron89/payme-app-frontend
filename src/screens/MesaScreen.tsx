@@ -134,6 +134,7 @@ type SolicitudCierre = {
 type IntentoSeleccion = {
   readonly selected: ReadonlyMap<string, number>;
   readonly revision: number;
+  readonly alGuardar?: () => void;
 } & ({ readonly modo: 'consumo' } | {
   readonly modo: 'igual'; readonly request: ReplaceInformativeSelectionRequest;
 });
@@ -642,6 +643,17 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     descartarSolicitudCierre();
     revisionBorradorRef.current += 1;
     borradorEditadoRef.current = true;
+  }
+
+  function descartarBorrador(): void {
+    descartarSolicitudCierre();
+    revisionBorradorRef.current += 1;
+    borradorEditadoRef.current = false;
+    seleccionRef.current = mesaActualRef.current?.division_mode === 'igual'
+      ? new Map(informativasGuardadas) : new Map();
+    denominadoresRef.current = new Map();
+    setSelected(seleccionRef.current);
+    setSelectedDenominators(denominadoresRef.current);
   }
 
   // Un token guest nuevo para el mismo código es otra identidad: ningún
@@ -1354,8 +1366,9 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     if (!ejemplo) try { localStorage.setItem('payme.app.mesa-guardada.v1', '1'); } catch { /* preferencia no durable */ }
   }
 
-  async function confirmarGuardado(estadoGuardado?: EstadoGuardado): Promise<void> {
+  async function confirmarGuardado(estadoGuardado?: EstadoGuardado, alGuardar?: () => void): Promise<void> {
     registrarPrimeraMesa();
+    if (alGuardar) { alGuardar(); return; }
     // El tutorial conserva su recorrido local (D363).
     if (ejemplo) { ejemploLocal.irA('listo'); navigate('home'); return; }
     const identidad = identidadActualRef.current;
@@ -1410,7 +1423,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     }
   }
 
-  function confirmarInformativa(saved: InformativeSelectionResponse, revision: number): void {
+  function confirmarInformativa(saved: InformativeSelectionResponse, revision: number, alGuardar?: () => void): void {
     registrarPrimeraMesa();
     const guardadas = selectionMap(saved);
     setInformativasGuardadas(guardadas);
@@ -1424,8 +1437,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     setInformativeState(estadoGuardado);
     setInformativeSaved(sinEdicionPosterior);
     if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
-      setCierrePropio(true); reload();
-    } else if (sinEdicionPosterior) confirmarGuardado(estadoGuardado);
+      setCierrePropio(true);
+      if (sinEdicionPosterior && alGuardar) alGuardar();
+      else reload();
+    } else if (sinEdicionPosterior) confirmarGuardado(estadoGuardado, alGuardar);
   }
 
   async function reconciliarSeleccion(): Promise<boolean> {
@@ -1443,7 +1458,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       aplicarFotoPropia(foto);
       intentoSeleccionRef.current = null; setSeleccionIncierta(false);
       if (intento.modo === 'igual' && foto.propia) {
-        confirmarInformativa(foto.propia, intento.revision);
+        confirmarInformativa(foto.propia, intento.revision, intento.alGuardar);
       } else {
         const sinEdicionPosterior = revisionBorradorRef.current === intento.revision;
         if (sinEdicionPosterior) {
@@ -1452,7 +1467,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         }
         if (cerroPorSeleccion({ mesa_status: foto.mesa.status, closure_reason: foto.mesa.closure_reason })) {
           setCierrePropio(true);
-        } else if (sinEdicionPosterior) confirmarGuardado();
+          if (sinEdicionPosterior) intento.alGuardar?.();
+        } else if (sinEdicionPosterior) confirmarGuardado(undefined, intento.alGuardar);
       }
       return true;
     } catch {
@@ -1553,6 +1569,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     const vigente = () => identityEpochRef.current.isCurrent(identityEpoch)
       && identidadActualRef.current === identidad;
     const revision = preparada?.revision ?? revisionBorradorRef.current;
+    const alGuardar = preparada?.alGuardar && (() => {
+      // La intención de navegar pertenece al borrador que la persona confirmó.
+      if (vigente() && revisionBorradorRef.current === revision) preparada.alGuardar?.();
+    });
     /**
      * 🔴 **D-R8 · dónde termina el recorrido con el corte, y por qué el lock
      * ahora SÍ ocurre.**
@@ -1575,7 +1595,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (selected.size === 0) {
         // D845 · ya registrado y sin nada nuevo: se confirma en la mesa.
         // Sin nada registrado, la vista explica qué falta antes de llegar acá.
-        if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) confirmarGuardado();
+        if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) confirmarGuardado(undefined, alGuardar);
         return;
       }
       const request = cierre?.operacion.modo === 'consumo' ? cierre.operacion.request : freezeSelectionRequest({
@@ -1588,7 +1608,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       try {
         // El segundo pedido conserva exactamente los ítems del que fue rechazado.
         const requests = request.items;
-        if (!CORTE.allowsPay) intentoSeleccionRef.current = { modo: 'consumo', selected: new Map(selected), revision };
+        if (!CORTE.allowsPay) intentoSeleccionRef.current = { modo: 'consumo', selected: new Map(selected), revision, alGuardar };
         const r = await api.lockItems(code, requests, guestToken, cierre ? selectionClosureConfirmation(cierre.challenge) : undefined);
         if (!vigente()) return;
         intentoSeleccionRef.current = null; setSeleccionIncierta(false); borradorEditadoRef.current = false;
@@ -1600,7 +1620,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (cerroPorSeleccion(r)) {
           setSelected(new Map()); setSelectedDenominators(new Map());
           setCierrePropio(true);
-          reload();
+          if (alGuardar) alGuardar();
+          else reload();
           return;
         }
         // Con el corte la selección queda registrada y el recorrido termina acá:
@@ -1612,7 +1633,12 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         // $0.00», porque lo que quedaba libre del ítem ya era 0 (medido).
         //
         // D845 · el lock confirmado recarga la mesa y muestra el aviso de éxito.
-        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); confirmarGuardado(); return; }
+        if (!CORTE.allowsPay) {
+          setSelected(new Map());
+          setSelectedDenominators(new Map());
+          confirmarGuardado(undefined, alGuardar);
+          return;
+        }
         setView('pay');
       } catch (err) {
         if (!vigente()) return;
@@ -1685,7 +1711,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       if (!CORTE.allowsPay) {
         // Decisión 32 · lo guardado sigue igual (ninguna edición desde el último
         // guardado acreditado): «Guardado» lleva a Inicio sin volver a enviar.
-        if (preparada?.informativeSaved) { confirmarGuardado('available'); return; }
+        if (preparada?.informativeSaved) { confirmarGuardado('available', alGuardar); return; }
         if (!preparada && (informativeState === 'unsupported' || informativeState === 'idle')) {
           toast(t('Guardar esta selección todavía no está disponible.'));
           return;
@@ -1705,13 +1731,13 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         }
         const request = cierre?.operacion.modo === 'igual' ? cierre.operacion.request : freezeSelectionRequest(replaceInformativeSelectionRequest(selected));
         setBusy(true);
-        intentoSeleccionRef.current = { modo: 'igual', selected: new Map(selected), revision, request };
+        intentoSeleccionRef.current = { modo: 'igual', selected: new Map(selected), revision, request, alGuardar };
         try {
           const saved = await api.replaceInformativeSelection(code, cierre
             ? { ...request, closure_confirmation: selectionClosureConfirmation(cierre.challenge) } : request);
           if (!vigente()) return;
           intentoSeleccionRef.current = null; setSeleccionIncierta(false);
-          confirmarInformativa(saved, revision);
+          confirmarInformativa(saved, revision, alGuardar);
         } catch (err) {
           if (!vigente()) return;
           if (await procesarRechazoCierre(err, preparada, { modo: 'igual', request }, identidad)) return;
@@ -3541,6 +3567,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onSetFraction={setFraction}
       onSetDenominator={setDenominator}
       onGoToPay={goToPay}
+      onDescartarBorrador={descartarBorrador}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
       invitacionPendiente={invitacionPendiente}
       onVerAvisos={() => navigate('avisos')}

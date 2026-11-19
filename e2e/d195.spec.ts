@@ -73,7 +73,20 @@ test.describe('D195 · los buscadores de la burbuja, sin borde de foco', () => {
     // D379 · «Invitar amigos» vive en la hoja del engranaje.
     await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
     await page.getByRole('button', { name: 'Invitar amigos de PayMe' }).click();
-    await sinBordeDeFoco(page, page.getByRole('textbox', { name: 'Buscar contactos para invitar', exact: true }));
+    const campo = page.getByRole('textbox', { name: 'Buscar contactos para invitar', exact: true });
+    const burbuja = page.locator('.invitar-busqueda').filter({ has: campo });
+    await campo.click();
+    await expect(campo).toBeFocused();
+    await expect(burbuja).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Tab');
+    await expect(campo).not.toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(campo).toBeFocused();
+    await expect(burbuja).toHaveCSS('outline-style', 'solid');
+    await expect(burbuja).toHaveCSS('outline-width', '2px');
+    await expect(burbuja).toHaveCSS('outline-color', 'rgb(16, 30, 59)');
+    await page.keyboard.type('a');
+    await expect(campo).toHaveValue('a');
   });
 
   test('control · los campos del ingreso conservan su foco (formularios, no se tocan)', async ({ page }) => {

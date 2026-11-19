@@ -485,7 +485,11 @@ function EditorDeFoto({ tieneFoto, guardando, onFoto }: {
           detalle={t('Se borra del viaje y no se puede recuperar.')} cancelar={t('Cancelar')}
           onCancelar={() => {
             setConfirmar(false);
-            requestAnimationFrame(() => eliminar.current?.focus({ preventScroll: true }));
+            requestAnimationFrame(() => {
+              if (!document.activeElement || document.activeElement === document.body) {
+                eliminar.current?.focus({ preventScroll: true });
+              }
+            });
           }}>
           <button type="button" className="btn btn-danger" disabled={guardando} onClick={() => {
             setConfirmar(false);

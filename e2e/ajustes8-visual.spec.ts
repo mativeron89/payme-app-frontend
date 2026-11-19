@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
-import { abrirTusConsumos } from './_mesa';
+import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
 
 async function capturar(page: Page, name: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
@@ -145,6 +145,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await capturar(page, 'v03-v05-ultimo-consumo-seleccionado');
 
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
+    await confirmarGuardadoDeMesa(page);
     // D240 punto 8 (reemplaza a V05 en este momento): el «Listo» que completa la
     // mesa avisa ANTES de enviar, con lo elegido para revisar; marcar sigue
     // siendo local (arriba) y nada se registra hasta confirmar.

@@ -6149,23 +6149,46 @@ button.qc-circulo::after {
 /* D863 · el nombre conserva su ancho natural y la modalidad baja si hace falta. */
 .mesa-selection-context {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   column-gap: var(--sp-1);
   min-width: 0;
-  overflow-wrap: anywhere;
+}
+
+.mesa-selection-context-main {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mesa-selection-context strong {
-  display: inline-block;
-  max-width: 100%;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .mesa-selection-context strong::before {
+  content: '·';
   content: '·' / '';
   color: var(--text-muted);
   font-weight: 400;
   margin-inline-end: var(--sp-1);
+}
+
+@media (max-width: 359px) {
+  .mesa-selection-context[data-modalidad-en-otra-linea] {
+    display: block;
+  }
+
+  .mesa-selection-context[data-modalidad-en-otra-linea] .mesa-selection-context-main {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .mesa-selection-context[data-modalidad-en-otra-linea] strong::before {
+    display: none;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

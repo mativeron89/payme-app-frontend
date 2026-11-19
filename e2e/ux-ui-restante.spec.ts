@@ -1,6 +1,9 @@
+import { confirmarGuardadoDeMesa } from './_mesa';
+import { cerrarAntesDelFrame } from './_foco';
 import { expect, test, type Page } from '@playwright/test';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
 import { ingresar } from './_app';
+import type { Api } from '../src/api';
 
 async function idioma(page: Page, lang: 'en' | 'es') {
   await page.addInitScript((value) => localStorage.setItem('payme.app.idioma.v1', value), lang);
@@ -78,6 +81,9 @@ for (const lang of ['es', 'en'] as const) {
     await expect(volver).toBeFocused();
     await expect(dialogo).toHaveCount(0);
     await volver.click();
+    await cerrarAntesDelFrame(page, dialogo.getByRole('button', { name: en ? 'Keep editing' : 'Seguir editando' }),
+      dialogo, page.getByRole('button', { name: en ? 'Continue' : 'Continuar', exact: true }));
+    await volver.click();
     await dialogo.getByRole('button', { name: en ? 'Save' : 'Guardar', exact: true }).click();
     await expect(page.getByText(en ? "Done, it's saved" : 'Listo, quedó guardado', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/mesa\/PA-2847$/);
@@ -92,8 +98,37 @@ for (const lang of ['es', 'en'] as const) {
     if (await consumos.getAttribute('aria-expanded') !== 'true') await consumos.click();
     await page.locator('.qc-renglon .qc-libre').first().click();
     await page.getByRole('button', { name: en ? 'Back' : 'Volver', exact: true }).click();
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as { api: Api };
+      const { body } = document;
+      body.dataset.preparacionesDeGuardado = '0';
+      body.dataset.escriturasDeSeleccion = '0';
+      const leer = api.getMesa.bind(api);
+      const lock = api.lockItems.bind(api);
+      const reemplazar = api.replaceInformativeSelection.bind(api);
+      api.getMesa = (...args) => {
+        if (args[0] === 'PA-2847' && document.querySelector('[role="dialog"]')) {
+          body.dataset.preparacionesDeGuardado = String(Number(body.dataset.preparacionesDeGuardado) + 1);
+        }
+        return leer(...args);
+      };
+      api.lockItems = (...args) => {
+        body.dataset.escriturasDeSeleccion = String(Number(body.dataset.escriturasDeSeleccion) + 1);
+        return lock(...args);
+      };
+      api.replaceInformativeSelection = (...args) => {
+        body.dataset.escriturasDeSeleccion = String(Number(body.dataset.escriturasDeSeleccion) + 1);
+        return reemplazar(...args);
+      };
+    });
     await page.getByRole('button', { name: en ? 'Leave without saving' : 'Salir sin guardar' }).click();
     await expect(page).not.toHaveURL(/mesa\/PA-2847$/);
+    await expect(page.locator('body')).toHaveAttribute('data-preparaciones-de-guardado', '0');
+    await expect(page.locator('body')).toHaveAttribute('data-escrituras-de-seleccion', '0');
+    await page.goto('/#/mesa/PA-2847');
+    await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
+    await expect(page.locator('.qc-renglon').first().locator('.qc-libre')).toBeVisible();
   });
 
   test(`U7 · la modalidad en la mesa usa el mismo nombre (${lang})`, async ({ page }) => {
@@ -111,6 +146,7 @@ for (const lang of ['es', 'en'] as const) {
     const plato = page.locator('.qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' });
     await plato.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await continuar.click();
+    await confirmarGuardadoDeMesa(page);
     await expect(page.locator('.mesa-guardado')).toBeVisible();
     if (en) {
       await idioma(page, lang);
