@@ -112,7 +112,7 @@ for (const origen of ['amigo', 'solicitud'] as const) {
         sessionStorage.setItem('k20-blocks', JSON.stringify([...ids, id]));
         return original(id);
       };
-      return { id: target.id, nombre: target.full_name };
+      return { id: target.id, nombre: target.full_name, primerNombre: target.first_name };
     }, origen);
     const llamadas = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('k20-blocks') ?? '[]') as string[]);
     await irEnLaApp(page, '/amigos');
@@ -138,8 +138,32 @@ for (const origen of ['amigo', 'solicitud'] as const) {
     await hoja.getByRole('button', { name: 'Bloquear', exact: true }).click();
     await expect(hoja).toHaveCount(0);
     expect(await llamadas()).toEqual([persona.id]);
+    const nombre = origen === 'amigo' ? persona.nombre : persona.primerNombre;
+    await expect(page.locator('.toast')).toContainText(`Bloqueaste a ${nombre}`);
+    if (origen === 'amigo') await foto(page, 'm-bloqueaste-es');
   });
 }
+test('M · aviso de bloqueo y botón de quitar en EN', async ({ page }) => {
+  await ingresar(page);
+  await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+  await page.reload();
+  await irEnLaApp(page, '/amigos');
+  const menu = page.getByRole('button', { name: 'More actions for Juan López', exact: true });
+  await menu.click();
+  await page.getByRole('button', { name: 'Remove friend', exact: true }).click();
+  const hoja = page.getByRole('dialog', { name: 'Remove Juan López from your friends?', exact: true });
+  await expect(hoja.getByRole('button', { name: 'Remove', exact: true })).toBeVisible();
+  await foto(page, 'm-quitar-en');
+  await hoja.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(menu).toBeFocused();
+
+  await menu.click();
+  await page.getByRole('button', { name: 'Block', exact: true }).click();
+  await page.getByRole('dialog', { name: /^Block Juan López/ })
+    .getByRole('button', { name: 'Block', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('You blocked Juan López');
+  await foto(page, 'm-bloqueaste-en');
+});
 test('K21 · Legal y ayuda conserva enlaces vigentes y correo fijo', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/mas');
   const seccion = page.getByRole('region', { name: 'Legal y ayuda', exact: true });
@@ -186,7 +210,10 @@ test('K20 · el menú del último amigo queda visible fuera de la tarjeta', asyn
   await mas.scrollIntoViewIfNeeded(); await mas.click();
   const quitar = page.getByRole('button', { name: 'Quitar de amigos', exact: true });
   await expect(quitar).toBeFocused(); await expect(quitar).toBeInViewport();
-  await quitar.click(); await expect(page.getByRole('dialog', { name: /¿Quitar a / })).toBeVisible();
+  await quitar.click();
+  const hoja = page.getByRole('dialog', { name: /¿Quitar a / });
+  await expect(hoja.getByRole('button', { name: 'Quitar', exact: true })).toBeVisible();
+  await foto(page, 'm-quitar-es');
   await page.keyboard.press('Escape'); await expect(mas).toBeFocused();
 });
 test('K22 · apertura sin jerga en el caso correcto', async ({ page }) => {

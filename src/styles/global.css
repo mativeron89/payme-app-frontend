@@ -3876,8 +3876,8 @@ html.app-de-inicio-ios .app {
    los diez estados: los botones van adentro de la tarjeta. Reemplaza a la
    burbuja angosta en el medio y al bloque de acción pegado abajo (v5).
 
-   D y E llevan una barra reducida propia (`BarraDeLink`) con el círculo; A, B,
-   C y F no llevan barra.
+   En los rechazos terminales, «Ir a Inicio» va dentro de la tarjeta.
+   Los errores reintentables muestran ahí «Reintentar».
 
    Lo que ninguna de las tres puede hacer: nombrar el restaurante o la mesa
    ANTES del canje. Ni el 401 ni el 403. Después del canje sí (§1.2-C), porque
@@ -10454,6 +10454,7 @@ h1.pay-title-lbl {
 .mi-parte-plato dt { min-width: 0; overflow-wrap: anywhere; }
 .mi-parte-plato dd { margin: 0; white-space: nowrap; }
 .mi-parte-plato-porcion { white-space: nowrap; }
+.mi-parte-cuenta-propina { position: relative; }
 .mi-parte-cuenta-propina dt {
   position: absolute;
   width: 1px;

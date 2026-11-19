@@ -111,6 +111,59 @@ for (const [forma, personas] of [['En partes iguales', 2], ['Pagar el total', 1]
   });
 }
 
+for (const caso of ['tras el PUT', 'al volver a guardar sin cambios'] as const) {
+  test(`MP1 · getMesa falla ${caso}`, async ({ page }) => {
+    const code = await abrirInformativa(page, 'En partes iguales', 2);
+    await page.getByRole('button', { name: plato('Tagliatelle Bolognese') }).click();
+    await page.evaluate(async ({ code, caso }) => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const guardar = api.replaceInformativeSelection.bind(api);
+      const leer = api.getMesa.bind(api);
+      const medicion = { puts: 0, lecturas: 0, fallidas: 0 };
+      const registrar = () => sessionStorage.setItem('mp1-medicion', JSON.stringify(medicion));
+      api.replaceInformativeSelection = async (...args) => {
+        const result = await guardar(...args);
+        if (args[0] === code) { medicion.puts += 1; registrar(); }
+        return result;
+      };
+      // En el segundo toque la primera lectura prepara el borrador sin cambios.
+      // El fallo corresponde a la segunda lectura, la que confirma el aviso.
+      const fallaEn = caso === 'tras el PUT' ? 1 : 3;
+      api.getMesa = async (...args) => {
+        if (args[0] === code && medicion.puts > 0) {
+          medicion.lecturas += 1;
+          if (medicion.lecturas === fallaEn) {
+            api.getMesa = leer;
+            medicion.fallidas += 1;
+            registrar();
+            throw new TypeError('falló la lectura de la mesa en el mock');
+          }
+          registrar();
+        }
+        return leer(...args);
+      };
+    }, { code, caso });
+
+    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
+    const aviso = page.locator('.mesa-guardado');
+    await continuar.click();
+    if (caso === 'al volver a guardar sin cambios') {
+      await expect(aviso).toContainText('Listo, quedó guardado');
+      await expect(page.getByText('Tu selección quedó guardada.', { exact: false })).toBeVisible();
+      await continuar.click();
+    }
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('mp1-medicion') ?? 'null')))
+      .toEqual({ puts: 1, lecturas: caso === 'tras el PUT' ? 1 : 3, fallidas: 1 });
+    await expect(aviso).toHaveText('Listo, quedó guardado');
+    await expect(aviso.locator('p')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(continuar).toBeEnabled();
+    await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
+
+  });
+}
+
 test.describe('Listo · selección informativa v2', () => {
   test('En partes iguales N≥2 guarda pares exactos, reconcilia respuesta incierta y rehidrata', async ({ page }) => {
     const code = await abrirInformativa(page, 'En partes iguales', 2);

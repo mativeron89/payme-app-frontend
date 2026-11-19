@@ -123,6 +123,71 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
   });
 }
 
+const medidasDeGuardado = [
+  { width: 320, height: 568 }, { width: 360, height: 640 }, { width: 375, height: 667 },
+  { width: 390, height: 664 }, { width: 414, height: 896 },
+];
+
+for (const viewport of medidasDeGuardado) {
+  for (const platos of [1, 6]) {
+    test(`N0 · dos guardados a ${viewport.width}×${viewport.height} con ${platos === 1 ? '1 plato' : '6 platos'}`, async ({ page }, info) => {
+      await page.setViewportSize(viewport);
+      if (viewport.width === 320) await page.emulateMedia({ reducedMotion: 'reduce' });
+      await mesa(page);
+      const filas = page.locator('.qc-renglon');
+      const aviso = page.locator('.mesa-guardado');
+      const desplazable = page.locator('.mesa-selection-scroll');
+      await expect(filas).toHaveCount(7);
+      const clickSinDesplazarAncestros = (el: HTMLButtonElement) => el.click();
+
+      const guardarYMedir = async (numero: number, esperados: number) => {
+        await desplazable.evaluate(el => { el.scrollTop = el.scrollHeight; });
+        await expect(continuar(page)).toBeEnabled();
+        await continuar(page).evaluate(clickSinDesplazarAncestros);
+        await expect(aviso).toContainText('Listo, quedó guardado');
+        await expect(filas.locator('[data-estado="registrado"]')).toHaveCount(esperados);
+        const medidas = await aviso.evaluate(el => {
+          const app = el.closest('.app')!;
+          const lista = el.closest('.mesa-selection-scroll')!.getBoundingClientRect();
+          const barra = app.querySelector('.appbar-block')!.getBoundingClientRect();
+          const cabecera = app.querySelector('.hdr')!.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          const centro = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return {
+            scrollTop: app.scrollTop, scrollHeight: app.scrollHeight, clientHeight: app.clientHeight,
+            fondoBarra: barra.bottom, altoVentana: innerHeight, inicioCabecera: cabecera.top,
+            avisoVisible: r.top >= Math.max(0, lista.top) && r.bottom <= Math.min(barra.top, lista.bottom)
+              && r.left >= 0 && r.right <= innerWidth && el.contains(centro),
+          };
+        });
+        await info.attach(`guardado-${numero}`, { body: JSON.stringify(medidas), contentType: 'application/json' });
+        await captura(page, `n0-${viewport.width}x${viewport.height}-${platos}-${numero}`);
+        return medidas;
+      };
+
+      // Clics DOM de la app, sin el scroll de accionabilidad de Playwright.
+      for (let i = 1; i <= platos; i += 1) {
+        await filas.nth(i).locator('.qc-libre').evaluate(clickSinDesplazarAncestros);
+      }
+      const primero = await guardarYMedir(1, platos);
+      await consumos(page).evaluate(clickSinDesplazarAncestros);
+      // Cambia un plato ya guardado por uno libre para mantener la cantidad
+      // y evitar que el segundo guardado complete la mesa.
+      await filas.nth(platos).getByRole('button', { name: /^Soltar / }).evaluate(clickSinDesplazarAncestros);
+      await expect(filas.nth(platos).locator('.qc-libre')).toBeEnabled();
+      await filas.nth(platos === 6 ? 0 : 6).locator('.qc-libre').evaluate(clickSinDesplazarAncestros);
+      await expect(aviso).toHaveCount(0);
+      const segundo = await guardarYMedir(2, platos);
+      const invariante = ({ clientHeight, altoVentana }: typeof primero) => ({
+        scrollTop: 0, scrollHeight: clientHeight, clientHeight: altoVentana,
+        fondoBarra: altoVentana, inicioCabecera: 0, avisoVisible: true,
+      });
+      expect(primero).toMatchObject(invariante(primero));
+      expect(segundo).toMatchObject(invariante(segundo));
+    });
+  }
+}
+
 for (const caso of ['lectura fallida', 'importe cero', 'importe ausente'] as const) {
   test(`K5 · ${caso} después de guardar deja el aviso sin importe`, async ({ page }) => {
     const code = await mesa(page);

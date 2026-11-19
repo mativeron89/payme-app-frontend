@@ -287,7 +287,7 @@ export function SocialScreen() {
     olvidarLoDeAmigos();
     try {
       await api.blockUser(userId);
-      toast(t('{0} quedó bloqueado', quien));
+      toast(t('Bloqueaste a {0}', quien));
       loadFriends();
       loadRequests();
     } catch {
@@ -304,7 +304,7 @@ export function SocialScreen() {
       olvidarLoDeAmigos();
       try { await api.removeFriend(f.id); toast(t('Amigo quitado')); loadFriends(); loadRequests(); }
       catch { toast(t('No se pudo quitar de tus amigos')); }
-    }, t('Confirmar'), botonesDeAmigos.current.get(f.id) ?? null);
+    }, t('Quitar'), botonesDeAmigos.current.get(f.id) ?? null);
   }
 
   async function addFriend() {

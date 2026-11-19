@@ -104,7 +104,7 @@ for (const ancho of [375, 390] as const) {
       await deslizar(page, fila(page, 'Juan López'), -120);
       await eliminar(page, 'Juan López').click();
       await expect(page.getByRole('dialog', { name: '¿Quitar a Juan López de tus amigos?', exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+      await page.getByRole('button', { name: 'Quitar', exact: true }).click();
       await expect(toast(page)).toContainText('Amigo quitado');
       await expect(fila(page, 'Juan López')).toHaveCount(0);
       await expect(fila(page, 'María Ruiz')).toBeVisible();
@@ -157,7 +157,7 @@ for (const ancho of [375, 390] as const) {
       });
       await deslizar(page, fila(page, 'Juan López'), -120);
       await eliminar(page, 'Juan López').click();
-      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+      await page.getByRole('button', { name: 'Quitar', exact: true }).click();
       await expect(toast(page)).toContainText('No se pudo quitar de tus amigos');
       await expect(fila(page, 'Juan López')).toBeVisible();
     });
@@ -170,7 +170,7 @@ for (const ancho of [375, 390] as const) {
       await expect(fila(page, 'Juan López')).toHaveClass(/deslizable--abierta/);
       await expect(boton).toBeVisible();
       await page.keyboard.press('Enter');
-      await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+      await page.getByRole('button', { name: 'Quitar', exact: true }).click();
       await expect(toast(page)).toContainText('Amigo quitado');
       await expect(fila(page, 'Juan López')).toHaveCount(0);
     });
