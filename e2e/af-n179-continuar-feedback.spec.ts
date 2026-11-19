@@ -39,7 +39,7 @@ async function hastaConsumoDos(
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
   await expect(page.getByRole('heading', { name: '¿Cómo dividen?', exact: true })).toBeVisible();
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   await sumar.click();
   await sumar.click();

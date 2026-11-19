@@ -3,13 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
 import { MockApiError } from '../../api/mock/mockApi';
-import { traducir } from '../../i18n/idioma';
+import { IdiomaProvider, traducir } from '../../i18n/idioma';
 import type { DetalleViaje, MiembroViaje, TicketEnViaje, TransferenciaViaje, VistaPreviaCierre } from '../../api/viajes';
 import { BalanceVista, LugarAgrupado, PestanasDeBalance } from './BalanceScreen';
 import { agruparConsumos } from './consumosPorLugar';
 import {
   ViajeScreen,
   HojaModal,
+  MontoDeBalance,
   HojaCerrarVista,
   HojaNoPuedeSalirVista,
   HojaSalirVista,
@@ -128,11 +129,11 @@ describe('D245 · el viaje abierto, más simple', () => {
     expect(leido.indexOf('\u2212$542')).toBeLessThan(leido.indexOf('Miembros'));
   });
 
-  it('🔴 a favor en verde y cero en negro; el lector de pantalla oye «a favor»', () => {
+  it('🔴 a favor en verde y cero en negro; el lector de pantalla oye «Te deben» o «Estás a mano»', () => {
     expect(vista(listo(viaje({ mi_balance_cents: 120000 }))))
-      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-a-favor"><span aria-hidden="true">$1,200</span><span class="vj-oculto">A favor: $1,200</span></p>');
+      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-a-favor"><span aria-hidden="true">$1,200</span><span class="vj-oculto">Te deben $1,200</span></p>');
     expect(vista(listo(viaje({ mi_balance_cents: 0 }))))
-      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-cero"><span aria-hidden="true">$0</span><span class="vj-oculto">$0</span></p>');
+      .toContain('<p data-guia="mi-balance" class="vjv-monto vjv-monto-cero"><span aria-hidden="true">$0</span><span class="vj-oculto">Estás a mano</span></p>');
   });
 
   it('se van «Tu balance», «Gasto del grupo», «Tickets · N» y la lista de tickets', () => {
@@ -800,4 +801,24 @@ it('K1 · Salir del pie de esperando pagos también cuenta la espera desde abrir
   const confirmar = m.componente(HojaSalirVista).props.onConfirmar as () => void;
   ahora = 1349; confirmar(); expect(enviar).not.toHaveBeenCalled();
   ahora = 1350; confirmar(); confirmar(); expect(enviar).toHaveBeenCalledTimes(1);
+});
+
+describe('U11 · nombre accesible del saldo del viaje', () => {
+  it.each([
+    ['es', 120000, '$1,200', 'Te deben $1,200'],
+    ['es', -54200, '−$542', 'Debes $542'],
+    ['es', 0, '$0', 'Estás a mano'],
+    ['en', 120000, '$1,200', 'You are owed $1,200'],
+    ['en', -54200, '−$542', 'You owe $542'],
+    ['en', 0, '$0', "You&#x27;re even"],
+  ] as const)('%s con %i centavos', (idioma, cents, visible, leido) => {
+    vi.stubGlobal('localStorage', { getItem: () => idioma });
+    try {
+      const html = renderToStaticMarkup(<IdiomaProvider><MontoDeBalance cents={cents} /></IdiomaProvider>);
+      expect(html).toContain(`<span aria-hidden="true">${visible}</span>`);
+      expect(html).toContain(`<span class="vj-oculto">${leido}</span>`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

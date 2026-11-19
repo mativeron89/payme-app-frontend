@@ -3,7 +3,7 @@ import { hastaCompartir, selectorDePropina, pedidosDePropina } from './fixtures/
 
 async function mesa(page: Page): Promise<string> {
   const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-  await selectorDePropina(page).getByRole('radio', { name: '10%', exact: true }).click();
+  await selectorDePropina(page).getByRole('button', { name: '10%', exact: true }).click();
   await expect.poll(() => pedidosDePropina(page)).toBe(1);
   await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -125,7 +125,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
 
 const medidasDeGuardado = [
   { width: 320, height: 568 }, { width: 360, height: 640 }, { width: 375, height: 667 },
-  { width: 390, height: 664 }, { width: 414, height: 896 },
+  { width: 390, height: 664 }, { width: 414, height: 736 },
 ];
 
 for (const viewport of medidasDeGuardado) {

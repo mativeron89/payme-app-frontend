@@ -59,6 +59,7 @@ type Estado =
     readonly reintento: boolean;
   }
   | { readonly paso: 'no_se_pudo' }
+  | { readonly paso: 'cuenta_suspendida' }
   | { readonly paso: 'solicitudes_llenas' };
 
 const CAMPO_VACIO: Estado = { paso: 'campo', error: null };
@@ -216,9 +217,10 @@ export function UnirmeConCodigo() {
       const { status, code } = extractApiError(err);
       if (status === 404 || code === 'join_code_invalid') setEstado({ paso: 'campo', error: 'codigo' });
       else if (status === 429) setEstado({ paso: 'campo', error: 'limite' });
+      else if (status === 403 && code === 'user_suspended') setEstado({ paso: 'cuenta_suspendida' });
       else if (code === 'join_requests_full') setEstado({ paso: 'solicitudes_llenas' });
       else if (status === 403 || status === 409 || status === 410 || code === 'join_request_not_allowed') setEstado({ paso: 'no_se_pudo' });
-      // Sin red, cuenta suspendida, error o respuesta mal formada: ningún
+      // Sin red, error o respuesta mal formada: ningún
       // resultado inventado (A23, A24).
       else setEstado({ paso: 'campo', error: 'reintento' });
     } finally {
@@ -374,6 +376,9 @@ export function UnirmeConCodigo() {
               {t('Cancelar')}
             </button>
           </div>
+        )}
+        {estado.paso === 'cuenta_suspendida' && (
+          <p className="unirse-no-se-pudo" role="status">{t('Tu cuenta está suspendida. Escríbenos.')}</p>
         )}
         {(estado.paso === 'no_se_pudo' || estado.paso === 'solicitudes_llenas') && (
           <div className="unirse-no-se-pudo" role="status">

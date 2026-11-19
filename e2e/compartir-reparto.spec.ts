@@ -62,9 +62,9 @@ async function abrirTuParte(page: Page): Promise<void> {
 /** Partes iguales entre 4, servicio y descuento, 10 %: llega a «Tu mesa». */
 async function mesaIgualesAl10(page: Page): Promise<void> {
   await hastaCompartir(page, { ocr: 'servicio_descuento', modo: 'igual' });
-  await page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('radio', { name: '10%', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('radio', { name: '10%', exact: true }))
-    .toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('button', { name: '10%', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('button', { name: '10%', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('status')).toHaveCount(0);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
@@ -131,9 +131,9 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
   test('🔴 por consumo: antes de «Listo» no hay botón; después, comparte la parte guardada', async ({ page }) => {
     await prepararCompartir(page, 'hoja');
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-    await page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('radio', { name: '15%', exact: true }))
-      .toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('button', { name: '15%', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('button', { name: '15%', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('region', { name: 'Propina de la mesa' }).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
@@ -154,7 +154,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await expect.poll(() => compartidos(page)).toHaveLength(1);
     const [datos] = await compartidos(page) as Array<{ text: string }>;
     expect(datos.text.split('\n').slice(1)).toEqual([
-      'Así va la mesa (por consumo)',
+      'Así va la mesa (Cada uno lo suyo)',
       'Mi parte: $210.90',
       '  Mis platos: $195',
       `  Descuento: ${MENOS}$11.61`,

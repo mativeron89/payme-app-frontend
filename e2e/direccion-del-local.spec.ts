@@ -74,7 +74,7 @@ test('🔴 con la dirección: se reenvía tal cual al resolver, se guarda en el 
   await hoja.getByRole('button', { name: /Cerrar/ }).first().click();
 
   // Hasta abrir la mesa.
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   await sumar.click();
   await sumar.click();

@@ -1,3 +1,4 @@
+import { HojaDeDecision } from '../../components/HojaDeDecision';
 import { useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { PROFILE_AVATAR_INPUT_MIMES } from '../../api/profileIdentity';
@@ -443,6 +444,8 @@ function EditorDeFoto({ tieneFoto, guardando, onFoto }: {
 }) {
   const { t } = useIdioma();
   const entrada = useRef<HTMLInputElement | null>(null);
+  const eliminar = useRef<HTMLButtonElement>(null);
+  const [confirmar, setConfirmar] = useState(false);
   return (
     <div className="vjcfg-editor">
       <p className="vjc-ayuda">{t('La ven sólo los miembros del viaje.')}</p>
@@ -472,11 +475,24 @@ function EditorDeFoto({ tieneFoto, guardando, onFoto }: {
           {guardando ? t('Subiendo la foto…') : tieneFoto ? t('Cambiar la foto') : t('Elegir foto')}
         </button>
         {tieneFoto && (
-          <button type="button" className="btn btn-ghost" disabled={guardando} onClick={() => onFoto(null)}>
+          <button type="button" ref={eliminar} className="btn btn-ghost" disabled={guardando} onClick={() => setConfirmar(true)}>
             {t('Eliminar foto')}
           </button>
         )}
       </div>
+      {confirmar && tieneFoto && (
+        <HojaDeDecision titulo={t('¿Eliminar la foto del viaje?')}
+          detalle={t('Se borra del viaje y no se puede recuperar.')} cancelar={t('Cancelar')}
+          onCancelar={() => {
+            setConfirmar(false);
+            requestAnimationFrame(() => eliminar.current?.focus({ preventScroll: true }));
+          }}>
+          <button type="button" className="btn btn-danger" disabled={guardando} onClick={() => {
+            setConfirmar(false);
+            onFoto(null);
+          }}>{t('Borrar')}</button>
+        </HojaDeDecision>
+      )}
     </div>
   );
 }

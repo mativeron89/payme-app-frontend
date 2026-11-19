@@ -408,7 +408,7 @@ describe('🔴 D275 · D277 · «No tienes mesas abiertas», con la cámara y en
     const scroll = home.slice(home.indexOf("<div className={`scroll${avisoSinMesas ? ' con-aviso-sin-mesas' : ''}`}>"));
     const cierre = scroll.indexOf('<AppBottomBar');
     expect(scroll.slice(0, cierre)).toMatch(/\{avisoSinMesas && <AvisoSinMesas accion=\{accionDelCentro\} \/>\}\s*<\/div>\s*$/);
-    expect(home).toContain('<AppBottomBar active="home" center={accionDelCentro} />');
+    expect(home).toContain('<AppBottomBar active="home" center={accionDelCentro} centerRef={escanearRef} />');
     // La barra es la de siempre: sin la franja de D275.
     expect(renderToStaticMarkup(<AppBottomBar active="home" />)).toMatch(/^<div class="appbar-block">/);
     expect(css).not.toContain('.appbar-aviso');

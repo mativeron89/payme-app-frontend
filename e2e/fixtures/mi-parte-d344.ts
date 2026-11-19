@@ -22,7 +22,7 @@ export async function hastaCompartir(
   await sacarFoto(page);
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
   const consumo = opciones.modo === 'consumo';
-  await page.getByRole('radio', { name: consumo ? /Por lo que pidió cada uno/ : /En partes iguales/ }).click();
+  await page.getByRole('radio', { name: consumo ? /Cada uno lo suyo/ : /En partes iguales/ }).click();
   const mas = page.getByRole('button', { name: 'Un comensal más' });
   if (consumo) await mas.click();
   await mas.click();

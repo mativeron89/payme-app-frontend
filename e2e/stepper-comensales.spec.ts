@@ -82,7 +82,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('Elige cuántos son')).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
-    // Elegir 3: piso 1 + dos toques. D366 · en «Por lo que pidió cada uno» ya
+    // Elegir 3: piso 1 + dos toques. D366 · en «Cada uno lo suyo» ya
     // no se muestra la base de propina por persona (840 ÷ 3 = $280): el grupo
     // − N + queda solo. Primero el testigo (el 3 elegido), después la ausencia.
     const mas = page.getByRole('button', { name: 'Un comensal más' });

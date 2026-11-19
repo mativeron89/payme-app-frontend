@@ -36,6 +36,7 @@ export type JoinLinkOutcome =
   | 'joining'
   /** 403 · los CUATRO motivos del contrato, indistinguibles a propósito. */
   | 'rejected'
+  | 'cuenta_suspendida'
   /** D856: límite de solicitudes pendientes, no de comensales. */
   | 'solicitudes_llenas'
   /**
@@ -141,6 +142,8 @@ export function joinLinkMessage(outcome: JoinLinkOutcome, t: Traducir = enEspano
         body: t('Pídele a quien la abrió que acepte las que tiene.'),
         retryable: false,
       };
+    case 'cuenta_suspendida':
+      return { title: t('Tu cuenta está suspendida. Escríbenos.'), body: '', retryable: false };
     case 'rejected':
     case 'mesa_cerrada':
       // D817/D856: el rechazo no publica el motivo ni ofrece reintentar.

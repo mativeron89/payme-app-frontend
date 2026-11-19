@@ -23,7 +23,7 @@ test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', 
   await hastaLaPantallaFusionada(page);
 
   await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
-  for (const forma of ['Por lo que pidió cada uno', 'En partes iguales', 'Pagar el total']) {
+  for (const forma of ['Cada uno lo suyo', 'En partes iguales', 'Pagar el total']) {
     await expect(page.getByRole('radio', { name: new RegExp(forma) })).toBeVisible();
   }
   // El acceso y el total viven en la MISMA burbuja compacta. Restaurante y
@@ -134,7 +134,7 @@ test('🔴 P3-02 · la selección tiene semántica, no sólo una clase CSS', asy
   const grupo = page.getByRole('radiogroup', { name: '¿Cómo dividen?' });
   await expect(grupo).toBeVisible();
 
-  const consumo = page.getByRole('radio', { name: /Por lo que pidió cada uno/ });
+  const consumo = page.getByRole('radio', { name: /Cada uno lo suyo/ });
   const total = page.getByRole('radio', { name: /Pagar el total/ });
   await expect(consumo).toHaveAttribute('aria-checked', 'true');
   await expect(total).toHaveAttribute('aria-checked', 'false');

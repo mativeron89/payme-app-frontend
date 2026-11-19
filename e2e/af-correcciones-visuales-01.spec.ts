@@ -287,7 +287,7 @@ async function hastaGarantia(page: Page) {
   await ingresar(page);
   await page.getByRole('button', { name: 'Escanear', exact: true }).click();
   await sacarFoto(page);
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await sumar.click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();

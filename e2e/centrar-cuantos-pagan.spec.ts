@@ -29,7 +29,7 @@ import { sacarFoto } from './_camara';
 const FORMAS = [
   { nombre: 'Pagar el total', radio: /Pagar el total/, pregunta: '¿Cuántos pagan?', piso: 1 },
   { nombre: 'En partes iguales', radio: /En partes iguales/, pregunta: '¿Cuántos pagan?', piso: 2 },
-  { nombre: 'Por lo que pidió cada uno', radio: /Por lo que pidió cada uno/, pregunta: '¿Cuántos son en la mesa?', piso: 1 },
+  { nombre: 'Cada uno lo suyo', radio: /Cada uno lo suyo/, pregunta: '¿Cuántos son en la mesa?', piso: 1 },
 ] as const;
 
 async function capturar(page: Page, nombre: string): Promise<void> {

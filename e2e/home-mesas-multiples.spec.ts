@@ -51,10 +51,10 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
     await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847/);
     await enTuMesaConLaLista(page);
     // Decisión 77 de Mati: la línea contextual es sólo el restaurante, sin el
-    // código de mesa; el modo va en otro span y el «·» sigue `aria-hidden`.
+    // código de mesa y con el modo al lado si entra.
     await expect(page.locator('.mesa-selection-context-main')).toHaveText('La Parolaccia');
     await expect(page.locator('.mesa-selection-title')).not.toContainText('PA-2847');
-    await expect(page.getByText('cada uno lo suyo', { exact: true })).toBeVisible();
+    await expect(page.getByText('Cada uno lo suyo', { exact: true })).toBeVisible();
   });
 
   test('con UNA sola abierta la fila no existe y la tarjeta queda como siempre', async ({ page }) => {

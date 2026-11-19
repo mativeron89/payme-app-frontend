@@ -121,7 +121,7 @@ export async function abrirMesaConLink(
   // todos los specs existentes esperan. En consumo el stepper arranca en 0 y se
   // cuentan los de la mesa (mismos toques que `af-diseno-02`).
   const consumo = opciones.modo === 'consumo';
-  await page.getByRole('radio', { name: consumo ? /Por lo que pidió cada uno/ : /En partes iguales/ }).click();
+  await page.getByRole('radio', { name: consumo ? /Cada uno lo suyo/ : /En partes iguales/ }).click();
   await expect(page.getByRole('button', { name: 'Un comensal más' })).toBeVisible();
 
   // §1.4 (2026-08-06): el stepper nace SIN ELEGIR y el N lo pone la persona —

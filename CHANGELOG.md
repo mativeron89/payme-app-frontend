@@ -1,3 +1,12 @@
+## 0.277.0 · 2026-11-19
+
+- El nombre del restaurante se lee completo y la división aprovecha mejor las pantallas chicas con texto grande.
+- La mesa avisa mientras comprueba el cierre y brinda tres opciones al volver con consumos sin guardar.
+- «Cada uno lo suyo» identifica el mismo reparto al crear la mesa, verla y compartirlo.
+- El tutorial indica cómo volver a abrirlo. Las mesas terminadas ofrecen acciones desde un botón visible.
+- Viajes pide confirmación al borrar notas, listas o fotos y usa las mismas frases de saldo con lector de pantalla.
+- Mejora el foco con teclado en invitaciones, propina y Amigos. El aviso de privacidad sigue disponible ante fallos de invitación.
+
 ## 0.276.0 · 2026-11-17
 
 - En la mesa, los consumos quedan a la vista al entrar por primera vez. «Mi parte» destaca el importe, «Continuar» guarda en la misma mesa y el aviso espera el monto confirmado. Al cerrar, se muestran los platos que quedan sin dueño.

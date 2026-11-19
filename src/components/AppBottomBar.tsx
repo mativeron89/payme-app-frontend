@@ -82,6 +82,7 @@ const RIGHT: SideItem[] = [
 ];
 
 export interface AppBottomBarProps {
+  centerRef?: React.Ref<HTMLButtonElement>;
   /**
    * Qué posición se marca activa. `null` en pasos de flujo: ninguna de las
    * cinco representa "estoy en el Ticket", y marcar una sería mentir sobre
@@ -133,7 +134,7 @@ export function useAccionDelCentro(center?: AppBottomBarProps['center']): NonNul
   });
 }
 
-export function AppBottomBar({ active = null, center, above, accionAncha = false }: AppBottomBarProps) {
+export function AppBottomBar({ active = null, center, centerRef, above, accionAncha = false }: AppBottomBarProps) {
   const { t } = useIdioma();
   const centro = useAccionDelCentro(center);
   const pendientes = useSolicitudesPendientes();
@@ -182,6 +183,7 @@ export function AppBottomBar({ active = null, center, above, accionAncha = false
         {LEFT.map(item)}
         {!accionAncha && <button
           type="button"
+          ref={centerRef}
           className="appbar-center"
           data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
           onClick={centro.onClick}

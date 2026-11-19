@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode, type Ref } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { navigate } from '../router';
 import { useToast } from './ui';
@@ -276,6 +276,7 @@ export function AppHeaderBack({
 export function AppHeaderFlow({
   userName,
   onBack,
+  backRef,
   backLabel = 'Volver',
   backIcon = 'arrow-left',
   action,
@@ -285,6 +286,7 @@ export function AppHeaderFlow({
   /** Nombre COMPLETO editable. Si falta, la fila 1 va sólo con el logo. */
   userName?: string;
   onBack: () => void;
+  backRef?: Ref<HTMLButtonElement>;
   /**
    * Qué dice y qué ícono lleva el control de la fila 2. Por defecto retrocede.
    *
@@ -330,7 +332,7 @@ export function AppHeaderFlow({
         </button>
       </div>
       <div className="hdr-row hdr-row-2">
-        <button type="button" className="hdr-back" onClick={onBack}>
+        <button ref={backRef} type="button" className="hdr-back" onClick={onBack}>
           <Icon name={backIcon} size={20} />
           {t(backLabel)}
         </button>

@@ -176,6 +176,7 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
   const [tick, setTick] = useState(0);
   const [mode, setMode] = useState<'friends' | 'groups'>('friends');
   const [q, setQ] = useState('');
+  const [focoPorToque, setFocoPorToque] = useState(false);
   const { enabled: arrobaHabilitada } = useUsernameCapability();
   /** Grupo abierto en el acordeón. Uno solo: dos abiertos empujan de más. */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -408,10 +409,12 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
         role="tabpanel"
         aria-labelledby={`invite-${mode}-tab`}
       >
-        <div className="social-search">
+        <div className="social-search invitar-busqueda" data-foco-por-toque={focoPorToque || undefined}>
           <Icon name="search" size={18} aria-hidden="true" />
           <input
             className="social-search-input"
+            onPointerDown={() => setFocoPorToque(true)}
+            onBlur={() => setFocoPorToque(false)}
             // AF-USERNAME-D104: se busca por lo que se ve. El «ID» ya no se ve.
             placeholder={mode === 'groups'
               ? t('Buscar grupo por nombre')

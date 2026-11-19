@@ -39,12 +39,12 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
   test('🔴 cada forma tiene su «?»: explica sin elegir, una a la vez, y se cierra con el mismo «?», la ✕ o Escape', async ({ page }) => {
     await hastaComoDividen(page);
     // Tres «?», cerrados, hermanos del radio (no adentro).
-    for (const opcion of ['Por lo que pidió cada uno', 'En partes iguales', 'Pagar el total']) {
+    for (const opcion of ['Cada uno lo suyo', 'En partes iguales', 'Pagar el total']) {
       await expect(ayuda(page, opcion)).toHaveAttribute('aria-expanded', 'false');
     }
     expect(await page.locator('[role="radio"] .ayuda-opcion-boton, [role="radio"] button').count()).toBe(0);
     await expect(explicacion(page)).toHaveCount(0);
-    const consumo = page.getByRole('radio', { name: /Por lo que pidió cada uno/ });
+    const consumo = page.getByRole('radio', { name: /Cada uno lo suyo/ });
     const total = page.getByRole('radio', { name: /Pagar el total/ });
     const elegidaAntes = await consumo.getAttribute('aria-checked');
 
@@ -85,7 +85,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // La ✕ la cierra y el foco vuelve al «?». La primera opción no tiene lugar
     // arriba (lo que se desplaza empieza ahí): su burbuja va abajo, entera, y la
     // ✕ se puede tocar (arriba quedaba recortada y la tapaba la tarjeta del total).
-    await ayuda(page, 'Por lo que pidió cada uno').click();
+    await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems y paga por lo que consumió.');
     await expect(explicacion(page)).toHaveClass(/ayuda-opcion-burbuja--abajo/);
     const [abajo, primera] = await Promise.all([explicacion(page).boundingBox(), consumo.boundingBox()]);
@@ -94,12 +94,12 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     await capturar(page, 'd360-12-ayuda-primera-opcion-abajo');
     await page.getByRole('button', { name: 'Cerrar la explicación', exact: true }).click();
     await expect(explicacion(page)).toHaveCount(0);
-    await expect(ayuda(page, 'Por lo que pidió cada uno')).toBeFocused();
+    await expect(ayuda(page, 'Cada uno lo suyo')).toBeFocused();
 
     // El mismo «?» también la cierra.
-    await ayuda(page, 'Por lo que pidió cada uno').click();
+    await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveCount(1);
-    await ayuda(page, 'Por lo que pidió cada uno').click();
+    await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveCount(0);
   });
 
@@ -131,7 +131,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // Primero el control positivo (el grupo con su «—»), después la ausencia.
     const tarjeta = page.locator('.division-stepper');
     for (const [radio, pregunta] of [
-      [/Por lo que pidió cada uno/, '¿Cuántos son en la mesa?'],
+      [/Cada uno lo suyo/, '¿Cuántos son en la mesa?'],
       [/En partes iguales/, '¿Cuántos pagan?'],
       [/Pagar el total/, '¿Cuántos pagan?'],
     ] as const) {
@@ -229,7 +229,7 @@ test.describe('P04 · D371 · el plato en $0', () => {
     await editarPrecio(page, 'Agua mineral', '0');
     await expect(page.locator('.ticket-title-amount')).toHaveText('$800');
     await cerrarElTicket(page);
-    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+    await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     for (let i = 0; i < 4; i += 1) await mas.click();
     await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('4');
@@ -427,7 +427,7 @@ test.describe('D536 · el «Escanear» de la barra abre la cámara directo', () 
 test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina', () => {
   test('🔴 el organizador ve el engranaje arriba a la derecha (D469); abre la hoja con el código y la propina, y se cierra con Escape o la ✕', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-    await selectorDePropina(page).getByRole('radio', { name: '10%', exact: true }).click();
+    await selectorDePropina(page).getByRole('button', { name: '10%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
@@ -474,7 +474,7 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     expect(Math.round(cajaCopiar!.y), 'en la misma fila').toBe(Math.round(cajaInvitar!.y));
     expect(Math.abs(cajaCopiar!.width - cajaInvitar!.width), 'mitad y mitad').toBeLessThanOrEqual(1);
     await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })
-      .getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
+      .getByRole('button', { name: '10%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(hoja.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
     await capturar(page, 'd360-10-hoja-de-la-mesa');
     // Con propina, 12 entre la fila de compartir y la propina.
@@ -485,7 +485,7 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     expect(Math.abs(aireConPropina - 12), 'entre compartir y la propina, 12').toBeLessThanOrEqual(1);
 
     // Cambiarla desde la hoja la guarda; Escape cierra y el foco vuelve al engranaje.
-    await hoja.getByRole('radio', { name: '15%', exact: true }).click();
+    await hoja.getByRole('button', { name: '15%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(2);
     await expect(hoja.getByRole('status')).toHaveCount(0);
     await page.keyboard.press('Escape');
@@ -495,7 +495,7 @@ test.describe('D360-4b · el engranaje de «Tu mesa»: el código y la propina',
     await expect(page.getByText('Propina de la mesa: 15 %', { exact: true })).toHaveCount(0);
     await engranaje.click();
     await expect(hoja.getByRole('region', { name: 'Propina de la mesa' })
-      .getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+      .getByRole('button', { name: '15%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
     await expect(hoja).toHaveCount(0);
 

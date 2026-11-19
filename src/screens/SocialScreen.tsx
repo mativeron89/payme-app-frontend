@@ -90,6 +90,7 @@ export function SocialScreen() {
   const [tab, setTab] = useState<SocialTabId>('amigos');
   const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void>; etiqueta: string } | null>(null);
   const disparadorConfirmacion = useRef<HTMLElement | null>(null);
+  const pestanasRef = useRef<HTMLDivElement>(null);
   const botonesDeAmigos = useRef(new Map<string, HTMLButtonElement>());
   const cerrarConfirmacion = () => {
     setConfirmacion(null);
@@ -287,6 +288,8 @@ export function SocialScreen() {
     olvidarLoDeAmigos();
     try {
       await api.blockUser(userId);
+      disparadorConfirmacion.current =
+        pestanasRef.current?.querySelector<HTMLElement>('button[aria-selected="true"]') ?? null;
       toast(t('Bloqueaste a {0}', quien));
       loadFriends();
       loadRequests();
@@ -488,7 +491,9 @@ export function SocialScreen() {
         userName={fullName(session) ?? undefined}
         alignChrome
         tabs={
-          <BubbleTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as SocialTabId)} />
+          <div ref={pestanasRef} className="social-pestanas">
+            <BubbleTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as SocialTabId)} />
+          </div>
         }
       />
 

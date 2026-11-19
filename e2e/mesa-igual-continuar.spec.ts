@@ -183,7 +183,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await enTuMesaConLaLista(page);
-    await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
+    await expect(page.locator('.mesa-selection-title')).toContainText('Cada uno lo suyo');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();

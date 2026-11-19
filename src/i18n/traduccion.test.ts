@@ -62,12 +62,9 @@ function familiasDinamicas(): Record<string, string[]> {
     'el centro por defecto': ['Escanear'],
     // AppHeader.tsx:132 y ui.tsx:32 · `t(backLabel)` con su valor por defecto.
     'backLabel por defecto': ['Volver'],
-    // §1.3-bis · CreateMesaFlow: las tres formas de dividir viven en una
-    // lista y se traducen por variable. Se enumeran los SEIS strings.
-    'las tres formas de dividir': [
-      'Por lo que pidió cada uno', 'Cada uno elige sus platos',
-      'En partes iguales', 'El total dividido entre todos',
-      'Pagar el total', 'Uno o varios cubren toda la cuenta',
+    // Los subtítulos se traducen al elegir la sugerencia o el texto base.
+    'descripción del modo de división': [
+      'Cada uno elige sus platos', 'El total dividido entre todos', 'Uno o varios cubren toda la cuenta',
     ],
     // Tanda 4 · `t(r.clave, ...r.args)` en el comprobante. Las CUATRO claves
     // se derivan de la función real recorriendo sus cuatro combinaciones: si
@@ -175,7 +172,7 @@ function envueltos(): { ruta: string; texto: string }[] {
 // tanto en pantalla como en el nombre accesible. La maqueta fija una única
 // pregunta para las tres divisiones; se retiró esa familia dinámica, no una
 // cobertura de traducción.
-const T_SIN_LITERAL = 18;
+const T_SIN_LITERAL = 17;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];
@@ -223,7 +220,7 @@ describe('🔴 los `t()` que NO reciben literal · el extractor no los ve', () =
    * y `CATEGORIA` en `utils/labels.ts` (vía `categoryLabel()`) — sobre un
    * código/enum que sí viene del backend, pero el TEXTO en español que se le
    * pasa a `t()` es 100% local y enumerable. Las dos familias ya están abajo.
-   * No queda ningún sitio deliberadamente afuera: los 18 de `T_SIN_LITERAL`
+   * No queda ningún sitio deliberadamente afuera: los de `T_SIN_LITERAL`
    * están cubiertos por alguna familia.
    */
   it('🔴 cada valor que puede entrar a un `t(VARIABLE)` tiene traducción EN', () => {

@@ -50,7 +50,7 @@ function sigueAbierta(status: MesaStatus): boolean {
 }
 
 function modalidad(datos: DatosDelReparto, t: Traducir): string {
-  if (datos.divisionMode === 'consumo') return t('por consumo');
+  if (datos.divisionMode === 'consumo') return t('Cada uno lo suyo');
   return datos.expectedParticipants > 1
     ? t('partes iguales, entre {0}', datos.expectedParticipants)
     : t('toda la cuenta');

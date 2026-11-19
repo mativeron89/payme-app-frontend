@@ -223,7 +223,7 @@ test('mesa · ticket → garantía → 3DS → compartir → tu mesa', async ({ 
   expect(Math.round(total.debajoDelTitulo)).toBe(10);
   const ver = (await piezaDelTotal(page, '.ticket-title-fold .tk-fold-head'))!;
   expect([Math.round(ver.derecha), Math.round(ver.alto)]).toEqual([17, 48]);
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await masUno.click();
   await page.getByRole('button', { name: 'Continuar' }).click();

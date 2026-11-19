@@ -84,7 +84,7 @@ async function abrirTicket(page: Page, conTotalDetectado = false): Promise<void>
 
 async function abrirGarantia(page: Page, modo: 'igual' | 'consumo' = 'igual'): Promise<void> {
   await abrirTicket(page);
-  await page.getByRole('radio', { name: modo === 'igual' ? /En partes iguales/ : /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: modo === 'igual' ? /En partes iguales/ : /Cada uno lo suyo/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   const toques = modo === 'igual' ? 3 : 4;
   for (let i = 0; i < toques; i += 1) await sumar.click();

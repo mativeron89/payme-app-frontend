@@ -131,3 +131,40 @@ for (const ancho of [375, 390] as const) {
     });
   });
 }
+
+for (const lang of ['es', 'en'] as const) {
+  test(`U10 · cancelar conserva la foto y confirmar la quita (${lang})`, async ({ page }) => {
+    const en = lang === 'en';
+    await conViajes(page);
+    await page.evaluate(value => localStorage.setItem('payme.app.idioma.v1', value), lang);
+    await page.reload();
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/index');
+      const leer = api.getViaje;
+      let conFoto = true;
+      api.getViaje = async (...args) => ({ ...(await leer(...args)), has_photo: conFoto });
+      api.quitarFotoDeViaje = async (...args) => {
+        conFoto = false;
+        sessionStorage.setItem('borrado-de-prueba', args[0]);
+      };
+    });
+    await alViaje(page, CANCUN, 'Cancún 2026');
+    if (!en) await capturar(page, 'balance-solo-monto');
+    await page.getByRole('button', { name: en ? 'Trip settings' : 'Configuración del viaje', exact: true }).click();
+    await page.getByRole('button', { name: en ? 'Photo' : 'Foto', exact: true }).click();
+    const eliminar = page.getByRole('button', { name: en ? 'Delete photo' : 'Eliminar foto', exact: true });
+    await eliminar.click();
+    const confirmar = page.getByRole('dialog', { name: en ? 'Delete the trip photo?' : '¿Eliminar la foto del viaje?' });
+    await expect(confirmar).toContainText(en ? "It's removed from the trip and can't be recovered."
+      : 'Se borra del viaje y no se puede recuperar.');
+    if (!en) await capturar(page, 'confirmar-eliminar-foto');
+    await confirmar.getByRole('button', { name: en ? 'Cancel' : 'Cancelar', exact: true }).click();
+    await expect(eliminar).toBeFocused();
+    expect(await page.evaluate(() => sessionStorage.getItem('borrado-de-prueba'))).toBeNull();
+    await eliminar.click();
+    await confirmar.getByRole('button', { name: en ? 'Delete' : 'Borrar', exact: true }).click();
+    await expect(eliminar).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem('borrado-de-prueba'))).toBe(CANCUN);
+  });
+}

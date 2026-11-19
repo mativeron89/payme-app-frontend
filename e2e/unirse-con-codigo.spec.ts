@@ -439,3 +439,19 @@ test.describe('C · la espera se consulta cada 10 s a la vista, y nunca en segun
     await expect(espera(page)).toHaveCount(0);
   });
 });
+
+test('U18 · código y cuenta suspendida: muestra el estado de la cuenta, sin afirmar admisión', async ({ page }) => {
+  await enMesas(page);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/index');
+    const errores = '/src/api/http.ts';
+    const { HttpError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/http');
+    api.requestJoin = async () => { throw new HttpError(403, { error: 'user_suspended' }); };
+  });
+  await abrirYEscribir(page, '12345');
+  await solicitar(page).click();
+  await expect(page.getByText('Tu cuenta está suspendida. Escríbenos.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Tu cuenta ya está lista/)).toHaveCount(0);
+  await capturar(page, 'codigo-cuenta-suspendida');
+});

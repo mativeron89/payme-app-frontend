@@ -4,6 +4,7 @@ import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
+import { HojaDeDecision } from '../components/HojaDeDecision';
 import { useHojaModal } from '../components/useHojaModal';
 import { Avatar, useToast } from '../components/ui';
 import { InviteFriends, type MemoriaDeInvitaciones } from '../components/InviteFriends';
@@ -245,6 +246,7 @@ export interface MesaDetailViewProps {
   linkDelQr?: string | null;
   /** D622 · AF-3 · pide ese link al abrir la hoja, una vez por apertura (sólo con la mesa recibiendo gente). */
   onPedirLinkDelQr?: () => void;
+  tieneBorrador?: boolean;
   onBack: () => void;
   /**
    * D344 · el selector de la propina de la mesa del organizador, armado por
@@ -630,6 +632,7 @@ export function MesaDetailView({
   linkDelQr = null,
   onPedirLinkDelQr,
   onBack,
+  tieneBorrador = false,
   propinaDeLaMesa = null,
   calificacion = null,
   propinaGuardando = false,
@@ -648,6 +651,12 @@ export function MesaDetailView({
    */
   const [hojaCierre, setHojaCierre] = useState<null | 'cerrar'>(null);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
+  const volverRef = useRef<HTMLButtonElement>(null);
+  const [salidaPendiente, setSalidaPendiente] = useState(false);
+  const seguirEditando = () => {
+    setSalidaPendiente(false);
+    requestAnimationFrame(() => volverRef.current?.focus({ preventScroll: true }));
+  };
   const pantallaRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<HTMLDivElement | null>(null);
   /**
@@ -772,6 +781,8 @@ export function MesaDetailView({
   ) : null;
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
+  const comprobandoCierre = !ejemplo && (mesa.status === 'open' || mesa.status === 'partially_paid')
+    && (cd === null || cd === '0:00');
   const esConsumo = mesa.division_mode === 'consumo';
   /**
    * D344 · «Mi parte» con platos, ajustes y propina (P2–P4), sólo en la mesa
@@ -897,7 +908,7 @@ export function MesaDetailView({
   const availableSlots = availableSlotsOf(mesa);
   const nothingLeft = nothingLeftFor(mesa);
   const divisionLabel = esConsumo
-    ? t('cada uno lo suyo')
+    ? t('Cada uno lo suyo')
     : mesa.expected_participants === 1
       ? pagosCortados ? t('toda la cuenta') : t('pagar el total')
       : t('partes iguales');
@@ -1310,7 +1321,12 @@ export function MesaDetailView({
 
   return (
     <div ref={pantallaRef} className={`screen has-appbar${ejemplo ? '' : ' mesa-con-accion-ancha'}`}>
-      <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
+      <AppHeaderFlow
+        userName={userName}
+        backRef={volverRef}
+        onBack={() => { if (tieneBorrador) setSalidaPendiente(true); else onBack(); }}
+        bellBlocked={busy || !!frozenScope}
+      />
       <div className="title-card mesa-selection-title">
         {/* D469 · el engranaje del organizador va ARRIBA A LA DERECHA de la
             tarjeta («la configuración de la mesa debe ir en la burbuja del
@@ -1339,10 +1355,7 @@ export function MesaDetailView({
             {esTitular ? t('Tu mesa') : t('¿Qué consumiste?')}
           </h1>
           <div className="title-card-sub mesa-selection-context">
-            {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
-                abiertas— y en UNA línea, restaurante · modalidad. */}
             <span className="mesa-selection-context-main">{mesa.restaurant.name}</span>
-            <span aria-hidden="true">·</span>
             <strong>{divisionLabel}</strong>
           </div>
         </FilaDeTitulo>
@@ -1382,6 +1395,9 @@ export function MesaDetailView({
       </div>
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
+        {comprobandoCierre && (
+          <p className="note" role="status">{t('Estamos comprobando el estado de la mesa…')}</p>
+        )}
         {recuperacion}
         {avisoGuardado && (
           <div ref={avisoGuardadoRef} className="card mesa-guardado" role="status">
@@ -1617,6 +1633,24 @@ export function MesaDetailView({
           </>
         )}
       </div>
+      {salidaPendiente && (
+        <HojaDeDecision
+          titulo={t('Tienes cambios sin guardar')}
+          detalle={t('Si sales ahora, lo que marcaste aquí no se guarda.')}
+          cancelar={t('Seguir editando')}
+          onCancelar={seguirEditando}
+        >
+          <button type="button" className="btn btn-navy"
+            disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
+            onClick={() => {
+              seguirEditando();
+              void terminarListo();
+            }}>
+            {t('Guardar')}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={onBack}>{t('Salir sin guardar')}</button>
+        </HojaDeDecision>
+      )}
       {hojaDeLaMesa && hayConfiguracion && (
         <HojaDeLaMesa
           codigo={codigoParaUnirse}

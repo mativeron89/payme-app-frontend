@@ -3569,6 +3569,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onCopyInvitationLink={() => void copyInvitationLink()}
       linkDelQr={linkDelQr?.code === code && linkDelQrVigente(linkDelQr.expiresAt, Date.now()) ? linkDelQr.link : null}
       onPedirLinkDelQr={() => void pedirLinkDelQr()}
+      tieneBorrador={!ejemplo && !isGuest && CORTE.pagosCortados
+        && (mesa.division_mode === 'consumo' ? selected.size > 0 : !mismoBorrador(selected, informativasGuardadas))}
       onBack={() => goBack('mesas')}
       propinaDeLaMesa={selectorDePropina}
       // D553/D554 · con la mesa ya cerrada (sólo lectura), la calificación con un toque.

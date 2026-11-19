@@ -1,4 +1,5 @@
 import { Icon } from '../components/Icon';
+import { useToast } from '../components/ui';
 import { useIdioma } from '../i18n/idioma';
 import { formatMXN } from '../utils/format';
 import { confirmedConsumptionProgress } from '../screens/mesaItemsView';
@@ -19,8 +20,12 @@ import './ayuda.css';
  *
  * Son dos botones hermanos (abrir y quitar), nunca uno dentro del otro.
  */
-export function TarjetaTutorial({ aperturaPendiente }: { readonly aperturaPendiente: boolean | null }) {
+export function TarjetaTutorial({ aperturaPendiente, onQuitar }: {
+  readonly aperturaPendiente: boolean | null;
+  readonly onQuitar?: () => void;
+}) {
   const { t } = useIdioma();
+  const toast = useToast();
   const guia = useGuia();
   const ejemplo = useEjemplo();
   const enFechasDeViaje = useEnFechasDeViaje();
@@ -39,7 +44,11 @@ export function TarjetaTutorial({ aperturaPendiente }: { readonly aperturaPendie
         <span className="tarjeta-tutorial-cuadro" aria-hidden="true"><Icon name="map" size={28} /></span>
         <span className="tarjeta-tutorial-titulo">{t('Tutorial')}</span>
       </button>
-      <button type="button" className="tarjeta-tutorial-quitar" aria-label={t('Quitar el tutorial de Inicio')} onClick={guia.ocultarTarjeta}>
+      <button type="button" className="tarjeta-tutorial-quitar" aria-label={t('Quitar el tutorial de Inicio')} onClick={() => {
+        guia.ocultarTarjeta();
+        toast(t('Lo encuentras en Más › Ayuda'), { sobreLaBarra: true });
+        onQuitar?.();
+      }}>
         <Icon name="x" size={18} />
       </button>
     </section>

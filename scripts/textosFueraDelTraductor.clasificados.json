@@ -246,17 +246,10 @@
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
-  "texto": "Por lo que pidió cada uno",
-  "grupo": "dinamico",
-  "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
- },
- {
-  "archivo": "src/screens/CreateMesaFlow.tsx",
   "texto": "Cada uno elige sus platos",
   "grupo": "dinamico",
   "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+  "motivo": "se traduce con t(op.sub); la clave existe en en.ts"
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
@@ -267,17 +260,10 @@
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
-  "texto": "En partes iguales",
-  "grupo": "dinamico",
-  "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
- },
- {
-  "archivo": "src/screens/CreateMesaFlow.tsx",
   "texto": "El total dividido entre todos",
   "grupo": "dinamico",
   "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+  "motivo": "se traduce con t(op.sub); la clave existe en en.ts"
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
@@ -288,17 +274,10 @@
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",
-  "texto": "Pagar el total",
-  "grupo": "dinamico",
-  "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
- },
- {
-  "archivo": "src/screens/CreateMesaFlow.tsx",
   "texto": "Uno o varios cubren toda la cuenta",
   "grupo": "dinamico",
   "veces": 1,
-  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+  "motivo": "se traduce con t(op.sub); la clave existe en en.ts"
  },
  {
   "archivo": "src/screens/CreateMesaFlow.tsx",

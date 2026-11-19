@@ -15,6 +15,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { AppBottomBar } from '../../components/AppBottomBar';
 import { AppHeaderBack } from '../../components/AppHeader';
 import { Icon } from '../../components/Icon';
+import { HojaDeDecision } from '../../components/HojaDeDecision';
 import { FilaDeTitulo } from '../../components/TarjetaDeTitulo';
 import { useToast } from '../../components/ui';
 import { useHojaModal } from '../../components/useHojaModal';
@@ -66,7 +67,7 @@ type Carga =
 type Hoja =
   | { readonly tipo: 'nota'; readonly entrada: NotaDeTexto | null }
   | { readonly tipo: 'lista'; readonly entrada: ListaConTildes | null }
-  | { readonly tipo: 'menu'; readonly entrada: EntradaDeNotas };
+  | { readonly tipo: 'menu' | 'borrar'; readonly entrada: EntradaDeNotas };
 
 /** Lo que una hoja de escribir le pide a la pantalla, y lo que la pantalla le contesta. */
 export type ResultadoDeGuardar = { readonly cerrar: true } | { readonly cerrar: false; readonly mensaje: string | null; readonly nuevaClave?: boolean };
@@ -297,9 +298,19 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
         <HojaDeMenu
           entrada={hoja.entrada}
           onEditar={() => setHoja(hoja.entrada.tipo === 'nota' ? { tipo: 'nota', entrada: hoja.entrada } : { tipo: 'lista', entrada: hoja.entrada })}
-          onBorrar={() => void borrar(hoja.entrada)}
+          onBorrar={() => setHoja({ tipo: 'borrar', entrada: hoja.entrada })}
           onCancelar={() => setHoja(null)}
         />
+      )}
+      {pizarron && hoja?.tipo === 'borrar' && (
+        <HojaDeDecision
+          titulo={hoja.entrada.tipo === 'nota' ? t('¿Borrar tu nota?') : t('¿Borrar «{0}»?', hoja.entrada.titulo)}
+          detalle={t('Se borra del viaje y no se puede recuperar.')}
+          cancelar={t('Cancelar')}
+          onCancelar={() => setHoja({ tipo: 'menu', entrada: hoja.entrada })}
+        >
+          <button type="button" className="btn btn-danger" onClick={() => void borrar(hoja.entrada)}>{t('Borrar')}</button>
+        </HojaDeDecision>
       )}
     </div>
   );

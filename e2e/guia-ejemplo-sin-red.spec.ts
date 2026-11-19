@@ -124,7 +124,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await burbuja(page, 'Este es el ticket de ejemplo.').getByRole('button', { name: 'Siguiente', exact: true }).click();
     await expect.poll(() => fase(page)).toBe('dividir');
     // T3 · el valor del contador del ejemplo antes de Continuar (como en ff5dec7).
-    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+    await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?', exact: true }).locator('.val')).toHaveText('1');
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
@@ -278,11 +278,11 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     const antes = await escrito(page);
     await page.getByRole('button', { name: 'Escanear', exact: true }).click();
     await sacarFoto(page);
-    await expect(page.getByRole('radio', { name: /Por lo que pidió cada uno/ })).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Cada uno lo suyo/ })).toBeVisible();
     await page.getByRole('button', { name: 'Ver el ticket', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
     await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
-    await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+    await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
     await page.getByRole('button', { name: 'Un comensal más' }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 

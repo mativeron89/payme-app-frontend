@@ -125,7 +125,7 @@ test.describe('D263 · «¿Quién pagó?» con varios', () => {
     await expect(page.getByText('El pago completo queda a nombre de quien pagó.', { exact: true })).toHaveCount(0);
     await capturar(page, 'd263-05-ticket-nuevo-dos');
     await page.getByRole('button', { name: 'Compartir con el viaje', exact: true }).click();
-    // «Por lo que pidió cada uno»: al ticket, a elegir.
+    // «Cada uno lo suyo»: al ticket, a elegir.
     await expect(page).toHaveURL(new RegExp(`/viaje-ticket/${CANCUN}\\.`));
     await expect(page.locator('.title-card-sub')).toContainText('Pagaron 2 personas');
     await expect(page.getByRole('region', { name: 'Quiénes pagaron', exact: true }).locator('li'))

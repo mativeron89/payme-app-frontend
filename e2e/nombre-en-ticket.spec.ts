@@ -128,9 +128,9 @@ test.describe('AF-NOMBRE-EN-TICKET · «¿Cómo dividen?» en una sola vista (y 
       const igual = await acreditar('iguales con número');
       await capturar(page, `como-dividen-${ancho}x${alto}-con-numero`);
 
-      await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
-      // D366 · en «Por lo que pidió cada uno» ya no hay monto ni «base de propina».
-      await expect(page.getByRole('radio', { name: /Por lo que pidió cada uno/ })).toHaveAttribute('aria-checked', 'true');
+      await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
+      // D366 · en «Cada uno lo suyo» ya no hay monto ni «base de propina».
+      await expect(page.getByRole('radio', { name: /Cada uno lo suyo/ })).toHaveAttribute('aria-checked', 'true');
       await expect(page.locator('.division-stepper .split-amt, .division-stepper .marcador-monto')).toHaveCount(0);
       await expect(page.locator('.division-stepper')).not.toContainText('base de propina');
       const consumo = await acreditar('consumo con número');

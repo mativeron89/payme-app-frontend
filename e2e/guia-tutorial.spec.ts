@@ -163,7 +163,7 @@ async function hastaDividir(page: Page): Promise<void> {
   expect(await fase(page)).toBe('dividir');
 }
 /** 2c → 2d. */
-async function hastaCompartir(page: Page, forma: RegExp = /Por lo que pidió cada uno/, toques = 1): Promise<void> {
+async function hastaCompartir(page: Page, forma: RegExp = /Cada uno lo suyo/, toques = 1): Promise<void> {
   await page.getByRole('radio', { name: forma }).click();
   for (let i = 0; i < toques; i += 1) await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -443,7 +443,7 @@ test.describe('D363 · 375 × 667 y en inglés', () => {
     const ticket = burbuja(page, 'This is the sample receipt.');
     await expect(ticket).toBeVisible();
     await ticket.getByRole('button', { name: 'Next', exact: true }).click();
-    await page.getByRole('radio', { name: /By what each person ordered/ }).click();
+    await page.getByRole('radio', { name: /Everyone their own/ }).click();
     await page.getByRole('button', { name: 'One more diner', exact: true }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(burbuja(page, 'This is where you’ll invite your friends to join the table.')).toBeVisible();

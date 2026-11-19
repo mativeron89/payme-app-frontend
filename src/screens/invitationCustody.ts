@@ -119,6 +119,7 @@ export function settleInvitationFailure(status: number | null, code?: string): J
     // `?t=` de un token muerto cada vez que el storage no había persistido.
     stripTokenFromUrl();
   }
+  if (status === 403 && code === 'user_suspended') return 'cuenta_suspendida';
   return code === 'join_requests_full' ? 'solicitudes_llenas' : status === 400
     ? 'invalid'
     : status === 403 || status === 409

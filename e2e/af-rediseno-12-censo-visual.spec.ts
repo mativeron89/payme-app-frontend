@@ -239,7 +239,7 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   }));
   expect(divisionScroll.scrollHeight).toBe(divisionScroll.clientHeight);
 
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   for (let i = 0; i < 4; i += 1) await sumar.click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();

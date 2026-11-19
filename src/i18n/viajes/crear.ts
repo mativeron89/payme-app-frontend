@@ -11,7 +11,6 @@ export const EN_VIAJES_CREAR: Record<string, string> = {
   'Miembros': 'Members',
   'Busca en Amigos o escribe @usuario': 'Search your Friends or type @username',
   'Creas el viaje': 'You create the trip',
-  'Quitar': 'Remove',
   // 1e · Buscar por @usuario.
   'En tus amigos': 'In your friends',
   'Otros usuarios de PayMe': 'Other PayMe users',

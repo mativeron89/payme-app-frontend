@@ -138,6 +138,7 @@ for (const origen of ['amigo', 'solicitud'] as const) {
     await hoja.getByRole('button', { name: 'Bloquear', exact: true }).click();
     await expect(hoja).toHaveCount(0);
     expect(await llamadas()).toEqual([persona.id]);
+    await expect(page.getByRole('tab', { selected: true })).toBeFocused();
     const nombre = origen === 'amigo' ? persona.nombre : persona.primerNombre;
     await expect(page.locator('.toast')).toContainText(`Bloqueaste a ${nombre}`);
     if (origen === 'amigo') await foto(page, 'm-bloqueaste-es');
@@ -225,7 +226,7 @@ test('K22 · apertura sin jerga en el caso correcto', async ({ page }) => {
     api.createMesa = async () => { throw new HttpError(400, { error: 'invalid_items' }); };
   });
   await page.getByRole('button', { name: 'Escanear', exact: true }).click(); await sacarFoto(page);
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();

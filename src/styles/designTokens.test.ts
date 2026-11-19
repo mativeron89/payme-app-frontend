@@ -475,17 +475,6 @@ function bloquesSinMovimiento(): string[] {
 }
 
 describe('D372 · la invitación base (Claude Design, con las resoluciones de V)', () => {
-  it('🔴 la barra reducida: la sombra ES la de la barra principal (derivada, no copiada), de borde a borde, sin transform', () => {
-    const sombra = (cuerpo: string) => cuerpo.match(/box-shadow:\s*([^;]+);/)![1]
-    const barra = rule('.link-barra')
-    expect(sombra(barra)).toBe(sombra(rule('.appbar-block')))
-    for (const decl of ['position: absolute', 'left: 0', 'right: 0', 'bottom: 0', 'height: var(--appbar-alto)', 'border-radius: 24px 24px 0 0']) {
-      expect(barra, decl).toContain(decl)
-    }
-    expect(barra, 'la entrada usa transform: la barra no puede depender de un translateX').not.toMatch(/transform/)
-    expect(rule('.link-barra .link-round')).toContain('margin-top: -16px')
-  })
-
   it('🔴 .hdr no cambia; .hdr-compact tiene su alto propio y no se suman reglas compactas nuevas', () => {
     const hdr = rule('.hdr')
     expect(hdr).toContain('height: calc(154px + env(safe-area-inset-top))')
@@ -504,8 +493,8 @@ describe('D372 · la invitación base (Claude Design, con las resoluciones de V)
     expect(suelta).toContain('flex: none')
   })
 
-  it('la entrada: 200 ms con 40 de retraso, en la tarjeta montada, la suelta y la barra', () => {
-    expect(CSS).toMatch(/\.link-screen > \.title-card,\s*\.link-alta > \.title-card,\s*\.link-barra \{\s*animation: link-entra 200ms cubic-bezier\(0\.2, 0, 0, 1\) 40ms both;/)
+  it('la entrada: 200 ms con 40 de retraso, en la tarjeta montada y la suelta', () => {
+    expect(CSS).toMatch(/\.link-screen > \.title-card,\s*\.link-alta > \.title-card \{\s*animation: link-entra 200ms cubic-bezier\(0\.2, 0, 0, 1\) 40ms both;/)
   })
 
   it('🔴 con «reducir movimiento», el aro quieto y la entrada sólo con opacidad; control positivo: el extractor ve otros bloques', () => {

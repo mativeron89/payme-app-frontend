@@ -432,6 +432,28 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const ticketRef = useRef<HTMLDivElement | null>(null);
   const ticketTouchStartY = useRef<number | null>(null);
   const ticketTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const cuerpoDivision = useRef<HTMLDivElement>(null);
+  const [divisionDesplazable, setDivisionDesplazable] = useState(false);
+  useLayoutEffect(() => {
+    const cuerpo = cuerpoDivision.current;
+    const pantalla = cuerpo?.parentElement;
+    const titulo = cuerpo?.previousElementSibling;
+    const total = cuerpo?.firstElementChild;
+    const radio = cuerpo?.querySelector('.div-card');
+    const barra = pantalla?.querySelector('.appbar-block');
+    if (!pantalla || !titulo || !total || !radio || !barra) return;
+
+    const medir = () => {
+      const altoBajoTitulo = pantalla.getBoundingClientRect().bottom - titulo.getBoundingClientRect().bottom;
+      const espacioParaOpciones = altoBajoTitulo - total.getBoundingClientRect().height
+        - barra.getBoundingClientRect().height - 10; // Margen sobre la tarjeta del total.
+      setDivisionDesplazable(espacioParaOpciones < radio.getBoundingClientRect().height * 2);
+    };
+    medir();
+    const observer = new ResizeObserver(medir);
+    for (const elemento of [pantalla, titulo, total, radio, barra]) observer.observe(elemento);
+    return () => observer.disconnect();
+  }, [step]);
   const ticketCloseRef = useRef<HTMLButtonElement | null>(null);
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
@@ -3153,6 +3175,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
             <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
           </FilaDeTitulo>
         </div>
+        <div ref={cuerpoDivision} className={`ticket-flow-body${divisionDesplazable ? ' ticket-flow-body--desplazable' : ''}`}>
         <div className="card ticket-total-card">
           <div className="ticket-total-fila">
             {/* D360 · P04 · con alguna línea incompleta (un precio vacío) no hay
@@ -3252,13 +3275,15 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               elegir es opcional, así que dice que todos PUEDEN marcar lo que
               comieron (texto de AF; Mati lo aprueba en la prueba). */}
           {([
-            { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos', ayuda: t('Cada uno selecciona sus ítems y paga por lo que consumió.') },
-            { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos', ayuda: t('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.') },
+            { modo: 'consumo', ico: <Icon name="users" size={22} />, title: t('Cada uno lo suyo'), sub: 'Cada uno elige sus platos', ayuda: sinGarantia
+              ? t('Cada uno marca lo que consumió.')
+              : t('Cada uno selecciona sus ítems y paga por lo que consumió.') },
+            { modo: 'igual', ico: '÷', title: t('En partes iguales'), sub: 'El total dividido entre todos', ayuda: t('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.') },
             // La referencia dibuja una billetera, pero el MVP prohíbe cualquier
             // affordance wallet: acá mandan P1.5 y el riel card-only ratificado.
-            { modo: 'total', ico: <Icon name="card" size={22} className="div-total-icon" />, title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta', ayuda: t('Sólo algunas personas van a pagar la cuenta, pero todos pueden marcar lo que comieron.') },
+            { modo: 'total', ico: <Icon name="card" size={22} className="div-total-icon" />, title: t('Pagar el total'), sub: 'Uno o varios cubren toda la cuenta', ayuda: t('Sólo algunas personas van a pagar la cuenta, pero todos pueden marcar lo que comieron.') },
           ] as const).map((op) => {
-            const titulo = t(op.title);
+            const titulo = op.title;
             return (
             <div key={op.modo} className="div-opcion">
               <button
@@ -3333,6 +3358,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </div>
             </div>
           </div>
+        </div>
         </div>
         {ticketVisible && (
           <div className="ticket-sheet-layer">

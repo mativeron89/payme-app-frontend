@@ -101,7 +101,17 @@ export function PropinaDeLaMesa({
           {t('El ticket ya trae un cargo por servicio de {0}.', formatMXN(servicio))}
         </p>
       )}
-      <div className="propina-mesa-opciones" role="radiogroup" aria-labelledby={tituloId}>
+      <div className="propina-mesa-opciones" role="group" aria-labelledby={tituloId}
+        onKeyDown={(event) => {
+          const avance = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1
+            : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 0;
+          if (!avance) return;
+          const opciones = [...event.currentTarget.querySelectorAll('button')];
+          const actual = opciones.findIndex((boton) => boton === event.target);
+          if (actual < 0) return;
+          event.preventDefault();
+          opciones[(actual + avance + opciones.length) % opciones.length]?.focus();
+        }}>
         {PRESETS_DE_LA_MESA.map((pct) => {
           const elegida = preset === pct;
           return (
@@ -109,10 +119,14 @@ export function PropinaDeLaMesa({
               key={pct}
               type="button"
               className={`propina-mesa-pill${elegida ? ' sel' : ''}`}
-              role="radio"
-              aria-checked={elegida}
-              disabled={guardando}
-              onClick={() => { setOtroAbierto(false); setPorConfirmar(null); onElegir(settingDePreset(pct)); }}
+              aria-pressed={elegida}
+              aria-disabled={guardando || undefined}
+              onClick={() => {
+                if (guardando) return;
+                setOtroAbierto(false);
+                setPorConfirmar(null);
+                onElegir(settingDePreset(pct));
+              }}
             >
               {pct}%
             </button>
@@ -121,10 +135,9 @@ export function PropinaDeLaMesa({
         <button
           type="button"
           className={`propina-mesa-pill propina-mesa-pill--otro${esOtro || otroAbierto ? ' sel' : ''}`}
-          role="radio"
-          aria-checked={esOtro || otroAbierto}
-          disabled={guardando}
-          onClick={() => setOtroAbierto(true)}
+          aria-pressed={esOtro || otroAbierto}
+          aria-disabled={guardando || undefined}
+          onClick={() => { if (!guardando) setOtroAbierto(true); }}
         >
           {t('Otro')}
         </button>

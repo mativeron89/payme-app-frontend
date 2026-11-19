@@ -31,7 +31,7 @@ const cabecera = (page: Page, nombre: string) => region(page, nombre).locator('.
 /** Hasta «Tu mesa» después de «Listo», con el Tagliatelle elegido y la propina del 15 %. */
 async function tuMesaDespuesDeListo(page: Page): Promise<string> {
   const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-  await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
+  await selectorDePropina(page).getByRole('button', { name: '15%', exact: true }).click();
   await expect.poll(() => pedidosDePropina(page)).toBe(1);
   await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
@@ -142,7 +142,7 @@ test.describe('D469 · «Tu mesa»: engranaje arriba a la derecha y tres despleg
     await expect(hoja).toBeVisible();
     await expect(hoja.getByText(/Código para unirse:/)).toBeVisible();
     await expect(hoja.getByRole('button', { name: 'Invitar amigos de PayMe' })).toBeVisible();
-    await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(selectorDePropina(page).getByRole('button', { name: '15%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await capturar(page, 'd469-03-hoja-del-engranaje');
     await page.keyboard.press('Escape');
     await expect(hoja).toHaveCount(0);
@@ -151,7 +151,7 @@ test.describe('D469 · «Tu mesa»: engranaje arriba a la derecha y tres despleg
 
   test('🔴 la mesa que ya cerró (la vista de la captura) conserva el engranaje: la hoja muestra la propina leída', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'igual' });
-    await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
+    await selectorDePropina(page).getByRole('button', { name: '15%', exact: true }).click();
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();

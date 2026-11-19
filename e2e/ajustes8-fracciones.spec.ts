@@ -103,7 +103,7 @@ async function sinOtroEnLasPorciones(page: Page): Promise<void> {
   await expect(porciones.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
   // D360-4b · el «Otro» de la propina de la mesa ya no está en la página: vive
   // en la hoja del engranaje.
-  await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Propina de la mesa', exact: true })).toHaveCount(0);
 }
 
 /**

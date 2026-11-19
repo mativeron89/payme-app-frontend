@@ -40,6 +40,7 @@ import {
   iniciales,
   nombreDeMiembro,
   parametroDeTicket,
+  textoDeMiBalance,
   type T,
 } from './viajesView';
 import { pedirInicioEnViajes } from './inicioEnViajes';
@@ -804,13 +805,13 @@ function ViajeAbierto({ viaje: v, onVerBalance, onCargaManual, onNotas, fotoDe }
  * D245-3 · el balance propio como monto: a favor en verde («$1,200»), deuda en
  * rojo con signo menos («−$542») y cero en negro («$0»). Sin «Debes», «Te deben»
  * ni «Estás a mano» a la vista; el color nunca va solo: el lector de pantalla
- * oye «a favor» o «debes».
+ * oye la misma frase que en la lista de viajes.
  */
 export function MontoDeBalance({ cents }: { cents: number }) {
   const { t } = useIdioma();
   const tono = cents > 0 ? 'a-favor' : cents < 0 ? 'deuda' : 'cero';
   const visible = cents < 0 ? `\u2212${formatMXN(-cents)}` : formatMXN(cents);
-  const dicho = cents > 0 ? t('A favor: {0}', formatMXN(cents)) : cents < 0 ? t('Debes {0}', formatMXN(-cents)) : formatMXN(0);
+  const dicho = textoDeMiBalance(cents, t, formatMXN);
   return (
     <p data-guia="mi-balance" className={`vjv-monto vjv-monto-${tono}`}>
       <span aria-hidden="true">{visible}</span>

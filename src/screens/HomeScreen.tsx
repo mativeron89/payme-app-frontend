@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
@@ -226,15 +226,16 @@ export function HomeScreen() {
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const unread = useSinLeer();
   const avisoDeFotos = useAvisoDeFotos();
-  const [hayInvitacion, setHayInvitacion] = useState<boolean | null>(null);
+  const escanearRef = useRef<HTMLButtonElement>(null);
+  const [invitaciones, setInvitaciones] = useState<'cargando' | 'hay' | 'ninguna' | 'fallo'>('cargando');
   useEffect(() => {
     let vigente = true;
-    setHayInvitacion(null);
+    setInvitaciones('cargando');
     const turno = ultimoVisto.turno();
     api.getPendingInvitations().then((r) => {
       const g = ultimoVisto.guardar(turno, 'inicio.invitaciones', invitacionesMostrables(r.invitations));
-      if (vigente && g) setHayInvitacion(g.valor.length > 0);
-    }).catch(() => { if (vigente && ultimoVisto.esDeAhora(turno)) setHayInvitacion(null); });
+      if (vigente && g) setInvitaciones(g.valor.length > 0 ? 'hay' : 'ninguna');
+    }).catch(() => { if (vigente && ultimoVisto.esDeAhora(turno)) setInvitaciones('fallo'); });
     return () => { vigente = false; };
   }, [session, unread]);
   let primeraMesaGuardada = false;
@@ -469,11 +470,11 @@ export function HomeScreen() {
         <InvitacionEnInicio />
         {/* D363 · 2f · la tarjeta Tutorial va debajo de la invitación pendiente (Q5), y en 4a la mesa de ejemplo
             ocupa su lugar; una mesa abierta real queda debajo, donde siempre. */}
-        <TarjetaTutorial aperturaPendiente={aperturaPendiente} />
+        <TarjetaTutorial aperturaPendiente={aperturaPendiente} onQuitar={() => escanearRef.current?.focus({ preventScroll: true })} />
         <TarjetaMesaDeEjemplo />
-        <FriendAvatarNotice visible={hayInvitacion === false} />
+        <FriendAvatarNotice visible={invitaciones === 'ninguna' || invitaciones === 'fallo'} />
         {/* D176 · la guía «Agregar a inicio», la primera vez y sólo en Safari de iOS. */}
-        <AvisoAgregarAInicio habilitado={primeraMesaGuardada && hayInvitacion === false && avisoDeFotos === 'resuelto'} />
+        <AvisoAgregarAInicio habilitado={primeraMesaGuardada && invitaciones === 'ninguna' && avisoDeFotos === 'resuelto'} />
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}
         <section className="home-mesa" aria-label={t('Tu mesa abierta')}>
@@ -677,7 +678,7 @@ export function HomeScreen() {
         {avisoSinMesas && <AvisoSinMesas accion={accionDelCentro} />}
       </div>
 
-      <AppBottomBar active="home" center={accionDelCentro} />
+      <AppBottomBar active="home" center={accionDelCentro} centerRef={escanearRef} />
 
     </div>
   );

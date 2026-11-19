@@ -113,7 +113,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /^Plato nuevo/ }).click();
     await page.getByRole('radiogroup', { name: 'Porción de Plato nuevo' })
-      .getByRole('radio', { name: '½', exact: true }).click();
+      .getByRole('button', { name: '½', exact: true }).click();
     await expect(page.locator('.qc-renglon').filter({ hasText: 'Plato nuevo' }).locator('.qc-pildora')).toHaveText('½');
     await expect(desglose(page)).toHaveText(guardado, { useInnerText: true });
     await expect(platos).toHaveCount(2);
@@ -126,13 +126,13 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     const selector = selectorDePropina(page);
     await expect(selector).toBeVisible();
     // Sin nada preseleccionado (§1.5 bis): seis opciones, ninguna marcada.
-    const opciones = selector.getByRole('radio');
+    const opciones = selector.getByRole('button');
     await expect(opciones).toHaveCount(6);
-    for (let i = 0; i < 6; i += 1) await expect(opciones.nth(i)).toHaveAttribute('aria-checked', 'false');
+    for (let i = 0; i < 6; i += 1) await expect(opciones.nth(i)).toHaveAttribute('aria-pressed', 'false');
     await expect(selector).toContainText('El ticket ya trae un cargo por servicio de $85.');
 
-    await selector.getByRole('radio', { name: '10%', exact: true }).click();
-    await expect(selector.getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await selector.getByRole('button', { name: '10%', exact: true }).click();
+    await expect(selector.getByRole('button', { name: '10%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     // D360-3 · ya no se dice cuánto da para toda la mesa. Primero el testigo de que
     // se guardó (el pedido salió y «Guardando…» se fue), después la ausencia.
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
@@ -150,7 +150,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(selectorDePropina(page)).toHaveCount(0);
     await abrirConfiguracionDeLaMesa(page);
     // En «Tu mesa» el mismo selector, con lo que quedó guardado.
-    await expect(selectorDePropina(page).getByRole('radio', { name: '10%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(selectorDePropina(page).getByRole('button', { name: '10%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
     expect(await filasDelDesglose(page)).toEqual([
@@ -177,8 +177,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
   test('🔴 por consumo: «Mi parte» antes de «Listo» y la parte del servidor después', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-    await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await selectorDePropina(page).getByRole('button', { name: '15%', exact: true }).click();
+    await expect(selectorDePropina(page).getByRole('button', { name: '15%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await expect(selectorDePropina(page)).not.toContainText(/Son \$[\d,.]+ para toda la mesa/);
@@ -228,8 +228,8 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
 
   test('🔴 quien no organiza ve la propina de la mesa y su parte, sin poder cambiarla (R5)', async ({ page }) => {
     const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
-    await selectorDePropina(page).getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(selectorDePropina(page).getByRole('radio', { name: '15%', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await selectorDePropina(page).getByRole('button', { name: '15%', exact: true }).click();
+    await expect(selectorDePropina(page).getByRole('button', { name: '15%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => pedidosDePropina(page)).toBe(1);
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
@@ -264,7 +264,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await page.evaluate(() => { localStorage.setItem('payme.app.mock.propina_mesa.v1', 'error'); });
 
     await abrirConfiguracionDeLaMesa(page);
-    await selectorDePropina(page).getByRole('radio', { name: '5%', exact: true }).click();
+    await selectorDePropina(page).getByRole('button', { name: '5%', exact: true }).click();
     await expect(selectorDePropina(page).getByRole('status')).toHaveText('Guardando la propina…');
     // D360-4b · con la hoja cerrada, la página dice que se está guardando y los
     // platos esperan (la hoja abierta deja la pantalla de atrás inerte).

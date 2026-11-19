@@ -4022,30 +4022,6 @@ html.app-de-inicio-ios .app {
   margin-top: var(--sp-3);
 }
 
-/* D y E · la barra reducida: blanca, de borde a borde, esquinas de 24 arriba y
-   la sombra de .appbar-block (adenda b). Su alto es el de la barra principal
-   (`--appbar-alto`: 64 en Safari, y la regla del área segura de D173). Va
-   absoluta contra `.app`, nunca fixed (D256), y sin translateX: la entrada usa
-   transform. El círculo va montado a −16. */
-.link-barra {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--appbar-alto);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background: var(--surface);
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -2px 8px rgba(16, 30, 59, 0.08);
-  z-index: 19;
-}
-
-.link-barra .link-round {
-  margin-top: -16px;
-}
-
 /* C · el aro de espera, dentro del cuadro navy: 24 × 24, borde de 3, una vuelta
    por segundo. Quieto con «reducir movimiento» (abajo). */
 .link-aro {
@@ -4058,11 +4034,10 @@ html.app-de-inicio-ios .app {
   animation: spin 1s linear infinite;
 }
 
-/* La entrada de la tarjeta y de la barra: 200 ms, con 40 de retraso. La banda no
+/* La entrada de la tarjeta: 200 ms, con 40 de retraso. La banda no
    anima («ya está»). La salida de C no se programa (ver el CHANGELOG). */
 .link-screen > .title-card,
-.link-alta > .title-card,
-.link-barra {
+.link-alta > .title-card {
   animation: link-entra 200ms cubic-bezier(0.2, 0, 0, 1) 40ms both;
 }
 
@@ -4089,8 +4064,7 @@ html.app-de-inicio-ios .app {
 /* «Reducir movimiento»: sólo la opacidad, en 120 ms, sin retraso; el aro quieto. */
 @media (prefers-reduced-motion: reduce) {
   .link-screen > .title-card,
-  .link-alta > .title-card,
-  .link-barra {
+  .link-alta > .title-card {
     animation: link-entra-quieta 120ms linear both;
   }
   .link-aro {
@@ -6172,29 +6146,26 @@ button.qc-circulo::after {
   font-weight: 700;
 }
 
-/* M04 · una sola línea contextual evita que restaurante y modo inflen la
-   burbuja. Decisión 77 de Mati: sin el código de mesa y en UNA línea, así que
-   ya no envuelve. Si no entra, se recorta el NOMBRE con «…»; la modalidad no
-   se recorta nunca. Antes podía envolver sin truncar. */
+/* D863 · el nombre conserva su ancho natural y la modalidad baja si hace falta. */
 .mesa-selection-context {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: flex-start;
   column-gap: var(--sp-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.mesa-selection-context-main {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.mesa-selection-context strong {
+  display: inline-block;
+  max-width: 100%;
 }
 
-.mesa-selection-context > :not(.mesa-selection-context-main) {
-  flex-shrink: 0;
-  white-space: nowrap;
+.mesa-selection-context strong::before {
+  content: '·' / '';
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-inline-end: var(--sp-1);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -7805,12 +7776,11 @@ button.qc-circulo::after {
 .social-search-input:focus {
   outline: none;
 }
-/* D195 · Mati: «La burbuja donde escribo, se le genera un borde celeste que no
-   completa toda la burbuja, quitar el borce celeste». Era el `outline` teal de
-   `.social-search:focus-within`: un rectángulo dentro de la `.card` redondeada,
-   curvo arriba y recto abajo. Enfocado, el buscador (Amigos, Grupos e Invitar a
-   la mesa) se ve igual que sin foco: lo que cambia es el cursor, sin otro borde
-   ni sombra en su lugar. */
+/* D195 · el indicador de teclado abarca el icono y el campo. */
+.invitar-busqueda:not([data-foco-por-toque]):has(.social-search-input:focus-visible) {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
 
 /* Ícono propio de cada grupo (§1.9: "no uno repetido"). */
 .group-ico {
@@ -9202,6 +9172,28 @@ h1.pay-title-lbl {
   }
 }
 
+.ticket-flow-body {
+  display: contents;
+}
+
+.ticket-flow-body--desplazable {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ticket-flow-body--desplazable .ticket-total-card .ticket-title-fold {
+  max-width: 100%;
+}
+.ticket-flow-body--desplazable .ticket-title-fold .tk-fold-lbl {
+  white-space: normal;
+}
+
+.ticket-flow-body--desplazable .scroll.ticket-flow-scroll {
+  overflow: visible;
+}
+
 .ticket-flow-scroll {
   /* AF-NOMBRE-EN-TICKET · pedido 127: 12 y no 16, parte del alto que hace
      entrar las tres formas y «¿Cuántos son?» a 390×664 y 375×667. */
@@ -9360,7 +9352,8 @@ h1.pay-title-lbl {
   border-width: 1px;
 }
 
-.ticket-sheet-open > .scroll {
+.ticket-sheet-open .ticket-flow-scroll,
+.ticket-sheet-open .ticket-flow-body--desplazable {
   overflow: hidden;
 }
 
@@ -10178,7 +10171,7 @@ h1.pay-title-lbl {
   border-color: var(--orange);
   color: #fff;
 }
-.propina-mesa-pill:disabled {
+.propina-mesa-pill[aria-disabled="true"] {
   opacity: 0.6;
   cursor: default;
 }
@@ -12663,3 +12656,41 @@ h1.pay-title-lbl {
 
 /* D846: sólo las pantallas cuyo centro es la cámara reservan sus 32px. */
 .screen.has-appbar:has(> .appbar-block .appbar-center[data-guia="camara"]) { --appbar-saliente: 32px; }
+
+.deslizable-frente--con-acciones {
+  display: flex;
+  align-items: center;
+}
+
+.deslizable-frente--con-acciones > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.deslizable-acciones {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  flex: 0 0 44px;
+}
+
+.hoja-de-decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+}
+
+.hoja-de-decision .btn-danger {
+  background: var(--danger);
+  color: var(--on-dark);
+}
+
+.hoja-de-decision h2,
+.hoja-de-decision p {
+  margin: 0;
+}
+
+.social-pestanas {
+  display: contents;
+}

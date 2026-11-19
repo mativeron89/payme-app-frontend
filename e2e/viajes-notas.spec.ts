@@ -365,6 +365,7 @@ test.describe('D290 · el menú ⋯: editar y borrar lo mío', () => {
     await conMiNota(page);
     await mio(page).getByRole('button', { name: 'Editar o borrar la nota', exact: true }).click();
     await hoja(page, 'Tu nota').getByRole('button', { name: 'Borrar nota', exact: true }).click();
+    await hoja(page, '¿Borrar tu nota?').getByRole('button', { name: 'Borrar', exact: true }).click();
     await expect(toast(page)).toContainText('Nota borrada');
     await expect(mio(page).getByText('Todavía no anotaste nada', { exact: true })).toBeVisible();
   });
@@ -475,6 +476,7 @@ test.describe('🔴 D290 · los errores del dueño, explicados', () => {
     await seam(page, 'ya_no_estaba');
     await menu.click();
     await hoja(page, 'Tu nota').getByRole('button', { name: 'Borrar nota', exact: true }).click();
+    await hoja(page, '¿Borrar tu nota?').getByRole('button', { name: 'Borrar', exact: true }).click();
     await expect(toast(page)).toContainText('Ya no estaba');
     await expect(mio(page).getByText('Todavía no anotaste nada', { exact: true })).toBeVisible();
   });
@@ -497,10 +499,12 @@ test.describe('🔴 D290 · los errores del dueño, explicados', () => {
     await seam(page, 'suspendida');
     await menu.click();
     await hoja(page, 'Tu nota').getByRole('button', { name: 'Borrar nota', exact: true }).click();
+    await hoja(page, '¿Borrar tu nota?').getByRole('button', { name: 'Borrar', exact: true }).click();
     await expect(toast(page)).toContainText('Tu cuenta está suspendida. Escríbenos.');
     await seam(page, 'no_es_tuya');
     await mio(page).getByRole('button', { name: 'Editar o borrar la nota', exact: true }).click();
     await hoja(page, 'Tu nota').getByRole('button', { name: 'Borrar nota', exact: true }).click();
+    await hoja(page, '¿Borrar tu nota?').getByRole('button', { name: 'Borrar', exact: true }).click();
     await expect(toast(page)).toContainText('Sólo puedes cambiar lo tuyo.');
     await expect(mio(page).locator('.nts-nota-texto')).toHaveText('Mi nota');
   });
@@ -633,3 +637,38 @@ test.describe('D290 · con 6 o más personas (a 390)', () => {
     await expect(page.getByRole('heading', { name: 'Marta Gil', level: 1 })).toBeVisible();
   });
 });
+
+for (const lang of ['es', 'en'] as const) {
+  for (const tipo of ['nota', 'lista'] as const) {
+    test(`U10 · cancelar y confirmar el borrado de ${tipo} (${lang})`, async ({ page }) => {
+      const en = lang === 'en';
+      await conViajes(page);
+      await editarEstado(page, `const viaje = e.viajes.find((x) => x.id === a); viaje.estado = 'abierto';`, OAXACA);
+      await alPizarron(page, OAXACA);
+      await page.evaluate(value => localStorage.setItem('payme.app.idioma.v1', value), lang);
+      await page.reload();
+
+      const nota = tipo === 'nota';
+      const abrirMenu = page.getByRole('button', { name: en
+        ? (nota ? 'Edit or delete the note' : 'Edit or delete the list')
+        : (nota ? 'Editar o borrar la nota' : 'Editar o borrar la lista'), exact: true });
+      const borrar = page.getByRole('button', { name: en
+        ? (nota ? 'Delete note' : 'Delete list') : (nota ? 'Borrar nota' : 'Borrar lista'), exact: true });
+      const titulo = nota ? (en ? 'Delete your note?' : '¿Borrar tu nota?')
+        : (en ? 'Delete “Para llevar”?' : '¿Borrar «Para llevar»?');
+      await abrirMenu.click();
+      await borrar.click();
+      const confirmar = hoja(page, titulo);
+      await expect(confirmar).toBeVisible();
+      await expect(confirmar).toContainText(en ? "It's removed from the trip and can't be recovered."
+        : 'Se borra del viaje y no se puede recuperar.');
+      if (!en) await capturar(page, `confirmar-borrar-${tipo}`);
+      await confirmar.getByRole('button', { name: en ? 'Cancel' : 'Cancelar', exact: true }).click();
+      await expect(confirmar).toHaveCount(0);
+      await expect(borrar).toBeVisible();
+      await borrar.click();
+      await confirmar.getByRole('button', { name: en ? 'Delete' : 'Borrar', exact: true }).click();
+      await expect(abrirMenu).toHaveCount(0);
+    });
+  }
+}

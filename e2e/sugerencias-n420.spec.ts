@@ -44,7 +44,7 @@ test.describe('n420 · apagado (hoy)', () => {
     await expect(page.getByText('Análisis interno de PayMe')).toHaveCount(0);
     await aComoDividen(page);
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
-    await expect(opcion(page, /Por lo que pidió cada uno/)).toContainText('Cada uno elige sus platos');
+    await expect(opcion(page, /Cada uno lo suyo/)).toContainText('Cada uno elige sus platos');
     await expect(page.getByText(/Como siempre/)).toHaveCount(0);
   });
 });
@@ -78,7 +78,7 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     await aComoDividen(page);
     await expect(opcion(page, /En partes iguales/)).toContainText('Como siempre · entre 4');
     await expect(opcion(page, /En partes iguales/)).not.toContainText('El total dividido entre todos');
-    await expect(opcion(page, /Por lo que pidió cada uno/)).toContainText('Cada uno elige sus platos');
+    await expect(opcion(page, /Cada uno lo suyo/)).toContainText('Cada uno elige sus platos');
     // D412 · elegirla no completa el número de personas: el contador nace sin elegir.
     await expect(page.locator('.division-stepper')).toHaveClass(/division-stepper--pending/);
     await opcion(page, /En partes iguales/).click();
@@ -93,8 +93,8 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     await fila(page, 'Sugerencias para dividir').click();
     await expect(fila(page, 'Sugerencias para dividir')).toBeChecked();
     await aComoDividen(page);
-    await expect(opcion(page, /Por lo que pidió cada uno/)).toContainText('Como siempre');
-    await expect(opcion(page, /Por lo que pidió cada uno/)).not.toContainText('entre');
+    await expect(opcion(page, /Cada uno lo suyo/)).toContainText('Como siempre');
+    await expect(opcion(page, /Cada uno lo suyo/)).not.toContainText('entre');
     await expect(opcion(page, /En partes iguales/)).toContainText('El total dividido entre todos');
   });
 

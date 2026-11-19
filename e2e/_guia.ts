@@ -169,9 +169,9 @@ export async function hastaElTicket(page: Page): Promise<void> {
  */
 export async function abrirUnaMesaReal(page: Page): Promise<void> {
   await sacarFoto(page);
-  await expect(page.getByRole('radio', { name: /Por lo que pidió cada uno/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Cada uno lo suyo/ })).toBeVisible();
   await expect(page.getByText('Restaurante Ejemplo', { exact: true })).toHaveCount(0);
-  await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
+  await page.getByRole('radio', { name: /Cada uno lo suyo/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
@@ -202,7 +202,7 @@ export async function hastaDividir(page: Page): Promise<void> {
 }
 export const TEXTO_2D = 'Aquí invitarás a tus amigos a sumarse a la mesa.';
 /** 2c → 2d. */
-export async function hastaCompartir(page: Page, forma: RegExp = /Por lo que pidió cada uno/, toques = 1): Promise<void> {
+export async function hastaCompartir(page: Page, forma: RegExp = /Cada uno lo suyo/, toques = 1): Promise<void> {
   await page.getByRole('radio', { name: forma }).click();
   for (let i = 0; i < toques; i += 1) await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();

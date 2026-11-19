@@ -520,7 +520,7 @@ test.describe('Listo · selección informativa v2', () => {
     // sus cuatro opciones de arriba). D360-4b · el «Otro» de la propina de la
     // mesa ya no está en la página: vive en la hoja del engranaje.
     await expect(fracciones.getByRole('radio', { name: 'Otro', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Propina de la mesa', exact: true })).toHaveCount(0);
     await expect(fracciones.getByRole('radio', { name: 'Entero', exact: true })).toHaveAttribute('aria-checked', 'true');
     await fracciones.getByRole('radio', { name: '¼', exact: true }).click();
 

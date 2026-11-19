@@ -106,7 +106,7 @@ describe('D363 · el cableado en Inicio', () => {
   const inicio = readFileSync(new URL('../screens/HomeScreen.tsx', import.meta.url), 'utf8');
   it('Q5 · la tarjeta va debajo de la invitación pendiente, y la mesa de ejemplo en su lugar', () => {
     const invitacion = inicio.indexOf('<InvitacionEnInicio />');
-    const tarjeta = inicio.indexOf('<TarjetaTutorial aperturaPendiente={aperturaPendiente} />');
+    const tarjeta = inicio.indexOf('<TarjetaTutorial aperturaPendiente={aperturaPendiente} onQuitar=');
     const ejemplo = inicio.indexOf('<TarjetaMesaDeEjemplo />');
     expect(invitacion).toBeGreaterThan(-1);
     expect(tarjeta).toBeGreaterThan(invitacion);

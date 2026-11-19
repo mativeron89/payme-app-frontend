@@ -377,6 +377,7 @@ export function MesasScreen() {
   /** La única tarjeta con «Eliminar» a la vista: de qué lista y qué mesa. */
   const [deslizada, setDeslizada] = useState<TarjetaDeslizada | null>(null);
   /** La mesa que espera la respuesta a «¿Borrar también su historial?». */
+  const volverDeBorrar = useRef<HTMLButtonElement | null>(null);
   const [preguntaMesa, setPreguntaMesa] = useState<TuMesa | null>(null);
   /** El aviso con «Deshacer»: el gesto se puede disparar sin querer. */
   const [aviso, setAviso] = useState<{ texto: string; deshacer: () => void } | null>(null);
@@ -663,7 +664,8 @@ export function MesasScreen() {
           onAbrir={() => setDeslizada(claveGesto)}
           onCerrar={() => cerrarDeslizada(claveGesto)}
           nombre={nombre}
-          onEliminar={() => setPreguntaMesa(m)}
+          accionesVisibles
+          onEliminar={(disparador) => { volverDeBorrar.current = disparador; setPreguntaMesa(m); }}
         >
           <FilaDeTicket
             icono={icono}
@@ -926,7 +928,11 @@ export function MesasScreen() {
         <HojaBorrarMesa
           onSi={() => borrarMesa(preguntaMesa, true)}
           onNo={() => borrarMesa(preguntaMesa, false)}
-          onCancelar={() => { setPreguntaMesa(null); setDeslizada(null); }}
+          onCancelar={() => {
+            setPreguntaMesa(null);
+            setDeslizada(null);
+            requestAnimationFrame(() => volverDeBorrar.current?.focus({ preventScroll: true }));
+          }}
         />
       )}
       {aviso && (
@@ -968,7 +974,8 @@ function ConGesto({
   onAbrir: () => void;
   onCerrar: () => void;
   nombre: string;
-  onEliminar: () => void;
+  onEliminar: (disparador: HTMLButtonElement) => void;
+  accionesVisibles?: boolean;
   children: ReactNode;
 }) {
   return activo ? <FilaDeslizable {...props}>{children}</FilaDeslizable> : <>{children}</>;

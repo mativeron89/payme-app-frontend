@@ -110,7 +110,7 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByRole('radiogroup', { name: /^(Elige tu propina|Propina)$/ })).toHaveCount(0);
     // D360-4b · la de la mesa vive en la hoja del engranaje: se abre para verla.
     await page.getByRole('button', { name: 'Configuración de la mesa', exact: true }).click();
-    await expect(page.getByRole('radiogroup', { name: 'Propina de la mesa', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Propina de la mesa', exact: true })).toHaveCount(1);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
 

@@ -48,7 +48,7 @@ test.describe('D223 · «Tu mesa» del titular', () => {
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toHaveCount(0);
     await expect(solicitudes(page)).toBeVisible();
     // La burbuja conserva restaurante · modo, la barra y el tiempo.
-    await expect(page.locator('.mesa-selection-context')).toContainText('cada uno lo suyo');
+    await expect(page.locator('.mesa-selection-context')).toContainText('Cada uno lo suyo');
     await expect(page.locator('.mi-progress')).toBeVisible();
     await expect(page.locator('.mi-count')).toBeVisible();
     const orden = await page.evaluate(() => {

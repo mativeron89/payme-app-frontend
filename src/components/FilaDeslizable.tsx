@@ -107,6 +107,7 @@ export function FilaDeslizable({
   nombre,
   onEliminar,
   refEliminar,
+  accionesVisibles = false,
   className,
   children,
 }: {
@@ -115,7 +116,8 @@ export function FilaDeslizable({
   onCerrar: () => void;
   /** Lo que se borra, para el nombre accesible del botón («Eliminar {nombre}»). */
   nombre: string;
-  onEliminar: () => void;
+  onEliminar: (disparador: HTMLButtonElement) => void;
+  accionesVisibles?: boolean;
   /** El consumidor puede guardar el disparador real para devolverle foco al cerrar su hoja. */
   refEliminar?: Ref<HTMLButtonElement>;
   className?: string;
@@ -124,6 +126,7 @@ export function FilaDeslizable({
   const { t } = useIdioma();
   const raiz = useRef<HTMLDivElement | null>(null);
   const frente = useRef<HTMLDivElement | null>(null);
+  const acciones = useRef<HTMLButtonElement>(null);
   const inicio = useRef<{ x: number; y: number; base: number; id: number } | null>(null);
   const arrastrando = useRef(false);
   /** D360-8 · las últimas posiciones del dedo, para la velocidad al soltar. */
@@ -173,7 +176,7 @@ export function FilaDeslizable({
     >
       <div
         ref={frente}
-        className={`deslizable-frente${desplazamiento !== null ? ' deslizable-frente--arrastrando' : ''}`}
+        className={`deslizable-frente${accionesVisibles ? ' deslizable-frente--con-acciones' : ''}${desplazamiento !== null ? ' deslizable-frente--arrastrando' : ''}`}
         style={{ transform: `translateX(${x}px)` }}
         onPointerDown={(e) => {
           if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -248,6 +251,12 @@ export function FilaDeslizable({
         }}
       >
         {children}
+        {accionesVisibles && (
+          <button ref={acciones} type="button" className="deslizable-acciones btn btn-ghost"
+            aria-label={t('Más acciones de {0}', nombre)} aria-expanded={abierta} onClick={onAbrir}>
+            ⋯
+          </button>
+        )}
       </div>
       <button
         ref={refEliminar}
@@ -255,7 +264,7 @@ export function FilaDeslizable({
         className="deslizable-eliminar"
         aria-label={t('Eliminar {0}', nombre)}
         onFocus={() => { if (!abierta) onAbrir(); }}
-        onClick={onEliminar}
+        onClick={(event) => onEliminar(acciones.current ?? event.currentTarget)}
       >
         <Icon name="trash" size={18} />
         <span>{t('Eliminar')}</span>
