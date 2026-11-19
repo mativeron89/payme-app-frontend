@@ -90,12 +90,21 @@ export function SocialScreen() {
   const [tab, setTab] = useState<SocialTabId>('amigos');
   const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void>; etiqueta: string } | null>(null);
   const disparadorConfirmacion = useRef<HTMLElement | null>(null);
+  const botonesDeAmigos = useRef(new Map<string, HTMLButtonElement>());
   const cerrarConfirmacion = () => {
     setConfirmacion(null);
-    requestAnimationFrame(() => disparadorConfirmacion.current?.isConnected && disparadorConfirmacion.current.focus());
+    const disparador = disparadorConfirmacion.current;
+    requestAnimationFrame(() => {
+      if (disparador?.isConnected) disparador.focus({ preventScroll: true });
+    });
   };
-  const confirmar = (texto: string, accion: () => Promise<void>, etiqueta = t('Confirmar')) => {
-    disparadorConfirmacion.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const confirmar = (
+    texto: string,
+    accion: () => Promise<void>,
+    etiqueta = t('Confirmar'),
+    disparador = document.activeElement,
+  ) => {
+    disparadorConfirmacion.current = disparador instanceof HTMLElement ? disparador : null;
     setConfirmacion({ texto, accion, etiqueta });
   };
   const hojaConfirmacion = confirmacion && <ConfirmacionSocial texto={confirmacion.texto} etiqueta={confirmacion.etiqueta}
@@ -295,7 +304,7 @@ export function SocialScreen() {
       olvidarLoDeAmigos();
       try { await api.removeFriend(f.id); toast(t('Amigo quitado')); loadFriends(); loadRequests(); }
       catch { toast(t('No se pudo quitar de tus amigos')); }
-    });
+    }, t('Confirmar'), botonesDeAmigos.current.get(f.id) ?? null);
   }
 
   async function addFriend() {
@@ -595,7 +604,15 @@ export function SocialScreen() {
                       <div className="n">{f.full_name}</div>
                       <ArrobaDebajo username={f.username} />
                     </div>
-                    <MenuSocial nombre={f.full_name} onQuitar={() => pedirQuitar(f)} onBloquear={() => pedirBloqueo(f.id, f.full_name)} />
+                    <MenuSocial
+                      nombre={f.full_name}
+                      registrarBoton={(boton) => {
+                        if (boton) botonesDeAmigos.current.set(f.id, boton);
+                        else botonesDeAmigos.current.delete(f.id);
+                      }}
+                      onQuitar={() => pedirQuitar(f)}
+                      onBloquear={() => pedirBloqueo(f.id, f.full_name)}
+                    />
                     {walletRailEnabled && (
                       <button
                         className="btn"
@@ -827,13 +844,14 @@ function SolicitudesPanel({
 }
 
 /** D854: explicit text actions; one local menu per row. */
-function MenuSocial({ nombre, disabled = false, onBloquear, onQuitar }: {
+function MenuSocial({ nombre, disabled = false, onBloquear, onQuitar, registrarBoton }: {
   nombre: string; disabled?: boolean; onBloquear: () => void; onQuitar?: () => void;
+  registrarBoton?: (boton: HTMLButtonElement | null) => void;
 }) {
   const { t } = useIdioma();
   const [abierto, setAbierto] = useState(false);
   const [posicion, setPosicion] = useState({ top: 0, left: 0, width: 240 });
-  const boton = useRef<HTMLButtonElement>(null);
+  const boton = useRef<HTMLButtonElement | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!abierto) return;
@@ -854,7 +872,8 @@ function MenuSocial({ nombre, disabled = false, onBloquear, onQuitar }: {
   const elegir = (accion: () => void) => { setAbierto(false); boton.current?.focus(); accion(); };
   const teclado = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { setAbierto(false); boton.current?.focus(); } };
   return <div className="social-menu" onKeyDown={teclado}>
-    <button ref={boton} type="button" className="btn btn-ghost btn-sm btn-fit" aria-label={t('Más acciones de {0}', nombre)}
+    <button ref={(elemento) => { boton.current = elemento; registrarBoton?.(elemento); }}
+      type="button" className="btn btn-ghost btn-sm btn-fit" aria-label={t('Más acciones de {0}', nombre)}
       aria-expanded={abierto} disabled={disabled} onClick={() => {
         const r = boton.current?.getBoundingClientRect();
         if (r) {

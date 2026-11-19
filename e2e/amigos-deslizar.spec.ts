@@ -113,15 +113,39 @@ for (const ancho of [375, 390] as const) {
 
     test('cancelar la confirmación no quita a nadie', async ({ page }) => {
       await aAmigos(page);
-      await deslizar(page, fila(page, 'Juan López'), -120);
+      await page.evaluate(async () => {
+        const ruta = '/src/api/index.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+        const quitar = api.removeFriend.bind(api);
+        api.removeFriend = async (id) => {
+          sessionStorage.setItem('d295-quitar-llamadas', String(Number(sessionStorage.getItem('d295-quitar-llamadas')) + 1));
+          return quitar(id);
+        };
+      });
+      const juan = fila(page, 'Juan López');
+      const menu = juan.getByRole('button', { name: 'Más acciones de Juan López', exact: true });
+      const hoja = page.getByRole('dialog', { name: '¿Quitar a Juan López de tus amigos?', exact: true });
+      const cancelarYComprobar = async () => {
+        await expect(hoja).toBeVisible();
+        await hoja.getByRole('button', { name: 'Cancelar', exact: true }).click();
+        await expect(hoja).toHaveCount(0);
+        // Espera el retorno de foco antes de medir la fila cerrada.
+        await expect(menu).toBeFocused();
+        await expect(menu).toHaveAttribute('aria-expanded', 'false');
+        await expect(abiertas(page)).toHaveCount(0);
+        await expect(juan).toBeVisible();
+        expect(await page.evaluate(() => sessionStorage.getItem('d295-quitar-llamadas'))).toBeNull();
+      };
+
+      await deslizar(page, juan, -120);
       await eliminar(page, 'Juan López').click();
-      await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
-      await expect(abiertas(page)).toHaveCount(0);
-      await expect(fila(page, 'Juan López')).toBeVisible();
-      // Una recarga confirma que el dueño (el mock) no lo quitó.
-      await irEnLaApp(page, '/mesas');
-      await irEnLaApp(page, '/amigos');
-      await expect(fila(page, 'Juan López')).toBeVisible();
+      await cancelarYComprobar();
+      await menu.press('Enter');
+      await page.getByRole('button', { name: 'Quitar de amigos', exact: true }).click();
+      await cancelarYComprobar();
+      await capturar(page, 'cancelar');
+      await page.reload();
+      await expect(juan).toBeVisible();
     });
 
     test('si falla, el mismo error de siempre y el amigo sigue', async ({ page }) => {
