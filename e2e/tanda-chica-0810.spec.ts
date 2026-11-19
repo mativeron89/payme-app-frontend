@@ -33,7 +33,10 @@ async function espiarHojas(page: Page): Promise<void> {
         for (const n of c.addedNodes) {
           if (!(n instanceof Element)) continue;
           for (const d of [n, ...n.querySelectorAll('[role="dialog"]')]) {
-            if (d.getAttribute('role') === 'dialog') w.__hojas.push(d.getAttribute('aria-label') ?? '');
+            if (d.getAttribute('role') !== 'dialog') continue;
+            const idTitulo = d.getAttribute('aria-labelledby');
+            const titulo = idTitulo ? document.getElementById(idTitulo)?.textContent : null;
+            w.__hojas.push(d.getAttribute('aria-label') ?? titulo ?? '');
           }
         }
       }
