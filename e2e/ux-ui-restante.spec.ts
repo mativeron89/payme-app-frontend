@@ -95,10 +95,14 @@ for (const lang of ['es', 'en'] as const) {
       dialogo, page.getByRole('button', { name: en ? 'Continue' : 'Continuar', exact: true }));
     await volver.click();
     await dialogo.getByRole('button', { name: en ? 'Save' : 'Guardar', exact: true }).click();
-    await expect(page.getByText(en ? "Done, it's saved" : 'Listo, quedó guardado', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/mesa\/PA-2847$/);
+    await expect(page).toHaveURL(/\/mesas$/);
+    await expect(dialogo).toHaveCount(0);
+    // D879 vuelve al confirmar. Al reabrir, el ítem debe seguir registrado.
+    await page.goto('/#/mesa/PA-2847');
+    if (await consumos.getAttribute('aria-expanded') !== 'true') await consumos.click();
+    await expect(page.locator('.qc-renglon').first().locator('[data-estado="registrado"]')).toBeVisible();
     await volver.click();
-    await expect(page).not.toHaveURL(/mesa\/PA-2847$/);
+    await expect(page).toHaveURL(/\/mesas$/);
     await expect(dialogo).toHaveCount(0);
   });
 
