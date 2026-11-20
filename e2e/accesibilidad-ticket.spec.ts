@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ingresar, irEnLaApp } from './_app';
+import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
@@ -94,5 +94,36 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(alerta.getByRole('button', { name: en ? 'Take another photo' : 'Sacar otra foto' })).toBeVisible();
     await alerta.getByRole('button', { name: en ? 'Fix it manually' : 'Corregir a mano' }).click();
     await expect(page.getByRole('heading', { name: en ? 'How are you splitting?' : '¿Cómo dividen?' })).toBeVisible();
+  });
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  const en = idioma === 'en';
+  test(`una foto de Viajes de más de 8 MB pide otra captura (${idioma})`, async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('payme.app.mock.viajes.v1', 'encendido');
+    });
+    await relojFueraDeLasFechasDeLosViajes(page);
+    await ingresar(page);
+    if (en) {
+      await irEnLaApp(page, '/mas');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+    }
+    await page.evaluate(async () => {
+      const rutaApi = '/src/api/index.ts';
+      const rutaMock = '/src/api/mock/mockApi.ts';
+      const { api } = await import(/* @vite-ignore */ rutaApi) as typeof import('../src/api');
+      const { MockApiError } = await import(/* @vite-ignore */ rutaMock) as typeof import('../src/api/mock/mockApi');
+      api.scanTicket = async () => { throw new MockApiError(413, 'image_too_large'); };
+    });
+    await irEnLaApp(page, '/viaje/d1000000-0000-4000-8000-000000000001');
+    await page.getByRole('button', { name: en ? 'Scan a ticket for Cancún 2026' : 'Escanear ticket para Cancún 2026', exact: true }).click();
+    await expect(page).toHaveURL(/\/scan\/d1000000-0000-4000-8000-000000000001$/);
+    await sacarFoto(page, undefined, { usar: false });
+    await page.getByRole('button', { name: en ? 'Use photo' : 'Usar foto', exact: true }).click();
+    const alerta = page.getByRole('alert').filter({ hasText: en ? 'The photo is over 8 MB' : 'La foto pesa más de 8 MB' });
+    await expect(alerta.locator('.state-error-body')).toHaveText(en ? 'Take another photo.' : 'Saca otra foto.');
+    await expect(alerta.getByRole('button', { name: en ? 'Take another photo' : 'Sacar otra foto' })).toBeVisible();
+    await expect(alerta.getByRole('button', { name: en ? 'Fix it manually' : 'Corregir a mano' })).toHaveCount(0);
   });
 }

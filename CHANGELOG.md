@@ -1,10 +1,16 @@
+## 0.278.1 · 2026-11-20
+
+- El aviso de guardado queda entero sobre la barra en pantallas bajas, incluso con el nombre del restaurante en dos renglones.
+- Al cerrar la ayuda de División, el foco vuelve al signo de pregunta y la opción queda a la vista.
+- La carga de la mesa distingue los fallos de conexión de los errores inesperados. Una quinta foto tardía muestra un solo aviso de tope.
+
 ## 0.278.0 · 2026-11-19
 
 - El reloj de la mesa mantiene juntas las horas y los minutos. El aviso de guardado queda a la vista en pantallas bajas. Si falla la carga, la pantalla indica cómo reintentar.
 - Mejora el foco con teclado en el tutorial, al elegir porciones y al guardar consumos.
 - La revisión del ticket muestra la cantidad de consumos y el precio por unidad. Una foto demasiado pesada ofrece otra captura o la carga manual en mesas.
 - Las filas de Configuración y el selector de idioma usan el mismo tamaño de letra y crecen con el texto ampliado. Los bordes de los controles tienen más contraste y la hoja de mesa tiene blancos táctiles más amplios.
-- La ayuda de «¿Cómo dividen?» aparece en una burbuja junto a la opción. La píldora de propina muestra un foco de teclado visible.
+- La burbuja de ayuda de «¿Cómo dividen?» se desplaza para quedar sobre la barra. La píldora de propina elegida es turquesa y muestra un foco de teclado visible.
 - Viajes usa la misma confirmación para borrar consumos, notas y fotos. Los avisos de bloqueo se muestran arriba de la barra.
 
 ## 0.277.0 · 2026-11-19

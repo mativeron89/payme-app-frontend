@@ -456,7 +456,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const estadoPropina = useEstadoDePropina(clavePropina);
   const propinaGuardando = estadoPropina.fase === 'guardando';
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
-  const [errorDeCarga, setErrorDeCarga] = useState<'sin-conexion' | 'no-encontrada' | null>(null);
+  const [errorDeCarga, setErrorDeCarga] = useState<'sin-conexion' | 'no-encontrada' | 'error-generico' | null>(null);
   const [view, setView] = useState<View>('detail');
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
@@ -848,12 +848,24 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     } catch (err) {
       if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return null;
       if (!mesaActualRef.current) {
-        // La lectura autenticada conserva el estado HTTP. Fetch rechaza sin
-        // estado ante red caída o timeout. El recibo de entrada sigue el flujo D387.
         const { status } = extractApiError(err);
-        const sinConexion = status === null
-          && (err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError'));
-        setErrorDeCarga(sinConexion && !guestToken && !reciboDeIngreso.current ? 'sin-conexion' : 'no-encontrada');
+        // El invitado durmiente y los rechazos HTTP conservan su mensaje.
+        if (guestToken || (status !== null && status >= 400 && status < 500)) {
+          setErrorDeCarga('no-encontrada');
+        } else {
+          // Fetch rechaza sin status. Sólo sus mensajes conocidos identifican
+          // la red: un TypeError de la vista o del decoder cae en el genérico.
+          const falloDeRed = status === null && (
+            (err instanceof DOMException && err.name === 'AbortError')
+            || (err instanceof TypeError && [
+              'Failed to fetch',
+              'Load failed',
+              'NetworkError when attempting to fetch resource.',
+            ].includes(err.message))
+          );
+          setErrorDeCarga(falloDeRed || (status !== null && status >= 500 && status < 600)
+            ? 'sin-conexion' : 'error-generico');
+        }
         resolverAviso.current();
       } else setInformativeState(estadoGuardado ?? 'error');
       return null;
@@ -2575,11 +2587,11 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       <div className="screen">
         <TopBar title={t('Mesa')} onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="empty">
-          <div className="emoji"><Icon name={errorDeCarga === 'sin-conexion' ? 'warning' : 'search'} size={40} /></div>
-          {errorDeCarga === 'sin-conexion' ? (
+          <div className="emoji"><Icon name={errorDeCarga === 'no-encontrada' ? 'search' : 'warning'} size={40} /></div>
+          {errorDeCarga !== 'no-encontrada' ? (
             <>
               <div>{t('No pudimos cargar tu mesa')}</div>
-              <p className="state-error-body">{t('Revisa tu conexión y vuelve a intentarlo.')}</p>
+              <p className="state-error-body">{errorDeCarga === 'sin-conexion' ? t('Revisa tu conexión y vuelve a intentarlo.') : t('Intenta de nuevo.')}</p>
             </>
           ) : t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
           <div style={{ marginTop: 16 }}>

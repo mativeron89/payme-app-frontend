@@ -382,6 +382,7 @@ test('GET de otra identidad resuelto tarde no pisa la cuenta nueva ni dispara un
 });
 
 test('lock guardado con respuesta perdida y GET fallido bloquea otra escritura hasta reconciliar', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 548 });
   const f = await fixture(page, 'consumo'); await entrar(page); await elegir(page);
   f.comportamiento('commit_perdido');
   // El preflight termina; el fallo de lectura se activa AL salir el POST.
@@ -392,7 +393,16 @@ test('lock guardado con respuesta perdida y GET fallido bloquea otra escritura h
   await expect(fila(page, 'Plato B').locator('.qc-libre')).toBeDisabled();
   f.fallar(false);
   await page.getByRole('button', { name: 'Actualizar estado', exact: true }).click();
-  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  const aviso = page.locator('.mesa-guardado');
+  await expect(aviso).toContainText('Listo, quedó guardado');
+  await expect.poll(() => aviso.evaluate(el => {
+    const caja = el.getBoundingClientRect();
+    const lista = el.closest('.mesa-selection-scroll')!.getBoundingClientRect();
+    const barra = el.closest('.app')!.querySelector('.appbar-block')!.getBoundingClientRect();
+    const visible = (y: number) => el.contains(document.elementFromPoint(caja.left + caja.width / 2, y));
+    return caja.top >= lista.top && visible(caja.top + 2) && visible(caja.bottom - 2)
+      ? Math.min(lista.bottom, barra.top) - caja.bottom : -1;
+  })).toBeGreaterThanOrEqual(8);
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/); expect(f.writes).toBe(1);
 });

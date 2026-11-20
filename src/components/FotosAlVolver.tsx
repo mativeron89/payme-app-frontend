@@ -139,7 +139,7 @@ export function FotosAlVolver({
           <Icon name="camera" size={28} />
           <span>{t('Sacar otra')}</span>
         </button>
-        {lleno && (
+        {lleno && !topeAlcanzado && (
           <p className="fotos-al-volver-tope">{t('Ya tienes {0} fotos, el máximo por ticket.', max)}</p>
         )}
         {topeAlcanzado && (

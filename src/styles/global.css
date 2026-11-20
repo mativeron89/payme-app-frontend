@@ -12758,15 +12758,24 @@ h1.pay-title-lbl {
 }
 .mesa-guardado p { margin: var(--sp-1) 0 0; font-weight: 700; }
 
-@media (max-height: 600px) {
+@media (max-height: 620px) {
+  /* Libera espacio para el aviso y el nombre de dos renglones sin achicar
+     los controles de la cabecera ni cambiar el relleno del aviso. */
+  .mesa-con-accion-ancha:has(.mesa-guardado) > .hdr {
+    height: calc(146px + env(safe-area-inset-top));
+    padding-bottom: 48px;
+  }
+
   .mesa-selection-scroll:has(> .mesa-guardado) {
     padding-top: var(--sp-1);
   }
   .mesa-selection-scroll > .mesa-guardado {
-    scroll-margin-top: 0;
+    /* Evita que el redondeo del scroll corte el borde superior del aviso. */
+    scroll-margin-top: 2px;
   }
   .mesa-con-accion-ancha:has(.mesa-guardado) .mesa-selection-title {
-    padding-block: var(--sp-2);
+    gap: var(--sp-1);
+    padding-block: var(--sp-1);
   }
 }
 .mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }

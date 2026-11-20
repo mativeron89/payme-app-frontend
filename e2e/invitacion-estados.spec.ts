@@ -299,7 +299,8 @@ test.describe('C, D, E y F · con sesión (390 × 844)', () => {
     const mesa = await abrirMesaConLink(page);
     await getMesaQueFalla(page);
     await alLink(page, mesa);
-    await expect(page.getByText('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')).toBeVisible();
+    await expect(page.getByText('No pudimos cargar tu mesa', { exact: true })).toBeVisible();
+    await expect(page.getByText('Revisa tu conexión y vuelve a intentarlo.', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
     await expect(page.locator('.toast[role="status"]')).toHaveText('Te sumaste a la mesa');
     expect(await page.evaluate(() => (window as unknown as { __getMesa: { fallidas: number } }).__getMesa.fallidas)).toBe(2);

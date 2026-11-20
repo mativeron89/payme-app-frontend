@@ -74,6 +74,22 @@ test.describe('el 403 es ciego', () => {
     });
   }
 
+  test('el 403 uniforme simulado al canjear un link muestra el mensaje neutro', async ({ page }) => {
+    await ingresar(page);
+    await page.evaluate(async () => {
+      const rutaApi = '/src/api/index.ts';
+      const rutaMock = '/src/api/mock/mockApi.ts';
+      const { api } = await import(/* @vite-ignore */ rutaApi) as typeof import('../src/api');
+      const { MockApiError } = await import(/* @vite-ignore */ rutaMock) as typeof import('../src/api/mock/mockApi');
+      api.acceptInvitationLink = async () => { throw new MockApiError(403, 'invitation_link_not_valid'); };
+      location.hash = '#/mesa/PA-2847?t=fixture-c227';
+    });
+    await expect(page.getByText('No pudimos sumarte a esta mesa.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reintentar', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toHaveCount(0);
+  });
+
   /**
    * ⭐ EL TEST QUE DE VERDAD CIERRA EL ORÁCULO. Los de arriba miran una
    * pantalla; éste compara **dos**, y exige que sean indistinguibles.

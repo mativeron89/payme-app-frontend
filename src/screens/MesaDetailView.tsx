@@ -1485,8 +1485,8 @@ export function MesaDetailView({
           </span>
         </div>
       </div>
-      {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
+        {guestHeader}
         {comprobandoCierre && (
           <p className="note" role="status">{t('Estamos comprobando el estado de la mesa…')}</p>
         )}

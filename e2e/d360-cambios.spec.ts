@@ -22,12 +22,18 @@ async function capturar(page: Page, nombre: string, mostrar?: Locator): Promise<
   await page.screenshot({ path: `${dir}/${nombre}.png`, animations: 'disabled' });
 }
 
-async function hastaComoDividen(page: Page): Promise<void> {
+async function hastaComoDividen(page: Page, idioma: 'es' | 'en' = 'es'): Promise<void> {
   await configurarTicketSinQr(page, { ocr: 'no_merchant' });
   await ingresar(page, { sinInvitaciones: true });
-  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
-  await sacarFoto(page);
-  await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+  if (idioma === 'en') {
+    await irEnLaApp(page, '/mas');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await irEnLaApp(page, '/home');
+  }
+  await page.getByRole('button', { name: idioma === 'es' ? 'Escanear' : 'Scan', exact: true }).click();
+  await sacarFoto(page, undefined, { usar: idioma === 'es' });
+  if (idioma === 'en') await page.getByRole('button', { name: 'Use photo', exact: true }).click();
+  await expect(page.getByRole('radio', { name: idioma === 'es' ? /Pagar el total/ : /Pay the whole bill/ })).toBeVisible();
 }
 
 const ayuda = (page: Page, opcion: string) => page.getByRole('button', { name: `Cómo funciona: ${opcion}`, exact: true });
@@ -131,6 +137,39 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
       await burbuja.getByRole('button', { name: 'Cerrar la explicación', exact: true }).click();
       await expect(signo).toBeFocused();
     });
+  }
+
+  for (const idioma of ['es', 'en'] as const) {
+    for (const altura of [548, 568]) {
+      test(`C227 · las tres ayudas devuelven el foco visible a 320×${altura} (${idioma})`, async ({ page }) => {
+        await page.setViewportSize({ width: 320, height: altura });
+        await hastaComoDividen(page, idioma);
+        const opciones = idioma === 'es'
+          ? ['Cada uno lo suyo', 'En partes iguales', 'Pagar el total']
+          : ['Everyone their own', 'Split evenly', 'Pay the whole bill'];
+        for (const opcion of opciones) {
+          const signo = page.getByRole('button', {
+            name: `${idioma === 'es' ? 'Cómo funciona' : 'How it works'}: ${opcion}`, exact: true,
+          });
+          for (const cerrar of ['Escape', 'botón']) {
+            await signo.click();
+            if (cerrar === 'Escape') await page.keyboard.press('Escape');
+            else await explicacion(page).getByRole('button').click();
+            await expect(explicacion(page)).toHaveCount(0);
+            await expect(signo).toBeFocused();
+            await expect.poll(() => signo.evaluate(el => {
+              const caja = el.getBoundingClientRect();
+              const radio = el.closest('.div-opcion')?.querySelector('[role="radio"]');
+              const r = radio?.getBoundingClientRect();
+              return {
+                ayuda: el.contains(document.elementFromPoint(caja.x + caja.width / 2, caja.y + caja.height / 2)),
+                opcion: !!r && !!radio?.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)),
+              };
+            })).toEqual({ ayuda: true, opcion: true });
+          }
+        }
+      });
+    }
   }
 
   test('el «?» se toca con 44 px y el círculo mide 22, arriba a la derecha de la opción', async ({ page }) => {

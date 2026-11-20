@@ -21,7 +21,7 @@ for (const idioma of ['es', 'en'] as const) {
       let recuperada = false;
       document.addEventListener('restablecer-lectura', () => { recuperada = true; }, { once: true });
       api.getMesa = async (...args) => {
-        if (args[0] === 'PA-2847' && !recuperada) throw new TypeError('Sin respuesta de la red');
+        if (args[0] === 'PA-2847' && !recuperada) throw new TypeError('Failed to fetch');
         return leer(...args);
       };
     });
@@ -55,6 +55,39 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/mesa\/PA-2847$/);
   });
+
+  for (const falla of [401, 403, 404, 503, 'TypeError'] as const) {
+    test(`el error de carga ${falla} conserva su mensaje (${idioma})`, async ({ page }) => {
+      await preparar(page, idioma);
+      await page.evaluate(async falla => {
+        const rutaApi = '/src/api/index.ts';
+        const rutaMock = '/src/api/mock/mockApi.ts';
+        const { api } = await import(/* @vite-ignore */ rutaApi) as typeof import('../src/api');
+        const { MockApiError } = await import(/* @vite-ignore */ rutaMock) as typeof import('../src/api/mock/mockApi');
+        const leer = api.getMesa.bind(api);
+        api.getMesa = async (...args) => {
+          if (args[0] !== 'PA-2847') return leer(...args);
+          if (falla === 'TypeError') throw new TypeError('Cannot read properties of undefined');
+          throw new MockApiError(falla, 'error_de_prueba');
+        };
+      }, falla);
+      await irEnLaApp(page, '/mesa/PA-2847');
+      const panel = page.locator('.empty');
+      const conexion = en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.';
+      if (falla === 503 || falla === 'TypeError') {
+        await expect(panel).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
+        await expect(panel.locator('.state-error-body')).toHaveText(falla === 503
+          ? conexion : en ? 'Please try again.' : 'Intenta de nuevo.');
+        await expect(panel).not.toContainText('Cannot read properties');
+      } else {
+        await expect(panel).toContainText(en
+          ? "We couldn't find this table. The link may have expired, or the bill may already be closed."
+          : 'No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.');
+        await expect(panel).not.toContainText(conexion);
+      }
+      await expect(panel.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true })).toBeVisible();
+    });
+  }
 
   test(`la mesa inexistente conserva el mensaje de 404 (${idioma})`, async ({ page }) => {
     await preparar(page, idioma);

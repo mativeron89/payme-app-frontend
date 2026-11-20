@@ -40,34 +40,52 @@ export function AyudaDeOpcion({
   const { t } = useIdioma();
   const boton = useRef<HTMLButtonElement | null>(null);
   const burbuja = useRef<HTMLDivElement | null>(null);
+  const devolverFoco = useRef(false);
   const [abajo, setAbajo] = useState(false);
 
   // La burbuja es absoluta. Medimos sin la animación y desplazamos sólo el
   // cuerpo de División para que el borde inferior quede sobre la barra.
   useLayoutEffect(() => {
-    if (!abierta) { setAbajo(false); return; }
+    if (!abierta) {
+      setAbajo(false);
+      if (!devolverFoco.current) return;
+      devolverFoco.current = false;
+      const disparador = boton.current;
+      const fila = disparador?.closest('.div-opcion');
+      const contenedor = fila && cuerpoDesplazable(fila);
+      if (fila && contenedor) {
+        const { superior, inferior } = limitesVisibles(contenedor);
+        const caja = fila.getBoundingClientRect();
+        if (caja.top < superior) contenedor.scrollTop += caja.top - superior;
+        else if (caja.bottom > inferior) contenedor.scrollTop += caja.bottom - inferior;
+      }
+      disparador?.focus({ preventScroll: true });
+      return;
+    }
     const nota = burbuja.current;
     const opcion = nota?.offsetParent;
     if (!nota || !opcion) return;
     const contenedor = cuerpoDesplazable(opcion);
     if (!contenedor) return;
 
-    const caja = contenedor.getBoundingClientRect();
-    const superior = Math.max(0, caja.top);
+    const { superior, inferior } = limitesVisibles(contenedor);
     const fila = opcion.getBoundingClientRect();
     const arriba = fila.top - SEPARACION - nota.offsetHeight;
     const vaAbajo = arriba + contenedor.scrollTop < superior;
     setAbajo(vaAbajo);
 
-    const barra = nota.closest('.app')?.querySelector('.appbar-block');
-    const circulo = barra?.querySelector('.appbar-fab');
-    const inferior = Math.min(window.innerHeight, caja.bottom,
-      barra?.getBoundingClientRect().top ?? Infinity,
-      circulo?.getBoundingClientRect().top ?? Infinity);
+    const scrollAlAbrir = contenedor.scrollTop;
     const inicio = vaAbajo ? fila.bottom + SEPARACION : arriba;
     const fin = inicio + nota.offsetHeight;
     if (inicio < superior) contenedor.scrollTop += inicio - superior;
     else if (fin + SEPARACION > inferior) contenedor.scrollTop += fin + SEPARACION - inferior;
+    const scrollParaLaBurbuja = contenedor.scrollTop;
+
+    return () => {
+      // Devuelve la opción a su lugar si sólo la burbuja movió el cuerpo.
+      // Si la persona siguió desplazando la lista, conserva ese movimiento.
+      if (contenedor.scrollTop === scrollParaLaBurbuja) contenedor.scrollTop = scrollAlAbrir;
+    };
   }, [abierta]);
 
   // Al abrirse, el foco pasa a la burbuja: así el lector de pantalla lee la
@@ -77,8 +95,8 @@ export function AyudaDeOpcion({
   }, [abierta]);
 
   const cerrar = (): void => {
+    devolverFoco.current = true;
     onCerrar();
-    boton.current?.focus({ preventScroll: true });
   };
 
   return (
@@ -125,4 +143,16 @@ function cuerpoDesplazable(desde: Element): HTMLElement | null {
     if (overflowY === 'auto' || overflowY === 'scroll') return el;
   }
   return null;
+}
+
+function limitesVisibles(contenedor: HTMLElement): { superior: number; inferior: number } {
+  const caja = contenedor.getBoundingClientRect();
+  const barra = contenedor.closest('.app')?.querySelector('.appbar-block');
+  const circulo = barra?.querySelector('.appbar-fab');
+  return {
+    superior: Math.max(0, caja.top),
+    inferior: Math.min(window.innerHeight, caja.bottom,
+      barra?.getBoundingClientRect().top ?? Infinity,
+      circulo?.getBoundingClientRect().top ?? Infinity),
+  };
 }

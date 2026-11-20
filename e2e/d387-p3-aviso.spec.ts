@@ -199,8 +199,10 @@ for (const modo of ['nombre-vacio', 'error'] as const) {
     const mesa = await abrirMesaConLink(page, { modo: 'consumo' });
     await instrumentar(page, modo);
     await alLink(page, mesa);
-    if (modo === 'error') await expect(page.getByText('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')).toBeVisible();
-    else await expect(detalle(page)).toBeVisible();
+    if (modo === 'error') {
+      await expect(page.getByText('No pudimos cargar tu mesa', { exact: true })).toBeVisible();
+      await expect(page.getByText('Intenta de nuevo.', { exact: true })).toBeVisible();
+    } else await expect(detalle(page)).toBeVisible();
     await expect(aviso(page)).toHaveText('Te sumaste a la mesa');
     expect((await sonda(page)).detalles).toHaveLength(2);
     await page.reload();
