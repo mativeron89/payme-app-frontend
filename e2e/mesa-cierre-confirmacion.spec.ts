@@ -26,7 +26,6 @@ for (const mode of ['consumo', 'igual'] as const) {
   test(`n422 ${mode}: Revisar cancela sin persistencia; cambiar borrador no hereda confirmación`, async ({ page }) => {
     const code = await preparar(page, mode); const before = await persistido(page, code);
     await elegirTodo(page); await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     const dialog = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
     await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Revisar', exact: true })).toBeFocused();
     expect(await persistido(page, code)).toEqual(before);
@@ -35,7 +34,6 @@ for (const mode of ['consumo', 'igual'] as const) {
     // Quitar un plato hace que el nuevo pedido no complete: no hereda el token anterior.
     await page.locator('.qc-renglon').first().locator('button.qc-circulo--marcado').click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect(page).toHaveURL(/\/home$/); expect((await persistido(page, code)).status).toBe('open');
@@ -60,7 +58,6 @@ for (const mode of ['consumo', 'igual'] as const) {
   test(`n422 ${mode}: recargar descarta el desafío y la selección rechazada no aparece guardada`, async ({ page }) => {
     const code = await preparar(page, mode); const before = await persistido(page, code);
     await elegirTodo(page); await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
     const serialized = await page.evaluate(() => Object.values(localStorage).join(' ') + Object.values(sessionStorage).join(' '));
     expect(serialized).not.toContain('payme.app.selection-closure/v1');
@@ -80,13 +77,11 @@ test('n422 inglés: Escape devuelve foco y Enter confirma sólo desde Save and c
   await expect(page.locator('.qc-renglon').first()).toBeVisible();
   await elegirTodo(page); const done = page.getByRole('button', { name: 'Continue', exact: true });
   await done.click();
-  await confirmarGuardadoDeMesa(page);
   const dialog = page.getByRole('dialog', { name: 'This closes the table' });
   await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Review', exact: true })).toBeFocused();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(done).toBeFocused();
   expect((await persistido(page, code)).status).toBe('open');
   await done.click();
-  await confirmarGuardadoDeMesa(page);
   await expect(dialog).toBeVisible();
   const confirm = dialog.getByRole('button', { name: 'Save and close', exact: true });
   await confirm.focus(); await confirm.press('Enter');

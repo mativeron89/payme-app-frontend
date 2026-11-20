@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar, tokenDeLaUrl, CORTE } from './_app';
-import { abrirTusConsumos, enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirTusConsumos, enTuMesaConLaLista } from './_mesa';
 
 /**
  * 🔴 **Este recorrido prueba el CORTE, así que lo declara** (Q6, resuelta por
@@ -124,7 +124,6 @@ test.describe('el camino de pago completo', () => {
      * que lo dice. Salir sin registrar dejaría ese aviso mintiendo.
      */
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     // Decisión 32 (2026-09-24) · registra y vuelve a Inicio: Mati lo pidió literal.
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();

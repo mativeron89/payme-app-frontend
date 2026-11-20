@@ -226,7 +226,6 @@ export interface MesaDetailViewProps {
   onSetFraction: (id: string, bps: number) => void;
   onSetDenominator: (id: string, denominator: number) => void;
   onGoToPay: (preparada?: PreparacionListo) => void;
-  onDescartarBorrador?: () => void;
   /** Lecturas completas antes de decidir hoja/guardado; opcional sólo para vistas inertes. */
   onPrepararListo?: () => Promise<PreparacionListo | null>;
   cierreSeleccion?: { mesa: MesaDetail; selected: ReadonlyMap<string, number> } | null;
@@ -618,7 +617,6 @@ export function MesaDetailView({
   onSetFraction,
   onSetDenominator,
   onGoToPay,
-  onDescartarBorrador,
   onPrepararListo,
   cierreSeleccion = null,
   onConfirmarCierreSeleccion,
@@ -655,11 +653,11 @@ export function MesaDetailView({
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const volverRef = useRef<HTMLButtonElement>(null);
   const [salidaPendiente, setSalidaPendiente] = useState<{
-    tipo: 'volver' | 'navegar' | 'centro';
+    tipo: 'volver' | 'navegar';
     accion: () => void;
     disparador: HTMLButtonElement | null;
   } | null>(null);
-  const seguirEditando = () => {
+  const cerrarAvisoYRestaurarFoco = () => {
     const disparador = salidaPendiente?.disparador;
     setSalidaPendiente(null);
     requestAnimationFrame(() => {
@@ -1677,24 +1675,24 @@ export function MesaDetailView({
           titulo={t('Tienes cambios sin guardar')}
           detalle={t('Si sales ahora, lo que marcaste aquí no se guarda.')}
           cancelar={t('Seguir editando')}
-          onCancelar={seguirEditando}
+          onCancelar={cerrarAvisoYRestaurarFoco}
         >
           <button type="button" className="btn btn-navy"
             disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
             onClick={() => {
-              setSalidaPendiente(null);
-              void terminarListo(salidaPendiente.tipo === 'navegar' ? salidaPendiente.accion : undefined);
+              if (salidaPendiente.tipo === 'volver') {
+                cerrarAvisoYRestaurarFoco();
+                void terminarListo();
+              } else {
+                setSalidaPendiente(null);
+                void terminarListo(salidaPendiente.accion);
+              }
             }}>
             {t('Guardar')}
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => {
-            if (salidaPendiente.tipo === 'centro') {
-              onDescartarBorrador?.();
-              seguirEditando();
-            } else {
-              setSalidaPendiente(null);
-              salidaPendiente.accion();
-            }
+            setSalidaPendiente(null);
+            salidaPendiente.accion();
           }}>{t('Salir sin guardar')}</button>
         </HojaDeDecision>
       )}
@@ -1757,8 +1755,8 @@ export function MesaDetailView({
         active={null}
         accionAncha={!ejemplo}
         above={miParte}
-        onAccion={(slot, accion, disparador) => {
-          if (tieneBorrador) setSalidaPendiente({ tipo: slot === 'centro' ? 'centro' : 'navegar', accion, disparador });
+        onAccion={(_, accion, disparador) => {
+          if (tieneBorrador) setSalidaPendiente({ tipo: 'navegar', accion, disparador });
           else accion();
         }}
         center={pagosCortados ? {

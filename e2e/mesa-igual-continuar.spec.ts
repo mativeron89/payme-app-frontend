@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
-import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * 🔴 **El corte se declara donde se prueba** (Q6, resuelta por medición).
@@ -213,7 +213,6 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // Con la selección hecha sigue sin haber pago.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     // Decisión 32 · registra y vuelve a Inicio.
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();

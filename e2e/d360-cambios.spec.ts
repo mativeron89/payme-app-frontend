@@ -3,7 +3,7 @@ import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
 import { configurarTicketSinQr } from './fixtures/ticket-sin-qr';
 import { hastaCompartir, pedidosDePropina, selectorDePropina } from './fixtures/mi-parte-d344';
-import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * D360 · los cambios que pidió Mati después de probar la app (0.253.0). Acá van
@@ -245,7 +245,6 @@ test.describe('P04 · D371 · el plato en $0', () => {
     for (let i = 0; i < 6; i += 1) await conPrecio.nth(i).getByRole('button').first().click();
     await expect(page.locator('.qc-lista .qc-renglon [data-estado="mio"]')).toHaveCount(6);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     // La hoja sale ANTES de mandar nada: la mesa sigue en «Tu mesa» y lo elegido se puede revisar.
     const hoja = page.getByRole('dialog', { name: 'Con esto se cierra la mesa' });
     await expect(hoja).toBeVisible();

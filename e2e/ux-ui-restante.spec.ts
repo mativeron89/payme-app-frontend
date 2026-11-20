@@ -1,4 +1,3 @@
-import { confirmarGuardadoDeMesa } from './_mesa';
 import { cerrarAntesDelFrame } from './_foco';
 import { expect, test, type Page } from '@playwright/test';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
@@ -146,7 +145,6 @@ for (const lang of ['es', 'en'] as const) {
     const plato = page.locator('.qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' });
     await plato.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await continuar.click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.locator('.mesa-guardado')).toBeVisible();
     if (en) {
       await idioma(page, lang);

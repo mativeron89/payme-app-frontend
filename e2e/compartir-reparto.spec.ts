@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { RESTAURANTE_DE_EJEMPLO } from '../src/ayuda/ejemplo/fixtureEjemplo';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
 import * as guia from './_guia';
-import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirTusConsumos } from './_mesa';
 
 /**
  * D588–D591 · AF-CLAUDE-COMPARTIR-REPARTO-0-269-0-20261030 · «Compartir» al pie
@@ -144,7 +144,6 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await expect(page.getByRole('button', { name: 'Compartir', exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

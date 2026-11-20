@@ -1,3 +1,4 @@
+import type { Api } from '../src/api';
 import { expect, type Page } from '@playwright/test';
 
 /**
@@ -64,4 +65,31 @@ export async function enTuMesaConLaLista(page: Page): Promise<void> {
 export async function confirmarGuardadoDeMesa(page: Page): Promise<void> {
   await page.getByRole('dialog', { name: /^(Tienes cambios sin guardar|You have unsaved changes)$/ })
     .getByRole('button', { name: /^(Guardar|Save)$/, exact: true }).click();
+}
+
+export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'normal' | 'retenida' | 'rechazada' = 'normal') {
+  await page.evaluate(async (respuesta) => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as { api: Api };
+    const originalLock = api.lockItems.bind(api);
+    const originalReemplazar = api.replaceInformativeSelection.bind(api);
+    const { body } = document;
+    body.dataset.escriturasDeSeleccion = '0';
+    let liberar!: () => void;
+    const ack = new Promise<void>((resolve) => { liberar = resolve; });
+    document.addEventListener('liberar-guardado', liberar, { once: true });
+    async function antesDeEscribir() {
+      body.dataset.escriturasDeSeleccion = String(Number(body.dataset.escriturasDeSeleccion) + 1);
+      if (respuesta === 'retenida') await ack;
+      if (respuesta === 'rechazada') throw Object.assign(new Error('Rechazo de la fixture'), { status: 403 });
+    }
+    api.lockItems = async (...args) => {
+      await antesDeEscribir();
+      return originalLock(...args);
+    };
+    api.replaceInformativeSelection = async (...args) => {
+      await antesDeEscribir();
+      return originalReemplazar(...args);
+    };
+  }, respuesta);
 }

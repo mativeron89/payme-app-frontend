@@ -1,17 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { sacarFoto } from './_camara';
-import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * Decisión 32 (Mati, 2026-09-24) · «Listo» guarda y vuelve a Inicio. Estas
  * pruebas miran lo guardado, así que reentran a la misma mesa después.
  */
-async function listoYVolver(page: Page, conBorrador = true): Promise<void> {
+async function listoYVolver(page: Page): Promise<void> {
   // n130 · la ruta vive en el path, no en el fragmento.
   const enMesa = await page.evaluate(() => location.pathname);
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-  if (conBorrador) await confirmarGuardadoDeMesa(page);
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
@@ -102,7 +101,6 @@ for (const [forma, personas] of [['En partes iguales', 2], ['Pagar el total', 1]
     }, code);
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
     await continuar.click();
-    await confirmarGuardadoDeMesa(page);
     const aviso = page.locator('.mesa-guardado');
     await expect(aviso).toHaveText('Listo, quedó guardado');
     await expect(aviso.locator('p')).toHaveCount(0);
@@ -150,7 +148,6 @@ for (const caso of ['tras el PUT', 'al volver a guardar sin cambios'] as const) 
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
     const aviso = page.locator('.mesa-guardado');
     await continuar.click();
-    await confirmarGuardadoDeMesa(page);
     if (caso === 'al volver a guardar sin cambios') {
       await expect(aviso).toContainText('Listo, quedó guardado');
       await expect(page.getByText('Tu selección quedó guardada.', { exact: false })).toBeVisible();
@@ -213,7 +210,7 @@ test.describe('Listo · selección informativa v2', () => {
         return original(...args);
       };
     });
-    await listoYVolver(page, false);
+    await listoYVolver(page);
     // Vacío→vacío es replay exacto sin fila en el dueño: al reentrar no hay nada
     // guardado que mostrar (sin `updated_at`), así que el círculo vuelve a ser
     // «Listo». El éxito lo acreditó la vuelta a Inicio (decisión 32).
@@ -270,7 +267,6 @@ test.describe('Listo · selección informativa v2', () => {
     // la vista de sólo lectura.
     const enMesa = await page.evaluate(() => location.pathname);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     // D240 punto 8 · antes de guardar lo que cierra la mesa, la hoja para revisar.
     await page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })
       .getByRole('button', { name: 'Guardar y cerrar', exact: true }).click();
@@ -443,7 +439,6 @@ test.describe('Listo · selección informativa v2', () => {
 
     await first.click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.put.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
@@ -560,7 +555,6 @@ test.describe('Listo · selección informativa v2', () => {
       };
     });
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Esa porción no es válida para esta mesa.')).toBeVisible();
     expect(await page.evaluate((mesaCode) => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);

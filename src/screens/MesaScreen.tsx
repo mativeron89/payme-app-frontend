@@ -645,17 +645,6 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     borradorEditadoRef.current = true;
   }
 
-  function descartarBorrador(): void {
-    descartarSolicitudCierre();
-    revisionBorradorRef.current += 1;
-    borradorEditadoRef.current = false;
-    seleccionRef.current = mesaActualRef.current?.division_mode === 'igual'
-      ? new Map(informativasGuardadas) : new Map();
-    denominadoresRef.current = new Map();
-    setSelected(seleccionRef.current);
-    setSelectedDenominators(denominadoresRef.current);
-  }
-
   // Un token guest nuevo para el mismo código es otra identidad: ningún
   // estado visual o lock de A puede sobrevivir para B.
   useEffect(() => {
@@ -3567,7 +3556,6 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       onSetFraction={setFraction}
       onSetDenominator={setDenominator}
       onGoToPay={goToPay}
-      onDescartarBorrador={descartarBorrador}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
       invitacionPendiente={invitacionPendiente}
       onVerAvisos={() => navigate('avisos')}

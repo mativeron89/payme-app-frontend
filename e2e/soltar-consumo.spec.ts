@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, irEnLaApp, sinRefresco } from './_app';
-import { enTuMesaConLaLista, confirmarGuardadoDeMesa } from './_mesa';
+import { enTuMesaConLaLista } from './_mesa';
 
 /**
  * AF-25 · n80 · soltar un consumo propio no pagado (`POST items/release`, dueño
@@ -37,7 +37,6 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   // Decisión 32 · «Listo» registra y vuelve a Inicio; se vuelve a la mesa para mirar lo tomado.
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-  await confirmarGuardadoDeMesa(page);
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
@@ -202,7 +201,6 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     const code = await mesaConUnoElegido(page);
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

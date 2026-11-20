@@ -6,7 +6,7 @@ import {
   selectorDePropina,
   verComoParticipante,
 } from './fixtures/mi-parte-d344';
-import { abrirConfiguracionDeLaMesa, abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirConfiguracionDeLaMesa, abrirTusConsumos } from './_mesa';
 
 /**
  * D344 · AF-D344-MI-PARTE-FRONT-20261017 · el organizador fija la propina de la
@@ -193,7 +193,6 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await capturar(page, 'd344-03-mi-parte-consumo-vista-previa');
 
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
@@ -237,7 +236,6 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

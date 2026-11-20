@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camaraSimulada, camarasAbiertas, sacarFoto } from './_camara';
-import { abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirTusConsumos } from './_mesa';
 import {
   abrirDesdeLaTarjeta, burbuja, CLAVE_TARJETA_OCULTA, contarLaRed, entrar, escrito, espiarLaFachada, fase,
   hastaElTicket, hastaLaCamara, hastaTuMesa, llamadas, pathname, SONDAS_DE_RED, sondearLaRed, tarjeta, TEXTO_2D, type Llamada,
@@ -301,7 +301,6 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     const total = await renglones.count();
     for (let i = 0; i < total; i += 1) await renglones.nth(i).getByRole('button').first().click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     // Punto 2 · sin la bandera, elegir todo abre la hoja antes de cerrar.
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
 

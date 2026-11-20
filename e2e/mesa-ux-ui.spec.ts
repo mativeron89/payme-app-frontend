@@ -1,4 +1,3 @@
-import { confirmarGuardadoDeMesa } from './_mesa';
 import { expect, test, type Page } from '@playwright/test';
 import { hastaCompartir, selectorDePropina, pedidosDePropina } from './fixtures/mi-parte-d344';
 
@@ -46,8 +45,6 @@ test('K2 K3 K4 · importes, textos ES/EN, botón ancho y cámara en Inicio', asy
   await page.keyboard.press('Tab'); await boton.focus(); await expect(boton).toBeFocused();
   expect(await boton.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
   await page.keyboard.press('Enter');
-  await page.getByRole('dialog', { name: 'Tienes cambios sin guardar' })
-    .getByRole('button', { name: 'Guardar', exact: true }).press('Enter');
   await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -80,12 +77,10 @@ test('K5 · guardar con éxito confirma en la mesa; error sin aviso', async ({ p
     api.lockItems = async () => { api.lockItems = original; throw new MockApiError(409, 'item_already_locked'); };
   });
   await continuar(page).click();
-  await confirmarGuardadoDeMesa(page);
   await expect(page.getByText('Alguien ya tomó uno de esos consumos', { exact: true })).toBeVisible();
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
   await continuar(page).click();
-  await confirmarGuardadoDeMesa(page);
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/mesa/${code}$`));
   await expect(page.locator('.mesa-guardado')).toContainText('Tu parte: $201.73');
@@ -112,7 +107,6 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
     await plato.click();
     expect(await page.locator('.mesa-selection-scroll').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
     await continuar(page).click();
-    await confirmarGuardadoDeMesa(page);
     const aviso = page.locator('.mesa-guardado');
     await expect(aviso).toBeVisible();
     await expect(aviso).toBeInViewport({ ratio: 1 });
@@ -150,7 +144,6 @@ for (const viewport of medidasDeGuardado) {
         await desplazable.evaluate(el => { el.scrollTop = el.scrollHeight; });
         await expect(continuar(page)).toBeEnabled();
         await continuar(page).evaluate(clickSinDesplazarAncestros);
-        await confirmarGuardadoDeMesa(page);
         await expect(aviso).toContainText('Listo, quedó guardado');
         await expect(filas.locator('[data-estado="registrado"]')).toHaveCount(esperados);
         const medidas = await aviso.evaluate(el => {
@@ -222,7 +215,6 @@ for (const caso of ['lectura fallida', 'importe cero', 'importe ausente'] as con
       };
     }, { code, caso });
     await continuar(page).click();
-    await confirmarGuardadoDeMesa(page);
     const aviso = page.locator('.mesa-guardado');
     await expect(aviso).toHaveText('Listo, quedó guardado');
     await expect(aviso.locator('p')).toHaveCount(0);
@@ -234,7 +226,6 @@ for (const caso of ['lectura fallida', 'importe cero', 'importe ausente'] as con
 
 test('K6 · cerrar avisa sólo los platos sin dueño confirmados', async ({ page }) => {
   const code = await mesa(page); await elegir(page); await continuar(page).click();
-  await confirmarGuardadoDeMesa(page);
   await expect.poll(() => page.evaluate(async (c) => {
     const ruta = '/src/api/mock/store.ts'; const { state } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/store');
     return state.mesas.find((m) => m.code === c)!.items.filter((i) => i.claims.length > 0).length;

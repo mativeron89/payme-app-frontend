@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hastaCompartir, pedidosDePropina, selectorDePropina } from './fixtures/mi-parte-d344';
-import { abrirConfiguracionDeLaMesa, abrirTusConsumos, confirmarGuardadoDeMesa } from './_mesa';
+import { abrirConfiguracionDeLaMesa, abrirTusConsumos } from './_mesa';
 
 /**
  * D469 · la pantalla de la mesa después de «Listo» (Mati, con captura):
@@ -41,7 +41,6 @@ async function tuMesaDespuesDeListo(page: Page): Promise<string> {
   await abrirTusConsumos(page);
   await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-  await confirmarGuardadoDeMesa(page);
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
@@ -160,7 +159,6 @@ test.describe('D469 · «Tu mesa»: engranaje arriba a la derecha y tres despleg
     await abrirTusConsumos(page);
     await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await confirmarGuardadoDeMesa(page);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

@@ -83,7 +83,7 @@ const RIGHT: SideItem[] = [
 
 export interface AppBottomBarProps {
   centerRef?: React.Ref<HTMLButtonElement>;
-  onAccion?: (slot: BottomBarSlot | 'centro', accion: () => void, disparador: HTMLButtonElement) => void;
+  onAccion?: (slot: BottomBarSlot, accion: () => void, disparador: HTMLButtonElement) => void;
   /**
    * Qué posición se marca activa. `null` en pasos de flujo: ninguna de las
    * cinco representa "estoy en el Ticket", y marcar una sería mentir sobre
@@ -140,10 +140,6 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
   const centro = useAccionDelCentro(center);
   const pendientes = useSolicitudesPendientes();
 
-  const clickCentro = onAccion
-    ? (event: React.MouseEvent<HTMLButtonElement>) => onAccion('centro', centro.onClick, event.currentTarget)
-    : centro.onClick;
-
   const item = (it: SideItem) => {
     const on = active === it.slot;
     const burbuja = it.slot === 'amigos' && pendientes !== null && pendientes > 0 ? pendientes : 0;
@@ -180,7 +176,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
       {accionAncha && (
         <div className="appbar-accion">
           <button type="button" className="btn btn-navy appbar-continuar" data-guia="continuar"
-            onClick={clickCentro} disabled={centro.disabled} aria-busy={centro.busy || undefined}
+            onClick={centro.onClick} disabled={centro.disabled} aria-busy={centro.busy || undefined}
             aria-label={centro.ariaLabel || centro.label}>
             {centro.label}
           </button>
@@ -193,7 +189,7 @@ export function AppBottomBar({ active = null, center, centerRef, above, accionAn
           ref={centerRef}
           className="appbar-center"
           data-guia={centro.icon === 'camera' ? 'camara' : 'continuar'}
-          onClick={clickCentro}
+          onClick={centro.onClick}
           disabled={centro.disabled}
           aria-busy={centro.busy || undefined}
           // D250 · ya traducido por quien lo pasa, como `label`; `t` lo deja igual.
