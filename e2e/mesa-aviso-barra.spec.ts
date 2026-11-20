@@ -200,19 +200,60 @@ test('Continuar devuelve el foco al aviso después de guardar con el teclado', a
   await expect(guardado).toBeFocused();
 });
 
-test('Y4 · Volver y Guardar devuelve el foco a Volver cuando queda en el documento', async ({ page }) => {
-  await preparar(page, true);
-  await observarEscriturasDeSeleccion(page, 'retenida');
-  const volver = page.getByRole('button', { name: 'Volver', exact: true });
-  await volver.click();
-  await aviso(page).getByRole('button', { name: 'Guardar', exact: true }).click();
-  await expect(aviso(page)).toHaveCount(0);
-  await expect(volver).toBeFocused();
-  await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
-  await page.evaluate(() => document.dispatchEvent(new Event('liberar-guardado')));
-  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
-  await expect(volver).toBeFocused();
-});
+async function prepararVolver(page: Page, en: boolean) {
+  await preparar(page, false);
+  if (en) {
+    await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
+    await page.reload();
+  }
+  await page.evaluate(async () => {
+    const ruta = '/src/router.ts';
+    const { navigate } = await import(/* @vite-ignore */ ruta) as typeof import('../src/router');
+    navigate('amigos');
+    navigate('mesa', 'PA-2847');
+  });
+  await expect(page).toHaveURL(mesa);
+  await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
+  const consumos = page.locator('.tus-consumos .desplegable-cabecera');
+  if (await consumos.getAttribute('aria-expanded') !== 'true') await consumos.click();
+  await fila(page).locator('.qc-libre').click();
+
+  return {
+    volver: page.getByRole('button', { name: en ? 'Back' : 'Volver', exact: true }),
+    dialogo: page.getByRole('dialog', { name: en ? 'You have unsaved changes' : 'Tienes cambios sin guardar' }),
+    guardar: en ? 'Save' : 'Guardar',
+  };
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  const en = idioma === 'en';
+  test(`D879 · Volver navega al destino original sólo tras confirmar el guardado (${idioma})`, async ({ page }) => {
+    const { volver, dialogo, guardar } = await prepararVolver(page, en);
+    await observarEscriturasDeSeleccion(page, 'retenida');
+    await volver.click();
+    await dialogo.getByRole('button', { name: guardar, exact: true }).click();
+    await expect(dialogo).toHaveCount(0);
+    await expect(volver).toBeFocused();
+    await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
+    await expect(page).toHaveURL(mesa);
+    await page.evaluate(() => document.dispatchEvent(new Event('liberar-guardado')));
+    await expect(page).toHaveURL(/\/amigos$/);
+    await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
+  });
+
+  test(`D879 · Volver con guardado fallido se queda en la mesa y conserva el foco (${idioma})`, async ({ page }) => {
+    const { volver, dialogo, guardar } = await prepararVolver(page, en);
+    await observarEscriturasDeSeleccion(page, 'rechazada');
+    await volver.press('Enter');
+    await dialogo.getByRole('button', { name: guardar, exact: true }).press('Enter');
+    await expect(dialogo).toHaveCount(0);
+    await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
+    await expect(page.getByText(en ? "We couldn't reserve what you picked" : 'No pudimos reservar lo que elegiste', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(mesa);
+    await expect(volver).toBeFocused();
+    await expect(fila(page).locator('.qc-circulo--marcado')).toBeVisible();
+  });
+}
 
 test('Y4 · Volver y Guardar respeta el foco que tomó otro control', async ({ page }) => {
   await preparar(page, true);
@@ -221,5 +262,5 @@ test('Y4 · Volver y Guardar respeta el foco que tomó otro control', async ({ p
   await cerrarAntesDelFrame(page, aviso(page).getByRole('button', { name: 'Guardar', exact: true }),
     aviso(page), control(page, 'Mesas'));
   await page.evaluate(() => document.dispatchEvent(new Event('liberar-guardado')));
-  await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/mesas$/);
 });

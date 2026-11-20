@@ -653,7 +653,6 @@ export function MesaDetailView({
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const volverRef = useRef<HTMLButtonElement>(null);
   const [salidaPendiente, setSalidaPendiente] = useState<{
-    tipo: 'volver' | 'navegar';
     accion: () => void;
     disparador: HTMLButtonElement | null;
   } | null>(null);
@@ -1414,7 +1413,7 @@ export function MesaDetailView({
         backRef={volverRef}
         onBack={() => {
           if (tieneBorrador) {
-            setSalidaPendiente({ tipo: 'volver', accion: onBack, disparador: volverRef.current });
+            setSalidaPendiente({ accion: onBack, disparador: volverRef.current });
           } else onBack();
         }}
         bellBlocked={busy || !!frozenScope}
@@ -1736,13 +1735,8 @@ export function MesaDetailView({
             disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
             onClick={() => {
               focoTrasContinuar.current = false;
-              if (salidaPendiente.tipo === 'volver') {
-                cerrarAvisoYRestaurarFoco();
-                void terminarListo();
-              } else {
-                cerrarAvisoYRestaurarFoco();
-                void terminarListo(salidaPendiente.accion);
-              }
+              cerrarAvisoYRestaurarFoco();
+              void terminarListo(salidaPendiente.accion);
             }}>
             {t('Guardar')}
           </button>
@@ -1812,7 +1806,7 @@ export function MesaDetailView({
         accionAncha={!ejemplo}
         above={miParte}
         onAccion={(_, accion, disparador) => {
-          if (tieneBorrador) setSalidaPendiente({ tipo: 'navegar', accion, disparador });
+          if (tieneBorrador) setSalidaPendiente({ accion, disparador });
           else accion();
         }}
         center={pagosCortados ? {

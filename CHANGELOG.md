@@ -3,6 +3,7 @@
 - El aviso de guardado queda entero sobre la barra en pantallas bajas, incluso con el nombre del restaurante en dos renglones.
 - Al cerrar la ayuda de División, el foco vuelve al signo de pregunta y la opción queda a la vista.
 - La carga de la mesa distingue los fallos de conexión de los errores inesperados. Una quinta foto tardía muestra un solo aviso de tope.
+- En mesas, el aviso de foto pesada ofrece sacar otra foto o corregir a mano. Con cambios pendientes, «Guardar» desde «Volver» vuelve al destino anterior cuando el guardado se confirma.
 
 ## 0.278.0 · 2026-11-19
 

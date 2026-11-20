@@ -643,7 +643,7 @@ export const EN: Record<string, string> = {
   "Elige lo que consumiste para continuar": "Choose what you had to continue",
   "1 consumo": "1 item",
   "Saca otra foto.": "Take another photo.",
-  "Saca otra foto o cárgalo a mano.": "Take another photo or enter it by hand.",
+  "Saca otra foto o corrígelo a mano.": "Take another photo or fix it manually.",
   "Quitar la última foto": "Remove the last photo",
   "Ya tienes {0} fotos; esa no se agregó.": "You already have {0} photos. That one was not added.",
   "{0} consumos": "{0} items",

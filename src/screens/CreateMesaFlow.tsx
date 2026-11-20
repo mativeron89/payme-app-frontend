@@ -2971,7 +2971,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   <Icon name="warning" size={22} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="state-error-title">{t('La foto pesa más de 8 MB')}</div>
-                    <p className="state-error-body">{enViaje ? t('Saca otra foto.') : t('Saca otra foto o cárgalo a mano.')}</p>
+                    <p className="state-error-body">{enViaje ? t('Saca otra foto.') : t('Saca otra foto o corrígelo a mano.')}</p>
                   </div>
                 </div>
                 <div className="state-actions">

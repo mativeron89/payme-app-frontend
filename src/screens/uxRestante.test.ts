@@ -7,7 +7,7 @@ it.each([
   ['Cada uno lo suyo', 'Everyone their own'],
   ['cada uno lo suyo', 'Everyone their own'],
   ['1 consumo', '1 item'],
-  ['Saca otra foto o cárgalo a mano.', 'Take another photo or enter it by hand.'],
+  ['Saca otra foto o corrígelo a mano.', 'Take another photo or fix it manually.'],
   ['Revisa tu conexión y vuelve a intentarlo.', 'Check your connection and try again.'],
   ['Quitar la última foto', 'Remove the last photo'],
   ['Ya tienes {0} fotos; esa no se agregó.', 'You already have {0} photos. That one was not added.'],

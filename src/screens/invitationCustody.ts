@@ -103,6 +103,10 @@ export function closeInvitationCustody(): void {
  * `status` es el de `extractApiError`: `null` cubre red caída, timeout y
  * respuesta malformada, que es exactamente el conjunto que NO dice nada sobre
  * si el token sirve.
+ *
+ * D392 y addenda D877: accept-link inscribe directo. Su contrato vigente
+ * no emite 409 ni join_requests_full. Estas ramas conservan el fallback
+ * defensivo del enlace. La cola del pedido por código se maneja aparte.
  */
 export function settleInvitationFailure(status: number | null, code?: string): JoinLinkOutcome {
   // TERMINAL = el emisor ya decidió que este canje no va a cerrar. Nada de lo
