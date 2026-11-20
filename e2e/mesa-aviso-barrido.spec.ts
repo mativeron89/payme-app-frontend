@@ -53,6 +53,7 @@ for (const width of [320, 340, 360, 375, 390, 414]) {
                 scrollTop: app.scrollTop, excesoApp: app.scrollHeight - app.clientHeight,
                 diferenciaBarraVentana: barra.bottom - innerHeight,
                 inicioCabecera: app.querySelector('.hdr')!.getBoundingClientRect().top,
+                rellenoSuperior: getComputedStyle(el).paddingTop,
                 margenInferior: Math.min(barra.top, lista.bottom, innerHeight) - caja.bottom,
                 avisoVisible: caja.top >= Math.max(0, lista.top) && caja.left >= 0
                   && caja.right <= innerWidth && el.contains(centro),
@@ -81,7 +82,7 @@ for (const width of [320, 340, 360, 375, 390, 414]) {
           for (const [i, medidas] of [primero, segundo].entries()) {
             const mensaje = `guardado ${i + 1}: ${JSON.stringify(medidas)}`;
             expect(medidas, mensaje).toMatchObject({
-              scrollTop: 0, excesoApp: 0, diferenciaBarraVentana: 0, inicioCabecera: 0, avisoVisible: true,
+              scrollTop: 0, excesoApp: 0, diferenciaBarraVentana: 0, inicioCabecera: 0, avisoVisible: true, rellenoSuperior: '12px',
             });
             expect(medidas.margenInferior, mensaje).toBeGreaterThanOrEqual(0);
           }

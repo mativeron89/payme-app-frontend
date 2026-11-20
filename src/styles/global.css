@@ -12763,7 +12763,6 @@ h1.pay-title-lbl {
     padding-top: var(--sp-1);
   }
   .mesa-selection-scroll > .mesa-guardado {
-    padding-block: var(--sp-2);
     scroll-margin-top: 0;
   }
   .mesa-con-accion-ancha:has(.mesa-guardado) .mesa-selection-title {
