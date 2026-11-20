@@ -27,6 +27,29 @@ for (const idioma of ['es', 'en'] as const) {
     });
     await irEnLaApp(page, '/mesa/PA-2847');
     await expect(page.locator('.empty')).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
+    await expect(page.locator('.empty')).toContainText(en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.');
+    await page.evaluate(() => document.dispatchEvent(new Event('restablecer-lectura')));
+    await page.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/mesa\/PA-2847$/);
+  });
+
+  test(`el timeout se reintenta por la misma ruta (${idioma})`, async ({ page }) => {
+    await preparar(page, idioma);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const leer = api.getMesa.bind(api);
+      let recuperada = false;
+      document.addEventListener('restablecer-lectura', () => { recuperada = true; }, { once: true });
+      api.getMesa = async (...args) => {
+        if (args[0] === 'PA-2847' && !recuperada) throw new DOMException('aborted', 'AbortError');
+        return leer(...args);
+      };
+    });
+    await irEnLaApp(page, '/mesa/PA-2847');
+    await expect(page.locator('.empty')).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
+    await expect(page.locator('.empty')).toContainText(en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.');
     await page.evaluate(() => document.dispatchEvent(new Event('restablecer-lectura')));
     await page.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true }).click();
     await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
@@ -39,10 +62,12 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(page.locator('.empty')).toContainText(en
       ? "We couldn't find this table. The link may have expired, or the bill may already be closed."
       : 'No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.');
+    await expect(page.locator('.empty')).not.toContainText(en
+      ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.');
   });
 
   test(`el detalle cambia de reloj largo a minutos y segundos (${idioma})`, async ({ page }) => {
-    await page.setViewportSize({ width: en ? 390 : 320, height: 780 });
+    await page.setViewportSize({ width: 320, height: 780 });
     await preparar(page, idioma);
     await page.evaluate(async () => {
       const ruta = '/src/api/mock/store.ts';
@@ -55,6 +80,17 @@ for (const idioma of ['es', 'en'] as const) {
     const reloj = page.locator('.mi-count');
     const prefijo = en ? 'Expires in' : 'Vence en';
     await expect(reloj).toHaveText(`${prefijo} 4 h 59 min`);
+    await expect.poll(() => reloj.textContent()).toContain(`${prefijo} 4\u00a0h\u00a059\u00a0min`);
+    expect(await reloj.evaluate(el => {
+      const texto = Array.from(el.childNodes).find(n => n.textContent?.includes('4\u00a0h'));
+      if (!texto) return 0;
+      const inicio = texto.textContent!.indexOf('4\u00a0h');
+      const duracion = document.createRange();
+      duracion.setStart(texto, inicio);
+      duracion.setEnd(texto, inicio + '4\u00a0h\u00a059\u00a0min'.length);
+      return duracion.getClientRects().length;
+    })).toBe(1);
+
     await expect(reloj).not.toHaveClass(/\burgent\b/);
     const sinDesborde = await reloj.evaluate((el) => {
       const fila = el.parentElement!;

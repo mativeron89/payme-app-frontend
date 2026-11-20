@@ -90,9 +90,9 @@ for (const idioma of ['es', 'en'] as const) {
     await sacarFoto(page, undefined, { usar: false });
     await page.getByRole('button', { name: en ? 'Use photo' : 'Usar foto', exact: true }).click();
     const alerta = page.getByRole('alert').filter({ hasText: en ? 'The photo is over 8 MB' : 'La foto pesa más de 8 MB' });
-    await expect(alerta).toContainText(en ? 'Take another photo from closer up.' : 'Saca otra foto más de cerca.');
+    await expect(alerta).toContainText(en ? 'Take another photo or enter it by hand.' : 'Saca otra foto o cárgalo a mano.');
     await expect(alerta.getByRole('button', { name: en ? 'Take another photo' : 'Sacar otra foto' })).toBeVisible();
-    await alerta.getByRole('button', { name: en ? 'Enter it by hand' : 'Cargarlo a mano' }).click();
+    await alerta.getByRole('button', { name: en ? 'Fix it manually' : 'Corregir a mano' }).click();
     await expect(page.getByRole('heading', { name: en ? 'How are you splitting?' : '¿Cómo dividen?' })).toBeVisible();
   });
 }

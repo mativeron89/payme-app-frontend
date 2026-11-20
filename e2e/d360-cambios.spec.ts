@@ -57,9 +57,9 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // No eligió nada: la opción elegida sigue siendo la de antes.
     await expect(total).toHaveAttribute('aria-checked', 'false');
     await expect(consumo).toHaveAttribute('aria-checked', elegidaAntes!);
-    // La explicación va debajo de su opción, dentro del flujo.
+    // La burbuja va arriba de su opción, con la punta del lado del «?».
     const [caja, opcionCaja] = await Promise.all([explicacion(page).boundingBox(), total.boundingBox()]);
-    expect(caja!.y, 'la explicación va debajo de la opción').toBeGreaterThanOrEqual(opcionCaja!.y + opcionCaja!.height);
+    expect(caja!.y + caja!.height, 'la explicación va arriba de la opción').toBeLessThanOrEqual(opcionCaja!.y);
     await capturar(page, 'd360-01-ayuda-pagar-el-total');
 
     // Escape la cierra y el foco vuelve a su «?».
@@ -85,7 +85,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // ✕ se puede tocar (arriba quedaba recortada y la tapaba la tarjeta del total).
     await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveText('Cada uno marca lo que consumió.');
-    await expect(explicacion(page)).toHaveCSS('position', 'relative');
+    await expect(explicacion(page)).toHaveClass(/ayuda-opcion-burbuja--abajo/);
     const [abajo, primera] = await Promise.all([explicacion(page).boundingBox(), consumo.boundingBox()]);
     expect(abajo!.y, 'la explicación va abajo de la primera opción').toBeGreaterThanOrEqual(primera!.y + primera!.height);
     await expect(page.getByRole('button', { name: 'Cerrar la explicación', exact: true })).toBeInViewport({ ratio: 1 });
@@ -100,6 +100,38 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveCount(0);
   });
+
+  for (const opcion of ['Cada uno lo suyo', 'En partes iguales', 'Pagar el total']) {
+    test(`D366 · burbuja de ${opcion} arriba de la barra a 320×568`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 568 });
+      await hastaComoDividen(page);
+      const signo = ayuda(page, opcion);
+      await signo.click();
+      const burbuja = explicacion(page);
+      await expect(burbuja).toHaveCSS('position', 'absolute');
+      await expect(burbuja).toBeFocused();
+      await expect.poll(() => burbuja.evaluate(el => {
+        const caja = el.getBoundingClientRect();
+        const opcion = el.closest('.div-opcion')!.getBoundingClientRect();
+        const app = el.closest('.app')!;
+        const limitesInferiores = [...app.querySelectorAll('.appbar-block, .appbar-fab')]
+          .filter(n => n.getBoundingClientRect().height > 0).map(n => n.getBoundingClientRect().top);
+        const centroX = caja.left + caja.width / 2;
+        const centroY = caja.top + caja.height / 2;
+        const puntos = [[centroX, caja.top + 3], [centroX, caja.bottom - 3],
+          [caja.left + 3, centroY], [caja.right - 3, centroY], [centroX, centroY]];
+        return {
+          ladoCorrecto: el.classList.contains('ayuda-opcion-burbuja--abajo')
+            ? caja.top >= opcion.bottom : caja.bottom <= opcion.top,
+          punta: getComputedStyle(el, '::after').content === '""',
+          sobreLaBarra: caja.bottom <= Math.min(innerHeight, ...limitesInferiores),
+          visible: puntos.every(([x, y]) => el.contains(document.elementFromPoint(x!, y!))),
+        };
+      })).toEqual({ ladoCorrecto: true, punta: true, sobreLaBarra: true, visible: true });
+      await burbuja.getByRole('button', { name: 'Cerrar la explicación', exact: true }).click();
+      await expect(signo).toBeFocused();
+    });
+  }
 
   test('el «?» se toca con 44 px y el círculo mide 22, arriba a la derecha de la opción', async ({ page }) => {
     await hastaComoDividen(page);

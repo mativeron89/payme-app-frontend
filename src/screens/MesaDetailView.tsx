@@ -799,7 +799,7 @@ export function MesaDetailView({
   const cd = countdownTo(mesa.expires_at, ahora);
   const urgente = countdownIsUrgent(cd);
   const relojLargo = cd && Number.parseInt(cd, 10) >= 10 ? countdownLong(mesa.expires_at, ahora) : null;
-  const textoDelReloj = relojLargo ? t('Vence en {0}', relojLargo.text) : cd ?? t('venció');
+  const textoDelReloj = relojLargo ? t('Vence en {0}', relojLargo.text.replaceAll(' ', '\u00a0')) : cd ?? t('venció');
   const comprobandoCierre = !ejemplo && (mesa.status === 'open' || mesa.status === 'partially_paid')
     && (cd === null || cd === '0:00');
   const esConsumo = mesa.division_mode === 'consumo';

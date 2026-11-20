@@ -8356,12 +8356,20 @@ h1.pay-title-lbl {
   padding: 0 var(--sp-4);
 }
 
+.config-screen {
+  --fs-config-fila: 1rem;
+}
+
 .config-screen .config-card .list-row {
   height: auto;
   padding-block: var(--sp-3);
-  font-size: 1rem;
+  font-size: var(--fs-config-fila);
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.config-screen .lang-btn {
+  font-size: inherit;
 }
 
 .config-screen .config-card .list-row > div {
@@ -9155,10 +9163,12 @@ h1.pay-title-lbl {
   border-radius: var(--r-full);
 }
 
-/* La explicación ocupa espacio debajo de su opción. */
 .ayuda-opcion-burbuja {
-  position: relative;
-  margin-block-start: var(--sp-2);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 3;
   box-sizing: border-box;
   padding: 16px 44px;
   border: 1px solid var(--border);
@@ -9186,6 +9196,19 @@ h1.pay-title-lbl {
   color: var(--text);
 }
 
+.ayuda-opcion-burbuja::after {
+  content: '';
+  position: absolute;
+  right: 24px;
+  bottom: -8px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--teal-l);
+  transform: rotate(45deg);
+}
+
 .ayuda-opcion-cerrar {
   position: absolute;
   top: 4px;
@@ -9206,6 +9229,22 @@ h1.pay-title-lbl {
   outline: 2px solid var(--action);
   outline-offset: -2px;
   border-radius: 10px;
+}
+
+/* Si arriba no entra (la primera opción, contra el borde de lo que se desplaza),
+   la burbuja va abajo de la opción, con la punta hacia arriba. */
+.ayuda-opcion-burbuja--abajo {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+.ayuda-opcion-burbuja--abajo::after {
+  top: -8px;
+  bottom: auto;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 
 @keyframes ayuda-opcion-entra {
@@ -12719,12 +12758,16 @@ h1.pay-title-lbl {
 }
 .mesa-guardado p { margin: var(--sp-1) 0 0; font-weight: 700; }
 
-@media (max-width: 359px) and (max-height: 600px) {
+@media (max-height: 600px) {
   .mesa-selection-scroll:has(> .mesa-guardado) {
-    padding-top: var(--sp-2);
+    padding-top: var(--sp-1);
   }
   .mesa-selection-scroll > .mesa-guardado {
+    padding-block: var(--sp-2);
     scroll-margin-top: 0;
+  }
+  .mesa-con-accion-ancha:has(.mesa-guardado) .mesa-selection-title {
+    padding-block: var(--sp-2);
   }
 }
 .mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }
@@ -12755,7 +12798,6 @@ h1.pay-title-lbl {
 .legal-ayuda-texto {
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-legacy-sm);
   font-weight: 600;
   overflow-wrap: anywhere;
 }

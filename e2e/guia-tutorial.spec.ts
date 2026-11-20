@@ -331,6 +331,20 @@ test.describe('D363 · salir en cualquier paso', () => {
     expect(await mesasDelMock(page)).toBe(antes);
   });
 
+  test('3a · Escape desde la burbuja devuelve el foco a Tutorial', async ({ page }) => {
+    await entrar(page);
+    const antes = await mesasDelMock(page);
+    await abrirDesdeLaTarjeta(page);
+    await hastaLaCamara(page);
+    await hastaElTicket(page);
+    await expect(burbuja(page, 'Este es el ticket de ejemplo.')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: /Ticket/ })).toHaveCount(0);
+    await expect(tarjeta(page).getByRole('button', { name: 'Tutorial', exact: true })).toBeFocused();
+    await expect.poll(() => fase(page)).toBe('apagado');
+    expect(await mesasDelMock(page)).toBe(antes);
+  });
+
   test('2d y 2e · la ✕ vuelve a Inicio sin crear nada', async ({ page }) => {
     await entrar(page);
     const antes = await mesasDelMock(page);

@@ -3,19 +3,33 @@ import { ingresar, irEnLaApp } from './_app';
 
 for (const [idioma, width] of [['es', 320], ['en', 390]] as const) {
   const en = idioma === 'en';
-  test(`texto a 200 % en Configuración, sin desbordar (${idioma})`, async ({ page }) => {
+  test(`las diez filas y el selector de Configuración escalan juntos (${idioma})`, async ({ page }) => {
     await page.setViewportSize({ width, height: 812 });
+    await page.addInitScript(() => {
+      localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox');
+    });
     await ingresar(page);
     await irEnLaApp(page, '/mas');
     if (en) await page.getByRole('button', { name: 'EN', exact: true }).click();
-    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
-    const nombre = en ? 'Notifications' : 'Notificaciones';
-    const fila = page.getByRole('button', { name: nombre, exact: true }).last();
-    await expect(fila.getByText(nombre, { exact: true })).toHaveCSS('font-size', '32px');
-    expect(await page.locator('.config-card .list-row').evaluateAll(rows =>
-      rows.filter(row => row.clientWidth > 0 && row.scrollWidth > row.clientWidth + 1).length)).toBe(0);
-    await fila.press('Enter');
-    await expect(page.getByRole('heading', { name: nombre, exact: true })).toBeVisible();
+    const config = page.locator('.config-screen');
+    const nombres = en
+      ? ['Email', 'Language', 'Time zone', 'Notifications', 'Blocked people', 'My cards', 'Privacy notice',
+        'Terms of use', 'Write to us: soporte@paymemx.com', 'Delete my account']
+      : ['Email', 'Idioma', 'Zona horaria', 'Notificaciones', 'Bloqueados', 'Mis tarjetas', 'Aviso de privacidad',
+        'Términos de uso', 'Escríbenos: soporte@paymemx.com', 'Eliminar mi cuenta'];
+    const etiquetas = nombres.map(nombre => config.locator('.config-card').getByText(nombre, { exact: true }));
+    const idiomas = ['ES', 'EN'].map(nombre => config.getByRole('button', { name: nombre, exact: true }));
+    for (const [escala, px] of [['100%', '16px'], ['200%', '32px']] as const) {
+      await page.evaluate(escala => { document.documentElement.style.fontSize = escala; }, escala);
+      for (const control of [...etiquetas, ...idiomas]) {
+        await expect(control).toHaveCSS('font-size', px);
+      }
+      expect(await config.locator('.config-card .list-row').evaluateAll(rows =>
+        rows.filter(row => row.clientWidth > 0 && row.scrollWidth > row.clientWidth + 1).length)).toBe(0);
+    }
+    const notificaciones = en ? 'Notifications' : 'Notificaciones';
+    await config.getByRole('button', { name: notificaciones, exact: true }).last().press('Enter');
+    await expect(page.getByRole('heading', { name: notificaciones, exact: true })).toBeVisible();
   });
 
   test(`Inicio traduce el reloj cuando resta menos de un minuto (${idioma})`, async ({ page }) => {

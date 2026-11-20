@@ -2971,7 +2971,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   <Icon name="warning" size={22} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="state-error-title">{t('La foto pesa más de 8 MB')}</div>
-                    <p className="state-error-body">{t('Saca otra foto más de cerca.')}</p>
+                    <p className="state-error-body">{enViaje ? t('Saca otra foto.') : t('Saca otra foto o cárgalo a mano.')}</p>
                   </div>
                 </div>
                 <div className="state-actions">
@@ -2980,7 +2980,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </button>
                   {!enViaje && (
                     <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
-                      {t('Cargarlo a mano')}
+                      {t('Corregir a mano')}
                     </button>
                   )}
                 </div>

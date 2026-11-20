@@ -91,6 +91,17 @@ test('W1 · un rechazo de Guardar conserva la mesa y su borrador', async ({ page
   await expect(fila(page).locator('.qc-circulo--marcado')).toBeVisible();
 });
 
+test('W1 · un rechazo de Guardar con mouse conserva la mesa y su borrador', async ({ page }) => {
+  await preparar(page, true);
+  await observarEscriturasDeSeleccion(page, 'rechazada');
+  await control(page, 'Mesas').click();
+  await aviso(page).getByRole('button', { name: 'Guardar', exact: true }).click();
+  await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
+  await expect(page.getByText('No pudimos reservar lo que elegiste', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(mesa);
+  await expect(fila(page).locator('.qc-circulo--marcado')).toBeVisible();
+});
+
 test('W1 · partes iguales guarda desde la barra y descarta al último valor guardado', async ({ page }) => {
   const code = await hastaCompartir(page, { modo: 'igual', ocr: 'descuento' });
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();

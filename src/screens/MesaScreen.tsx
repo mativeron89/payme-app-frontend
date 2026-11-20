@@ -2575,10 +2575,13 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       <div className="screen">
         <TopBar title={t('Mesa')} onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="empty">
-          <div className="emoji"><Icon name="search" size={40} /></div>
-          {errorDeCarga === 'sin-conexion'
-            ? t('No pudimos cargar tu mesa')
-            : t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
+          <div className="emoji"><Icon name={errorDeCarga === 'sin-conexion' ? 'warning' : 'search'} size={40} /></div>
+          {errorDeCarga === 'sin-conexion' ? (
+            <>
+              <div>{t('No pudimos cargar tu mesa')}</div>
+              <p className="state-error-body">{t('Revisa tu conexión y vuelve a intentarlo.')}</p>
+            </>
+          ) : t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
           <div style={{ marginTop: 16 }}>
             <button
               className="btn btn-ghost btn-sm"

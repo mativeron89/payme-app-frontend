@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { Icon } from './Icon';
 
@@ -8,7 +8,11 @@ import { Icon } from './Icon';
  *
  * - Es un botón HERMANO del radio de la opción, nunca adentro (un botón dentro
  *   de otro no se puede tocar ni anunciar bien). 22 px de círculo y 44 de toque.
- * - Abre una explicación debajo de su opción, en el flujo. Una a la vez.
+ * - Abre una explicación en una burbuja arriba de la opción, con la punta hacia
+ *   el «?». Si arriba no entra (la primera opción, contra el borde de lo que se
+ *   desplaza), va abajo: arriba quedaba recortada y su ✕ no se podía tocar
+ *   (medido en la corrida e2e del 2026-10-18). Una a la vez: la decide la
+ *   pantalla (`abierta`).
  * - El mismo «?», la ✕ o Escape la cierran, y el foco vuelve al «?».
  * - No elige la opción ni cambia nada: sólo explica.
  *
@@ -36,11 +40,40 @@ export function AyudaDeOpcion({
   const { t } = useIdioma();
   const boton = useRef<HTMLButtonElement | null>(null);
   const burbuja = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!abierta) return;
+  const [abajo, setAbajo] = useState(false);
+
+  // La burbuja es absoluta. Medimos sin la animación y desplazamos sólo el
+  // cuerpo de División para que el borde inferior quede sobre la barra.
+  useLayoutEffect(() => {
+    if (!abierta) { setAbajo(false); return; }
     const nota = burbuja.current;
-    nota?.scrollIntoView?.({ block: 'nearest' });
-    nota?.focus({ preventScroll: true });
+    const opcion = nota?.offsetParent;
+    if (!nota || !opcion) return;
+    const contenedor = cuerpoDesplazable(opcion);
+    if (!contenedor) return;
+
+    const caja = contenedor.getBoundingClientRect();
+    const superior = Math.max(0, caja.top);
+    const fila = opcion.getBoundingClientRect();
+    const arriba = fila.top - SEPARACION - nota.offsetHeight;
+    const vaAbajo = arriba + contenedor.scrollTop < superior;
+    setAbajo(vaAbajo);
+
+    const barra = nota.closest('.app')?.querySelector('.appbar-block');
+    const circulo = barra?.querySelector('.appbar-fab');
+    const inferior = Math.min(window.innerHeight, caja.bottom,
+      barra?.getBoundingClientRect().top ?? Infinity,
+      circulo?.getBoundingClientRect().top ?? Infinity);
+    const inicio = vaAbajo ? fila.bottom + SEPARACION : arriba;
+    const fin = inicio + nota.offsetHeight;
+    if (inicio < superior) contenedor.scrollTop += inicio - superior;
+    else if (fin + SEPARACION > inferior) contenedor.scrollTop += fin + SEPARACION - inferior;
+  }, [abierta]);
+
+  // Al abrirse, el foco pasa a la burbuja: así el lector de pantalla lee la
+  // explicación. Sin mover la vista: la burbuja ya está al lado del «?».
+  useEffect(() => {
+    if (abierta) burbuja.current?.focus({ preventScroll: true });
   }, [abierta]);
 
   const cerrar = (): void => {
@@ -67,7 +100,7 @@ export function AyudaDeOpcion({
         <div
           ref={burbuja}
           id={id}
-          className="ayuda-opcion-burbuja"
+          className={`ayuda-opcion-burbuja${abajo ? ' ayuda-opcion-burbuja--abajo' : ''}`}
           role="note"
           tabIndex={-1}
           onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); cerrar(); } }}
@@ -80,4 +113,16 @@ export function AyudaDeOpcion({
       )}
     </>
   );
+}
+
+/** Los 10 px entre la burbuja y su opción (`.ayuda-opcion-burbuja`, `calc(100% + 10px)`). */
+const SEPARACION = 10;
+
+/** La lista o el cuerpo exterior de División, según la altura del viewport. */
+function cuerpoDesplazable(desde: Element): HTMLElement | null {
+  for (let el = desde.parentElement; el; el = el.parentElement) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+  }
+  return null;
 }

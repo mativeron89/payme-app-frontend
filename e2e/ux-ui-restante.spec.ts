@@ -43,7 +43,7 @@ for (const lang of ['es', 'en'] as const) {
     await expect(comprobando).toHaveCount(0);
     const habilitado = await continuar.isEnabled();
     const venceEn = await page.locator('.mi-count').innerText();
-    expect(venceEn.trim()).toMatch(/\d+:\d+|(?:Vence en|Expires in) \d+ (?:h|min)/);
+    expect(venceEn.trim()).toMatch(/\d+:\d+|(?:Vence en|Expires in) \d+[ \u00a0](?:h|min)/);
     await page.evaluate(() => {
       const original = Date.now;
       const adelantada = original() + 30 * 24 * 60 * 60 * 1000;
@@ -143,7 +143,23 @@ for (const lang of ['es', 'en'] as const) {
 
   test(`U7 · la modalidad en la mesa usa el mismo nombre (${lang})`, async ({ page }) => {
     await mesaSemilla(page, lang);
-    await expect(page.locator('.mesa-selection-context strong')).toHaveText(en ? 'each picks their own' : 'cada uno lo suyo');
+    await expect(page.locator('.mesa-selection-context strong')).toHaveText(en ? 'Everyone their own' : 'cada uno lo suyo');
+    if (en) {
+      await page.setViewportSize({ width: 375, height: 667 });
+      const nombre = 'Tacos El Güero';
+      await page.evaluate(async (nombre) => {
+        const ruta = '/src/api/mock/store.ts';
+        const { findMesa, persist } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/store');
+        const mesa = findMesa('PA-2847');
+        if (!mesa) throw new Error('Falta la mesa de ejemplo');
+        mesa.restaurant = { ...mesa.restaurant, name: nombre };
+        persist();
+      }, nombre);
+      await page.reload();
+      const restaurante = page.locator('.mesa-selection-context-main');
+      await expect(restaurante).toHaveText(nombre);
+      await expect.poll(() => restaurante.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    }
   });
 
   test(`U5 · quitar un plato guardado cuenta como cambio (${lang})`, async ({ page }) => {

@@ -1,9 +1,10 @@
 ## 0.278.0 · 2026-11-19
 
-- El reloj de la mesa muestra las horas restantes. Si falla la carga, se puede reintentar desde la misma pantalla.
+- El reloj de la mesa mantiene juntas las horas y los minutos. El aviso de guardado queda a la vista en pantallas bajas. Si falla la carga, la pantalla indica cómo reintentar.
 - Mejora el foco con teclado en el tutorial, al elegir porciones y al guardar consumos.
 - La revisión del ticket muestra la cantidad de consumos y el precio por unidad. Una foto demasiado pesada ofrece otra captura o la carga manual en mesas.
-- Configuración admite texto más grande. Los controles de la hoja de mesa tienen blancos más amplios y mejor contraste.
+- Las filas de Configuración y el selector de idioma usan el mismo tamaño de letra y crecen con el texto ampliado. Los bordes de los controles tienen más contraste y la hoja de mesa tiene blancos táctiles más amplios.
+- La ayuda de «¿Cómo dividen?» aparece en una burbuja junto a la opción. La píldora de propina muestra un foco de teclado visible.
 - Viajes usa la misma confirmación para borrar consumos, notas y fotos. Los avisos de bloqueo se muestran arriba de la barra.
 
 ## 0.277.0 · 2026-11-19

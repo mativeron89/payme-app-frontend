@@ -5,9 +5,10 @@ import { EN_VIAJES_CREAR } from '../i18n/viajes/crear';
 
 it.each([
   ['Cada uno lo suyo', 'Everyone their own'],
-  ['cada uno lo suyo', 'each picks their own'],
+  ['cada uno lo suyo', 'Everyone their own'],
   ['1 consumo', '1 item'],
-  ['Saca otra foto más de cerca.', 'Take another photo from closer up.'],
+  ['Saca otra foto o cárgalo a mano.', 'Take another photo or enter it by hand.'],
+  ['Revisa tu conexión y vuelve a intentarlo.', 'Check your connection and try again.'],
   ['Quitar la última foto', 'Remove the last photo'],
   ['Ya tienes {0} fotos; esa no se agregó.', 'You already have {0} photos. That one was not added.'],
   ['¿Borrar el consumo?', 'Delete the expense?'],
