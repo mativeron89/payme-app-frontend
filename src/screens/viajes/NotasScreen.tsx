@@ -77,6 +77,7 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
   const { session } = useAuth();
   const toast = useToast();
   const [carga, setCarga] = useState<Carga>({ tipo: 'cargando' });
+  const disparadorDeHoja = useRef<HTMLButtonElement | null>(null);
   const [hoja, setHoja] = useState<Hoja | null>(null);
   /** Las tildes en camino: lo que se ve mientras el dueño contesta (un toque más sobre el mismo ítem no hace nada). */
   const [tildando, setTildando] = useState<ReadonlyMap<string, boolean>>(() => new Map());
@@ -248,6 +249,15 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
     if (pizarron && miembroId && (!otro || otro.es_yo)) replaceRoute('viaje-notas', viajeId);
   }, [pizarron, miembroId, otro, viajeId]);
 
+  function cancelarHoja() {
+    const boton = disparadorDeHoja.current;
+    disparadorDeHoja.current = null;
+    setHoja(null);
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) boton?.focus({ preventScroll: true });
+    });
+  }
+
   const centro = circuloDelViaje(pizarron ? { id: pizarron.viaje_id, nombre: pizarron.nombre, estado: pizarron.estado } : null, t);
   return (
     <div className="screen has-appbar">
@@ -269,8 +279,14 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
           fotoDe={fotoDe}
           onReintentar={cargar}
           onVerViajes={() => navigate('viajes', 'abiertos')}
-          onNueva={(tipo) => setHoja(tipo === 'nota' ? { tipo: 'nota', entrada: null } : { tipo: 'lista', entrada: null })}
-          onMenu={(entrada) => setHoja({ tipo: 'menu', entrada })}
+          onNueva={(tipo, boton) => {
+            disparadorDeHoja.current = boton;
+            setHoja(tipo === 'nota' ? { tipo: 'nota', entrada: null } : { tipo: 'lista', entrada: null });
+          }}
+          onMenu={(entrada, boton) => {
+            disparadorDeHoja.current = boton;
+            setHoja({ tipo: 'menu', entrada });
+          }}
           onTildar={(lista, itemId, tildado) => void tildar(lista, itemId, tildado)}
           onAbrirApartado={(a) => navigate('viaje-notas', parametroDeApartado(viajeId, a.miembro_id))}
         />
@@ -281,7 +297,7 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
           key={`nota:${hoja.entrada?.id ?? 'nueva'}`}
           entrada={hoja.entrada}
           tope={pizarron.limites.caracteres_nota}
-          onCancelar={() => setHoja(null)}
+          onCancelar={cancelarHoja}
           onGuardar={guardarNota}
         />
       )}
@@ -290,7 +306,7 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
           key={`lista:${hoja.entrada?.id ?? 'nueva'}`}
           entrada={hoja.entrada}
           limites={pizarron.limites}
-          onCancelar={() => setHoja(null)}
+          onCancelar={cancelarHoja}
           onGuardar={guardarLista}
         />
       )}
@@ -299,7 +315,7 @@ export function NotasScreen({ viajeId, miembroId }: { viajeId: string; miembroId
           entrada={hoja.entrada}
           onEditar={() => setHoja(hoja.entrada.tipo === 'nota' ? { tipo: 'nota', entrada: hoja.entrada } : { tipo: 'lista', entrada: hoja.entrada })}
           onBorrar={() => setHoja({ tipo: 'borrar', entrada: hoja.entrada })}
-          onCancelar={() => setHoja(null)}
+          onCancelar={cancelarHoja}
         />
       )}
       {pizarron && hoja?.tipo === 'borrar' && (
@@ -351,8 +367,8 @@ export interface PizarronVistaProps {
   readonly fotoDe: (miembroId: string) => string | null;
   readonly onReintentar: () => void;
   readonly onVerViajes: () => void;
-  readonly onNueva: (tipo: 'nota' | 'lista') => void;
-  readonly onMenu: (entrada: EntradaDeNotas) => void;
+  readonly onNueva: (tipo: 'nota' | 'lista', boton: HTMLButtonElement) => void;
+  readonly onMenu: (entrada: EntradaDeNotas, boton: HTMLButtonElement) => void;
   readonly onTildar: (lista: ListaConTildes, itemId: string, tildado: boolean) => void;
   readonly onAbrirApartado: (apartado: Apartado) => void;
 }
@@ -566,8 +582,8 @@ function ApartadoMio({ apartado: a, pizarron: p, fotoDe, tildando, onNueva, onMe
               <p className="nts-vacio-titulo">{t('Todavía no anotaste nada')}</p>
               <p className="nts-vacio-ayuda">{t('Anota un plan o arma una lista. Todos los del viaje lo ven; sólo tú lo editas.')}</p>
               <div className="nts-vacio-botones">
-                <button type="button" className="btn btn-navy nts-boton-48" onClick={() => onNueva('nota')}>{t('Escribir nota')}</button>
-                <button type="button" className="btn nts-boton-borde nts-boton-48" onClick={() => onNueva('lista')}>{t('Armar lista')}</button>
+                <button type="button" className="btn btn-navy nts-boton-48" onClick={(e) => onNueva('nota', e.currentTarget)}>{t('Escribir nota')}</button>
+                <button type="button" className="btn nts-boton-borde nts-boton-48" onClick={(e) => onNueva('lista', e.currentTarget)}>{t('Armar lista')}</button>
               </div>
             </div>
           ) : (
@@ -578,16 +594,16 @@ function ApartadoMio({ apartado: a, pizarron: p, fotoDe, tildando, onNueva, onMe
             <div className="nts-entradas">
               {a.entradas.map((e) => (
                 <EntradaVista key={e.id} entrada={e} mia editable={p.editable} recortar={false} tildando={tildando}
-                  onMenu={() => onMenu(e)} onTildar={onTildar} />
+                  onMenu={(boton) => onMenu(e, boton)} onTildar={onTildar} />
               ))}
             </div>
             {p.editable && (
               <>
                 <div className="nts-mis-botones">
-                  <button type="button" className="nts-mas" disabled={enElTope} aria-label={t('Nota nueva')} onClick={() => onNueva('nota')}>
+                  <button type="button" className="nts-mas" disabled={enElTope} aria-label={t('Nota nueva')} onClick={(e) => onNueva('nota', e.currentTarget)}>
                     <Icon name="plus" size={18} className="nts-mas-signo" />{t('Nota')}
                   </button>
-                  <button type="button" className="nts-mas" disabled={enElTope} aria-label={t('Lista nueva')} onClick={() => onNueva('lista')}>
+                  <button type="button" className="nts-mas" disabled={enElTope} aria-label={t('Lista nueva')} onClick={(e) => onNueva('lista', e.currentTarget)}>
                     <Icon name="plus" size={18} className="nts-mas-signo" />{t('Lista')}
                   </button>
                 </div>
@@ -613,7 +629,7 @@ function EntradaVista({ entrada: e, mia, editable, recortar, tildando, onMenu, o
   /** En el pizarrón, la nota de otro: 4 líneas y «Ver todo». */
   recortar: boolean;
   tildando: ReadonlyMap<string, boolean>;
-  onMenu?: () => void;
+  onMenu?: (boton: HTMLButtonElement) => void;
   onTildar?: (lista: ListaConTildes, itemId: string, tildado: boolean) => void;
   onVerTodo?: () => void;
 }) {
@@ -624,7 +640,7 @@ function EntradaVista({ entrada: e, mia, editable, recortar, tildando, onMenu, o
       return (
         <div className="nts-nota nts-nota-mia">
           <p className="nts-nota-texto">{e.texto}</p>
-          <button type="button" className="nts-menu" aria-label={t('Editar o borrar la nota')} onClick={onMenu}>
+          <button type="button" className="nts-menu" aria-label={t('Editar o borrar la nota')} onClick={(e) => onMenu?.(e.currentTarget)}>
             <Icon name="tres-puntos" size={20} />
           </button>
         </div>
@@ -643,7 +659,7 @@ function EntradaVista({ entrada: e, mia, editable, recortar, tildando, onMenu, o
         <span className="nts-lista-titulo">{e.titulo}</span>
         <span className="nts-lista-cuenta">{tildadosDeLista({ items }, t)}</span>
         {conControles && (
-          <button type="button" className="nts-menu" aria-label={t('Editar o borrar la lista')} onClick={onMenu}>
+          <button type="button" className="nts-menu" aria-label={t('Editar o borrar la lista')} onClick={(e) => onMenu?.(e.currentTarget)}>
             <Icon name="tres-puntos" size={20} />
           </button>
         )}

@@ -156,7 +156,7 @@ for (const lang of ['es', 'en'] as const) {
     await page.getByRole('button', { name: en ? 'Photo' : 'Foto', exact: true }).click();
     const eliminar = page.getByRole('button', { name: en ? 'Delete photo' : 'Eliminar foto', exact: true });
     await eliminar.click();
-    const confirmar = page.getByRole('dialog', { name: en ? 'Delete the trip photo?' : '¿Eliminar la foto del viaje?' });
+    const confirmar = page.getByRole('dialog', { name: en ? 'Delete the trip photo?' : '¿Borrar la foto del viaje?' });
     await expect(confirmar).toContainText(en ? "It's removed from the trip and can't be recovered."
       : 'Se borra del viaje y no se puede recuperar.');
     if (!en) await capturar(page, 'confirmar-eliminar-foto');

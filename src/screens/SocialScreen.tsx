@@ -290,7 +290,7 @@ export function SocialScreen() {
       await api.blockUser(userId);
       disparadorConfirmacion.current =
         pestanasRef.current?.querySelector<HTMLElement>('button[aria-selected="true"]') ?? null;
-      toast(t('Bloqueaste a {0}', quien));
+      toast(t('Bloqueaste a {0}', quien), { sobreLaBarra: true });
       loadFriends();
       loadRequests();
     } catch {

@@ -321,7 +321,7 @@ test.describe('D363 · salir en cualquier paso', () => {
     await abrirDesdeLaTarjeta(page);
     await hastaLaCamara(page);
     await hastaElTicket(page);
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).press('Escape');
     await expect(page.getByRole('dialog', { name: /Ticket/ })).toHaveCount(0);
     expect(await fase(page)).toBe('dividir');
     // 2c sin burbuja ni ✕ (Q7): se sale yéndose. «Volver» cierra la guía y descarta la mesa de ejemplo.

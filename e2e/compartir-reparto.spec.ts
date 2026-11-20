@@ -154,7 +154,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await expect.poll(() => compartidos(page)).toHaveLength(1);
     const [datos] = await compartidos(page) as Array<{ text: string }>;
     expect(datos.text.split('\n').slice(1)).toEqual([
-      'Así va la mesa (Cada uno lo suyo)',
+      'Así va la mesa (cada uno lo suyo)',
       'Mi parte: $210.90',
       '  Mis platos: $195',
       `  Descuento: ${MENOS}$11.61`,

@@ -14,7 +14,7 @@ import type { MesaDetail, MesaItem } from '../api/types';
 import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
 import { useUsernameCapability } from '../api/username';
-import { countdownTo, formatMXN } from '../utils/format';
+import { countdownLong, countdownTo, formatMXN } from '../utils/format';
 import { nombreDePlato } from '../utils/nombreDePlato';
 import {
   availableSlotsOf,
@@ -683,11 +683,17 @@ export function MesaDetailView({
   /** D469 · «Tu parte» (el desglose de D344) arranca cerrado. */
   const [miParteAbierta, setMiParteAbierta] = useState(false);
   const avisoGuardadoRef = useRef<HTMLDivElement>(null);
+  const focoTrasContinuar = useRef(false);
   useLayoutEffect(() => {
     if (!avisoGuardado) return;
     setMiParteAbierta(true);
     setConsumosAbierto(false);
-    avisoGuardadoRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    const aviso = avisoGuardadoRef.current;
+    aviso?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    if (focoTrasContinuar.current && document.activeElement === document.body) {
+      aviso?.focus({ preventScroll: true });
+    }
+    focoTrasContinuar.current = false;
   }, [avisoGuardado]);
   /**
    * D360-4a · «Quiénes están en la mesa» arranca CERRADO siempre, haya o no
@@ -789,8 +795,11 @@ export function MesaDetailView({
       {inviteOpen && <InviteFriends code={code} memoria={memoriaDeInvitaciones} />}
     </div>
   ) : null;
-  const cd = countdownTo(mesa.expires_at);
+  const ahora = new Date();
+  const cd = countdownTo(mesa.expires_at, ahora);
   const urgente = countdownIsUrgent(cd);
+  const relojLargo = cd && Number.parseInt(cd, 10) >= 10 ? countdownLong(mesa.expires_at, ahora) : null;
+  const textoDelReloj = relojLargo ? t('Vence en {0}', relojLargo.text) : cd ?? t('venció');
   const comprobandoCierre = !ejemplo && (mesa.status === 'open' || mesa.status === 'partially_paid')
     && (cd === null || cd === '0:00');
   const esConsumo = mesa.division_mode === 'consumo';
@@ -844,6 +853,18 @@ export function MesaDetailView({
   const [abierto, setAbierto] = useState<string | null>(null);
   const idDeLaTira = useId();
   const tiraRef = useRef<HTMLDivElement | null>(null);
+  const focoDelPlato = useRef<string | null>(null);
+  const idDelControl = (id: string): string => `${idDeLaTira}-plato-${id}`;
+  useLayoutEffect(() => {
+    if (focoDelPlato.current === null) return;
+    const control = document.getElementById(focoDelPlato.current);
+    if (!(control instanceof HTMLButtonElement) || control.disabled) {
+      focoDelPlato.current = null;
+      return;
+    }
+    focoDelPlato.current = null;
+    control.focus({ preventScroll: true });
+  });
   /**
    * D360-6 · la tira de porciones aparece DEBAJO del plato: al abrirse se trae a
    * la vista (su `scroll-margin-bottom` deja libre la barra de abajo) y el foco
@@ -872,10 +893,10 @@ export function MesaDetailView({
    * listas: 10000, 5000, 3333 y 2500.
    */
   const selectorNatural = pagosCortados && original !== null;
-  const elegirPorcion = (id: string, denominator: number): void => {
+  const elegirPorcion = (id: string, denominator: number, cerrar = true): void => {
     if (selectorNatural) onSetDenominator(id, denominator);
     else onSetFraction(id, denominatorBps(denominator));
-    setAbierto(null);
+    if (cerrar) setAbierto(null);
   };
   // Decisión 79 · en «igual» con el dato del dueño (v2.134.0), la barra dice lo
   // ELEGIDO igual que en consumo, contando desde `informative_remaining_bps`.
@@ -918,7 +939,7 @@ export function MesaDetailView({
   const availableSlots = availableSlotsOf(mesa);
   const nothingLeft = nothingLeftFor(mesa);
   const divisionLabel = esConsumo
-    ? t('Cada uno lo suyo')
+    ? t('cada uno lo suyo')
     : mesa.expected_participants === 1
       ? pagosCortados ? t('toda la cuenta') : t('pagar el total')
       : t('partes iguales');
@@ -977,7 +998,7 @@ export function MesaDetailView({
   const faltaElegir = esConsumo && selected.size === 0 && !mia?.items_cents;
 
   const miParte = faltaElegir ? null : (
-    <div data-guia="mi-parte" className="mi-parte">
+    <div data-guia="mi-parte" className="mi-parte" aria-live="polite" aria-atomic="true">
       {nothingLeft ? (
         <span>{pagosCortados ? t('No queda nada por elegir') : t('No queda nada por pagar')}</span>
       ) : !esConsumo && availableSlots === 0 ? (
@@ -1210,7 +1231,7 @@ export function MesaDetailView({
             const tira = tiraAbierta ? (
               <div key="tira" ref={tiraRef} id={idTira} className="qc-porciones">
                 <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
-                  {opciones.map((d) => {
+                  {opciones.map((d, indice) => {
                     const elegida = bps === denominatorBps(d);
                     return (
                       <button
@@ -1218,8 +1239,31 @@ export function MesaDetailView({
                         type="button"
                         role="radio"
                         aria-checked={elegida}
+                        tabIndex={elegida || (!opciones.some((o) => bps === denominatorBps(o)) && indice === 0) ? 0 : -1}
                         className={`qc-opcion${elegida ? ' on' : ''}`}
-                        onClick={() => elegirPorcion(i.id, d)}
+                        onClick={() => {
+                          focoDelPlato.current = idDelControl(i.id);
+                          elegirPorcion(i.id, d);
+                        }}
+                        onKeyDown={(evento) => {
+                          if (evento.key === 'Escape') {
+                            evento.preventDefault();
+                            evento.stopPropagation();
+                            focoDelPlato.current = idDelControl(i.id);
+                            setAbierto(null);
+                            return;
+                          }
+                          const siguiente = evento.key === 'ArrowRight' || evento.key === 'ArrowDown'
+                            ? (indice + 1) % opciones.length
+                            : evento.key === 'ArrowLeft' || evento.key === 'ArrowUp'
+                              ? (indice + opciones.length - 1) % opciones.length
+                              : -1;
+                          if (siguiente < 0) return;
+                          evento.preventDefault();
+                          const botones = evento.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+                          elegirPorcion(i.id, opciones[siguiente], false);
+                          botones?.[siguiente]?.focus({ preventScroll: true });
+                        }}
                       >
                         {etiquetaPorcion(denominatorBps(d), t)}
                       </button>
@@ -1246,9 +1290,15 @@ export function MesaDetailView({
                 {sel && !editBloqueado ? (
                   <button
                     type="button"
+                    id={idDelControl(i.id)}
                     className="qc-circulo qc-circulo--marcado"
                     aria-label={t('Soltar {0}', nombre)}
-                    onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                    aria-pressed={true}
+                    onClick={(evento) => {
+                      if (evento.detail === 0) focoDelPlato.current = idDelControl(i.id);
+                      setAbierto(null);
+                      onToggleItem(i.id);
+                    }}
                   >
                     <Icon name="check" size={14} />
                   </button>
@@ -1307,6 +1357,7 @@ export function MesaDetailView({
                 key={i.id}
                 className="qc-fila qc-otro"
                 data-estado={state}
+                role="group"
                 aria-label={state === 'tomado' && lineaQuien ? `${nombreAria}${ariaQuien}` : `${nombreAria}${tag ? t(', {0}', tag) : ''}`}
               >
                 <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
@@ -1323,12 +1374,16 @@ export function MesaDetailView({
             <button
               key={i.id}
               type="button"
+              id={idDelControl(i.id)}
               className="qc-fila qc-libre"
               data-estado={queda ? 'queda' : 'libre'}
               disabled={editBloqueado}
               aria-pressed={false}
               aria-label={`${nombreAria}${ariaQuien}${tag ? t(', {0}', tag) : ''}`}
-              onClick={() => tomarPlato(i.id, opciones.length)}
+              onClick={(evento) => {
+                if (evento.detail === 0 && opciones.length <= 1) focoDelPlato.current = idDelControl(i.id);
+                tomarPlato(i.id, opciones.length);
+              }}
             >
               <span className="qc-circulo" aria-hidden="true" />
               {lineaQuien ? <span className="qc-cuerpo">{titulo('qc-nombre')}{lineaQuien}</span> : titulo('qc-nombre')}
@@ -1426,7 +1481,7 @@ export function MesaDetailView({
             )}
           </span>
           <span className={`mi-count ${urgente ? 'urgent' : ''}`}>
-            <Icon name="clock" size={14} /> {cd ?? t('venció')}
+            <Icon name="clock" size={14} /> {textoDelReloj}
           </span>
         </div>
       </div>
@@ -1437,7 +1492,7 @@ export function MesaDetailView({
         )}
         {recuperacion}
         {avisoGuardado && (
-          <div ref={avisoGuardadoRef} className="card mesa-guardado" role="status">
+          <div ref={avisoGuardadoRef} className="card mesa-guardado" role="status" tabIndex={-1}>
             <span className="mesa-guardado-check" aria-hidden="true"><Icon name="check" size={24} /></span>
             <div><strong>{t('Listo, quedó guardado')}</strong>
               {avisoGuardado.importeCents !== null && <p>{t('Tu parte: {0}', formatMXN(avisoGuardado.importeCents))}</p>}
@@ -1680,17 +1735,18 @@ export function MesaDetailView({
           <button type="button" className="btn btn-navy"
             disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
             onClick={() => {
+              focoTrasContinuar.current = false;
               if (salidaPendiente.tipo === 'volver') {
                 cerrarAvisoYRestaurarFoco();
                 void terminarListo();
               } else {
-                setSalidaPendiente(null);
+                cerrarAvisoYRestaurarFoco();
                 void terminarListo(salidaPendiente.accion);
               }
             }}>
             {t('Guardar')}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => {
+          <button type="button" className="btn btn-ghost btn-texto-peligro" onClick={() => {
             setSalidaPendiente(null);
             salidaPendiente.accion();
           }}>{t('Salir sin guardar')}</button>
@@ -1774,7 +1830,11 @@ export function MesaDetailView({
            * de una lectura acreditada. Marcar el último ítem continúa siendo
            * local y nunca envía por sí mismo.
            */
-          onClick: () => { void terminarListo(); },
+          onClick: () => {
+            if (preparandoRef.current || busy || leyendoListo) return;
+            focoTrasContinuar.current = document.activeElement?.matches('[data-guia="continuar"]:focus-visible') ?? false;
+            void terminarListo();
+          },
           disabled: busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked),
         } : {
           // Decisión 90 de Mati, definición 1: el círculo dice «Listo» también

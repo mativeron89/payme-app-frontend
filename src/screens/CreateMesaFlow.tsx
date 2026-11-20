@@ -348,7 +348,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
    */
   const [scanIssue, setScanIssue] = useState<
     'ocr' | 'no_items' | 'no_prices' | 'provider' | 'image_type' | 'too_large' | 'too_small'
-    | 'budget_exhausted' | 'budget_unavailable' | 'partes_pesadas' | null
+    | 'budget_exhausted' | 'budget_unavailable' | 'partes_pesadas' | 'limite_partes' | null
   >(null);
   /**
    * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
@@ -1295,9 +1295,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (!ticketVisible) return;
     const dialog = ticketRef.current;
     // AF-NOMBRE-EN-TICKET · abierta desde «Editar en el ticket», el foco va al campo.
-    (campoNombreRef.current ?? (ticketForcedOpenRef.current ? dialog : ticketCloseRef.current))?.focus();
+    // En el ejemplo, la burbuja enfoca el paso cuando su portal ya es visible.
+    if (!ticketDeEjemploRef.current || !dialog?.hasAttribute('data-guia-convive')) {
+      (campoNombreRef.current ?? (ticketForcedOpenRef.current ? dialog : ticketCloseRef.current))?.focus();
+    }
     const keepFocusInside = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !ticketForcedOpenRef.current) {
+      if (event.key === 'Escape' && !event.defaultPrevented && !ticketForcedOpenRef.current) {
         event.preventDefault();
         setTicketAbierto(false);
         return;
@@ -1390,7 +1393,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     if (preparandoParteRef.current) await preparandoParteRef.current;
     // D547 · la de la cámara, con varias fotos, va a «la pantalla al volver» y espera el ✓ (salvo que repita una parte).
     if (variasFotos && origen === 'camara' && reemplazandoRef.current === null && secuenciaRef.current === null) {
-      if (partesRef.current.length + tandaRef.current.length >= maxPartes) return;
+      if (partesRef.current.length + tandaRef.current.length >= maxPartes) {
+        setScanIssue('limite_partes');
+        return;
+      }
       const foto = { id: ++idDeFotoRef.current, original, miniatura: null, vista: null };
       const siguientes = [...tandaRef.current, foto];
       tandaRef.current = siguientes;
@@ -1401,7 +1407,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       return;
     }
     // D484 · con las partes completas, una foto más no tiene lugar (salvo que se esté repitiendo una).
-    if (variasFotos && reemplazandoRef.current === null && partesRef.current.length >= maxPartes) return;
+    if (variasFotos && reemplazandoRef.current === null && partesRef.current.length >= maxPartes) {
+      setScanIssue('limite_partes');
+      return;
+    }
     await alRecuadro(original, origen);
   }
 
@@ -1498,6 +1507,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     tandaRef.current = siguientes;
     setTanda(siguientes);
     setAvisoDeLaTanda(null);
+    if (scanIssue === 'limite_partes') setScanIssue(null);
   }
 
   /**
@@ -2601,6 +2611,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           max={maxPartes}
           recienLlegada={recienLlegada}
           aviso={avisoDeLaTanda}
+          topeAlcanzado={scanIssue === 'limite_partes'}
           titulo={tituloDelEscaneo}
           onSacarOtra={doScan}
           onListo={() => { void recuadroDeLaTanda(); }}
@@ -2729,6 +2740,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               </div>
             </div>
           )}
+          {scanIssue === 'limite_partes' && (
+            <p className="state-warn" role="alert">{t('Ya tienes {0} fotos; esa no se agregó.', maxPartes)}</p>
+          )}
           {scanIssue === 'partes_pesadas' && (
             <div className="state-warn" role="alert">
               <div className="state-error-row">
@@ -2738,6 +2752,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   <p className="state-error-body">{t('Quita una parte o vuelve a sacarlas.')}</p>
                 </div>
               </div>
+              {partes.length > 0 && (
+                <div className="state-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={scanning || capturando || secuencia !== null}
+                    onClick={() => quitarParte(partes.length - 1)}>
+                    {t('Quitar la última foto')}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {/* D509 · n322 · con la foto en el marco: el marco ya está sobre el papel (se mueve igual) y, si la foto
@@ -2949,13 +2971,18 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   <Icon name="warning" size={22} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="state-error-title">{t('La foto pesa más de 8 MB')}</div>
-                    <p className="state-error-body">{t('Prueba con menos calidad.')}</p>
+                    <p className="state-error-body">{t('Saca otra foto más de cerca.')}</p>
                   </div>
                 </div>
                 <div className="state-actions">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                     {t('Sacar otra foto')}
                   </button>
+                  {!enViaje && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                      {t('Cargarlo a mano')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -3177,6 +3204,13 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         </div>
         <div ref={cuerpoDivision} className={`ticket-flow-body${divisionDesplazable ? ' ticket-flow-body--desplazable' : ''}`}>
         <div className="card ticket-total-card">
+          {editItems.length > 0 && !ejemplo && (
+            <p className="ticket-lectura-resumen">
+              {normalizedRestaurantLabel || restaurant?.name || t('Restaurante')} · {editItems.length === 1
+                ? t('1 consumo')
+                : t('{0} consumos', editItems.length)}
+            </p>
+          )}
           <div className="ticket-total-fila">
             {/* D360 · P04 · con alguna línea incompleta (un precio vacío) no hay
                 total todavía: se dice «—», nunca «$0», un total que nadie midió.
@@ -3501,6 +3535,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   // decía…» y lo que se manda al crear la mesa siguen tal cual.
                   const nombre = nombreDePlato(it.name.trim());
                   const etiqueta = nombre || t('consumo {0}', idx + 1);
+                  const unitario = precioDeLinea(it.priceStr);
                   const confidenceWarning = it.lowConfidence ? (
                     <span
                       className="tk-confidence-warning"
@@ -3607,6 +3642,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       {dudaWarning}
                       <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
                         {nombre || t('Sin nombre')}
+                        {it.quantity > 1 && unitario !== null && (
+                          <small className="tk-precio-unitario">{it.quantity} × {formatMXN(unitario)}</small>
+                        )}
                       </span>
                       <span className="tk-price">
                         {lineTotals[idx] === null ? '—' : formatMXN(lineTotals[idx] as number)}
@@ -3643,6 +3681,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       <dd>{fila.clave === 'descuento' ? montoDeDescuento(fila.cents) : formatMXN(fila.cents)}</dd>
                     </div>
                   ))}
+                </dl>
+              )}
+              {desglose.tipo !== 'cierra' && editItems.length > 0 && !ejemplo && (
+                <dl className="tk-desglose">
+                  <div className="tk-desglose-total">
+                    <dt>{t('Total de los consumos')}</dt>
+                    <dd>{ticketCompleto ? formatMXN(total) : '—'}</dd>
+                  </div>
                 </dl>
               )}
               {/* D363 · D367 · en el ejemplo el ticket no se edita: sin «Modificar ítems». */}

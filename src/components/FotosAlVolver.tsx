@@ -39,6 +39,7 @@ export function FotosAlVolver({
   max,
   recienLlegada,
   aviso,
+  topeAlcanzado = false,
   titulo,
   onSacarOtra,
   onListo,
@@ -55,6 +56,7 @@ export function FotosAlVolver({
   recienLlegada: number | null;
   /** Una foto de la tanda no se pudo usar en el recuadro (su número): se avisa acá. */
   aviso: number | null;
+  topeAlcanzado?: boolean;
   /** El título de la pantalla de escaneo («Escanea el ticket» o el del viaje). */
   titulo: string;
   onSacarOtra: () => void;
@@ -139,6 +141,9 @@ export function FotosAlVolver({
         </button>
         {lleno && (
           <p className="fotos-al-volver-tope">{t('Ya tienes {0} fotos, el máximo por ticket.', max)}</p>
+        )}
+        {topeAlcanzado && (
+          <p className="fotos-al-volver-aviso" role="alert">{t('Ya tienes {0} fotos; esa no se agregó.', max)}</p>
         )}
         {aviso !== null && (
           <p className="fotos-al-volver-aviso" role="alert">

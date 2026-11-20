@@ -167,6 +167,7 @@
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --border: #e3e9f0;
+  --border-control: #7b8aa0;
   --text: #101e3b; /* 15.37:1 sobre --bg — medido acá; el doc dice 15.38 (redondeo) */
   --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
   --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
@@ -587,7 +588,7 @@ html.app-de-inicio-ios .app {
    El turquesa es el oscuro del diseño y del anillo (--teal-txt, #0A7B80): el
    claro (--teal, #0FB5C9) con texto blanco da 2.4:1 y no llega a AA; el oscuro
    da 5.1:1 con blanco y como borde/texto sobre blanco. El gris usa --gray-d
-   (7.6:1) y el borde de siempre: no compite ni invita a tocarlo por error. */
+   (7.6:1) y un borde neutro de control. */
 .btn-turquesa {
   background: var(--teal-txt);
   color: #fff;
@@ -601,7 +602,7 @@ html.app-de-inicio-ios .app {
 .btn-neutro {
   background: #fff;
   color: var(--gray-d);
-  border: 1.5px solid var(--gray-b);
+  border: 1.5px solid var(--border-control);
 }
 /* D181 · «Cerrar mesa» en rojo clarito: #9b3a26 sobre #fdecea da 6.07:1 (AA).
    Va después de `.btn` (misma especificidad: gana la última declaración). */
@@ -1101,7 +1102,7 @@ html.app-de-inicio-ios .app {
 /* ─── Formularios ─── */
 .input {
   width: 100%;
-  border: 1.5px solid var(--gray-b);
+  border: 1.5px solid var(--border-control);
   border-radius: 10px;
   padding: 13px 14px;
   font-size: 16px; /* ≥16px evita el zoom automático de iOS */
@@ -1109,6 +1110,17 @@ html.app-de-inicio-ios .app {
   font-family: var(--font-body);
   margin-bottom: 12px;
   background: #fff;
+}
+.input:focus-visible,
+.tip-pill:focus-visible,
+.propina-mesa-pill:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+.input:disabled,
+.tip-pill:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .input::placeholder {
   color: var(--gray-txt);
@@ -1265,7 +1277,7 @@ html.app-de-inicio-ios .app {
   height: 48px;
   margin-bottom: 0;
   padding: 0 14px;
-  border: 1px solid var(--gray-b);
+  border: 1px solid var(--border-control);
   border-radius: 12px;
   background: var(--surface);
   /* 🔴 El artefacto dice 15px y acá van 16px, a propósito y declarado. Safari
@@ -1280,7 +1292,6 @@ html.app-de-inicio-ios .app {
   color: var(--gray-txt);
 }
 .ingreso-input:focus {
-  outline: none;
   border-color: var(--link);
   box-shadow: 0 0 0 3px rgba(10, 123, 128, 0.14);
 }
@@ -1715,13 +1726,16 @@ html.app-de-inicio-ios .app {
 .arroba-input {
   display: flex;
   align-items: center;
-  border: 1.5px solid var(--gray-b);
+  border: 1.5px solid var(--border-control);
   border-radius: 10px;
   background: #fff;
   padding: 0 14px;
   min-height: var(--tap-min);
 }
-.arroba-input:focus-within { border-color: var(--action-2); }
+.arroba-input:focus-within {
+  border-color: var(--link);
+  box-shadow: 0 0 0 3px rgba(10, 123, 128, 0.14);
+}
 .arroba-input--error { border-color: var(--warning); }
 .arroba-prefijo {
   flex: none;
@@ -1798,7 +1812,7 @@ html.app-de-inicio-ios .app {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1854,7 +1868,7 @@ html.app-de-inicio-ios .app {
 
 /* ─── Métodos de pago / tips (s-payment) ─── */
 .method-card {
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   border-radius: var(--radius-sm);
   padding: 14px;
   cursor: pointer;
@@ -1944,7 +1958,7 @@ html.app-de-inicio-ios .app {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   margin-left: auto;
   flex-shrink: 0;
   display: flex;
@@ -1970,7 +1984,7 @@ html.app-de-inicio-ios .app {
 .tip-pill {
   padding: 8px 16px;
   border-radius: 20px;
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
@@ -1981,8 +1995,8 @@ html.app-de-inicio-ios .app {
 }
 .tip-pill.sel {
   background: var(--orange);
-  border-color: var(--orange);
-  color: #fff;
+  border-color: var(--orange-txt);
+  color: var(--navy);
 }
 
 /* ─── Selector de propina · SPEC_APP.md §1.5 bis ───
@@ -2064,14 +2078,14 @@ html.app-de-inicio-ios .app {
    spec no toca. */
 .tip-choices .tip-pill.sel {
   background: var(--action-2);
-  border-color: var(--action-2);
+  border-color: var(--link);
   color: var(--action-2-fg);
 }
 
 /* ─── División (s-division) ─── */
 .div-card {
   background: #fff;
-  border: 1.4px solid var(--gray-b);
+  border: 1.4px solid var(--border-control);
   border-radius: 18px;
   padding: 16px;
   cursor: pointer;
@@ -2096,7 +2110,7 @@ html.app-de-inicio-ios .app {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1.8px solid var(--gray-b);
+  border: 1.8px solid var(--border-control);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -2162,7 +2176,7 @@ html.app-de-inicio-ios .app {
   width: var(--tap-min);
   height: var(--tap-min);
   border-radius: 50%;
-  border: 1.5px solid var(--gray-b);
+  border: 1.5px solid var(--border-control);
   background: #fff;
   font-size: 20px;
   font-weight: 700;
@@ -5505,7 +5519,7 @@ html.app-de-inicio-ios .app {
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   border-radius: var(--r-full);
   background: var(--surface);
 }
@@ -5765,6 +5779,21 @@ button.qc-circulo::after {
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
+}
+
+.qc-opcion,
+.qc-soltar {
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qc-fila,
+  .qc-opcion,
+  .qc-soltar {
+    animation: none;
+    transition: none;
+  }
 }
 
 .qc-opcion.on {
@@ -7800,9 +7829,12 @@ button.qc-circulo::after {
   outline: none;
 }
 /* D195 · el indicador de teclado abarca el icono y el campo. */
+.invitar-busqueda {
+  border-radius: var(--radius-sm);
+}
 .invitar-busqueda:not([data-foco-por-toque]):has(.social-search-input:focus-visible) {
   outline: 2px solid var(--action);
-  outline-offset: -2px;
+  outline-offset: -4px;
 }
 
 /* Ícono propio de cada grupo (§1.9: "no uno repetido"). */
@@ -8031,8 +8063,13 @@ button.qc-circulo::after {
   /* 16 px: por debajo, el iPhone agranda la pantalla al tocar el campo. */
   font-size: 16px;
 }
+.tk-edit-input:enabled,
+.tk-nombre-input:enabled {
+  border-color: var(--border-control);
+}
+
 .tk-nombre-input:focus-visible {
-  outline: 3px solid var(--action-2);
+  outline: 3px solid var(--link);
   outline-offset: 2px;
 }
 .tk-nombre-acciones {
@@ -8323,6 +8360,23 @@ h1.pay-title-lbl {
   min-height: 60px;
   height: 60px;
   padding: 0 var(--sp-4);
+}
+
+.config-screen .config-card .list-row {
+  height: auto;
+  padding-block: var(--sp-3);
+  font-size: 1rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.config-screen .config-card .list-row > div {
+  min-inline-size: 0;
+}
+
+.config-screen .config-card .list-row:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
 }
 
 /* ─── Cuentas conectadas · AF-09 · D-LOGIN-1 «Vincular desde la cuenta» ───
@@ -9094,14 +9148,10 @@ h1.pay-title-lbl {
   border-radius: var(--r-full);
 }
 
-/* La explicación: la burbuja de la guía sin pie, arriba de la opción, con la
-   punta hacia el «?» (centro a 31 del borde derecho: 20 + 11). Una a la vez. */
+/* La explicación ocupa espacio debajo de su opción. */
 .ayuda-opcion-burbuja {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 10px);
-  z-index: 3;
+  position: relative;
+  margin-block-start: var(--sp-2);
   box-sizing: border-box;
   padding: 16px 44px;
   border: 1px solid var(--border);
@@ -9129,19 +9179,6 @@ h1.pay-title-lbl {
   color: var(--text);
 }
 
-.ayuda-opcion-burbuja::after {
-  content: '';
-  position: absolute;
-  right: 24px;
-  bottom: -8px;
-  width: 14px;
-  height: 14px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: var(--teal-l);
-  transform: rotate(45deg);
-}
-
 .ayuda-opcion-cerrar {
   position: absolute;
   top: 4px;
@@ -9162,22 +9199,6 @@ h1.pay-title-lbl {
   outline: 2px solid var(--action);
   outline-offset: -2px;
   border-radius: 10px;
-}
-
-/* Si arriba no entra (la primera opción, contra el borde de lo que se desplaza),
-   la burbuja va abajo de la opción, con la punta hacia arriba. */
-.ayuda-opcion-burbuja--abajo {
-  top: calc(100% + 10px);
-  bottom: auto;
-}
-
-.ayuda-opcion-burbuja--abajo::after {
-  top: -8px;
-  bottom: auto;
-  border-right: 0;
-  border-bottom: 0;
-  border-left: 1px solid var(--border);
-  border-top: 1px solid var(--border);
 }
 
 @keyframes ayuda-opcion-entra {
@@ -9301,6 +9322,22 @@ h1.pay-title-lbl {
 .division-options .div-radio::after {
   width: 11px;
   height: 11px;
+}
+
+/* El radio lleno indica la selección; la tarjeta conserva su borde decorativo. */
+.division-options .div-card.sel:not(:disabled) .div-radio {
+  border-color: var(--link);
+}
+
+.division-options .div-card.sel:not(:disabled) .div-radio::after {
+  background: var(--link);
+}
+
+@media (forced-colors: active) {
+  .division-options .div-card.sel:not(:disabled) .div-radio::after {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
 }
 
 .division-options .div-ico {
@@ -10181,7 +10218,7 @@ h1.pay-title-lbl {
   min-height: 44px;
   padding: 8px 6px;
   border-radius: 20px;
-  border: 2px solid var(--gray-b);
+  border: 2px solid var(--border-control);
   background: #fff;
   color: var(--navy);
   font-family: var(--font-display);
@@ -10191,8 +10228,8 @@ h1.pay-title-lbl {
 }
 .propina-mesa-pill.sel {
   background: var(--orange);
-  border-color: var(--orange);
-  color: #fff;
+  border-color: var(--orange-txt);
+  color: var(--navy);
 }
 .propina-mesa-pill[aria-disabled="true"] {
   opacity: 0.6;
@@ -10212,6 +10249,9 @@ h1.pay-title-lbl {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
+}
+.propina-mesa-otro .input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 .propina-mesa-error,
 .propina-mesa-estado--error {
@@ -10267,6 +10307,44 @@ h1.pay-title-lbl {
 .title-card-engranaje:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: -3px;
+}
+
+.hoja-de-la-mesa .sheet-head {
+  gap: var(--sp-2);
+}
+
+.hoja-de-la-mesa .sheet-title {
+  overflow-wrap: anywhere;
+}
+
+.hoja-de-la-mesa .sheet-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--tap-min);
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.hoja-de-la-mesa :is(button, input, a[href]) {
+  min-height: var(--tap-min);
+}
+
+.hoja-de-la-mesa :is(button, input, a[href]):focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+.hoja-de-la-mesa .mesa-acciones-fila > .btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.hoja-de-la-mesa .propina-mesa-pill {
+  min-width: min-content;
 }
 
 /* La hoja del engranaje: el código arriba; después «Copiar link» e «Invitar
@@ -12709,6 +12787,10 @@ h1.pay-title-lbl {
   color: var(--on-dark);
 }
 
+.hoja-de-decision .btn-ghost.btn-texto-peligro {
+  color: var(--danger);
+}
+
 .hoja-de-decision h2,
 .hoja-de-decision p {
   margin: 0;
@@ -12716,4 +12798,15 @@ h1.pay-title-lbl {
 
 .social-pestanas {
   display: contents;
+}
+
+.ticket-lectura-resumen {
+  margin: 0 0 var(--sp-2);
+  overflow-wrap: anywhere;
+}
+.tk-precio-unitario {
+  display: block;
+  margin-block-start: 2px;
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
 }

@@ -382,7 +382,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
   });
 
-  test('un «Listo» que no completa la mesa guarda y vuelve a Inicio sin ninguna hoja', async ({ page }) => {
+  test('un «Listo» que no completa la mesa guarda y muestra el aviso en la misma mesa', async ({ page }) => {
     await espiarHojas(page);
     await abrirMesa(page);
     await contarLlamadas(page, 'lockItems');

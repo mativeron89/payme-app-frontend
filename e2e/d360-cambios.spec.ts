@@ -57,9 +57,9 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // No eligió nada: la opción elegida sigue siendo la de antes.
     await expect(total).toHaveAttribute('aria-checked', 'false');
     await expect(consumo).toHaveAttribute('aria-checked', elegidaAntes!);
-    // La burbuja va arriba de su opción, con su punta del lado del «?».
+    // La explicación va debajo de su opción, dentro del flujo.
     const [caja, opcionCaja] = await Promise.all([explicacion(page).boundingBox(), total.boundingBox()]);
-    expect(caja!.y + caja!.height, 'la explicación va arriba de la opción').toBeLessThanOrEqual(opcionCaja!.y);
+    expect(caja!.y, 'la explicación va debajo de la opción').toBeGreaterThanOrEqual(opcionCaja!.y + opcionCaja!.height);
     await capturar(page, 'd360-01-ayuda-pagar-el-total');
 
     // Escape la cierra y el foco vuelve a su «?».
@@ -68,9 +68,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     await expect(ayuda(page, 'Pagar el total')).toBeFocused();
     await expect(ayuda(page, 'Pagar el total')).toHaveAttribute('aria-expanded', 'false');
 
-    // Abrir otro cierra el anterior: una a la vez. Abierta, una burbuja tapa la
-    // opción vecina (es el diseño), así que el otro «?» se abre con el teclado
-    // (Enter), que prueba lo mismo sin depender de qué tapa la burbuja.
+    // Abrir otra explicación cierra la anterior. Los controles siguen disponibles.
     await ayuda(page, 'En partes iguales').click();
     await expect(explicacion(page)).toHaveText('Cada uno selecciona sus ítems, pero la cuenta se divide en partes iguales.');
     await ayuda(page, 'Pagar el total').press('Enter');
@@ -87,7 +85,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     // ✕ se puede tocar (arriba quedaba recortada y la tapaba la tarjeta del total).
     await ayuda(page, 'Cada uno lo suyo').click();
     await expect(explicacion(page)).toHaveText('Cada uno marca lo que consumió.');
-    await expect(explicacion(page)).toHaveClass(/ayuda-opcion-burbuja--abajo/);
+    await expect(explicacion(page)).toHaveCSS('position', 'relative');
     const [abajo, primera] = await Promise.all([explicacion(page).boundingBox(), consumo.boundingBox()]);
     expect(abajo!.y, 'la explicación va abajo de la primera opción').toBeGreaterThanOrEqual(primera!.y + primera!.height);
     await expect(page.getByRole('button', { name: 'Cerrar la explicación', exact: true })).toBeInViewport({ ratio: 1 });

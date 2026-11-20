@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, sinRefresco } from './_app';
-import { abrirTusConsumos, observarEscriturasDeSeleccion } from './_mesa';
+import { abrirTusConsumos, asentarEscriturasDeSeleccion, observarEscriturasDeSeleccion } from './_mesa';
 
 interface SyntheticClaim {
   who: 'user' | 'other';
@@ -124,6 +124,7 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).dblclick();
     await expect(page.getByRole('dialog', { name: 'Tienes cambios sin guardar' })).toHaveCount(0);
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+    await asentarEscriturasDeSeleccion(page);
     await expect(page.locator('body')).toHaveAttribute('data-escrituras-de-seleccion', '1');
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');

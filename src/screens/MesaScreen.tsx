@@ -456,7 +456,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const estadoPropina = useEstadoDePropina(clavePropina);
   const propinaGuardando = estadoPropina.fase === 'guardando';
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const [errorDeCarga, setErrorDeCarga] = useState<'sin-conexion' | 'no-encontrada' | null>(null);
   const [view, setView] = useState<View>('detail');
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
@@ -614,7 +614,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   const [, forceTick] = useState(0);
   // Toda lectura de esta instancia captura el epoch. Cambiar token/código
   // invalida antes de renderizar la identidad siguiente y un resolve tardío
-  // de A no puede escribir mesa, error, tarjetas ni notFound de B.
+  // de A no puede escribir mesa, error, tarjetas ni errorDeCarga de B.
   const identityEpochRef = useRef(new RequestEpoch());
   const mesaReadEpochRef = useRef(new RequestEpoch());
   const seleccionRef = useRef(selected);
@@ -656,7 +656,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     intentoSeleccionRef.current = null;
     setAvisoGuardado(null);
     setSeleccionIncierta(false); setLeyendoListo(false); listoEnVueloRef.current = false;
-    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
+    setMesa(null); setErrorDeCarga(null); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
     setInformativasGuardadas(new Map()); setCierrePropio(false);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
@@ -795,13 +795,13 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (!vigente() || intentoSeleccionRef.current) return;
         // En la carga inicial se conserva la mesa sólo para presentar el error
         // y su botón de lectura. No es un par utilizable por Listo.
-        if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
+        if (!mesaActualRef.current) { setMesa(r.mesa); setErrorDeCarga(null); }
         setInformativeState(estado);
       };
       if (r.mesa.division_mode === 'igual' && !guestToken && capability?.supported) {
         // Sólo presenta la mesa inicial; loading impide editar o guardar hasta
         // recibir la propia. No devuelve una foto utilizable antes de ese GET.
-        if (!mesaActualRef.current) { setMesa(r.mesa); setNotFound(false); }
+        if (!mesaActualRef.current) { setMesa(r.mesa); setErrorDeCarga(null); }
         try { propia = await api.getInformativeSelection(code); }
         catch { lecturaPropiaFallida(estadoGuardado); return null; }
       }
@@ -816,7 +816,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
 
   type FotoPropia = NonNullable<Awaited<ReturnType<typeof leerMesaPropia>>>;
   const aplicarFotoPropia = useCallback((foto: FotoPropia) => {
-    setMesa(foto.mesa); setNotFound(false);
+    setMesa(foto.mesa); setErrorDeCarga(null);
     resolverAviso.current(foto.mesa.restaurant.name);
     if (foto.propia) {
       const guardadas = selectionMap(foto.propia);
@@ -845,13 +845,20 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
       const foto = await leerMesaPropia(estadoGuardado);
       if (foto) aplicarFotoPropia(foto);
       return foto;
-    } catch {
+    } catch (err) {
       if (!identityEpochRef.current.isCurrent(identityEpoch) || identidadActualRef.current !== identidad) return null;
-      if (!mesaActualRef.current) { setNotFound(true); resolverAviso.current(); }
-      else setInformativeState(estadoGuardado ?? 'error');
+      if (!mesaActualRef.current) {
+        // La lectura autenticada conserva el estado HTTP. Fetch rechaza sin
+        // estado ante red caída o timeout. El recibo de entrada sigue el flujo D387.
+        const { status } = extractApiError(err);
+        const sinConexion = status === null
+          && (err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError'));
+        setErrorDeCarga(sinConexion && !guestToken && !reciboDeIngreso.current ? 'sin-conexion' : 'no-encontrada');
+        resolverAviso.current();
+      } else setInformativeState(estadoGuardado ?? 'error');
       return null;
     }
-  }, [leerMesaPropia, aplicarFotoPropia]);
+  }, [leerMesaPropia, aplicarFotoPropia, guestToken]);
 
   useEffect(() => {
     reload();
@@ -2563,19 +2570,21 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
   // ─── Estados de carga / error ────────────────────────────
   // OJO: el invitado NO puede salir a 'home' — navigate() reescribe el hash sin
   // el token ?t= y perdería el acceso a la mesa (quedaría en el login).
-  if (notFound) {
+  if (errorDeCarga) {
     return (
       <div className="screen">
         <TopBar title={t('Mesa')} onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="empty">
           <div className="emoji"><Icon name="search" size={40} /></div>
-          {t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
+          {errorDeCarga === 'sin-conexion'
+            ? t('No pudimos cargar tu mesa')
+            : t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
           <div style={{ marginTop: 16 }}>
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 if (isGuest) { window.location.reload(); return; }
-                setNotFound(false);
+                setErrorDeCarga(null);
                 reload();
               }}
             >

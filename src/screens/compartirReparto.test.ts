@@ -65,7 +65,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
   it('por consumo, mesa cerrada, con descuento (ES)', () => {
     expect(textoDelReparto(consumoCerrada, es)).toBe([
       'Trattoria Sintética',
-      'Así quedó la mesa (Cada uno lo suyo)',
+      'Así quedó la mesa (cada uno lo suyo)',
       'Mi parte: $210.90',
       '  Mis platos: $195',
       `  Descuento: ${MENOS}$11.61`,
@@ -78,7 +78,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
   it('por consumo, mesa cerrada, con descuento (EN)', () => {
     expect(textoDelReparto(consumoCerrada, en)).toBe([
       'Trattoria Sintética',
-      'How the table ended up (Everyone their own)',
+      'How the table ended up (each picks their own)',
       'My share: $210.90',
       '  My dishes: $195',
       `  Discount: ${MENOS}$11.61`,

@@ -79,7 +79,6 @@ export const EN_VIAJES_VIAJE: Record<string, string> = {
   'Todavía no hay consumos.': 'No expenses yet.',
   // D256 · eliminar un ticket o un gasto desde Consumos.
   // D388 · pregunta antes de invocar el borrado existente.
-  '¿Eliminar?': 'Remove?',
   'Ticket eliminado': 'Receipt deleted',
   'Gasto eliminado': 'Expense deleted',
   'Ya no estaba': 'It was already gone',

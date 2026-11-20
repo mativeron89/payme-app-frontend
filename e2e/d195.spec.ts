@@ -84,6 +84,7 @@ test.describe('D195 · los buscadores de la burbuja, sin borde de foco', () => {
     await expect(campo).toBeFocused();
     await expect(burbuja).toHaveCSS('outline-style', 'solid');
     await expect(burbuja).toHaveCSS('outline-width', '2px');
+    await expect(burbuja).toHaveCSS('outline-offset', '-4px');
     await expect(burbuja).toHaveCSS('outline-color', 'rgb(16, 30, 59)');
     await page.keyboard.type('a');
     await expect(campo).toHaveValue('a');

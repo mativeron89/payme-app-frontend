@@ -93,7 +93,7 @@ export function MasScreen() {
 
 
   return (
-    <div className="screen has-appbar">
+    <div className="screen has-appbar config-screen">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
         <FilaDeTitulo icono="engranaje">
@@ -129,7 +129,7 @@ export function MasScreen() {
             <div className="list-row" style={{ cursor: 'default' }}>
               <span><Icon name="mail" size={16} /></span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Email')}</div>
+                <div style={{ fontSize: 'inherit', fontWeight: 600 }}>{t('Email')}</div>
                 <div className="caption">{user.email}</div>
               </div>
             </div>
@@ -171,7 +171,7 @@ export function MasScreen() {
               cambia el control segmentado vigente. */}
           <div className="list-row" style={{ cursor: 'default' }}>
             <span><Icon name="globe" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+            <div style={{ flex: 1, fontSize: 'inherit', fontWeight: 600 }}>
               {t('Idioma')}
             </div>
             <SelectorIdioma />
@@ -183,20 +183,20 @@ export function MasScreen() {
               página propia (`#/notificaciones`), no una sección acá. */}
           <button className="list-row" onClick={() => navigate('notificaciones')}>
             <span><Icon name="bell" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+            <div style={{ flex: 1, fontSize: 'inherit', fontWeight: 600 }}>
               {t('Notificaciones')}
             </div>
             <FlechaDeFila />
           </button>
           {session && <button ref={blockedOpener} className="list-row" type="button" onClick={() => navigate('mas', 'bloqueados')}>
             <span><Icon name="lock" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Bloqueados')}</div>
+            <div style={{ flex: 1, fontSize: 'inherit', fontWeight: 600 }}>{t('Bloqueados')}</div>
             <FlechaDeFila />
           </button>}
           {corteDeclarado && (
             <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
               <span><Icon name="card" size={16} /></span>
-              <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-b)' }}>
+              <div style={{ flex: 1, fontSize: 'inherit', color: 'var(--gray-b)' }}>
                 {t('Los pagos llegan pronto')}
               </div>
             </div>
@@ -208,7 +208,7 @@ export function MasScreen() {
                   algo que no existe en el build real. NO se oculta la fila: es el
                   ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
                   Se renombra. */}
-              <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+              <div style={{ flex: 1, fontSize: 'inherit', fontWeight: 600 }}>
                 {walletRailEnabled ? 'Saldo y tarjetas' : t('Mis tarjetas')}
               </div>
               <FlechaDeFila />
@@ -341,7 +341,7 @@ function FilaAgregarAInicio() {
         }}
       >
         <span aria-hidden="true"><Icon name="home" size={16} /></span>
-        <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+        <div style={{ flex: 1, fontSize: 'inherit', fontWeight: 600 }}>
           {t('Agregar a inicio')}
         </div>
         <FlechaDeFila />

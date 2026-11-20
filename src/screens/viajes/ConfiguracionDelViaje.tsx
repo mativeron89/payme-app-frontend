@@ -481,7 +481,7 @@ function EditorDeFoto({ tieneFoto, guardando, onFoto }: {
         )}
       </div>
       {confirmar && tieneFoto && (
-        <HojaDeDecision titulo={t('¿Eliminar la foto del viaje?')}
+        <HojaDeDecision titulo={t('¿Borrar la foto del viaje?')}
           detalle={t('Se borra del viaje y no se puede recuperar.')} cancelar={t('Cancelar')}
           onCancelar={() => {
             setConfirmar(false);

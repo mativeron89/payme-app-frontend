@@ -43,7 +43,7 @@ for (const lang of ['es', 'en'] as const) {
     await expect(comprobando).toHaveCount(0);
     const habilitado = await continuar.isEnabled();
     const venceEn = await page.locator('.mi-count').innerText();
-    expect(venceEn.trim()).toMatch(/\d+:\d+/);
+    expect(venceEn.trim()).toMatch(/\d+:\d+|(?:Vence en|Expires in) \d+ (?:h|min)/);
     await page.evaluate(() => {
       const original = Date.now;
       const adelantada = original() + 30 * 24 * 60 * 60 * 1000;
@@ -75,6 +75,17 @@ for (const lang of ['es', 'en'] as const) {
     await page.locator('.qc-renglon .qc-libre').first().click();
     await volver.click();
     await expect(dialogo).toBeVisible();
+    await expect(dialogo.getByRole('button', { name: en ? 'Keep editing' : 'Seguir editando' })).toBeFocused();
+    const peligro = await dialogo.evaluate(el => getComputedStyle(el).getPropertyValue('--danger').trim());
+    const descartar = dialogo.getByRole('button', { name: en ? 'Leave without saving' : 'Salir sin guardar' });
+    await expect(descartar).toHaveCSS('color', await page.evaluate(color => {
+      const muestra = document.createElement('span');
+      muestra.style.color = color;
+      document.body.append(muestra);
+      const resultado = getComputedStyle(muestra).color;
+      muestra.remove();
+      return resultado;
+    }, peligro));
     if (!en) await captura(page, 'mesa-cambios-sin-guardar');
     await dialogo.getByRole('button', { name: en ? 'Keep editing' : 'Seguir editando' }).click();
     await expect(volver).toBeFocused();
@@ -132,7 +143,7 @@ for (const lang of ['es', 'en'] as const) {
 
   test(`U7 · la modalidad en la mesa usa el mismo nombre (${lang})`, async ({ page }) => {
     await mesaSemilla(page, lang);
-    await expect(page.locator('.mesa-selection-context strong')).toHaveText(en ? 'Everyone their own' : 'Cada uno lo suyo');
+    await expect(page.locator('.mesa-selection-context strong')).toHaveText(en ? 'each picks their own' : 'cada uno lo suyo');
   });
 
   test(`U5 · quitar un plato guardado cuenta como cambio (${lang})`, async ({ page }) => {
@@ -171,7 +182,8 @@ for (const lang of ['es', 'en'] as const) {
     const quitar = page.locator('.tarjeta-tutorial-quitar');
     await quitar.press('Enter');
     await expect(quitar).toHaveCount(0);
-    await expect(page.locator('.toast--sobre-barra')).toHaveText(en ? "You'll find it under More › Help" : 'Lo encuentras en Más › Ayuda');
+    await expect.poll(() => page.locator('.toast--sobre-barra').textContent())
+      .toBe(en ? "You'll find it under More › Help" : 'Lo encuentras en Más › Ayuda');
     await expect(page.locator('.appbar-center')).toBeFocused();
     if (!en) await captura(page, 'inicio-tutorial-quitado');
   });

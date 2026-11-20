@@ -46,7 +46,7 @@ export function TarjetaTutorial({ aperturaPendiente, onQuitar }: {
       </button>
       <button type="button" className="tarjeta-tutorial-quitar" aria-label={t('Quitar el tutorial de Inicio')} onClick={() => {
         guia.ocultarTarjeta();
-        toast(t('Lo encuentras en Más › Ayuda'), { sobreLaBarra: true });
+        toast(t('Lo encuentras en Más › Ayuda'), { sobreLaBarra: true });
         onQuitar?.();
       }}>
         <Icon name="x" size={18} />

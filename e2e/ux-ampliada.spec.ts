@@ -140,7 +140,7 @@ for (const origen of ['amigo', 'solicitud'] as const) {
     expect(await llamadas()).toEqual([persona.id]);
     await expect(page.getByRole('tab', { selected: true })).toBeFocused();
     const nombre = origen === 'amigo' ? persona.nombre : persona.primerNombre;
-    await expect(page.locator('.toast')).toContainText(`Bloqueaste a ${nombre}`);
+    await expect(page.locator('.toast--sobre-barra')).toContainText(`Bloqueaste a ${nombre}`);
     if (origen === 'amigo') await foto(page, 'm-bloqueaste-es');
   });
 }

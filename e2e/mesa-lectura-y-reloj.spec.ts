@@ -1,0 +1,82 @@
+import { expect, test, type Page } from '@playwright/test';
+import { ingresar, irEnLaApp } from './_app';
+
+async function preparar(page: Page, idioma: 'es' | 'en') {
+  await page.clock.install({ time: new Date('2026-10-13T18:00:00Z') });
+  await ingresar(page, { sinInvitaciones: true });
+  if (idioma === 'en') {
+    await irEnLaApp(page, '/mas');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+  }
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  const en = idioma === 'en';
+  test(`una lectura interrumpida se reintenta por la misma ruta (${idioma})`, async ({ page }) => {
+    await preparar(page, idioma);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const leer = api.getMesa.bind(api);
+      let recuperada = false;
+      document.addEventListener('restablecer-lectura', () => { recuperada = true; }, { once: true });
+      api.getMesa = async (...args) => {
+        if (args[0] === 'PA-2847' && !recuperada) throw new TypeError('Sin respuesta de la red');
+        return leer(...args);
+      };
+    });
+    await irEnLaApp(page, '/mesa/PA-2847');
+    await expect(page.locator('.empty')).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
+    await page.evaluate(() => document.dispatchEvent(new Event('restablecer-lectura')));
+    await page.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/mesa\/PA-2847$/);
+  });
+
+  test(`la mesa inexistente conserva el mensaje de 404 (${idioma})`, async ({ page }) => {
+    await preparar(page, idioma);
+    await irEnLaApp(page, '/mesa/inexistente');
+    await expect(page.locator('.empty')).toContainText(en
+      ? "We couldn't find this table. The link may have expired, or the bill may already be closed."
+      : 'No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.');
+  });
+
+  test(`el detalle cambia de reloj largo a minutos y segundos (${idioma})`, async ({ page }) => {
+    await page.setViewportSize({ width: en ? 390 : 320, height: 780 });
+    await preparar(page, idioma);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/mock/store.ts';
+      const { findMesa } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/store');
+      const mesa = findMesa('PA-2847');
+      if (!mesa) throw new Error('Falta la mesa de ejemplo');
+      mesa.expires_at = '2026-10-13T22:59:50Z';
+    });
+    await irEnLaApp(page, '/mesa/PA-2847');
+    const reloj = page.locator('.mi-count');
+    const prefijo = en ? 'Expires in' : 'Vence en';
+    await expect(reloj).toHaveText(`${prefijo} 4 h 59 min`);
+    await expect(reloj).not.toHaveClass(/\burgent\b/);
+    const sinDesborde = await reloj.evaluate((el) => {
+      const fila = el.parentElement!;
+      return fila.scrollWidth <= fila.clientWidth + 1
+        && el.getBoundingClientRect().left >= fila.querySelector('.mi-meta-amt')!.getBoundingClientRect().right - 1;
+    });
+    expect(sinDesborde).toBe(true);
+
+    const saltarA = async (hora: string) => {
+      const diferencia = await page.evaluate((valor) => new Date(valor).getTime() - Date.now(), hora);
+      await page.clock.fastForward(diferencia);
+    };
+    await saltarA('2026-10-13T21:59:44Z');
+    await expect(reloj).not.toHaveClass(/\burgent\b/);
+    await saltarA('2026-10-13T21:59:52Z');
+    await expect(reloj).toHaveClass(/\burgent\b/);
+    await saltarA('2026-10-13T22:49:45Z');
+    await expect(reloj).toHaveText(`${prefijo} 10 min`);
+    await saltarA('2026-10-13T22:49:52Z');
+    await expect(reloj).toHaveText(/^\s*9:5[0-9]\s*$/);
+    await saltarA('2026-10-13T22:59:51Z');
+    await expect(page.getByRole('heading', { name: en ? 'Closing completed' : 'Cierre completado' })).toBeVisible();
+    await expect(reloj).toHaveCount(0);
+  });
+}

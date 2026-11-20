@@ -1,3 +1,11 @@
+## 0.278.0 · 2026-11-19
+
+- El reloj de la mesa muestra las horas restantes. Si falla la carga, se puede reintentar desde la misma pantalla.
+- Mejora el foco con teclado en el tutorial, al elegir porciones y al guardar consumos.
+- La revisión del ticket muestra la cantidad de consumos y el precio por unidad. Una foto demasiado pesada ofrece otra captura o la carga manual en mesas.
+- Configuración admite texto más grande. Los controles de la hoja de mesa tienen blancos más amplios y mejor contraste.
+- Viajes usa la misma confirmación para borrar consumos, notas y fotos. Los avisos de bloqueo se muestran arriba de la barra.
+
 ## 0.277.0 · 2026-11-19
 
 - En pantallas de hasta 359 px, la modalidad baja a otro renglón si hace falta para leer completo el nombre del restaurante.

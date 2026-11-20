@@ -142,7 +142,7 @@ test.describe('D255 · tramo 2', () => {
     await abrirConfiguracion(page);
     await page.getByRole('button', { name: /^Foto/ }).click();
     await page.getByRole('button', { name: 'Eliminar foto', exact: true }).click();
-    await page.getByRole('dialog', { name: '¿Eliminar la foto del viaje?' })
+    await page.getByRole('dialog', { name: '¿Borrar la foto del viaje?' })
       .getByRole('button', { name: 'Borrar', exact: true }).click();
     await expect(page.getByText('Quitamos la foto del viaje.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Volver', exact: true }).click();

@@ -93,3 +93,8 @@ export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'norm
     };
   }, respuesta);
 }
+
+/** Da tiempo a que un segundo gesto termine la lectura previa y delate otra escritura. */
+export async function asentarEscriturasDeSeleccion(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>(resolve => window.setTimeout(resolve, 400)));
+}

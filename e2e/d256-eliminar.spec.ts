@@ -136,10 +136,10 @@ async function contextoControlado(page: Page): Promise<void> {
 
 const llamadas = (page: Page) => page.evaluate(() => (window as VentanaD388).__d388!.llamadas);
 const efectos = (page: Page) => page.evaluate(() => (window as VentanaD388).__d388!.efectos);
-const hoja = (page: Page) => page.getByRole('dialog', { name: '¿Eliminar?', exact: true });
+const hoja = (page: Page) => page.getByRole('dialog', { name: '¿Borrar el consumo?', exact: true });
 async function confirmar(page: Page): Promise<void> {
   await expect(hoja(page)).toBeVisible();
-  await hoja(page).getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await hoja(page).getByRole('button', { name: 'Borrar', exact: true }).click();
 }
 
 /** Deja pasar el frame de restauración y observa el siguiente, sin una espera por tiempo. */
@@ -394,7 +394,7 @@ test('D388 · Enter y dos callbacks encolados confirman una sola vez', async ({ 
   await page.keyboard.press('Enter'); // Cancelar inicial, no Eliminar.
   expect(await llamadas(page)).toEqual([]);
   await preguntarBar(page);
-  await hoja(page).getByRole('button', { name: 'Eliminar', exact: true }).evaluate((boton) => {
+  await hoja(page).getByRole('button', { name: 'Borrar', exact: true }).evaluate((boton) => {
     if (!(boton instanceof HTMLButtonElement)) throw new Error('D388: la confirmación debe ser un botón');
     boton.click(); boton.click();
   });
@@ -433,7 +433,7 @@ for (const cambio of ['retirado', 'permiso', 'cerrado'] as const) {
     await contextoControlado(page); await conViajes(page); await aConsumos(page);
     await preguntarBar(page);
     // Se conserva el nodo del botón para disparar un callback anterior, aun si React ya retiró la hoja.
-    await hoja(page).getByRole('button', { name: 'Eliminar', exact: true }).evaluate((boton) => {
+    await hoja(page).getByRole('button', { name: 'Borrar', exact: true }).evaluate((boton) => {
       boton.dataset.anterior = 'd388';
       (window as unknown as { __botonAnterior: HTMLButtonElement }).__botonAnterior = boton as HTMLButtonElement;
     });
@@ -558,9 +558,9 @@ for (const [idioma, ancho] of [['es', 320], ['en', 375]] as const) {
       if (!(b instanceof HTMLButtonElement)) throw new Error('D388: el disparador debe ser un botón');
       b.click();
     });
-    const dialogo = page.getByRole('dialog', { name: idioma === 'es' ? '¿Eliminar?' : 'Remove?', exact: true });
+    const dialogo = page.getByRole('dialog', { name: idioma === 'es' ? '¿Borrar el consumo?' : 'Delete the expense?', exact: true });
     const cancelar = dialogo.getByRole('button', { name: idioma === 'es' ? 'Cancelar' : 'Cancel', exact: true });
-    const eliminar = dialogo.getByRole('button', { name: idioma === 'es' ? 'Eliminar' : 'Remove', exact: true });
+    const eliminar = dialogo.getByRole('button', { name: idioma === 'es' ? 'Borrar' : 'Delete', exact: true });
     await expect(cancelar).toBeFocused();
     const focoInicialCancelar = await cancelar.evaluate((el) => el === document.activeElement);
     await expect(page.locator('.app')).toHaveAttribute('inert', '');
@@ -577,7 +577,8 @@ for (const [idioma, ancho] of [['es', 320], ['en', 375]] as const) {
     const fuentesDespues = await dialogo.locator('h2, button').evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
     const c = await cancelar.boundingBox(); const e = await eliminar.boundingBox();
     expect(c).not.toBeNull(); expect(e).not.toBeNull();
-    expect(c!.y + c!.height).toBeLessThanOrEqual(e!.y);
+    expect(e!.y + e!.height).toBeLessThanOrEqual(c!.y);
+    await expect(eliminar).toHaveClass(/\bbtn-danger\b/);
     await expect(cancelar).toBeInViewport({ ratio: 1 });
     await expect(eliminar).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

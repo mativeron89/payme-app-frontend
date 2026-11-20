@@ -212,9 +212,9 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
   }, [activa, paso?.id, onPrimeraBurbuja]);
 
   // Foco a la burbuja al aparecer cada paso (ficha, «Accesibilidad»).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activa) burbuja.current?.focus({ preventScroll: true });
-  }, [activa, clave]);
+  }, [activa, clave, destino]);
 
   // El control señalado se describe con la burbuja.
   useEffect(() => {
@@ -228,15 +228,18 @@ export function GuiaContenido({ pagina, param, empezado, onSalir, onTerminar, on
     return () => { if (antes === null) control.removeAttribute('aria-describedby'); else control.setAttribute('aria-describedby', antes); };
   }, [activa, clave]);
 
-  // Escape = ✕ (y en 2a, «otro momento»). En 3a lo atiende la hoja del ticket: primero se cierra ella.
+  // Escape desde la burbuja equivale a su cierre. Fuera de la burbuja
+  // de Ticket, Escape sigue a cargo de la hoja.
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || !activa || !paso || paso.id === 'ticket') return;
+      if (e.key !== 'Escape' || !activa || !paso) return;
+      if (paso.id === 'ticket' && !burbuja.current?.contains(document.activeElement)) return;
+      e.preventDefault();
       e.stopPropagation();
       if (paso.pie === 'terminar') onTerminar(); else cerrarBurbuja();
     };
-    document.addEventListener('keydown', escape);
-    return () => document.removeEventListener('keydown', escape);
+    document.addEventListener('keydown', escape, true);
+    return () => document.removeEventListener('keydown', escape, true);
   }, [activa, paso, cerrarBurbuja, onTerminar]);
 
   if (!paso || !destino || !destino.isConnected) return null;

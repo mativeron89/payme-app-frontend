@@ -41,7 +41,7 @@ test('AF2-P2 · la lectura de la mesa con sesión se puede reintentar', async ({
   });
 
   await page.goto('/#/mesa/PA-2847');
-  await expect(page.getByText(/No encontramos esta mesa/)).toBeVisible();
+  await expect(page.getByText(/No pudimos cargar tu mesa/)).toBeVisible();
   const captura = process.env.PAYME_E2E_CAPTURAS;
   if (captura) await page.screenshot({ path: `${captura}/AF2-P2.png` });
   await page.evaluate(() => document.dispatchEvent(new Event('c169-lectura-disponible')));

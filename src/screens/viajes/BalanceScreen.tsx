@@ -16,7 +16,8 @@ import { useIdioma } from '../../i18n/idioma';
 import { goBack, navigate } from '../../router';
 import { formatMXN } from '../../utils/format';
 import { fullName } from '../../utils/identity';
-import { AvatarDeViaje, EstadoSinViaje, HojaModal, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
+import { HojaDeDecision } from '../../components/HojaDeDecision';
+import { AvatarDeViaje, EstadoSinViaje, useDetalleViaje, useFotosDeMiembros, type CargaDeViaje } from './ViajeScreen';
 import { circuloDelViaje } from './circuloDelViaje';
 import { agruparConsumos, type LugarConsumido } from './consumosPorLugar';
 import { fechaDelTicket } from './viajeView';
@@ -42,7 +43,7 @@ import './viaje.css';
  * D256 · en Consumos, deslizar a la izquierda un ticket o un gasto deja ver
  * «Eliminar» en rojo, como en Mesas (`FilaDeslizable`, D239), sólo donde el
  * dueño dice `puede_eliminar` (quien lo cargó o quien lo pagó, con el viaje
- * abierto). D388 · antes de eliminar pide «¿Eliminar?»; sólo al confirmar se
+ * abierto). D388 · antes de eliminar pide confirmación; sólo al confirmar se
  * actualiza la pantalla con el viaje de la respuesta.
  *
  * D281 · en Consumos, los tickets y gastos del mismo lugar se juntan en una fila con el lugar, cuántas veces y el
@@ -72,7 +73,6 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
   const vida = useRef<symbol | null>(null);
   const seleccion = useRef<SeleccionParaEliminar | null>(null);
   const [pregunta, setPregunta] = useState<SeleccionParaEliminar | null>(null);
-  const inicial = useRef<HTMLButtonElement | null>(null);
   const balance = useRef<HTMLDivElement | null>(null);
   const cuadroDeFoco = useRef<number | null>(null);
   const principal = session?.principal_id ?? null;
@@ -215,16 +215,11 @@ export function BalanceScreen({ viajeId }: { viajeId: string }) {
       {/* D250 · desde Balance de un viaje abierto, el círculo escanea para ese viaje. */}
       <AppBottomBar active={null} center={circuloDelViaje(carga.tipo === 'listo' ? carga.viaje : null, t)} />
       {pregunta && ticketVigente(pregunta) && (
-        <HojaModal etiqueta={t('¿Eliminar?')} inicial={inicial} onCerrar={() => descartar(pregunta)}>
-          <div className="vjv-hoja">
-            <span className="vjv-hoja-asa" aria-hidden="true" />
-            <h2 className="vjv-hoja-titulo">{t('¿Eliminar?')}</h2>
-            <div className="vjv-hoja-botones">
-              <button ref={inicial} type="button" className="btn btn-ghost" onClick={() => descartar(pregunta)}>{t('Cancelar')}</button>
-              <button type="button" className="btn btn-navy" onClick={() => void confirmar(pregunta)}>{t('Eliminar')}</button>
-            </div>
-          </div>
-        </HojaModal>
+        <HojaDeDecision titulo={t('¿Borrar el consumo?')}
+          detalle={t('Se borra del viaje y no se puede recuperar.')}
+          cancelar={t('Cancelar')} onCancelar={() => descartar(pregunta)}>
+          <button type="button" className="btn btn-danger" onClick={() => void confirmar(pregunta)}>{t('Borrar')}</button>
+        </HojaDeDecision>
       )}
     </div>
   );

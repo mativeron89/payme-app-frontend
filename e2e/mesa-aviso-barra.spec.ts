@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { cerrarAntesDelFrame } from './_foco';
-import { abrirTusConsumos, observarEscriturasDeSeleccion } from './_mesa';
+import { abrirTusConsumos, asentarEscriturasDeSeleccion, observarEscriturasDeSeleccion } from './_mesa';
 import { hastaCompartir } from './fixtures/mi-parte-d344';
 
 const mesa = /\/mesa\/PA-2847$/;
@@ -82,10 +82,11 @@ for (const { nombre, ruta } of destinos) {
 test('W1 · un rechazo de Guardar conserva la mesa y su borrador', async ({ page }) => {
   await preparar(page, true);
   await observarEscriturasDeSeleccion(page, 'rechazada');
-  await control(page, 'Mesas').click();
-  await aviso(page).getByRole('button', { name: 'Guardar', exact: true }).click();
+  await control(page, 'Mesas').press('Enter');
+  await aviso(page).getByRole('button', { name: 'Guardar', exact: true }).press('Enter');
   await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
   await expect(page.getByText('No pudimos reservar lo que elegiste', { exact: true })).toBeVisible();
+  await expect(control(page, 'Mesas')).toBeFocused();
   await expect(page).toHaveURL(mesa);
   await expect(fila(page).locator('.qc-circulo--marcado')).toBeVisible();
 });
@@ -131,6 +132,7 @@ test('W1 · Continuar sin borrador conserva la indicación para elegir', async (
 async function comprobarGuardadoDirecto(page: Page) {
   await expect(aviso(page)).toHaveCount(0);
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
+  await asentarEscriturasDeSeleccion(page);
   await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
   await expect(page).toHaveURL(mesa);
   await expect(fila(page).locator('[data-estado="registrado"]')).toHaveCount(1);
@@ -177,6 +179,14 @@ test('Y2 · dblclick en Continuar guarda una vez', async ({ page }) => {
   await observarEscriturasDeSeleccion(page);
   await control(page, 'Continuar').dblclick();
   await comprobarGuardadoDirecto(page);
+});
+
+test('Continuar devuelve el foco al aviso después de guardar con el teclado', async ({ page }) => {
+  await preparar(page, true);
+  await control(page, 'Continuar').press('Enter');
+  const guardado = page.locator('.mesa-guardado');
+  await expect(guardado).toBeVisible();
+  await expect(guardado).toBeFocused();
 });
 
 test('Y4 · Volver y Guardar devuelve el foco a Volver cuando queda en el documento', async ({ page }) => {

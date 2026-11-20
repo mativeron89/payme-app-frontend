@@ -551,7 +551,7 @@ export function HomeScreen() {
                     <div className="mesa-foot">
                       {cuenta && (
                         <span className={`mesa-cd ${cuenta.urgent ? 'urgent' : ''}`}>
-                          <Icon name="clock" size={15} className="ico-inline" /> {t('Vence en')} {cuenta.text}
+                          <Icon name="clock" size={15} className="ico-inline" /> {t('Vence en {0}', cuenta.text === 'menos de 1 min' ? t('menos de 1 min') : cuenta.text)}
                         </span>
                       )}
                       <span className="mesa-go">{t('Ver mesa →')}</span>
