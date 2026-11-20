@@ -81,7 +81,7 @@ test('U14 · el buscador muestra el anillo de teclado dentro de la burbuja', asy
   expect(await campo.evaluate(el => el.matches(':focus-visible'))).toBe(true);
   await expect(burbuja).toHaveCSS('outline-color', 'rgb(16, 30, 59)');
   await expect(burbuja).toHaveCSS('outline-style', 'solid');
-  await expect(burbuja).toHaveCSS('outline-offset', '-2px');
+  await expect(burbuja).toHaveCSS('outline-offset', '-4px');
   await capture(page, 'invitar-foco');
 });
 

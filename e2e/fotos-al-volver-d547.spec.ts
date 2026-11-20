@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
+import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camarasAbiertas, FOTO_DE_CAMARA, sacarFoto } from './_camara';
 
 /**
@@ -289,3 +289,33 @@ test.describe('D547 · sin la capacidad de varias fotos', () => {
     await expect(page.getByRole('button', { name: 'Sacar otra', exact: true })).toBeVisible();
   });
 });
+
+for (const idioma of ['es', 'en'] as const) {
+  const en = idioma === 'en';
+  test(`al recibir una quinta foto tardía avisa y conserva las cuatro (${idioma})`, async ({ page }) => {
+    await conCapacidad(page);
+    await relojFueraDeLasFechasDeLosViajes(page);
+    await ingresar(page);
+    if (en) {
+      await irEnLaApp(page, '/mas');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await irEnLaApp(page, '/home');
+    }
+    await espiarOcr(page);
+    await page.getByRole('button', { name: en ? 'Scan' : 'Escanear', exact: true }).click();
+    await esperarCapacidad(page);
+    await sacar(page, 4);
+    await expect(sacarOtra(page)).toBeDisabled();
+    // La entrada única de cámara recibe el archivo tardío aun cuando el botón ya está deshabilitado.
+    await page.locator('input[data-camara="nativa"]').setInputFiles(FOTO_DE_CAMARA);
+    const aviso = alVolver(page).getByRole('alert');
+    await expect(aviso).toHaveText(en ? 'You already have 4 photos. That one was not added.' : 'Ya tienes 4 fotos; esa no se agregó.');
+    await expect(fila(page).locator('.fotos-al-volver-numero')).toHaveText(['1', '2', '3', '4']);
+    expect(await lecturas(page)).toEqual([]);
+    await fila(page).getByRole('button', { name: en ? 'View photo 4' : 'Ver la foto 4', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: en ? 'Remove this photo' : 'Quitar esta foto' }).click();
+    await expect(aviso).toHaveCount(0);
+    await expect(fila(page).getByRole('listitem')).toHaveCount(3);
+    await expect(sacarOtra(page)).toBeEnabled();
+  });
+}

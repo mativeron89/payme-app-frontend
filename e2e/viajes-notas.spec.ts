@@ -672,3 +672,47 @@ for (const lang of ['es', 'en'] as const) {
     });
   }
 }
+
+for (const idioma of ['es', 'en'] as const) {
+  const en = idioma === 'en';
+  test(`cancelar las hojas de Notas devuelve el foco a cada disparador (${idioma})`, async ({ page }) => {
+    await conViajes(page);
+    if (en) {
+      await irEnLaApp(page, '/mas');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+    }
+    await irEnLaApp(page, `/viaje-notas/${CANCUN}`);
+    const seccion = page.getByRole('region', { name: en ? 'Your section' : 'Tu apartado', exact: true });
+    const escribir = seccion.getByRole('button', { name: en ? 'Write a note' : 'Escribir nota', exact: true });
+    const armar = seccion.getByRole('button', { name: en ? 'Make a list' : 'Armar lista', exact: true });
+    const nueva = hoja(page, en ? 'New note' : 'Nota nueva');
+    const lista = hoja(page, en ? 'New list' : 'Lista nueva');
+    for (const [boton, dialogo] of [[escribir, nueva], [armar, lista]] as const) {
+      await boton.press('Enter');
+      await expect(dialogo).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialogo).toHaveCount(0);
+      await expect(boton).toBeFocused();
+    }
+    await escribir.press('Enter');
+    await nueva.getByRole('textbox', { name: en ? 'Note' : 'Nota', exact: true }).fill('Plan de ejemplo');
+    await nueva.getByRole('button', { name: en ? 'Save' : 'Guardar', exact: true }).click();
+
+    const abrirMenu = seccion.getByRole('button', { name: en ? 'Edit or delete the note' : 'Editar o borrar la nota', exact: true });
+    const menu = hoja(page, en ? 'Your note' : 'Tu nota');
+    await abrirMenu.press('Enter');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(abrirMenu).toBeFocused();
+
+    await abrirMenu.press('Enter');
+    await menu.getByRole('button', { name: en ? 'Edit note' : 'Editar nota' }).press('Enter');
+    const editar = hoja(page, en ? 'Edit note' : 'Editar nota');
+    await expect(editar).toBeVisible();
+    await editar.getByRole('button', { name: en ? 'Cancel' : 'Cancelar', exact: true }).press('Enter');
+    await expect(editar).toHaveCount(0);
+    await expect(abrirMenu).toBeFocused();
+    await expect(seccion.getByText('Plan de ejemplo', { exact: true })).toBeVisible();
+  });
+}

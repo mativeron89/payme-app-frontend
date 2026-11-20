@@ -54,7 +54,7 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
     // código de mesa y con el modo al lado si entra.
     await expect(page.locator('.mesa-selection-context-main')).toHaveText('La Parolaccia');
     await expect(page.locator('.mesa-selection-title')).not.toContainText('PA-2847');
-    await expect(page.getByText('Cada uno lo suyo', { exact: true })).toBeVisible();
+    await expect(page.locator('.mesa-selection-context strong')).toHaveText('cada uno lo suyo');
   });
 
   test('con UNA sola abierta la fila no existe y la tarjeta queda como siempre', async ({ page }) => {

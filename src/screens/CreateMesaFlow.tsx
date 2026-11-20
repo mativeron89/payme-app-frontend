@@ -3204,18 +3204,14 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
         </div>
         <div ref={cuerpoDivision} className={`ticket-flow-body${divisionDesplazable ? ' ticket-flow-body--desplazable' : ''}`}>
         <div className="card ticket-total-card">
-          {editItems.length > 0 && !ejemplo && (
-            <p className="ticket-lectura-resumen">
-              {normalizedRestaurantLabel || restaurant?.name || t('Restaurante')} · {editItems.length === 1
-                ? t('1 consumo')
-                : t('{0} consumos', editItems.length)}
-            </p>
-          )}
           <div className="ticket-total-fila">
             {/* D360 · P04 · con alguna línea incompleta (un precio vacío) no hay
                 total todavía: se dice «—», nunca «$0», un total que nadie midió.
                 `total` sigue en 0 para la validación (D5). */}
-            <div className="ticket-title-amount">{ticketCompleto ? formatMXN(total) : '—'}</div>
+            <dl className="ticket-total-consumos">
+              <dt>{t('Total de los consumos')}</dt>
+              <dd className="ticket-title-amount">{ticketCompleto ? formatMXN(total) : '—'}</dd>
+            </dl>
             <div
               className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
               onAnimationEnd={() => setTicketPulse(false)}
@@ -3425,7 +3421,9 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               }}
             >
               <div className="ticket-sheet-head">
-                <span id="ticket-sheet-title">{t('Ticket')} · {t('{0} consumos', editItems.length)}</span>
+                <span id="ticket-sheet-title">{t('Ticket')} · {editItems.length === 1
+                  ? t('1 consumo')
+                  : t('{0} consumos', editItems.length)}</span>
                 {!totalMismatch && (
                   <button
                     ref={ticketCloseRef}
@@ -3641,7 +3639,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       {confidenceWarning}
                       {dudaWarning}
                       <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
-                        {nombre || t('Sin nombre')}
+                        <span>{nombre || t('Sin nombre')}</span>
                         {it.quantity > 1 && unitario !== null && (
                           <small className="tk-precio-unitario">{it.quantity} × {formatMXN(unitario)}</small>
                         )}
@@ -3681,14 +3679,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       <dd>{fila.clave === 'descuento' ? montoDeDescuento(fila.cents) : formatMXN(fila.cents)}</dd>
                     </div>
                   ))}
-                </dl>
-              )}
-              {desglose.tipo !== 'cierra' && editItems.length > 0 && !ejemplo && (
-                <dl className="tk-desglose">
-                  <div className="tk-desglose-total">
-                    <dt>{t('Total de los consumos')}</dt>
-                    <dd>{ticketCompleto ? formatMXN(total) : '—'}</dd>
-                  </div>
                 </dl>
               )}
               {/* D363 · D367 · en el ejemplo el ticket no se edita: sin «Modificar ítems». */}

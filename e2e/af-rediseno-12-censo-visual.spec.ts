@@ -298,7 +298,13 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
 
   await page.goto('/#/mas');
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-  await expect(page.locator('.config-card .list-row').first()).toHaveCSS('height', '60px');
+  const filaConfiguracion = page.locator('.config-card .list-row').first();
+  const altoNormal = await filaConfiguracion.evaluate(el => el.getBoundingClientRect().height);
+  expect(altoNormal).toBeGreaterThanOrEqual(60);
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  await expect.poll(() => filaConfiguracion.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(altoNormal);
+  await expect.poll(() => filaConfiguracion.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await page.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
   await expect(page.locator('.config-card').getByText('Idioma', { exact: true }).locator('..').locator('svg')).toHaveCount(1);
   await acreditar(page, '10-configuracion');
   await page.goto('/#/mesas');

@@ -5781,12 +5781,6 @@ button.qc-circulo::after {
   cursor: pointer;
 }
 
-.qc-opcion,
-.qc-soltar {
-  min-block-size: var(--tap-min);
-  min-inline-size: var(--tap-min);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .qc-fila,
   .qc-opcion,
@@ -9054,6 +9048,19 @@ h1.pay-title-lbl {
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
+}
+
+.ticket-total-consumos,
+.ticket-total-consumos dd {
+  margin: 0;
+}
+.ticket-total-consumos dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Sin `min-width: 0`: el importe nunca se achica por debajo de su texto, así
@@ -12711,6 +12718,15 @@ h1.pay-title-lbl {
   color: var(--success);
 }
 .mesa-guardado p { margin: var(--sp-1) 0 0; font-weight: 700; }
+
+@media (max-width: 359px) and (max-height: 600px) {
+  .mesa-selection-scroll:has(> .mesa-guardado) {
+    padding-top: var(--sp-2);
+  }
+  .mesa-selection-scroll > .mesa-guardado {
+    scroll-margin-top: 0;
+  }
+}
 .mesa-con-accion-ancha .scroll.con-fila-sobre-barra { padding-bottom: calc(var(--appbar-alto) + 144px); }
 
 /* D846: sólo el escaneo cambia de tamaño; los otros pasos conservan sus controles. */
@@ -12800,10 +12816,6 @@ h1.pay-title-lbl {
   display: contents;
 }
 
-.ticket-lectura-resumen {
-  margin: 0 0 var(--sp-2);
-  overflow-wrap: anywhere;
-}
 .tk-precio-unitario {
   display: block;
   margin-block-start: 2px;
