@@ -74,6 +74,14 @@ export class HttpError extends Error {
   }
 }
 
+/** Rechazo del transporte antes de obtener una respuesta HTTP. */
+export class HttpNetworkError extends TypeError {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : 'network_error', { cause });
+    this.name = 'HttpNetworkError';
+  }
+}
+
 /**
  * AF-20 · n89 · cierra la costura C-02 (Web Locks).
  *
@@ -171,6 +179,9 @@ async function rawRequestAs<T>(
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: ctrl.signal,
       ...(cache && { cache }),
+    }).catch((cause: unknown) => {
+      if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
+      throw new HttpNetworkError(cause);
     });
     // El body puede colgar después de recibir headers: conservar el timer
     // hasta json() evita dejar un journal monetario en sending eterno.

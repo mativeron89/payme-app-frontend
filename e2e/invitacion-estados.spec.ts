@@ -80,11 +80,13 @@ async function getMesaQueFalla(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const rutaApi = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ rutaApi) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
+    const rutaHttp = '/src/api/http.ts';
+    const { HttpNetworkError } = await import(/* @vite-ignore */ rutaHttp) as typeof import('../src/api/http');
     const w = window as unknown as { __getMesa: { fallidas: number } };
     w.__getMesa = { fallidas: 0 };
     api.getMesa = () => {
       w.__getMesa.fallidas += 1;
-      return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.reject(new HttpNetworkError(new TypeError('Failed to fetch')));
     };
   });
 }

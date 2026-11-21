@@ -91,8 +91,13 @@ for (const idioma of ['es', 'en'] as const) {
     await page.getByRole('button', { name: en ? 'Use photo' : 'Usar foto', exact: true }).click();
     const alerta = page.getByRole('alert').filter({ hasText: en ? 'The photo is over 8 MB' : 'La foto pesa más de 8 MB' });
     await expect(alerta.locator('.state-error-body')).toHaveText(en ? 'Take another photo or fix it manually.' : 'Saca otra foto o corrígelo a mano.');
-    await expect(alerta.getByRole('button', { name: en ? 'Take another photo' : 'Sacar otra foto' })).toBeVisible();
-    await alerta.getByRole('button', { name: en ? 'Fix it manually' : 'Corregir a mano' }).click();
+    const otraFoto = alerta.getByRole('button', { name: en ? 'Take another photo' : 'Sacar otra foto' });
+    const corregir = alerta.getByRole('button', { name: en ? 'Fix it manually' : 'Corregir a mano' });
+    await expect(otraFoto).toBeVisible();
+    await expect(corregir).toBeVisible();
+    expect.soft((await otraFoto.boundingBox())?.height).toBe(44);
+    expect.soft((await corregir.boundingBox())?.height).toBe(44);
+    await corregir.click();
     await expect(page.getByRole('heading', { name: en ? 'How are you splitting?' : '¿Cómo dividen?' })).toBeVisible();
   });
 }

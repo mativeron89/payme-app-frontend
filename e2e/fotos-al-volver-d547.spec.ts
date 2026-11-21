@@ -309,7 +309,7 @@ for (const idioma of ['es', 'en'] as const) {
     // La entrada única de cámara recibe el archivo tardío aun cuando el botón ya está deshabilitado.
     await page.locator('input[data-camara="nativa"]').setInputFiles(FOTO_DE_CAMARA);
     const aviso = alVolver(page).getByRole('alert');
-    await expect(alVolver(page).getByText(en ? /^You already have 4 photos/ : /^Ya tienes 4 fotos/)).toHaveCount(1);
+    await expect(alVolver(page).getByText(en ? /^(You have|You already have) 4 photos/ : /^Ya tienes 4 fotos/)).toHaveCount(1);
     await expect(aviso).toHaveText(en ? 'You already have 4 photos. That one was not added.' : 'Ya tienes 4 fotos; esa no se agregó.');
     await expect(fila(page).locator('.fotos-al-volver-numero')).toHaveText(['1', '2', '3', '4']);
     expect(await lecturas(page)).toEqual([]);

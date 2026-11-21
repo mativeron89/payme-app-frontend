@@ -67,10 +67,12 @@ export async function confirmarGuardadoDeMesa(page: Page): Promise<void> {
     .getByRole('button', { name: /^(Guardar|Save)$/, exact: true }).click();
 }
 
-export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'normal' | 'retenida' | 'rechazada' = 'normal') {
+export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'normal' | 'retenida' | 'rechazada' | 'rechazo-definitivo' = 'normal') {
   await page.evaluate(async (respuesta) => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Api };
+    const rutaMock = '/src/api/mock/mockApi.ts';
+    const { MockApiError } = await import(/* @vite-ignore */ rutaMock) as typeof import('../src/api/mock/mockApi');
     const originalLock = api.lockItems.bind(api);
     const originalReemplazar = api.replaceInformativeSelection.bind(api);
     const { body } = document;
@@ -81,6 +83,7 @@ export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'norm
     async function antesDeEscribir() {
       body.dataset.escriturasDeSeleccion = String(Number(body.dataset.escriturasDeSeleccion) + 1);
       if (respuesta === 'retenida') await ack;
+      if (respuesta === 'rechazo-definitivo') throw new MockApiError(409, 'item_already_locked');
       if (respuesta === 'rechazada') throw Object.assign(new Error('Rechazo de la fixture'), { status: 403 });
     }
     api.lockItems = async (...args) => {

@@ -10,13 +10,13 @@
     "Una prueba ata este archivo al código (tests/invitacion-preview.test.js): las claves, los cuerpos, la capacidad y el limitador."
   ],
   "ruta": "POST /api/invitations/link-preview",
-  "sesion": "No hace falta: la ruta no mira la sesión. Con o sin Authorization responde lo mismo.",
+  "sesion": "Opcional. D883: Authorization Bearer con JWT, sesión y cuenta válidos identifica a quien mira. Sin autorización válida se aplica la vista previa anónima, sin 401.",
   "pedido": {
     "cuerpo": "{\"token\": \"...\"} — el token del link (el `t` de la URL que arma POST /api/mesas/:code/invitations). Viaja sólo en el cuerpo, nunca en la URL.",
     "forma": "string de 8 a 200 caracteres, la misma validación que accept-link."
   },
   "respuesta_200": {
-    "cuando": "El token es un link vigente (pending, no vencido, no cancelado, no supersedido) de una mesa viva (el mismo stateMachine.mesaViva que accept-link: fully_paid pre-cierre está viva) y quien invita tiene su cuenta activa.",
+    "cuando": "El token es un link vigente (pending, no vencido, no cancelado, no supersedido) de una mesa viva (el mismo stateMachine.mesaViva que accept-link: fully_paid pre-cierre está viva) y quien invita tiene su cuenta activa. D883: con sesión válida, la persona que mira pasa si no hay bloqueo en ningún sentido con el titular o quien invitó, o si ya participa activamente en esa mesa.",
     "claves": ["inviter_first_name", "restaurant_name"],
     "tipos": { "inviter_first_name": "string | null", "restaurant_name": "string" },
     "nombre_null": "D676: inviter_first_name es null cuando quien invita no es mayor de edad conocida (menor, o sin fecha de nacimiento / sin la declaración de mayoría): la misma regla que la foto (D457, consent.edadConocida === true; null cierra). Mismas claves, mismo código 200 y mismas cabeceras: la respuesta no dice si es menor o si no tiene fecha.",
@@ -29,8 +29,18 @@
   },
   "respuesta_403": {
     "cuerpo": "{\"error\":\"invitation_link_not_valid\"}",
-    "cuando": "Todo lo demás: firma o forma inválida, token que no existe, vencido, cancelado, supersedido, mesa que ya no está viva, mesa borrada o quien invita sin cuenta activa.",
+    "cuando": "Todo lo demás: firma o forma inválida, token que no existe, vencido, cancelado, supersedido, mesa que ya no está viva, mesa borrada o quien invita sin cuenta activa, o D883: quien mira con sesión válida tiene un bloqueo en cualquier sentido con el titular o quien invitó y no participa activamente en esa mesa.",
     "uniforme": "El mismo cuerpo byte por byte y las mismas cabeceras en todos los casos, y el mismo cuerpo que accept-link: nada distingue «existe» de «no existe». Acá no hay 410 ni mesa_status."
+  },
+  "canje": {
+    "ruta": "POST /api/invitations/accept-link",
+    "sesion": "Requerida.",
+    "respuesta_403": {
+      "cuerpo": "{\"error\":\"invitation_link_not_valid\"}",
+      "cuando": "Token no válido, mesa inexistente o, para quien no participa activamente, bloqueo en cualquier sentido con el titular o con quien creó el link.",
+      "uniforme": "Mismo cuerpo byte por byte y mismas cabeceras para esos casos, salvo los valores que varían por pedido."
+    },
+    "participante_activo": "El bloqueo no cambia el canje idempotente de un link válido de una mesa que admite el ingreso. Si la participación estaba inactiva, el bloqueo impide reactivarla."
   },
   "respuesta_400": {
     "cuerpo": "{\"error\":\"invitation_token_required\"}",

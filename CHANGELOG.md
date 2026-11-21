@@ -1,3 +1,9 @@
+## 0.278.2 · 2026-11-20
+
+- Si la carga de una mesa falla por la red, la app ofrece reintentar con el mismo mensaje en todos los navegadores. En inglés, el error inesperado dice «Try again.».
+- «Reintentar» al cargar la mesa y «Sacar otra foto» y «Corregir a mano» ante una foto pesada tienen un mínimo táctil de 44 px.
+- Se actualizó el espejo del contrato de la vista previa del link con App Backend 2.214.2.
+
 ## 0.278.1 · 2026-11-20
 
 - El aviso de guardado queda entero sobre la barra en pantallas bajas, incluso con el nombre del restaurante en dos renglones.
@@ -11,7 +17,7 @@
 - Mejora el foco con teclado en el tutorial, al elegir porciones y al guardar consumos.
 - La revisión del ticket muestra la cantidad de consumos y el precio por unidad. Una foto demasiado pesada ofrece otra captura o la carga manual en mesas.
 - Las filas de Configuración y el selector de idioma usan el mismo tamaño de letra y crecen con el texto ampliado. Los bordes de los controles tienen más contraste y la hoja de mesa tiene blancos táctiles más amplios.
-- La burbuja de ayuda de «¿Cómo dividen?» se desplaza para quedar sobre la barra. La píldora de propina elegida es turquesa y muestra un foco de teclado visible.
+- La burbuja de ayuda de «¿Cómo dividen?» se desplaza para quedar sobre la barra. La píldora de propina elegida en «Mi parte» es naranja y muestra un foco de teclado visible. La píldora de la vista de pago es turquesa y se ve cuando los pagos están habilitados.
 - Viajes usa la misma confirmación para borrar consumos, notas y fotos. Los avisos de bloqueo se muestran arriba de la barra.
 
 ## 0.277.0 · 2026-11-19

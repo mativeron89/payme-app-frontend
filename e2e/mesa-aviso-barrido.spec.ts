@@ -76,6 +76,7 @@ for (const width of [320, 340, 360, 375, 390, 414]) {
               await continuar.evaluate(clicSinMoverAncestros);
               await expect(aviso.locator('strong')).toHaveText(texto.aviso);
               await expect(filas.locator('[data-estado="registrado"]')).toHaveCount(platos);
+              if (height <= 620) await expect(page.locator('.mesa-con-accion-ancha > .hdr')).toHaveCSS('padding-bottom', '48px');
               const medidas = await aviso.evaluate(el => {
                 const app = el.closest('.app')!;
                 const lista = el.closest('.mesa-selection-scroll')!.getBoundingClientRect();

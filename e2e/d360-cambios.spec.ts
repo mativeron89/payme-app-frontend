@@ -172,6 +172,32 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     }
   }
 
+  for (const desplazar of [false, true]) {
+    test(`C232 · al cerrar la ayuda ${desplazar ? 'conserva el desplazamiento manual' : 'restaura el scroll anterior'}`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 548 });
+      await hastaComoDividen(page);
+      const signo = ayuda(page, 'Cada uno lo suyo');
+      const cuerpo = page.locator('.ticket-flow-scroll');
+      await signo.scrollIntoViewIfNeeded();
+      const inicial = await cuerpo.evaluate(el => el.scrollTop);
+      await signo.press('Enter');
+      await expect(explicacion(page)).toBeFocused();
+      const abierto = await cuerpo.evaluate(el => el.scrollTop);
+      expect(abierto).not.toBe(inicial);
+      const esperado = desplazar ? await cuerpo.evaluate(el => {
+        el.scrollTop = 6;
+        return el.scrollTop;
+      }) : inicial;
+      if (desplazar) {
+        expect(esperado).not.toBe(abierto);
+        expect(esperado).not.toBe(inicial);
+      }
+      await page.keyboard.press('Escape');
+      await expect(signo).toBeFocused();
+      expect(await cuerpo.evaluate(el => el.scrollTop)).toBe(esperado);
+    });
+  }
+
   test('el «?» se toca con 44 px y el círculo mide 22, arriba a la derecha de la opción', async ({ page }) => {
     await hastaComoDividen(page);
     const boton = ayuda(page, 'En partes iguales');

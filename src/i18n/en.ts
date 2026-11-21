@@ -507,7 +507,7 @@ export const EN: Record<string, string> = {
   "Detalle registrado en PayMe. No es factura ni comprobante de pago.": "Details recorded in PayMe. Not an invoice or proof of payment.",
   "No pudimos cargar tu historial": "We couldn't load your history",
   "No pudimos cargar tu mesa": "We couldn't load your table",
-  "Intenta de nuevo.": "Please try again.",
+  "Intenta de nuevo.": "Try again.",
   "Revisa tu conexión y vuelve a intentarlo.": "Check your connection and try again.",
   "No pudimos cargar tus contactos": "We couldn't load your contacts",
   "No pudimos cargar tus estadísticas": "We couldn't load your stats",

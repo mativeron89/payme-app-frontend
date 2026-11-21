@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "8a82fd0a23dbd41c36e0144da4bd48086fff2c78",
+  "commit": "6037cd0e5e8174cc235546d27e59e96df6158a1b",
   "total": 175,
   "archivos": [
     {
@@ -55,8 +55,8 @@
     {
       "origen": "contract/invitacion-preview-v1.json",
       "destino": "contract/invitacion-preview-v1.json",
-      "sha256": "4089994f5e8d17b3636499900c61e5bf4e68070980f01b4ec1abab04158a2c06",
-      "bytes": 4882
+      "sha256": "1fe580f003831a028981cb0f35b4a656c475431b8279cb28a136f3a01dd5b1ee",
+      "bytes": 5946
     },
     {
       "origen": "contract/mesa-acceso-v1.json",
@@ -553,8 +553,8 @@
     {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "cf3f518f3cec0b7444c0fa17c520f096d47120fc217b5b1a0b9ea496dfb7fdff",
-      "bytes": 15815
+      "sha256": "7670a6fe0ea5c42750f845ae5789af380d86fcfa6d37f8071c098fd87270a552",
+      "bytes": 17056
     },
     {
       "origen": "routes/account.js",
@@ -607,14 +607,14 @@
     {
       "origen": "routes/invitationPreview.js",
       "destino": "routes/invitationPreview.js",
-      "sha256": "581644fda579a47489f73e4da29fcbf0933928e30a236cb5c5efb5179e46d09a",
-      "bytes": 5822
+      "sha256": "633a49ef26741c4e3bb965bccd3cbb1da273e3ad297a90d48a9700ce581ba36a",
+      "bytes": 6505
     },
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "55bea64ff9a14275b795332c83b94da4e40718f824140e7b34ed5807ad2d0336",
-      "bytes": 18260
+      "sha256": "38599f16217c1b6b4d2344c703e82a6d51c60ffa2babddd682d56c3903f734de",
+      "bytes": 19353
     },
     {
       "origen": "routes/joinRequests.js",
@@ -817,8 +817,8 @@
     {
       "origen": "services/invitationAuthority.js",
       "destino": "services/invitationAuthority.js",
-      "sha256": "f0bd1be79fcaf049c1958eceb6a7af88ebdbe2327a20317bd89cb94bd39363d4",
-      "bytes": 18069
+      "sha256": "aadd3792c789a8c27097f9ee7e6270ff4867a63cc07338d3a029e3fbb724fa6d",
+      "bytes": 18274
     },
     {
       "origen": "services/itemClaims.js",

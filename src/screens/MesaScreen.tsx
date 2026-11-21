@@ -27,6 +27,7 @@ import {
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { HttpNetworkError } from '../api/http';
 import { esInvitacionNoAceptada } from '../api/invitacionNoAceptada';
 import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
@@ -853,16 +854,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         if (guestToken || (status !== null && status >= 400 && status < 500)) {
           setErrorDeCarga('no-encontrada');
         } else {
-          // Fetch rechaza sin status. Sólo sus mensajes conocidos identifican
-          // la red: un TypeError de la vista o del decoder cae en el genérico.
-          const falloDeRed = status === null && (
-            (err instanceof DOMException && err.name === 'AbortError')
-            || (err instanceof TypeError && [
-              'Failed to fetch',
-              'Load failed',
-              'NetworkError when attempting to fetch resource.',
-            ].includes(err.message))
-          );
+          const falloDeRed = err instanceof HttpNetworkError
+            || (err instanceof DOMException && err.name === 'AbortError');
           setErrorDeCarga(falloDeRed || (status !== null && status >= 500 && status < 600)
             ? 'sin-conexion' : 'error-generico');
         }
@@ -2596,7 +2589,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
           ) : t('No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.')}
           <div style={{ marginTop: 16 }}>
             <button
-              className="btn btn-ghost btn-sm"
+              className="btn btn-ghost btn-sm btn-tactil"
               onClick={() => {
                 if (isGuest) { window.location.reload(); return; }
                 setErrorDeCarga(null);

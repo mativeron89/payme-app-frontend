@@ -646,6 +646,8 @@ html.app-de-inicio-ios .app {
   font-size: 13px;
 }
 
+.btn-tactil { min-height: var(--tap-min); }
+
 /* ─── Cards del home (maqueta s-home) ─── */
 .home-card {
   border-radius: 20px;

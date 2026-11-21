@@ -12,27 +12,38 @@ async function preparar(page: Page, idioma: 'es' | 'en') {
 
 for (const idioma of ['es', 'en'] as const) {
   const en = idioma === 'en';
-  test(`una lectura interrumpida se reintenta por la misma ruta (${idioma})`, async ({ page }) => {
-    await preparar(page, idioma);
-    await page.evaluate(async () => {
-      const ruta = '/src/api/index.ts';
-      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
-      const leer = api.getMesa.bind(api);
-      let recuperada = false;
-      document.addEventListener('restablecer-lectura', () => { recuperada = true; }, { once: true });
-      api.getMesa = async (...args) => {
-        if (args[0] === 'PA-2847' && !recuperada) throw new TypeError('Failed to fetch');
-        return leer(...args);
-      };
+  for (const mensaje of ['Load failed', 'NetworkError when attempting to fetch resource.', 'Connection lost'] as const) {
+    test(`una lectura interrumpida (${mensaje}) se reintenta por la misma ruta (${idioma})`, async ({ page }) => {
+      await preparar(page, idioma);
+      await page.evaluate(async mensaje => {
+        const ruta = '/src/api/index.ts';
+        const rutaHttp = '/src/api/http.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+        const { httpPublicRequest } = await import(/* @vite-ignore */ rutaHttp) as typeof import('../src/api/http');
+        const leer = api.getMesa.bind(api);
+        const fetchOriginal = window.fetch.bind(window);
+        window.fetch = async (input, init) => {
+          if (typeof input === 'string' && input.endsWith('/api/mesas/PA-2847')) {
+            throw new TypeError(mensaje);
+          }
+          return fetchOriginal(input, init);
+        };
+        let recuperada = false;
+        document.addEventListener('restablecer-lectura', () => { recuperada = true; }, { once: true });
+        api.getMesa = async (...args) => {
+          if (args[0] === 'PA-2847' && !recuperada) return httpPublicRequest('GET', '/mesas/PA-2847');
+          return leer(...args);
+        };
+      }, mensaje);
+      await irEnLaApp(page, '/mesa/PA-2847');
+      await expect(page.locator('.empty')).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
+      await expect(page.locator('.empty')).toContainText(en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.');
+      await page.evaluate(() => document.dispatchEvent(new Event('restablecer-lectura')));
+      await page.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true }).click();
+      await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
+      await expect(page).toHaveURL(/mesa\/PA-2847$/);
     });
-    await irEnLaApp(page, '/mesa/PA-2847');
-    await expect(page.locator('.empty')).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
-    await expect(page.locator('.empty')).toContainText(en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.');
-    await page.evaluate(() => document.dispatchEvent(new Event('restablecer-lectura')));
-    await page.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true }).click();
-    await expect(page.getByRole('heading', { name: en ? 'Your table' : 'Tu mesa', exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/mesa\/PA-2847$/);
-  });
+  }
 
   test(`el timeout se reintenta por la misma ruta (${idioma})`, async ({ page }) => {
     await preparar(page, idioma);
@@ -56,7 +67,7 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(page).toHaveURL(/mesa\/PA-2847$/);
   });
 
-  for (const falla of [401, 403, 404, 503, 'TypeError'] as const) {
+  for (const falla of [401, 403, 404, 408, 429, 500, 503, 'TypeError'] as const) {
     test(`el error de carga ${falla} conserva su mensaje (${idioma})`, async ({ page }) => {
       await preparar(page, idioma);
       await page.evaluate(async falla => {
@@ -67,25 +78,28 @@ for (const idioma of ['es', 'en'] as const) {
         const leer = api.getMesa.bind(api);
         api.getMesa = async (...args) => {
           if (args[0] !== 'PA-2847') return leer(...args);
-          if (falla === 'TypeError') throw new TypeError('Cannot read properties of undefined');
+          if (falla === 'TypeError') throw new TypeError('Load failed');
           throw new MockApiError(falla, 'error_de_prueba');
         };
       }, falla);
       await irEnLaApp(page, '/mesa/PA-2847');
       const panel = page.locator('.empty');
       const conexion = en ? 'Check your connection and try again.' : 'Revisa tu conexión y vuelve a intentarlo.';
-      if (falla === 503 || falla === 'TypeError') {
+      const servidor = falla === 500 || falla === 503;
+      if (servidor || falla === 'TypeError') {
         await expect(panel).toContainText(en ? "We couldn't load your table" : 'No pudimos cargar tu mesa');
-        await expect(panel.locator('.state-error-body')).toHaveText(falla === 503
-          ? conexion : en ? 'Please try again.' : 'Intenta de nuevo.');
-        await expect(panel).not.toContainText('Cannot read properties');
+        await expect(panel.locator('.state-error-body')).toHaveText(servidor
+          ? conexion : en ? 'Try again.' : 'Intenta de nuevo.');
+        await expect(panel).not.toContainText('Load failed');
       } else {
         await expect(panel).toContainText(en
           ? "We couldn't find this table. The link may have expired, or the bill may already be closed."
           : 'No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la cuenta.');
         await expect(panel).not.toContainText(conexion);
       }
-      await expect(panel.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true })).toBeVisible();
+      const reintentar = panel.getByRole('button', { name: en ? 'Retry' : 'Reintentar', exact: true });
+      await expect(reintentar).toBeVisible();
+      if (falla === 503) expect((await reintentar.boundingBox())?.height).toBe(44);
     });
   }
 

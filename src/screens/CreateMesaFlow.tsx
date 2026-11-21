@@ -2975,11 +2975,11 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   </div>
                 </div>
                 <div className="state-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  <button type="button" className="btn btn-ghost btn-sm btn-tactil" onClick={doScan}>
                     {t('Sacar otra foto')}
                   </button>
                   {!enViaje && (
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                    <button type="button" className="btn btn-ghost btn-sm btn-tactil" onClick={cargarAMano}>
                       {t('Corregir a mano')}
                     </button>
                   )}
