@@ -243,8 +243,8 @@ for (const width of [320, 390]) {
     // Dos platos marcados. Desde la decisión 90 el selector vive DENTRO del
     // renglón y hay uno solo abierto a la vez (regla 3: «nada flota encima de
     // otros platos»): marcar el segundo cierra el del primero.
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     await expect(page.getByRole('radiogroup')).toHaveCount(1);
 
     const scroll = page.locator('.screen > .scroll.flow-scroll');
@@ -274,7 +274,7 @@ for (const width of [320, 390]) {
     });
     expect(atEnd.scrollTop).toBeGreaterThanOrEqual(atEnd.max - 1);
 
-    const lastItem = await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).boundingBox();
+    const lastItem = await page.getByRole('button', { name: 'Vino tinto (copa), $60', exact: true }).boundingBox();
     // D223 · en «Tu mesa» lo último del scroll ya no es «Invitar amigos» (que
     // sube, a compartir) sino «Tus consumos» o «Cerrar mesa»: se mide lo último.
     const lastAction = await page.locator('.mesa-selection-scroll > :last-child').boundingBox();

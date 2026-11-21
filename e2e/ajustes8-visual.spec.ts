@@ -134,7 +134,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="libre"]')).toBeVisible();
     await expect(page.locator('.qc-renglon [data-estado="tomado"]')).not.toHaveCount(0);
 
-    const item = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
+    const item = page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true });
     expect(await claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(0);
     await item.click();
     // Decisión 90 · el renglón elegido es el propio en teal, no un botón pulsado.

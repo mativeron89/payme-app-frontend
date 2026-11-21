@@ -211,7 +211,7 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await expect(dudosas).toHaveCount(2);
     for (const fila of await dudosas.all()) {
       await expect(fila).toContainText('Vino tinto (copa)');
-      await expect(fila.getByRole('img', { name: '¿Está repetido? Revísalo con el ticket.', exact: true })).toBeVisible();
+      await expect(fila.getByText('¿Está repetido? Revísalo con el ticket.', { exact: true })).toBeVisible();
     }
     await expect(page.locator('.tk-row[data-duda]')).toHaveCount(2);
     await capturar(page, 'd509-filas-dudosas');

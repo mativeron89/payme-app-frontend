@@ -2886,7 +2886,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 </div>
                 <div className="state-actions">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={volverASacar}>
-                    {t('Reintentar')}
+                    {t('Sacar otra foto')}
                   </button>
                   {!enViaje && (
                     <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
@@ -3537,8 +3537,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   const confidenceWarning = it.lowConfidence ? (
                     <span
                       className="tk-confidence-warning"
-                      role="img"
-                      aria-label={t('No pudimos leer este ítem')}
+                      aria-hidden="true"
                     >
                       ?
                     </span>
@@ -3546,10 +3545,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   // D509 · la fila que explica que la suma no cierre: marcada, con el motivo.
                   const duda = dudas.get(idx);
                   const dudaWarning = duda ? (
-                    <span className="tk-confidence-warning tk-duda" role="img" aria-label={textoDeDuda(duda)} title={textoDeDuda(duda)}>
+                    <span className="tk-confidence-warning tk-duda" aria-hidden="true">
                       !
                     </span>
                   ) : null;
+                  const motivo = duda ? textoDeDuda(duda) : it.lowConfidence ? t('No se leyó bien: revísalo con el ticket.') : null;
+                  const renglonMotivo = motivo && <span className="tk-motivo" data-duda={duda}>{motivo}</span>;
                   const marcada = it.lowConfidence || duda !== undefined;
                   if (editingItems && expandedItem === idx) {
                     return (
@@ -3560,11 +3561,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       >
                         {confidenceWarning}
                         {dudaWarning}
-                        {duda && (
-                          <div className="tk-original" data-duda={duda}>
-                            <span className="tk-original-txt">{textoDeDuda(duda)}</span>
-                          </div>
-                        )}
+                        {renglonMotivo}
                         <label className="tk-edit-field">
                           <span className="tk-edit-lbl">{t('Consumo')}</span>
                           <input
@@ -3640,6 +3637,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       {dudaWarning}
                       <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
                         <span>{nombre || t('Sin nombre')}</span>
+                        {renglonMotivo}
                         {it.quantity > 1 && unitario !== null && (
                           <small className="tk-precio-unitario">{it.quantity} × {formatMXN(unitario)}</small>
                         )}

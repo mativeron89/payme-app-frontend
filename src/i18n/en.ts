@@ -1091,7 +1091,6 @@ export const EN: Record<string, string> = {
   "No se puede reabrir: para seguir, abre una mesa nueva.": "It can't be reopened: to continue, open a new table.",
   "La mesa ya estaba cerrada.": "The table was already closed.",
   "Cerrar la mesa todavía no está disponible.": "Closing the table isn't available yet.",
-  "No pudimos cerrar la mesa. Intenta de nuevo.": "We couldn't close the table. Try again.",
   "Venció el tiempo de la mesa.": "The table's time ran out.",
   "Se eligieron todos los consumos.": "Every item was chosen.",
   "La cerraste tú.": "You closed it.",
@@ -1566,4 +1565,7 @@ export const EN: Record<string, string> = {
   "No pudimos desbloquear a {0}": "We couldn't unblock {0}",
   "Desbloquear a {0}": "Unblock {0}",
   "Desbloquear": "Unblock",
+  "No pudimos confirmar el cierre. Prueba de nuevo: si la mesa ya se cerró, verás el cierre completado.": "We couldn't confirm that the table closed. Try again: if it already closed, you'll see the closed table.",
+  "Reintentar cierre": "Retry closing",
+  "No se leyó bien: revísalo con el ticket.": "Hard to read: check it against the receipt.",
 };

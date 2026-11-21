@@ -186,7 +186,7 @@ test.describe('D240 punto 3 · el listado al elegir', () => {
 
     const vino = renglon(page, 'Vino tinto (copa)');
     await expect(vino.locator('.qc-cant')).toHaveText('2 ×');
-    await expect(vino.getByRole('button', { name: 'Vino tinto (copa) por 2', exact: true })).toBeVisible();
+    await expect(vino.getByRole('button', { name: 'Vino tinto (copa) por 2, $120', exact: true })).toBeVisible();
     const pos = await vino.evaluate((r) => {
       const c = r.querySelector('.qc-cant')!.getBoundingClientRect();
       const n = r.querySelector('.qc-nombre')!.getBoundingClientRect();
@@ -301,7 +301,7 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
   test('«Cerrar mesa» con algo marcado sin «Continuar»: lo dice, y «Revisar» lleva a la lista sin cerrar', async ({ page }) => {
     await abrirMesa(page);
     await contarLlamadas(page, 'closeMesa');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await tocarCerrarMesa(page);
     const hoja = page.getByRole('dialog', { name: '¿Cerrar la mesa?' });
     await expect(hoja.getByText('Revisa lo que elegiste: después de cerrar ya no se puede modificar.')).toBeVisible();

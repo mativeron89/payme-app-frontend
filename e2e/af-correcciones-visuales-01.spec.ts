@@ -333,8 +333,8 @@ test('Pagar separa resumen, propina, método y total sin duplicar el monto', asy
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-  await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
+  await page.getByRole('button', { name: 'Vino tinto (copa), $60', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
   const title = page.locator('.pay-title');

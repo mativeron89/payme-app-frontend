@@ -174,7 +174,7 @@ for (const lang of ['es', 'en'] as const) {
     await expect(continuar).toBeEnabled();
     if (await consumos.getAttribute('aria-expanded') !== 'true') await consumos.click();
     const plato = page.locator('.qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' });
-    await plato.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await plato.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await continuar.click();
     await expect(page.locator('.mesa-guardado')).toBeVisible();
     if (en) {

@@ -418,7 +418,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     expect([s.ancho, s.alto]).toEqual([3277, 2458]);
   });
 
-  test('🔴 «Reintentar» abre la cámara en el mismo toque y, si se cancela, el aviso sigue', async ({ page }) => {
+  test('🔴 «Sacar otra foto» abre la cámara en el mismo toque y, si se cancela, el aviso sigue', async ({ page }) => {
     await configurarTicketSinQr(page, { ocr: 'no_items' });
     await ingresar(page);
     await tocarNueva(page);
@@ -427,7 +427,7 @@ test.describe('D212 · «Nueva» abre la cámara nativa', () => {
     await expect(aviso).toBeVisible();
     const [selector] = await Promise.all([
       page.waitForEvent('filechooser'),
-      aviso.getByRole('button', { name: 'Reintentar', exact: true }).click(),
+      aviso.getByRole('button', { name: 'Sacar otra foto', exact: true }).click(),
     ]);
     expect(await atributo(selector, 'capture')).toBe('environment');
     // Cancelada: el motivo por el que falló sigue en pantalla.

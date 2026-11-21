@@ -248,7 +248,7 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await mesaSinGarantia(page, { 'payme.app.mock.cerrar.v1': 'error' });
     await tocarCerrar(page);
     await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
-    await expect(page.getByText('No pudimos cerrar la mesa. Intenta de nuevo.')).toBeVisible();
-    await expect(boton(page)).toBeVisible();
+    await expect(hoja(page).getByRole('alert')).toHaveText('No pudimos confirmar el cierre. Prueba de nuevo: si la mesa ya se cerró, verás el cierre completado.');
+    await expect(hoja(page).getByRole('button', { name: 'Reintentar cierre' })).toBeFocused();
   });
 });

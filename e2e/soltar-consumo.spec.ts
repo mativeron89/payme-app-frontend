@@ -34,7 +34,7 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await page.goto(`/#/mesa/${mesa.code}`);
   await enTuMesaConLaLista(page);
   await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   // Decisión 32 · «Listo» registra y vuelve a Inicio; se vuelve a la mesa para mirar lo tomado.
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
@@ -112,7 +112,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await capturar(page, 'soltar-02-suelto');
 
     // Libre de verdad: se puede volver a elegir.
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await expect(tagliatelle.getByRole('radiogroup')).toBeVisible();
   });
 
@@ -199,7 +199,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
 
   test('un 404 de ÍTEM (item_not_found) no se confunde con un backend sin la ruta', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -249,7 +249,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
       api.releaseItems = async (...a: unknown[]) => { w.__soltados += 1; return original(...a); };
     });
     const tagliatelle = fila(page, 'Tagliatelle Bolognese');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await tagliatelle.getByRole('radio', { name: 'Entero' }).click();
     await expect(tagliatelle.locator('[data-estado="mio"]')).toBeVisible();
     await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();

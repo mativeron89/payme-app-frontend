@@ -7,7 +7,7 @@ declare global { interface Window { pagoMedido: number } }
 async function enPago(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox'));
   await ingresar(page); await page.goto('/#/mesa/PA-2847'); await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: /^(Continuar|Listo)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
 }

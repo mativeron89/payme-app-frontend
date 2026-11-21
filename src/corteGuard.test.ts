@@ -371,7 +371,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
   }
 
   it('K1 · el componente abre los consumos nuevos y ubica cerrar después', () => {
-    const markup = vista({ mesa: { ...MESA, my_role: 'opener', guarantee_mode: false }, onCerrarMesa: async () => undefined });
+    const markup = vista({ mesa: { ...MESA, my_role: 'opener', guarantee_mode: false }, onCerrarMesa: async () => 'resuelta' });
     expect(markup).toContain('Toca lo que consumiste');
     const lista = markup.slice(markup.indexOf('desplegable tus-consumos'));
     expect(lista).toContain('aria-expanded="true"');

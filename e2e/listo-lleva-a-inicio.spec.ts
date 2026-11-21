@@ -104,7 +104,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'lockItems');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
     expect(await llamadas(page, 'lockItems')).toBe(1);
@@ -122,7 +122,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
 
@@ -158,7 +158,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     // El preflight lee abierto; el original de lockItems encuentra el
     // vencimiento al ingresar y produce su 409 real `mesa_not_active`.
     await sinRefresco(page, async () => {
@@ -177,7 +177,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
     await contarLlamadas(page, 'replaceInformativeSelection');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enInicio(page);
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
@@ -199,7 +199,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     // Igual: se vence al ingresar al PUT, después de ambas lecturas previas.
     await sinRefresco(page, async () => {
       await vencerAlEntrarEnMutacion(page, mesa.code, 'replaceInformativeSelection');

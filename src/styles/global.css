@@ -12874,3 +12874,13 @@ h1.pay-title-lbl {
   font-size: 0.875em;
   overflow-wrap: anywhere;
 }
+
+.tk-motivo {
+  display: block;
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--warning);
+}

@@ -107,7 +107,7 @@ test('W1 · partes iguales guarda desde la barra y descarta al último valor gua
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await abrirTusConsumos(page);
   const plato = page.locator('.qc-renglon').filter({ hasText: 'Tagliatelle Bolognese' });
-  await plato.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+  await plato.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await observarEscriturasDeSeleccion(page);
   await control(page, 'Mesas').click();
   await aviso(page).getByRole('button', { name: 'Guardar', exact: true }).click();

@@ -81,9 +81,9 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
   test('el ejemplo del diseño · los cinco estados a la vez, y «Mi parte · 2 platos» $90', async ({ page }) => {
     const code = await abrirMesa(page);
     await plantarAjenos(page, code);
-    await page.getByRole('button', { name: 'Tiramisú', exact: true }).click();
+    await page.getByRole('button', { name: 'Tiramisú, $70', exact: true }).click();
     await page.locator('.qc-renglon[data-plato="Tiramisú"]').nth(1).getByRole('radio', { name: 'Entero' }).click();
-    await page.getByRole('button', { name: 'Agua mineral', exact: true }).click();
+    await page.getByRole('button', { name: 'Agua mineral, $40', exact: true }).click();
     await renglon(page, 'Agua mineral').getByRole('radio', { name: '½' }).click();
 
     const estados = await page.locator('.qc-renglon').evaluateAll((rs) => rs.map((r) => [
@@ -112,7 +112,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
   test('lo que se reemplaza ya no está: ni «¿Cuánto tomas tú?», ni «Tu parte:», ni la X roja, ni el borde punteado', async ({ page }) => {
     await abrirMesa(page);
     await expect(page.locator('.qc-lista')).not.toHaveClass(/tk-fold--pending/);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await expect(page.getByText('¿Cuánto tomas tú?')).toHaveCount(0);
     await expect(page.getByText(/^Tu parte:/)).toHaveCount(0);
     await expect(page.locator('.mi-soltar, .mi-frac')).toHaveCount(0);
@@ -121,7 +121,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
   test('reglas 3 y 4 · marcar abre la tira DEBAJO del plato (D360-6) con Entero · ½ · ⅓ · ¼ + «Soltar», sin taparlo, y elegir la cierra', async ({ page }) => {
     await abrirMesa(page);
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     const selector = tagliatelle.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(selector).toBeVisible();
     // D360-6 · el plato elegido se sigue viendo entero, con su nombre, y la tira
@@ -160,19 +160,19 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
   test('regla 3 · la píldora vuelve a abrir el selector; «Soltar» deja el plato libre', async ({ page }) => {
     await abrirMesa(page);
     const risotto = renglon(page, 'Risotto ai Funghi');
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     await risotto.getByRole('radio', { name: '⅓' }).click();
     await risotto.getByRole('button', { name: /^Cambiar la porción de Risotto ai Funghi/ }).click();
     await expect(risotto.getByRole('radio', { name: '⅓' })).toHaveAttribute('aria-checked', 'true');
     await risotto.getByRole('button', { name: 'Soltar', exact: true }).click();
     await expect(risotto.locator('[data-estado="libre"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Risotto ai Funghi', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true })).toBeVisible();
   });
 
   test('regla 7 · también se suelta tocando el círculo marcado', async ({ page }) => {
     await abrirMesa(page);
     const vino = renglon(page, 'Vino tinto (copa)');
-    await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
+    await page.getByRole('button', { name: 'Vino tinto (copa), $60', exact: true }).click();
     await vino.getByRole('radio', { name: 'Entero' }).click();
     const circulo = vino.getByRole('button', { name: 'Soltar Vino tinto (copa)' });
     await expect(circulo.locator('path')).toHaveAttribute('d', CHECK);
@@ -250,7 +250,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     const relativo = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().top - e.closest('.qc-lista')!.getBoundingClientRect().top);
     const antes = await relativo(siguiente);
 
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     // D360-6 · abierta, la tira va debajo del plato: el siguiente baja lo que
     // mide la tira más su margen de abajo (6), ni más ni menos.
     const tira = libre.locator('.qc-porciones');
@@ -273,7 +273,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
   test('definición 4 · zona táctil de 44 px sin agrandar lo visible', async ({ page }) => {
     await abrirMesa(page);
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     const opcion = tagliatelle.getByRole('radio', { name: '½' });
     const soltar = tagliatelle.getByRole('button', { name: 'Soltar', exact: true });
     const medir = (l: Locator) => l.evaluate((e) => {
@@ -298,9 +298,9 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await expect(burbuja.getByRole('progressbar')).toBeVisible();
     await expect(burbuja.locator('.mi-meta-amt')).toHaveText(/^Elegido \$\d+(?:\.\d{2})? de \$840$/);
     await expect(burbuja.locator('.mi-count')).toBeVisible();
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await renglon(page, 'Tagliatelle Bolognese').getByRole('radio', { name: 'Entero' }).click();
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     await renglon(page, 'Risotto ai Funghi').getByRole('radio', { name: '½' }).click();
     await expect(page.locator('.mi-parte')).toContainText('Mi parte · 2 platos');
     await expect(page.locator('.mi-parte-amt')).toHaveText('$305');
@@ -328,7 +328,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
     await expect(tagliatelle.locator('[data-estado="registrado"] .qc-pildora')).toHaveText('⅔');
     // Al marcar otro plato el selector ofrece sólo las cuatro: ni ⅔ ni ¾.
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi, $220', exact: true }).click();
     await expect(renglon(page, 'Risotto ai Funghi').getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
     await expect(page.getByRole('radio', { name: '⅔' })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: '¾' })).toHaveCount(0);
@@ -339,7 +339,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await abrirMesa(page, 'igual');
     await expect(page.locator('.mesa-selection-context')).toContainText('partes iguales');
     const tagliatelle = renglon(page, 'Tagliatelle Bolognese');
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await expect(tagliatelle.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
     await tagliatelle.getByRole('radio', { name: '½' }).click();
     await expect(tagliatelle.locator('[data-estado="mio"] .qc-pildora')).toContainText('½');

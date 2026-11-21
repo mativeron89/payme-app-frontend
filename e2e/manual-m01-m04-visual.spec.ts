@@ -65,7 +65,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     });
     await page.goto('/#/mesa/PA-2847');
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
 
     const consumo = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(consumo.getByRole('radio')).toHaveCount(2);

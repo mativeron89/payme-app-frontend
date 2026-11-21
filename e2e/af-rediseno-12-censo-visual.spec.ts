@@ -287,8 +287,8 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   // M04 (`9c78a7b`, v0.184.0) dejó `.mesa-selection-title` en 12px 16px; D285 (0.242.0) la lleva al padding
   // 16 / 18 de todas las tarjetas, con el cuadro del ícono a la izquierda.
   await acreditar(page, '07-mis-items');
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-  await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
+  await page.getByRole('button', { name: 'Vino tinto (copa), $60', exact: true }).click();
   // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el censo se detiene en
   // Mis ítems: 08-pago y 09-comprobante quedan fuera mientras el checkout esté
   // cerrado. El círculo dice «Listo» (desde la decisión 90, con o sin pagos) y

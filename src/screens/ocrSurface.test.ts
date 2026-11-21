@@ -23,7 +23,7 @@ describe('superficie OCR consume las señales publicadas', () => {
   it('conserva y diferencia la baja confianza sin bloquear Continuar', () => {
     expect(source).toContain('lowConfidence: true as const');
     expect(source).toContain('tk-row-warning');
-    expect(source).toContain("aria-label={t('No pudimos leer este ítem')}");
+    expect(source).toContain("it.lowConfidence ? t('No se leyó bien: revísalo con el ticket.')");
     expect(source).toContain('{confidenceWarning}');
     expect(source).toContain('setEditingItems(decision.hasLowConfidence)');
     expect(source).not.toMatch(/ticketValid[\s\S]{0,240}lowConfidence/);

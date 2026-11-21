@@ -221,7 +221,7 @@ export interface MesaDetailViewProps {
    * AF-34 · n98 · cerrar la mesa. `null` ⇒ el botón no está (retirado tras un
    * 403, un 409 `close_not_applicable` o un 404). La red la hace `MesaScreen`.
    */
-  onCerrarMesa: (() => Promise<void>) | null;
+  onCerrarMesa: (() => Promise<'resuelta' | 'reintentar'>) | null;
   cerrando: boolean;
   onSetFraction: (id: string, bps: number) => void;
   onSetDenominator: (id: string, denominator: number) => void;
@@ -409,6 +409,7 @@ function HojaAntesDeCerrar({
   mios,
   sinGuardar,
   confirmar,
+  errorCierre,
   cerrando,
   onRevisar,
   onSalir,
@@ -420,6 +421,7 @@ function HojaAntesDeCerrar({
   mios: readonly { key: string; texto: string }[];
   sinGuardar: boolean;
   confirmar: string;
+  errorCierre?: boolean;
   cerrando: boolean;
   onRevisar: () => void;
   onSalir: () => void;
@@ -429,6 +431,10 @@ function HojaAntesDeCerrar({
   const hoja = useRef<HTMLDivElement | null>(null);
   const revisar = useRef<HTMLButtonElement | null>(null);
   useHojaModal(hoja, revisar, onSalir);
+  const reintento = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (errorCierre && !cerrando) reintento.current?.focus();
+  }, [errorCierre, cerrando]);
   // Con muchos platos, los botones no se pierden debajo: hasta 4 y «y N más».
   const visibles = mios.slice(0, 4);
   const resto = mios.length - visibles.length;
@@ -474,9 +480,14 @@ function HojaAntesDeCerrar({
         <ul className="cerrar-mesa-lista">
           {renglones.map((r) => <li key={r}>{r}</li>)}
         </ul>
+        {errorCierre && (
+          <p className="title-card-note warn" role="alert">
+            <Icon name="warning" size={16} /><span>{t('No pudimos confirmar el cierre. Prueba de nuevo: si la mesa ya se cerró, verás el cierre completado.')}</span>
+          </p>
+        )}
         <div className="cerrar-mesa-acciones">
           <button ref={revisar} type="button" className="btn btn-ghost" onClick={onRevisar}>{t('Revisar')}</button>
-          <button type="button" className="btn btn-navy" onClick={onConfirmar} disabled={cerrando}>
+          <button ref={reintento} type="button" className="btn btn-navy" onClick={onConfirmar} disabled={cerrando}>
             {cerrando ? t('Cerrando…') : confirmar}
           </button>
         </div>
@@ -649,7 +660,7 @@ export function MesaDetailView({
    * AF-34 · D240 punto 8 · la hoja antes del cierre (distinta de la de D-R20):
    * `cerrar` la abre «Cerrar mesa»; la selección llega del desafío del dueño.
    */
-  const [hojaCierre, setHojaCierre] = useState<null | 'cerrar'>(null);
+  const [hojaCierre, setHojaCierre] = useState<null | 'cerrar' | 'reintentar'>(null);
   const botonCerrarMesa = useRef<HTMLButtonElement | null>(null);
   const volverRef = useRef<HTMLButtonElement>(null);
   const [salidaPendiente, setSalidaPendiente] = useState<{
@@ -1378,7 +1389,7 @@ export function MesaDetailView({
               data-estado={queda ? 'queda' : 'libre'}
               disabled={editBloqueado}
               aria-pressed={false}
-              aria-label={`${nombreAria}${ariaQuien}${tag ? t(', {0}', tag) : ''}`}
+              aria-label={`${nombreAria}${t(', {0}', formatMXN(fullPrice))}${textoQuien ? t(', {0}', textoQuien) : ''}${tag ? t(', {0}', tag) : ''}`}
               onClick={(evento) => {
                 if (evento.detail === 0 && opciones.length <= 1) focoDelPlato.current = idDelControl(i.id);
                 tomarPlato(i.id, opciones.length);
@@ -1755,7 +1766,7 @@ export function MesaDetailView({
           onCerrar={cerrarHojaDeLaMesa}
         />
       )}
-      {hojaCierre === 'cerrar' && onCerrarMesa && (
+      {hojaCierre !== null && onCerrarMesa && (
         <HojaAntesDeCerrar
           titulo={t('¿Cerrar la mesa?')}
           sinDueno={sinDuenoAntesDeCerrar(mesa)}
@@ -1766,7 +1777,8 @@ export function MesaDetailView({
           ]}
           mios={lineasElegidas(elegidosRegistrados(mesa, esConsumo, informativasGuardadas))}
           sinGuardar={esConsumo ? selected.size > 0 : guardadaLeida && !informativeSaved}
-          confirmar={t('Sí, cerrar la mesa')}
+          errorCierre={hojaCierre === 'reintentar'}
+          confirmar={hojaCierre === 'reintentar' ? t('Reintentar cierre') : t('Sí, cerrar la mesa')}
           cerrando={cerrando}
           onRevisar={() => { setHojaCierre(null); llevarALaLista(true); }}
           onSalir={() => {
@@ -1777,7 +1789,10 @@ export function MesaDetailView({
           // La hoja queda abierta con «Cerrando…» apagado hasta que el dueño
           // contesta: un segundo toque cae en el botón apagado, no en lo que
           // hay debajo. Si se cerró, la pantalla pasa al cierre.
-          onConfirmar={() => { void onCerrarMesa().finally(() => setHojaCierre(null)); }}
+          onConfirmar={async () => {
+            const resultado = await onCerrarMesa();
+            setHojaCierre(actual => actual && resultado === 'reintentar' ? 'reintentar' : null);
+          }}
         />
       )}
       {cierreSeleccion && (

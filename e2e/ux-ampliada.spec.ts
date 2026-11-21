@@ -236,7 +236,7 @@ test('K22 · apertura sin jerga en el caso correcto', async ({ page }) => {
 test('K22 · tarjeta pendiente conserva bloqueo y mensaje de un solo intento', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox'));
   await ingresar(page); await irEnLaApp(page, '/mesa/PA-2847'); await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('radio', { name: '10%', exact: true }).click();
   await page.evaluate(async () => {

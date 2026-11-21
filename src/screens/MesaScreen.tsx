@@ -1334,8 +1334,8 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * AF-34 · «Cerrar mesa». Un solo envío en vuelo (ref, no estado: dos toques en
    * el mismo frame ven el mismo estado). El resultado lo decide `resultadoDeCerrar`.
    */
-  async function cerrarMesa(): Promise<void> {
-    if (!mesa || cerrandoRef.current || intentoSeleccionRef.current || listoEnVueloRef.current) return;
+  async function cerrarMesa(): Promise<'resuelta' | 'reintentar'> {
+    if (!mesa || cerrandoRef.current || intentoSeleccionRef.current || listoEnVueloRef.current) return 'reintentar';
     cerrandoRef.current = true;
     setCerrando(true);
     try {
@@ -1351,12 +1351,14 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         setCerrarRetirado(true);
         if (r.aviso === 'no_disponible') toast(t('Cerrar la mesa todavía no está disponible.'));
       } else {
-        toast(t('No pudimos cerrar la mesa. Intenta de nuevo.'));
+        void reload();
+        return 'reintentar';
       }
     } finally {
       cerrandoRef.current = false;
       setCerrando(false);
     }
+    return 'resuelta';
   }
 
   /**

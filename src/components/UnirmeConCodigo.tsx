@@ -351,22 +351,25 @@ export function UnirmeConCodigo() {
           </>
         )}
         {estado.paso === 'esperando' && (
-          <div className="unirse-espera" aria-live="polite">
+          <div className="unirse-espera">
             <div className="unirse-espera-codigo">
               <span className="unirse-espera-rotulo">{t('Código')}</span>
               <strong>{estado.codigo}</strong>
             </div>
             <span className="unirse-pildora">{t('Esperando respuesta')}</span>
             {estado.expiresAt !== null && (
-              <p className="unirse-vence">{t('Vence en {0}', venceEn(estado.expiresAt, ahora))}</p>
+              <p className="unirse-vence" role="timer" aria-live="off">{t('Vence en {0}', venceEn(estado.expiresAt, ahora))}</p>
             )}
             <p className="unirse-texto">{t('Listo, le avisamos a quien abrió la mesa. Cuando te acepte, entras directo.')}</p>
-            {estado.reintento && (
-              <p className="unirse-aviso" role="status">
+            <div role="status" aria-live="polite" aria-atomic="true">
+              {!estado.reintento && <span className="cuadre-ticket-anuncio">{t('Esperando respuesta')}</span>}
+              {estado.reintento && (
+              <p className="unirse-aviso">
                 <Icon name="info" size={16} />
                 <span>{t('No pudimos confirmar el resultado. Intenta de nuevo.')}</span>
               </p>
-            )}
+              )}
+            </div>
             <button
               type="button"
               className="unirse-cancelar"

@@ -187,8 +187,10 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await solicitar(page).click();
     await expect(espera(page)).toBeVisible();
     await expect(espera(page)).toContainText('CódigoPA-12345');
-    await expect(espera(page).getByText('Esperando respuesta')).toBeVisible();
+    await expect(espera(page).locator('.unirse-pildora')).toBeVisible();
     // Desde expires_at (10 minutos), no 15:00 fijo.
+    await expect(espera(page).getByRole('timer')).toHaveAttribute('aria-live', 'off');
+    await expect(espera(page).getByRole('status')).toHaveText('Esperando respuesta');
     await expect(espera(page).locator('.unirse-vence')).toHaveText(/^Vence en (10:00|09:5\d)$/);
     await expect(espera(page)).toContainText('Listo, le avisamos a quien abrió la mesa. Cuando te acepte, entras directo.');
     await expect(espera(page).getByRole('button', { name: 'Cancelar', exact: true })).toBeVisible();

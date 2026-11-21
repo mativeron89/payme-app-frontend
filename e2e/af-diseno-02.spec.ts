@@ -117,8 +117,8 @@ async function abrirPago(page: Page): Promise<void> {
   await abrirCompartir(page, 'consumo');
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-  await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
+  await page.getByRole('button', { name: 'Vino tinto (copa), $60', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
 }
