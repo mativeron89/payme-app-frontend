@@ -56,7 +56,7 @@ type Estado =
     readonly codigo: string;
     readonly expiresAt: string | null;
     readonly cancelando: boolean;
-    readonly reintento: boolean;
+    readonly reintento: false | 'consulta' | 'cancelar';
   }
   | { readonly paso: 'no_se_pudo' }
   | { readonly paso: 'cuenta_suspendida' }
@@ -146,7 +146,7 @@ export function UnirmeConCodigo() {
       }
       // Sin red, error del servidor o respuesta mal formada (P08): la espera
       // sigue y se avisa; la próxima consulta lo vuelve a intentar.
-      setEstado((e) => (e.paso === 'esperando' && e.id === id ? { ...e, reintento: true } : e));
+      setEstado((e) => (e.paso === 'esperando' && e.id === id ? { ...e, reintento: 'consulta' } : e));
     } finally {
       consultandoRef.current = false;
     }
@@ -253,7 +253,7 @@ export function UnirmeConCodigo() {
         olvidarSolicitud();
         volverAlCampo('reintento');
       } else {
-        setEstado((e) => (e.paso === 'esperando' && e.id === id ? { ...e, reintento: true } : e));
+        setEstado((e) => (e.paso === 'esperando' && e.id === id ? { ...e, reintento: 'cancelar' } : e));
       }
     }
   }
@@ -364,10 +364,12 @@ export function UnirmeConCodigo() {
             <div role="status" aria-live="polite" aria-atomic="true">
               {!estado.reintento && <span className="cuadre-ticket-anuncio">{t('Esperando respuesta')}</span>}
               {estado.reintento && (
-              <p className="unirse-aviso">
-                <Icon name="info" size={16} />
-                <span>{t('No pudimos confirmar el resultado. Intenta de nuevo.')}</span>
-              </p>
+                <p className="unirse-aviso">
+                  <Icon name="info" size={16} />
+                  <span>{estado.reintento === 'consulta'
+                    ? t('No pudimos comprobar la respuesta. Vamos a intentarlo otra vez en unos segundos; no necesitas hacer otra solicitud.')
+                    : t('No pudimos cancelar la solicitud. Prueba de nuevo.')}</span>
+                </p>
               )}
             </div>
             <button

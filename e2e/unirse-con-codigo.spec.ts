@@ -292,6 +292,16 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await expect(solicitar(page)).toBeDisabled();
   });
 
+  test('UX-09 · al fallar Cancelar conserva el pedido y ofrece reintentar', async ({ page }) => {
+    await costura(page, { cancelar: 'error' });
+    await enMesas(page);
+    await abrirYEscribir(page, '12345');
+    await solicitar(page).click();
+    await espera(page).getByRole('button', { name: 'Cancelar' }).click();
+    await expect(espera(page).getByRole('status')).toHaveText('No pudimos cancelar la solicitud. Prueba de nuevo.');
+    expect((await contar(page)).cancelaciones).toBe(1);
+  });
+
   test('A17 · vencida: el mismo «no se pudo»', async ({ page }) => {
     await costura(page, { estado: 'expired', tras: 1 });
     await enMesas(page);
@@ -384,7 +394,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await solicitar(page).click();
     await expect(espera(page)).toBeVisible();
     await volverALaApp(page);
-    await expect(espera(page).getByText('No pudimos confirmar el resultado. Intenta de nuevo.')).toBeVisible();
+    await expect(espera(page).getByText('No pudimos comprobar la respuesta. Vamos a intentarlo otra vez en unos segundos; no necesitas hacer otra solicitud.')).toBeVisible();
     await expect(espera(page)).toContainText('Esperando respuesta');
     await expect(page.getByText('Señuelo del Mock')).toHaveCount(0);
   });
@@ -396,7 +406,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await solicitar(page).click();
     await expect(espera(page)).toBeVisible();
     await volverALaApp(page);
-    await expect(espera(page).getByText('No pudimos confirmar el resultado. Intenta de nuevo.')).toBeVisible();
+    await expect(espera(page).getByText('No pudimos comprobar la respuesta. Vamos a intentarlo otra vez en unos segundos; no necesitas hacer otra solicitud.')).toBeVisible();
     await expect(page).toHaveURL(/\/mesas$/);
   });
 });

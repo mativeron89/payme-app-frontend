@@ -1568,4 +1568,9 @@ export const EN: Record<string, string> = {
   "No pudimos confirmar el cierre. Prueba de nuevo: si la mesa ya se cerró, verás el cierre completado.": "We couldn't confirm that the table closed. Try again: if it already closed, you'll see the closed table.",
   "Reintentar cierre": "Retry closing",
   "No se leyó bien: revísalo con el ticket.": "Hard to read: check it against the receipt.",
+  "Hay más contactos. Busca por nombre o @ para encontrar a quien quieres invitar.": "There are more contacts. Search by name or @ to find the person you want to invite.",
+  "Hay más contactos. Busca por nombre para encontrar a quien quieres invitar.": "There are more contacts. Search by name to find the person you want to invite.",
+  "Hay más grupos. Busca por nombre para encontrar el que quieres.": "There are more groups. Search by name to find the one you want.",
+  "No pudimos comprobar la respuesta. Vamos a intentarlo otra vez en unos segundos; no necesitas hacer otra solicitud.": "We couldn't check the response. We'll try again in a few seconds; you don't need to send another request.",
+  "No pudimos cancelar la solicitud. Prueba de nuevo.": "We couldn't cancel the request. Try again.",
 };

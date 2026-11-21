@@ -232,7 +232,7 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
     };
   }, [tick]);
 
-  const shown = useMemo(() => {
+  const contactosFiltrados = useMemo(() => {
     const needle = fold(q.trim());
     const pool = needle
       ? friends.filter(
@@ -240,7 +240,7 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
           (f) => fold(f.full_name).includes(needle) || arrobaCoincide(f.username, arrobaHabilitada, needle),
         )
       : friends;
-    return pool.slice(0, 6);
+    return pool;
   }, [friends, q, arrobaHabilitada]);
 
   /**
@@ -250,10 +250,13 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
    */
   const fotoDeAmigo = useMemo(() => new Map(friends.map((f) => [f.id, f.has_avatar])), [friends]);
 
-  const shownGroups = useMemo(() => {
+  const gruposFiltrados = useMemo(() => {
     const needle = fold(q.trim());
-    return (needle ? groups.filter((g) => fold(g.name).includes(needle)) : groups).slice(0, 6);
+    return needle ? groups.filter((g) => fold(g.name).includes(needle)) : groups;
   }, [groups, q]);
+
+  const shown = contactosFiltrados.slice(0, 6);
+  const shownGroups = gruposFiltrados.slice(0, 6);
 
   async function invite(f: Invitable) {
     const r = await invitarConMemoria(memoria, f.payme_id, (key) => api.inviteFriend(code, f.payme_id, key));
@@ -428,6 +431,9 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
         {mode === 'friends' && (
           <>
             {shown.length > 0 && <div className="inv-list">{shown.map((f) => fila(f, f.id))}</div>}
+            {contactosFiltrados.length > shown.length && (
+              <p className="inv-none">{arrobaHabilitada ? t('Hay más contactos. Busca por nombre o @ para encontrar a quien quieres invitar.') : t('Hay más contactos. Busca por nombre para encontrar a quien quieres invitar.')}</p>
+            )}
             {shown.length === 0 && (
               <p className="inv-none">
                 {q.trim()
@@ -493,6 +499,7 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
               );
             })}
           </div>}
+          {gruposFiltrados.length > shownGroups.length && <p className="inv-none">{t('Hay más grupos. Busca por nombre para encontrar el que quieres.')}</p>}
           </>
         )}
       </div>

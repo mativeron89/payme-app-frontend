@@ -4282,7 +4282,12 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                 <Icon name="message" size={18} className="ico-inline" /> {t('WhatsApp')}
               </a>
               {typeof navigator.share === 'function' && <button type="button" className="btn btn-ghost share-native" disabled={!link}
-                onClick={() => { if (link) void compartirTexto(t('Súmate a la mesa {0} en PayMe: {1}', code, link)); }}>
+                onClick={async () => {
+                  if (!link) return;
+                  const resultado = await compartirTexto(t('Súmate a la mesa {0} en PayMe: {1}', code, link));
+                  if (resultado === 'copiado') toast(t('Link de invitación copiado ✓'));
+                  else if (resultado === 'sin_portapapeles') toast(t('No se pudo copiar: tu navegador no habilitó el portapapeles'));
+                }}>
                 <Icon name="share" size={18} /> {t('Compartir…')}
               </button>}
             </div>
