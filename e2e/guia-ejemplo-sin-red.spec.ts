@@ -176,7 +176,7 @@ test.describe('D363 · el ejemplo no sale a la red ni escribe', () => {
     await hastaTuMesa(page);
     await tuMesaDelEjemplo(page);
 
-    await page.getByRole('button', { name: /^Tagliatelle Bolognese(,|$)/ }).click();
+    await page.getByRole('button', { name: /^Tagliatelle Bolognese, / }).click();
     await page.getByRole('radio', { name: '½', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect.poll(() => pathname(page)).toBe('/home');

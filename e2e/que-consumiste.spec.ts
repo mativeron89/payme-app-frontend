@@ -204,7 +204,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await capturar(page, 'qc-05-queda-y-otro');
 
     // Tomar lo que queda: sin Entero.
-    await page.getByRole('button', { name: 'Pizza Margherita, Queda ½' }).click();
+    await page.getByRole('button', { name: 'Pizza Margherita, $185, Queda ½', exact: true }).click();
     await expect(pizza.getByRole('radio')).toHaveText(['½', '⅓', '¼']);
     await expect(pizza.getByRole('radio', { name: '½' })).toHaveAttribute('aria-checked', 'true');
   });
@@ -229,7 +229,7 @@ test.describe('AF-QUE-CONSUMISTE · «¿Qué consumiste?» del diseño', () => {
     await enTuMesaConLaLista(page);
     const agua = renglon(page, 'Agua mineral');
     // AF-4 · el nombre accesible lleva también quién eligió el resto (acá, un invitado viejo sin cuenta: «?»).
-    await page.getByRole('button', { name: /^Agua mineral, .+, Lo eligió \?, Queda ¼$/ }).click();
+    await page.getByRole('button', { name: 'Agua mineral, $40, Lo eligió ?, Queda ¼', exact: true }).click();
     await expect(agua.getByRole('radiogroup')).toHaveCount(0);
     await expect(agua.locator('[data-estado="mio"] .qc-pildora')).toHaveText('¼');
   });

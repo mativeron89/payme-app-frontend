@@ -113,7 +113,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(desglose(page).locator('.mi-parte-cuenta-propina')).toHaveCount(0);
     const guardado = await desglose(page).innerText();
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: /^Plato nuevo/ }).click();
+    await page.getByRole('button', { name: 'Plato nuevo, $1', exact: true }).click();
     await page.getByRole('radiogroup', { name: 'Porción de Plato nuevo' })
       .getByRole('radio', { name: '½', exact: true }).click();
     await expect(page.locator('.qc-renglon').filter({ hasText: 'Plato nuevo' }).locator('.qc-pildora')).toHaveText('½');
@@ -190,7 +190,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(desglose(page)).toHaveCount(0);
 
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await expect(page.locator('.mi-parte-amt')).toHaveText('$210.90');
     await capturar(page, 'd344-03-mi-parte-consumo-vista-previa');
 
@@ -236,7 +236,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(selectorDePropina(page).getByRole('status')).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -273,7 +273,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Configuración de la mesa' })).toHaveCount(0);
     await expect(page.locator('.propina-mesa-estado--pagina[role="status"]')).toHaveText('Guardando la propina…');
-    await expect(page.getByRole('button', { name: /Tagliatelle Bolognese/ })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true })).toBeDisabled();
 
     // 1 s y 2 s de espera entre los tres intentos. Con la hoja cerrada, la
     // página avisa y ofrece abrirla.
@@ -281,7 +281,7 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(aviso).toContainText('No pudimos guardar la propina.', { timeout: 15_000 });
     expect(await pedidosDePropina(page)).toBe(3);
     await expect(page.locator('.propina-mesa-estado--pagina[role="status"]')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Tagliatelle Bolognese/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true })).toBeEnabled();
     await aviso.getByRole('button', { name: 'Revisar', exact: true }).click();
     await expect(selectorDePropina(page).getByRole('alert')).toContainText(
       'No pudimos guardar la propina. Puedes elegir tus platos y volver a intentarlo desde la propina de la mesa.',

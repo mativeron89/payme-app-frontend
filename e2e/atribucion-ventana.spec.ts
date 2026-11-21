@@ -60,7 +60,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   await frenarJournal(page, 1_500);
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
@@ -171,7 +171,7 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   const mesa = await abrirMesaConLink(page);
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });

@@ -155,7 +155,7 @@ test('D387 · 200 retenido no revela detalle; cierra ambas custodias antes de sa
   expect(await page.evaluate(() => [
     'payme_pending_invitation_link', 'payme.app.retorno_mesa.v1', 'payme.app.retorno_mesa_modo.v1', 'payme.app.google_salida.v1',
   ].map((k) => sessionStorage.getItem(k)))).toEqual([null, null, null, null]);
-  await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();
   await expect(page.locator('[data-guia-overlay]')).toHaveCount(0);
   await aviso(page).getByRole('button').click();

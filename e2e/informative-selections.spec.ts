@@ -24,7 +24,7 @@ async function listoYVolver(page: Page): Promise<void> {
  * ancla en el nombre del plato: nunca matchea «Soltar …» ni otro plato.
  */
 function plato(nombre: string): RegExp {
-  return new RegExp(`^${nombre}(,|$)`);
+  return new RegExp(`^${nombre}, `);
 }
 
 /**

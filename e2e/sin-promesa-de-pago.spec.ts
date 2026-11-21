@@ -230,7 +230,7 @@ for (const idioma of ['es', 'en'] as const) {
       await abrirRegion(page, T('Tus consumos'));
       // Testigo: el plato que eligió otra cuenta se ve como tal (AF-4: con las iniciales de «los demás» del mock).
       await expect(page.getByText(idioma === 'en' ? 'AM picked it' : 'Lo eligió AM', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
+      await page.getByRole('button', { name: 'Consumo de 540, $540', exact: true }).click();
       await sinPromesa(page, idioma, 'Tu mesa');
       await page.getByRole('button', { name: T('Configuración de la mesa'), exact: true }).click();
       await expect(page.getByRole('dialog', { name: T('Configuración de la mesa') })).toBeVisible();
@@ -245,7 +245,7 @@ for (const idioma of ['es', 'en'] as const) {
       await page.goto(`/#/mesa/${CODE}`);
       await expect(page.getByRole('heading', { name: T('¿Qué consumiste?'), exact: true })).toBeVisible();
       await expect(page.getByText(idioma === 'en' ? 'AM picked it' : 'Lo eligió AM', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
+      await page.getByRole('button', { name: 'Consumo de 540, $540', exact: true }).click();
       await sinPromesa(page, idioma, '¿Qué consumiste?');
     });
   });

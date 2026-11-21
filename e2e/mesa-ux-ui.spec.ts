@@ -14,7 +14,7 @@ const consumos = (page: Page) => page.locator('.tus-consumos .desplegable-cabece
 const continuar = (page: Page) => page.getByRole('button', { name: /^(Continuar|Listo)$/, exact: true });
 async function elegir(page: Page): Promise<void> {
   if (await consumos(page).getAttribute('aria-expanded') !== 'true') await consumos(page).click();
-  await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
 }
 async function captura(page: Page, nombre: string): Promise<void> {
   if (process.env.PAYME_E2E_CAPTURAS) {
@@ -54,7 +54,7 @@ test('K2 K3 K4 · importes, textos ES/EN, botón ancho y cámara en Inicio', asy
   await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en')); await page.reload();
   await expect(page.locator('.mi-meta-amt')).toHaveText('Chosen $195 of $840');
   if (await consumos(page).getAttribute('aria-expanded') !== 'true') await consumos(page).click();
-  await page.getByRole('button', { name: /Pizza Margherita/ }).click();
+  await page.getByRole('button', { name: 'Pizza Margherita, $185', exact: true }).click();
   await expect(page.locator('.mi-parte')).toContainText('My share');
   await expect(page.locator('.mi-parte')).toContainText('tip included');
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();

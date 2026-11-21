@@ -39,7 +39,7 @@ async function tuMesaDespuesDeListo(page: Page): Promise<string> {
   // Al abrir la mesa, «Tus consumos» también arranca cerrado.
   await expect(cabecera(page, 'Tus consumos')).toHaveAttribute('aria-expanded', 'true');
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -157,7 +157,7 @@ test.describe('D469 · «Tu mesa»: engranaje arriba a la derecha y tres despleg
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();

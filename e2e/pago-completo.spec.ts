@@ -91,7 +91,7 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('$840')).toBeVisible();
 
     // Marcar lo consumido sigue vivo y sigue sin mover un peso (H-14).
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     // v2.124.0 (fracciones en «igual» según N, Decisión de Mati e9aa0450…): la
     // mesa nace con N=4, así que bajo el corte el selector es el natural.
     await page.getByRole('radio', { name: '½', exact: true }).click();
@@ -154,7 +154,7 @@ test.describe('el camino de pago completo', () => {
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
@@ -182,7 +182,7 @@ test.describe('el camino de pago completo', () => {
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
 
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
@@ -270,7 +270,7 @@ test.describe('el camino de pago completo', () => {
 
     // Se llegó a Mis ítems: los ítems del ticket son botones de esta pantalla y
     // de ninguna otra del recorrido.
-    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
     expect(tokenDeLaUrl(page.url())).toBeNull();
   });

@@ -153,7 +153,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await abrir(page, CONSUMO);
     await expect(barra(page)).toHaveText('Elegido $0 de $840');
 
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
     await expect(page.locator('.mi-progress-fill')).toHaveAttribute('style', /width: 36%/);
@@ -166,11 +166,11 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await renglon(page, 'Consumo de 300').getByRole('button', { name: 'Soltar', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $0 de $840');
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $300 de $840');
   });
 
@@ -178,7 +178,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     const fila = renglon(page, 'Consumo de 300');
     await fila.getByRole('radio', { name: '½' }).click();
     await expect(barra(page)).toHaveText('Elegido $150 de $840');
@@ -191,7 +191,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $300 de $840');
     await claim(page, C540, 'other', 10000);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -203,7 +203,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
@@ -211,7 +211,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await abrir(page, CONSUMO);
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toBeVisible();
     await expect(barra(page)).toHaveText('Elegido $300 de $840');
-    await page.getByRole('button', { name: 'Consumo de 540', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 540, $540', exact: true }).click();
     await expect(barra(page)).toHaveText('Elegido $840 de $840');
   });
 
@@ -219,7 +219,7 @@ test.describe('AF-BARRA-EN-VIVO · cada uno lo suyo', () => {
     await preparar(page);
     await sembrar(page, 'consumo');
     await abrir(page, CONSUMO);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await renglon(page, 'Consumo de 300').getByRole('radio', { name: '½' }).click();
     await expect(barra(page)).toHaveText('Elegido $150 de $840');
 

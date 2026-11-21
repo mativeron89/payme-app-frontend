@@ -131,7 +131,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     // No se puede elegir más de lo que queda: nace en ½ y «Entero» no se ofrece.
     // Con N=2 y «Queda ½» la única porción que cabe es ½, así que la regla 4 del
     // diseño la marca directo, sin abrir selector ni ofrecer cambiarla.
-    await page.getByRole('button', { name: /^Pizza para compartir/ }).click();
+    await page.getByRole('button', { name: /^Pizza para compartir, / }).click();
     const pizza = fila(page, 'Pizza para compartir');
     await expect(pizza.locator('[data-estado="mio"] .qc-pildora')).toHaveText('½');
     await expect(pizza.getByRole('radiogroup')).toHaveCount(0);

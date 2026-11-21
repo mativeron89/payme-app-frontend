@@ -406,7 +406,7 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     await expect(nombre('ZIFON NATURAL 900 ML')).toHaveText('Zifon natural 900 ML');
     await expect(nombre('CERVEZA IPA')).toHaveText('Cerveza IPA');
     // El nombre accesible dice lo mismo que se ve.
-    await expect(page.getByRole('button', { name: 'Zifon natural 900 ML', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zifon natural 900 ML, $220', exact: true })).toBeVisible();
     // Un nombre mixto queda tal cual.
     await expect(page.locator('.qc-renglon[data-plato="Tiramisú"] .qc-nombre').first()).toHaveText('Tiramisú');
     // D360-5a · sin «¿Compartieron un plato?». Control positivo: es una mesa por consumo, con la lista de platos a la
@@ -417,7 +417,7 @@ test.describe('D360-5b · D370 · mayúscula inicial al mostrar', () => {
     // D360-6 · al marcar un plato, la tira de porciones aparece debajo, sin taparlo
     // (el Tagliatelle de PA-2847, renombrado acá «100 HUGEL COPA»). Captura para Mati.
     const hugel = page.locator('.qc-renglon[data-plato="100 HUGEL COPA"]');
-    await page.getByRole('button', { name: '100 Hugel copa', exact: true }).click();
+    await page.getByRole('button', { name: '100 Hugel copa, $195', exact: true }).click();
     await expect(hugel.locator('.qc-porciones')).toBeVisible();
     const [cajaFila, cajaTira] = await Promise.all([hugel.locator('[data-estado="mio"]').boundingBox(), hugel.locator('.qc-porciones').boundingBox()]);
     expect(cajaTira!.y, 'la tira no tapa el renglón').toBeGreaterThanOrEqual(cajaFila!.y + cajaFila!.height - 1);

@@ -42,7 +42,7 @@ test('mesa en la App mock: selección con teclado y controles de porción', asyn
   await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
-  const dish = page.getByRole('button', { name: /Tagliatelle Bolognese/ });
+  const dish = page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true });
   await dish.focus();
   await page.keyboard.press('Enter');
   const group = page.getByRole('radiogroup', { name: /Porción de Tagliatelle/ });

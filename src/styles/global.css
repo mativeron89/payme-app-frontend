@@ -9395,6 +9395,7 @@ h1.pay-title-lbl {
 }
 
 .division-options .div-title {
+  overflow-wrap: anywhere;
   font-size: 15.5px;
   line-height: 1.2;
   margin-bottom: 2px;

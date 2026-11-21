@@ -192,7 +192,7 @@ test.describe('Historial (§1.10)', () => {
     await expect(page.getByText('$840')).toBeVisible();
     await enTuMesaConLaLista(page);
 
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el
     // corte es que no hay pantalla de pago, no el rótulo del círculo.
     await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();

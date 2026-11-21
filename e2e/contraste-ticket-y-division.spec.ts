@@ -101,8 +101,7 @@ for (const [idioma, ancho] of [['es', 320], ['en', 390]] as const) {
     await page.keyboard.press('Tab');
     await expect(seleccionada).toBeFocused();
     const teclado = await estilo(marca(seleccionada), true);
-    await page.keyboard.press('Tab'); // Ayuda de la primera opción.
-    await page.keyboard.press('Tab');
+    await page.keyboard.press('ArrowRight');
     await expect(otra).toBeFocused();
     await page.keyboard.press('Space');
     await expect(otra).toHaveAttribute('aria-checked', 'true');

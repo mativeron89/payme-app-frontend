@@ -132,7 +132,7 @@ test.describe('D622 · AF-4 · quién eligió cada plato', () => {
     await plantarAjenos(page, code);
     await enTuMesaConLaLista(page);
     // El borrador (todavía sin guardar): el dueño dice que la eligió AM.
-    await renglon(page, 'Pizza Margherita').getByRole('button', { name: /^Pizza Margherita/ }).click();
+    await renglon(page, 'Pizza Margherita').getByRole('button', { name: /^Pizza Margherita, / }).click();
     const mio = renglon(page, 'Pizza Margherita').locator('[data-estado="mio"]');
     await expect(mio).toBeVisible();
     await expect(mio.locator('.qc-quien .qc-etiqueta')).toHaveText('Lo eligió AM');

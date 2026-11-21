@@ -53,7 +53,7 @@ test('AF2-P3 · el comprobante permanece visible al releer la mesa y refleja el 
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
   await abrirTusConsumos(page);
-  await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
   await page.evaluate(async () => {

@@ -140,7 +140,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await abrirTusConsumos(page);
     await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el
     // corte es que no hay pantalla de pago, no el rótulo del círculo.
     await expect(page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true })).toBeVisible();

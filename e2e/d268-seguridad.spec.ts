@@ -292,7 +292,7 @@ test.describe('🔴 D268 · S-05 · la invitación a la mesa sigue pendiente', (
     await page.goto('/#/mesa/PA-2680');
 
     // Ve la mesa (el dueño se la muestra para que decida), y no hay aviso todavía.
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     const aviso = page.getByRole('alert').filter({ hasText: 'Primero acepta la invitación a esta mesa.' });
     await expect(aviso).toHaveCount(0);
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();

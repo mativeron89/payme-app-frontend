@@ -144,7 +144,7 @@ test.describe('D622 · AF-2 · la tarjeta con el estado de la mesa', () => {
     await sembrar(page);
     await page.goto(`/#/mesa/${CODE}`);
     await enTuMesaConLaLista(page);
-    await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
+    await page.getByRole('button', { name: 'Consumo de 300, $300', exact: true }).click();
     await expect(page.locator('.mi-meta-amt')).toHaveText('Elegido $300 de $840');
     await expect(titular(page)).toHaveText('Todavía no eligió nadie');
   });

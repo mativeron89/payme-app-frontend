@@ -138,7 +138,7 @@ test.describe('D588–D591 · «Compartir» el reparto', () => {
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: /Tagliatelle Bolognese/ }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await expect(page.locator('.mi-parte-amt')).toHaveText('$210.90');
     // Elegido pero sin «Listo»: no hay «Tu parte» guardada, no hay botón.
     await expect(page.getByRole('button', { name: 'Compartir', exact: true })).toHaveCount(0);
