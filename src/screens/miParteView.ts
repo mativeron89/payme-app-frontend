@@ -130,6 +130,11 @@ export function rotuloDeAjustes(renglon: RenglonDeAjustes, t: (s: string, ...arg
       : t('Redondeo');
 }
 
+/** Importe propio confirmado, o el estado explícito que publicó la mesa. */
+export function montoDePropina(setting: TipSetting | null, mia: MyShare, t: Traducir): string {
+  return setting === null ? t('Sin fijar') : formatMXN(mia.tip_cents);
+}
+
 /**
  * El rótulo de la propina en el desglose: con un %, «Propina (10 % de la
  * mesa)»; con «Otro», «Propina de la mesa»; sin fijar, «Propina» sin ningún %

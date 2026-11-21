@@ -2,7 +2,7 @@ import type { MyShare, ShareTotals, TipSetting } from '../api/miParte';
 import type { MesaStatus } from '../api/types';
 import { formatMXN } from '../utils/format';
 import { writeClipboardText } from '../utils/clipboard';
-import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina, signoDeAjustes } from './miParteView';
+import { montoDePropina, renglonDeAjustes, rotuloDeAjustes, rotuloDePropina, signoDeAjustes } from './miParteView';
 
 /**
  * D584 · D588–D591 · «Compartir» el reparto, entrega 1: el texto.
@@ -72,7 +72,7 @@ export function textoDelReparto(datos: DatosDelReparto, t: Traducir): string {
     t('Mi parte: {0}', formatMXN(mia.total_cents)),
     `  ${t('Mis platos')}: ${formatMXN(mia.items_cents)}`,
     ...(renglon ? [`  ${rotuloDeAjustes(renglon, t)}: ${montoDeAjustes(mia)}`] : []),
-    `  ${rotuloDePropina(datos.tipSetting, t)}: ${formatMXN(mia.tip_cents)}`,
+    `  ${rotuloDePropina(datos.tipSetting, t)}: ${montoDePropina(datos.tipSetting, mia, t)}`,
     t('Total del ticket: {0}', formatMXN(datos.totalDeLaMesaCents)),
     t('Dividido con PayMe · paymemx.com'),
   ].filter((linea) => linea.length > 0).join('\n');

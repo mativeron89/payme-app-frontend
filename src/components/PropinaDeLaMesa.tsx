@@ -76,13 +76,19 @@ export function PropinaDeLaMesa({
   const [otroTexto, setOtroTexto] = useState(esOtro && 'tip_cents' in mostrada ? centsToString(mostrada.tip_cents) : '');
   const [otroInvalido, setOtroInvalido] = useState(false);
   const [porConfirmar, setPorConfirmar] = useState<TipSetting | null>(null);
-  const confirmarRef = useRef<HTMLButtonElement | null>(null);
+  const fijarRef = useRef<HTMLButtonElement | null>(null);
+  const cambiarRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    if (porConfirmar) confirmarRef.current?.focus();
+    if (porConfirmar) cambiarRef.current?.focus();
   }, [porConfirmar]);
 
   const montoPorConfirmar = porConfirmar && 'tip_cents' in porConfirmar ? porConfirmar.tip_cents : null;
   const servicio = servicioImpreso(totales);
+
+  function cambiarMonto(): void {
+    setPorConfirmar(null);
+    fijarRef.current?.focus();
+  }
 
   const fijarOtro = (): void => {
     const setting = settingDeOtro(otroTexto);
@@ -139,7 +145,7 @@ export function PropinaDeLaMesa({
           aria-disabled={guardando || undefined}
           onClick={() => { if (!guardando) setOtroAbierto(true); }}
         >
-          {t('Otro')}
+          {t('Monto en pesos')}
         </button>
       </div>
       {otroAbierto && (
@@ -154,9 +160,13 @@ export function PropinaDeLaMesa({
             aria-label={t('Monto de la propina de la mesa')}
             aria-invalid={otroInvalido || undefined}
             onChange={(e) => { setOtroTexto(sanearOtro(e.target.value)); setOtroInvalido(false); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') fijarOtro(); }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              if (!event.repeat) fijarOtro();
+            }}
           />
-          <button type="button" className="btn btn-turquesa btn-sm btn-fit" disabled={guardando} onClick={fijarOtro}>
+          <button type="button" className="btn btn-turquesa btn-sm btn-fit" ref={fijarRef} disabled={guardando} onClick={fijarOtro}>
             {t('Fijar')}
           </button>
         </div>
@@ -165,21 +175,26 @@ export function PropinaDeLaMesa({
         <p className="propina-mesa-error" role="alert">{t('Escribe un monto, por ejemplo 150 o 150.50.')}</p>
       )}
       {porConfirmar && montoPorConfirmar !== null && totales && (
-        <div className="propina-mesa-confirmar" role="alertdialog" aria-labelledby={confirmTituloId}>
+        <div className="propina-mesa-confirmar" role="group" aria-labelledby={confirmTituloId}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            cambiarMonto();
+          }}>
           <p id={confirmTituloId}>
             {t('La propina ({0}) es más de 3 veces los platos de la mesa ({1}). ¿La dejas así?',
               formatMXN(montoPorConfirmar), formatMXN(totales.items_cents))}
           </p>
           <div className="propina-mesa-confirmar-acciones">
             <button
-              ref={confirmarRef}
               type="button"
               className="btn btn-turquesa btn-sm"
               onClick={() => { const s = porConfirmar; setPorConfirmar(null); onElegir(s); }}
             >
               {t('Sí, dejarla')}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPorConfirmar(null)}>
+            <button type="button" className="btn btn-ghost btn-sm" ref={cambiarRef} onClick={cambiarMonto}>
               {t('Cambiarla')}
             </button>
           </div>

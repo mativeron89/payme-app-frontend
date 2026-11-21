@@ -1573,4 +1573,8 @@ export const EN: Record<string, string> = {
   "Hay más grupos. Busca por nombre para encontrar el que quieres.": "There are more groups. Search by name to find the one you want.",
   "No pudimos comprobar la respuesta. Vamos a intentarlo otra vez en unos segundos; no necesitas hacer otra solicitud.": "We couldn't check the response. We'll try again in a few seconds; you don't need to send another request.",
   "No pudimos cancelar la solicitud. Prueba de nuevo.": "We couldn't cancel the request. Try again.",
+  "Monto en pesos": "Amount in pesos",
+  "Sin fijar": "Not set",
+  "Monto no disponible": "Amount unavailable",
+  "No pudimos calcular el importe de cada plato. El total de tu parte no cambia.": "We couldn't work out the amount for each dish. Your total doesn't change.",
 };

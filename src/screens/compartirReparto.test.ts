@@ -3,7 +3,7 @@ import type { MyShare, ShareTotals } from '../api/miParte';
 import { traducir, type Idioma } from '../i18n/idioma';
 import { formatMXN } from '../utils/format';
 import { compartirTexto, montoDeAjustes, textoDelReparto, type DatosDelReparto } from './compartirReparto';
-import { renglonDeAjustes, rotuloDeAjustes, rotuloDePropina } from './miParteView';
+import { montoDePropina, renglonDeAjustes, rotuloDeAjustes, rotuloDePropina } from './miParteView';
 
 /**
  * D588–D591 · «Compartir» el reparto, entrega 1 (texto). Las cuentas son las de
@@ -111,10 +111,17 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       'Así va la mesa (partes iguales, entre 4)',
       'Mi parte: $210',
       '  Mis platos: $210',
-      '  Propina: $0',
+      '  Propina: Sin fijar',
       'Total del ticket: $840',
       'Dividido con PayMe · paymemx.com',
     ]);
+  });
+
+  it('separa sin fijar de un cero elegido en ambos idiomas y conserva el total', () => {
+    const datos = { ...igualAbierta, totales: TOTALES_LIMPIOS, mia: MIA_LIMPIA };
+    expect(textoDelReparto({ ...datos, tipSetting: null }, en)).toContain('  Tip: Not set');
+    expect(textoDelReparto({ ...datos, tipSetting: { tip_bps: 0 } }, es)).toContain('  Propina (0 % de la mesa): $0');
+    expect(textoDelReparto({ ...datos, tipSetting: { tip_bps: 0 } }, en)).toContain('$0');
   });
 
   it('una sola persona: describe toda la cuenta sin invitar a pagar con pagos apagados', () => {
@@ -129,7 +136,7 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
       const renglon = renglonDeAjustes(datos.totales, datos.mia);
       expect(renglon).not.toBeNull();
       expect(texto).toContain(`  ${rotuloDeAjustes(renglon!, es)}: ${montoDeAjustes(datos.mia)}`);
-      expect(texto).toContain(`  ${rotuloDePropina(datos.tipSetting, es)}: ${formatMXN(datos.mia.tip_cents)}`);
+      expect(texto).toContain(`  ${rotuloDePropina(datos.tipSetting, es)}: ${montoDePropina(datos.tipSetting, datos.mia, es)}`);
       expect(texto).toContain(`Mi parte: ${formatMXN(datos.mia.total_cents)}`);
     }
   });

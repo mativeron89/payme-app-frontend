@@ -52,6 +52,7 @@ import {
   rotuloDeAjustes,
   rotuloDePartesIguales,
   rotuloDePropina,
+  montoDePropina,
   totalesDeLaMesa,
   vistaPreviaPorConsumo,
 } from './miParteView';
@@ -553,7 +554,9 @@ function DesgloseDeMiParte({
         {platos.map((plato) => (
           <div key={plato.id} className="mi-parte-plato">
             <dt>{plato.nombre}{plato.porcion && <span className="mi-parte-plato-porcion"> · {plato.porcion}</span>}</dt>
-            <dd>{plato.montoCents !== null ? formatMXN(plato.montoCents) : null}</dd>
+            <dd>{plato.montoCents !== null ? formatMXN(plato.montoCents) : (
+              <><span aria-hidden="true">—</span><span className="cuadre-ticket-anuncio">{t('Monto no disponible')}</span></>
+            )}</dd>
           </div>
         ))}
         {renglon && (
@@ -565,7 +568,7 @@ function DesgloseDeMiParte({
         {/* D360 · P47 · «Poner en negrita la propina»: el renglón entero. */}
         <div className="mi-parte-desglose-fila mi-parte-desglose-propina">
           <dt>{rotuloDePropina(tipSetting, t)}</dt>
-          <dd>{formatMXN(mia.tip_cents)}</dd>
+          <dd>{montoDePropina(tipSetting, mia, t)}</dd>
         </div>
         {cuentaPropina && (
           <div className="mi-parte-cuenta-propina"><dt>{t('Propina')}</dt><dd>{cuentaPropina}</dd></div>
@@ -575,6 +578,9 @@ function DesgloseDeMiParte({
           <dd>{formatMXN(mia.total_cents)}</dd>
         </div>
       </dl>
+      {platos.some(plato => plato.montoCents === null) && (
+        <p className="title-card-note"><Icon name="info" size={16} /><span>{t('No pudimos calcular el importe de cada plato. El total de tu parte no cambia.')}</span></p>
+      )}
       {textoParaCompartir !== null && (
         <div className="mi-parte-compartir">
           <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={() => { void compartir(); }}>
@@ -836,14 +842,14 @@ export function MesaDetailView({
    * parte guardada después de «Listo» y en partes iguales la del servidor. No en
    * la mesa de ejemplo: la guía no comparte ni copia (D367).
    */
-  const desgloseDeMiParte = totales && muestraElDesglose(mia, esConsumo) ? (
+  const desgloseDeMiParte = parteDelDueno.tipSetting !== undefined && totales && muestraElDesglose(mia, esConsumo) ? (
     <DesgloseDeMiParte
       totales={totales}
       mia={mia}
       items={mesa.items}
       esConsumo={esConsumo}
       partes={partes}
-      tipSetting={parteDelDueno.tipSetting ?? null}
+      tipSetting={parteDelDueno.tipSetting}
       abierto={miParteAbierta}
       onToggle={() => setMiParteAbierta((a) => !a)}
       textoParaCompartir={ejemplo ? null : textoDelReparto({
@@ -854,7 +860,7 @@ export function MesaDetailView({
         totalDeLaMesaCents: mesa.total_cents,
         totales,
         mia,
-        tipSetting: parteDelDueno.tipSetting ?? null,
+        tipSetting: parteDelDueno.tipSetting,
       }, t)}
     />
   ) : null;

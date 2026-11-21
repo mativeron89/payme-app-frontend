@@ -104,10 +104,12 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tu mesa' })).toBeVisible();
     await expect(desglose(page).locator('.desplegable-cabecera')).toHaveAttribute('aria-expanded', 'false');
-    expect(await filasDelDesglose(page)).toEqual(['Tus platos $1.34', 'Propina $0', 'Total $1.34']);
+    expect(await filasDelDesglose(page)).toEqual(['Tus platos $1.34', 'Propina Sin fijar', 'Total $1.34']);
     const platos = desglose(page).locator('.mi-parte-plato');
     await expect(platos.locator('dt')).toHaveText(['Plato fraccionado · ⅓', 'Plato entero']);
-    await expect(platos.locator('dd')).toHaveText(['', '']);
+    await expect(platos.locator('dd [aria-hidden]')).toHaveText(['—', '—']);
+    await expect(platos.locator('dd .cuadre-ticket-anuncio')).toHaveText(['Monto no disponible', 'Monto no disponible']);
+    await expect(desglose(page).getByText('No pudimos calcular el importe de cada plato. El total de tu parte no cambia.')).toHaveCount(1);
     await expect(desglose(page).locator('.mi-parte-cuenta-propina')).toHaveCount(0);
     const guardado = await desglose(page).innerText();
     await abrirTusConsumos(page);
@@ -288,3 +290,27 @@ test.describe('D344 · la propina de la mesa y «Mi parte»', () => {
     await expect(aviso).toHaveCount(0);
   });
 });
+
+for (const lugar of ['compartir', 'configuración'] as const) {
+  test(`propina alta desde ${lugar}: Escape y Enter ofrecen corregir el monto`, async ({ page }) => {
+    const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
+    if (lugar === 'configuración') {
+      await page.goto('/#/mesa/' + code);
+      await page.getByRole('button', { name: 'Configuración de la mesa' }).click();
+    }
+    const propina = selectorDePropina(page);
+    await propina.getByRole('button', { name: 'Monto en pesos' }).click();
+    const campo = propina.getByRole('textbox');
+    const fijar = propina.getByRole('button', { name: 'Fijar' });
+    await campo.fill('5000');
+    for (const tecla of ['Escape', 'Enter']) {
+      await campo.press('Enter');
+      const grupo = propina.getByRole('group', { name: /más de 3 veces/ });
+      await expect(grupo.getByRole('button', { name: 'Cambiarla' })).toBeFocused();
+      await page.keyboard.press(tecla);
+      await expect(grupo).toHaveCount(0);
+      await expect(fijar).toBeFocused();
+      expect(await pedidosDePropina(page)).toBe(0);
+    }
+  });
+}
