@@ -232,7 +232,7 @@ export function UnirmeConCodigo() {
     if (estado.paso !== 'esperando' || estado.cancelando) return;
     const { id } = estado;
     const generacion = generacionRef.current;
-    setEstado({ ...estado, cancelando: true });
+    setEstado({ ...estado, cancelando: true, reintento: false });
     try {
       await api.cancelJoinRequest(id);
       if (!vigente(generacion)) return;
@@ -362,7 +362,7 @@ export function UnirmeConCodigo() {
             )}
             <p className="unirse-texto">{t('Listo, le avisamos a quien abrió la mesa. Cuando te acepte, entras directo.')}</p>
             <div role="status" aria-live="polite" aria-atomic="true">
-              {!estado.reintento && <span className="cuadre-ticket-anuncio">{t('Esperando respuesta')}</span>}
+              {!estado.cancelando && !estado.reintento && <span className="cuadre-ticket-anuncio">{t('Esperando respuesta')}</span>}
               {estado.reintento && (
                 <p className="unirse-aviso">
                   <Icon name="info" size={16} />

@@ -1335,7 +1335,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
    * el mismo frame ven el mismo estado). El resultado lo decide `resultadoDeCerrar`.
    */
   async function cerrarMesa(): Promise<'resuelta' | 'reintentar'> {
-    if (!mesa || cerrandoRef.current || intentoSeleccionRef.current || listoEnVueloRef.current) return 'reintentar';
+    if (!mesa || cerrandoRef.current || intentoSeleccionRef.current || listoEnVueloRef.current) return 'resuelta';
     cerrandoRef.current = true;
     setCerrando(true);
     try {

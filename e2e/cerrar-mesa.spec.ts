@@ -285,3 +285,46 @@ for (const fallo of ['antes', 'después', 'timeout', '200 mal formado'] as const
     expect(await pedidosDeCierre(page)).toBe(1);
   });
 }
+
+for (const estado of ['selección incierta', 'Listo en vuelo'] as const) {
+  test(`cerrar con ${estado} descarta la hoja sin anunciar un fallo de cierre`, async ({ page }) => {
+    await mesaSinGarantia(page);
+    await page.locator('.qc-libre').first().click();
+    // Retener la lectura previa a lockItems aísla la guarda de Listo en vuelo.
+    let iniciarLectura: (() => void) | undefined;
+    const lectura = new Promise<void>(resolver => { iniciarLectura = resolver; });
+    if (estado === 'Listo en vuelo') {
+      await page.exposeFunction('lecturaDeListo', () => iniciarLectura?.());
+      await page.evaluate(async () => {
+        const ruta = '/src/api/index.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+        const leer = api.getMesa.bind(api);
+        api.getMesa = async (...args) => {
+          api.getMesa = leer;
+          await new Promise<void>(resolver => {
+            window.addEventListener('continuar-lectura-de-listo', () => resolver(), { once: true });
+            void (window as unknown as { lecturaDeListo(): Promise<void> }).lecturaDeListo();
+          });
+          return leer(...args);
+        };
+      });
+    } else {
+      await page.evaluate(async () => {
+        const ruta = '/src/api/index.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+        api.lockItems = async () => { throw new TypeError('red caída'); };
+      });
+    }
+    await page.getByRole('button', { name: /^(Listo|Continuar)$/ }).click();
+    const aviso = page.getByText('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.', { exact: true });
+    if (estado === 'Listo en vuelo') await lectura;
+    else await expect(aviso).toBeVisible();
+    await tocarCerrar(page);
+    await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
+    await expect(hoja(page)).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({ hasText: 'No pudimos confirmar el cierre' })).toHaveCount(0);
+    expect(await pedidosDeCierre(page)).toBe(0);
+    if (estado === 'selección incierta') await expect(aviso).toBeVisible();
+    else await page.evaluate(() => window.dispatchEvent(new Event('continuar-lectura-de-listo')));
+  });
+}

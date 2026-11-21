@@ -206,6 +206,21 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
   });
 
+  test('Escape devuelve el foco a la miniatura y quitar la única foto enfoca Volver', async ({ page }) => {
+    await sacar(page, 1);
+    const miniatura = fila(page).getByRole('button', { name: 'Ver la foto 1', exact: true });
+    await miniatura.click();
+    const visor = page.getByRole('dialog', { name: 'Foto 1', exact: true });
+    await expect(visor.getByRole('button', { name: 'Cerrar' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(visor).toHaveCount(0);
+    await expect(miniatura).toBeFocused();
+    await miniatura.press('Enter');
+    await visor.getByRole('button', { name: 'Quitar esta foto' }).click();
+    await expect(visor).toHaveCount(0);
+    await expect(page.locator('.camara').getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
+  });
+
   test('🔴 con 4 fotos, «Sacar otra» se deshabilita y una línea lo explica', async ({ page }) => {
     await sacar(page, 4);
     await expect(sacarOtra(page)).toBeDisabled();

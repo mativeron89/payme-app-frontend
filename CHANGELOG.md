@@ -1,6 +1,7 @@
 ## 0.279.0 · 2026-11-21
 
-- Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado.
+- Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado. Si hay una selección pendiente, la hoja se cierra y deja visible el estado del guardado.
+- Si el ticket no trae platos, se ofrece «Sacar otra foto». En la espera por código, el aviso distingue los errores al consultar de los errores al cancelar y vuelve a anunciar cada intento fallido.
 - La revisión del ticket explica qué revisar por plato. Al elegir un plato, el lector de pantalla anuncia el precio de la línea. La espera por código anuncia los cambios sin leer cada segundo.
 - Compartir una invitación avisa si se copió el link. La búsqueda de contactos y grupos indica cuándo hay más coincidencias.
 - «Tu parte» y su texto compartido muestran «Sin fijar» hasta que alguien elige la propina. Los platos sin un importe individual calculable llevan un guion y una explicación. El total se conserva.

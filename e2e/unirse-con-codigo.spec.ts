@@ -190,6 +190,8 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await expect(espera(page).locator('.unirse-pildora')).toBeVisible();
     // Desde expires_at (10 minutos), no 15:00 fijo.
     await expect(espera(page).getByRole('timer')).toHaveAttribute('aria-live', 'off');
+    const reloj = espera(page).locator('.unirse-vence');
+    expect(await reloj.evaluate(el => el.parentElement?.closest('[aria-live]:not([aria-live="off"])') === null)).toBe(true);
     await expect(espera(page).getByRole('status')).toHaveText('Esperando respuesta');
     await expect(espera(page).locator('.unirse-vence')).toHaveText(/^Vence en (10:00|09:5\d)$/);
     await expect(espera(page)).toContainText('Listo, le avisamos a quien abrió la mesa. Cuando te acepte, entras directo.');
@@ -300,6 +302,22 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await espera(page).getByRole('button', { name: 'Cancelar' }).click();
     await expect(espera(page).getByRole('status')).toHaveText('No pudimos cancelar la solicitud. Prueba de nuevo.');
     expect((await contar(page)).cancelaciones).toBe(1);
+    const mensajes: string[] = [];
+    await page.exposeFunction('anotarCancelacion', (texto: string) => mensajes.push(texto));
+    await espera(page).getByRole('status').evaluate(el => {
+      const ventana = window as unknown as { anotarCancelacion: (texto: string) => void };
+      new MutationObserver(() => ventana.anotarCancelacion(el.textContent ?? '')).observe(el, {
+        subtree: true, childList: true, characterData: true,
+      });
+    });
+    await espera(page).getByRole('button', { name: 'Cancelar' }).click();
+    await expect.poll(() => mensajes).toContain('No pudimos cancelar la solicitud. Prueba de nuevo.');
+    expect((await contar(page)).cancelaciones).toBe(2);
+    await page.evaluate(() => localStorage.removeItem('payme.app.mock.unirse.v1'));
+    await espera(page).getByRole('button', { name: 'Cancelar' }).click();
+    await expect(campo(page)).toHaveValue('');
+    await expect(espera(page)).toHaveCount(0);
+    expect((await contar(page)).cancelaciones).toBe(3);
   });
 
   test('A17 · vencida: el mismo «no se pudo»', async ({ page }) => {

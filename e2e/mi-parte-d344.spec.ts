@@ -314,3 +314,47 @@ for (const lugar of ['compartir', 'configuración'] as const) {
     }
   });
 }
+
+for (const lugar of ['compartir', 'configuración'] as const) {
+  for (const activacion of ['clic', 'Enter'] as const) {
+    test(`propina alta desde ${lugar}: Sí, dejarla con ${activacion} guarda una sola vez`, async ({ page }) => {
+      const code = await hastaCompartir(page, { ocr: 'descuento', modo: 'consumo' });
+      if (lugar === 'configuración') {
+        await page.goto('/#/mesa/' + code);
+        await abrirConfiguracionDeLaMesa(page);
+      }
+      const envios: unknown[] = [];
+      await page.exposeFunction('anotarPropina', (setting: unknown) => envios.push(setting));
+      await page.evaluate(async () => {
+        const ruta = '/src/api/index.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+        const enviar = api.fijarPropinaDeLaMesa.bind(api);
+        api.fijarPropinaDeLaMesa = async (...args) => {
+          await (window as unknown as { anotarPropina(setting: unknown): Promise<void> }).anotarPropina(args[1]);
+          return enviar(...args);
+        };
+      });
+      const propina = selectorDePropina(page);
+      await propina.getByRole('button', { name: 'Monto en pesos' }).click();
+      const campo = propina.getByRole('textbox');
+      await campo.fill('5000');
+      const grupo = propina.getByRole('group', { name: /más de 3 veces/ });
+      await campo.dispatchEvent('keydown', { key: 'Enter', repeat: true });
+      await expect(grupo).toHaveCount(0);
+      await campo.press('Enter');
+      const confirmar = grupo.getByRole('button', { name: 'Sí, dejarla', exact: true });
+      if (activacion === 'clic') await confirmar.click();
+      else {
+        await confirmar.focus();
+        await page.keyboard.down('Enter');
+        await page.keyboard.down('Enter');
+        await page.keyboard.up('Enter');
+      }
+      await expect(grupo).toHaveCount(0);
+      await expect(propina.getByRole('button', { name: 'Quitar la propina' })).toBeVisible();
+      await expect(campo).toHaveValue(/^5000(?:\.00)?$/);
+      expect(envios).toEqual([{ tip_cents: 500000 }]);
+      expect(await pedidosDePropina(page)).toBe(1);
+    });
+  }
+}
