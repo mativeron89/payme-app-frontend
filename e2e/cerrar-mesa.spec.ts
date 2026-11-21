@@ -252,3 +252,36 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await expect(hoja(page).getByRole('button', { name: 'Reintentar cierre' })).toBeFocused();
   });
 });
+
+for (const fallo of ['antes', 'después', 'timeout', '200 mal formado'] as const) {
+  test(`cierre con respuesta incierta · ${fallo}`, async ({ page }) => {
+    await mesaSinGarantia(page);
+    await tocarCerrar(page);
+    await page.evaluate(async (causa) => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const cerrar = api.closeMesa.bind(api);
+      api.closeMesa = async (...args) => {
+        api.closeMesa = cerrar;
+        if (causa === 'después') await cerrar(...args);
+        if (causa === 'timeout') throw new DOMException('timeout', 'AbortError');
+        if (causa === '200 mal formado') {
+          const rutaDecoder = '/src/api/cerrarMesa.ts';
+          const { decodeMesaCerrada } = await import(/* @vite-ignore */ rutaDecoder) as typeof import('../src/api/cerrarMesa');
+          return decodeMesaCerrada({});
+        }
+        throw new TypeError('respuesta perdida');
+      };
+    }, fallo);
+    await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
+    if (fallo !== 'después') {
+      const reintentar = hoja(page).getByRole('button', { name: 'Reintentar cierre' });
+      await expect(reintentar).toBeFocused();
+      expect(await pedidosDeCierre(page)).toBe(0);
+      await reintentar.click();
+    }
+    await expect(page.getByText('La cerraste tú.')).toBeVisible();
+    await expect(hoja(page)).toHaveCount(0);
+    expect(await pedidosDeCierre(page)).toBe(1);
+  });
+}

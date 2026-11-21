@@ -1,3 +1,4 @@
+import { sacarFoto } from './_camara';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { abrirMesaConLink, ingresar, irEnLaApp } from './_app';
 
@@ -129,4 +130,24 @@ test.describe('D202 · H-04 · el foco no sale de las hojas modales', () => {
     await expect(hoja.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
     await contieneElFoco(page, hoja, () => hoja.getByRole('button', { name: 'Cerrar', exact: true }).click());
   });
+});
+
+test('la capa de salida de las fotos contiene Tab y devuelve Escape a Volver', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.ocr_pages.v1', 'encendido'));
+  await ingresar(page);
+  await page.getByRole('button', { name: 'Escanear', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const ruta = '/src/api/ocrPaginas.ts';
+    const { capacidadOcrPaginas } = await import(/* @vite-ignore */ ruta);
+    return capacidadOcrPaginas() !== null;
+  })).toBe(true);
+  await sacarFoto(page, undefined, { usar: false });
+  const volver = page.locator('.fotos-al-volver .camara-volver');
+  await volver.click();
+  const capa = page.getByRole('alertdialog');
+  for (const tecla of ['Tab', 'Shift+Tab'] as const) {
+    expect((await recorrer(page, capa, tecla)).size).toBe(2);
+  }
+  await page.keyboard.press('Escape');
+  await expect(volver).toBeFocused();
 });

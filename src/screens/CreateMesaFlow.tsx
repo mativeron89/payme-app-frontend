@@ -1506,6 +1506,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     const siguientes = tandaRef.current.filter((f) => f.id !== id);
     tandaRef.current = siguientes;
     setTanda(siguientes);
+    if (siguientes.length === 0) {
+      // Al quitar la única foto desaparece «Listo». El teclado vuelve a la cámara.
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.camara .camara-volver')?.focus());
+    }
     setAvisoDeLaTanda(null);
     if (scanIssue === 'limite_partes') setScanIssue(null);
   }
@@ -3298,7 +3302,23 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               vivía en la clase `sel`, así que un lector de pantalla no podía
               decir cuál estaba elegido ni que fueran alternativas de una misma
               pregunta. `radiogroup` + `aria-checked` lo dicen. */}
-          <div data-guia="reparto" className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
+          <div data-guia="reparto" className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}
+            onKeyDown={(event) => {
+              const opciones = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+              const actual = opciones.indexOf(event.target as HTMLButtonElement);
+              if (actual < 0) return;
+              let siguiente: number;
+              switch (event.key) {
+                case 'Home': siguiente = 0; break;
+                case 'End': siguiente = opciones.length - 1; break;
+                case 'ArrowLeft': case 'ArrowUp': siguiente = (actual + opciones.length - 1) % opciones.length; break;
+                case 'ArrowRight': case 'ArrowDown': siguiente = (actual + 1) % opciones.length; break;
+                default: return;
+              }
+              event.preventDefault();
+              opciones[siguiente]?.focus();
+              opciones[siguiente]?.click();
+            }}>
           {/* D366 · cada forma lleva un «?» que la explica, para todos. Es un
               botón HERMANO del radio (nunca adentro); uno abierto a la vez.
               Textos del paquete de Claude Design, salvo «Pagar el total»: ahí
@@ -3319,6 +3339,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
               <button
                 className={`div-card ${division === op.modo ? 'sel' : ''}`}
                 role="radio"
+                tabIndex={division === op.modo ? 0 : -1}
                 aria-checked={division === op.modo}
                 onClick={() => {
                   setDivision(op.modo);

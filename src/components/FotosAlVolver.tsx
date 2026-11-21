@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
+import { contenerTab } from './useHojaModal';
 import { Icon } from './Icon';
 
 /**
@@ -73,6 +74,16 @@ export function FotosAlVolver({
   const cerrarVistaRef = useRef<HTMLButtonElement | null>(null);
   const seguirRef = useRef<HTMLButtonElement | null>(null);
 
+  const capaRef = useRef<HTMLDivElement>(null);
+  const volverRef = useRef<HTMLButtonElement>(null);
+  const listoRef = useRef<HTMLButtonElement>(null);
+  const miniaturas = useRef(new Map<number, HTMLButtonElement>());
+
+  function seguirSacando(): void {
+    setConfirmandoSalida(false);
+    volverRef.current?.focus();
+  }
+
   // Al aparecer la pantalla el foco va al título: la cámara se cerró y quien usa lector sabe dónde está.
   useEffect(() => {
     tituloRef.current?.focus();
@@ -102,9 +113,12 @@ export function FotosAlVolver({
   useEffect(() => {
     if (!fotoEnVista && !confirmandoSalida) return undefined;
     const alTeclado = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setVista(null);
-      setConfirmandoSalida(false);
+      if (e.key === 'Escape') {
+        if (fotoEnVista) {
+          setVista(null);
+          miniaturas.current.get(fotoEnVista.id)?.focus();
+        } else seguirSacando();
+      } else if (capaRef.current) contenerTab(e, capaRef.current);
     };
     document.addEventListener('keydown', alTeclado);
     return () => document.removeEventListener('keydown', alTeclado);
@@ -115,6 +129,7 @@ export function FotosAlVolver({
       <div className="camara-arriba">
         <button
           type="button"
+          ref={volverRef}
           className="camara-volver"
           onClick={() => (fotos.length > 0 ? setConfirmandoSalida(true) : onSalir())}
         >
@@ -159,6 +174,10 @@ export function FotosAlVolver({
             <li key={f.id}>
               <button
                 type="button"
+                ref={(boton) => {
+                  if (boton) miniaturas.current.set(f.id, boton);
+                  else miniaturas.current.delete(f.id);
+                }}
                 className="fotos-al-volver-mini"
                 aria-label={t('Ver la foto {0}', previas + i + 1)}
                 onClick={() => setVista(f.id)}
@@ -173,6 +192,7 @@ export function FotosAlVolver({
         </ol>
         <button
           type="button"
+          ref={listoRef}
           className="fotos-al-volver-listo"
           onClick={onListo}
           disabled={fotos.length === 0}
@@ -194,7 +214,7 @@ export function FotosAlVolver({
       )}
 
       {fotoEnVista && (
-        <div className="fotos-al-volver-capa" role="dialog" aria-modal="true" aria-label={t('Foto {0}', previas + indiceEnVista + 1)}>
+        <div ref={capaRef} className="fotos-al-volver-capa" role="dialog" aria-modal="true" aria-label={t('Foto {0}', previas + indiceEnVista + 1)}>
           {fotoEnVista.vista ?? fotoEnVista.miniatura
             ? <img className="fotos-al-volver-grande" src={(fotoEnVista.vista ?? fotoEnVista.miniatura)!} alt="" draggable={false} />
             : <Icon name="receipt" size={48} />}
@@ -204,13 +224,18 @@ export function FotosAlVolver({
               className="camara-galeria"
               onClick={() => {
                 setVista(null);
+                const siguiente = fotos[indiceEnVista + 1];
+                (siguiente ? miniaturas.current.get(siguiente.id) : listoRef.current)?.focus();
                 onQuitar(fotoEnVista.id);
               }}
             >
               <Icon name="trash" size={20} />
               <span>{t('Quitar esta foto')}</span>
             </button>
-            <button type="button" className="camara-usar" ref={cerrarVistaRef} onClick={() => setVista(null)}>
+            <button type="button" className="camara-usar" ref={cerrarVistaRef} onClick={() => {
+              setVista(null);
+              miniaturas.current.get(fotoEnVista.id)?.focus();
+            }}>
               {t('Cerrar')}
             </button>
           </div>
@@ -219,6 +244,7 @@ export function FotosAlVolver({
 
       {confirmandoSalida && (
         <div
+          ref={capaRef}
           className="fotos-al-volver-capa fotos-al-volver-capa--pregunta"
           role="alertdialog"
           aria-modal="true"
@@ -230,7 +256,7 @@ export function FotosAlVolver({
             <p id="fotos-al-volver-salir-texto">
               {fotos.length === 1 ? t('Se pierde la foto que sacaste.') : t('Se pierden las {0} fotos que sacaste.', fotos.length)}
             </p>
-            <button type="button" className="btn btn-navy" ref={seguirRef} onClick={() => setConfirmandoSalida(false)}>
+            <button type="button" className="btn btn-navy" ref={seguirRef} onClick={seguirSacando}>
               {t('Seguir sacando')}
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => { setConfirmandoSalida(false); onSalir(); }}>

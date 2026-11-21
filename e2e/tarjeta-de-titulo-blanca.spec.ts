@@ -266,7 +266,7 @@ test('mesa · pagar mi parte → ¡Listo!', async ({ page }) => {
   });
   await page.goto('/#/mesa/PA-3121');
   await enTuMesaConLaLista(page);
-  await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
+  await page.getByRole('button', { name: 'Omakase para dos, $260', exact: true }).click();
   await page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' }).getByRole('radio', { name: '⅓', exact: true }).click();
   await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();

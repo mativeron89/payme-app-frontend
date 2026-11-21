@@ -63,6 +63,20 @@ function aplicarInerte(): void {
 /** Lo que el teclado recorre dentro de la hoja. */
 const ENFOCABLES = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Mantiene el recorrido de Tab en los controles de la capa visible. */
+export function contenerTab(event: KeyboardEvent, capa: HTMLElement): void {
+  if (event.key !== 'Tab') return;
+  const enfocables = [...capa.querySelectorAll<HTMLElement>(ENFOCABLES)];
+  const primero = enfocables[0];
+  const ultimo = enfocables[enfocables.length - 1];
+  if (!primero || !ultimo) return;
+  const activo = document.activeElement;
+  if (!capa.contains(activo) || (event.shiftKey ? activo === primero : activo === ultimo)) {
+    event.preventDefault();
+    (event.shiftKey ? ultimo : primero).focus();
+  }
+}
+
 export function useHojaModal(
   hoja: RefObject<HTMLElement | null>,
   inicial: RefObject<HTMLElement | null>,
@@ -85,23 +99,7 @@ export function useHojaModal(
         cerrar.current();
         return;
       }
-      if (event.key !== 'Tab') return;
-      const el = hoja.current;
-      if (!el) return;
-      const enfocables = [...el.querySelectorAll<HTMLElement>(ENFOCABLES)];
-      const primero = enfocables[0];
-      const ultimo = enfocables[enfocables.length - 1];
-      if (!primero || !ultimo) return;
-      // Desde afuera de la hoja (un toque en el velo deja el foco en `body`) no
-      // hace falta nada: con `.app` inerte, lo único enfocable es la hoja.
-      const activo = document.activeElement;
-      if (event.shiftKey && activo === primero) {
-        event.preventDefault();
-        ultimo.focus();
-      } else if (!event.shiftKey && activo === ultimo) {
-        event.preventDefault();
-        primero.focus();
-      }
+      if (hoja.current) contenerTab(event, hoja.current);
     };
     document.addEventListener('keydown', alTeclado);
     return () => {

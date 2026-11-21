@@ -80,7 +80,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
 
     await page.goto('/#/mesa/PA-3121');
     await abrirTusConsumos(page);
-    await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
+    await page.getByRole('button', { name: 'Omakase para dos, $260', exact: true }).click();
     await expect(page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' }).getByRole('radio'))
       .toHaveText(['Entero', '½', '⅓', '¼']);
     await capturar(page, 'm01-igual-cuatro');

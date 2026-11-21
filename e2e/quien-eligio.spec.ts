@@ -244,6 +244,8 @@ test.describe('D622 · AF-4 · quién eligió cada plato', () => {
     const cabecera = page.getByRole('region', { name: 'Your items', exact: true }).locator('.desplegable-cabecera');
     if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
     const tiramisu = renglon(page, 'Tiramisú').locator('[data-estado="tomado"]');
+    await expect(renglon(page, 'Pizza Margherita').locator('.qc-libre')).toHaveAccessibleName('Pizza Margherita, $185, AM picked it, ½ left');
+    await expect(renglon(page, 'Risotto ai Funghi').locator('.qc-libre')).toHaveAccessibleName('Risotto ai Funghi, $220');
     await expect(tiramisu.locator('.qc-quien .qc-etiqueta')).toHaveText('AM picked it');
     await expect(page.locator('.estado-mesa-personas-texto')).toHaveText('2 of 4 have joined');
   });

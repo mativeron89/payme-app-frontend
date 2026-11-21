@@ -156,6 +156,8 @@ const ESPANOL_LEGITIMO = new Set([
   'podrás',
   // D363 · 2d (texto de la ficha del tutorial): «Aquí invitarás a tus amigos…». Futuro de tú, no voseo.
   'invitarás',
+  // UX-15 · «verás el cierre completado» es el futuro de ver.
+  'verás',
   // AF2 · futuro de tercera persona del texto aprobado de la puerta (decisión
   // 46): «se mostrará a tus amigos». No es voseo.
   'mostrará',
@@ -282,6 +284,8 @@ describe('el producto habla español mexicano', () => {
     expect(vosesEn('Bogotá: otra persona heredará esta selección.')).toEqual([]);
     expect(vosesEn('Heredá')).toEqual(['Heredá']);
     expect(vosesEn('Heredás')).toEqual(['Heredás']);
+    expect(vosesEn('verás el cierre completado')).toEqual([]);
+    expect(vosesEn('Confirmás el cierre')).toEqual(['Confirmás']);
   });
 
   it('🔴 el copy convertido de verdad pasa la guarda', () => {

@@ -1,3 +1,11 @@
+## 0.279.0 · 2026-11-21
+
+- Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado.
+- La revisión del ticket explica qué revisar por plato. Al elegir un plato, el lector de pantalla anuncia el precio de la línea. La espera por código anuncia los cambios sin leer cada segundo.
+- Compartir una invitación avisa si se copió el link. La búsqueda de contactos y grupos indica cuándo hay más coincidencias.
+- «Tu parte» y su texto compartido muestran «Sin fijar» hasta que alguien elige la propina. Los platos sin un importe individual calculable llevan un guion y una explicación. El total se conserva.
+- La opción «Monto en pesos» conserva la confirmación de propina alta y enfoca «Cambiarla». Las opciones de división y el visor de fotos admiten navegación por teclado.
+
 ## 0.278.2 · 2026-11-20
 
 - Si la carga de una mesa falla por la red, la app ofrece reintentar con el mismo mensaje en todos los navegadores. En inglés, el error inesperado dice «Try again.».

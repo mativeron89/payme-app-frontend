@@ -127,7 +127,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await enTuMesaConLaLista(page);
     expect(await nMesa()).toBe(4);
 
-    await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
+    await page.getByRole('button', { name: 'Omakase para dos, $260', exact: true }).click();
     const fracciones = page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' });
     await expect(fracciones.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
     await fracciones.getByRole('radio', { name: '⅓', exact: true }).click();

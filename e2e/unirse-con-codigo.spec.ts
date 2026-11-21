@@ -418,10 +418,20 @@ test.describe('C · la espera se consulta cada 10 s a la vista, y nunca en segun
     await abrirYEscribir(page, '12345');
     await solicitar(page).click();
     await expect(espera(page)).toBeVisible();
+    const anuncios: string[] = [];
+    await page.exposeFunction('anotarAnuncio', (texto: string) => anuncios.push(texto));
+    await espera(page).getByRole('status').evaluate(el => {
+      const ventana = window as unknown as { anotarAnuncio: (texto: string) => void };
+      new MutationObserver(() => ventana.anotarAnuncio(el.textContent ?? '')).observe(el, {
+        subtree: true, characterData: true, childList: true,
+      });
+    });
     await page.clock.runFor(9_000);
     expect((await contar(page)).consultas).toBe(0);
     await page.clock.runFor(1_100);
     await expect.poll(async () => (await contar(page)).consultas).toBe(1);
+    await page.clock.runFor(5_000);
+    expect(anuncios).toEqual([]);
     // El contador baja con el reloj.
     await expect(espera(page).locator('.unirse-vence')).toHaveText(/^Vence en 14:(4\d|5\d)$/);
   });

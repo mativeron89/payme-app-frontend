@@ -189,14 +189,20 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     const vista = page.getByRole('dialog', { name: 'Foto 2', exact: true });
     await expect(vista).toBeVisible();
     await expect(vista.getByRole('button', { name: 'Cerrar', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(vista.getByRole('button', { name: 'Quitar esta foto' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(vista.getByRole('button', { name: 'Cerrar' })).toBeFocused();
     await capturar(page, 'es-foto-grande');
     await vista.getByRole('button', { name: 'Quitar esta foto', exact: true }).click();
     await expect(vista).toHaveCount(0);
+    await expect(fila(page).getByRole('button', { name: 'Ver la foto 2' })).toBeFocused();
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
     await expect(fila(page).locator('.fotos-al-volver-numero')).toHaveText(['1', '2']);
     // Cerrar sin quitar no cambia nada.
     await fila(page).getByRole('button', { name: 'Ver la foto 1', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(fila(page).getByRole('button', { name: 'Ver la foto 1' })).toBeFocused();
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
   });
 
@@ -222,6 +228,7 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await capturar(page, 'es-salir');
     await pregunta.getByRole('button', { name: 'Seguir sacando', exact: true }).click();
     await expect(pregunta).toHaveCount(0);
+    await expect(alVolver(page).getByRole('button', { name: 'Volver' })).toBeFocused();
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
     await expect(page).toHaveURL(/\/scan$/);
     await alVolver(page).getByRole('button', { name: 'Volver', exact: true }).click();

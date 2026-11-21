@@ -213,3 +213,49 @@ for (let index = 0; index < 6; index += 1) {
     await expect(precio).toBeFocused();
   });
 }
+
+for (const idioma of ['es', 'en'] as const) {
+  test(`UX-03 · el motivo de lectura se ve al revisar y editar, con letra ampliada (${idioma})`, async ({ page }) => {
+    await ticket(page, 84001, idioma, 'baja');
+    const fila = page.locator('.tk-row').filter({ hasText: 'Pizza Margherita' });
+    const motivo = idioma === 'es' ? 'No se leyó bien: revísalo con el ticket.' : 'Hard to read: check it against the receipt.';
+    await expect(fila.locator('.tk-motivo')).toHaveText(motivo);
+    await expect(fila.locator('.tk-confidence-warning')).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.locator('.tk-row:not(.tk-row-warning) .tk-motivo')).toHaveCount(0);
+    const tamanos = await fila.locator('.tk-name, .tk-motivo').evaluateAll(els => els.map(el => parseFloat(getComputedStyle(el).fontSize)));
+    for (const width of [320, 375, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const escala of [1.5, 2]) {
+        await fila.locator('.tk-name, .tk-motivo').evaluateAll((els, args) => els.forEach((el, i) => {
+          (el as HTMLElement).style.fontSize = args.tamanos[i]! * args.escala + 'px';
+          (el as HTMLElement).style.lineHeight = '1.4';
+        }), { tamanos, escala });
+        const caja = await fila.locator('.tk-motivo').boundingBox();
+        const lapiz = await fila.locator('.tk-pencil').boundingBox();
+        expect(caja!.x).toBeGreaterThanOrEqual(0);
+        expect(caja!.x + caja!.width).toBeLessThanOrEqual(lapiz!.x + 1);
+        expect(lapiz!.x + lapiz!.width).toBeLessThanOrEqual(width);
+        expect(lapiz!.height).toBeGreaterThanOrEqual(44);
+        expect(await fila.locator('.tk-motivo').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+      }
+    }
+    await fila.locator('.tk-pencil').click();
+    await expect(page.locator('.tk-edit .tk-motivo')).toHaveText(motivo);
+  });
+}
+
+for (const [impreso, esperado] of [
+  [65500, '¿Está repetido? Revísalo con el ticket.'],
+  [102500, 'Revisa la cantidad con el ticket.'],
+  [67350, 'Revisa el precio: puede tener un dígito de más o de menos.'],
+  [18359, 'Este importe es mayor que todo el ticket. Revísalo.'],
+] as const) {
+  test(`UX-03 · cuando coinciden dos marcas prevalece «${esperado}»`, async ({ page }) => {
+    await ticket(page, impreso, 'es', 'baja');
+    const fila = page.locator('.tk-row').filter({ hasText: 'Pizza Margherita' });
+    await expect(fila.locator('.tk-confidence-warning[aria-hidden="true"]')).toHaveCount(2);
+    await expect(fila.locator('.tk-motivo')).toHaveText([esperado]);
+    await fila.locator('.tk-pencil').click();
+    await expect(page.locator('.tk-edit .tk-motivo')).toHaveText([esperado]);
+  });
+}

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { medirTextoAmpliado } from './fixtures/medirTextoAmpliado';
 import { sacarFoto } from './_camara';
 import { hastaCompartir, pedidosDePropina } from './fixtures/mi-parte-d344';
 
@@ -58,7 +59,9 @@ for (const lang of ['es', 'en'] as const) {
   for (const sinCobro of [true, false]) {
     test(`U6/U7 · nombre y ayuda de la división (${lang}, cobro ${sinCobro ? 'apagado' : 'activo'})`, async ({ page }) => {
       await dividir(page, lang, sinCobro);
-      await expect(page.getByRole('radio', { name: lang === 'en' ? /^Everyone their own/ : /^Cada uno lo suyo/ })).toBeVisible();
+      const consumo = page.getByRole('radio', { name: lang === 'en' ? /^Everyone their own/ : /^Cada uno lo suyo/ });
+    await expect(consumo).toBeVisible();
+    if (sinCobro) await medirTextoAmpliado(page, consumo.locator('.div-title'), false);
       await page.locator('.div-opcion').first().getByRole('button').click();
       const esperado = lang === 'en'
         ? (sinCobro ? 'Everyone marks what they had.' : 'Everyone picks their items and pays for what they had.')
@@ -108,4 +111,24 @@ test('U15 · flechas sólo mueven el foco, Enter y Espacio guardan una vez', asy
   await expect.poll(() => pedidosDePropina(page)).toBe(2);
   await expect(diez).toHaveAttribute('aria-pressed', 'true');
   await capture(page, 'propina-teclado');
+});
+
+test('las flechas seleccionan como un toque y vuelven a pedir un número insuficiente', async ({ page }) => {
+  await dividir(page, 'es', true);
+  const modos = page.locator('.division-options').getByRole('radio');
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await expect(page.locator('.division-stepper')).not.toHaveClass(/--pending/);
+  await modos.nth(0).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(modos.nth(1)).toBeFocused();
+  await expect(modos.nth(1)).toBeChecked();
+  await expect(page.locator('.division-stepper')).toHaveClass(/--pending/);
+  for (const [tecla, indice] of [['End', 2], ['ArrowDown', 0], ['ArrowUp', 2], ['Home', 0]] as const) {
+    await page.keyboard.press(tecla);
+    await expect(modos.nth(indice)).toBeChecked();
+    await expect(modos.nth(indice)).toBeFocused();
+    await expect(modos.nth(indice)).toHaveAttribute('tabindex', '0');
+  }
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.div-opcion').first().getByRole('button')).toBeFocused();
 });
