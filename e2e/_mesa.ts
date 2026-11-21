@@ -67,7 +67,11 @@ export async function confirmarGuardadoDeMesa(page: Page): Promise<void> {
     .getByRole('button', { name: /^(Guardar|Save)$/, exact: true }).click();
 }
 
-export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'normal' | 'retenida' | 'rechazada' | 'rechazo-definitivo' = 'normal') {
+type RechazoDeSeleccion = 'item_already_locked' | 'fraction_not_available' | 'validation_error';
+
+export async function observarEscriturasDeSeleccion(
+  page: Page, respuesta: 'normal' | 'retenida' | 'rechazada' | RechazoDeSeleccion = 'normal',
+) {
   await page.evaluate(async (respuesta) => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Api };
@@ -83,8 +87,10 @@ export async function observarEscriturasDeSeleccion(page: Page, respuesta: 'norm
     async function antesDeEscribir() {
       body.dataset.escriturasDeSeleccion = String(Number(body.dataset.escriturasDeSeleccion) + 1);
       if (respuesta === 'retenida') await ack;
-      if (respuesta === 'rechazo-definitivo') throw new MockApiError(409, 'item_already_locked');
       if (respuesta === 'rechazada') throw Object.assign(new Error('Rechazo de la fixture'), { status: 403 });
+      if (respuesta !== 'normal' && respuesta !== 'retenida') {
+        throw new MockApiError(respuesta === 'validation_error' ? 400 : 409, respuesta);
+      }
     }
     api.lockItems = async (...args) => {
       await antesDeEscribir();

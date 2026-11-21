@@ -241,18 +241,24 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
   });
 
-  test(`D879 · Volver con rechazo definitivo conserva la mesa y el foco (${idioma})`, async ({ page }) => {
-    const { volver, dialogo, guardar } = await prepararVolver(page, en);
-    await observarEscriturasDeSeleccion(page, 'rechazo-definitivo');
-    await volver.click();
-    await dialogo.getByRole('button', { name: guardar, exact: true }).click();
-    await expect(dialogo).toHaveCount(0);
-    await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
-    await expect(page.getByText(en ? 'Someone already claimed one of those items' : 'Alguien ya tomó uno de esos consumos', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(mesa);
-    await expect(volver).toBeFocused();
-    await expect(page.locator('.mesa-guardado')).toHaveCount(0);
-  });
+  for (const [codigo, enTexto, esTexto] of [
+    ['item_already_locked', 'Someone already claimed one of those items', 'Alguien ya tomó uno de esos consumos'],
+    ['fraction_not_available', 'That dish is fully claimed', 'Ese plato ya está completo'],
+    ['validation_error', "We couldn't reserve what you picked", 'No pudimos reservar lo que elegiste'],
+  ] as const) {
+    test(`D879 · Volver con rechazo definitivo ${codigo} conserva la mesa y el foco (${idioma})`, async ({ page }) => {
+      const { volver, dialogo, guardar } = await prepararVolver(page, en);
+      await observarEscriturasDeSeleccion(page, codigo);
+      await volver.click();
+      await dialogo.getByRole('button', { name: guardar, exact: true }).click();
+      await expect(dialogo).toHaveCount(0);
+      await expect(lecturas(page)).toHaveAttribute('data-escrituras-de-seleccion', '1');
+      await expect(page.getByText(en ? enTexto : esTexto, { exact: true })).toBeVisible();
+      await expect(page).toHaveURL(mesa);
+      await expect(volver).toBeFocused();
+      await expect(page.locator('.mesa-guardado')).toHaveCount(0);
+    });
+  }
 
   test(`D879 · Volver con guardado fallido se queda en la mesa y conserva el foco (${idioma})`, async ({ page }) => {
     const { volver, dialogo, guardar } = await prepararVolver(page, en);

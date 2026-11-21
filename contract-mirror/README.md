@@ -1,4 +1,19 @@
-## AF-8 · protecciones de Viajes y el reespejo de 2.214.0 · 0.275.20
+## AF-9 · D886 · el reespejo de la vista previa de 2.214.2 · 0.278.2
+
+Contenido vigente: `6037cd0e5e8174cc235546d27e59e96df6158a1b`.
+Inventario íntegro de 175 entradas tomado del dueño App Backend 2.214.2, `main` en
+`ec9f8b8ebe4cd774c675e09499e56d50fc81e174` (medido por VI y asentado en C232D),
+`contract/mirror-inventory.json`, sha256 `04e81dcf71ac4958d6e28c2a793389ec69cb0dacf968ac7608c34b0f39441ad7`,
+adoptado con `--adoptar-inventario`, sin editarlo. **25 archivos espejados**, todos JSON de `contract/`;
+**150 fuentes sólo por hash**, conforme D268. El commit del inventario identifica el contenido;
+el SHA de main identifica la publicación del inventario.
+
+Se copia `contract/invitacion-preview-v1.json` byte a byte. Cambian sólo por hash `middleware/auth.js`, `routes/invitationPreview.js`, `routes/invitations.js`, `services/invitationAuthority.js`.
+Los hechos se regeneran en local contra `6037cd0e`. La app sigue pidiendo la vista previa sin sesión (D886).
+Los sha256 de `services/parteDeMesa.js` y `utils/money.js` coinciden con el inventario anterior.
+`PROCEDENCIA.commit` de `src/api/mock/parteDeMesa.ts` pasa al commit del contenido.
+
+### Refresh anterior · AF-8 · protecciones de Viajes y el reespejo de 2.214.0 · 0.275.20
 
 Contenido vigente: `8a82fd0a23dbd41c36e0144da4bd48086fff2c78`.
 Inventario íntegro de 175 entradas tomado del dueño App Backend 2.214.0, `main` en
