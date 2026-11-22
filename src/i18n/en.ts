@@ -1474,12 +1474,10 @@ export const EN: Record<string, string> = {
   "Revisa la cantidad con el ticket.": "Check the quantity against the receipt.",
   "Revisa el precio: puede tener un dígito de más o de menos.": "Check the price: it may have one digit too many or too few.",
   "Este importe es mayor que todo el ticket. Revísalo.": "This amount is larger than the whole receipt. Check it.",
-  // D547 · la pantalla al volver de la cámara nativa: la foto se achica abajo a la izquierda, «Sacar otra» y el ✓.
+  // D935 · la última foto, las miniaturas y las acciones al volver de la cámara nativa.
   // Escrito por App Frontend; «ticket» va como «receipt» (D481).
   "Sacaste 1 foto.": "You took 1 photo.",
   "Sacaste {0} fotos.": "You took {0} photos.",
-  "Toca ✓ para ajustar el recuadro.": "Tap ✓ to adjust the frame.",
-  "Si el ticket es largo, saca otra parte. Si no, toca ✓.": "If the receipt is long, take another part. If not, tap ✓.",
   "Ya tienes {0} fotos, el máximo por ticket.": "You have {0} photos, the most per receipt.",
   "No pudimos usar la foto {0}. Quítala y saca otra.": "We couldn't use photo {0}. Remove it and take another.",
   "Fotos del ticket": "Receipt photos",
