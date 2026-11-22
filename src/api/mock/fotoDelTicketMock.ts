@@ -18,6 +18,13 @@ interface PapelDelTicket {
 
 /** Los tickets de las mesas de ejemplo con foto (`FOTOS_DE_MESAS_MOCK`). */
 const PAPELES_DE_MESAS: Readonly<Record<string, PapelDelTicket>> = {
+  'PA-3121': {
+    lugar: 'HANZO SUSHI',
+    renglones: [
+      { nombre: 'OMAKASE PARA DOS', cents: 26000 }, { nombre: 'SASHIMI MIXTO', cents: 14000 },
+      { nombre: 'TEMPURA DE CAMARÓN', cents: 12000 }, { nombre: 'SAKE', cents: 10000 },
+    ],
+  },
   'PA-6604': {
     lugar: 'CAFÉ TACUBA',
     renglones: [

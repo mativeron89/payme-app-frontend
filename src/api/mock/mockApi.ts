@@ -2301,6 +2301,8 @@ const FOTOS_DE_MESAS_MOCK: Readonly<Record<string, { thumb: boolean; full: boole
 };
 
 export function fotoDeMesaMock(code: string): { thumb: boolean; full: boolean } {
+  // Ticket dibujado de la mesa abierta de la cuenta de prueba.
+  if (code === 'PA-3121' && findMesa(code)?.openedByUser) return { thumb: true, full: true };
   return FOTOS_DE_MESAS_MOCK[code] ?? { thumb: false, full: false };
 }
 

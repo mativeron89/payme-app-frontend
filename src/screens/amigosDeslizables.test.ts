@@ -35,8 +35,8 @@ describe('🔴 D295 · Amigos: deslizar para eliminar, sin la ✕', () => {
   });
 
   it('«Eliminar» hace lo que hacía la ✕: la misma confirmación, la misma llamada, los mismos avisos y recargas', () => {
-    expect(listaDeAmigos).toContain('onEliminar={() => pedirQuitar(f)}');
-    const accion = social.slice(social.indexOf('function pedirQuitar(f: Friend)'), social.indexOf('async function addFriend()'));
+    expect(listaDeAmigos).toContain('onEliminar={(boton) => pedirQuitar(f, boton)}');
+    const accion = social.slice(social.indexOf('function pedirQuitar(f: Friend, disparador: HTMLButtonElement)'), social.indexOf('async function addFriend()'));
     const pasos = [
       'setAmigoDeslizado(null);',
       "confirmar(t('¿Quitar a {0} de tus amigos?', f.full_name), async () => {",

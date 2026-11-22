@@ -1,5 +1,7 @@
 ## 0.280.0 · 2026-11-22
 
+- Las filas de Mesas, Amigos y Balance se deslizan o se abren al enfocar sus acciones. Amigos muestra el nombre y lleva el @ a Información.
+- En la mesa abierta, Finalizar vuelve a Inicio al confirmar el guardado. El ticket con foto abre su visor privado desde la miniatura.
 - Al volver de la cámara se ve la última foto completa. El botón «+» junto al check permite sacar otra, hasta cuatro por ticket, también en Viajes.
 - La franja detrás de la hora toma el color de la pantalla, incluido el negro de Escanear.
 

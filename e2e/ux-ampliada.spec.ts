@@ -86,8 +86,8 @@ test('K19 · cuenta desde link con el divisor de Entrar en inglés', async ({ pa
 });
 test('K20 · menú de amigo y solicitud; confirmación propia y foco', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/amigos');
-  const amigo = page.getByRole('button', { name: 'Más acciones de Juan López', exact: true });
-  await amigo.click(); await page.getByRole('button', { name: 'Bloquear', exact: true }).click();
+  const amigo = page.getByRole('button', { name: 'Información de Juan López', exact: true });
+  await amigo.focus(); await amigo.press('Enter'); await page.getByRole('button', { name: 'Bloquear', exact: true }).click();
   const hoja = page.getByRole('dialog', { name: /¿Bloquear a Juan López/ });
   await expect(hoja).toBeVisible();
   await expect(hoja.getByRole('button', { name: 'Cancelar', exact: true })).toBeFocused();
@@ -117,10 +117,10 @@ for (const origen of ['amigo', 'solicitud'] as const) {
     const llamadas = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('k20-blocks') ?? '[]') as string[]);
     await irEnLaApp(page, '/amigos');
     if (origen === 'solicitud') await page.getByRole('tab', { name: /Solicitudes/ }).click();
-    const menu = page.getByRole('button', { name: `Más acciones de ${persona.nombre}`, exact: true });
+    const menu = page.getByRole('button', { name: `${origen === 'amigo' ? 'Información de' : 'Más acciones de'} ${persona.nombre}`, exact: true });
     const hoja = page.getByRole('dialog', { name: /^¿Bloquear a / });
     const abrir = async () => {
-      await menu.click();
+      await menu.focus(); await menu.press('Enter');
       await page.getByRole('button', { name: /^Bloquear( a |$)/ }).click();
       await expect(hoja).toBeVisible();
       await expect(hoja.getByRole('button', { name: 'Bloquear', exact: true })).toHaveText('Bloquear');
@@ -149,16 +149,15 @@ test('M · aviso de bloqueo y botón de quitar en EN', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
   await page.reload();
   await irEnLaApp(page, '/amigos');
-  const menu = page.getByRole('button', { name: 'More actions for Juan López', exact: true });
-  await menu.click();
-  await page.getByRole('button', { name: 'Remove friend', exact: true }).click();
+  const menu = page.getByRole('button', { name: 'Delete Juan López', exact: true });
+  await menu.focus(); await menu.press('Enter');
   const hoja = page.getByRole('dialog', { name: 'Remove Juan López from your friends?', exact: true });
   await expect(hoja.getByRole('button', { name: 'Remove', exact: true })).toBeVisible();
   await foto(page, 'm-quitar-en');
   await hoja.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(menu).toBeFocused();
 
-  await menu.click();
+  await page.keyboard.press('Tab'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Block', exact: true }).click();
   await page.getByRole('dialog', { name: /^Block Juan López/ })
     .getByRole('button', { name: 'Block', exact: true }).click();
@@ -207,11 +206,9 @@ for (const [status, code] of [[403, 'invitation_link_not_valid'], [409, 'join_re
 
 test('K20 · el menú del último amigo queda visible fuera de la tarjeta', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/amigos');
-  const mas = page.getByRole('button', { name: /^Más acciones de / }).last();
-  await mas.scrollIntoViewIfNeeded(); await mas.click();
-  const quitar = page.getByRole('button', { name: 'Quitar de amigos', exact: true });
-  await expect(quitar).toBeFocused(); await expect(quitar).toBeInViewport();
-  await quitar.click();
+  const mas = page.locator('.amigo-deslizable').last().getByRole('button', { name: /^Eliminar / });
+  await mas.focus(); await expect(mas).toBeInViewport();
+  await mas.press('Enter');
   const hoja = page.getByRole('dialog', { name: /¿Quitar a / });
   await expect(hoja.getByRole('button', { name: 'Quitar', exact: true })).toBeVisible();
   await foto(page, 'm-quitar-es');

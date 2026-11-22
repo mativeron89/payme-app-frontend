@@ -43,7 +43,7 @@ describe('UX ampliada', () => {
     const s = source('./SocialScreen.tsx');
     expect(s).not.toContain('window.confirm');
     expect(s).toContain('useHojaModal');
-    expect(s).toContain("t('Quitar de amigos')");
+    expect(s).toContain("t('¿Quitar a {0} de tus amigos?'");
     expect(s).toContain("t('Bloquear a {0}'");
     expect(s).toContain('aria-expanded={');
   });

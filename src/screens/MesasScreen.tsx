@@ -664,7 +664,6 @@ export function MesasScreen() {
           onAbrir={() => setDeslizada(claveGesto)}
           onCerrar={() => cerrarDeslizada(claveGesto)}
           nombre={nombre}
-          accionesVisibles
           onEliminar={(disparador) => { volverDeBorrar.current = disparador; setPreguntaMesa(m); }}
         >
           <FilaDeTicket
@@ -979,7 +978,6 @@ function ConGesto({
   onCerrar: () => void;
   nombre: string;
   onEliminar: (disparador: HTMLButtonElement) => void;
-  accionesVisibles?: boolean;
   children: ReactNode;
 }) {
   return activo ? <FilaDeslizable {...props}>{children}</FilaDeslizable> : <>{children}</>;

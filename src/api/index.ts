@@ -1120,14 +1120,13 @@ const realApi: Api = {
   // que eximir: sin ellos el dueño contesta byte por byte como antes.
   // D622 · D628 · AF-4 · `members_version=1` (2.210.0): «los de la mesa» y quién
   // eligió cada plato, que se leen con `leerMiembros` y `leerEligieron`.
-  getMesa: (code, guestToken) =>
-    guestToken
-      ? httpGuestRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`, guestToken,
-      )
-      : httpRequest<MesaDetailResponse>(
-        'GET', `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`,
-      ),
+  getMesa: (code, guestToken) => {
+    const ruta = `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`;
+    if (guestToken) return httpGuestRequest<MesaDetailResponse>('GET', ruta, guestToken);
+    const foto = negociacionDeFoto();
+    return httpRequest<MesaDetailResponse>('GET', ruta
+      + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : ''));
+  },
   getInformativeSelection: async (code) => informativeSelectionResponse(
     await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),
   ),
@@ -1872,7 +1871,12 @@ const mockApi: Api = {
   getMovement: async (id) => decodeMovementDetailResponse(await mock.mockMovement(id)),
 
   getOpenMesas: () => mock.mockOpenMesas(),
-  getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
+  getMesa: async (code, guestToken) => {
+    const foto = !guestToken && negociacionDeFoto();
+    const detalle = await mock.mockGetMesa(code, guestToken ? 'guest' : 'user');
+    if (!foto) return detalle;
+    return { mesa: { ...detalle.mesa, ticket_image: foto === 2 ? mock.fotoDeMesaMockV2(code) : mock.fotoDeMesaMock(code) } };
+  },
   getInformativeSelection: async (code) => informativeSelectionResponse(await mock.mockGetInformativeSelection(code)),
   replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
     await mock.mockReplaceInformativeSelection(code, req),

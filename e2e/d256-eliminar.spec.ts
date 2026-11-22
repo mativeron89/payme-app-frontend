@@ -196,8 +196,16 @@ test('🔴 D256 · deslizar «Bar La Ola» (lo pagué yo), «Eliminar» y la cue
   await expect(page.locator('.vjv-monto-deuda')).toHaveText(/^−\$542/);
   await aConsumos(page);
   const bar = consumo(page, 'Bar La Ola');
-  await deslizar(page, bar);
+  await expect(bar).not.toContainText('⋯');
   const eliminar = bar.getByRole('button', { name: 'Eliminar Bar La Ola', exact: true });
+  await eliminar.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(eliminar).toBeFocused();
+  await expect(bar.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -96, 0)');
+  await page.keyboard.press('Shift+Tab');
+  await expect(bar.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  await deslizar(page, bar);
   await expect(bar.locator('.deslizable--abierta')).toHaveCount(1);
   await expect(eliminar).toBeInViewport({ ratio: 1 });
   await eliminar.click();

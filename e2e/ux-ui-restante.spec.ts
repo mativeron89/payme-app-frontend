@@ -210,7 +210,7 @@ for (const lang of ['es', 'en'] as const) {
 }
 
 for (const lang of ['es', 'en'] as const) {
-  test(`U9 · acciones visibles sólo para mesas terminadas y foco al cancelar (${lang})`, async ({ page }) => {
+  test(`U9 · acciones por teclado sólo para mesas terminadas y foco al cancelar (${lang})`, async ({ page }) => {
     const en = lang === 'en';
     await page.addInitScript(() => localStorage.setItem('payme.app.mock.mis_mesas.v1', 'sin_cobro'));
     await ingresar(page);
@@ -234,22 +234,20 @@ for (const lang of ['es', 'en'] as const) {
       };
     });
     await page.goto('/#/mesas');
-    const etiqueta = en ? /^More actions for / : /^Más acciones de /;
-    const acciones = page.locator('.tu-mesa').getByRole('button', { name: etiqueta });
-    const primera = acciones.first();
+    const filas = page.locator('.tu-mesa');
+    const acciones = filas.getByRole('button', { name: en ? /^Delete / : /^Eliminar / });
     await expect(acciones).toHaveCount(3);
-    await expect(primera).toBeVisible();
-    const size = await primera.boundingBox();
-    expect(size?.width).toBeGreaterThanOrEqual(44);
-    expect(size?.height).toBeGreaterThanOrEqual(44);
-    await expect(page.locator('[data-mesa="PA-90210"]').getByRole('button', { name: etiqueta })).toHaveCount(0);
-    await primera.click();
-    await expect(primera).toHaveAttribute('aria-expanded', 'true');
-    await acciones.nth(1).click();
-    await expect(primera).toHaveAttribute('aria-expanded', 'false');
-    await primera.click();
+    await expect(filas.filter({ hasText: '⋯' })).toHaveCount(0);
+    await expect(filas.getByRole('button', { name: en ? /^More actions for / : /^Más acciones de / })).toHaveCount(0);
+    const primera = acciones.first();
+    await primera.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(primera).toBeFocused();
+    await expect(filas.locator('.deslizable--abierta .deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -96, 0)');
+    await expect(page.locator('[data-mesa="PA-90210"]').getByRole('button', { name: en ? /^Delete / : /^Eliminar / })).toHaveCount(0);
     if (!en) await captura(page, 'tus-mesas-acciones');
-    await page.locator('.tu-mesa .deslizable--abierta .deslizable-eliminar').click();
+    await primera.press('Enter');
     const dialogo = page.getByRole('dialog');
     await expect(dialogo).toBeVisible();
     await dialogo.getByRole('button', { name: en ? 'Close' : 'Cerrar', exact: true }).click();

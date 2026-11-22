@@ -102,8 +102,24 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
   test('Amigos: la lista, el filtro por @ y el campo de agregar', async ({ page }) => {
     await entrar(page);
     await irAAmigos(page);
-    await debajo(fila(page, '.friend-row', 'Sofía Fernández'), '@sofi.fernandez');
-    await debajo(fila(page, '.friend-row', 'Juan López'), '@juan.lopez');
+    const juan = page.locator('.amigo-deslizable').filter({ hasText: 'Juan López' });
+    await expect(juan.locator('.friend-row')).not.toContainText('@');
+    await expect(juan.locator('.friend-row')).not.toContainText('⋯');
+    const eliminar = juan.getByRole('button', { name: 'Eliminar Juan López', exact: true });
+    await eliminar.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(eliminar).toBeFocused();
+    await page.keyboard.press('Tab');
+    const info = juan.getByRole('button', { name: 'Información de Juan López', exact: true });
+    await expect(info).toBeFocused();
+    await expect(juan.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -192, 0)');
+    await page.keyboard.press('Enter');
+    const hoja = page.getByRole('dialog', { name: 'Información de Juan López', exact: true });
+    await expect(hoja.getByText('@juan.lopez', { exact: true })).toBeVisible();
+    await capturar(page, 'c255-informacion-amigo');
+    await page.keyboard.press('Escape');
+    await expect(info).toBeFocused();
     await debajo(fila(page, '.friend-row', 'Leo Paz'), null);
     await sinCodigo(page);
     await capturar(page, 'd104-amigos');
@@ -285,3 +301,23 @@ for (const dueno of ['viejo', 'apagado'] as const) {
     });
   });
 }
+
+test('D944 · nombre largo servido completo a lectores y truncado en la fila', async ({ page }) => {
+  await entrar(page);
+  const nombre = 'María del Carmen '.repeat(6).trim();
+  await page.evaluate(async (largo) => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const original = api.getFriends.bind(api);
+    api.getFriends = async () => {
+      const respuesta = await original();
+      return { friends: respuesta.friends.map((f) => f.full_name === 'Juan López' ? { ...f, full_name: largo, username: null } : f) };
+    };
+  }, nombre);
+  await irAAmigos(page);
+  const filaLarga = page.locator('.amigo-deslizable').filter({ hasText: nombre });
+  const texto = filaLarga.locator('.fr-name .n');
+  await expect(texto).toHaveText(nombre);
+  expect(await texto.evaluate(el => getComputedStyle(el).textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(filaLarga.getByRole('button', { name: 'Información de ' + nombre, exact: true })).toHaveCount(1);
+});

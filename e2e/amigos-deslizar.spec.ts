@@ -52,7 +52,7 @@ for (const ancho of [375, 390] as const) {
       const filas = page.locator('.friend-row');
       await expect(filas).toHaveCount(await page.locator('.amigo-deslizable').count());
       expect(await filas.count()).toBeGreaterThan(1);
-      await expect(page.getByRole('button', { name: /^Más acciones de / })).toHaveCount(await filas.count());
+      await expect(page.getByRole('button', { name: /^Más acciones de / })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /^Quitar a / })).toHaveCount(0);
       expect(await lista(page).textContent()).not.toContain('✕');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(ancho);
@@ -71,6 +71,7 @@ for (const ancho of [375, 390] as const) {
       const boton = eliminar(page, 'Juan López');
       await expect(boton).toBeVisible();
       await expect(boton).toHaveText('Eliminar');
+      await expect(juan.getByRole('button', { name: 'Información de Juan López', exact: true })).toBeInViewport({ ratio: 1 });
       const m = await boton.evaluate((b) => {
         const r = b.getBoundingClientRect();
         const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger').trim();
@@ -123,16 +124,15 @@ for (const ancho of [375, 390] as const) {
         };
       });
       const juan = fila(page, 'Juan López');
-      const menu = juan.getByRole('button', { name: 'Más acciones de Juan López', exact: true });
+      const boton = eliminar(page, 'Juan López');
       const hoja = page.getByRole('dialog', { name: '¿Quitar a Juan López de tus amigos?', exact: true });
       const cancelarYComprobar = async () => {
         await expect(hoja).toBeVisible();
         await hoja.getByRole('button', { name: 'Cancelar', exact: true }).click();
         await expect(hoja).toHaveCount(0);
         // Espera el retorno de foco antes de medir la fila cerrada.
-        await expect(menu).toBeFocused();
-        await expect(menu).toHaveAttribute('aria-expanded', 'false');
-        await expect(abiertas(page)).toHaveCount(0);
+        await expect(boton).toBeFocused();
+        await expect(juan).toHaveClass(/deslizable--abierta/);
         await expect(juan).toBeVisible();
         expect(await page.evaluate(() => sessionStorage.getItem('d295-quitar-llamadas'))).toBeNull();
       };
@@ -140,8 +140,7 @@ for (const ancho of [375, 390] as const) {
       await deslizar(page, juan, -120);
       await eliminar(page, 'Juan López').click();
       await cancelarYComprobar();
-      await menu.press('Enter');
-      await page.getByRole('button', { name: 'Quitar de amigos', exact: true }).click();
+      await boton.press('Enter');
       await cancelarYComprobar();
       await capturar(page, 'cancelar');
       await page.reload();

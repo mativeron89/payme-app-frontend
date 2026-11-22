@@ -240,3 +240,28 @@ test.describe('D466 · E · el ticket de un viaje', () => {
     await expect(page.getByRole('button', { name: 'Ver la foto del ticket', exact: true })).toHaveCount(0);
   });
 });
+
+test('D946 · mesa abierta propia con foto, sin foto y capacidad apagada', async ({ page }) => {
+  await entrar(page, 'encendido');
+  await page.goto('/#/mesa/PA-3121');
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  const miniatura = page.getByRole('button', { name: 'Ver la foto del ticket', exact: true });
+  await imagenCargada(miniatura.locator('img'));
+  expect(await miniatura.locator('img').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBe(160);
+  await capturar(page, 'mesa-abierta-miniatura');
+  await miniatura.focus();
+  await page.keyboard.press('Enter');
+  const visor = page.getByRole('dialog', { name: 'Foto del ticket', exact: true });
+  await expect(visor).toBeVisible();
+  await expect.poll(() => visor.locator('img').first().evaluate(img => (img as HTMLImageElement).naturalWidth)).toBe(480);
+  await capturar(page, 'mesa-abierta-completa');
+  await page.keyboard.press('Escape');
+  await expect(miniatura).toBeFocused();
+  await page.goto('/#/mesa/PA-2847');
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  await expect(miniatura).toHaveCount(0);
+  await page.evaluate(() => localStorage.setItem('payme.app.mock.ticket_image.v1', 'apagado'));
+  await page.goto('/mesa/PA-3121');
+  await expect(page.getByRole('heading', { name: 'Tu mesa', exact: true })).toBeVisible();
+  await expect(miniatura).toHaveCount(0);
+});

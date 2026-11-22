@@ -6,14 +6,9 @@ import { enTuMesaConLaLista } from './_mesa';
  * Decisión 32 de Mati (2026-09-24): «En esa pantalla ya muestra lo que elegí,
  * cuando selecciono Listo me debería llevar a la pantalla de Inicio».
  *
- * Regla: con el guardado OK, «Listo» vuelve a Inicio —también el segundo
- * toque, cuando ya estaba registrado y no hay nada nuevo—; si falla, no navega
- * y muestra el error; sin nada elegido ni registrado, la guarda de «Continuar».
- * La misma regla rige en «igual» (selección informativa, n225).
- *
- * Medido el 24/09 sobre 1c5ad226: tras el primer registro el círculo quedaba
- * vivo y mudo (`goToPay` retornaba en `selected.size === 0`). Todas estas
- * pruebas son rojas contra esa base.
+ * D845 conserva Continuar dentro de la mesa y anuncia el guardado. D945
+ * agrega Finalizar: usa la misma escritura y vuelve a Inicio al confirmarla.
+ * Consumo e igual se miden también con el guardado detenido y con error.
  */
 
 const RIEL = 'payme.app.mock.money_rail.v1';
@@ -22,7 +17,7 @@ async function conRielApagado(page: Page): Promise<void> {
   await page.addInitScript((k) => localStorage.setItem(k, 'disabled'), RIEL);
 }
 
-async function enInicio(page: Page): Promise<void> {
+async function confirmadoEnMesa(page: Page): Promise<void> {
   await expect(page.getByText('Listo, quedó guardado', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/mesa\/PA-/);
 }
@@ -97,7 +92,7 @@ async function vencerAlEntrarEnMutacion(
 }
 
 test.describe('D845 · guardar confirma en la mesa', () => {
-  test('consumo · elegir → Listo registra y vuelve a Inicio; al volver, la fila se ve como propia', async ({ page }) => {
+  test('consumo · elegir → Continuar registra y confirma en la mesa; al volver, la fila se ve como propia', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
@@ -106,7 +101,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await contarLlamadas(page, 'lockItems');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await enInicio(page);
+    await confirmadoEnMesa(page);
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
     await page.goto(`/#/mesa/${mesa.code}`);
@@ -116,7 +111,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await expect(page.getByRole('progressbar', { name: 'Asignado 23% de la mesa' })).toBeVisible();
   });
 
-  test('consumo · ya registrado y sin nada nuevo (la captura de Mati): el segundo Listo también va a Inicio, sin otro lock', async ({ page }) => {
+  test('consumo · ya registrado y sin nada nuevo (la captura de Mati): el segundo Continuar confirma en la mesa, sin otro lock', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
@@ -124,7 +119,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await enTuMesaConLaLista(page);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await enInicio(page);
+    await confirmadoEnMesa(page);
 
     await page.goto(`/#/mesa/${mesa.code}`);
     await enTuMesaConLaLista(page);
@@ -133,7 +128,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
-    await enInicio(page);
+    await confirmadoEnMesa(page);
     expect(await llamadas(page, 'lockItems')).toBe(0);
   });
 
@@ -170,7 +165,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     });
   });
 
-  test('igual · elegir → Listo guarda y vuelve a Inicio; al volver, nota fija y «Guardado» tocable que también va a Inicio sin otro PUT', async ({ page }) => {
+  test('igual · elegir → Continuar guarda y confirma en la mesa; al volver, nota fija y «Guardado» tocable que confirma sin otro PUT', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'igual' });
@@ -179,7 +174,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     await contarLlamadas(page, 'replaceInformativeSelection');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
     await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
-    await enInicio(page);
+    await confirmadoEnMesa(page);
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(1);
 
     await page.goto(`/#/mesa/${mesa.code}`);
@@ -189,7 +184,7 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     const guardado = page.getByRole('button', { name: 'Continuar', exact: true });
     await expect(guardado).toBeEnabled();
     await guardado.click();
-    await enInicio(page);
+    await confirmadoEnMesa(page);
     expect(await llamadas(page, 'replaceInformativeSelection')).toBe(0);
   });
 
@@ -211,3 +206,42 @@ test.describe('D845 · guardar confirma en la mesa', () => {
     });
   });
 });
+
+for (const modo of ['consumo', 'igual'] as const) {
+  for (const resultado of ['ok', 'error'] as const) {
+    test(`D945 · Finalizar espera el guardado de ${modo} · ${resultado}`, async ({ page }) => {
+      await conRielApagado(page);
+      await ingresar(page);
+      const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo });
+      await page.goto(`/#/mesa/${mesa.code}`);
+      await enTuMesaConLaLista(page);
+      await page.getByRole('button', { name: 'Tagliatelle Bolognese, $195', exact: true }).click();
+      const metodo = modo === 'consumo' ? 'lockItems' : 'replaceInformativeSelection';
+      await page.evaluate(async ({ metodo, resultado }) => {
+        const ruta = '/src/api/index.ts';
+        const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...args: unknown[]) => Promise<unknown>> };
+        const guardar = api[metodo]!.bind(api);
+        api[metodo] = async (...args) => {
+          sessionStorage.setItem('d945-guardando', '1');
+          await new Promise<void>(resolver => window.addEventListener('d945-resolver', () => resolver(), { once: true }));
+          if (resultado === 'error') throw new Error('Fallo sintético');
+          return guardar(...args);
+        };
+      }, { metodo, resultado });
+      const finalizar = page.getByRole('button', { name: 'Finalizar', exact: true });
+      await finalizar.focus();
+      await page.keyboard.press('Enter');
+      await expect.poll(() => page.evaluate(() => sessionStorage.getItem('d945-guardando'))).toBe('1');
+      await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
+      await expect(finalizar).toBeDisabled();
+      await page.evaluate(() => window.dispatchEvent(new Event('d945-resolver')));
+      if (resultado === 'ok') {
+        await expect(page).toHaveURL(/\/home$/);
+      } else {
+        await expect(page.getByRole('status').filter({ hasText: /No pudimos|No se guardó|No sabemos/ })).toBeVisible();
+        await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
+      }
+      await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa', exact: true })).toHaveCount(0);
+    });
+  }
+}

@@ -238,3 +238,44 @@ describe('D466 · con la capacidad encendida', () => {
     expect(claves.size).toBe(4);
   });
 });
+
+it('D946 · la mesa negocia el detalle y sólo pide los dos binarios por el transporte privado', async () => {
+  aplicarConfigFotoDelTicket(ENCENDIDA);
+  const sesion = loadSession()!;
+  const code = 'PA-3121';
+  const detalle = '/api/mesas/' + code;
+  const thumb = detalle + '/ticket-image/thumb';
+  const full = detalle + '/ticket-image/full';
+  const registro: string[] = [];
+  const transporte = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const headers = new Headers(init?.headers);
+    if (url.origin !== new URL(import.meta.env.VITE_API_URL ?? 'http://localhost:3000').origin
+        || init?.method !== 'GET' || headers.get('Authorization') !== 'Bearer ' + sesion.access_token) {
+      throw new Error('Transporte de prueba: petición no autorizada');
+    }
+    if (url.pathname === detalle && url.searchParams.get('ticket_image_version') === '1') {
+      registro.push(detalle);
+      return json({ mesa: { code, ticket_image: { thumb: true, full: true } } });
+    }
+    if ((url.pathname === thumb || url.pathname === full) && !url.search && init.cache === 'no-store'
+        && headers.get('Accept') === 'image/webp') {
+      registro.push(url.pathname);
+      return foto(webp());
+    }
+    throw new Error('Transporte de prueba: ruta fuera de la lista');
+  };
+  vi.stubGlobal('fetch', transporte);
+  // Control negativo sólo dentro del doble. Ningún caso delega en la red.
+  const origen = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+  await expect(transporte(new URL('/control-sintetico', origen), {
+    method: 'GET', headers: { Authorization: 'Bearer ' + sesion.access_token },
+  })).rejects.toThrow('ruta fuera de la lista');
+  expect(registro).toEqual([]);
+  const respuesta = await api.getMesa(code);
+  expect(respuesta.mesa.ticket_image).toEqual({ thumb: true, full: true });
+  for (const tamano of ['thumb', 'full'] as const) {
+    await expect(pedirFotoDelTicket({ tipo: 'mesa', code }, tamano, sesion)).resolves.toBeInstanceOf(Blob);
+  }
+  expect(registro).toEqual([detalle, thumb, full]);
+});

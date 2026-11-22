@@ -12809,21 +12809,21 @@ h1.pay-title-lbl {
 /* D846: sólo las pantallas cuyo centro es la cámara reservan sus 32px. */
 .screen.has-appbar:has(> .appbar-block .appbar-center[data-guia="camara"]) { --appbar-saliente: 32px; }
 
-.deslizable-frente--con-acciones {
-  display: flex;
-  align-items: center;
+.btn-finalizar {
+  background: var(--brand);
+  color: var(--navy);
+  margin-block: var(--sp-3);
 }
 
-.deslizable-frente--con-acciones > :first-child {
-  flex: 1;
-  min-width: 0;
+.deslizable-informacion {
+  right: 96px;
+  background: var(--navy);
 }
 
-.deslizable-acciones {
-  width: 44px;
-  min-height: 44px;
-  padding: 0;
-  flex: 0 0 44px;
+.amigo-deslizable .fr-name .n {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hoja-de-decision {

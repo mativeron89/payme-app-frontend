@@ -249,6 +249,8 @@ export interface MesaDetailViewProps {
   onPedirLinkDelQr?: () => void;
   tieneBorrador?: boolean;
   onBack: () => void;
+  fotoDelTicket?: ReactNode;
+  onFinalizar?: () => void;
   /**
    * D344 · el selector de la propina de la mesa del organizador, armado por
    * `MesaScreen` (que tiene la sesión y el pedido). `null`/ausente ⇒ no se
@@ -649,6 +651,8 @@ export function MesaDetailView({
   linkDelQr = null,
   onPedirLinkDelQr,
   onBack,
+  fotoDelTicket,
+  onFinalizar,
   tieneBorrador = false,
   propinaDeLaMesa = null,
   calificacion = null,
@@ -1089,7 +1093,7 @@ export function MesaDetailView({
   };
   const preparandoRef = useRef(false);
   const intencionListoRef = useRef(0);
-  async function terminarListo(alGuardar?: () => void): Promise<void> {
+  async function terminarListo(alGuardar?: () => void, finalizar = false): Promise<void> {
     if (preparandoRef.current || busy || propinaGuardando || !onPrepararListo) return;
     preparandoRef.current = true;
     const intencion = ++intencionListoRef.current;
@@ -1102,9 +1106,16 @@ export function MesaDetailView({
         frenarSinEleccion(); return;
       }
       setHojaCierre(null);
-      onGoToPay(alGuardar ? { ...foto, alGuardar } : foto);
+      onGoToPay(alGuardar ? { ...foto, alGuardar, finalizar } : foto);
     } finally { preparandoRef.current = false; }
   }
+  const finalizar = onFinalizar && pagosCortados && !invitacionPendiente && (
+    <button type="button" className="btn btn-finalizar"
+      disabled={busy || leyendoListo || propinaGuardando || (!esConsumo && informativeEditingBlocked)}
+      onClick={() => { void terminarListo(onFinalizar, true); }}>
+      {t('Finalizar')}
+    </button>
+  );
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
 
   useLayoutEffect(() => {
@@ -1535,6 +1546,7 @@ export function MesaDetailView({
             <div>{t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}</div>
           </div>
         )}
+        {fotoDelTicket}
         {calificacion}
         {!esConsumo && informativeSaved && (
           <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
@@ -1712,6 +1724,7 @@ export function MesaDetailView({
               <p className="tus-consumos-guia">{t('Toca lo que consumiste')}</p>
               {listaDeConsumos}
             </Desplegable>
+            {finalizar}
             {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
                 `close_not_applicable` a las otras). D223 · al final, centrado,
                 en tinte de error. */}
@@ -1738,6 +1751,7 @@ export function MesaDetailView({
             {propinaLeida && <p className="propina-mesa-lectura">{propinaLeida}</p>}
             {desgloseDeMiParte}
             {listaDeConsumos}
+            {finalizar}
           </>
         )}
       </div>

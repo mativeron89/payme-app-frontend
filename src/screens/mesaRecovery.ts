@@ -12,6 +12,7 @@ export interface PreparacionListo {
   readonly identityEpoch: number;
   readonly readEpoch: number;
   readonly revision: number;
+  readonly finalizar?: boolean;
   readonly alGuardar?: () => void;
 }
 

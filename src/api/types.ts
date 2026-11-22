@@ -725,6 +725,8 @@ export interface ActiveStaff {
 
 /** GET /api/mesas/:code → mesa. */
 export interface MesaDetail {
+  /** Datos opcionales del dueño, validados antes de mostrar la foto. */
+  ticket_image?: unknown;
   id: string;
   code: string;
   full_name: string;
