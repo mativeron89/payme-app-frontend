@@ -631,9 +631,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     for (const p of partesRef.current) if (p.miniatura) URL.revokeObjectURL(p.miniatura);
   }, []);
   /**
-   * D547 · las fotos que la cámara nativa mandó y esperan el ✓ de «la pantalla al volver» (`FotosAlVolver`). Mati:
-   * «que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto
-   * apareciendo un check abajo a la derecha». Se guardan los originales, sólo en memoria: el recuadro los decodifica de
+   * D547 · las fotos que la cámara nativa mandó y esperan el ✓ de «la pantalla al volver» (`FotosAlVolver`).
+   * D935 muestra la última foto grande. Se guardan los originales, sólo en memoria: el recuadro los decodifica de
    * a uno después del ✓ y las partes salen de ahí (`prepararParte`, sin EXIF). Sólo con la capacidad de varias fotos y
    * sólo las de la cámara: la galería y la foto que repite una parte van al recuadro como siempre.
    *
@@ -647,7 +646,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     original: Blob;
     /** La de la fila, chica. `null` mientras se prepara o si el navegador no pudo dibujarla. */
     miniatura: string | null;
-    /** La de la foto grande y la que se achica, de hasta 1024. `null` igual. */
+    /** La de la foto grande, de hasta 1024. `null` igual. */
     vista: string | null;
   }[]>([]);
   const tandaRef = useRef(tanda);
@@ -655,7 +654,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const idDeFotoRef = useRef(0);
   /** La preparación de las vistas de la tanda en curso: la siguiente foto (o el recuadro) espera a que termine. */
   const vistasDeLaTandaRef = useRef<Promise<void>>(Promise.resolve());
-  const [recienLlegada, setRecienLlegada] = useState<number | null>(null);
   /** D547 · la foto de la tanda que no se pudo usar en el recuadro (su número): la pantalla lo avisa. */
   const [avisoDeLaTanda, setAvisoDeLaTanda] = useState<number | null>(null);
   /**
@@ -672,7 +670,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     for (const f of tandaRef.current) soltarVistas(f);
     tandaRef.current = [];
     setTanda([]);
-    setRecienLlegada(null);
     setAvisoDeLaTanda(null);
     setSecuencia(null);
   }, [setSecuencia]);
@@ -1460,8 +1457,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   /**
    * D547 · auditoría de PR108, punto 4 · la miniatura y la vista de una foto de la tanda, después de las anteriores:
    * una sola foto decodificada a la vez, que se suelta apenas salen las dos. Si la foto ya no está en la tanda
-   * (quitada, soltada, fuera de la pantalla), no se prepara nada o se descarta. Cuando están, la foto «llega»: es la
-   * que se achica.
+   * (quitada, soltada, fuera de la pantalla), no se prepara nada o se descarta.
    */
   function prepararVistasDeLaTanda(id: number, original: Blob) {
     const sigue = () => tandaRef.current.some((f) => f.id === id);
@@ -1493,7 +1489,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       const siguientes = tandaRef.current.map((f) => (f.id === id ? { ...f, ...urls } : f));
       tandaRef.current = siguientes;
       setTanda(siguientes);
-      setRecienLlegada(id);
     })().catch(() => undefined);
     vistasDeLaTandaRef.current = trabajo;
   }
@@ -1530,8 +1525,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     }
     const primera = tandaRef.current[0];
     if (!primera) return;
-    // Al volver a la pantalla, la última foto ya no es «recién llegada»: no se vuelve a achicar.
-    setRecienLlegada(null);
     setAvisoDeLaTanda(null);
     setScanIssue(null);
     setRecorteFallido(false);
@@ -2613,7 +2606,6 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           fotos={tanda}
           previas={partes.length}
           max={maxPartes}
-          recienLlegada={recienLlegada}
           aviso={avisoDeLaTanda}
           topeAlcanzado={scanIssue === 'limite_partes'}
           titulo={tituloDelEscaneo}

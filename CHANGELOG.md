@@ -1,3 +1,8 @@
+## 0.280.0 · 2026-11-22
+
+- Al volver de la cámara se ve la última foto completa. El botón «+» junto al check permite sacar otra, hasta cuatro por ticket, también en Viajes.
+- La franja detrás de la hora toma el color de la pantalla, incluido el negro de Escanear.
+
 ## 0.279.0 · 2026-11-21
 
 - Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado. Si hay una selección pendiente, la hoja se cierra y deja visible el estado del guardado.

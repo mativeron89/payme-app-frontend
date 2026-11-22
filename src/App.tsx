@@ -1,3 +1,4 @@
+import { sincronizarFranja } from './franjaSuperior';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { GuiaProvider } from './ayuda/GuiaProvider';
 import { useEjemplo } from './ayuda/ejemplo/estadoEjemplo';
@@ -469,6 +470,7 @@ function Shell() {
 }
 
 export default function App() {
+  useEffect(sincronizarFranja, []);
   return (
     <RegionProvider>
       <AuthProvider>

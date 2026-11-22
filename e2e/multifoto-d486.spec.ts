@@ -8,7 +8,7 @@ import { camaraSimulada, FOTO_DE_CAMARA, sacarFoto } from './_camara';
  * dueño 2.196.0: hasta 4 fotos y 24 MiB entre todas).
  *
  * - El escaneo: D547 · las fotos de la cámara pasan primero por la pantalla al
- *   volver («Sacar otra» y el ✓) y después por el recuadro, una por una
+ *   volver («+» y el ✓) y después por el recuadro, una por una
  *   («Siguiente foto»); la tira numerada, «Leer ticket (N fotos)», el tope de 4,
  *   una parte rechazada que se repite en su lugar y el aviso de que las fotos se
  *   superponían. Lo propio de la pantalla al volver está en
@@ -92,13 +92,13 @@ async function fotoAlMarco(page: Page): Promise<void> {
 const alVolver = (page: Page) => page.locator('.fotos-al-volver');
 
 /**
- * D547 · `n` fotos con la cámara: la primera con la cámara que ya está abierta y las demás con «Sacar otra» de la
+ * D547 · `n` fotos con la cámara: la primera con la cámara que ya está abierta y las demás con «+» de la
  * pantalla al volver. Después, el ✓: la primera al recuadro.
  */
 async function fotosAlRecuadro(page: Page, n: number): Promise<void> {
   await esperarCapacidad(page);
   for (let i = 1; i <= n; i++) {
-    if (i > 1) await alVolver(page).getByRole('button', { name: /^(Sacar otra|Take another)$/ }).click();
+    if (i > 1) await alVolver(page).getByRole('button', { name: /^(Sacar otra foto|Take another photo)$/ }).click();
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     await expect(alVolver(page).getByRole('list').getByRole('listitem')).toHaveCount(i);
   }
@@ -158,13 +158,13 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await expect(page.getByRole('button', { name: 'Leer ticket (3 fotos)', exact: true })).toBeVisible();
   });
 
-  test('🔴 el tope del dueño: con la cuarta, «Sacar otra» deshabilitado con su línea, y se leen las cuatro', async ({ page }) => {
+  test('🔴 el tope del dueño: con la cuarta, «+» deshabilitado con su línea, y se leen las cuatro', async ({ page }) => {
     await esperarCapacidad(page);
     for (let i = 1; i <= 4; i++) {
-      if (i > 1) await alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true }).click();
+      if (i > 1) await alVolver(page).getByRole('button', { name: 'Sacar otra foto', exact: true }).click();
       await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     }
-    await expect(alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true })).toBeDisabled();
+    await expect(alVolver(page).getByRole('button', { name: 'Sacar otra foto', exact: true })).toBeDisabled();
     await expect(alVolver(page).getByText('Ya tienes 4 fotos, el máximo por ticket.', { exact: true })).toBeVisible();
     await alVolver(page).getByRole('button', { name: 'Listo, ajustar el recuadro', exact: true }).click();
     await expect(marco(page)).toBeVisible();
@@ -217,11 +217,11 @@ test.describe('D484 · D486 · el escaneo de un ticket largo', () => {
     await capturar(page, 'd509-filas-dudosas');
   });
 
-  test('D547 · la cámara se cancela en «Sacar otra»: queda la pantalla con la foto que había y se lee con una', async ({ page }) => {
+  test('D547 · la cámara se cancela en «+»: queda la pantalla con la foto que había y se lee con una', async ({ page }) => {
     await esperarCapacidad(page);
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     // Se abre la cámara y la persona la cierra sin sacar foto: nunca llega nada.
-    await alVolver(page).getByRole('button', { name: 'Sacar otra', exact: true }).click();
+    await alVolver(page).getByRole('button', { name: 'Sacar otra foto', exact: true }).click();
     await expect(alVolver(page).getByRole('list').getByRole('listitem')).toHaveCount(1);
     await alVolver(page).getByRole('button', { name: 'Listo, ajustar el recuadro', exact: true }).click();
     await expect(marco(page)).toBeVisible();

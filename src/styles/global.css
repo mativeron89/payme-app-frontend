@@ -415,6 +415,30 @@ html.app-de-inicio-ios .app {
   height: 100lvh;
 }
 
+/* D935 · el fondo del documento, los píxeles bajo la hora y el theme-color
+   comparten el color de la superficie superior, también durante el arranque. */
+:root {
+  --franja-superior: var(--gray-l);
+  background-color: var(--franja-superior);
+}
+:root:has(.hdr, .ingreso-hero, .login-screen, .pub-top) { --franja-superior: var(--action); }
+:root:has(.top-bar) { --franja-superior: var(--white); }
+:root:has(.ingreso-demo) { --franja-superior: var(--warning-tint); }
+:root:has(.link-alta) { --franja-superior: var(--bg); }
+:root:has(.screen.camara) { --franja-superior: #000000; }
+:root:has(.cartel-version) { --franja-superior: var(--info-tint); }
+:root:has(.visor-ticket, #splash) { --franja-superior: var(--navy); }
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--franja-superior);
+}
+
 .screen {
   flex: 1;
   position: relative;
@@ -1173,12 +1197,13 @@ html.app-de-inicio-ios .app {
 .ingreso-demo {
   background: var(--warning-tint);
   border-bottom: 1px solid var(--border);
-  padding: 7px 16px;
+  padding: calc(7px + env(safe-area-inset-top)) 16px 7px;
   text-align: center;
   font: 700 11.5px/1.35 var(--font-body);
   color: var(--warning);
   letter-spacing: 0.01em;
 }
+.ingreso-demo + .ingreso-hero { padding-top: 30px; }
 .ingreso-hero {
   background: var(--navy);
   padding: calc(30px + env(safe-area-inset-top)) 20px 56px;
@@ -2399,7 +2424,7 @@ html.app-de-inicio-ios .app {
 .camara-arriba {
   position: relative;
   padding: calc(env(safe-area-inset-top) + var(--sp-2)) var(--sp-4) var(--sp-4);
-  background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0));
+  background: #000;
 }
 
 .camara-volver {
@@ -9880,7 +9905,7 @@ h1.pay-title-lbl {
 }
 
 .pub-top {
-  padding: var(--sp-4);
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
   background: var(--action);
 }
 
@@ -12412,9 +12437,7 @@ h1.pay-title-lbl {
   outline-offset: 2px;
 }
 
-/* ─── D547 · la pantalla al volver de la cámara nativa (`FotosAlVolver`) ───
-   La foto recién sacada se achica hacia la fila de abajo a la izquierda; «Sacar otra» al centro y el ✓ abajo a la
-   derecha, donde cae el pulgar. Sobre el negro de la cámara, como «Escanea el ticket». */
+/* D935 · foto completa en el centro; sumar y confirmar al pie. */
 .fotos-al-volver {
   display: flex;
   flex-direction: column;
@@ -12435,28 +12458,11 @@ h1.pay-title-lbl {
   padding: var(--sp-4);
 }
 
-.fotos-al-volver-otra {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  width: min(100%, 220px);
-  min-height: 120px;
-  padding: var(--sp-4);
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.fotos-al-volver-otra:disabled {
-  opacity: 0.45;
-  cursor: default;
+.fotos-al-volver-principal {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
 }
 
 .fotos-al-volver-tope,
@@ -12494,7 +12500,7 @@ h1.pay-title-lbl {
   display: flex;
   gap: var(--sp-2);
   min-width: 0;
-  margin: 0 0 0 -8px;
+  margin: 0 auto 0 -8px;
   /* El número de cada miniatura sobresale 8 px arriba y a la izquierda: la fila deja ese lugar para no cortarlo. */
   padding: 8px 0 0 8px;
   list-style: none;
@@ -12505,8 +12511,8 @@ h1.pay-title-lbl {
   position: relative;
   display: block;
   flex: none;
-  width: 52px;
-  height: 68px;
+  width: 44px;
+  height: 52px;
   padding: 0;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 8px;
@@ -12548,6 +12554,7 @@ h1.pay-title-lbl {
   text-align: center;
 }
 
+.fotos-al-volver-otra,
 .fotos-al-volver-listo {
   display: flex;
   flex: none;
@@ -12564,6 +12571,7 @@ h1.pay-title-lbl {
   cursor: pointer;
 }
 
+.fotos-al-volver-otra:disabled,
 .fotos-al-volver-listo:disabled {
   opacity: 0.45;
   cursor: default;
@@ -12574,32 +12582,6 @@ h1.pay-title-lbl {
 .fotos-al-volver-listo:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
-}
-
-/* La foto que acaba de llegar: se ve grande un instante y se achica hacia abajo a la izquierda, donde queda su
-   miniatura. Sin «reducir movimiento» nada más: con él, la pantalla ni la dibuja (`FotosAlVolver`). */
-.fotos-al-volver-recien {
-  position: absolute;
-  top: 18%;
-  right: var(--sp-4);
-  bottom: 18%;
-  left: var(--sp-4);
-  width: calc(100% - 2 * var(--sp-4));
-  height: 64%;
-  object-fit: contain;
-  object-position: left bottom;
-  transform-origin: left bottom;
-  pointer-events: none;
-  animation: fotos-al-volver-achicar 900ms ease-in-out forwards;
-}
-
-@keyframes fotos-al-volver-achicar {
-  0%, 30% { transform: none; opacity: 1; }
-  100% { transform: translateY(16vh) scale(0.16); opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fotos-al-volver-recien { display: none; }
 }
 
 .fotos-al-volver-capa {

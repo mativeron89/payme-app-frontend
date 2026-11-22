@@ -2,29 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { camarasAbiertas, FOTO_DE_CAMARA, sacarFoto } from './_camara';
 
-/**
- * D547 · la pantalla de PayMe al volver de la cámara nativa, en el mock con la capacidad de varias fotos encendida
- * (`payme.app.mock.ocr_pages.v1`, hasta 4).
- *
- * Mati: «que en automático la foto que se sacó se achique hacia abajo a la izquierda y que permita sacar otra foto
- * apareciendo un check abajo a la derecha (…) Una vez se selecciona el check se pasa a la edición de la foto para el
- * recuadro». Eligió «Pantalla al volver (Recomendada)»: la cámara sigue siendo la nativa.
- *
- * - La foto se achica a la fila de abajo a la izquierda (sin animación con «reducir movimiento»); «Sacar otra» abre la
- *   cámara nativa; el ✓ pasa al recuadro.
- * - Tocar una miniatura la muestra grande y deja quitarla.
- * - «Volver» con fotos pregunta antes de salir.
- * - Una sola foto se lee como siempre: la lectura de una imagen.
- * - En el recuadro de la tanda, «Volver a las fotos» vuelve con todas.
- *
- * Capturas para el catálogo (D542), con datos del mock, sólo con `PAYME_E2E_CAPTURAS`.
- */
+import { medirFranja, simularAreaSegura } from './franja-d935';
 
+/** D935 · regreso de la cámara nativa, con la capacidad multifoto de D486. */
 const PAGINAS = 'payme.app.mock.ocr_pages.v1';
 
 const alVolver = (page: Page) => page.locator('.fotos-al-volver');
 const fila = (page: Page) => alVolver(page).getByRole('list', { name: /^(Fotos del ticket|Receipt photos)$/ });
-const sacarOtra = (page: Page) => alVolver(page).getByRole('button', { name: /^(Sacar otra|Take another)$/ });
+const sacarOtra = (page: Page) => alVolver(page).getByRole('button', { name: /^(Sacar otra foto|Take another photo)$/ });
 const listo = (page: Page) => alVolver(page).getByRole('button', { name: /^(Listo, ajustar el recuadro|Done, adjust the frame)$/ });
 const marco = (page: Page) => page.getByRole('group', { name: /^(Marco del recorte|Crop frame)$/ });
 const ticketListo = (page: Page) => page.getByRole('radiogroup', { name: '¿Cómo dividen?' });
@@ -32,8 +17,6 @@ const ticketListo = (page: Page) => page.getByRole('radiogroup', { name: '¿Cóm
 async function capturar(page: Page, nombre: string): Promise<void> {
   const dir = process.env.PAYME_E2E_CAPTURAS;
   if (!dir) return;
-  // La foto que se achica se va sola al terminar: la captura es la pantalla quieta.
-  await expect(page.locator('.fotos-al-volver-recien')).toHaveCount(0, { timeout: 3_000 });
   await page.screenshot({ path: `${dir}/d547-${page.viewportSize()!.width}-${nombre}.png`, animations: 'disabled' });
 }
 
@@ -82,6 +65,25 @@ async function esperarCapacidad(page: Page): Promise<void> {
   }), { message: 'la capacidad de varias fotos no llegó' }).toBe(true);
 }
 
+async function ticketDeEjemplo(page: Page, numero = 1) {
+  const jpeg = await page.evaluate(n => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 1120;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fffaf1';
+    ctx.fillRect(0, 0, 600, 1120);
+    ctx.fillStyle = '#222';
+    ctx.font = 'bold 32px monospace';
+    ctx.fillText('COMEDOR DEL CENTRO', 52, 105);
+    ctx.font = '24px monospace';
+    const lineas = ['Ticket de ejemplo ' + n, '----------------------------', '2   Tacos de hongos      120', '1   Sopa de tortilla      65', '2   Aguas frescas         60', '----------------------------', 'TOTAL MXN                245', '', 'Gracias por tu visita'];
+    lineas.forEach((linea, i) => ctx.fillText(linea, 52, 195 + i * 65));
+    return canvas.toDataURL('image/jpeg').split(',')[1]!;
+  }, numero);
+  return { name: 'ticket.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpeg, 'base64') };
+}
+
 /** Saca `n` fotos más desde la pantalla al volver (la primera, con la cámara que ya está abierta). */
 async function sacar(page: Page, n: number, desde = 0): Promise<void> {
   for (let i = desde + 1; i <= desde + n; i++) {
@@ -93,6 +95,7 @@ async function sacar(page: Page, n: number, desde = 0): Promise<void> {
 
 test.describe('D547 · la pantalla al volver de la cámara', () => {
   test.beforeEach(async ({ page }) => {
+    await simularAreaSegura(page);
     await conCapacidad(page);
     await relojFueraDeLasFechasDeLosViajes(page);
     await ingresar(page);
@@ -101,13 +104,19 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await esperarCapacidad(page);
   });
 
-  test('🔴 con la foto: la miniatura abajo a la izquierda, «Sacar otra» y el ✓ abajo a la derecha; el foco en el título', async ({ page }) => {
-    await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
+  test('🔴 con la foto: la última foto grande y el + junto al ✓; el foco en el título', async ({ page }) => {
+    await sacarFoto(page, await ticketDeEjemplo(page), { usar: false });
     await expect(alVolver(page)).toBeVisible();
     // No va directo al recuadro.
     await expect(marco(page)).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Escanea el ticket', level: 1 })).toBeFocused();
-    await expect(alVolver(page).getByText('Sacaste 1 foto. Si el ticket es largo, saca otra parte. Si no, toca ✓.', { exact: true })).toBeVisible();
+    await expect(alVolver(page).getByText('Sacar otra', { exact: true })).toHaveCount(0);
+    await expect(alVolver(page).getByText(/Si el ticket es largo/)).toHaveCount(0);
+    const foto = alVolver(page).getByRole('img', { name: 'Foto 1', exact: true });
+    await expect(foto).toBeVisible();
+    await expect(foto).toHaveCSS('object-fit', 'contain');
+    expect((await foto.boundingBox())!.width).toBeGreaterThan(300);
+    expect((await foto.boundingBox())!.height).toBeGreaterThan(350);
     await expect(fila(page).getByRole('button', { name: 'Ver la foto 1', exact: true })).toBeVisible();
     await expect(sacarOtra(page)).toBeEnabled();
     // Las posiciones: la fila abajo a la izquierda y el ✓ abajo a la derecha, en la misma franja.
@@ -118,7 +127,15 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     expect(check.x).toBeGreaterThan(vista.width / 2);
     expect(mini.y).toBeGreaterThan(vista.height * 0.7);
     expect(check.y).toBeGreaterThan(vista.height * 0.7);
-    await capturar(page, 'es-una-foto');
+    const mas = (await sacarOtra(page).boundingBox())!;
+    expect(mas.x + mas.width).toBeLessThan(check.x);
+    expect([mas.y, mas.width, mas.height]).toEqual([check.y, check.width, check.height]);
+    await medirFranja(page, 'ticket-1', '#000000');
+    await fila(page).getByRole('button').first().focus();
+    await page.keyboard.press('Tab');
+    await expect(sacarOtra(page)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(listo(page)).toBeFocused();
   });
 
   test('🔴 auditoría de PR108, punto 4 · la fila y la foto grande dibujan copias chicas, nunca el original', async ({ page }) => {
@@ -144,7 +161,7 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     expect(tamanosDeLaPantalla).not.toContain(1400);
   });
 
-  test('🔴 «Sacar otra» abre la cámara nativa en el toque y la foto se suma a la fila, numerada', async ({ page }) => {
+  test('🔴 «+» abre la cámara nativa en el toque y la foto se suma a la fila, numerada', async ({ page }) => {
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     const antes = camarasAbiertas(page);
     await sacarOtra(page).click();
@@ -152,22 +169,25 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
     await expect(fila(page).locator('.fotos-al-volver-numero')).toHaveText(['1', '2']);
-    await expect(alVolver(page).getByText('Sacaste 2 fotos. Si el ticket es largo, saca otra parte. Si no, toca ✓.', { exact: true })).toBeVisible();
+    await expect(alVolver(page).getByText('Sacaste 2 fotos.', { exact: true })).toHaveCount(1);
     await sacar(page, 1, 2);
     await capturar(page, 'es-tres-fotos');
   });
 
-  test('🔴 la foto recién sacada se achica (la animación); con «reducir movimiento», nada se anima', async ({ page }) => {
-    await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
-    await expect(page.locator('.fotos-al-volver-recien')).toHaveCount(1);
-    await expect(page.locator('.fotos-al-volver-recien')).toHaveCSS('animation-name', 'fotos-al-volver-achicar');
-    // Se va sola al terminar.
-    await expect(page.locator('.fotos-al-volver-recien')).toHaveCount(0, { timeout: 3_000 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
+  test('la vista cambia de foto horizontal a vertical y vuelve a la anterior al quitarla', async ({ page }) => {
+    await sacar(page, 1);
+    const vista = alVolver(page).locator('.fotos-al-volver-principal');
+    await expect.poll(() => vista.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(1024);
+    const primera = await vista.getAttribute('src');
     await sacarOtra(page).click();
-    await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
-    await expect(fila(page).getByRole('listitem')).toHaveCount(2);
-    await expect(page.locator('.fotos-al-volver-recien')).toHaveCount(0);
+    const vertical = await ticketDeEjemplo(page);
+    await sacarFoto(page, vertical, { usar: false });
+    await expect(vista).toHaveAccessibleName('Foto 2');
+    await expect.poll(() => vista.evaluate(el => (el as HTMLImageElement).naturalHeight)).toBe(1024);
+    await expect(vista).toHaveCSS('object-fit', 'contain');
+    await fila(page).getByRole('button', { name: 'Ver la foto 2', exact: true }).click();
+    await page.getByRole('button', { name: 'Quitar esta foto', exact: true }).click();
+    await expect(vista).toHaveAttribute('src', primera!);
   });
 
   test('🔴 una sola foto: el ✓, el recuadro y «Usar foto», con la lectura de una imagen como siempre', async ({ page }) => {
@@ -221,12 +241,15 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await expect(page.locator('.camara').getByRole('button', { name: 'Volver', exact: true })).toBeFocused();
   });
 
-  test('🔴 con 4 fotos, «Sacar otra» se deshabilita y una línea lo explica', async ({ page }) => {
-    await sacar(page, 4);
+  test('🔴 con 4 fotos, «+» se deshabilita y una línea lo explica', async ({ page }) => {
+    for (let n = 1; n <= 4; n++) {
+      if (n > 1) await sacarOtra(page).click();
+      await sacarFoto(page, await ticketDeEjemplo(page, n), { usar: false });
+      await expect(alVolver(page).getByRole('img', { name: 'Foto ' + n, exact: true })).toBeVisible();
+    }
     await expect(sacarOtra(page)).toBeDisabled();
     await expect(alVolver(page).getByText('Ya tienes 4 fotos, el máximo por ticket.', { exact: true })).toBeVisible();
-    await expect(alVolver(page).getByText('Sacaste 4 fotos. Toca ✓ para ajustar el recuadro.', { exact: true })).toBeVisible();
-    await capturar(page, 'es-cuatro-fotos');
+    await medirFranja(page, 'ticket-4', '#000000');
     // Quitando una, se puede sacar otra.
     await fila(page).getByRole('button', { name: 'Ver la foto 4', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Quitar esta foto', exact: true }).click();
@@ -266,8 +289,7 @@ test.describe('D547 · la pantalla al volver de la cámara', () => {
     await page.getByRole('button', { name: 'Volver a las fotos', exact: true }).click();
     await expect(fila(page).getByRole('listitem')).toHaveCount(2);
     await expect(page.locator('.camara-partes')).toHaveCount(0);
-    // La última foto no se vuelve a achicar al regresar.
-    await expect(page.locator('.fotos-al-volver-recien')).toHaveCount(0);
+    await expect(alVolver(page).getByRole('img', { name: 'Foto 2', exact: true })).toBeVisible();
     // De nuevo al recuadro: arranca en la primera, y «Volver» de arriba también vuelve a las fotos (no se va).
     await listo(page).click();
     await expect(page.getByText('Parte 1: ajusta el marco para dejar sólo esa parte', { exact: true })).toBeVisible();
@@ -288,8 +310,8 @@ test.describe('D547 · en inglés', () => {
     await page.getByRole('button', { name: 'Scan', exact: true }).click();
     await esperarCapacidad(page);
     await sacarFoto(page, FOTO_DE_CAMARA, { usar: false });
-    await expect(alVolver(page).getByText('You took 1 photo. If the receipt is long, take another part. If not, tap ✓.', { exact: true })).toBeVisible();
-    await expect(sacarOtra(page)).toHaveText('Take another');
+    await expect(alVolver(page).getByRole('img', { name: 'Photo 1', exact: true })).toBeVisible();
+    await expect(sacarOtra(page)).toHaveAccessibleName('Take another photo');
     await expect(fila(page).getByRole('button', { name: 'View photo 1', exact: true })).toBeVisible();
     await capturar(page, 'en-una-foto');
     await alVolver(page).getByRole('button', { name: 'Back', exact: true }).click();
