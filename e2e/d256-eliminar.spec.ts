@@ -203,7 +203,7 @@ test('🔴 D256 · deslizar «Bar La Ola» (lo pagué yo), «Eliminar» y la cue
   await page.keyboard.press('Tab');
   await expect(eliminar).toBeFocused();
   await expect(bar.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -96, 0)');
-  await page.keyboard.press('Shift+Tab');
+  await page.getByRole('tab', { name: 'Consumos', exact: true }).focus();
   await expect(bar.locator('.deslizable-frente')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
   await deslizar(page, bar);
   await expect(bar.locator('.deslizable--abierta')).toHaveCount(1);

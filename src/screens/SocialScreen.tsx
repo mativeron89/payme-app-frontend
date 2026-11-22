@@ -900,7 +900,10 @@ function InformacionDeAmigo({ amigo, onCerrar, onBloquear, onTransferir }: {
       <strong>{amigo.full_name}</strong>
       <ArrobaDebajo username={amigo.username} />
       <button type="button" className="btn btn-ghost" onClick={onBloquear}>{t('Bloquear')}</button>
-      {onTransferir && <button type="button" className="btn btn-ghost" onClick={onTransferir}>{t('Transferir')}</button>}
+      {onTransferir && <button type="button" className="btn btn-ghost" onClick={onTransferir}
+        aria-label={`Transferir a ${amigo.full_name}`}>
+        <Icon name="arrow-up-right" size={16} />
+      </button>}
       <button type="button" className="btn btn-navy" ref={cerrar} onClick={onCerrar}>{t('Cerrar')}</button>
     </div>
   </div>, document.body);

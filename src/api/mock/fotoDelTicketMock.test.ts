@@ -53,7 +53,8 @@ describe('mock · la foto del ticket', () => {
     const de = (code: string) => negociadas.find((f) => f.code === code)?.ticket_image;
     expect(de('PA-6604')).toEqual({ thumb: true, full: true });
     expect(de('PA-7310')).toEqual({ thumb: true, full: false });
-    expect(negociadas.filter((f) => !['PA-6604', 'PA-7310'].includes(f.code)).every((f) =>
+    expect(de('PA-3121')).toEqual({ thumb: true, full: true });
+    expect(negociadas.filter((f) => !['PA-6604', 'PA-7310', 'PA-3121'].includes(f.code)).every((f) =>
       JSON.stringify(f.ticket_image) === JSON.stringify({ thumb: false, full: false }))).toBe(true);
     for (const f of filas(await mock.mockMisMesas())) expect('ticket_image' in f).toBe(false);
   });

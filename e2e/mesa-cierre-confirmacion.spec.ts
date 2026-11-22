@@ -23,6 +23,17 @@ async function persistido(page: Page, code: string) {
   }, code);
 }
 for (const mode of ['consumo', 'igual'] as const) {
+  test(`D945 · Finalizar en ${mode} conserva la mesa si el dueño exige confirmar el cierre`, async ({ page }) => {
+    const code = await preparar(page, mode);
+    const antes = await persistido(page, code);
+    await elegirTodo(page);
+    await page.getByRole('button', { name: 'Finalizar', exact: true }).click();
+    await expect(page.getByText('No se guardó tu selección. Revisa la mesa antes de continuar.', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp('/mesa/' + code + '$'));
+    await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa', exact: true })).toHaveCount(0);
+    expect(await persistido(page, code)).toEqual(antes);
+  });
+
   test(`n422 ${mode}: Revisar cancela sin persistencia; cambiar borrador no hereda confirmación`, async ({ page }) => {
     const code = await preparar(page, mode); const before = await persistido(page, code);
     await elegirTodo(page); await page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true }).click();
