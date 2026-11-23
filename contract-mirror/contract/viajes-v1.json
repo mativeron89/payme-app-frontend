@@ -695,6 +695,7 @@
     "restaurante": "Un viaje no guarda el RFC: el ticket va con el restaurante de una mesa de la misma respuesta cuyo nombre mostrado coincide (sin acentos, mayúsculas ni espacios de más), si es uno solo. Si no, en su propio grupo: id `viaje:` más el sha256 corto del nombre, categoría `cafe` para un café u `other`; sin lugar, id `viaje-ticket:<id del ticket>` y «Restaurante sin identificar». Nunca el RFC ni el folio.",
     "recibo_en_mesa_y_viaje": "Cuenta una sola vez: si el mismo recibo abrió una mesa que cuenta para vos, gana la mesa; si no, cuenta el ticket del viaje.",
     "visita": "`code` = el id del ticket (nunca es un código de mesa); `division_mode` consumo o igual; `created_at` = el instante. Con `stats_version=2` (cadena exacta, sólo en /stats/restaurants) cada visita suma `viaje_id` (null en una mesa); sin el parámetro, la forma de siempre.",
+    "foto_en_visita": "Desde 2.216.1, /api/account/stats/restaurants incluye la foto negociada en visitas de mesa y de viaje. En Viajes exige que quien consulta pueda leer hoy la foto de ese ticket. Ver contract/ticket-image-v1.json, listados.estadisticas.",
     "topes": "El tope del mes y el del rango cuentan también los tickets de viaje, incluido el conteo previo.",
     "en_mesas": "v2.184.0 · D293: la misma regla alimenta GET /api/viajes/visitas, mis tickets de viaje para la lista de Mesas, con lo que me toca (`te_toca_cents`) igual al monto de la visita acá."
   },

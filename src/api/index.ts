@@ -696,7 +696,7 @@ export interface Api {
   /** AF-31 · con `period`, `?period=` (dueño v2.106.0); sin él, el mes en curso. */
   getStats(period?: ClavePeriodo): Promise<StatsResponse>;
   /** AF-29 · n165 · «Tus restaurantes» (2b). 404 = backend anterior. */
-  getStatsRestaurants(period?: ClavePeriodo): Promise<TusRestaurantes>;
+  getStatsRestaurants(period?: ClavePeriodo, conFoto?: boolean): Promise<TusRestaurantes>;
   /** AF-31 · n166 · «Qué comes» por platos (2c). 404 = backend anterior. */
   getStatsDishes(period?: ClavePeriodo): Promise<PlatosDelPeriodo>;
   /** AF-31 · n167 · «Evolución» (2f): los últimos 6 meses, sin parámetros. */
@@ -1465,11 +1465,10 @@ const realApi: Api = {
     decodeMomentos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dayparts', period))),
   getStatsIngredients: async (period) =>
     decodeIngredientes(await httpRequest<unknown>('GET', rutaDeIngredientes(period))),
-  getStatsRestaurants: async (period) =>
-    decodeTusRestaurantes(
-      await httpRequest<unknown>('GET', rutaDeTusRestaurantes(period)),
-      { negociado: true },
-    ),
+  getStatsRestaurants: async (period, conFoto) => {
+    const foto = conFoto ? negociacionDeFoto() : false;
+    return decodeTusRestaurantes(await httpRequest<unknown>('GET', rutaDeTusRestaurantes(period, foto)), { negociado: true, foto });
+  },
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
   getBlockedUsers: async () => decodeBlockedUsers(await httpPrivateJsonRequest<unknown>('/friends/blocked')),
@@ -2022,7 +2021,10 @@ const mockApi: Api = {
   },
   getStatsDayparts: async (period) => decodeMomentos(await mock.mockStatsDayparts(period)),
   getStatsIngredients: async (period) => decodeIngredientes(await mock.mockStatsIngredients(period)),
-  getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period, { statsVersion: 2 })),
+  getStatsRestaurants: async (period, conFoto) => {
+    const foto = conFoto ? negociacionDeFoto() : false;
+    return decodeTusRestaurantes(await mock.mockStatsRestaurants(period, { statsVersion: 2, foto }), { foto });
+  },
 
   getFriends: () => mock.mockFriends(),
   getBlockedUsers: async () => decodeBlockedUsers(await mock.mockBlockedUsers()),

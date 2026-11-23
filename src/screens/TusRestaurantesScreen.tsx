@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
+import { partesDeLaFoto, tieneFoto, useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
+import { useCapacidadOcrPaginas } from '../api/ocrPaginas';
+import { useViajesHabilitado } from '../api/viajes';
+import { useMiniaturasDeTickets, type OrigenDeFoto } from '../api/fotosDeTickets';
+import { BotonDeMiniatura, MarcoDeFilaDeTicket, VisorDelTicket } from '../components/VisorDelTicket';
 import { api } from '../api';
-import { visitasDelMes, type TusRestaurantes, type Visita } from '../api/tusRestaurantes';
+import { visitasDelMes, type TusRestaurantes, type RestauranteDelMes, type Visita } from '../api/tusRestaurantes';
 import { isCurrentSession, loadSession } from '../api/storage';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -59,16 +64,23 @@ type Estado =
   | { readonly tipo: 'lista'; readonly datos: TusRestaurantes };
 
 export function TusRestaurantesScreen() {
-  const { t, idioma } = useIdioma();
+  const { session } = useAuth();
+  return <RestaurantesDeLaCuenta key={JSON.stringify([session?.principal_id, session?.family_id])} />;
+}
+
+function RestaurantesDeLaCuenta() {
+  const { t } = useIdioma();
   const { presentationZone } = useRegion();
   // E173-1 · sin «Fechas mostradas en …»: sólo el aviso de navegador degradado.
   const zoneCaption = personalZoneCaption(presentationZone, t);
   const { session } = useAuth();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [abierto, setAbierto] = useState<string | null>(null);
-  const [visitaAbierta, setVisitaAbierta] = useState<string | null>(null);
   /** AF-31 · el período elegido en 2a, conservado al navegar. */
   const clave = usePeriodoEstadisticas();
+  const capacidadFoto = useCapacidadFotoDelTicket();
+  const paginas = useCapacidadOcrPaginas();
+  const versionFoto = capacidadFoto ? (paginas ? 2 : 1) : null;
 
   /** F-02 · la respuesta de un período anterior no pisa la del elegido. */
   const nuevaTanda = useTandaVigente();
@@ -77,14 +89,13 @@ export function TusRestaurantesScreen() {
     const vigente = nuevaTanda();
     setEstado({ tipo: 'cargando' });
     setAbierto(null);
-    setVisitaAbierta(null);
     api
-      .getStatsRestaurants(clave)
+      .getStatsRestaurants(clave, versionFoto !== null)
       .then((datos) => { if (vigente()) setEstado({ tipo: 'lista', datos }); })
       // Todo error es el mismo cartel: 404, 413 o red. El dueño no manda datos
       // parciales, así que no hay nada a medias que mostrar.
       .catch(() => { if (vigente()) setEstado({ tipo: 'error' }); });
-  }, [clave, nuevaTanda]);
+  }, [clave, nuevaTanda, versionFoto]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -97,7 +108,6 @@ export function TusRestaurantesScreen() {
 
   function abrirRestaurante(id: string) {
     setAbierto((a) => (a === id ? null : id));
-    setVisitaAbierta(null);
   }
 
   return (
@@ -160,29 +170,7 @@ export function TusRestaurantesScreen() {
                     <span className="rest-monto">{formatMXN(r.amountCents)}</span>
                     <Icon name="chevron-down" size={18} className={abiertoR ? 'rest-chev abierto' : 'rest-chev'} />
                   </button>
-                  {abiertoR && (
-                    <div className="rest-visitas">
-                      {r.visits.map((v) => {
-                        const claveV = `${r.id}:${v.code}`;
-                        const abiertaV = visitaAbierta === claveV;
-                        return (
-                          <div key={v.code} className={abiertaV ? 'rest-visita abierta' : 'rest-visita'}>
-                            <button
-                              type="button"
-                              className="rest-visita-fila"
-                              aria-expanded={abiertaV}
-                              onClick={() => setVisitaAbierta((a) => (a === claveV ? null : claveV))}
-                            >
-                              <span className="rest-visita-fecha">{fechaDeVisita(v.createdAt, presentationZone, idioma, t)}</span>
-                              <span className="rest-visita-monto">{formatMXN(v.amountCents)}</span>
-                              <Icon name="chevron-down" size={18} className={abiertaV ? 'rest-chev abierto' : 'rest-chev'} />
-                            </button>
-                            {abiertaV && <DentroDeLaVisita visita={v} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {abiertoR && <VisitasDelRestaurante restaurante={r} conFoto={capacidadFoto !== null} />}
                 </section>
               );
             })}
@@ -234,6 +222,58 @@ export function modalidadDeVisita(
   if (divisionMode === 'igual') return t('Partes iguales');
   if (divisionMode === 'consumo') return t('Por consumo');
   return null;
+}
+
+function origenDeVisita(v: Visita, viajes: boolean): OrigenDeFoto | null {
+  if (!tieneFoto(v.fotoDelTicket)) return null;
+  if (v.viajeId !== null) return viajes ? { tipo: 'viaje', viajeId: v.viajeId, ticketId: v.code } : null;
+  // Sin viaje_id, sólo un código de mesa puede pedir bytes. El id de un ticket de viaje nunca sirve.
+  return /^PA-\d+$/.test(v.code) ? { tipo: 'mesa', code: v.code } : null;
+}
+
+function VisitasDelRestaurante({ restaurante, conFoto }: { restaurante: RestauranteDelMes; conFoto: boolean }) {
+  const { session } = useAuth();
+  const { t, idioma } = useIdioma();
+  const { presentationZone } = useRegion();
+  const viajes = useViajesHabilitado();
+  const filas = useMemo(() => restaurante.visits.map(visita => ({
+    visita, origen: conFoto ? origenDeVisita(visita, viajes) : null,
+  })), [restaurante, conFoto, viajes]);
+  const origenes = useMemo(() => filas.flatMap(({ origen }) => origen ? [origen] : []), [filas]);
+  const miniaturas = useMiniaturasDeTickets(session, origenes);
+  const [abierta, setAbierta] = useState<string | null>(null);
+  const [visor, setVisor] = useState<string | null>(null);
+  const disparador = useRef<HTMLButtonElement | null>(null);
+  const seleccion = filas.find(({ visita }) => visita.code === visor);
+  const foto = seleccion?.visita.fotoDelTicket;
+
+  return <div className="rest-visitas">
+    {filas.map(({ visita, origen }) => {
+      const expandida = abierta === visita.code;
+      const miniatura = origen && !miniaturas.sinFoto(origen) && (
+        <BotonDeMiniatura nombre={restaurante.name} icono="dining" url={miniaturas.urlDe(origen)} estado={miniaturas.estadoDe(origen)}
+          partes={partesDeLaFoto(visita.fotoDelTicket)} onAbrir={boton => { disparador.current = boton; setVisor(visita.code); }} />
+      );
+      return <div key={visita.code} className={expandida ? 'rest-visita abierta' : 'rest-visita'}>
+        <MarcoDeFilaDeTicket miniatura={miniatura}>
+          <button type="button" className="rest-visita-fila" aria-expanded={expandida}
+            onClick={() => setAbierta(expandida ? null : visita.code)}>
+            <span className="rest-visita-fecha">{fechaDeVisita(visita.createdAt, presentationZone, idioma, t)}</span>
+            <span className="rest-visita-monto">{formatMXN(visita.amountCents)}</span>
+            <Icon name="chevron-down" size={18} className={expandida ? 'rest-chev abierto' : 'rest-chev'} />
+          </button>
+        </MarcoDeFilaDeTicket>
+        {expandida && <DentroDeLaVisita visita={visita} />}
+      </div>;
+    })}
+    {seleccion?.origen && tieneFoto(foto) && !miniaturas.sinFoto(seleccion.origen) && (
+      <VisorDelTicket session={session} tickets={[{
+        clave: seleccion.visita.code, origen: seleccion.origen, foto, titulo: restaurante.name,
+        monto: formatMXN(seleccion.visita.amountCents), detalle: [],
+      }]} indiceInicial={0} titulo={() => t('Foto del ticket')} onCerrar={() => setVisor(null)}
+        onVerConsumos={null} returnFocusRef={disparador} />
+    )}
+  </div>;
 }
 
 /** Lo tuyo en la visita y, debajo, el botón del ticket completo. */

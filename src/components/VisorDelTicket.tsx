@@ -501,6 +501,11 @@ export function FilaDeLaFotoDelTicket({ url, estado, onAbrir, botonRef }: {
   );
 }
 
+/** El botón que abre la fila y el que abre el visor son hermanos. */
+export function MarcoDeFilaDeTicket({ children, miniatura }: { children: ReactNode; miniatura?: ReactNode }) {
+  return <div className="fila-ticket-cuerpo">{children}{miniatura}</div>;
+}
+
 /**
  * D481 · 2a · 2c · la anatomía de la fila de una lista de tickets: la columna
  * de 44 px (la miniatura o el ícono, centrados), el nombre, el monto y la
@@ -522,7 +527,7 @@ export function FilaDeTicket({ icono, nombre, monto, extra, miniatura, onAbrir, 
 }) {
   const { t } = useIdioma();
   return (
-    <div className="fila-ticket-cuerpo">
+    <MarcoDeFilaDeTicket miniatura={miniatura}>
       <button type="button" className="fila-ticket" onClick={onAbrir}>
         <span className="fila-ticket-columna" aria-hidden="true">
           {miniatura ? null : <Icon name={icono} size={26} />}
@@ -544,7 +549,6 @@ export function FilaDeTicket({ icono, nombre, monto, extra, miniatura, onAbrir, 
         </span>
         <Icon name="chevron-right" size={20} className="fila-ticket-flecha" />
       </button>
-      {miniatura}
-    </div>
+    </MarcoDeFilaDeTicket>
   );
 }

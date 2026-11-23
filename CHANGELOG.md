@@ -1,3 +1,7 @@
+## 0.281.0 · 2026-11-23
+
+- En Estadísticas → Tus restaurantes, tocá la miniatura de una visita de mesa o viaje para ver la foto de su ticket.
+
 ## 0.280.0 · 2026-11-22
 
 - Las pruebas cubren la foto con el interruptor apagado, Foto y Finalizar en mesas pagadas o pendientes de autorización, y Transferir en Información de Amigos con la wallet apagada.

@@ -25,6 +25,7 @@ const PAPELES_DE_MESAS: Readonly<Record<string, PapelDelTicket>> = {
       { nombre: 'TEMPURA DE CAMARÓN', cents: 12000 }, { nombre: 'SAKE', cents: 10000 },
     ],
   },
+  'PA-7500': { lugar: 'LA PAROLACCIA', renglones: [{ nombre: 'TAGLIATELLE BOLOGNESE', cents: 18000 }] },
   'PA-6604': {
     lugar: 'CAFÉ TACUBA',
     renglones: [

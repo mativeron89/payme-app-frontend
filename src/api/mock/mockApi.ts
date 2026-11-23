@@ -1,6 +1,6 @@
 import type { BlockedUser, BlockedUsersResponse } from '../index';
 import { SELECTION_CLOSURE_CONTRACT, type SelectionClosureConfirmation } from '../types';
-import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock } from '../fotoDelTicket';
+import { fotoDelTicketMockEncendida, capacidadFotoDelTicketMock, type NegociacionDeFoto } from '../fotoDelTicket';
 import { capacidadOcrPaginasMock } from '../ocrPaginas';
 import { direccionDelLocal } from '../direccionDelLocal';
 import { CLOSURE_CHANGED, CLOSURE_REQUIRED } from '../selectionClosure';
@@ -2296,6 +2296,7 @@ export async function mockMisMesas(
  * mesas del seed sin foto (cargadas a mano: el ícono de siempre).
  */
 const FOTOS_DE_MESAS_MOCK: Readonly<Record<string, { thumb: boolean; full: boolean }>> = {
+  'PA-7500': { thumb: true, full: true },
   'PA-6604': { thumb: true, full: true },
   'PA-7310': { thumb: true, full: false },
 };
@@ -5559,13 +5560,26 @@ function fallaDeRuta(clave: string, error413: string): Promise<never> | null {
 
 /** AF-29 · `GET /account/stats/restaurants` (v2.104.0), con `?period=` desde v2.106.0. */
 /** D260 · `statsVersion: 2` (`stats_version=2`) suma `viaje_id` a cada visita: el viaje, o `null` en una mesa. */
-export async function mockStatsRestaurants(period?: string, { statsVersion = 1 }: { readonly statsVersion?: 1 | 2 } = {}): Promise<unknown> {
+export async function mockStatsRestaurants(period?: string, { statsVersion = 1, foto = false }: {
+  readonly statsVersion?: 1 | 2; readonly foto?: NegociacionDeFoto;
+} = {}): Promise<unknown> {
   const falla = fallaDeRuta('payme.app.mock.restaurantes.v1', 'stats_month_too_large');
   if (falla) return falla;
   const resuelto = resolverPeriodo(period);
   if (resuelto === 'invalido') return fail(400, 'validation_error');
   const { meses, period: periodo } = periodoDelMock(resuelto.clave);
   const visitas = visitasDelModelo().filter((v) => meses.includes(v.mes));
+  const conFoto = foto && fotoDelTicketMockEncendida();
+  const viajes = conFoto && visitas.some(v => v.viajeId) ? await import('./viajes') : null;
+  function fotoDeVisita(v: VisitaMock) {
+    if (v.viajeId) {
+      return viajes?.ticketDeViajeTieneFotoMock(v.viajeId, v.code)
+        ? { thumb: true, full: true, ...(foto === 2 && { pages: 1 }) }
+        : null;
+    }
+    const estado = foto === 2 ? fotoDeMesaMockV2(v.code) : fotoDeMesaMock(v.code);
+    return estado.thumb ? estado : null;
+  }
   const porRestaurante = new Map<string, VisitaMock[]>();
   for (const v of visitas) porRestaurante.set(v.restaurantId, [...(porRestaurante.get(v.restaurantId) ?? []), v]);
   const restaurants = [...porRestaurante.values()]
@@ -5585,6 +5599,7 @@ export async function mockStatsRestaurants(period?: string, { statsVersion = 1 }
           amount_cents: v.amount_cents,
           items: v.items.map((it) => ({ ...it })),
           ...(statsVersion === 2 && { viaje_id: v.viajeId ?? null }),
+          ...(conFoto && { ticket_image: fotoDeVisita(v) }),
         })),
       };
     })
