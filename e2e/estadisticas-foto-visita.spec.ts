@@ -71,7 +71,7 @@ for (const [tipo, version, prefijo] of [
     expect(pedidos).toEqual([prefijo + '/ticket-image/thumb']);
     await boton.click();
     const visor = page.getByRole('dialog', { name: 'Foto del ticket' });
-    await expect(visor.locator('img').first()).toBeVisible();
+    await expect(visor.locator('img[data-tamano="full"]')).toBeVisible();
     expect(pedidos).toContain(prefijo + '/ticket-image/full');
     expect(pedidos.every(p => p.startsWith(prefijo + '/ticket-image/'))).toBe(true);
     await visor.getByLabel('Cerrar', { exact: true }).click();
@@ -116,7 +116,7 @@ for (const ancho of [320, 390]) {
     if (dir) await page.screenshot({ path: dir + '/visitas-' + ancho + '.png' });
     await boton.click();
     const visor = page.getByRole('dialog', { name: 'Foto del ticket' });
-    await expect(visor.locator('img').first()).toBeVisible();
+    await expect(visor.locator('img[data-tamano="full"]')).toBeVisible();
     if (dir) await page.screenshot({ path: dir + '/visor-' + ancho + '.png' });
   });
 }

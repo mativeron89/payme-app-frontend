@@ -2295,8 +2295,9 @@ export async function mockMisMesas(
  * Güero sólo con la miniatura (la completa «se borró a los 90 días») y las
  * mesas del seed sin foto (cargadas a mano: el ícono de siempre).
  */
+export const MESA_CON_FOTO_EN_ESTADISTICAS = 'PA-7500';
 const FOTOS_DE_MESAS_MOCK: Readonly<Record<string, { thumb: boolean; full: boolean }>> = {
-  'PA-7500': { thumb: true, full: true },
+  [MESA_CON_FOTO_EN_ESTADISTICAS]: { thumb: true, full: true },
   'PA-6604': { thumb: true, full: true },
   'PA-7310': { thumb: true, full: false },
 };
@@ -5436,6 +5437,20 @@ function visitasDelModelo(): VisitaMock[] {
     });
   }
   return visitas;
+}
+
+/** Papel dibujado a partir de la misma visita ficticia que se ve en Estadísticas. */
+export function papelDeEstadisticasMock() {
+  const visita = visitasDelModelo().find(v => v.code === MESA_CON_FOTO_EN_ESTADISTICAS);
+  if (!visita) return null;
+  return {
+    lugar: visita.restaurant.toUpperCase(),
+    renglones: visita.items.map(it => ({
+      nombre: it.name.toUpperCase(),
+      // El modelo sólo siembra líneas enteras o mitades. El papel muestra el importe de la línea completa.
+      cents: it.fraction_bps === 5000 ? it.amount_cents * 2 : it.amount_cents,
+    })),
+  };
 }
 
 type ClavePeriodoMock = 'this_month' | 'last_month' | 'last_3_months' | 'this_year';
