@@ -76,7 +76,8 @@ export function CardBrandChip({ brand }: { brand: string }) {
  * diseño. Sin la opción, donde estuvo siempre: ningún otro aviso se mueve.
  */
 export interface OpcionesDelAviso {
-  readonly sobreLaBarra?: boolean;
+  /** 'continuar' reserva también la acción de cierre de la mesa. */
+  readonly sobreLaBarra?: boolean | 'continuar';
   /** D387 · sólo el ingreso por link usa el aviso blanco bajo Volver. */
   readonly ingresoAMesa?: boolean;
 }
@@ -132,7 +133,7 @@ export function crearAnclajeDelIngreso(fila: Element | null, pantalla: Element |
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useIdioma();
   const [msg, setMsg] = useState<string | null>(null);
-  const [sobreLaBarra, setSobreLaBarra] = useState(false);
+  const [sobreLaBarra, setSobreLaBarra] = useState<OpcionesDelAviso['sobreLaBarra']>(false);
   const [ingresoAMesa, setIngresoAMesa] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
   const [arriba, setArriba] = useState<number | null>(null);
@@ -173,7 +174,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     omitirClick.current = false;
     setSaliendo(false);
     setMsg(m);
-    setSobreLaBarra(opciones?.sobreLaBarra === true);
+    setSobreLaBarra(opciones?.sobreLaBarra);
     setIngresoAMesa(opciones?.ingresoAMesa === true);
     timer.current = setTimeout(opciones?.ingresoAMesa ? cerrarIngreso : () => setMsg(null), opciones?.ingresoAMesa ? 3000 : 2400);
   }, [cancelarTimers, cerrarIngreso]);
@@ -220,7 +221,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('scroll', medir, true);
     };
   }, [msg, ingresoAMesa, invalidarIngreso]);
-  const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : '', ingresoAMesa ? 'toast--ingreso-mesa' : '', saliendo ? 'toast--saliendo' : ''].filter(Boolean).join(' ');
+  const clases = ['toast', msg ? '' : 'toast-hidden', sobreLaBarra ? 'toast--sobre-barra' : '',
+    sobreLaBarra === 'continuar' ? 'toast--sobre-continuar' : '', ingresoAMesa ? 'toast--ingreso-mesa' : '', saliendo ? 'toast--saliendo' : ''].filter(Boolean).join(' ');
   return (
     <ToastContext.Provider value={show}>
       {children}

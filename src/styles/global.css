@@ -3078,7 +3078,7 @@ body::before {
   bottom: calc(104px + env(safe-area-inset-bottom));
 }
 /* La barra de la mesa incluye el botón de continuar y el aviso entra desde 16 px más abajo. */
-body:has(.appbar-block--accion-ancha) .toast.toast--sobre-barra {
+.toast.toast--sobre-continuar {
   bottom: calc(var(--appbar-alto) + 52px + var(--sp-3) + 24px);
 }
 .toast:not(.toast-hidden) {
