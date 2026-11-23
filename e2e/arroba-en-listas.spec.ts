@@ -146,6 +146,11 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
 
     await page.getByRole('button', { name: 'Nuevo amigo' }).click();
     await expect(page.getByPlaceholder('Email', { exact: true })).toBeVisible();
+    await expect(juan.locator('.friend-row')).not.toContainText('@');
+    await info.focus();
+    await info.press('Enter');
+    await expect(hoja.getByText('@juan.lopez', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     await sinCodigo(page);
   });
 
@@ -164,9 +169,19 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
     await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
     await page.getByText('Familia', { exact: false }).first().click();
     await expect(page.getByText('Agregar del listado de amigos')).toBeVisible();
-    await debajo(fila(page, '.friend-row', 'Sofía Fernández'), '@sofi.fernandez');
-    await debajo(fila(page, '.friend-row', 'Leo Paz'), null);
-    await debajo(fila(page, '.friend-row', 'Juan López'), '@juan.lopez');
+    for (const [nombre, usuario] of [['Sofía Fernández', '@sofi.fernandez'], ['Juan López', '@juan.lopez'], ['Leo Paz', null]] as const) {
+      const row = fila(page, '.friend-row', nombre);
+      await expect(row).toBeVisible();
+      await expect(row).not.toContainText('@');
+      const info = row.getByRole('button', { name: 'Información de ' + nombre, exact: true });
+      await info.click();
+      const hoja = page.getByRole('dialog', { name: 'Información de ' + nombre, exact: true });
+      await expect(hoja).toBeVisible();
+      if (usuario) await expect(hoja.getByText(usuario, { exact: true })).toBeVisible();
+      else await expect(hoja).not.toContainText('@');
+      await hoja.getByRole('button', { name: 'Cerrar' }).click();
+      await expect(info).toBeFocused();
+    }
     await sinCodigo(page);
     await capturar(page, 'd104-grupo');
   });

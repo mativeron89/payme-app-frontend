@@ -68,6 +68,7 @@ export const EN: Record<string, string> = {
   "Términos de uso": "Terms of use",
   "Legal y ayuda": "Legal and help",
   "No se guardó tu selección. Revisa la mesa antes de continuar.": "Your selection wasn’t saved. Check the table before continuing.",
+  "Con esto se cierra la mesa. Toca «Continuar» para confirmarlo.": "This closes the table. Tap «Continue» to confirm.",
   "Finalizar": "Finish",
   "Información": "Information",
   "Información de {0}": "Information about {0}",

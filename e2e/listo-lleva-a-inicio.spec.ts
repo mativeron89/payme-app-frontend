@@ -234,12 +234,16 @@ for (const modo of ['consumo', 'igual'] as const) {
       await expect.poll(() => page.evaluate(() => sessionStorage.getItem('d945-guardando'))).toBe('1');
       await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
       await expect(finalizar).toBeDisabled();
+      const aviso = page.getByText('Listo, quedó guardado', { exact: true });
+      await expect(aviso).toHaveCount(0);
       await page.evaluate(() => window.dispatchEvent(new Event('d945-resolver')));
       if (resultado === 'ok') {
         await expect(page).toHaveURL(/\/home$/);
+        await expect(aviso).toBeVisible();
       } else {
         await expect(page.getByRole('status').filter({ hasText: /No pudimos|No se guardó|No sabemos/ })).toBeVisible();
         await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
+        await expect(aviso).toHaveCount(0);
       }
       await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa', exact: true })).toHaveCount(0);
     });

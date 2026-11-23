@@ -1513,7 +1513,9 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     const rechazo = decodeSelectionClosureRejection(failure.code, failure.status, failure.extra,
       { mesaCode: code, mode: operacion.modo });
     if (preparada?.finalizar) {
-      toast(t('No se guardó tu selección. Revisa la mesa antes de continuar.'));
+      toast(rechazo?.challenge && preparada.mesa.guarantee_mode === false
+        ? t('Con esto se cierra la mesa. Toca «Continuar» para confirmarlo.')
+        : t('No se guardó tu selección. Revisa la mesa antes de continuar.'));
       return true;
     }
     if (!rechazo || !preparada || ejemplo || isGuest || preparada.mesa.guarantee_mode !== false) {
@@ -3543,7 +3545,10 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
         && (mesa.status === 'open' || mesa.status === 'partially_paid')
         && <FotoDeMesaAbierta key={JSON.stringify([session.principal_id, code])} session={session} mesa={mesa} />}
       onFinalizar={!ejemplo && !isGuest && (mesa.status === 'open' || mesa.status === 'partially_paid')
-        ? () => navigate('home') : undefined}
+        ? () => {
+          navigate('home');
+          toast(t('Listo, quedó guardado'), { sobreLaBarra: true });
+        } : undefined}
       mesa={mesa}
       code={code}
       userName={fullName(session) ?? undefined}

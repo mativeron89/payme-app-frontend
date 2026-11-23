@@ -91,7 +91,7 @@ export function SocialScreen() {
   const [confirmacion, setConfirmacion] = useState<{ texto: string; accion: () => Promise<void>; etiqueta: string } | null>(null);
   const disparadorConfirmacion = useRef<HTMLElement | null>(null);
   const pestanasRef = useRef<HTMLDivElement>(null);
-  const [infoAmigo, setInfoAmigo] = useState<Friend | null>(null);
+  const [infoAmigo, setInfoAmigo] = useState<Pick<Friend, 'id' | 'payme_id' | 'full_name' | 'username'> | null>(null);
   const botonInfo = useRef<HTMLButtonElement | null>(null);
   const cerrarInfo = () => {
     setInfoAmigo(null);
@@ -391,6 +391,13 @@ export function SocialScreen() {
   if (detail) {
     const memberIds = new Set(detail.members.map((m) => m.id));
     const addable = friends?.filter((f) => !memberIds.has(f.id)) ?? [];
+    function informacion(persona: NonNullable<typeof infoAmigo>) {
+      return <button type="button" className="btn btn-ghost btn-sm btn-fit"
+        aria-label={t('Información de {0}', persona.full_name)} onClick={(event) => {
+          botonInfo.current = event.currentTarget;
+          setInfoAmigo(persona);
+        }}>{t('Información')}</button>;
+    }
     return (
       <div className="screen has-appbar">
         <AppHeaderBack
@@ -413,8 +420,8 @@ export function SocialScreen() {
                   <div className="n">
                     {m.first_name} {m.last_name}
                   </div>
-                  <ArrobaDebajo username={m.username} />
                 </div>
+                {informacion({ ...m, full_name: `${m.first_name} ${m.last_name}`.trim() })}
                 <button
                   className="back-btn"
                   style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
@@ -440,27 +447,29 @@ export function SocialScreen() {
               <div className="sectlabel">{t('Agregar del listado de amigos')}</div>
               <div className="card" style={{ marginBottom: 16 }}>
                 {addable.map((f) => (
-                  <button
-                    key={f.id}
-                    className="friend-row"
-                    onClick={async () => {
-                      try {
-                        olvidarLoDeAmigos();
-                        await api.addGroupMember(detail.group.id, f.id);
-                        setDetail(await api.getGroup(detail.group.id));
-                        loadGroups();
-                      } catch {
-                        toast(t('No se pudo agregar'));
-                      }
-                    }}
-                  >
-                    <Avatar name={f.full_name} />
-                    <div className="fr-name">
-                      <div className="n">{f.full_name}</div>
-                      <ArrobaDebajo username={f.username} />
-                    </div>
-                    <span className="badge badge-teal">{t('+ sumar')}</span>
-                  </button>
+                  <div key={f.id} className="friend-row">
+                    <button
+                      type="button"
+                      className="grupo-sumar-amigo"
+                      onClick={async () => {
+                        try {
+                          olvidarLoDeAmigos();
+                          await api.addGroupMember(detail.group.id, f.id);
+                          setDetail(await api.getGroup(detail.group.id));
+                          loadGroups();
+                        } catch {
+                          toast(t('No se pudo agregar'));
+                        }
+                      }}
+                    >
+                      <Avatar name={f.full_name} />
+                      <span className="fr-name">
+                        <span className="n">{f.full_name}</span>
+                      </span>
+                      <span className="badge badge-teal">{t('+ sumar')}</span>
+                    </button>
+                    {informacion(f)}
+                  </div>
                 ))}
               </div>
             </>
@@ -484,8 +493,9 @@ export function SocialScreen() {
         </div>
         {/* El detalle TAMBIÉN la lleva: que tenga flecha de volver no alcanza,
             esa vuelve a la lista y no sale de la sección. */}
+        {infoAmigo && <InformacionDeAmigo amigo={infoAmigo} onCerrar={cerrarInfo} />}
         {hojaConfirmacion}
-      <AppBottomBar active="amigos" />
+        <AppBottomBar active="amigos" />
       </div>
     );
   }
@@ -888,7 +898,7 @@ function MenuSocial({ nombre, disabled = false, onBloquear }: {
 }
 
 function InformacionDeAmigo({ amigo, onCerrar, onBloquear, onTransferir }: {
-  amigo: Friend; onCerrar: () => void; onBloquear: () => void; onTransferir?: () => void;
+  amigo: Pick<Friend, 'full_name' | 'username'>; onCerrar: () => void; onBloquear?: () => void; onTransferir?: () => void;
 }) {
   const { t } = useIdioma();
   const hoja = useRef<HTMLDivElement>(null);
@@ -899,7 +909,7 @@ function InformacionDeAmigo({ amigo, onCerrar, onBloquear, onTransferir }: {
       aria-label={t('Información de {0}', amigo.full_name)} onClick={e => e.stopPropagation()}>
       <strong>{amigo.full_name}</strong>
       <ArrobaDebajo username={amigo.username} />
-      <button type="button" className="btn btn-ghost" onClick={onBloquear}>{t('Bloquear')}</button>
+      {onBloquear && <button type="button" className="btn btn-ghost" onClick={onBloquear}>{t('Bloquear')}</button>}
       {onTransferir && <button type="button" className="btn btn-ghost" onClick={onTransferir}
         aria-label={`Transferir a ${amigo.full_name}`}>
         <Icon name="arrow-up-right" size={16} />

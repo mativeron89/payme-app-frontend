@@ -28,7 +28,7 @@ for (const mode of ['consumo', 'igual'] as const) {
     const antes = await persistido(page, code);
     await elegirTodo(page);
     await page.getByRole('button', { name: 'Finalizar', exact: true }).click();
-    await expect(page.getByText('No se guardó tu selección. Revisa la mesa antes de continuar.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Con esto se cierra la mesa. Toca «Continuar» para confirmarlo.', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(new RegExp('/mesa/' + code + '$'));
     await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa', exact: true })).toHaveCount(0);
     expect(await persistido(page, code)).toEqual(antes);
@@ -87,6 +87,9 @@ test('n422 inglés: Escape devuelve foco y Enter confirma sólo desde Save and c
   await expect(page.locator('.desplegable.tus-consumos .desplegable-cabecera')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.qc-renglon').first()).toBeVisible();
   await elegirTodo(page); const done = page.getByRole('button', { name: 'Continue', exact: true });
+  await page.getByRole('button', { name: 'Finish', exact: true }).click();
+  await expect(page.getByText('This closes the table. Tap «Continue» to confirm.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await done.click();
   const dialog = page.getByRole('dialog', { name: 'This closes the table' });
   await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button', { name: 'Review', exact: true })).toBeFocused();

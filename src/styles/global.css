@@ -2807,6 +2807,23 @@ body::before {
 .friend-row:last-child {
   border-bottom: none;
 }
+.grupo-sumar-amigo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.grupo-sumar-amigo .n {
+  overflow-wrap: anywhere;
+}
 .friend-row.sel {
   background: var(--teal-l);
 }

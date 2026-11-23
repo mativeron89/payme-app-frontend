@@ -1,3 +1,8 @@
+## 0.282.0 · 2026-11-23
+
+- «Finalizar» indica cuándo se necesita «Continuar» para confirmar el cierre de la mesa. Al regresar a Inicio tras guardar la selección, aparece «Listo, quedó guardado».
+- En Grupos y Nuevo amigo, las filas muestran el nombre o apodo. El @ se consulta en Información y sigue visible en los resultados de búsqueda por @.
+
 ## 0.281.0 · 2026-11-23
 
 - En Estadísticas → Tus restaurantes, tocá la miniatura de una visita de mesa o viaje para ver la foto de su ticket.
