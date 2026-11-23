@@ -391,12 +391,39 @@ export function SocialScreen() {
   if (detail) {
     const memberIds = new Set(detail.members.map((m) => m.id));
     const addable = friends?.filter((f) => !memberIds.has(f.id)) ?? [];
-    function informacion(persona: NonNullable<typeof infoAmigo>) {
-      return <button type="button" className="btn btn-ghost btn-sm btn-fit"
-        aria-label={t('Información de {0}', persona.full_name)} onClick={(event) => {
-          botonInfo.current = event.currentTarget;
-          setInfoAmigo(persona);
-        }}>{t('Información')}</button>;
+    const groupId = detail.group.id;
+    type Persona = NonNullable<typeof infoAmigo>;
+
+    async function actualizarMiembro(id: string, sumar: boolean) {
+      try {
+        olvidarLoDeAmigos();
+        if (sumar) await api.addGroupMember(groupId, id);
+        else await api.removeGroupMember(groupId, id);
+        setAmigoDeslizado(null);
+        setDetail(await api.getGroup(groupId));
+        loadGroups();
+      } catch {
+        toast(sumar ? t('No se pudo agregar') : t('No se pudo quitar del grupo'));
+      }
+    }
+
+    function filaDeGrupo(persona: Persona, esMiembro: boolean) {
+      const { id, full_name: nombre } = persona;
+      const identidad = <><Avatar name={nombre} /><span className="fr-name"><span className="n">{nombre}</span></span></>;
+      return (
+        <FilaDeslizable key={id} className="amigo-deslizable grupo-deslizable" nombre={nombre}
+          abierta={amigoDeslizado === id} onAbrir={() => setAmigoDeslizado(id)}
+          onCerrar={() => setAmigoDeslizado(actual => actual === id ? null : actual)}
+          etiquetaEliminar={t('Quitar')} nombreEliminar={t('Quitar a {0} del grupo', nombre)}
+          onEliminar={esMiembro ? boton => confirmar(t('¿Quitar a {0} del grupo?', nombre),
+            () => actualizarMiembro(id, false), t('Quitar'), boton) : undefined}
+          onInformacion={boton => { botonInfo.current = boton; setInfoAmigo(persona); }}>
+          {esMiembro
+            ? <div className="friend-row">{identidad}</div>
+            : <button type="button" className="friend-row" aria-label={t('Sumar a {0} al grupo', nombre)}
+                onClick={() => actualizarMiembro(id, true)}>{identidad}</button>}
+        </FilaDeslizable>
+      );
     }
     return (
       <div className="screen has-appbar">
@@ -413,64 +440,13 @@ export function SocialScreen() {
             {detail.members.length === 0 && (
               <div className="empty" style={{ padding: 18 }}>{t('Sin miembros todavía.')}</div>
             )}
-            {detail.members.map((m) => (
-              <div key={m.id} className="friend-row" style={{ cursor: 'default' }}>
-                <Avatar name={t('{0} {1}', m.first_name, m.last_name)} />
-                <div className="fr-name">
-                  <div className="n">
-                    {m.first_name} {m.last_name}
-                  </div>
-                </div>
-                {informacion({ ...m, full_name: `${m.first_name} ${m.last_name}`.trim() })}
-                <button
-                  className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
-                  aria-label={t('Quitar a {0} del grupo', m.first_name)}
-                  onClick={async () => {
-                    try {
-                      olvidarLoDeAmigos();
-                      await api.removeGroupMember(detail.group.id, m.id);
-                      setDetail(await api.getGroup(detail.group.id));
-                      loadGroups();
-                    } catch {
-                      toast(t('No se pudo quitar del grupo'));
-                    }
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+            {detail.members.map(m => filaDeGrupo({ ...m, full_name: `${m.first_name} ${m.last_name}`.trim() }, true))}
           </div>
           {addable.length > 0 && (
             <>
               <div className="sectlabel">{t('Agregar del listado de amigos')}</div>
               <div className="card" style={{ marginBottom: 16 }}>
-                {addable.map((f) => (
-                  <div key={f.id} className="friend-row">
-                    <button
-                      type="button"
-                      className="grupo-sumar-amigo"
-                      onClick={async () => {
-                        try {
-                          olvidarLoDeAmigos();
-                          await api.addGroupMember(detail.group.id, f.id);
-                          setDetail(await api.getGroup(detail.group.id));
-                          loadGroups();
-                        } catch {
-                          toast(t('No se pudo agregar'));
-                        }
-                      }}
-                    >
-                      <Avatar name={f.full_name} />
-                      <span className="fr-name">
-                        <span className="n">{f.full_name}</span>
-                      </span>
-                      <span className="badge badge-teal">{t('+ sumar')}</span>
-                    </button>
-                    {informacion(f)}
-                  </div>
-                ))}
+                {addable.map(f => filaDeGrupo(f, false))}
               </div>
             </>
           )}

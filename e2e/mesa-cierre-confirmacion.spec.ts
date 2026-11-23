@@ -102,3 +102,59 @@ test('n422 inglés: Escape devuelve foco y Enter confirma sólo desde Save and c
   await expect.poll(async () => (await persistido(page, code)).status).toBe('expired');
   await expect(dialog).toHaveCount(0);
 });
+
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+  test(`D953 · el aviso deja tocar Continuar a ${viewport.width} px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await preparar(page, 'consumo');
+    await elegirTodo(page);
+    await page.getByRole('button', { name: 'Finalizar', exact: true }).click();
+    const aviso = page.getByText('Con esto se cierra la mesa. Toca «Continuar» para confirmarlo.', { exact: true });
+    await expect(aviso).toBeVisible();
+    await aviso.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
+    const boton = page.getByRole('button', { name: 'Continuar', exact: true });
+    const punto = await boton.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      return { x, y, centroLibre: el.contains(document.elementFromPoint(x, y)) };
+    });
+    await expect(aviso).toBeVisible();
+    expect(punto.centroLibre).toBe(true);
+    const avisoRect = (await aviso.boundingBox())!;
+    expect(avisoRect.y + avisoRect.height).toBeLessThanOrEqual((await boton.boundingBox())!.y);
+    const dir = process.env.PAYME_E2E_CAPTURAS;
+    if (dir) await page.screenshot({ path: `${dir}/continuar-${viewport.width}.png` });
+    await expect(aviso).toBeVisible();
+    await page.touchscreen.tap(punto.x, punto.y);
+    await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa' })).toBeVisible();
+  });
+}
+
+for (const motivo of ['sin desafío', 'con garantía']) {
+  test(`D953 · Finalizar informa que no se guardó: ${motivo}`, async ({ page }) => {
+    const code = await preparar(page, 'consumo');
+    await elegirTodo(page);
+    const antes = await persistido(page, code);
+    await page.evaluate(async motivo => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      if (motivo === 'sin desafío') {
+        const errores = '/src/api/mock/mockApi.ts';
+        const { MockApiError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/mock/mockApi');
+        api.lockItems = async () => { throw new MockApiError(409, 'selection_closure_confirmation_required'); };
+      } else {
+        // El desafío es el válido del mock. Sólo cambia la garantía en la lectura fresca.
+        const leer = api.getMesa.bind(api);
+        api.getMesa = async (...args) => {
+          const respuesta = await leer(...args);
+          return { ...respuesta, mesa: { ...respuesta.mesa, guarantee_mode: true } };
+        };
+      }
+    }, motivo);
+    await page.getByRole('button', { name: 'Finalizar', exact: true }).click();
+    await expect(page.getByText('No se guardó tu selección. Revisa la mesa antes de continuar.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await persistido(page, code)).toEqual(antes);
+  });
+}

@@ -54,11 +54,10 @@ describe('🔴 D295 · Amigos: deslizar para eliminar, sin la ✕', () => {
     }
   });
 
-  it('🔴 la ✕ ya no está en la lista de amigos; la de los miembros de un grupo sigue (Grupos no cambia)', () => {
+  it('🔴 la lista de amigos no tiene ✕ ni un botón adicional en el frente', () => {
     expect(listaDeAmigos).not.toContain('✕');
     expect(listaDeAmigos).not.toContain("t('Quitar a {0}', f.first_name)");
     expect(listaDeAmigos).not.toContain('className="back-btn"');
-    expect(social).toContain("aria-label={t('Quitar a {0} del grupo', m.first_name)}");
   });
 
   it('CSS: la línea entre amigos la pone el envoltorio, sin radio propio, y después de `.deslizable` (gana la última)', () => {

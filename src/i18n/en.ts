@@ -218,7 +218,6 @@ export const EN: Record<string, string> = {
    */
   "Esto es una prueba. Usa una tarjeta de prueba — no hace falta la tuya, y no la queremos.": "This is a test. Use a test card — you don't need your own, and we don't want it.",
   "(la cuenta ÷": "(the bill ÷",
-  "+ sumar": "+ add",
   ", y se cobra aparte.": ", and it's charged separately.",
   ", {0}": ", {0}",
   ". No lo repetimos solos: si quieres pagar igual, toca el botón de abajo.": ". We won't repeat it on our own: if you still want to pay, tap the button below.",
@@ -697,6 +696,8 @@ export const EN: Record<string, string> = {
   "Puedes compartir el link igual mientras tanto.": "You can still share the link in the meantime.",
   "Queda {0}": "{0} left",
   "Quedó todo pago": "Everything was paid",
+  "¿Quitar a {0} del grupo?": "Remove {0} from the group?",
+  "Sumar a {0} al grupo": "Add {0} to the group",
   "Quitar a {0} del grupo": "Remove {0} from the group",
   "Quitar tarjeta {0}": "Remove card {0}",
   "Rechazar": "Decline",

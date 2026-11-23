@@ -2807,23 +2807,6 @@ body::before {
 .friend-row:last-child {
   border-bottom: none;
 }
-.grupo-sumar-amigo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  align-self: stretch;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.grupo-sumar-amigo .n {
-  overflow-wrap: anywhere;
-}
 .friend-row.sel {
   background: var(--teal-l);
 }
@@ -3093,6 +3076,10 @@ body::before {
    círculo, a 104 px del borde (turno 1 · 7). Sólo con `sobreLaBarra`. */
 .toast.toast--sobre-barra {
   bottom: calc(104px + env(safe-area-inset-bottom));
+}
+/* La barra de la mesa incluye el botón de continuar y el aviso entra desde 16 px más abajo. */
+body:has(.appbar-block--accion-ancha) .toast.toast--sobre-barra {
+  bottom: calc(var(--appbar-alto) + 52px + var(--sp-3) + 24px);
 }
 .toast:not(.toast-hidden) {
   animation: toast-in 0.25s ease-out;
@@ -12848,8 +12835,9 @@ h1.pay-title-lbl {
   margin-block: var(--sp-3);
 }
 
+.deslizable-eliminar + .deslizable-informacion { right: 96px; }
+
 .deslizable-informacion {
-  right: 96px;
   background: var(--navy);
 }
 
@@ -12857,6 +12845,12 @@ h1.pay-title-lbl {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.grupo-deslizable .fr-name .n {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .hoja-de-decision {

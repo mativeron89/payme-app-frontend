@@ -173,8 +173,9 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
       const row = fila(page, '.friend-row', nombre);
       await expect(row).toBeVisible();
       await expect(row).not.toContainText('@');
-      const info = row.getByRole('button', { name: 'Información de ' + nombre, exact: true });
-      await info.click();
+      const info = page.getByRole('button', { name: 'Información de ' + nombre, exact: true });
+      await info.focus();
+      await info.press('Enter');
       const hoja = page.getByRole('dialog', { name: 'Información de ' + nombre, exact: true });
       await expect(hoja).toBeVisible();
       if (usuario) await expect(hoja.getByText(usuario, { exact: true })).toBeVisible();

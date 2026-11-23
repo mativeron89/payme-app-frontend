@@ -2,6 +2,7 @@
 
 - «Finalizar» indica cuándo se necesita «Continuar» para confirmar el cierre de la mesa. Al regresar a Inicio tras guardar la selección, aparece «Listo, quedó guardado».
 - En Grupos y Nuevo amigo, las filas muestran el nombre o apodo. El @ se consulta en Información y sigue visible en los resultados de búsqueda por @.
+- En Grupos se desliza la fila para consultar Información o quitar a un miembro con confirmación. El aviso de cierre deja «Continuar» al alcance.
 
 ## 0.281.0 · 2026-11-23
 

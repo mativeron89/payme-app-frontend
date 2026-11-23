@@ -1515,7 +1515,7 @@ export function MesaScreen({ code, guestToken, avisoDeIngreso }: { code: string;
     if (preparada?.finalizar) {
       toast(rechazo?.challenge && preparada.mesa.guarantee_mode === false
         ? t('Con esto se cierra la mesa. Toca «Continuar» para confirmarlo.')
-        : t('No se guardó tu selección. Revisa la mesa antes de continuar.'));
+        : t('No se guardó tu selección. Revisa la mesa antes de continuar.'), { sobreLaBarra: true });
       return true;
     }
     if (!rechazo || !preparada || ejemplo || isGuest || preparada.mesa.guarantee_mode !== false) {

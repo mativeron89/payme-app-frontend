@@ -106,6 +106,8 @@ export function FilaDeslizable({
   onCerrar,
   nombre,
   onEliminar,
+  etiquetaEliminar,
+  nombreEliminar,
   refEliminar,
   onInformacion,
   className,
@@ -116,7 +118,9 @@ export function FilaDeslizable({
   onCerrar: () => void;
   /** Lo que se borra, para el nombre accesible del botón («Eliminar {nombre}»). */
   nombre: string;
-  onEliminar: (disparador: HTMLButtonElement) => void;
+  etiquetaEliminar?: string;
+  nombreEliminar?: string;
+  onEliminar?: (disparador: HTMLButtonElement) => void;
   onInformacion?: (disparador: HTMLButtonElement) => void;
   /** El consumidor puede guardar el disparador real para devolverle foco al cerrar su hoja. */
   refEliminar?: Ref<HTMLButtonElement>;
@@ -126,7 +130,7 @@ export function FilaDeslizable({
   const { t } = useIdioma();
   const raiz = useRef<HTMLDivElement | null>(null);
   const frente = useRef<HTMLDivElement | null>(null);
-  const anchoAcciones = ANCHO_ELIMINAR * (onInformacion ? 2 : 1);
+  const anchoAcciones = ANCHO_ELIMINAR * (onEliminar && onInformacion ? 2 : 1);
   const inicio = useRef<{ x: number; y: number; base: number; id: number } | null>(null);
   const arrastrando = useRef(false);
   /** D360-8 · las últimas posiciones del dedo, para la velocidad al soltar. */
@@ -252,17 +256,17 @@ export function FilaDeslizable({
       >
         {children}
       </div>
-      <button
+      {onEliminar && <button
         ref={refEliminar}
         type="button"
         className="deslizable-eliminar"
-        aria-label={t('Eliminar {0}', nombre)}
+        aria-label={nombreEliminar ?? t('Eliminar {0}', nombre)}
         onFocus={() => { if (!abierta) onAbrir(); }}
         onClick={(event) => onEliminar(event.currentTarget)}
       >
         <Icon name="trash" size={18} />
-        <span>{t('Eliminar')}</span>
-      </button>
+        <span>{etiquetaEliminar ?? t('Eliminar')}</span>
+      </button>}
       {onInformacion && (
         <button type="button" className="deslizable-eliminar deslizable-informacion"
           aria-label={t('Información de {0}', nombre)}
