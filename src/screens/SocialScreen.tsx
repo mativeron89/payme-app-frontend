@@ -11,6 +11,7 @@ import {
   AppHeader, AppHeaderBack, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
+import { InformacionDeAmigo } from '../components/InformacionDeAmigo';
 import { FilaDeslizable } from '../components/FilaDeslizable';
 import { navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
@@ -871,28 +872,6 @@ function MenuSocial({ nombre, disabled = false, onBloquear }: {
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => elegir(onBloquear)}>{t('Bloquear a {0}', nombre)}</button>
     </div>, document.body)}
   </div>;
-}
-
-function InformacionDeAmigo({ amigo, onCerrar, onBloquear, onTransferir }: {
-  amigo: Pick<Friend, 'full_name' | 'username'>; onCerrar: () => void; onBloquear?: () => void; onTransferir?: () => void;
-}) {
-  const { t } = useIdioma();
-  const hoja = useRef<HTMLDivElement>(null);
-  const cerrar = useRef<HTMLButtonElement>(null);
-  useHojaModal(hoja, cerrar, onCerrar);
-  return createPortal(<div className="sheet-overlay" onClick={onCerrar}>
-    <div ref={hoja} className="sheet social-confirmacion" role="dialog" aria-modal="true"
-      aria-label={t('Información de {0}', amigo.full_name)} onClick={e => e.stopPropagation()}>
-      <strong>{amigo.full_name}</strong>
-      <ArrobaDebajo username={amigo.username} />
-      {onBloquear && <button type="button" className="btn btn-ghost" onClick={onBloquear}>{t('Bloquear')}</button>}
-      {onTransferir && <button type="button" className="btn btn-ghost" onClick={onTransferir}
-        aria-label={`Transferir a ${amigo.full_name}`}>
-        <Icon name="arrow-up-right" size={16} />
-      </button>}
-      <button type="button" className="btn btn-navy" ref={cerrar} onClick={onCerrar}>{t('Cerrar')}</button>
-    </div>
-  </div>, document.body);
 }
 
 function ConfirmacionSocial({ texto, etiqueta, onCerrar, onConfirmar }: { texto: string; etiqueta: string; onCerrar: () => void; onConfirmar: () => Promise<void> }) {

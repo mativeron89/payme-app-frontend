@@ -10,7 +10,7 @@ import { Icon } from './Icon';
 import { FriendAvatar } from './FriendAvatar';
 import { podarFotosDeAmigos } from '../api/fotosEnMemoria';
 import { loadSession } from '../api/storage';
-import { ArrobaDebajo } from './ArrobaDebajo';
+import { FilaConInformacion } from './InformacionDeAmigo';
 import { arrobaCoincide, useUsernameCapability } from '../api/username';
 
 /**
@@ -49,7 +49,7 @@ interface Invitable {
   payme_id: string;
   first_name: string;
   full_name: string;
-  /** AF-USERNAME-D104 · lo que se ve debajo del nombre, vía `ArrobaDebajo`. */
+  /** AF-USERNAME-D104 · se consulta en Información y permite filtrar. */
   username?: string | null;
   /** E173-3 · sólo en la lista de amigos (`GET /friends`, dueño v2.148.0). */
   has_avatar?: boolean;
@@ -324,38 +324,39 @@ export function InviteFriends({ code, memoria: memoriaDeAfuera }: {
     const done = memoria.invitados.has(f.payme_id);
     const enviando = invitacionEnCurso(memoria, f.payme_id);
     return (
-      <div key={key} className="inv-row">
-        {/* Pedido de Mati (2026-09-25): la misma foto que en Amigos (n196),
-            con el mismo componente y la misma ruta del dueño
-            (`GET /friends/:userId/avatar`); `f.id` es el user id del amigo,
-            también en los integrantes de un grupo. Sin foto queda el monograma
-            navy sobre `--teal-l`, SIN color por persona (reconciliación
-            2026-08-21): el color por hash no lo elegía nadie y metía un sexto
-            color sin token en la única pantalla donde §5 bis · F declara que
-            hay uno solo. */}
-        <FriendAvatar
-          friendId={f.id}
-          name={f.full_name}
-          refreshToken={tick}
-          hasAvatar={f.has_avatar ?? fotoDeAmigo.get(f.id)}
-          variant="marca"
-        />
-        <div className="fr-name">
-          <div className="n">{f.full_name}</div>
-          <ArrobaDebajo username={f.username} />
+      <FilaConInformacion key={key} persona={f}>
+        <div className="inv-row">
+          {/* Pedido de Mati (2026-09-25): la misma foto que en Amigos (n196),
+              con el mismo componente y la misma ruta del dueño
+              (`GET /friends/:userId/avatar`); `f.id` es el user id del amigo,
+              también en los integrantes de un grupo. Sin foto queda el monograma
+              navy sobre `--teal-l`, SIN color por persona (reconciliación
+              2026-08-21): el color por hash no lo elegía nadie y metía un sexto
+              color sin token en la única pantalla donde §5 bis · F declara que
+              hay uno solo. */}
+          <FriendAvatar
+            friendId={f.id}
+            name={f.full_name}
+            refreshToken={tick}
+            hasAvatar={f.has_avatar ?? fotoDeAmigo.get(f.id)}
+            variant="marca"
+          />
+          <div className="fr-name">
+            <div className="n">{f.full_name}</div>
+          </div>
+          {/* Con BORDE y sin relleno: invitar es una acción repetible sobre una
+              lista, no el cierre de la pantalla. Un botón lleno por fila competía
+              con el círculo de la barra. */}
+          <button
+            type="button"
+            className={`btn btn-sm btn-fit ${done ? 'btn-ghost' : 'btn-outline'}`}
+            disabled={done || enviando}
+            onClick={() => void invite(f)}
+          >
+            {done ? t('Invitado ✓') : enviando ? t('Enviando…') : t('Invitar')}
+          </button>
         </div>
-        {/* Con BORDE y sin relleno: invitar es una acción repetible sobre una
-            lista, no el cierre de la pantalla. Un botón lleno por fila competía
-            con el círculo de la barra. */}
-        <button
-          type="button"
-          className={`btn btn-sm btn-fit ${done ? 'btn-ghost' : 'btn-outline'}`}
-          disabled={done || enviando}
-          onClick={() => void invite(f)}
-        >
-          {done ? t('Invitado ✓') : enviando ? t('Enviando…') : t('Invitar')}
-        </button>
-      </div>
+      </FilaConInformacion>
     );
   }
 

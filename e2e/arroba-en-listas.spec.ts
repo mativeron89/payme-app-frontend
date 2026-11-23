@@ -190,7 +190,7 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
   test('invitar amigos a una mesa: amigos, búsqueda y grupos', async ({ page }) => {
     await entrar(page);
     await abrirInvitar(page);
-    await debajo(fila(page, '.inv-row', 'Sofía Fernández'), '@sofi.fernandez');
+    await debajo(fila(page, '.inv-row', 'Sofía Fernández'), null);
     await debajo(fila(page, '.inv-row', 'Leo Paz'), null);
     await sinCodigo(page);
     await capturar(page, 'd104-invitar');
@@ -203,7 +203,7 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
 
     await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
     await page.getByRole('button', { name: /Familia/ }).click();
-    await debajo(fila(page, '.inv-row', 'Sofía Fernández'), '@sofi.fernandez');
+    await debajo(fila(page, '.inv-row', 'Sofía Fernández'), null);
     await debajo(fila(page, '.inv-row', 'Leo Paz'), null);
     await sinCodigo(page);
   });

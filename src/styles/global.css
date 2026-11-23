@@ -12847,6 +12847,18 @@ h1.pay-title-lbl {
   text-overflow: ellipsis;
 }
 
+.persona-deslizable { border-radius: 0; }
+.inv-list > .persona-deslizable:not(:last-child),
+.inv-members > .persona-deslizable:not(:last-child),
+li:not(:last-child) > .persona-deslizable { border-bottom: 1px solid var(--border); }
+.bloqueado-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+.persona-deslizable .fr-name { overflow-wrap: anywhere; }
+
 .grupo-deslizable .fr-name .n {
   display: block;
   white-space: normal;

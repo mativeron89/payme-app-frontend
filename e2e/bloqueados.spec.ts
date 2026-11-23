@@ -50,8 +50,7 @@ for (const idioma of ['es', 'en'] as const) {
     await expect(page.getByRole('heading', { name: t.title, exact: true })).toBeFocused();
     await expect(page.getByText('Juan López', { exact: true })).toBeVisible();
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
-    await expect(page.getByText('@juan.lopez', { exact: true })).toBeVisible();
-    await expect(page.getByText('@sofi.fernandez', { exact: true })).toBeVisible();
+    await expect(page.locator('li .fr-name')).not.toContainText([/@/, /@/]);
     await captura(page, `${idioma}-lista`);
     await page.getByRole('button', { name: t.back, exact: true }).click();
     await expect(page.getByRole('button', { name: t.title, exact: true })).toBeFocused();
@@ -159,9 +158,9 @@ for (const idioma of ['es', 'en'] as const) for (const width of [320, 390]) {
     expect(anchoEntrada).toBe(anchoHermana);
     await entrada.click();
     await expect(page.getByText('Juan López', { exact: true })).toBeVisible();
-    const fila = page.locator('li').filter({ hasText: 'Juan López' });
+    const fila = page.locator('.bloqueado-fila').filter({ hasText: 'Juan López' });
     expect(await fila.evaluate(el => getComputedStyle(el).gap)).toBe('12px');
-    await expect(fila.locator('.fr-name .id')).toHaveText('@juan.lopez');
+    await expect(fila).not.toContainText('@');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     expect(await page.locator('.scroll').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   });

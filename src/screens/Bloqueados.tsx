@@ -6,7 +6,7 @@ import { useIdioma } from '../i18n/idioma';
 import { AppHeaderBack } from '../components/AppHeader';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { useToast } from '../components/ui';
-import { ArrobaDebajo } from '../components/ArrobaDebajo';
+import { FilaConInformacion } from '../components/InformacionDeAmigo';
 import { extractApiError } from '../api/errors';
 import { fullName } from '../utils/identity';
 
@@ -74,16 +74,19 @@ export function Bloqueados({ onBack }: { onBack: () => void }) {
       </div> : people === null ? <p role="status">{t('Cargando…')}</p>
         : people.length === 0 ? <p className="empty" role="status">{t('No bloqueaste a nadie')}</p>
           : <ul className="card" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {people.map(person => <li key={person.id} style={{ padding: 16, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="fr-name" style={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
-                <div>{person.full_name}</div>
-                <ArrobaDebajo username={person.username} />
-              </div>
-              <button className="btn btn-ghost" type="button" style={{ width: 'auto', flexShrink: 0 }} disabled={busy}
-                aria-label={t('Desbloquear a {0}', person.full_name)} onClick={() => void unblock(person)}>
-                {t('Desbloquear')}
-              </button>
-            </li>)}
+            {people.map(person => (
+              <li key={person.id}>
+                <FilaConInformacion persona={person}>
+                  <div className="bloqueado-fila">
+                    <div className="fr-name"><div className="n">{person.full_name}</div></div>
+                    <button className="btn btn-ghost btn-fit" type="button" disabled={busy}
+                      aria-label={t('Desbloquear a {0}', person.full_name)} onClick={() => void unblock(person)}>
+                      {t('Desbloquear')}
+                    </button>
+                  </div>
+                </FilaConInformacion>
+              </li>
+            ))}
           </ul>}
     </div>
     <AppBottomBar active="mas" />
