@@ -1,4 +1,13 @@
-## AF-9 · D886 · el reespejo de la vista previa de 2.214.2 · 0.278.2
+## Foto por visita de Estadísticas · AF 0.281.0
+
+Contenido vigente: `70f6d194f672c92fd2ad18cd07b4c28679072ead`.
+El inventario de App Backend 2.216.1, publicado en `f3425dd0102a6d19503859b7720d724369228946`,
+tiene 173 entradas (25 contratos copiados y 148 fuentes sólo por hash).
+Huella del inventario, sha256 `6057397461abf2853ca02e933011782e3dc0b5b463c2a9f0c9f0b206a67d14f6`.
+Los contratos de foto y Viajes describen la negociación por visita y las rutas privadas de mesa y de viaje.
+Los hechos se regeneraron desde el commit del inventario.
+
+### Refresh anterior · AF-9 · D886 · el reespejo de la vista previa de 2.214.2 · 0.278.2
 
 Contenido vigente: `6037cd0e5e8174cc235546d27e59e96df6158a1b`.
 Inventario íntegro de 175 entradas tomado del dueño App Backend 2.214.2, `main` en

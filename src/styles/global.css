@@ -11950,6 +11950,11 @@ h1.pay-title-lbl {
   box-shadow: var(--sh-2);
 }
 
+.rest-visita .fila-ticket-cuerpo:has(> .fila-ticket-foto) .rest-visita-fila {
+  min-height: 64px;
+  padding-left: calc(var(--sp-4) + 54px);
+}
+
 .rest-visita-fila {
   display: flex;
   align-items: center;
@@ -11962,6 +11967,17 @@ h1.pay-title-lbl {
   color: var(--navy);
   text-align: left;
   cursor: pointer;
+}
+
+@media (max-width: 359px) {
+  .rest-visita .fila-ticket-foto {
+    left: var(--sp-1);
+  }
+
+  .rest-visita .fila-ticket-cuerpo:has(> .fila-ticket-foto) .rest-visita-fila {
+    padding-inline: calc(var(--sp-1) + 48px) var(--sp-2);
+    gap: var(--sp-1);
+  }
 }
 
 .rest-visita.abierta .rest-visita-fila {

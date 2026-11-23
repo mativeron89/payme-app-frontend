@@ -1,5 +1,5 @@
 import { fotoDelTicketMockEncendida } from '../fotoDelTicket';
-import { fotoDeMesaMock, MockApiError, partesDeMesaMock } from './mockApi';
+import { fotoDeMesaMock, MESA_CON_FOTO_EN_ESTADISTICAS, MockApiError, papelDeEstadisticasMock, partesDeMesaMock } from './mockApi';
 import { mockVerTicket } from './viajes';
 
 /**
@@ -149,7 +149,7 @@ export async function mockFotoDelTicketDeMesa(code: string, tamano: 'thumb' | 'f
   if (falla === 'cargando') await new Promise<never>(() => undefined);
   if (falla === 'error') throw new MockApiError(500, 'internal_error');
   const foto = fotoDeMesaMock(code);
-  const papel = PAPELES_DE_MESAS[code];
+  const papel = code === MESA_CON_FOTO_EN_ESTADISTICAS ? papelDeEstadisticasMock() : PAPELES_DE_MESAS[code];
   const partes = partesDeMesaMock(code);
   if (!papel || !foto[tamano] || parte >= partes) noEsta();
   return dibujarTicket(papel, tamano === 'thumb', parte, partes);

@@ -43,10 +43,12 @@
     "vinculo": "POST /api/mesas o POST /api/viajes/:id/tickets con ese `ocr_receipt` aceptado ligan la foto, en la misma transacción y sin campos nuevos en el cuerpo. Sin ligar, la foto vence a los 130 minutos (la vida del recibo, 2 h, más un margen) y se borra. Un recibo liga a lo primero que lo use."
   },
   "listados": {
-    "negociacion": "ticket_image_version=1",
+    "negociacion": "ticket_image_version=1|2 (una sola cadena exacta, con el modo encendido)",
     "clave": "ticket_image",
     "valor": { "thumb": "boolean", "full": "boolean (false si no se guardó o si ya venció en full_retained)" },
+    "estadisticas": "Independiente de stats_version. Con la negociación y el modo encendido, cada visita de mesa o de viaje incluye thumb y full de la página 0 y, en v2, pages. Sin foto o sin acceso actual a la ruta autenticada correspondiente, ticket_image es null. Una foto de viaje requiere Viajes habilitado, membresía activa y visibilidad del ticket, también en un viaje cerrado. Sin negociación se omite la clave, igual que con el modo apagado.",
     "rutas": [
+      "GET /api/account/stats/restaurants → restaurants[].visits[].ticket_image",
       "GET /api/mesas/open → mesas[].ticket_image",
       "GET /api/mesas/mine → mesas[].ticket_image",
       "GET /api/mesas/:code → mesa.ticket_image",

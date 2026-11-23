@@ -1285,6 +1285,15 @@ function ticketDe(v: ViajeMock, tid: unknown): TicketMock {
   return t;
 }
 
+export function ticketDeViajeTieneFotoMock(id: string, tid: string): boolean {
+  try {
+    return viajesMockEncendido() && ticketDe(miViaje(id), tid).items.length > 0;
+  } catch (error) {
+    if (error instanceof Respuesta && error.status === 404) return false;
+    throw error;
+  }
+}
+
 export function mockVerTicket(id: string, tid: string, { version = 1 }: OpcionesDeVersion = {}) {
   return ruta(() => {
     const v = miViaje(id);

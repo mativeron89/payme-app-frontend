@@ -166,3 +166,26 @@ describe('🔴 D479/D482 · AF-2 · `stats_version=3`: la cantidad de la línea 
     }
   });
 });
+
+describe('Foto por visita · contrato negociado', () => {
+  const respuesta = (foto: unknown) => ({
+    ...BUENO,
+    restaurants: BUENO.restaurants.map(r => ({ ...r, visits: r.visits.map(v => ({ ...v, ticket_image: foto })) })),
+  });
+  it('acepta las dos versiones, null y el dueño anterior que omite la clave', () => {
+    for (const version of [true, 2] as const) {
+      const foto = { thumb: true, full: false, ...(version === 2 && { pages: 2 }) };
+      expect(decodeTusRestaurantes(respuesta(foto), { foto: version }).restaurants[0].visits[0].fotoDelTicket).toEqual(foto);
+      expect(decodeTusRestaurantes(respuesta(null), { foto: version }).restaurants[0].visits[0].fotoDelTicket).toBeNull();
+      expect(decodeTusRestaurantes(BUENO, { foto: version })).toEqual(decodeTusRestaurantes(BUENO));
+    }
+  });
+  it('rechaza una foto no negociada y claves o formas ajenas aun con la capacidad encendida', () => {
+    const foto = { thumb: true, full: true };
+    expect(() => decodeTusRestaurantes(respuesta(foto))).toThrow('stats_restaurants_response_malformed');
+    for (const invalida of [{ ...foto, url: '/privada' }, { ...foto, pages: 1 }, false, 'thumb']) {
+      expect(() => decodeTusRestaurantes(respuesta(invalida), { foto: true })).toThrow('stats_restaurants_response_malformed');
+    }
+    expect(() => decodeTusRestaurantes(respuesta(foto), { foto: 2 })).toThrow('stats_restaurants_response_malformed');
+  });
+});

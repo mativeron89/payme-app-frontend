@@ -25,6 +25,8 @@
  * ítems de una respuesta traen `quantity` o ninguno.
  */
 
+import { decodeFotoDelTicket, PARAMETRO_FOTO_DEL_TICKET, valorDeLaNegociacion, versionDeLaNegociacion,
+  type FotoDelTicket, type NegociacionDeFoto, type VersionDeFotoDelTicket } from './fotoDelTicket';
 import type { BaseDeConsumo } from './consumoDelMes';
 import { decodePeriodo, rutaConPeriodo, type ClavePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
 
@@ -32,9 +34,10 @@ import { decodePeriodo, rutaConPeriodo, type ClavePeriodo, type PeriodoConfirmad
 export const STATS_VERSION = 'stats_version=3';
 
 /** `/account/stats/restaurants`, con su período si lo hay, y siempre con `stats_version=3`. */
-export function rutaDeTusRestaurantes(period?: ClavePeriodo): string {
+export function rutaDeTusRestaurantes(period?: ClavePeriodo, foto: NegociacionDeFoto = false): string {
   const ruta = rutaConPeriodo('/account/stats/restaurants', period);
-  return ruta + (ruta.includes('?') ? '&' : '?') + STATS_VERSION;
+  return ruta + (ruta.includes('?') ? '&' : '?') + STATS_VERSION
+    + (foto ? `&${PARAMETRO_FOTO_DEL_TICKET}=${valorDeLaNegociacion(foto)}` : '');
 }
 
 export interface ItemDeVisita {
@@ -53,6 +56,7 @@ export interface Visita {
   readonly items: readonly ItemDeVisita[];
   /** D260 · el viaje, si la visita es un ticket de viaje (y `code` es el id del ticket); `null` en una mesa. */
   readonly viajeId: string | null;
+  readonly fotoDelTicket?: FotoDelTicket | null;
 }
 
 export interface RestauranteDelMes {
@@ -113,19 +117,24 @@ function item(raw: unknown, conCantidad: boolean): ItemDeVisita {
   return { name, fractionBps: f, amountCents: a, quantity: q === null ? null : (q as number) };
 }
 
-function visita(raw: unknown, conCantidad: boolean): Visita {
-  if (!objetoPlano(raw) || !claves(raw, ['code', 'created_at', 'division_mode', 'amount_cents', 'items', 'viaje_id'])) malo();
+function visita(raw: unknown, conCantidad: boolean, versionFoto: VersionDeFotoDelTicket | null): Visita {
+  const esperadas = ['code', 'created_at', 'division_mode', 'amount_cents', 'items', 'viaje_id'];
+  if (versionFoto !== null) esperadas.push('ticket_image');
+  if (!objetoPlano(raw) || !claves(raw, esperadas)) malo();
+  const foto = versionFoto !== null ? decodeFotoDelTicket(raw.ticket_image, versionFoto) : null;
+  if (versionFoto !== null && raw.ticket_image !== null && !foto) malo();
   const { code, created_at: c, division_mode: d, amount_cents: a, items, viaje_id: viaje } = raw;
   if (!texto(code) || !fecha(c) || (d !== 'consumo' && d !== 'igual') || !entero(a) || a === 0) malo();
   if (!Array.isArray(items) || (viaje !== null && !texto(viaje))) malo();
-  return { code, createdAt: c, divisionMode: d, amountCents: a, items: items.map((it) => item(it, conCantidad)), viajeId: viaje };
+  return { code, createdAt: c, divisionMode: d, amountCents: a, items: items.map((it) => item(it, conCantidad)), viajeId: viaje,
+    ...(versionFoto !== null && { fotoDelTicket: foto }) };
 }
 
-function restaurante(raw: unknown, conCantidad: boolean): RestauranteDelMes {
+function restaurante(raw: unknown, conCantidad: boolean, versionFoto: VersionDeFotoDelTicket | null): RestauranteDelMes {
   if (!objetoPlano(raw) || !claves(raw, ['id', 'name', 'category', 'amount_cents', 'visits_count', 'visits'])) malo();
   const { id, name, category, amount_cents: a, visits_count: n, visits } = raw;
   if (!texto(id) || !texto(name) || !texto(category) || !entero(a) || !entero(n) || !Array.isArray(visits)) malo();
-  const vs = visits.map((v) => visita(v, conCantidad));
+  const vs = visits.map((v) => visita(v, conCantidad, versionFoto));
   if (vs.length !== n || vs.length === 0) malo();
   if (vs.reduce((s, v) => s + v.amountCents, 0) !== a) malo();
   return { id, name, category, amountCents: a, visits: vs };
@@ -148,7 +157,7 @@ function primerItemConCantidad(restaurants: readonly unknown[]): boolean {
  * @param negociado `true` si el pedido llevó `stats_version=3`. Sin negociar, un
  *   ítem con `quantity` se rechaza: no lo pidió nadie.
  */
-export function decodeTusRestaurantes(raw: unknown, { negociado = false }: { readonly negociado?: boolean } = {}): TusRestaurantes {
+export function decodeTusRestaurantes(raw: unknown, { negociado = false, foto = false }: { readonly negociado?: boolean; readonly foto?: NegociacionDeFoto } = {}): TusRestaurantes {
   // `period` es la única clave OPCIONAL (v2.106.0): presente, tiene que ser válida.
   const conPeriodo = objetoPlano(raw) && Object.prototype.hasOwnProperty.call(raw, 'period');
   const esperadas = ['basis', 'month_start', 'total_cents', 'restaurants', ...(conPeriodo ? ['period'] : [])];
@@ -158,7 +167,12 @@ export function decodeTusRestaurantes(raw: unknown, { negociado = false }: { rea
   const { basis, month_start: m, total_cents: total, restaurants } = raw;
   if ((basis !== 'consumption' && basis !== 'payments') || !fecha(m) || !entero(total) || !Array.isArray(restaurants)) malo();
   const conCantidad = negociado && primerItemConCantidad(restaurants);
-  const rs = restaurants.map((r) => restaurante(r, conCantidad));
+  // Un servidor anterior, o que apagó la foto después de /config, omite la clave en todas las visitas.
+  const primera = restaurants[0];
+  const conFoto = foto && objetoPlano(primera) && Array.isArray(primera.visits)
+    && objetoPlano(primera.visits[0]) && Object.prototype.hasOwnProperty.call(primera.visits[0], 'ticket_image');
+  const versionFoto = conFoto ? versionDeLaNegociacion(foto) : null;
+  const rs = restaurants.map((r) => restaurante(r, conCantidad, versionFoto));
   if (new Set(rs.map((r) => r.id)).size !== rs.length) malo();
   if (rs.reduce((s, r) => s + r.amountCents, 0) !== total) malo();
   return { basis, monthStart: m, totalCents: total, restaurants: rs, period };
