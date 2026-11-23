@@ -476,7 +476,7 @@
   "motivo": "identificador o opción de Intl; no se muestra"
  },
  {
-  "archivo": "src/screens/SocialScreen.tsx",
+  "archivo": "src/components/InformacionDeAmigo.tsx",
   "texto": "Transferir a",
   "grupo": "b",
   "veces": 1,
