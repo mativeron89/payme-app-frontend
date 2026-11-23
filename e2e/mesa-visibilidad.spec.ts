@@ -26,7 +26,7 @@ async function montar(page: Page, e: Escenario) {
     const method = route.request().method();
     if (method === 'GET' && path === '/api/config') return route.fulfill({ json: { features: {
       money_rail: { mode: e.pagos ? 'test' : 'disabled', payments_enabled: !!e.pagos, real_money: false },
-      ticket_image: { supported: true, enabled: true, mode: 'full_retained', stores_thumb: true,
+      ticket_image: { supported: true, enabled: !e.sinCapacidadFoto, mode: 'full_retained', stores_thumb: true,
         stores_full: true, full_retention_days: 90, negotiation_param: 'ticket_image_version', negotiation_value: '1',
         accepted_mime_types: ['image/jpeg', 'image/png', 'image/webp'], thumb_max_side_px: 320, full_max_side_px: 1600 },
     } } });
@@ -36,7 +36,7 @@ async function montar(page: Page, e: Escenario) {
     }
     if (method === 'GET' && path.endsWith('/informative-selection')) return route.fulfill({ json: {
       contract: 'payme.app.informative-selections/v2', mesa: { code: mesa.code, division_mode: 'igual',
-        status: mesa.status, closure_reason: mesa.closure_reason, mutable: !e.cerrada },
+        status: mesa.status, closure_reason: mesa.closure_reason, mutable: mesa.informative_selection_capability?.mutable },
       selection: { source: 'informative', items: [], updated_at: null }, coverage: { all_items_selected: false },
     } });
     if (method === 'GET' && path.includes('/ticket-image/')) {
@@ -78,7 +78,10 @@ const casos: { nombre: string; control?: Escenario; entrada: Escenario; sinFoto?
   { nombre: 'rol nulo', entrada: { rol: null }, sinFoto: true },
   { nombre: 'rol guest', entrada: { rol: 'guest' }, sinFoto: true },
   { nombre: 'invitado con token', entrada: { invitado: true }, sinFoto: true, sinFinalizar: true },
-  { nombre: 'mesa cerrada de lectura', control: { igual: true }, entrada: { igual: true, cerrada: true }, sinFoto: true, sinFinalizar: true },
+  { nombre: 'mesa cerrada de lectura', control: { igual: true }, entrada: { igual: true, estado: 'expired' }, sinFoto: true, sinFinalizar: true },
+  { nombre: 'mesa pagada', control: { igual: true }, entrada: { igual: true, estado: 'fully_paid' }, sinFoto: true, sinFinalizar: true },
+  { nombre: 'mesa pendiente de autorización', control: { igual: true }, entrada: { igual: true, estado: 'pending_auth' }, sinFoto: true, sinFinalizar: true },
+  { nombre: 'capacidad de foto apagada con foto en el detalle', entrada: { sinCapacidadFoto: true }, sinFoto: true },
   { nombre: 'mesa del tutorial', entrada: { ejemplo: true }, sinFoto: true, sinFinalizar: true },
   { nombre: 'código distinto del detalle', entrada: { otroCodigo: true }, sinFoto: true },
   { nombre: 'riel de pagos simulado', entrada: { pagos: true }, sinFinalizar: true },
@@ -88,7 +91,7 @@ for (const caso of casos) {
   test('Visibilidad · ' + caso.nombre, async ({ page }) => {
     await positivo(page, caso.control);
     const r = await montar(page, caso.entrada);
-    if (caso.entrada.cerrada) await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
+    if (caso.entrada.estado === 'expired') await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     if (caso.sinFoto) {
       await expect(foto(page)).toHaveCount(0);
       expect(r.fotos).toEqual([]);
@@ -98,13 +101,13 @@ for (const caso of casos) {
     }
     if (caso.sinFinalizar) await expect(finalizar(page)).toHaveCount(0);
     else await expect(finalizar(page)).toBeVisible();
-    if (caso.entrada.invitado) expect(r.versiones).toEqual([null]);
+    if (caso.entrada.invitado || caso.entrada.sinCapacidadFoto) expect(r.versiones).toEqual([null]);
   });
 }
 
 test('Visibilidad · dueño abierto y participante con pago parcial', async ({ page }) => {
   await positivo(page, { rol: 'opener' });
-  await positivo(page, { rol: 'participant', parcialmentePagada: true });
+  await positivo(page, { rol: 'participant', estado: 'partially_paid' });
 });
 
 test('Visibilidad · invitación pendiente antes y después del 403 simulado', async ({ page }) => {

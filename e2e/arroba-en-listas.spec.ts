@@ -117,6 +117,13 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
     await page.keyboard.press('Enter');
     const hoja = page.getByRole('dialog', { name: 'Información de Juan López', exact: true });
     await expect(hoja.getByText('@juan.lopez', { exact: true })).toBeVisible();
+    const wallet = await page.evaluate(async () => {
+      const ruta = '/src/api/walletRail.ts';
+      const { getWalletRailState } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/walletRail');
+      return getWalletRailState();
+    });
+    expect(wallet).toMatchObject({ walletRailEnabled: false, status: 'authoritative' });
+    await expect(hoja.getByRole('button', { name: /^Transferir/i })).toHaveCount(0);
     await capturar(page, 'c255-informacion-amigo');
     await page.keyboard.press('Escape');
     await expect(info).toBeFocused();

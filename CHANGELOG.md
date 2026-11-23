@@ -1,5 +1,6 @@
 ## 0.280.0 · 2026-11-22
 
+- Las pruebas cubren la foto con el interruptor apagado, Foto y Finalizar en mesas pagadas o pendientes de autorización, y Transferir en Información de Amigos con la wallet apagada.
 - Las pruebas de la mesa verifican cuándo se muestra la foto del ticket y cuándo aparece Finalizar.
 - Las filas de Mesas, Amigos y Balance se deslizan o se abren al enfocar sus acciones. Amigos muestra el nombre y lleva el @ a Información.
 - En la mesa abierta, Finalizar vuelve a Inicio al confirmar el guardado. El ticket con foto abre su visor privado desde la miniatura.
