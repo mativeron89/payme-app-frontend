@@ -228,6 +228,16 @@ for (const modo of ['consumo', 'igual'] as const) {
           return guardar(...args);
         };
       }, { metodo, resultado });
+      // El aviso caduca. Registrar si apareció en la mesa evita que una espera
+      // pase por verde cuando un aviso prematuro ya desapareció.
+      await page.evaluate(() => {
+        new MutationObserver(() => {
+          if (location.pathname.startsWith('/mesa/') &&
+              document.querySelector('.toast')?.textContent?.includes('Listo, quedó guardado')) {
+            sessionStorage.setItem('d954-aviso-en-mesa', '1');
+          }
+        }).observe(document.body, { childList: true, subtree: true, characterData: true });
+      });
       const finalizar = page.getByRole('button', { name: 'Finalizar', exact: true });
       await finalizar.focus();
       await page.keyboard.press('Enter');
@@ -235,7 +245,7 @@ for (const modo of ['consumo', 'igual'] as const) {
       await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
       await expect(finalizar).toBeDisabled();
       const aviso = page.getByText('Listo, quedó guardado', { exact: true });
-      await expect(aviso).toHaveCount(0);
+      expect(await page.evaluate(() => sessionStorage.getItem('d954-aviso-en-mesa'))).toBeNull();
       await page.evaluate(() => window.dispatchEvent(new Event('d945-resolver')));
       if (resultado === 'ok') {
         await expect(page).toHaveURL(/\/home$/);
@@ -245,6 +255,7 @@ for (const modo of ['consumo', 'igual'] as const) {
         await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));
         await expect(aviso).toHaveCount(0);
       }
+      expect(await page.evaluate(() => sessionStorage.getItem('d954-aviso-en-mesa'))).toBeNull();
       await expect(page.getByRole('dialog', { name: 'Con esto se cierra la mesa', exact: true })).toHaveCount(0);
     });
   }
