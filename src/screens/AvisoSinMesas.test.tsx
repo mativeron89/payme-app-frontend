@@ -37,6 +37,7 @@ describe('K1 y K2 · aviso y centro comparten la acción del momento', () => {
       const aviso = AvisoSinMesas({ accion });
       const centro = buscar(AppBottomBar({ center: accion }) as Nodo, 'appbar-center')!;
       expect(aviso.props.onClick).toBe(centro.props.onClick);
+      if (cantidad > 0) expect(aviso.props['aria-label']).toContain(accion.ariaLabel);
       aviso.props.onClick();
       // Aserciones inmediatas: un await antes de abrir la cámara las pone rojas.
       if (cantidad < 2) {
@@ -78,6 +79,7 @@ describe('K3 · estados del centro', () => {
       const accion: NonNullable<AppBottomBarProps['center']> = { label: 'Escanear', icon: 'camera', onClick: vi.fn(), [flag]: true };
       const html = renderToStaticMarkup(<AvisoSinMesas accion={accion} />);
       expect(html).toMatch(/^<button[^>]*disabled=""/);
+      expect(html.includes('aria-busy="true"')).toBe(flag === 'busy');
       expect(buscar(AppBottomBar({ center: accion }) as Nodo, 'appbar-center')!.props.disabled).toBe(true);
     });
   }

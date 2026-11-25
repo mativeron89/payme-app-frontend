@@ -75,6 +75,15 @@ async function abrirAvisos(page: Page): Promise<void> {
 }
 
 test.describe('E174-3B · la foto de quien invita en las invitaciones', () => {
+  test('Inicio comparte la lectura de invitaciones entre la burbuja y los avisos', async ({ page }) => {
+    await ingresar(page);
+    await abrirAvisos(page);
+    await espiar(page);
+    await irEnLaApp(page, '/');
+    await expect(burbuja(page).locator('.foto-quien-invita')).toHaveAttribute('src', /^blob:/);
+    expect((await espia(page)).lecturas).toBe(1);
+  });
+
   test('🔴 «Te invitaron»: con la pista y foto visible, la foto en lugar del ícono del restaurante', async ({ page }) => {
     await ingresar(page);
     await espiar(page);

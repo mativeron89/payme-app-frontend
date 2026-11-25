@@ -26,7 +26,7 @@ import {
   AppHeader, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
-import { InvitacionEnInicio } from './InvitacionEnInicio';
+import { InvitacionEnInicio, useInvitacionesDeInicio } from './InvitacionEnInicio';
 import { AvisoAgregarAInicio } from '../instalar/GuiaAgregarAInicio';
 import { ultimoVisto, useEsperaVisible } from '../api/ultimoVisto';
 import { useSinLeer } from '../components/useSinLeer';
@@ -42,7 +42,6 @@ import { mesaDeEjemploEnInicio, useEjemplo } from '../ayuda/ejemplo/estadoEjempl
 import { TarjetaMesaDeEjemplo, TarjetaTutorial } from '../ayuda/TarjetaTutorial';
 import { AvisoSinMesas } from './AvisoSinMesas';
 import { TarjetaCerca } from '../agente/TarjetaCerca';
-import { invitacionesMostrables } from './invitacionAdmision';
 import { useAvisoDeFotos } from '../ayuda/avisoDeFotos';
 
 /**
@@ -227,17 +226,7 @@ export function HomeScreen() {
   const unread = useSinLeer();
   const avisoDeFotos = useAvisoDeFotos();
   const escanearRef = useRef<HTMLButtonElement>(null);
-  const [invitaciones, setInvitaciones] = useState<'cargando' | 'hay' | 'ninguna' | 'fallo'>('cargando');
-  useEffect(() => {
-    let vigente = true;
-    setInvitaciones('cargando');
-    const turno = ultimoVisto.turno();
-    api.getPendingInvitations().then((r) => {
-      const g = ultimoVisto.guardar(turno, 'inicio.invitaciones', invitacionesMostrables(r.invitations));
-      if (vigente && g) setInvitaciones(g.valor.length > 0 ? 'hay' : 'ninguna');
-    }).catch(() => { if (vigente && ultimoVisto.esDeAhora(turno)) setInvitaciones('fallo'); });
-    return () => { vigente = false; };
-  }, [session, unread]);
+  const invitaciones = useInvitacionesDeInicio(session, unread);
   let primeraMesaGuardada = false;
   try { primeraMesaGuardada = localStorage.getItem('payme.app.mesa-guardada.v1') === '1'; } catch { /* sin preferencia durable */ }
 
@@ -467,14 +456,14 @@ export function HomeScreen() {
         {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
             las pestañas (la tarjeta montada va enganchada a ellas y no se
             separa). Sin invitaciones no dibuja nada. */}
-        <InvitacionEnInicio />
+        <InvitacionEnInicio lista={invitaciones.lista} cargar={invitaciones.cargar} />
         {/* D363 · 2f · la tarjeta Tutorial va debajo de la invitación pendiente (Q5), y en 4a la mesa de ejemplo
             ocupa su lugar; una mesa abierta real queda debajo, donde siempre. */}
         <TarjetaTutorial aperturaPendiente={aperturaPendiente} onQuitar={() => escanearRef.current?.focus({ preventScroll: true })} />
         <TarjetaMesaDeEjemplo />
-        <FriendAvatarNotice visible={invitaciones === 'ninguna' || invitaciones === 'fallo'} />
+        <FriendAvatarNotice visible={invitaciones.estado === 'ninguna' || invitaciones.estado === 'fallo'} />
         {/* D176 · la guía «Agregar a inicio», la primera vez y sólo en Safari de iOS. */}
-        <AvisoAgregarAInicio habilitado={primeraMesaGuardada && invitaciones === 'ninguna' && avisoDeFotos === 'resuelto'} />
+        <AvisoAgregarAInicio habilitado={primeraMesaGuardada && invitaciones.estado === 'ninguna' && avisoDeFotos === 'resuelto'} />
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}
         <section className="home-mesa" aria-label={t('Tu mesa abierta')}>

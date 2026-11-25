@@ -3208,6 +3208,7 @@ body::before {
    24 px de aire arriba y abajo, y se desplaza con todo lo demás. Supersede la franja
    de D275, 40 px sobre la barra. */
 .aviso-sin-mesas {
+  -webkit-tap-highlight-color: transparent;
   width: 100%;
   border: 0;
   border-radius: 0;

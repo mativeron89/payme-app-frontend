@@ -18,7 +18,7 @@ export function AvisoSinMesas({ accion }: { accion: NonNullable<AppBottomBarProp
       onClick={accion.onClick}
       disabled={accion.disabled || accion.busy}
       aria-busy={accion.busy || undefined}
-      aria-label={t('No tienes mesas abiertas. Escanear un ticket')}
+      aria-label={accion.ariaLabel ? `${t('No tienes mesas abiertas')}. ${accion.ariaLabel}` : t('No tienes mesas abiertas. Escanear un ticket')}
     >
       <span className="aviso-sin-mesas-titulo">{t('No tienes mesas abiertas')}</span>
       <span className="aviso-sin-mesas-cuerpo">

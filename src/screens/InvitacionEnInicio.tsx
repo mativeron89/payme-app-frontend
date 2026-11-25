@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { olvidarLoDeMesas, ultimoVisto } from '../api/ultimoVisto';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { useToast } from '../components/ui';
 import { FotoDeQuienInvita } from '../components/FotoDeQuienInvita';
 import { PREFIJO_INVITADOR_DE_INVITACION, claveInvitadorDeInvitacion, fotosEnMemoria } from '../api/fotosEnMemoria';
-import { loadSession } from '../api/storage';
+import { loadSession, type StoredSession } from '../api/storage';
 import { useIdioma } from '../i18n/idioma';
 import { navigate } from '../router';
 import { relTime } from '../utils/format';
@@ -180,35 +180,53 @@ export function VistaInvitacionEnInicio({
 }
 
 /** Inicio: pide las invitaciones y dibuja la burbuja, o nada. */
-export function InvitacionEnInicio() {
-  const { t } = useIdioma();
+export function useInvitacionesDeInicio(session: StoredSession | null, sinLeer: number) {
+  const [estado, setEstado] = useState<'cargando' | 'hay' | 'ninguna' | 'fallo'>('cargando');
+  const pedido = useRef(0);
   // D237 · lo último visto: la tarjeta «Te invitaron» no aparece de golpe al
   // volver a Inicio empujando lo de abajo.
   const [lista, setLista] = useState<InvitacionMostrable[]>(
     () => ultimoVisto.leer<InvitacionMostrable[]>('inicio.invitaciones') ?? [],
   );
   const cargar = useCallback(() => {
+    const id = ++pedido.current;
+    setEstado('cargando');
     // T-01 · la cuenta se toma AL PEDIR.
     const turno = ultimoVisto.turno();
     api
       .getPendingInvitations()
       .then((r) => {
         if (!ultimoVisto.esDeAhora(turno)) return;
+        if (id !== pedido.current) return;
         const mostrables = invitacionesMostrables(r.invitations);
         // E174-3B · la misma poda que en Avisos.
         const actual = loadSession();
         if (actual) fotosEnMemoria.podar(actual, PREFIJO_INVITADOR_DE_INVITACION, idsConFotoDeInvitacion(mostrables));
         const g = ultimoVisto.guardar(turno, 'inicio.invitaciones', mostrables);
-        if (g) setLista(g.valor);
+        if (g) {
+          setLista(g.valor);
+          setEstado(g.valor.length ? 'hay' : 'ninguna');
+        }
       })
       .catch(() => {
         if (!ultimoVisto.esDeAhora(turno)) return;
+        if (id !== pedido.current) return;
         // Sin poder confirmarla, no se sigue mostrando la guardada.
         ultimoVisto.olvidar('inicio.invitaciones');
         setLista([]);
+        setEstado('fallo');
       });
   }, []);
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    let vigente = true;
+    queueMicrotask(() => { if (vigente) cargar(); });
+    return () => { vigente = false; pedido.current += 1; };
+  }, [cargar, session, sinLeer]);
+  return { estado, lista, cargar };
+}
+
+export function InvitacionEnInicio({ lista, cargar }: Pick<ReturnType<typeof useInvitacionesDeInicio>, 'lista' | 'cargar'>) {
+  const { t } = useIdioma();
   const { ocupada, aceptar } = useAceptarInvitacion(cargar);
   const elegida = invitacionParaInicio(lista);
   if (!elegida) return null;

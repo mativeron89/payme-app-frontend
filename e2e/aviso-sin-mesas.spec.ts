@@ -43,6 +43,8 @@ for (const idioma of ['es', 'en'] as const) {
       const dir = process.env.PAYME_E2E_CAPTURAS;
       await page.locator('.scroll').first().evaluate((el) => el.scrollTo({ top: el.scrollHeight, behavior: 'instant' }));
       if (dir && idioma === 'es' && tecla === 'Enter') await page.screenshot({ path: `${dir}/inicio-reposo-375.png`, fullPage: true });
+      await expect(aviso).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(aviso).toHaveCSS('-webkit-tap-highlight-color', 'rgba(0, 0, 0, 0)');
       // Tab real hasta el aviso: no click que borre la modalidad del teclado.
       for (let i = 0; i < 40 && !(await aviso.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press('Tab');
       await expect(aviso).toBeFocused();
@@ -59,24 +61,18 @@ for (const flag of ['disabled', 'busy'] as const) {
   test(`K3 · ${flag} impide click y teclado, con control habilitado`, async ({ page }) => {
     await inicioSinMesas(page);
     await page.evaluate(async (estado) => {
-      const reactPath = '/node_modules/.vite/deps/react.js';
-      const domPath = '/node_modules/.vite/deps/react-dom_client.js';
-      const avisoPath = '/src/screens/AvisoSinMesas.tsx';
-      const { default: React } = await import(reactPath);
-      const { default: ReactDOM } = await import(domPath);
-      const { AvisoSinMesas } = await import(avisoPath);
+      const ruta = '/e2e/fixtures/montar-aviso.tsx';
+      const { montarAviso } = await import(ruta) as typeof import('./fixtures/montar-aviso');
       const prueba = document.createElement('div');
       prueba.id = 'aviso-fixture';
       prueba.dataset.llamadas = '0';
       prueba.style.cssText = 'position:fixed;inset:0;background:white;z-index:99999';
       document.body.append(prueba);
-      const root = ReactDOM.createRoot(prueba);
-      const accion = { label: 'Escanear', icon: 'camera', [estado]: true, onClick: () => { prueba.dataset.llamadas = String(Number(prueba.dataset.llamadas) + 1); } };
-      root.render(React.createElement(AvisoSinMesas, { accion }));
+      const habilitarAviso = montarAviso(prueba, estado);
       const habilitar = document.createElement('button');
       habilitar.textContent = 'Habilitar fixture';
       habilitar.style.cssText = 'position:fixed;top:0;left:0;z-index:100000';
-      habilitar.onclick = () => root.render(React.createElement(AvisoSinMesas, { accion: { ...accion, [estado]: false } }));
+      habilitar.onclick = habilitarAviso;
       document.body.append(habilitar);
     }, flag);
     const fixture = page.locator('#aviso-fixture');
