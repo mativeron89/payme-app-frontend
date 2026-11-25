@@ -250,6 +250,7 @@ for (const modo of ['consumo', 'igual'] as const) {
       if (resultado === 'ok') {
         await expect(page).toHaveURL(/\/home$/);
         await expect(aviso).toBeVisible();
+        await expect(page.locator('.toast').filter({ hasText: 'Listo, quedó guardado' })).toHaveClass(/toast--sobre-barra/);
       } else {
         await expect(page.getByRole('status').filter({ hasText: /No pudimos|No se guardó|No sabemos/ })).toBeVisible();
         await expect(page).toHaveURL(new RegExp('/mesa/' + mesa.code + '$'));

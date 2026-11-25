@@ -3,7 +3,7 @@ import { ingresar, irEnLaApp } from './_app';
 
 const nombres = ['Luna Celeste Ventisca', 'Brisa Marina Luciérnaga'] as const;
 
-async function amigos(page: Page, idioma = 'es') {
+async function amigos(page: Page, idioma = 'es', ejemplos: readonly [string, string] = nombres) {
   await ingresar(page, { sinInvitaciones: true });
   if (idioma === 'en') {
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
@@ -24,7 +24,7 @@ async function amigos(page: Page, idioma = 'es') {
       return { ...result, members: result.members.map(m => m.username === 'sofi.fernandez'
         ? { ...m, first_name: miembro, last_name: '' } : m) };
     };
-  }, nombres);
+  }, ejemplos);
   await irEnLaApp(page, '/amigos');
 }
 
@@ -93,6 +93,7 @@ test('Grupos permite consultar, sumar y quitar sólo tras confirmar', async ({ p
   await page.mouse.down();
   await page.mouse.move(x - 112, y, { steps: 8 });
   await page.mouse.up();
+  await expect(sumar.locator('xpath=ancestor::*[contains(@class, "deslizable-frente")][1]')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -96, 0)');
   await info.click();
   const hoja = page.getByRole('dialog');
   await expect(hoja.getByText('@juan.lopez', { exact: true })).toBeVisible();
@@ -107,6 +108,7 @@ test('Grupos permite consultar, sumar y quitar sólo tras confirmar', async ({ p
   const quitar = page.getByRole('button', { name: 'Quitar a Juan López del grupo' });
   const conUnoMas = await miembros();
   expect(conUnoMas).toHaveLength(inicial.length + 1);
+  await expect(quitar).toHaveText('Quitar');
   await quitar.focus();
   await page.keyboard.press('Tab');
   const infoMiembro = page.getByRole('button', { name: 'Información de Juan López' });
@@ -114,6 +116,7 @@ test('Grupos permite consultar, sumar y quitar sólo tras confirmar', async ({ p
   await page.keyboard.press('Enter');
   await expect(hoja.getByText('@juan.lopez', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(infoMiembro).toBeFocused();
   await expect(quitar).toHaveCount(1);
   await quitar.press('Enter');
   const cancelar = hoja.getByRole('button', { name: 'Cancelar' });
@@ -128,3 +131,26 @@ test('Grupos permite consultar, sumar y quitar sólo tras confirmar', async ({ p
   await expect(quitar).toHaveCount(0);
   expect(await miembros()).toEqual(inicial);
 });
+
+for (const idioma of ['es', 'en']) {
+  test('Grupos muestra el nombre largo completo en su columna · ' + idioma, async ({ page }) => {
+    const ejemplos = ['Luna Celeste de la Sierra del Valle de los Pinos', 'BrisaMarinaLuciérnagaDelBosque'] as const;
+    await amigos(page, idioma, ejemplos);
+    await familia(page);
+    for (const width of [320, 360, 375, 390, 430]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => document.fonts.ready);
+      for (const nombre of ejemplos) {
+        const texto = page.locator('.grupo-deslizable .fr-name .n', { hasText: nombre });
+        await expect(texto).toBeVisible();
+        expect(await texto.evaluate(el => {
+          const caja = el.getBoundingClientRect();
+          const rango = document.createRange();
+          rango.selectNodeContents(el);
+          return [...rango.getClientRects()].every(r => r.left >= caja.left - 1 && r.right <= caja.right + 1
+            && r.top >= caja.top - 1 && r.bottom <= caja.bottom + 1);
+        })).toBe(true);
+      }
+    }
+  });
+}

@@ -124,6 +124,20 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
     });
     expect(wallet).toMatchObject({ walletRailEnabled: false, status: 'authoritative' });
     await expect(hoja.getByRole('button', { name: /^Transferir/i })).toHaveCount(0);
+    await expect(hoja.getByRole('button')).toHaveText(['Bloquear', 'Cerrar']);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/walletRail.ts';
+      const { applyWalletRailConfig } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/walletRail');
+      applyWalletRailConfig({ features: { wallet_rail: { enabled: true, account_activity: true } } });
+    });
+    await expect(hoja.getByRole('button', { name: 'Transferir a Juan López', exact: true })).toBeVisible();
+    await expect(hoja.getByRole('button')).toHaveCount(3);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/walletRail.ts';
+      const { applyWalletRailConfig } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/walletRail');
+      applyWalletRailConfig({ features: { wallet_rail: { enabled: false, account_activity: true } } });
+    });
+    await expect(hoja.getByRole('button')).toHaveCount(2);
     await capturar(page, 'c255-informacion-amigo');
     await page.keyboard.press('Escape');
     await expect(info).toBeFocused();

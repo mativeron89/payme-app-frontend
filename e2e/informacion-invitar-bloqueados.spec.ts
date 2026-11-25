@@ -4,7 +4,7 @@ import { ingresar, irEnLaApp } from './_app';
 const nombres = ['Brisa Marina Luciérnaga', 'Luna Celeste Ventisca'] as const;
 const usuarios = ['brisa.luz', 'luna.celeste'] as const;
 
-async function preparar(page: Page, idioma: 'en' | 'es') {
+async function preparar(page: Page, idioma: 'en' | 'es', ejemplos: readonly [string, string] = nombres) {
   await ingresar(page, { sinInvitaciones: true });
   if (idioma === 'en') {
     await page.evaluate(() => localStorage.setItem('payme.app.idioma.v1', 'en'));
@@ -26,14 +26,14 @@ async function preparar(page: Page, idioma: 'en' | 'es') {
       sessionStorage.setItem('prueba.invitaciones', '1');
       return invitar(...args);
     };
-  }, { nombres, usuarios });
+  }, { nombres: ejemplos, usuarios });
 }
 
-async function medir(page: Page, filas: Locator, pantalla: string, idioma: string) {
+async function medir(page: Page, filas: Locator, pantalla: string, idioma: string, ejemplos: readonly [string, string] = nombres) {
   for (const width of [320, 360, 375, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 });
     await page.evaluate(() => document.fonts.ready);
-    for (const nombre of nombres) {
+    for (const nombre of ejemplos) {
       const fila = filas.filter({ hasText: nombre });
       await expect(fila).not.toContainText('@');
       const medida = await fila.locator('.fr-name .n').evaluate(el => {
@@ -52,7 +52,7 @@ async function medir(page: Page, filas: Locator, pantalla: string, idioma: strin
         };
       });
       expect(medida.lineas).toBeGreaterThan(0);
-      expect(medida.lineas).toBeLessThanOrEqual(2);
+      if (ejemplos === nombres) expect(medida.lineas).toBeLessThanOrEqual(2);
       expect(medida.dentro).toBe(true);
       expect(medida.solape).toBe(false);
       expect(medida.pagina).toBeLessThanOrEqual(width);
@@ -134,5 +134,19 @@ for (const idioma of ['es', 'en'] as const) {
     await filas.filter({ hasText: nombres[0] }).getByRole('button', { name: /Desbloquear|Unblock/ }).click();
     expect(confirmaciones).toBe(1);
     await expect(filas).toHaveCount(2);
+  });
+}
+
+for (const idioma of ['es', 'en'] as const) {
+  test('Los nombres largos caben junto a Invitar y Desbloquear · ' + idioma, async ({ page }) => {
+    const ejemplos = ['Luna Celeste de la Sierra del Valle de los Pinos', 'BrisaMarinaLuciérnagaDelBosque'] as const;
+    await preparar(page, idioma, ejemplos);
+    await irEnLaApp(page, '/mesa/PA-2847');
+    await page.getByRole('button', { name: /^(Configuración de la mesa|Table settings)$/ }).click();
+    await page.getByRole('button', { name: /Invitar amigos de PayMe|Invite PayMe friends/ }).click();
+    await medir(page, page.locator('.inv-row'), 'invitar', idioma, ejemplos);
+    await irEnLaApp(page, '/mas');
+    await page.getByRole('button', { name: /^(Bloqueados|Blocked people)$/ }).click();
+    await medir(page, page.locator('.bloqueado-fila'), 'bloqueados', idioma, ejemplos);
   });
 }
