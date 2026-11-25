@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { montoDePresupuestoValido, type PresupuestoDelMes as Presupuesto } from '../api/agente';
 import { useIdioma } from '../i18n/idioma';
+import { textoDeMonto } from '../utils/textoDeMonto';
 import { formatMXN } from '../utils/format';
 import { centsToString, stringToCents } from '../utils/money';
 import { useAgente } from './useAgente';
@@ -117,7 +118,7 @@ export function PresupuestoDelMes() {
             aria-label={t('Presupuesto del mes, en pesos')}
             value={texto}
             disabled={ocupado}
-            onChange={(e) => { setTexto(e.target.value.replace(/[^0-9.,$\s]/g, '')); setError(null); }}
+            onChange={(e) => { setTexto(textoDeMonto(e.target.value, texto)); setError(null); }}
           />
           <button type="submit" className="btn btn-navy btn-sm btn-fit" disabled={ocupado}>{t('Guardar')}</button>
           <button type="button" className="btn btn-ghost btn-sm btn-fit" disabled={ocupado} onClick={() => { setEditando(false); setError(null); }}>

@@ -210,6 +210,10 @@ test.describe('D554 · encendido en el mock (control positivo)', () => {
     await campo.fill('0.5');
     await panel.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(panel).toContainText('Escribe un monto de $1 en adelante.');
+    for (const invalido of ['−12', '1a2', '1$2']) {
+      await campo.fill(invalido);
+      await expect(campo).toHaveValue('0.5');
+    }
     await campo.fill('3,000');
     await panel.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(panel).toContainText(`Llevas ${gastado} de $3,000`);
