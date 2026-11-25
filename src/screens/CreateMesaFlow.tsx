@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../utils/textoDeMonto';
 import { compartirTexto } from './compartirReparto';
 import '../ayuda/ayuda.css';
 import type { StripeCardElement } from '@stripe/stripe-js';
@@ -3614,7 +3615,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             placeholder="0"
                             onChange={(e) =>
                               // Conservar separadores: el lector canónico distingue decimales de miles.
-                              updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.,]/g, '') })
+                              updateItem(idx, { priceStr: textoDeMonto(e.target.value, it.priceStr) })
                             }
                           />
                         </label>

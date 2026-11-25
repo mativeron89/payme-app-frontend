@@ -327,7 +327,7 @@ function TipSelector({
             inputMode="decimal"
             placeholder="0.00"
             value={customTipStr}
-            onChange={(e) => onCustomChange(sanearMontoPropio(e.target.value))}
+            onChange={(e) => onCustomChange(sanearMontoPropio(e.target.value, customTipStr))}
             disabled={disabled}
             aria-label={t('Monto de propina a mano')}
           />

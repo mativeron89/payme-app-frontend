@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../utils/textoDeMonto';
 import { stringToCents, tipFromBps } from '../utils/money';
 
 /**
@@ -70,8 +71,8 @@ export function tipIsChosen(tip: TipChoice): boolean {
  *   resto de lo inválido (propina 0, el CTA muestra la base sola). Rechazar
  *   gana a adivinar cuando hay plata en el medio.
  */
-export function sanearMontoPropio(crudo: string): string {
-  return crudo.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+export function sanearMontoPropio(crudo: string, anterior = ''): string {
+  return textoDeMonto(crudo, anterior).replace(/,/g, '.');
 }
 
 /**
@@ -110,7 +111,7 @@ export function tipCentsFor(
   if (tip.mode === 'unset') return 0;
   if (tip.mode === 'custom') {
     try {
-      return stringToCents(base.customStr || '0');
+      return Math.max(0, stringToCents(base.customStr || '0'));
     } catch {
       return 0;
     }

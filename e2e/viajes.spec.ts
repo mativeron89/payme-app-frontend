@@ -286,6 +286,11 @@ test('D244 · carga manual: «Listo» pide una descripción y un monto mayor que
   await expect(listo).toBeDisabled();
   await monto.fill('0');
   await expect(listo).toBeDisabled();
+  for (const invalido of ['−5.00', '1a2']) {
+    await monto.fill(invalido);
+    await expect(monto).toHaveValue('0');
+    await expect(listo).toBeDisabled();
+  }
   await monto.fill('1,250.50');
   await expect(listo).toBeEnabled();
   await expect(page.getByText('Total $1,250.50', { exact: true })).toBeVisible();

@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../utils/textoDeMonto';
 import type { ShareTotals, TipSetting } from '../api/miParte';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
@@ -48,8 +49,8 @@ export function settingDeOtro(texto: string): TipSetting | null {
 }
 
 /** Lo que se deja tipear en el campo de «Otro»: dígitos y un separador. */
-export function sanearOtro(crudo: string): string {
-  return crudo.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+export function sanearOtro(crudo: string, anterior = ''): string {
+  return textoDeMonto(crudo, anterior).replace(/,/g, '.');
 }
 
 /**

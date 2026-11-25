@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../../utils/textoDeMonto';
 import { useId } from 'react';
 import type { MiembroViaje, PagadorPedido } from '../../api/viajes';
 import { useIdioma } from '../../i18n/idioma';
@@ -217,7 +218,7 @@ export function SelectorDeQuienPago({ opciones, elegido, total, onCambio, deshab
                 disabled={deshabilitado}
                 onChange={(e) => {
                   const montos = new Map(elegido.montos ?? []);
-                  montos.set(o.id, e.target.value.replace(/[^0-9.,$]/g, ''));
+                  montos.set(o.id, textoDeMonto(e.target.value, elegido.montos?.get(o.id) ?? ''));
                   onCambio({ marcados: new Set(marcados), montos });
                 }}
               />

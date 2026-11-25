@@ -183,6 +183,8 @@ test.describe('🔴 D278-3 · la pantalla a 375', () => {
     }
     const precio = page.getByLabel('Precio de Ceviche de camarón', { exact: true });
     await precio.fill('1000000');
+    await precio.fill('−15');
+    await expect(precio).toHaveValue('1000000');
     const fila = page.locator('.vjr-renglon').filter({ has: precio }).locator('.vjr-fila');
     await expect(fila.locator('.vjr-linea')).toHaveText('$1,000,000');
     const desborde = await fila.evaluate((f) => f.scrollWidth - f.clientWidth);
@@ -212,6 +214,7 @@ test.describe('🔴 D278-3 · un gasto a mano con dos pagadores', () => {
     await page.getByLabel('Monto', { exact: true }).fill('950');
     const mio = page.getByLabel('Cuánto pagaste tú', { exact: true });
     const luis = page.getByLabel('Cuánto pagó Luis Pérez', { exact: true });
+    await mio.fill('4a50');
     await expect(mio).toHaveValue('450');
     await expect(luis).toHaveValue('450');
     await expect(page.getByText('Suman $900 de $950', { exact: true })).toBeVisible();

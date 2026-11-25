@@ -132,7 +132,7 @@ export function rotuloDeAjustes(renglon: RenglonDeAjustes, t: (s: string, ...arg
 
 /** Importe propio confirmado, o el estado explícito que publicó la mesa. */
 export function montoDePropina(setting: TipSetting | null, mia: MyShare, t: Traducir): string {
-  return setting === null ? t('Sin fijar') : formatMXN(mia.tip_cents);
+  return setting === null && mia.tip_cents === 0 ? t('Sin fijar') : formatMXN(mia.tip_cents);
 }
 
 /**

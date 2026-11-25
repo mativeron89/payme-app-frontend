@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../../utils/textoDeMonto';
 import '../../ayuda/ayuda.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, newIdempotencyKey } from '../../api';
@@ -163,7 +164,7 @@ export function CargaManualVista({ viaje, enviando = false, onListo }: {
               inputMode="decimal"
               value={monto}
               placeholder="$0"
-              onChange={(e) => setMonto(e.target.value.replace(/[^0-9.,$]/g, ''))}
+              onChange={(e) => setMonto(textoDeMonto(e.target.value, monto))}
             />
           </label>
           {montoAmbiguo && (

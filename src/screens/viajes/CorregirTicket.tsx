@@ -1,3 +1,4 @@
+import { textoDeMonto } from '../../utils/textoDeMonto';
 import { useId, useRef, useState } from 'react';
 import {
   MAX_DESCRIPCION_GASTO, TIPOS_LUGAR, type CorreccionDeTicket, type MiembroViaje, type OrigenTicket, type TicketDelViaje,
@@ -161,7 +162,7 @@ function CamposDelGasto({ borrador, antes, deshabilitado, onCambio }: {
           value={borrador.monto}
           placeholder="$0"
           disabled={deshabilitado}
-          onChange={(e) => onCambio({ ...borrador, monto: e.target.value.replace(/[^0-9.,$]/g, '') })}
+          onChange={(e) => onCambio({ ...borrador, monto: textoDeMonto(e.target.value, borrador.monto) })}
         />
       </label>
       {antes !== null && <p className="vjr-antes">{t('Antes {0}', formatMXN(antes))}</p>}
@@ -313,7 +314,7 @@ function Renglones({ borrador, deshabilitado, onCambio, onAgregar }: {
                   placeholder="$0"
                   aria-label={rotulos.precio}
                   disabled={deshabilitado}
-                  onChange={(e) => cambiar(r.clave, { precio: e.target.value.replace(/[^0-9.,$]/g, '') })}
+                  onChange={(e) => cambiar(r.clave, { precio: textoDeMonto(e.target.value, r.precio) })}
                 />
                 <span className="vjr-linea">{precio.tipo === 'ok' ? formatMXN(precio.cents * r.quantity) : ''}</span>
               </div>
@@ -349,7 +350,7 @@ function Ajustes({ borrador, deshabilitado, onCambio }: {
         value={borrador[clave]}
         placeholder="$0"
         disabled={deshabilitado}
-        onChange={(e) => onCambio({ ...borrador, [clave]: e.target.value.replace(/[^0-9.,$]/g, '') })}
+        onChange={(e) => onCambio({ ...borrador, [clave]: textoDeMonto(e.target.value, borrador[clave]) })}
       />
     </label>
   );
@@ -396,7 +397,7 @@ function MontosDePagadores({ ticket, miembros, montos, total, evaluacion, deshab
                   aria-label={yo ? t('Cuánto pagaste tú') : t('Cuánto pagó {0}', nombre)}
                   value={montos[i] ?? ''}
                   disabled={deshabilitado}
-                  onChange={(e) => onMontos(ticket.pagadores.map((_, k) => (k === i ? e.target.value.replace(/[^0-9.,$]/g, '') : montos[k] ?? '')))}
+                  onChange={(e) => onMontos(ticket.pagadores.map((_, k) => (k === i ? textoDeMonto(e.target.value, montos[i] ?? '') : montos[k] ?? '')))}
                 />
               </label>
             );

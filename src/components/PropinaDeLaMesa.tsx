@@ -159,7 +159,7 @@ export function PropinaDeLaMesa({
             disabled={guardando}
             aria-label={t('Monto de la propina de la mesa')}
             aria-invalid={otroInvalido || undefined}
-            onChange={(e) => { setOtroTexto(sanearOtro(e.target.value)); setOtroInvalido(false); }}
+            onChange={(e) => { setOtroTexto(sanearOtro(e.target.value, otroTexto)); setOtroInvalido(false); }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();

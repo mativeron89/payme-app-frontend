@@ -163,9 +163,10 @@ describe('sanearOtro deja sólo dígitos y punto', () => {
     expect(sanearOtro('12,50')).toBe('12.50');
   });
 
-  it('quita signos, letras, espacios y el símbolo de pesos', () => {
-    expect(sanearOtro('$1 50a')).toBe('150');
-    expect(sanearOtro('-5')).toBe('5');
+  it('rechaza un signo o letra sin modificar el monto anterior y admite espacios y pesos', () => {
+    expect(sanearOtro('$1 50a', '12.50')).toBe('12.50');
+    expect(sanearOtro('-5', '1')).toBe('1');
+    expect(sanearOtro('−5', '1')).toBe('1');
     expect(sanearOtro('abc')).toBe('');
     expect(sanearOtro(' 7 ')).toBe('7');
   });

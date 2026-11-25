@@ -2257,13 +2257,14 @@ function mineDeMockMesa(m: MockMesa, withItems: boolean): {
     if (mios.length === 0) continue;
     items += 1;
     const fractionBps = mios.reduce((sum, claim) => sum + claim.fraction_bps, 0);
-    const amountCents = mios.reduce(
-      (sum, claim) => sum + (claim.amount_cents ?? Math.floor((it.price_cents * it.quantity * claim.fraction_bps) / 10000)),
-      0,
-    );
-    for (const c of mios) {
-      monto += c.amount_cents ?? Math.floor((it.price_cents * it.quantity * c.fraction_bps) / 10000);
+    const anteriores: MockClaim[] = [];
+    let amountCents = 0;
+    for (const claim of it.claims) {
+      const cents = claim.amount_cents ?? priceFraction(it.price_cents * it.quantity, claim.fraction_bps, anteriores);
+      anteriores.push({ ...claim, amount_cents: cents });
+      if (claim.who === 'user') amountCents += cents;
     }
+    monto += amountCents;
     detail.push({ item_id: it.id, quantity: it.quantity, name: it.name, fraction_bps: fractionBps, amount_cents: amountCents });
   }
   return { items_count: items, amount_cents: monto, ...(withItems ? { items: detail } : {}) };

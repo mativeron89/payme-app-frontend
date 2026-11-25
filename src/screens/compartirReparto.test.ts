@@ -124,6 +124,12 @@ describe('textoDelReparto · D588 · mi parte y el total de la mesa', () => {
     expect(textoDelReparto({ ...datos, tipSetting: { tip_bps: 0 } }, en)).toContain('$0');
   });
 
+  it('conserva la propina propia confirmada si falta la configuración de la mesa', () => {
+    const datos = { ...igualAbierta, tipSetting: null };
+    expect(textoDelReparto(datos, es)).toContain('  Propina: $19.75');
+    expect(textoDelReparto(datos, en)).toContain('  Tip: $19.75');
+  });
+
   it('una sola persona: describe toda la cuenta sin invitar a pagar con pagos apagados', () => {
     const texto = textoDelReparto({ ...igualAbierta, expectedParticipants: 1 }, es);
     expect(texto).toContain('Así va la mesa (toda la cuenta)');

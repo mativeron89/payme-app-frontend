@@ -105,6 +105,8 @@ describe('el saneo del monto a mano (auditoría 2026-08-06 · la coma ×100)', (
     expect(sanearMontoPropio('12.34')).toBe('12.34');
     expect(sanearMontoPropio('$50')).toBe('50');
     expect(sanearMontoPropio('abc')).toBe('');
+    expect(sanearMontoPropio('1x2', '3')).toBe('3');
+    expect(tipCentsFor({ mode: 'custom' }, { ...BASE, customStr: '-5.00' })).toBe(0);
   });
 });
 
