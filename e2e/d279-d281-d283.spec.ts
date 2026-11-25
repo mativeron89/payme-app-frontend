@@ -43,6 +43,44 @@ const cerrarViaje = (page: Page) => page.getByRole('button', { name: 'Cerrar via
 const salirDelViaje = (page: Page) => page.getByRole('button', { name: 'Salir del viaje', exact: true });
 
 test.describe('🔴 D279 · «Cerrar viaje» sólo para quien creó el viaje', () => {
+  test('una lectura demorada del viaje no reemplaza el detalle más reciente', async ({ page }) => {
+    await conViajes(page);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const original = api.getViaje.bind(api);
+      let primera = true;
+      api.getViaje = async (...args) => {
+        if (!primera) return { ...await original(...args), nombre: 'Viaje actualizado' };
+        primera = false;
+        const soltar = new Promise<void>(resolve => window.addEventListener('soltar-primera-lectura', () => resolve(), { once: true }));
+        const anterior = await original(...args);
+        await soltar;
+        return { ...anterior, nombre: 'Nombre anterior' };
+      };
+    });
+    await ir(page, `/viaje/${CANCUN}`);
+    const titulo = page.getByRole('heading', { level: 1, name: 'Viaje actualizado' });
+    await expect(titulo).toBeVisible();
+    await page.evaluate(async () => {
+      window.dispatchEvent(new Event('soltar-primera-lectura'));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    await expect(titulo).toBeVisible();
+  });
+
+  for (const accion of ['Cerrar viaje', 'Salir del viaje']) {
+    test('Cancelar devuelve el foco a ' + accion, async ({ page }) => {
+      await conViajes(page);
+      await aConfiguracion(page, CANCUN, 'Cancún 2026');
+      const origen = page.getByRole('button', { name: accion, exact: true });
+      await origen.click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(origen).toBeFocused();
+    });
+  }
+
   test('quien lo creó ve «Cerrar viaje»; quien no, sólo «Salir del viaje»', async ({ page }) => {
     await conViajes(page);
     await aConfiguracion(page, CANCUN, 'Cancún 2026');

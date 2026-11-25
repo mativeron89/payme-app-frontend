@@ -86,15 +86,18 @@ export function useDetalleViaje(viajeId: string): {
 } {
   const [carga, setCarga] = useState<CargaDeViaje>({ tipo: 'cargando' });
   const vivo = useRef(true);
+  const lectura = useRef(0);
   useEffect(() => {
     vivo.current = true;
     return () => {
       vivo.current = false;
+      lectura.current += 1;
     };
   }, []);
 
   const mostrar = useCallback((v: DetalleViaje) => {
     if (!vivo.current) return;
+    lectura.current += 1;
     if (v.estado === 'cerrado') {
       replaceRoute('viaje-cerrado', viajeId);
       return;
@@ -105,10 +108,12 @@ export function useDetalleViaje(viajeId: string): {
   }, [viajeId]);
 
   const pedir = useCallback(async (silencioso: boolean) => {
+    const id = ++lectura.current;
     try {
-      mostrar(await api.getViaje(viajeId));
+      const detalle = await api.getViaje(viajeId);
+      if (id === lectura.current) mostrar(detalle);
     } catch (err) {
-      if (!vivo.current) return;
+      if (!vivo.current || id !== lectura.current) return;
       if (errorDeViaje(err).tipo === 'no_disponible') setCarga({ tipo: 'no_disponible' });
       else if (!silencioso) setCarga({ tipo: 'error' });
     }
@@ -120,7 +125,10 @@ export function useDetalleViaje(viajeId: string): {
   }, [pedir]);
 
   const refrescar = useCallback(() => pedir(true), [pedir]);
-  const noDisponible = useCallback(() => setCarga({ tipo: 'no_disponible' }), []);
+  const noDisponible = useCallback(() => {
+    lectura.current += 1;
+    setCarga({ tipo: 'no_disponible' });
+  }, []);
 
   useEffect(() => {
     cargar();
@@ -192,6 +200,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     duenoEnvio.current = null;
     setEnviando(false);
   }
+  const origenDeViaje = useRef<HTMLButtonElement | null>(null);
   const pantalla = useRef<HTMLDivElement | null>(null);
   const tituloRecibi = useRef<HTMLHeadingElement | null>(null);
   const focoAlCerrar = useRef<'titulo' | HTMLButtonElement | null>(null);
@@ -230,7 +239,13 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
     void refrescar();
   }, [refrescar, t, toast]);
 
-  const pedirCierre = useCallback(() => {
+  const pedirSalida = (boton: HTMLButtonElement) => {
+    origenDeViaje.current = boton;
+    setHoja({ tipo: 'salir', abiertaEn: performance.now() });
+  };
+
+  const pedirCierre = useCallback((boton?: HTMLButtonElement) => {
+    if (boton) origenDeViaje.current = boton;
     setHoja({ tipo: 'cerrar', abiertaEn: performance.now(), preview: null, fallo: false });
     api.getCierreDeViaje(viajeId)
       .then((preview) => setHoja((h) => (h?.tipo === 'cerrar' ? { ...h, preview, fallo: false } : h)))
@@ -348,6 +363,9 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
       // El toque en Safari no asegura foco previo; guardamos el botón que abrió esta hoja.
       if (disparador) requestAnimationFrame(() => disparador.focus());
     }
+    if (hoja?.tipo === 'cerrar' || hoja?.tipo === 'salir' || hoja?.tipo === 'no_puede_salir') {
+      focoAlCerrar.current = origenDeViaje.current;
+    }
     setHoja(null);
   };
 
@@ -429,7 +447,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
             inicial={inicial}
             onConfirmar={() => void confirmarCierre()}
             onRevisar={cerrarHoja}
-            onReintentar={pedirCierre}
+            onReintentar={() => pedirCierre()}
           />
         </HojaModal>
       )}
@@ -501,7 +519,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
             yaSeCerro();
           }}
           onCerrarViaje={pedirCierre}
-          onSalirDelViaje={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
+          onSalirDelViaje={pedirSalida}
         />
         <AppBottomBar active={null} center={circuloDelViaje(viaje, t)} />
         {hojas}
@@ -524,7 +542,7 @@ export function ViajeScreen({ viajeId }: { viajeId: string }) {
         onNotas={() => navigate('viaje-notas', viajeId)}
         fotoDe={fotoDe}
         fotoDelViaje={viaje?.has_photo ? fotoDelViaje.fotoDe(viaje.id) : null}
-        onSalir={() => setHoja({ tipo: 'salir', abiertaEn: performance.now() })}
+        onSalir={pedirSalida}
         onMarcar={(id, accion, disparador) => {
           if (accion === 'no-llego') {
             const transferencia = viaje?.transferencias.find((tr) => tr.id === id);
@@ -675,7 +693,7 @@ export interface ViajeVistaProps {
   /** D255 · la foto del viaje, si la hay, para su burbuja. */
   readonly fotoDelViaje?: string | null;
   readonly onAbrirTicket: (ticketId: string) => void;
-  readonly onSalir: () => void;
+  readonly onSalir: (boton: HTMLButtonElement) => void;
   readonly onMarcar: (transferenciaId: string, accion: AccionDirecta, disparador?: HTMLButtonElement) => void;
   readonly onRecibir: (transferencia: TransferenciaViaje, disparador: HTMLButtonElement) => void;
 }
@@ -967,10 +985,10 @@ function EsperandoPagos({ viaje: v, marcando, onMarcar, onRecibir, onSalir, onNo
  * puede pedir salir; el dueño deja si las transferencias propias están
  * confirmadas y, si no, dice cuántas faltan (la hoja de 1q).
  */
-export function BotonSalir({ onSalir }: { onSalir: () => void }) {
+export function BotonSalir({ onSalir }: { onSalir: (boton: HTMLButtonElement) => void }) {
   const { t } = useIdioma();
   return (
-    <button type="button" className="vjv-salir" onClick={onSalir}>
+    <button type="button" className="vjv-salir" onClick={e => onSalir(e.currentTarget)}>
       {t('Salir del viaje')}
     </button>
   );

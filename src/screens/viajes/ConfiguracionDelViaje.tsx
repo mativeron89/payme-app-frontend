@@ -105,9 +105,9 @@ export function ConfiguracionDelViaje({
   onActualizado: (v: DetalleViaje) => void;
   onYaSeCerro: () => void;
   /** D279 · «Cerrar viaje»: la hoja de siempre, la de la pantalla del viaje. */
-  onCerrarViaje: () => void;
+  onCerrarViaje: (boton: HTMLButtonElement) => void;
   /** D279 · «Salir del viaje»: la hoja de siempre (D242, H02). */
-  onSalirDelViaje: () => void;
+  onSalirDelViaje: (boton: HTMLButtonElement) => void;
 }) {
   const { t } = useIdioma();
   const toast = useToast();
@@ -236,8 +236,8 @@ export interface ConfiguracionVistaProps {
   /** Un archivo para subir, o `null` para quitar la foto. */
   readonly onFoto: (archivo: File | null) => void;
   /** D279 · «Cerrar viaje» y «Salir del viaje», que estaban en la pantalla del viaje. */
-  readonly onCerrarViaje: () => void;
-  readonly onSalirDelViaje: () => void;
+  readonly onCerrarViaje: (boton: HTMLButtonElement) => void;
+  readonly onSalirDelViaje: (boton: HTMLButtonElement) => void;
 }
 
 export function ConfiguracionVista(p: ConfiguracionVistaProps) {
@@ -311,11 +311,11 @@ export function ConfiguracionVista(p: ConfiguracionVistaProps) {
         <div className="vjv-pie-abierto">
           {/* D279 · cierra a mano sólo quien creó el viaje (`puedo_cerrar`). */}
           {v.puedo_cerrar && (
-            <button type="button" className="vjv-cerrar" onClick={p.onCerrarViaje}>
+            <button type="button" className="vjv-cerrar" onClick={e => p.onCerrarViaje(e.currentTarget)}>
               {t('Cerrar viaje')}
             </button>
           )}
-          <button type="button" className="vjv-salir" onClick={p.onSalirDelViaje}>
+          <button type="button" className="vjv-salir" onClick={e => p.onSalirDelViaje(e.currentTarget)}>
             {t('Salir del viaje')}
           </button>
         </div>

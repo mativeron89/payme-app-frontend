@@ -714,6 +714,29 @@ describe('K1 · cerrar y salir: espera y un solo POST por confirmación', () => 
     expect(enviar).toHaveBeenCalledTimes(1);
   });
 });
+describe('reintento tras fallar al cerrar o salir del viaje', () => {
+  it.each(['cerrar', 'salir'] as const)('%s libera el envío después del error', async accion => {
+    let ahora = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+    vi.spyOn(api, 'getCierreDeViaje').mockImplementation(() => new Promise(() => {}));
+    const enviar = vi.spyOn(api, accion === 'cerrar' ? 'cerrarViaje' : 'salirDeViaje').mockRejectedValue(new Error('red'));
+    const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje()));
+    (m.componente(ViajeVista).props.onConfiguracion as () => void)();
+    m.render();
+    const configuracion = m.nodos().find(n => typeof n.type === 'function' && n.type.name === 'ConfiguracionDelViaje')!;
+    (configuracion.props[accion === 'cerrar' ? 'onCerrarViaje' : 'onSalirDelViaje'] as () => void)();
+    m.render();
+    ahora = 1350;
+    for (const intento of [1, 2]) {
+      (m.componente(accion === 'cerrar' ? HojaCerrarVista : HojaSalirVista).props.onConfirmar as () => void)();
+      await microtareas();
+      m.render();
+      expect(enviar).toHaveBeenCalledTimes(intento);
+      expect(m.componente(accion === 'cerrar' ? HojaCerrarVista : HojaSalirVista).props.enviando).toBe(false);
+    }
+  });
+});
+
 describe('K2 · No me llegó confirma, espera, cancela y no duplica', () => {
   for (const cancelar of [true, false]) it(cancelar ? 'cancelar no manda' : 'confirmar manda una vez', async () => {
     let ahora = 1000; vi.spyOn(performance, 'now').mockImplementation(() => ahora);
@@ -749,6 +772,38 @@ describe('K3 · aviso al confirmar Recibí', () => {
   });
 });
 
+
+it('Recibí permite cancelar y volver a confirmar tras un conflicto con la lectura caída', async ({ onTestFinished }) => {
+  vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => { fn(0); return 1; });
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  let ahora = 1000;
+  vi.spyOn(performance, 'now').mockImplementation(() => ahora);
+  vi.spyOn(api, 'getViaje').mockRejectedValue(new Error('red'));
+  const enviar = vi.spyOn(api, 'marcarTransferenciaDeViaje').mockRejectedValue(new MockApiError(409, 'viaje_not_waiting_payments'));
+  const transferencia = tr('tr-1', IDS.luis, IDS.yo, 75000, 'marcada', 'me_deben');
+  const m = montarPrueba(() => ViajeScreen({ viajeId: 'v-1' }), listo(viaje({ estado: 'esperando_pagos', transferencias: [transferencia] })));
+  const abrir = () => {
+    (m.componente(ViajeVista).props.onRecibir as (tr: TransferenciaViaje, b: HTMLButtonElement) => void)(transferencia, { focus: vi.fn() } as unknown as HTMLButtonElement);
+    m.render();
+  };
+  for (const intento of [1, 2]) {
+    abrir();
+    const confirmar = m.boton('Sí, recibí').props.onClick as () => void;
+    ahora += 349;
+    confirmar();
+    expect(enviar).toHaveBeenCalledTimes(intento - 1);
+    ahora += 1;
+    confirmar();
+    await microtareas();
+    m.render();
+    expect(m.componente(HojaModal)).toBeUndefined();
+    expect(enviar).toHaveBeenCalledTimes(intento);
+    abrir();
+    (m.boton('Cancelar').props.onClick as () => void)();
+    m.render();
+    expect(m.componente(HojaModal)).toBeUndefined();
+  }
+});
 
 describe('salidas de la hoja No me llegó', () => {
   for (const error of ['viaje_not_waiting_payments', 'viaje_not_found', 'red']) it(`cierra tras ${error} y no repite el POST`, async () => {
