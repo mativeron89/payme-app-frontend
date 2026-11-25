@@ -1,3 +1,11 @@
+## 0.282.1 · 2026-11-24
+
+- Al pegar un importe con letras o con un signo negativo en la propina, el precio de un plato, un gasto de viaje o el presupuesto del mes, el campo conserva el valor anterior. «Mi parte» y su texto compartido muestran la propina confirmada.
+- Un segundo toque al cerrar una mesa conserva la confirmación en curso. Si falla el cierre, puedes volver a intentarlo desde la misma hoja.
+- Inicio actualiza la invitación y los avisos que dependen de ella con una sola consulta. El lector de pantalla anuncia a dónde lleva el aviso de escaneo cuando hay un viaje.
+- En Viajes, al cancelar «Cerrar viaje» o «Salir del viaje», el foco vuelve al botón que abrió la confirmación. Una respuesta demorada conserva el detalle más reciente del viaje.
+- En «Tus restaurantes», la fecha de la visita se lee completa en pantallas angostas con importes grandes.
+
 ## 0.282.0 · 2026-11-23
 
 - «Finalizar» indica cuándo se necesita «Continuar» para confirmar el cierre de la mesa. Al regresar a Inicio tras guardar la selección, aparece «Listo, quedó guardado».
@@ -6,7 +14,7 @@
 
 ## 0.281.0 · 2026-11-23
 
-- En Estadísticas → Tus restaurantes, tocá la miniatura de una visita de mesa o viaje para ver la foto de su ticket.
+- En Estadísticas → Tus restaurantes, toca la miniatura de una visita de mesa o viaje para ver la foto de su ticket.
 
 ## 0.280.0 · 2026-11-22
 
@@ -19,8 +27,8 @@
 
 ## 0.279.0 · 2026-11-21
 
-- Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado. Si hay una selección pendiente, la hoja se cierra y deja visible el estado del guardado.
-- Si el ticket no trae platos, se ofrece «Sacar otra foto». En la espera por código, el aviso distingue los errores al consultar de los errores al cancelar y vuelve a anunciar cada intento fallido.
+- Si el cierre de la mesa queda sin confirmar, la hoja permite reintentar mientras se actualiza el estado. Si hay una selección pendiente, la hoja se cierra. La pantalla muestra el estado del guardado cuando queda pendiente de verificación.
+- Si el ticket no trae platos, se ofrece «Sacar otra foto». En la espera por código, el aviso distingue los errores al consultar de los errores al cancelar. Si vuelves a cancelar y falla, se anuncia el nuevo intento.
 - La revisión del ticket explica qué revisar por plato. Al elegir un plato, el lector de pantalla anuncia el precio de la línea. La espera por código anuncia los cambios sin leer cada segundo.
 - Compartir una invitación avisa si se copió el link. La búsqueda de contactos y grupos indica cuándo hay más coincidencias.
 - «Tu parte» y su texto compartido muestran «Sin fijar» hasta que alguien elige la propina. Los platos sin un importe individual calculable llevan un guion y una explicación. El total se conserva.
