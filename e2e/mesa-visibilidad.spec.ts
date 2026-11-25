@@ -26,6 +26,8 @@ async function montar(page: Page, e: Escenario) {
     const method = route.request().method();
     if (method === 'GET' && path === '/api/config') return route.fulfill({ json: { features: {
       money_rail: { mode: e.pagos ? 'test' : 'disabled', payments_enabled: !!e.pagos, real_money: false },
+      ...(e.foto === 'varias' && { ocr_pages: { supported: true, enabled: true, max_pages: 4,
+        max_total_bytes: 25165824, negotiation_param: 'pages_version', negotiation_value: '1' } }),
       ticket_image: { supported: true, enabled: !e.sinCapacidadFoto, mode: 'full_retained', stores_thumb: true,
         stores_full: true, full_retention_days: 90, negotiation_param: 'ticket_image_version', negotiation_value: '1',
         accepted_mime_types: ['image/jpeg', 'image/png', 'image/webp'], thumb_max_side_px: 320, full_max_side_px: 1600 },
@@ -41,6 +43,7 @@ async function montar(page: Page, e: Escenario) {
     } });
     if (method === 'GET' && path.includes('/ticket-image/')) {
       fotos.push(path);
+      if (e.foto === 'retirada') return route.fulfill({ status: 404, json: { error: 'ticket_image_not_found' } });
       // Un píxel WebP, sin foto del disco.
       return route.fulfill({ contentType: 'image/webp', headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization' },
         body: Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64') });
@@ -82,6 +85,7 @@ const casos: { nombre: string; control?: Escenario; entrada: Escenario; sinFoto?
   { nombre: 'mesa pagada', control: { igual: true }, entrada: { igual: true, estado: 'fully_paid' }, sinFoto: true, sinFinalizar: true },
   { nombre: 'mesa pendiente de autorización', control: { igual: true }, entrada: { igual: true, estado: 'pending_auth' }, sinFoto: true, sinFinalizar: true },
   { nombre: 'capacidad de foto apagada con foto en el detalle', entrada: { sinCapacidadFoto: true }, sinFoto: true },
+  { nombre: 'capacidad encendida sin foto', entrada: { foto: 'ausente' }, sinFoto: true },
   { nombre: 'mesa del tutorial', entrada: { ejemplo: true }, sinFoto: true, sinFinalizar: true },
   { nombre: 'código distinto del detalle', entrada: { otroCodigo: true }, sinFoto: true },
   { nombre: 'riel de pagos simulado', entrada: { pagos: true }, sinFinalizar: true },
@@ -119,4 +123,18 @@ test('Visibilidad · invitación pendiente antes y después del 403 simulado', a
   await expect(foto(page)).toHaveCount(0);
   await expect(finalizar(page)).toHaveCount(0);
   expect(r.fotos).toEqual([miniatura]);
+});
+
+test('La mesa con varias páginas negocia la segunda versión y muestra su miniatura', async ({ page }) => {
+  const r = await montar(page, { foto: 'varias' });
+  await expect(foto(page).locator('img')).toBeVisible();
+  expect(r.versiones).toContain('2');
+  expect(r.fotos).toEqual([miniatura]);
+});
+
+test('La mesa retira la fila cuando el servidor ya no tiene la miniatura', async ({ page }) => {
+  const r = await montar(page, { foto: 'retirada' });
+  await expect.poll(() => r.fotos).toEqual([miniatura]);
+  await expect(foto(page)).toHaveCount(0);
+  await expect(finalizar(page)).toBeVisible();
 });

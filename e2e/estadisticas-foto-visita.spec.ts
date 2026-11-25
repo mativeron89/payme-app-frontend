@@ -13,7 +13,7 @@ const sesion = {
     birth_date: '1990-01-01', birth_date_set: true, payme_id: 'cuenta_prueba', avatar: null },
 };
 
-async function montar(page: Page, version: false | 1 | 2, caso: 'mesa' | 'viaje' | 'null' | '404' | 'viaje sin id' = 'mesa') {
+async function montar(page: Page, version: false | 1 | 2, caso: 'mesa' | 'viaje' | 'null' | '404' | 'viaje sin id' = 'mesa', monto = 18000) {
   const origen = test.info().config.projects.find(p => p.name === 'mesa-recuperacion-http')?.use.baseURL;
   if (!origen || new URL(origen).hostname !== '127.0.0.1') throw new Error('Falta el servidor HTTP local');
   const pedidos: string[] = [];
@@ -36,10 +36,10 @@ async function montar(page: Page, version: false | 1 | 2, caso: 'mesa' | 'viaje'
       consultas.push(u.search);
       // Incluso apagada, enviamos una foto en la respuesta para probar que se rechaza.
       const visita = { code: caso.startsWith('viaje') ? ticket : mesa, viaje_id: caso === 'viaje' ? viaje : null,
-        created_at: '2026-11-02T18:00:00Z', division_mode: 'igual', amount_cents: 18000, items: [],
+        created_at: '2026-11-02T18:00:00Z', division_mode: 'igual', amount_cents: monto, items: [],
         ticket_image: caso === 'null' ? null : { thumb: true, full: true, ...(version === 2 && { pages: 1 }) } };
-      return route.fulfill({ json: { basis: 'consumption', month_start: '2026-11-01T06:00:00Z', total_cents: 18000,
-        restaurants: [{ id: 'local-ficticio', name: 'Café de prueba', category: 'cafe', amount_cents: 18000, visits_count: 1, visits: [visita] }] } });
+      return route.fulfill({ json: { basis: 'consumption', month_start: '2026-11-01T06:00:00Z', total_cents: monto,
+        restaurants: [{ id: 'local-ficticio', name: 'Café de prueba', category: 'cafe', amount_cents: monto, visits_count: 1, visits: [visita] }] } });
     }
     if (u.pathname.includes('/ticket-image/')) {
       pedidos.push(u.pathname);
@@ -118,6 +118,17 @@ for (const ancho of [320, 390]) {
     await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
     await page.goto('/restaurantes');
     await page.getByRole('button', { name: /^La Parolaccia/ }).click();
+    const fotos = await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const resultado = [];
+      for (const detalle of [false, true]) {
+        const lista = await api.getStatsRestaurants('this_month', detalle);
+        resultado.push(lista.restaurants.flatMap(r => r.visits).some(v => Object.hasOwn(v, 'fotoDelTicket')));
+      }
+      return resultado;
+    });
+    expect(fotos).toEqual([false, true]);
     const filas = page.locator('.rest-visita');
     const boton = filas.first().getByRole('button', { name: /Ver la foto/ });
     await expect(boton.locator('img')).toBeVisible();
@@ -128,5 +139,26 @@ for (const ancho of [320, 390]) {
     const visor = page.getByRole('dialog', { name: 'Foto del ticket' });
     await expect(visor.locator('img[data-tamano="full"]')).toBeVisible();
     if (dir) await page.screenshot({ path: dir + '/visor-' + ancho + '.png' });
+  });
+}
+
+for (const monto of [123456, 1234567]) {
+  test('La fecha y el importe de la visita con foto caben sin solaparse · ' + monto, async ({ page }) => {
+    await montar(page, 1, 'mesa', monto);
+    await expect(page.locator('.fila-ticket-foto img')).toBeVisible();
+    for (const width of [320, 340, 359, 360, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => document.fonts.ready);
+      const medida = await page.locator('.rest-visita-fila').evaluate(el => {
+        const fecha = el.querySelector('.rest-visita-fecha')!;
+        const texto = document.createRange();
+        texto.selectNodeContents(fecha);
+        const fin = texto.getBoundingClientRect();
+        const importe = el.querySelector('.rest-visita-monto')!.getBoundingClientRect();
+        return { lineas: texto.getClientRects().length, separados: fin.right <= importe.left || fin.bottom <= importe.top,
+          ancho: document.documentElement.scrollWidth };
+      });
+      expect(medida, String(width)).toEqual({ lineas: 1, separados: true, ancho: width });
+    }
   });
 }

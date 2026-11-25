@@ -11961,8 +11961,9 @@ h1.pay-title-lbl {
 
 .rest-visita-fila {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 0 10px;
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
@@ -11994,11 +11995,18 @@ h1.pay-title-lbl {
 }
 
 .rest-visita-fecha {
-  flex: 1;
+  flex: 1 0 max-content;
   min-width: 0;
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 700;
+}
+
+.rest-visita-total {
+  display: inline-flex;
+  align-items: center;
+  column-gap: inherit;
+  margin-inline-start: auto;
 }
 
 .rest-visita-monto {

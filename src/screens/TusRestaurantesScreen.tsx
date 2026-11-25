@@ -259,8 +259,10 @@ function VisitasDelRestaurante({ restaurante, conFoto }: { restaurante: Restaura
           <button type="button" className="rest-visita-fila" aria-expanded={expandida}
             onClick={() => setAbierta(expandida ? null : visita.code)}>
             <span className="rest-visita-fecha">{fechaDeVisita(visita.createdAt, presentationZone, idioma, t)}</span>
-            <span className="rest-visita-monto">{formatMXN(visita.amountCents)}</span>
-            <Icon name="chevron-down" size={18} className={expandida ? 'rest-chev abierto' : 'rest-chev'} />
+            <span className="rest-visita-total">
+              <span className="rest-visita-monto">{formatMXN(visita.amountCents)}</span>
+              <Icon name="chevron-down" size={18} className={expandida ? 'rest-chev abierto' : 'rest-chev'} />
+            </span>
           </button>
         </MarcoDeFilaDeTicket>
         {expandida && <DentroDeLaVisita visita={visita} />}
