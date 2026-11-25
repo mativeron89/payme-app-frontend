@@ -383,3 +383,68 @@ describe('AF-NOMBRES-CORREGIDOS · D240 punto 15 · los nombres corregidos (`nam
     expect(ocrResponse({ ...ticket(), items: [plato] }).items[0]).toEqual({ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 });
   });
 });
+
+describe('C283-F2 · sugerencia opcional para la hoja del ticket', () => {
+  const recibo = 'or1.sintetico-f2';
+  const original = 'SOPA DE FID';
+  const sugerido = 'Sopa de fideo';
+  const lectura = (extra: Record<string, unknown> = {}) => ({
+    ...ticket(), receipt: recibo,
+    items: [{ ...ticket().items[0], name: original, original_name: original, ...extra }],
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([undefined, '', '0', 'true', '1'])('negocia sólo con la bandera literal, valor %s', async (flag) => {
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', flag);
+    const pending = api.scanTicket(new Blob(['foto']));
+    const xhr = FakeXmlHttpRequest.instances[0]!;
+    const query = new URL(xhr.url, 'http://localhost').searchParams;
+    const activa = flag === '1';
+    expect(query.getAll('suggestions_version')).toEqual(activa ? ['1'] : []);
+    expect(query.getAll('receipt_version')).toEqual(['1']);
+    const respuesta = lectura(activa ? { suggested_name: sugerido } : {});
+    xhr.finish(200, respuesta);
+    await expect(pending).resolves.toEqual(respuesta);
+  });
+
+  it('Viajes conserva su lectura propia incluso con la bandera de la hoja encendida', async () => {
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', '1');
+    viajes.aplicarConfigViajes({ features: { viajes: { supported: true, enabled: true } } });
+    try {
+      const pending = api.scanTicket(new Blob(['foto']), undefined, { viaje: true });
+      const xhr = FakeXmlHttpRequest.instances[0]!;
+      const query = new URL(xhr.url, 'http://localhost').searchParams;
+      expect(query.getAll('trip_version')).toEqual(['1']);
+      expect(query.has('suggestions_version')).toBe(false);
+      xhr.finish(200, lectura());
+      await expect(pending).resolves.toEqual(lectura());
+    } finally {
+      viajes.reiniciarViajesParaTests();
+    }
+  });
+
+  it('admite un servidor anterior aunque el cliente negocie', async () => {
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', '1');
+    const pending = api.scanTicket(new Blob(['foto']));
+    FakeXmlHttpRequest.instances[0]!.finish(200, lectura());
+    await expect(pending).resolves.toEqual(lectura());
+  });
+
+  it.each([
+    { suggested_name: '' }, { suggested_name: null }, { suggested_name: 'x'.repeat(61) },
+  ])('rechaza una propuesta fuera de contrato %j', async (extra) => {
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', '1');
+    const pending = api.scanTicket(new Blob(['foto']));
+    FakeXmlHttpRequest.instances[0]!.finish(200, lectura(extra));
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+
+  it.each(['sin recibo', 'mock', 'sin negociar'])('rechaza la sugerencia %s', async (caso) => {
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', caso === 'sin negociar' ? '0' : '1');
+    const pending = api.scanTicket(new Blob(['foto']));
+    FakeXmlHttpRequest.instances[0]!.finish(200, {
+      ...lectura({ suggested_name: sugerido }), mock: caso === 'mock', receipt: caso === 'sin recibo' ? '' : recibo,
+    });
+    await expect(pending).rejects.toThrow('contract_response_invalid:ocr');
+  });
+});

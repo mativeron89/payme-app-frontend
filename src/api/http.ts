@@ -217,6 +217,7 @@ function rawOcrUploadRequest<T>(
   fotoDelTicket: boolean | 2 = false,
   paginas = false,
   direccion = false,
+  sugerencias = false,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -243,7 +244,7 @@ function rawOcrUploadRequest<T>(
     // lectura de una mesa: el dueño publica la dirección del local para
     // reenviarla a `POST /api/restaurants/resolve`. Un viaje no resuelve
     // restaurante, así que no la pide. Nunca se muestra (Aviso 3.1.0 §6).
-    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket === 2 ? '&ticket_image_version=2' : fotoDelTicket ? '&ticket_image_version=1' : ''}${paginas ? '&pages_version=1' : ''}${direccion ? '&local_address_version=1' : ''}`);
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2&receipt_version=1&totals_version=1&warnings_version=2&adjustments_version=2&names_version=1${viaje ? '&trip_version=1' : ''}${fotoDelTicket === 2 ? '&ticket_image_version=2' : fotoDelTicket ? '&ticket_image_version=1' : ''}${paginas ? '&pages_version=1' : ''}${direccion ? '&local_address_version=1' : ''}${sugerencias ? '&suggestions_version=1' : ''}`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -389,13 +390,14 @@ export async function httpOcrUploadRequest<T>(
     readonly fotoDelTicket?: boolean | 2;
     readonly paginas?: boolean;
     readonly direccion?: boolean;
+    readonly sugerencias?: boolean;
   } = {},
 ): Promise<T> {
   return authenticatedRequest(undefined, (session) => (
     rawOcrUploadRequest<T>(
       body, session.access_token, onProgress, opciones.viaje === true,
       opciones.fotoDelTicket === 2 ? 2 : opciones.fotoDelTicket === true, opciones.paginas === true,
-      opciones.direccion === true,
+      opciones.direccion === true, opciones.sugerencias === true,
     )
   ));
 }

@@ -1,3 +1,7 @@
+## 0.284.0 · 2026-11-25
+
+- En la hoja del ticket se puede elegir y editar el nombre que sugiere el OCR para un plato. La función viene apagada.
+
 ## 0.282.0 · 2026-11-23
 
 - «Finalizar» indica cuándo se necesita «Continuar» para confirmar el cierre de la mesa. Al regresar a Inicio tras guardar la selección, aparece «Listo, quedó guardado».

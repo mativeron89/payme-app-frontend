@@ -1150,9 +1150,10 @@ const realApi: Api = {
     // AF-NOMBRES-CORREGIDOS · el pedido siempre negocia `names_version=1`.
     // D504 · la dirección del local sólo en la lectura de una mesa (la reenvía al resolver); un viaje no la pide.
     const direccion = !viaje;
+    const sugerencias = !viaje && import.meta.env.VITE_OCR_SUGGESTED_NAME_ENABLED === '1';
     return ocrResponse(
-      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket, paginas, direccion }),
-      { viaje, nombres: true, fotoDelTicket, direccion, ...(paginas ? { paginas: fotos.length } : {}) },
+      await httpOcrUploadRequest<unknown>(form, onUploadProgress, { viaje, fotoDelTicket, paginas, direccion, sugerencias }),
+      { viaje, nombres: true, fotoDelTicket, direccion, sugerencias, ...(paginas ? { paginas: fotos.length } : {}) },
     );
   },
   createMesa: async (req, intent) =>

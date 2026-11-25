@@ -144,6 +144,7 @@ interface EditItem {
    * se guarda para poder volver a él desde la edición del nombre.
    */
   originalName?: string;
+  suggestedName?: string;
 }
 
 export type TicketOpeningRoute = 'wait_for_user' | 'resolving_restaurant' | 'record_only_blocked' | 'create_without_money' | 'guarantee';
@@ -374,6 +375,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
   const [editingItems, setEditingItems] = useState(false);
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
   const expandedRowRef = useRef<HTMLDivElement | null>(null);
+  const enfocarNombreSugerido = useRef(false);
   const removedItemFocusRef = useRef<number | null>(null);
   /**
    * La fila que se abre puede quedar FUERA de la pantalla — pasa siempre al
@@ -388,7 +390,8 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
     const row = expandedRowRef.current;
     const nombre = row?.querySelector<HTMLInputElement>('input.tk-edit-input:not(.amt)');
     // Al agregar, la primera tarea es nombrar el consumo; un lápiz conserva el precio.
-    (nombre?.value === '' ? nombre : row?.querySelector<HTMLInputElement>('input.amt'))?.focus();
+    (enfocarNombreSugerido.current || nombre?.value === '' ? nombre : row?.querySelector<HTMLInputElement>('input.amt'))?.focus();
+    enfocarNombreSugerido.current = false;
   }, [expandedItem]);
   // TRES formas en la UI (§1.3-bis) y DOS en el contrato: la traducción vive
   // entera en `divisionModo.ts`, nunca acá.
@@ -1259,7 +1262,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
       ? `${Math.max(parseFloat(slot.style.minHeight) || 0, slot.getBoundingClientRect().height)}px` : '';
   });
   useLayoutEffect(() => {
-    if (editingItems) {
+    if (editingItems && !expandedRowRef.current) {
       const dialog = ticketRef.current;
       (dialog?.querySelector<HTMLButtonElement>('.tk-row-warning .tk-pencil')
         ?? dialog?.querySelector<HTMLButtonElement>('.tk-pencil'))?.focus();
@@ -1975,6 +1978,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
           ...(i.category && { category: i.category }),
           ...(i.confidence !== undefined && { confidence: i.confidence }),
           ...(i.low_confidence === true && { lowConfidence: true as const }),
+          ...(i.suggested_name && { suggestedName: i.suggested_name }),
           ...(i.original_name !== undefined && { originalName: i.original_name }),
         })),
       );
@@ -3565,6 +3569,22 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                   const motivo = duda ? textoDeDuda(duda) : it.lowConfidence ? t('No se leyó bien: revísalo con el ticket.') : null;
                   const renglonMotivo = motivo && <span className="tk-motivo" data-duda={duda}>{motivo}</span>;
                   const marcada = it.lowConfidence || duda !== undefined;
+                  const sugerencia = it.suggestedName;
+                  const usarSugerencia = sugerencia && !frozen && (
+                    <button type="button" className="tk-original-usar tk-sugerencia" onClick={() => {
+                      updateItem(idx, { name: sugerencia, suggestedName: undefined });
+                      if (expandedItem === idx && editingItems) {
+                        expandedRowRef.current?.querySelector<HTMLInputElement>('input.tk-edit-input')?.focus();
+                      } else {
+                        enfocarNombreSugerido.current = true;
+                        setTicketAbierto(true);
+                        setEditingItems(true);
+                        setExpandedItem(idx);
+                      }
+                    }}>
+                      {t('Usar sugerencia «{0}»', sugerencia)}
+                    </button>
+                  );
                   if (editingItems && expandedItem === idx) {
                     return (
                       <div
@@ -3581,9 +3601,10 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                             className="tk-edit-input"
                             value={it.name}
                             placeholder={t('Nombre del consumo')}
-                            onChange={(e) => updateItem(idx, { name: e.target.value })}
+                            onChange={(e) => updateItem(idx, { name: e.target.value, suggestedName: undefined })}
                           />
                         </label>
+                        {usarSugerencia}
                         {/* AF-NOMBRES-CORREGIDOS · D240 punto 15 · volver a lo que decía el
                             ticket: sólo dentro de la edición y sólo si es distinto de lo que
                             hay en el campo (sin ruido en la lista). El recibo firma el
@@ -3596,7 +3617,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                               type="button"
                               className="tk-original-usar"
                               onClick={() => {
-                                updateItem(idx, { name: it.originalName });
+                                updateItem(idx, { name: it.originalName, suggestedName: undefined });
                                 // El botón se desmonta; Consumo sigue en esta misma fila.
                                 expandedRowRef.current?.querySelector<HTMLInputElement>('input.tk-edit-input:not(.amt)')?.focus();
                               }}
@@ -3651,6 +3672,7 @@ export function CreateMesaFlow({ viajeId = null }: { readonly viajeId?: string |
                       <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
                         <span>{nombre || t('Sin nombre')}</span>
                         {renglonMotivo}
+                        {usarSugerencia}
                         {it.quantity > 1 && unitario !== null && (
                           <small className="tk-precio-unitario">{it.quantity} × {formatMXN(unitario)}</small>
                         )}
