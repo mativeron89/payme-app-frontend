@@ -4,6 +4,10 @@
 - En Grupos y Nuevo amigo, las filas muestran el nombre o apodo. El @ se consulta en Información y sigue visible en los resultados de búsqueda por @.
 - En Grupos se desliza la fila para consultar Información o quitar a un miembro con confirmación. En Invitar amigos y Bloqueados, el @ también se consulta al deslizar. El aviso de cierre deja «Continuar» al alcance.
 
+## 0.283.0 · 2026-11-25
+
+- D947 · Desde cada consumo con caja vigente se puede abrir el renglón de la foto del ticket. La negociación de C272 queda apagada por defecto.
+
 ## 0.281.0 · 2026-11-23
 
 - En Estadísticas → Tus restaurantes, tocá la miniatura de una visita de mesa o viaje para ver la foto de su ticket.

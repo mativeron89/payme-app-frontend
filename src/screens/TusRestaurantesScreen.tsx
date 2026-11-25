@@ -1,3 +1,4 @@
+import { InformacionDelConsumo } from '../components/InformacionDelConsumo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { partesDeLaFoto, tieneFoto, useCapacidadFotoDelTicket } from '../api/fotoDelTicket';
@@ -225,7 +226,6 @@ export function modalidadDeVisita(
 }
 
 function origenDeVisita(v: Visita, viajes: boolean): OrigenDeFoto | null {
-  if (!tieneFoto(v.fotoDelTicket)) return null;
   if (v.viajeId !== null) return viajes ? { tipo: 'viaje', viajeId: v.viajeId, ticketId: v.code } : null;
   // Sin viaje_id, sólo un código de mesa puede pedir bytes. El id de un ticket de viaje nunca sirve.
   return /^PA-\d+$/.test(v.code) ? { tipo: 'mesa', code: v.code } : null;
@@ -237,7 +237,7 @@ function VisitasDelRestaurante({ restaurante, conFoto }: { restaurante: Restaura
   const { presentationZone } = useRegion();
   const viajes = useViajesHabilitado();
   const filas = useMemo(() => restaurante.visits.map(visita => ({
-    visita, origen: conFoto ? origenDeVisita(visita, viajes) : null,
+    visita, origen: conFoto && tieneFoto(visita.fotoDelTicket) ? origenDeVisita(visita, viajes) : null,
   })), [restaurante, conFoto, viajes]);
   const origenes = useMemo(() => filas.flatMap(({ origen }) => origen ? [origen] : []), [filas]);
   const miniaturas = useMiniaturasDeTickets(session, origenes);
@@ -263,7 +263,7 @@ function VisitasDelRestaurante({ restaurante, conFoto }: { restaurante: Restaura
             <Icon name="chevron-down" size={18} className={expandida ? 'rest-chev abierto' : 'rest-chev'} />
           </button>
         </MarcoDeFilaDeTicket>
-        {expandida && <DentroDeLaVisita visita={visita} />}
+        {expandida && <DentroDeLaVisita visita={visita} origen={origenDeVisita(visita, viajes)} />}
       </div>;
     })}
     {seleccion?.origen && tieneFoto(foto) && !miniaturas.sinFoto(seleccion.origen) && (
@@ -277,7 +277,7 @@ function VisitasDelRestaurante({ restaurante, conFoto }: { restaurante: Restaura
 }
 
 /** Lo tuyo en la visita y, debajo, el botón del ticket completo. */
-function DentroDeLaVisita({ visita }: { visita: Visita }) {
+function DentroDeLaVisita({ visita, origen }: { visita: Visita; origen: OrigenDeFoto | null }) {
   const { t } = useIdioma();
   return (
     <div className="rest-dentro">
@@ -297,6 +297,7 @@ function DentroDeLaVisita({ visita }: { visita: Visita }) {
                 {prefijo && <span className="est-consumo-prefijo">{prefijo}</span>}
                 {nombreDePlato(it.name)}
               </span>
+              <InformacionDelConsumo caja={it.ticket_crop} nombre={nombreDePlato(it.name)} origen={origen} fecha={visita.viajeId === null ? visita.createdAt : null} />
               <span className="est-consumo-monto">{formatMXN(it.amountCents)}</span>
             </li>
           );
@@ -390,6 +391,7 @@ function TicketEnLaVisita({ code }: { code: string }) {
                 </span>
                 {f.tipo === 'otro' && <span className="est-consumo-rotulo">{t('Lo eligió otro')}</span>}
               </span>
+              <InformacionDelConsumo caja={f.ticket_crop} nombre={nombreDePlato(f.name)} origen={{ tipo: 'mesa', code }} />
               <span className="est-consumo-monto">{formatMXN(f.amountCents)}</span>
             </li>
           ))}

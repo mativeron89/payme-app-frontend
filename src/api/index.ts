@@ -1,3 +1,4 @@
+import { negociarRecorte } from './recortePorConsumo';
 import type { SelectionClosureConfirmation } from './types';
 import { FOTO_PATH, capacidadFoto, decodePermisoFoto, confirmarMutacionFoto, verificarAvisoFoto, type PermisoFoto } from './fotoPerfilNoAmigos';
 import {
@@ -1102,10 +1103,11 @@ const realApi: Api = {
     const foto = negociacionDeFoto();
     if (foto) qs.set(PARAMETRO_FOTO_DEL_TICKET, valorDeLaNegociacion(foto));
     const s = qs.toString();
-    return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`), foto === 2 ? 2 : 1);
+    const ruta = `/mesas/mine${s ? `?${s}` : ''}`;
+    return decodeMisMesas(await httpRequest<unknown>('GET', params?.detail ? negociarRecorte(ruta) : ruta), foto === 2 ? 2 : 1);
   },
   getMovement: async (id) => decodeMovementDetailResponse(
-    await httpPrivateJsonRequest<unknown>(`/account/movements/${encodeURIComponent(id)}`),
+    await httpPrivateJsonRequest<unknown>(negociarRecorte(`/account/movements/${encodeURIComponent(id)}`)),
   ),
   getWalletTransactions: () =>
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
@@ -1124,8 +1126,8 @@ const realApi: Api = {
     const ruta = `/mesas/${encodeURIComponent(code)}?adjustments_version=2&totals_version=2&share_version=1&members_version=1`;
     if (guestToken) return httpGuestRequest<MesaDetailResponse>('GET', ruta, guestToken);
     const foto = negociacionDeFoto();
-    return httpRequest<MesaDetailResponse>('GET', ruta
-      + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : ''));
+    return httpRequest<MesaDetailResponse>('GET', negociarRecorte(ruta
+      + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : '')));
   },
   getInformativeSelection: async (code) => informativeSelectionResponse(
     await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),
@@ -1467,7 +1469,7 @@ const realApi: Api = {
     decodeIngredientes(await httpRequest<unknown>('GET', rutaDeIngredientes(period))),
   getStatsRestaurants: async (period, conFoto) => {
     const foto = conFoto ? negociacionDeFoto() : false;
-    return decodeTusRestaurantes(await httpRequest<unknown>('GET', rutaDeTusRestaurantes(period, foto)), { negociado: true, foto });
+    return decodeTusRestaurantes(await httpRequest<unknown>('GET', negociarRecorte(rutaDeTusRestaurantes(period, foto))), { negociado: true, foto });
   },
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
@@ -1576,7 +1578,7 @@ const realApi: Api = {
   corregirTicketDeViaje: async (id, ticketId, pedido) => {
     assertViajesHabilitado();
     return decodeTicketCorregido(await httpRequest<unknown>(
-      'PATCH', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`, pedido,
+      'PATCH', negociarRecorte(`/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`), pedido,
     ));
   },
   subirFotoDeViaje: async (id, foto) => {
@@ -1624,11 +1626,11 @@ const realApi: Api = {
   },
   cargarTicketDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeTicketCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/tickets?viaje_version=11`, req));
+    return decodeTicketCargado(await httpRequest<unknown>('POST', negociarRecorte(`/viajes/${encodeURIComponent(id)}/tickets?viaje_version=11`), req));
   },
   cargarGastoDeViaje: async (id, req) => {
     assertViajesHabilitado();
-    return decodeGastoCargado(await httpRequest<unknown>('POST', `/viajes/${encodeURIComponent(id)}/gastos?viaje_version=11`, req), req);
+    return decodeGastoCargado(await httpRequest<unknown>('POST', negociarRecorte(`/viajes/${encodeURIComponent(id)}/gastos?viaje_version=11`), req), req);
   },
   getAvatarDeMiembroDeViaje: async (id, miembroId, expectedSession) => {
     assertViajesHabilitado();
@@ -1642,20 +1644,20 @@ const realApi: Api = {
     // D464 · D466 · la foto del ticket, sólo con la capacidad encendida (strings fijos, sin interpolar).
     const foto = negociacionDeFoto();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'GET', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`
-        + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : ''),
+      'GET', negociarRecorte(`/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}?viaje_version=11`
+        + (foto === 2 ? '&ticket_image_version=2' : foto ? '&ticket_image_version=1' : '')),
     ), 'viajes.ticket', foto);
   },
   elegirEnTicketDeViaje: async (id, ticketId, req) => {
     assertViajesHabilitado();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/seleccion?viaje_version=11`, req,
+      'PUT', negociarRecorte(`/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/seleccion?viaje_version=11`), req,
     ), 'viajes.seleccion');
   },
   marcarPresentesEnTicket: async (id, ticketId, presentes) => {
     assertViajesHabilitado();
     return decodeTicketDelViaje(await httpRequest<unknown>(
-      'PUT', `/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/presentes?viaje_version=11`, { presentes },
+      'PUT', negociarRecorte(`/viajes/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}/presentes?viaje_version=11`), { presentes },
     ), 'viajes.presentes');
   },
   getCierreDeViaje: async (id) => {
@@ -1676,7 +1678,7 @@ const realApi: Api = {
   },
   getResumenDeViaje: async (id) => {
     assertViajesHabilitado();
-    return decodeResumenDeViaje(await httpRequest<unknown>('GET', `/viajes/${encodeURIComponent(id)}/resumen`), id);
+    return decodeResumenDeViaje(await httpRequest<unknown>('GET', negociarRecorte(`/viajes/${encodeURIComponent(id)}/resumen`)), id);
   },
   getNotasDeViaje: async (id) => {
     assertViajesHabilitado();

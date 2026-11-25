@@ -4,6 +4,7 @@ import { desgloseDelTicket, type DesgloseDelTicket, type FilaDelDesglose, type L
 import { leerParteDelDetalle } from '../api/miParte';
 
 export interface TicketDigitalItem {
+  readonly ticket_crop?: MesaDetail['items'][number]['ticket_crop'];
   readonly name: string;
   readonly quantity: number;
   readonly unitPriceCents: number;
@@ -85,6 +86,7 @@ export function ticketDigitalView(mesa: MesaDetail, expectedCode: string): Ticke
       name: item.name,
       quantity: item.quantity,
       unitPriceCents: item.price_cents,
+      ...(item.ticket_crop && { ticket_crop: item.ticket_crop }),
     };
   });
 

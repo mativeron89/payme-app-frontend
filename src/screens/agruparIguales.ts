@@ -98,6 +98,7 @@ export function agruparPropios(items: readonly ItemPropioDeMesa[]): RenglonAgrup
     cantidad: (i) => i.quantity,
     monto: (i) => i.amountCents,
     key: (i) => i.itemId,
+    extra: (i) => JSON.stringify(i.ticket_crop),
   });
 }
 
@@ -119,6 +120,6 @@ export function agruparDelPago(
     cantidad: (i) => i.quantity,
     monto: (i) => i.amount_cents,
     key: (_, index) => `${movementId}:${index}`,
-    extra: (i) => String(i.declared_fraction_bps),
+    extra: (i) => JSON.stringify([i.declared_fraction_bps, i.ticket_crop]),
   });
 }

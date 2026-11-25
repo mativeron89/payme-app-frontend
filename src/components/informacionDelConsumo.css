@@ -1,0 +1,21 @@
+:is(li, div):has(> button.info-consumo),
+.mi-parte-plato:has(> dt > .info-consumo) {
+  min-block-size: 44px;
+  position: relative;
+  padding-inline-end: 44px;
+}
+.info-consumo {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--action);
+}
+.info-consumo-fondo { z-index: 1100; }
+.info-consumo-fondo canvas { max-width: 100%; max-height: 70vh; object-fit: contain; align-self: center; }
