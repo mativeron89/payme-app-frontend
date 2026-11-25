@@ -222,7 +222,7 @@ export interface MesaDetailViewProps {
    * AF-34 · n98 · cerrar la mesa. `null` ⇒ el botón no está (retirado tras un
    * 403, un 409 `close_not_applicable` o un 404). La red la hace `MesaScreen`.
    */
-  onCerrarMesa: (() => Promise<'resuelta' | 'reintentar'>) | null;
+  onCerrarMesa: (() => Promise<'resuelta' | 'reintentar' | 'ocupada' | 'sin_pedido'>) | null;
   cerrando: boolean;
   onSetFraction: (id: string, bps: number) => void;
   onSetDenominator: (id: string, denominator: number) => void;
@@ -1811,6 +1811,8 @@ export function MesaDetailView({
           // hay debajo. Si se cerró, la pantalla pasa al cierre.
           onConfirmar={async () => {
             const resultado = await onCerrarMesa();
+            if (resultado === 'ocupada') return;
+            if (resultado === 'sin_pedido') requestAnimationFrame(() => botonCerrarMesa.current?.focus());
             setHojaCierre(actual => actual && resultado === 'reintentar' ? 'reintentar' : null);
           }}
         />

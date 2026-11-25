@@ -324,7 +324,19 @@ for (const estado of ['selección incierta', 'Listo en vuelo'] as const) {
     await expect(hoja(page)).toHaveCount(0);
     await expect(page.getByRole('alert').filter({ hasText: 'No pudimos confirmar el cierre' })).toHaveCount(0);
     expect(await pedidosDeCierre(page)).toBe(0);
+    await expect(boton(page)).toBeFocused();
     if (estado === 'selección incierta') await expect(aviso).toBeVisible();
     else await page.evaluate(() => window.dispatchEvent(new Event('continuar-lectura-de-listo')));
   });
 }
+
+test('dos confirmaciones en el mismo turno conservan la hoja si falla el único cierre', async ({ page }) => {
+  await mesaSinGarantia(page, { 'payme.app.mock.cerrar.v1': 'error' });
+  await tocarCerrar(page);
+  await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).evaluate(el => {
+    (el as HTMLButtonElement).click();
+    (el as HTMLButtonElement).click();
+  });
+  await expect(hoja(page).getByRole('button', { name: 'Reintentar cierre' })).toBeFocused();
+  expect(await pedidosDeCierre(page)).toBe(1);
+});
