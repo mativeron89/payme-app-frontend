@@ -470,6 +470,7 @@ export function ocrResponse(
   opciones: {
     readonly viaje?: boolean;
     readonly nombres?: boolean;
+    readonly sugerencias?: boolean;
     /** `true`: se negoció `ticket_image_version=1`; `2`: la v2 de varias fotos (D484). */
     readonly fotoDelTicket?: boolean | 2;
     /** D484 · se negoció `pages_version=1`: se mandaron `paginas` fotos (2 o más). */
@@ -557,11 +558,16 @@ export function ocrResponse(
 
   const items: OcrResponse['items'] = [];
   const nombres = version2 && opciones.nombres === true;
-  const clavesDelItem = nombres ? OCR_ITEM_KEYS_NOMBRES : OCR_ITEM_KEYS;
+  const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
+  const clavesBase = nombres ? OCR_ITEM_KEYS_NOMBRES : OCR_ITEM_KEYS;
+  const clavesDelItem = version2 && opciones.sugerencias && receipt && !body.mock
+    ? [...clavesBase, 'suggested_name'] : clavesBase;
   for (const raw of body.items) {
     const item = record(raw);
     if (!item
         || Object.keys(item).some((key) => !clavesDelItem.includes(key))
+        || (item.suggested_name !== undefined && (typeof item.suggested_name !== 'string'
+          || item.suggested_name.length > 60 || normalizedMerchantName(item.suggested_name) !== item.suggested_name))
         // Negociado, el original va en TODOS los platos, con las reglas de `name`.
         || (nombres && (typeof item.original_name !== 'string'
           || normalizedMerchantName(item.original_name) !== item.original_name))
@@ -584,11 +590,11 @@ export function ocrResponse(
       quantity: item.quantity,
       ...(item.confidence !== undefined ? { confidence: item.confidence as number } : {}),
       ...(item.low_confidence === true ? { low_confidence: true as const } : {}),
+      ...(typeof item.suggested_name === 'string' ? { suggested_name: item.suggested_name } : {}),
       ...(nombres ? { original_name: item.original_name as string } : {}),
     });
   }
 
-  const receipt = version2 ? ocrReceipt(body.receipt) : undefined;
   // D464 · la foto del escaneo: ausente se tolera (un dueño anterior o el modo
   // `off` no la publican); presente, con la forma exacta de cada rama.
   const fotoDelEscaneo = version2 && body.ticket_image !== undefined

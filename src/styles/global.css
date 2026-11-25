@@ -5324,6 +5324,12 @@ body::before {
   cursor: pointer;
 }
 
+.tk-sugerencia {
+  display: block;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
 .tk-edit-input.amt {
   font-family: var(--font-display);
   font-weight: 700;

@@ -1169,6 +1169,8 @@ export interface OcrResponse {
      * iguales.
      */
     original_name?: string;
+    /** Propuesta opcional de AB. El recibo sigue correspondiendo a `name`. */
+    suggested_name?: string;
   }>;
   total_cents: number;
   /** Total IMPRESO detectado; `total_cents` es la suma de las filas. */

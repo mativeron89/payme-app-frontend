@@ -1354,6 +1354,7 @@ export const EN: Record<string, string> = {
   "No pudimos borrarlo. Prueba de nuevo.": "We couldn't delete it. Try again.",
   // AF-NOMBRES-CORREGIDOS · D240 punto 15 · volver a lo que decía el ticket.
   "En el ticket decía «{0}».": "The ticket said «{0}».",
+  "Usar sugerencia «{0}»": "Use suggestion “{0}”",
   "Usar ese nombre": "Use that name",
   // AF-LINK-DE-INVITACION · D252 · el link de invitación en Amigos (sin puntos ni premios).
   // D255-4 · una sola burbuja que copia el link: se fueron el texto, compartir y cambiar.

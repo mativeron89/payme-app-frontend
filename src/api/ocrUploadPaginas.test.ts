@@ -186,6 +186,26 @@ describe('D484 · D486 · el escaneo de un ticket en varias fotos', () => {
     await expect(pending).resolves.toEqual(respuesta);
   });
 
+  it('negocia una sugerencia al unir dos fotos y conserva el recibo del conjunto', async () => {
+    aplicarConfigOcrPaginas({ features: { ocr_pages: CAPACIDAD } });
+    vi.stubEnv('VITE_OCR_SUGGESTED_NAME_ENABLED', '1');
+    try {
+      const pending = api.scanTicket([foto(), foto()]);
+      const xhr = FakeXmlHttpRequest.instances[0]!;
+      const query = new URL(xhr.url, 'http://localhost').searchParams;
+      expect(query.getAll('pages_version')).toEqual(['1']);
+      expect(query.getAll('suggestions_version')).toEqual(['1']);
+      const respuesta = {
+        ...ticket(), receipt: 'or1.dos-paginas', pages: { count: 2, overlap_removed: 0, reordered: false },
+        items: [{ ...ticket().items[0], name: 'SOPA DE FID', original_name: 'SOPA DE FID', suggested_name: 'Sopa de fideo' }],
+      };
+      xhr.finish(200, respuesta);
+      await expect(pending).resolves.toEqual(respuesta);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('con la foto del ticket encendida además: `ticket_image_version=2` (con una o con varias)', async () => {
     aplicarConfigOcrPaginas({ features: { ocr_pages: CAPACIDAD } });
     aplicarConfigFotoDelTicket({ features: { ticket_image: FOTO_ENCENDIDA } });
