@@ -382,6 +382,40 @@ test.describe('D240 punto 8 · avisar antes de que la mesa se cierre', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
   });
 
+  test('una lectura demorada no muestra Guardado después de elegir otro plato', async ({ page }) => {
+    await abrirMesa(page);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+      const guardar = api.lockItems.bind(api);
+      const leer = api.getMesa.bind(api);
+      let retenida = false;
+      api.lockItems = async (...args) => {
+        const respuesta = await guardar(...args);
+        retenida = true;
+        return respuesta;
+      };
+      api.getMesa = async (...args) => {
+        const detalle = await leer(...args);
+        if (retenida) {
+          retenida = false;
+          const doc = document.documentElement;
+          doc.dataset.lecturaGuardado = 'pendiente';
+          await new Promise<void>(resolve => window.addEventListener('continuar-lectura', () => resolve(), { once: true }));
+          requestAnimationFrame(() => requestAnimationFrame(() => { doc.dataset.lecturaGuardado = 'terminada'; }));
+        }
+        return detalle;
+      };
+    });
+    await elegirEntero(renglon(page, 'Tiramisú', 0));
+    await listo(page).click();
+    await expect(page.locator('html')).toHaveAttribute('data-lectura-guardado', 'pendiente');
+    await elegirEntero(renglon(page, 'Agua mineral'));
+    await page.evaluate(() => window.dispatchEvent(new Event('continuar-lectura')));
+    await expect(page.locator('html')).toHaveAttribute('data-lectura-guardado', 'terminada');
+    await expect(page.locator('.mesa-guardado')).toHaveCount(0);
+  });
+
   test('un «Listo» que no completa la mesa guarda y muestra el aviso en la misma mesa', async ({ page }) => {
     await espiarHojas(page);
     await abrirMesa(page);

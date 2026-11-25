@@ -142,7 +142,7 @@ for (const ancho of [320, 390]) {
   });
 }
 
-for (const monto of [123456, 1234567]) {
+for (const monto of [18000, 123456, 1234567]) {
   test('La fecha y el importe de la visita con foto caben sin solaparse · ' + monto, async ({ page }) => {
     await montar(page, 1, 'mesa', monto);
     await expect(page.locator('.fila-ticket-foto img')).toBeVisible();
@@ -156,9 +156,10 @@ for (const monto of [123456, 1234567]) {
         const fin = texto.getBoundingClientRect();
         const importe = el.querySelector('.rest-visita-monto')!.getBoundingClientRect();
         return { lineas: texto.getClientRects().length, separados: fin.right <= importe.left || fin.bottom <= importe.top,
-          ancho: document.documentElement.scrollWidth };
+          ancho: document.documentElement.scrollWidth, mismaFila: fin.bottom > importe.top && fin.top < importe.bottom };
       });
-      expect(medida, String(width)).toEqual({ lineas: 1, separados: true, ancho: width });
+      expect(medida, String(width)).toMatchObject({ lineas: 1, separados: true, ancho: width });
+      if (monto === 18000) expect(medida.mismaFila, String(width)).toBe(true);
     }
   });
 }

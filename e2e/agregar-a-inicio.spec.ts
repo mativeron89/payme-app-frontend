@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar as ingresarBase } from './_app';
+import { ingresar as ingresarBase, irEnLaApp } from './_app';
 
 // Esta familia prueba instalación después de la primera mesa guardada (D845/UX-17).
 async function ingresar(page: Page) {
@@ -70,6 +70,19 @@ async function captura(page: Page, nombre: string): Promise<void> {
 
 test.describe('en Safari de iPhone', () => {
   test.use({ userAgent: IPHONE_SAFARI });
+
+  test('la guía espera la primera mesa guardada aunque la cuenta ya leyó el aviso', async ({ page }) => {
+    await ingresarBase(page, { sinInvitaciones: true });
+    await page.getByLabel('Actualización del Aviso de Privacidad').getByRole('button', { name: 'Entendido' }).click();
+    await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
+    await inicioListo(page);
+    await expect(guia(page)).toHaveCount(0);
+    await page.evaluate(() => localStorage.setItem('payme.app.mesa-guardada.v1', '1'));
+    await irEnLaApp(page, '/mesas');
+    await expect(page.getByRole('button', { name: 'Unirme con código', exact: true })).toBeVisible();
+    await irEnLaApp(page, '/home');
+    await expect(guia(page)).toBeVisible();
+  });
 
   test('al entrar, Inicio muestra la guía; «Entendido» la cierra y no vuelve', async ({ page }) => {
     await ingresar(page);
