@@ -687,7 +687,7 @@ export interface Api {
    */
   acceptInvitationLink(token: string): Promise<AcceptInvitationLinkResponse>;
   /**
-   * AF-5 · D629 · D676 · `POST /api/invitations/link-preview` (App Backend 2.211.0), SIN sesión: el token va en el
+   * AF-5 · D629 · D676 · `POST /api/invitations/link-preview`, sin enviar la sesión desde la app: el token va en el
    * cuerpo, nunca en la URL. Devuelve la respuesta CRUDA: la lee `vistaPreviaDelLink` (`./vistaPreviaDelLink.ts`), con
    * el decodificador estricto, la capacidad `features.link_preview` y el plazo de 1,5 s. No canjea nada (D583).
    */

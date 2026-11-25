@@ -412,7 +412,7 @@ for (const idioma of ['es', 'en'] as const) test(`K2 navegador · No me llegó, 
   await expect(hoja.getByRole('heading')).toHaveText(idioma === 'es' ? '¿No te llegaron $750 de Luis?' : "Didn't get $750 from Luis?");
   await expect(hoja.getByText(idioma === 'es' ? 'Le vamos a avisar a Luis y el aviso no se puede retirar.' : "We'll let Luis know, and the notice can't be taken back.", { exact: true })).toBeVisible();
   expect(await llamadas(page)).toEqual([]);
-  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/no-me-llego-${idioma}.png` });
+  if (process.env.PAYME_E2E_CAPTURAS) await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/no-me-llego-${idioma}.png` });
   await page.waitForTimeout(360);
   const confirmar = hoja.getByRole('button', { name: idioma === 'es' ? 'Sí, no me llegó' : "Yes, I didn't get it", exact: true });
   await confirmar.evaluate((el) => { (el as HTMLButtonElement).click(); (el as HTMLButtonElement).click(); });
@@ -427,7 +427,7 @@ for (const idioma of ['es', 'en'] as const) test(`K3 navegador · aviso guardado
   await page.getByRole('dialog').getByRole('button', { name: idioma === 'es' ? 'Sí, recibí' : 'Yes, I received it', exact: true }).click();
   await expect(page.getByText(idioma === 'es' ? 'Listo, quedó guardado' : "Done, it's saved", { exact: true })).toBeVisible();
   await expect(page.locator('.toast')).toHaveClass(/toast--sobre-barra/);
-  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/listo-${idioma}.png` });
+  if (process.env.PAYME_E2E_CAPTURAS) await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/listo-${idioma}.png` });
 });
 
 for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco al cancelar o Escape · ${idioma}`, async ({ page }) => {
@@ -445,7 +445,7 @@ for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco 
     await expect(origen).toBeFocused();
     expect(await llamadas(page)).toEqual([]);
   }
-  if (process.env.C204_CAPTURE_DIR) await page.screenshot({ path: `${process.env.C204_CAPTURE_DIR}/foco-devuelto-${idioma}.png` });
+  if (process.env.PAYME_E2E_CAPTURAS) await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/foco-devuelto-${idioma}.png` });
 });
 
 for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco tras error · ${idioma}`, async ({ page }) => {
@@ -458,4 +458,27 @@ for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco 
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(origen).toBeFocused();
   expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'no-llego']]);
+});
+
+test('No me llegó vuelve al botón y permite un segundo intento tras un conflicto', async ({ page }) => {
+  await preparar(page);
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(ruta) as typeof import('../src/api');
+    const mock = '/src/api/mock/mockApi.ts';
+    const { MockApiError } = await import(mock) as typeof import('../src/api/mock/mockApi');
+    api.marcarTransferenciaDeViaje = async (...args) => {
+      (window as unknown as Ventana).__c194.llamadas.push(args);
+      throw new MockApiError(409, 'viaje_not_waiting_payments');
+    };
+    api.getViaje = async () => { throw new Error('sin conexión'); };
+  });
+  const origen = fila(page, 'Luis').getByRole('button', { name: 'No me llegó', exact: true });
+  for (const cantidad of [1, 2]) {
+    await origen.click();
+    await page.waitForTimeout(360);
+    await page.getByRole('dialog').getByRole('button', { name: 'Sí, no me llegó', exact: true }).click();
+    await expect(origen).toBeFocused();
+    expect(await llamadas(page)).toHaveLength(cantidad);
+  }
 });

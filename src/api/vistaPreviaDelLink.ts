@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 /**
  * AF-5 · D622 (mejora 5) · D629 · D676 · la vista previa del link de la mesa, sin sesión.
  *
- * Contrato del dueño: `contract/invitacion-preview-v1.json` (App Backend 2.211.0), espejado byte a byte en
+ * Contrato del dueño: `contract/invitacion-preview-v1.json`, espejado byte a byte en
  * `contract-mirror/`. `POST /api/invitations/link-preview` con `{"token": "..."}` en el CUERPO (nunca en la URL de la
  * API) contesta, para un link vigente de una mesa viva, exactamente `{inviter_first_name, restaurant_name}`; con
  * `inviter_first_name: null` si quien invita no es mayor de edad conocida (D676). Todo lo demás es un 403 uniforme.

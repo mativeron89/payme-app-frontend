@@ -172,11 +172,12 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
     }
   }
 
-  for (const desplazar of [false, true]) {
-    test(`C232 · al cerrar la ayuda ${desplazar ? 'conserva el desplazamiento manual' : 'restaura el scroll anterior'}`, async ({ page }) => {
-      await page.setViewportSize({ width: 320, height: 548 });
+  for (const direccion of ['ninguna', 'arriba', 'abajo'] as const) {
+    test(`C232 · al cerrar la ayuda ${direccion === 'ninguna' ? 'restaura el scroll anterior' : 'conserva el desplazamiento manual hacia ' + direccion}`, async ({ page }) => {
+      // A 620 px la segunda opción sigue visible tras desplazar hacia abajo.
+      await page.setViewportSize({ width: 320, height: direccion === 'abajo' ? 620 : 548 });
       await hastaComoDividen(page);
-      const signo = ayuda(page, 'Cada uno lo suyo');
+      const signo = ayuda(page, direccion === 'abajo' ? 'En partes iguales' : 'Cada uno lo suyo');
       const cuerpo = page.locator('.ticket-flow-scroll');
       await signo.scrollIntoViewIfNeeded();
       const inicial = await cuerpo.evaluate(el => el.scrollTop);
@@ -184,11 +185,11 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
       await expect(explicacion(page)).toBeFocused();
       const abierto = await cuerpo.evaluate(el => el.scrollTop);
       expect(abierto).not.toBe(inicial);
-      const esperado = desplazar ? await cuerpo.evaluate(el => {
-        el.scrollTop = 6;
+      const esperado = direccion !== 'ninguna' ? await cuerpo.evaluate((el, dir) => {
+        el.scrollTop = dir === 'arriba' ? 6 : el.scrollTop + 6;
         return el.scrollTop;
-      }) : inicial;
-      if (desplazar) {
+      }, direccion) : inicial;
+      if (direccion !== 'ninguna') {
         expect(esperado).not.toBe(abierto);
         expect(esperado).not.toBe(inicial);
       }

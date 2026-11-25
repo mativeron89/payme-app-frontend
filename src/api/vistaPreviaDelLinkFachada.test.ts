@@ -4,7 +4,7 @@ import type { StoredSession } from './storage';
 
 /**
  * AF-5 · la vista previa del link por el transporte real: `POST /api/invitations/link-preview`, el token SÓLO en el
- * cuerpo (nunca en la URL de la API), sin `Authorization` aunque haya sesión (la ruta es pública y no mira la sesión),
+ * cuerpo (nunca en la URL de la API), sin `Authorization` aunque haya sesión (la app solicita la vista anónima incluso si el servidor admite sesión opcional),
  * y cortada a 1,5 s. La capacidad llega con `GET /api/config`, sin request propia.
  */
 const T_DEL_LINK = 'v2.00000000-0000-4000-8000-000000000001.mac';

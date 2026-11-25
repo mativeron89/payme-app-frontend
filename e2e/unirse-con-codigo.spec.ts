@@ -24,8 +24,8 @@ async function costura(page: Page, valor: Record<string, unknown>): Promise<void
 }
 
 /** Cuenta los pedidos, consultas y cancelaciones, y las mesas que se piden. */
-async function espiar(page: Page, demoraPedirMs = 0): Promise<void> {
-  await page.evaluate(async (demora) => {
+async function espiar(page: Page, retener: 'pedido' | 'cancelacion' | null = null): Promise<void> {
+  await page.evaluate(async (retenido) => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
     const w = window as unknown as Ventana;
@@ -36,16 +36,20 @@ async function espiar(page: Page, demoraPedirMs = 0): Promise<void> {
     const pedir = api.requestJoin!.bind(api);
     api.requestJoin = async (...a: unknown[]) => {
       w.__pedidos.push(String(a[0]));
-      if (demora) await new Promise((r) => setTimeout(r, demora));
+      if (retenido === 'pedido') await new Promise<void>(resolve => window.addEventListener('soltar-pedido', () => resolve(), { once: true }));
       return pedir(...a);
     };
     const consultar = api.getJoinRequest!.bind(api);
     api.getJoinRequest = (...a: unknown[]) => { w.__consultas += 1; return consultar(...a); };
     const cancelar = api.cancelJoinRequest!.bind(api);
-    api.cancelJoinRequest = (...a: unknown[]) => { w.__cancelaciones += 1; return cancelar(...a); };
+    api.cancelJoinRequest = async (...a: unknown[]) => {
+      w.__cancelaciones += 1;
+      if (retenido === 'cancelacion') await new Promise<void>(resolve => window.addEventListener('soltar-cancelacion', () => resolve(), { once: true }));
+      return cancelar(...a);
+    };
     const mesa = api.getMesa!.bind(api);
     api.getMesa = (...a: unknown[]) => { w.__mesas.push(String(a[0])); return mesa(...a); };
-  }, demoraPedirMs);
+  }, retener);
 }
 
 const contar = (page: Page) => page.evaluate(() => {
@@ -58,11 +62,11 @@ const campo = (page: Page) => page.getByLabel('Escribe el código de la mesa');
 const solicitar = (page: Page) => page.getByRole('button', { name: 'Solicitar unirme', exact: true });
 const espera = (page: Page) => page.locator('.unirse-espera');
 
-async function enMesas(page: Page, demoraPedirMs = 0): Promise<void> {
+async function enMesas(page: Page, retener: 'pedido' | 'cancelacion' | null = null): Promise<void> {
   await ingresar(page);
   await page.goto('/mesas');
   await expect(page.getByRole('heading', { name: 'Mesas', exact: true })).toBeVisible();
-  await espiar(page, demoraPedirMs);
+  await espiar(page, retener);
 }
 
 async function abrirYEscribir(page: Page, cifras: string): Promise<void> {
@@ -147,7 +151,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
   });
 
   test('🔴 A04 · enviando: spinner, el campo fijo y UN solo pedido aunque se toque dos veces', async ({ page }) => {
-    await enMesas(page, 600);
+    await enMesas(page, 'pedido');
     await abrirYEscribir(page, '12345');
     // D236 · el botón listo: naranja con texto BLANCO (Mati: «La letra de la
     // burbuja naranja tiene que ser blanca»). Era navy.
@@ -163,7 +167,13 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     const cajas = await page.getByRole('button', { name: 'Enviando…' }).evaluate((b) => {
       const r = (el: Element) => el.getBoundingClientRect();
       const boton = r(b);
-      const spinner = r(b.querySelector('.unirse-spinner')!);
+      const icono = b.querySelector('.unirse-spinner')!;
+      // El espacio entre controles se mide en su caja de layout, sin el giro del dibujo.
+      for (const animacion of icono.getAnimations()) {
+        animacion.pause();
+        animacion.currentTime = 0;
+      }
+      const spinner = r(icono);
       const rango = document.createRange();
       rango.selectNodeContents(b.lastChild!);
       const texto = rango.getBoundingClientRect();
@@ -176,6 +186,7 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     expect(cajas.texto.left - cajas.spinner.right, JSON.stringify(cajas)).toBeLessThanOrEqual(10);
     await expect(campo(page)).toBeDisabled();
     await capturar(page, 'unirse-enviando-375');
+    await page.evaluate(() => window.dispatchEvent(new Event('soltar-pedido')));
     await expect(espera(page)).toBeVisible();
     expect((await contar(page)).pedidos).toEqual(['PA-12345']);
   });
@@ -292,6 +303,20 @@ test.describe('D219 · D223 · «Unirme con código», quien pide', () => {
     await noSePudo.getByRole('button', { name: 'Escribir otro código', exact: true }).click();
     await expect(campo(page)).toHaveValue('');
     await expect(solicitar(page)).toBeDisabled();
+  });
+
+  test('al cancelar deja de anunciar que espera la respuesta de la mesa', async ({ page }) => {
+    await enMesas(page, 'cancelacion');
+    await abrirYEscribir(page, '12345');
+    await solicitar(page).click();
+    const estado = espera(page).getByRole('status');
+    const cancelar = espera(page).getByRole('button', { name: 'Cancelar' });
+    await expect(estado).toHaveText('Esperando respuesta');
+    await cancelar.click();
+    await expect(cancelar).toBeDisabled();
+    await expect(estado).toBeEmpty();
+    await page.evaluate(() => window.dispatchEvent(new Event('soltar-cancelacion')));
+    await expect(campo(page)).toHaveValue('');
   });
 
   test('UX-09 · al fallar Cancelar conserva el pedido y ofrece reintentar', async ({ page }) => {

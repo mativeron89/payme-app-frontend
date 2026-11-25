@@ -40,7 +40,7 @@ describe('K5 · 429 de invitaciones: mensaje, sin reintento y misma clave', () =
     expect(createInvitation).toHaveBeenCalledTimes(1);
     expect(intentos.get('MESA-EJEMPLO')).toBe('clave-ejemplo');
     const esperado = code === 'mesa_invitations_rate_limited'
-      ? traducir(mensaje, idioma)
+      ? (idioma === 'es' ? mensaje : "You've sent a lot of invites in a row. Wait a few minutes and try again.")
       : traducir(nombre === 'makeLink' ? 'No pudimos confirmar el link. Reintenta la misma operación: vamos a reutilizarla para no crear otra invitación.' : 'No pudimos confirmar el link. Reintenta la misma operación: vamos a reutilizarla.', idioma);
     if (nombre === 'pedirLinkDelQr') { expect(avisos).toEqual([]); expect(qr).toBeNull(); }
     else if (nombre === 'copyInvitationLink') expect(avisos).toEqual([esperado]);
