@@ -107,6 +107,11 @@ test('C182D H3 · Agregar consumo escribe letras en Consumo y el lápiz mantiene
   await abrirTercera(page, sheet);
   const precio = sheet.getByLabel('Precio por unidad');
   const before = await precio.inputValue();
+  for (const invalido of ['−5.00', '1a2', '1$2']) {
+    await precio.fill(invalido);
+    await expect(precio).toHaveValue(before);
+  }
+  await precio.press('End');
   await page.keyboard.type('9');
   await expect(precio).toHaveValue(`${before}9`);
   await tabHasta(page, sheet, sheet.getByRole('button', { name: 'Agregar consumo', exact: true }));
