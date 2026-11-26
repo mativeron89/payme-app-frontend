@@ -386,7 +386,7 @@ test.describe('D363 · la tarjeta y Más → Ayuda', () => {
     await expect(tarjeta(page)).toHaveCount(0);
     // 1o · Más → Ayuda abre 2a (sobre Escanear, en Más) y crea otra mesa de ejemplo.
     await page.getByRole('button', { name: 'Más', exact: true }).click();
-    const fila = page.getByRole('button', { name: 'Tutorial' });
+    const fila = page.getByRole('button', { name: 'Tutorial', exact: true });
     await expect(fila).toBeEnabled();
     await capturar(page, 'd363-1o-ayuda');
     await fila.click();
@@ -399,7 +399,7 @@ test.describe('D363 · la tarjeta y Más → Ayuda', () => {
   test('D364 · quien marcó «No volver a mostrar» no ve la tarjeta, y le queda Más → Ayuda', async ({ page }) => {
     await entrar(page, { noVolverAMostrar: true });
     await page.getByRole('button', { name: 'Más', exact: true }).click();
-    await page.getByRole('button', { name: 'Tutorial' }).click();
+    await page.getByRole('button', { name: 'Tutorial', exact: true }).click();
     const a2 = burbuja(page, '¿Cómo divido la cuenta?');
     await expect(a2).toBeVisible();
     await a2.getByRole('button', { name: 'Realizar el tutorial en otro momento' }).click();
@@ -414,7 +414,7 @@ test.describe('D363 · la tarjeta y Más → Ayuda', () => {
     await expect(page.getByRole('button', { name: /^Escanear ticket para/ })).toBeVisible();
     await expect(tarjeta(page)).toHaveCount(0);
     await page.getByRole('button', { name: 'Más', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Tutorial' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Tutorial', exact: true })).toBeDisabled();
     await expect(page.getByText('Disponible fuera de las fechas de un viaje')).toBeVisible();
   });
 });

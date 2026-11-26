@@ -37,7 +37,7 @@ for (const regreso of ['focus', 'visibilitychange'] as const) {
     await expect(tarjeta(page)).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Más', exact: true }).click();
-    const fila = page.getByRole('button', { name: 'Tutorial' });
+    const fila = page.getByRole('button', { name: 'Tutorial', exact: true });
     await expect(fila).toBeDisabled();
     await expect(page.getByText(NOTA, { exact: true })).toBeVisible();
     const antes = await pedidos(page);
