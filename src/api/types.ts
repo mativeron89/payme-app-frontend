@@ -1,3 +1,4 @@
+import type { CajaDelTicket } from './recortePorConsumo';
 /**
  * api/types.ts — Tipos del contrato REAL del app backend (v2.13).
  * Fuente de verdad: contract-mirror/ (schemas/index.js + routes/*.js).
@@ -460,6 +461,7 @@ export interface HistoryResponse {
 
 /** Detalle owner-only de un pago propio (`GET /account/movements/:id`). */
 export interface MovementDetailItem {
+  ticket_crop?: CajaDelTicket;
   name: string;
   price_cents: number;
   quantity: number;
@@ -651,6 +653,7 @@ export interface OpenMesasResponse {
 
 /** Ítem dentro de GET /api/mesas/:code. */
 export interface MesaItem {
+  ticket_crop?: CajaDelTicket;
   id: string;
   name: string;
   category: string;

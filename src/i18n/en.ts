@@ -1291,6 +1291,8 @@ export const EN: Record<string, string> = {
   "Elegir otra": "Choose another",
   "No pudimos recortar la foto. Mandamos la foto entera.": "We couldn't crop the photo. We're sending the whole photo.",
   "Marco del recorte": "Crop frame",
+  "Ver renglón de {0} en el ticket": "View {0} on the receipt",
+  "Renglón de {0} en el ticket": "Receipt line for {0}",
   "Foto del ticket": "Receipt photo",
   "Esquina de arriba a la izquierda": "Top-left corner",
   "Esquina de arriba a la derecha": "Top-right corner",

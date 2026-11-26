@@ -1,3 +1,4 @@
+import { separarRecorte, type CajaDelTicket } from './recortePorConsumo';
 import { useSyncExternalStore } from 'react';
 import { extractApiError } from './errors';
 import { decodeFotoDelTicket, versionDeLaNegociacion, type FotoDelTicket, type NegociacionDeFoto } from './fotoDelTicket';
@@ -313,6 +314,7 @@ export interface DetalleViaje {
 }
 
 export interface ItemDelTicket {
+  readonly ticket_crop?: CajaDelTicket;
   readonly id: string;
   readonly name: string;
   readonly price_cents: number;
@@ -427,7 +429,7 @@ export interface ResumenDeViaje {
     readonly pagaste_tu: boolean;
     readonly mi_monto_cents: number;
     readonly asignado_al_cierre_cents: number;
-    readonly items: ReadonlyArray<{ readonly name: string; readonly fraction_bps: number; readonly amount_cents: number }>;
+    readonly items: ReadonlyArray<{ readonly ticket_crop?: CajaDelTicket; readonly name: string; readonly fraction_bps: number; readonly amount_cents: number }>;
   }>;
 }
 
@@ -876,11 +878,12 @@ function ticketDetalle(raw: unknown, e: string, conFoto: NegociacionDeFoto = fal
     // D278-3 · el dueño los calcula igual desde la 6: abierto y (lo cargó o lo pagó).
     && typeof t.puedo_corregir === 'boolean' && t.puedo_corregir === t.puedo_marcar_presentes, e);
   const items = lista(t.items, e, (x): ItemDelTicket => {
-    const i = objeto(x, ['id', 'name', 'price_cents', 'quantity', 'line_cents', 'remaining_bps', 'my_bps', 'my_amount_cents'], e);
+    const { fila, campos } = separarRecorte(x);
+    const i = objeto(fila, ['id', 'name', 'price_cents', 'quantity', 'line_cents', 'remaining_bps', 'my_bps', 'my_amount_cents'], e);
     exigir(texto(i.id) && texto(i.name) && noNegativo(i.price_cents) && noNegativo(i.quantity) && i.quantity >= 1
       && noNegativo(i.line_cents) && noNegativo(i.remaining_bps) && i.remaining_bps <= 10000
       && noNegativo(i.my_bps) && i.my_bps <= 10000 && noNegativo(i.my_amount_cents) && i.my_amount_cents <= i.line_cents, e);
-    return i as unknown as ItemDelTicket;
+    return { ...i, ...campos } as unknown as ItemDelTicket;
   }, MAX_RENGLONES_TICKET);
   const personas = lista(t.personas, e, (x): PersonaDelTicket => {
     const p = objeto(x, ['miembro_id', 'ya_eligio', 'presente'], e);
@@ -1007,10 +1010,11 @@ export function decodeResumenDeViaje(raw: unknown, viajeId: string): ResumenDeVi
       && esForma(l.forma) && typeof l.pagaste_tu === 'boolean' && noNegativo(l.mi_monto_cents)
       && noNegativo(l.asignado_al_cierre_cents), e);
     const items = lista(l.items, e, (y) => {
-      const i = objeto(y, ['name', 'fraction_bps', 'amount_cents'], e);
+      const { fila, campos } = separarRecorte(y);
+      const i = objeto(fila, ['name', 'fraction_bps', 'amount_cents'], e);
       exigir(texto(i.name) && noNegativo(i.fraction_bps) && i.fraction_bps > 0 && i.fraction_bps <= 10000
         && noNegativo(i.amount_cents), e);
-      return i as unknown as ResumenDeViaje['lugares'][number]['items'][number];
+      return { ...i, ...campos } as unknown as ResumenDeViaje['lugares'][number]['items'][number];
     }, MAX_RENGLONES_TICKET);
     return { ...(l as unknown as ResumenDeViaje['lugares'][number]), items };
   }, 200);

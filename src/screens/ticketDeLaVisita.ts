@@ -23,6 +23,7 @@ import { bpsLabel, bpsValido } from './mesaItemsView';
 export type TipoDeFila = 'otro' | 'libre' | 'ticket';
 
 export interface FilaDelTicket {
+  readonly ticket_crop?: MesaDetail['items'][number]['ticket_crop'];
   readonly tipo: TipoDeFila;
   readonly name: string;
   /** Lo que antecede al nombre: «½», «2», o `null`. */
@@ -69,14 +70,14 @@ function porcion(lineaCents: number, bps: number): number {
  */
 export function filasDelTicket(mesa: Pick<MesaDetail, 'division_mode' | 'items'>): FilaDelTicket[] | null {
   if (!Array.isArray(mesa.items)) return null;
-  const lineas: { name: string; quantity: number; total: number; mio: unknown; queda: unknown }[] = [];
+  const lineas: { ticket_crop?: FilaDelTicket['ticket_crop']; name: string; quantity: number; total: number; mio: unknown; queda: unknown }[] = [];
   for (const it of mesa.items) {
     const total = linea(it?.price_cents, it?.quantity);
     if (typeof it?.name !== 'string' || it.name.trim() === '' || total === null) return null;
-    lineas.push({ name: it.name, quantity: it.quantity, total, mio: it.my_bps, queda: it.remaining_bps });
+    lineas.push({ ticket_crop: it.ticket_crop, name: it.name, quantity: it.quantity, total, mio: it.my_bps, queda: it.remaining_bps });
   }
   const ticketEntero = (): FilaDelTicket[] => lineas.map((l) => ({
-    tipo: 'ticket', name: l.name, prefijo: l.quantity > 1 ? String(l.quantity) : null, amountCents: l.total,
+    tipo: 'ticket', ...(l.ticket_crop && { ticket_crop: l.ticket_crop }), name: l.name, prefijo: l.quantity > 1 ? String(l.quantity) : null, amountCents: l.total,
   }));
   if (mesa.division_mode !== 'consumo') return ticketEntero();
   const legibles = lineas.every((l) => bpsValido(l.mio) && bpsValido(l.queda) && (l.mio as number) + (l.queda as number) <= 10000);
@@ -87,10 +88,10 @@ export function filasDelTicket(mesa: Pick<MesaDetail, 'division_mode' | 'items'>
     const libre = l.queda as number;
     const otros = 10000 - libre - mio;
     if (otros > 0) {
-      filas.push({ tipo: 'otro', name: l.name, prefijo: prefijoDeItem(otros, l.quantity), amountCents: porcion(l.total, otros) });
+      filas.push({ tipo: 'otro', ...(l.ticket_crop && { ticket_crop: l.ticket_crop }), name: l.name, prefijo: prefijoDeItem(otros, l.quantity), amountCents: porcion(l.total, otros) });
     }
     if (libre > 0) {
-      filas.push({ tipo: 'libre', name: l.name, prefijo: prefijoDeItem(libre, l.quantity), amountCents: porcion(l.total, libre) });
+      filas.push({ tipo: 'libre', ...(l.ticket_crop && { ticket_crop: l.ticket_crop }), name: l.name, prefijo: prefijoDeItem(libre, l.quantity), amountCents: porcion(l.total, libre) });
     }
   }
   return filas;

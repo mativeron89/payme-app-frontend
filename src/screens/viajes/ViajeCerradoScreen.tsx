@@ -1,3 +1,4 @@
+import { InformacionDelConsumo } from '../../components/InformacionDelConsumo';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { extractApiError } from '../../api/errors';
@@ -310,6 +311,7 @@ export function VistaDelViajeCerrado({
                 <RenglonDeLugar
                   key={l.ticket_id}
                   lugar={l}
+                  viajeId={r.viaje_id}
                   t={t}
                   idioma={idioma}
                   abierto={abiertos.has(l.ticket_id)}
@@ -331,8 +333,8 @@ export function VistaDelViajeCerrado({
   );
 }
 
-function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar }: {
-  lugar: ResumenDeViaje['lugares'][number]; t: T; idioma: Idioma; abierto: boolean; onAlternar: () => void;
+function RenglonDeLugar({ lugar: l, viajeId, t, idioma, abierto, onAlternar }: {
+  viajeId: string; lugar: ResumenDeViaje['lugares'][number]; t: T; idioma: Idioma; abierto: boolean; onAlternar: () => void;
 }) {
   const fecha = fechaCortaViaje(l.fecha_ticket, idioma);
   const desplegable = l.items.length > 0;
@@ -375,6 +377,7 @@ function RenglonDeLugar({ lugar: l, t, idioma, abierto, onAlternar }: {
         <ul id={idItems} className="vjd-items" hidden={!abierto}>
           {l.items.map((i, k) => (
             <li key={k} className="vjd-item">
+              <InformacionDelConsumo caja={i.ticket_crop} nombre={nombreDePlato(i.name)} origen={{ tipo: 'viaje', viajeId, ticketId: l.ticket_id }} />
               <span>
                 {nombreDePlato(i.name)}
                 {i.fraction_bps < 10000 && ` · ${etiquetaPorcion(i.fraction_bps, t)}`}

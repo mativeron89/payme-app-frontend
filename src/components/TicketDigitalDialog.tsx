@@ -1,3 +1,4 @@
+import { InformacionDelConsumo } from './InformacionDelConsumo';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
@@ -195,6 +196,7 @@ export function TicketDigitalDialog({
                 <ul className="ticket-digital-items">
                   {estado.ticket.items.map((item, index) => (
                     <li key={`${item.name}:${index}`}>
+                      <InformacionDelConsumo caja={item.ticket_crop} nombre={nombreDePlato(item.name)} origen={{ tipo: 'mesa', code }} />
                       <span className="ticket-digital-qty">{item.quantity} ×</span>
                       <span className="ticket-digital-name">{nombreDePlato(item.name)}</span>
                       <span className="ticket-digital-price">{formatMXN(item.unitPriceCents)}</span>

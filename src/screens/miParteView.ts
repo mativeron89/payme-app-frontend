@@ -10,6 +10,7 @@ type Traducir = (s: string, ...args: unknown[]) => string;
 
 /** AF-1 · sólo presentación: nunca modifica la parte publicada ni el borrador. */
 export interface LineaDeTuPlato {
+  readonly ticket_crop?: MesaItem['ticket_crop'];
   readonly id: string;
   readonly nombre: string;
   readonly porcion: string | null;
@@ -26,6 +27,7 @@ export function lineasDeTusPlatos(
       ? fractionPreview(precio, item.my_bps, 10000) : null;
     return {
       id: item.id,
+      ...(item.ticket_crop && { ticket_crop: item.ticket_crop }),
       nombre: `${item.quantity > 1 ? `${item.quantity} × ` : ''}${nombreDePlato(item.name)}`,
       porcion: item.my_bps < 10000 ? bpsLabel(item.my_bps) : null,
       montoCents: monto,

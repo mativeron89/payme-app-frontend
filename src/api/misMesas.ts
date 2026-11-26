@@ -1,3 +1,4 @@
+import { separarRecorte, type CajaDelTicket } from './recortePorConsumo';
 /**
  * AF-24 · «Tus mesas» · `GET /api/mesas/mine` (dueño C4, v2.85.0 ·
  * `contract-mirror/routes/mesas.js:943-1082`).
@@ -47,6 +48,7 @@ export interface TuMesa {
 }
 
 export interface ItemPropioDeMesa {
+  readonly ticket_crop?: CajaDelTicket;
   readonly itemId: string;
   readonly quantity: number;
   readonly name: string;
@@ -79,7 +81,8 @@ function itemsPropios(
 ): readonly ItemPropioDeMesa[] | null {
   if (!Array.isArray(raw) || itemsCount === null || amountCents === null) return null;
   const decoded: ItemPropioDeMesa[] = [];
-  for (const value of raw) {
+  for (const renglon of raw) {
+    const { fila: value, campos } = separarRecorte(renglon);
     if (!objeto(value) || Object.keys(value).sort().join(',') !== 'amount_cents,fraction_bps,item_id,name,quantity') return null;
     const itemId = texto(value.item_id);
     const name = texto(value.name);
@@ -88,7 +91,7 @@ function itemsPropios(
     const itemAmount = enteroNoNegativo(value.amount_cents);
     if (!itemId || !name || quantity === null || quantity < 1 || fractionBps === null
       || fractionBps < 1 || fractionBps > 10000 || itemAmount === null) return null;
-    decoded.push({ itemId, quantity, name, fractionBps, amountCents: itemAmount });
+    decoded.push({ ...campos, itemId, quantity, name, fractionBps, amountCents: itemAmount });
   }
   if (divisionMode === 'igual') return decoded.length === 0 ? decoded : null;
   if (divisionMode !== 'consumo') return null;

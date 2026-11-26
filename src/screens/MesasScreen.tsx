@@ -1,3 +1,4 @@
+import { InformacionDelConsumo } from '../components/InformacionDelConsumo';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
@@ -746,6 +747,7 @@ export function MesasScreen() {
                 {/* D240 punto 16 · los iguales de este pago, juntos. */}
                 {movement.items.length > 0 ? agruparDelPago(movement.id, movement.items).map((g) => (
                   <div key={g.key} className="hist-detail-row">
+                    <InformacionDelConsumo caja={g.primero.ticket_crop} nombre={nombreDePlato(g.primero.name)} origen={{ tipo: 'mesa', code: movement.mesa.code }} fecha={movement.date} />
                     <span className="hist-detail-name">
                       <span>{nombreConCantidad(g.cantidad, nombreDePlato(g.primero.name))}</span>
                       {g.primero.declared_fraction_bps != null && (

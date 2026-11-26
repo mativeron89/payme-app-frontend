@@ -1,3 +1,7 @@
+## 0.283.0 · 2026-11-25
+
+- D947 · Desde cada consumo con caja vigente se puede abrir el renglón de la foto del ticket. La negociación de C272 queda apagada por defecto.
+
 ## 0.282.1 · 2026-11-24
 
 - Al pegar un importe con letras o con un signo negativo en la propina, el precio de un plato, un gasto de viaje o el presupuesto del mes, el campo conserva el valor anterior. «Mi parte» y su texto compartido muestran la propina confirmada.

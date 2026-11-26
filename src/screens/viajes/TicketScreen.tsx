@@ -1,3 +1,4 @@
+import { InformacionDelConsumo } from '../../components/InformacionDelConsumo';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { denominatorBps } from '../../api/mesaPresentation';
@@ -297,6 +298,7 @@ export function TicketScreen({ viajeId, ticketId }: { viajeId: string; ticketId:
         />
       ) : ticket && viaje ? (
         <TicketVista
+          viajeId={viajeId}
           ticket={ticket}
           miembros={viaje.miembros}
           cerrado={viaje.estado !== 'abierto'}
@@ -382,6 +384,7 @@ export function TicketEstadoVista({ estado, onReintentar }: {
 }
 
 export interface TicketVistaProps {
+  viajeId?: string;
   ticket: TicketDelViaje;
   miembros: readonly MiembroViaje[];
   seleccion: ReadonlyMap<string, number>;
@@ -641,7 +644,7 @@ function ConsumoVista(props: TicketVistaProps) {
         )}
         {/* D481 · con el viaje cerrado, el ticket por consumo se ve como la pantalla del ticket de Mesas (3b): «Lo que
             elegiste», de sólo lectura, y en el pie «Elegiste». */}
-        {vistaElegidaDelViajeCerrado(ticket, props.cerrado) && <LoQueElegisteDelViaje ticket={ticket} />}
+        {vistaElegidaDelViajeCerrado(ticket, props.cerrado) && <LoQueElegisteDelViaje ticket={ticket} viajeId={props.viajeId} />}
         {/* D276-3 · un gasto personal es todo mío: sin lista para elegir (quedan el total y quiénes estuvieron). */}
         {!ticket.personal && !vistaElegidaDelViajeCerrado(ticket, props.cerrado) && (
           <section className="vj-card vjt-consumos" aria-labelledby="vjt-que-consumiste">
@@ -700,6 +703,7 @@ export function vistaElegidaDelViajeCerrado(ticket: TicketDelViaje, cerrado = fa
 
 /** D481 · las filas de «Lo que elegiste» de un ticket de viaje: lo mío, con la cantidad y la porción antes del nombre. */
 export function filasElegidasDelViaje(ticket: TicketDelViaje): Array<{
+  readonly ticket_crop?: ItemDelTicket['ticket_crop'];
   readonly id: string;
   readonly cantidad: string | null;
   readonly porcion: string | null;
@@ -708,6 +712,7 @@ export function filasElegidasDelViaje(ticket: TicketDelViaje): Array<{
 }> {
   return ticket.items.filter((i) => i.my_bps > 0).map((i) => ({
     id: i.id,
+    ...(i.ticket_crop && { ticket_crop: i.ticket_crop }),
     cantidad: i.quantity > 1 ? `${i.quantity} ×` : null,
     porcion: i.my_bps < 10000 ? bpsLabel(i.my_bps) : null,
     nombre: nombreDePlato(i.name),
@@ -716,7 +721,7 @@ export function filasElegidasDelViaje(ticket: TicketDelViaje): Array<{
 }
 
 /** D481 · «Lo que elegiste» de un ticket de viaje cerrado: de sólo lectura, sin píldora de porción. */
-function LoQueElegisteDelViaje({ ticket }: { ticket: TicketDelViaje }) {
+function LoQueElegisteDelViaje({ ticket, viajeId }: Pick<TicketVistaProps, 'ticket' | 'viajeId'>) {
   const { t } = useIdioma();
   const filas = filasElegidasDelViaje(ticket);
   return (
@@ -726,6 +731,7 @@ function LoQueElegisteDelViaje({ ticket }: { ticket: TicketDelViaje }) {
         <ul className={filas.some((f) => f.porcion) ? 'pantalla-ticket-filas pantalla-ticket-filas--con-porcion' : 'pantalla-ticket-filas'}>
           {filas.map((f) => (
             <li key={f.id} className="eleccion-fila">
+              <InformacionDelConsumo caja={f.ticket_crop} nombre={f.nombre} origen={viajeId ? { tipo: 'viaje', viajeId, ticketId: ticket.id } : null} fecha={ticket.cargado_en} />
               <span className="eleccion-fila-casilla" aria-hidden="true"><Icon name="check" size={18} /></span>
               {/* D100 · la porción en su columna, antes del nombre (que se alinea), sólo si alguna línea la tiene. */}
               <span className="eleccion-fila-frac">{f.porcion ?? ''}</span>
@@ -750,7 +756,7 @@ function LoQueElegisteDelViaje({ ticket }: { ticket: TicketDelViaje }) {
  * porción y tu parte, la píldora abre el selector en el mismo renglón, «Queda
  * ½» y «Lo eligió otro» sin nombre. Sin poder elegir, sólo se ve.
  */
-function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSoltar, onAbrir, onPorcion }: TicketVistaProps) {
+function ListaParaElegir({ ticket, viajeId, seleccion, abierto, guardando, onTomar, onSoltar, onAbrir, onPorcion }: TicketVistaProps) {
   const { t } = useIdioma();
   const personas = ticket.personas.length;
   const editable = ticket.puedo_elegir && !guardando;
@@ -766,6 +772,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
             <span className={clase}>{nombre}</span>
           </span>
         );
+        const informacion = <InformacionDelConsumo caja={i.ticket_crop} nombre={nombre} origen={viajeId ? { tipo: 'viaje', viajeId, ticketId: ticket.id } : null} fecha={ticket.cargado_en} />;
         const bps = seleccion.get(i.id) ?? 0;
         const opciones = porcionesDelPlato(i, personas);
 
@@ -774,6 +781,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
           if (editable && abierto === i.id) {
             return (
               <div key={i.id} className="qc-renglon">
+                {informacion}
                 <div className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
                   <div data-guia="porcion" className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
                     {opciones.map((d) => {
@@ -801,6 +809,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
           }
           return (
             <div key={i.id} className="qc-renglon">
+              {informacion}
               <div className="qc-fila qc-mia" data-estado="mio" role="group" aria-label={nombreAria}>
                 {editable ? (
                   <button
@@ -842,6 +851,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
           const tag = t('Lo eligió otro');
           return (
             <div key={i.id} className="qc-renglon">
+              {informacion}
               <div className="qc-fila qc-otro" data-estado="tomado" aria-label={`${nombreAria}${t(', {0}', tag)}`}>
                 <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
                 <span className="qc-cuerpo">
@@ -865,6 +875,7 @@ function ListaParaElegir({ ticket, seleccion, abierto, guardando, onTomar, onSol
         );
         return (
           <div key={i.id} className="qc-renglon">
+            {informacion}
             {editable ? (
               <button
                 type="button"

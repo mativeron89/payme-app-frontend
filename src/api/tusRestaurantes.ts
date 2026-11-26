@@ -1,3 +1,4 @@
+import { separarRecorte, type CajaDelTicket } from './recortePorConsumo';
 /**
  * AF-29 · n165 · «Tus restaurantes» (diseño 2b) · `GET /api/account/stats/restaurants`
  * (dueño v2.104.0 · `contract-mirror/routes/account.js`, handoff
@@ -41,6 +42,7 @@ export function rutaDeTusRestaurantes(period?: ClavePeriodo, foto: NegociacionDe
 }
 
 export interface ItemDeVisita {
+  readonly ticket_crop?: CajaDelTicket;
   readonly name: string;
   readonly fractionBps: number;
   readonly amountCents: number;
@@ -107,14 +109,15 @@ function malo(): never {
   throw new Error('stats_restaurants_response_malformed');
 }
 
-function item(raw: unknown, conCantidad: boolean): ItemDeVisita {
+function item(renglon: unknown, conCantidad: boolean): ItemDeVisita {
+  const { fila: raw, campos } = separarRecorte(renglon);
   const esperadas = ['name', 'fraction_bps', 'amount_cents', ...(conCantidad ? ['quantity'] : [])];
   if (!objetoPlano(raw) || !claves(raw, esperadas)) malo();
   const { name, fraction_bps: f, amount_cents: a } = raw;
   if (!texto(name) || !entero(f) || f < 1 || f > 10000 || !entero(a)) malo();
   const q: unknown = conCantidad ? raw.quantity : null;
   if (q !== null && (!entero(q) || q < 1)) malo();
-  return { name, fractionBps: f, amountCents: a, quantity: q === null ? null : (q as number) };
+  return { ...campos, name, fractionBps: f, amountCents: a, quantity: q === null ? null : (q as number) };
 }
 
 function visita(raw: unknown, conCantidad: boolean, versionFoto: VersionDeFotoDelTicket | null): Visita {

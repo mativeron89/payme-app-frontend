@@ -1,3 +1,4 @@
+import { separarRecorte } from './recortePorConsumo';
 import type { MovementDetailItem, MovementDetailResponse } from './types';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,7 +30,8 @@ function text(value: unknown, max = 300): value is string {
 }
 
 function item(value: unknown): MovementDetailItem | null {
-  const raw = record(value);
+  const { fila, campos } = separarRecorte(value);
+  const raw = record(fila);
   if (!raw || !exactKeys(raw, [
     'name', 'price_cents', 'quantity', 'category', 'amount_cents', 'fraction_bps',
     'declared_fraction_bps',
@@ -50,6 +52,7 @@ function item(value: unknown): MovementDetailItem | null {
   // Si aparecen los dos a la vez, el 2xx no se interpreta por inferencia.
   if (declaredValue === undefined || (bothPresent && declaredValue !== null)) return null;
   return {
+    ...campos,
     name: raw.name,
     price_cents: raw.price_cents,
     quantity: raw.quantity,
