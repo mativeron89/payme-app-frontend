@@ -8,19 +8,20 @@ export async function conRecursoRetenido<T>(
 ): Promise<T> {
   let liberar!: () => void;
   const permiso = new Promise<void>((resolve) => { liberar = resolve; });
-  let peticiones = 0;
-  const retener = async (ruta: Route) => {
-    peticiones += 1;
-    await permiso;
-    await ruta.continue();
+  const pendientes: Promise<void>[] = [];
+  const retener = (ruta: Route) => {
+    const respuesta = permiso.then(() => ruta.continue());
+    pendientes.push(respuesta);
+    return respuesta;
   };
   await page.route(patron, retener);
   try {
     const resultado = await comprobar();
-    await expect.poll(() => peticiones).toBeGreaterThan(0);
+    await expect.poll(() => pendientes.length).toBeGreaterThan(0);
     return resultado;
   } finally {
     liberar();
+    await Promise.all(pendientes);
     await page.unroute(patron, retener);
   }
 }
