@@ -1,3 +1,7 @@
+## 0.283.2 · 2026-11-26
+
+- Pruebas de la relectura de invitaciones en Inicio al cambiar de sesión y nombres descriptivos para las pruebas de confirmación de transferencias de viaje.
+
 ## 0.283.1 · 2026-11-26
 
 - Pruebas de importes pegados, lecturas pendientes en Inicio y Viajes, importes de visitas en pantalla angosta y contrato de recortes del ticket.

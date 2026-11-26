@@ -37,7 +37,7 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
     (window as unknown as Ventana).__confirmacionDeTransferencia = i;
     api.marcarTransferenciaDeViaje = (viaje, transferencia, accion) => {
       i.llamadas.push([viaje, transferencia, accion]);
-      const ejecutar = () => i.fallar ? Promise.reject(new Error('fallo inventado C194')) : original(viaje, transferencia, accion);
+      const ejecutar = () => i.fallar ? Promise.reject(new Error('fallo ficticio al confirmar la transferencia')) : original(viaje, transferencia, accion);
       if (!i.demorar) return ejecutar();
       return new Promise((resolve, reject) => { i.resolver = () => { void ejecutar().then(resolve, reject); }; });
     };
@@ -78,13 +78,13 @@ test.afterEach(async ({ page }) => {
   if (!page.isClosed()) await page.evaluate(() => (window as unknown as Ventana).__confirmacionDeTransferencia?.restaurar());
 });
 
-test('C194 A1 · desde Pendiente pide confirmación y no marca', async ({ page }) => {
+test('desde Pendiente pide confirmación y no marca', async ({ page }) => {
   await preparar(page);
   await boton(page, 'Sofía').click();
   await comprobarHoja(page, 'Sofía', '$300');
 });
 
-test('C194 A2 · desde marcó que te pagó pide confirmación y no marca', async ({ page }) => {
+test('desde marcó que te pagó pide confirmación y no marca', async ({ page }) => {
   await preparar(page);
   await boton(page, 'Luis').click();
   await comprobarHoja(page, 'Luis', '$750');
@@ -92,7 +92,7 @@ test('C194 A2 · desde marcó que te pagó pide confirmación y no marca', async
 
 for (const nombre of ['Sofía', 'Luis']) {
   for (const salida of ['Cancelar', 'Escape', 'afuera']) {
-    test(`C194 A3 · ${salida} devuelve el foco a Recibí de ${nombre} sin marcar`, async ({ page }) => {
+    test(`${salida} devuelve el foco a Recibí de ${nombre} sin marcar`, async ({ page }) => {
       await preparar(page);
       const disparador = boton(page, nombre);
       // Safari puede no enfocar un botón al tocarlo: no depender del foco anterior.
@@ -116,7 +116,7 @@ async function confirmar(page: Page) {
 }
 
 // A4 y A6 conservan sus aserciones en pruebas independientes (H2).
-test('C194 A4 · doble clic sincrónico confirma una sola vez', async ({ page }) => {
+test('doble clic sincrónico confirma una sola vez', async ({ page }) => {
   await preparar(page);
   await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   await boton(page, 'Luis').click();
@@ -131,7 +131,7 @@ test('C194 A4 · doble clic sincrónico confirma una sola vez', async ({ page })
   await expect(fila(page, 'Luis')).toContainText('Pagado');
 });
 
-test('C194 A4 · Escape mientras guarda no cierra ni permite cancelar', async ({ page }) => {
+test('Escape mientras guarda no cierra ni permite cancelar', async ({ page }) => {
   await preparar(page);
   await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   await boton(page, 'Luis').click();
@@ -144,7 +144,7 @@ test('C194 A4 · Escape mientras guarda no cierra ni permite cancelar', async ({
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('C194 A6 · segunda confirmación y última transferencia a Cerrados', async ({ page }) => {
+test('segunda confirmación y última transferencia a Cerrados', async ({ page }) => {
   await preparar(page);
   await boton(page, 'Luis').click();
   await confirmar(page);
@@ -156,7 +156,7 @@ test('C194 A6 · segunda confirmación y última transferencia a Cerrados', asyn
   expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi'], [VIAJE, await idFixture(page, 'sofia'), 'recibi']]);
 });
 
-test('C194 A5 · confirmación en inglés con el texto exacto', async ({ page }) => {
+test('confirmación en inglés con el texto exacto', async ({ page }) => {
   await preparar(page, 'en');
   await fila(page, 'Luis').getByRole('button', { name: 'I got it', exact: true }).click();
   const hoja = page.getByRole('dialog', { name: 'Did you receive $750 from Luis?', exact: true });
@@ -168,7 +168,7 @@ test('C194 A5 · confirmación en inglés con el texto exacto', async ({ page })
   expect(await llamadas(page)).toEqual([]);
 });
 
-test('C194 · un error conserva el aviso y el refresco existentes sin dar por pagado', async ({ page }) => {
+test('un error conserva el aviso y el refresco existentes sin dar por pagado', async ({ page }) => {
   await preparar(page);
   await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = true; });
   await boton(page, 'Luis').click();

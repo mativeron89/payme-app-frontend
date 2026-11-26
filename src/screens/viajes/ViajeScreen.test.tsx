@@ -611,7 +611,7 @@ describe('🔴 D297 · el engranaje de la Configuración, en la tarjeta del viaj
 });
 
 
-describe('C194 · D809 #15 · texto de confirmar lo recibido', () => {
+describe('texto de confirmar lo recibido', () => {
   it('traduce la confirmación exacta y conserva el formato de moneda de la pantalla', () => {
     expect(traducir('¿Recibiste {0} de {1}?', 'es', '$1,819.50', 'Luis')).toBe('¿Recibiste $1,819.50 de Luis?');
     expect(traducir('¿Recibiste {0} de {1}?', 'en', '$1,819.50', 'Luis')).toBe('Did you receive $1,819.50 from Luis?');

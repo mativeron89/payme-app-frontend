@@ -18,8 +18,8 @@ const viajes = lecturas<DetalleViaje>();
 const invitaciones = lecturas<PendingInvitationsResponse>();
 api.getViaje = viajes.pedir;
 api.getPendingInvitations = invitaciones.pedir;
-const sesion = { principal_id: 'persona-ficticia', family_id: 'familia-ficticia', access_token: 'fake-a', refresh_token: 'fake-r' };
-saveSession(sesion);
+const sesionInicial = { principal_id: 'persona-ficticia', family_id: 'familia-ficticia', access_token: 'fake-a', refresh_token: 'fake-r' };
+saveSession(sesionInicial);
 
 function viaje(nombre: string, estado: DetalleViaje['estado'] = 'abierto'): DetalleViaje {
   return { id: 'viaje-ficticio', nombre, estado, fecha_desde: null, fecha_hasta: null, creado_en: null,
@@ -39,11 +39,18 @@ function Viaje() {
 }
 
 function Inicio() {
+  const [sesion, setSesion] = useState(sesionInicial);
+  function cambiarSesion() {
+    const siguiente = { principal_id: 'otra-persona-ficticia', family_id: 'otra-familia-ficticia', access_token: 'fake-b', refresh_token: 'fake-s' };
+    saveSession(siguiente);
+    setSesion(siguiente);
+  }
   const [sinLeer, contador] = useState(0);
   const { estado, lista, cargar } = useInvitacionesDeInicio(sesion, sinLeer);
   return <>
     <output>{[estado, ...lista.map(i => i.id)].join(' ')}</output>
     <button onClick={cargar}>Releer</button>
+    <button onClick={cambiarSesion}>Cambiar sesión</button>
     <button onClick={() => contador(n => n + 1)}>Sumar aviso</button>
   </>;
 }

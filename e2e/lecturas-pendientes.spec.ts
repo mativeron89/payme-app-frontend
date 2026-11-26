@@ -74,6 +74,16 @@ test('Inicio vuelve a leer al cambiar el contador de avisos', async ({ page }) =
   await expect(page.locator('output')).toHaveText('hay inv-1');
 });
 
+test('Inicio vuelve a leer las invitaciones al cambiar de sesión', async ({ page }) => {
+  await abrir(page, 'inicio');
+  await page.getByRole('button', { name: 'Cambiar sesión' }).click();
+  await pedidos(page, 2);
+  await responder(page, 1);
+  await expect(page.locator('output')).toHaveText('hay inv-1');
+  await responder(page, 0);
+  await expect(page.locator('output')).toHaveText('hay inv-1');
+});
+
 test('Inicio muestra el estado de fallo al fallar la lectura vigente', async ({ page }) => {
   await abrir(page, 'inicio');
   await page.getByText('Releer').click();
