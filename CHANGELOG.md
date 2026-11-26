@@ -1,3 +1,7 @@
+## 0.283.1 · 2026-11-26
+
+- Pruebas de importes pegados, lecturas pendientes en Inicio y Viajes, importes de visitas en pantalla angosta y contrato de recortes del ticket.
+
 ## 0.283.0 · 2026-11-25
 
 - D947 · Desde cada consumo con caja vigente se puede abrir el renglón de la foto del ticket. La negociación de C272 queda apagada por defecto.

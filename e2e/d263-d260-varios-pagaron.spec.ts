@@ -1,3 +1,4 @@
+import { conservaImporteAlPegar } from './_pegarImporte';
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 import { sacarFoto } from './_camara';
@@ -69,7 +70,7 @@ test.describe('D263 · «¿Quién pagó?» con varios', () => {
     const mio = page.getByLabel('Cuánto pagaste tú', { exact: true });
     const luis = page.getByLabel('Cuánto pagó Luis Pérez', { exact: true });
     const sofia = page.getByLabel('Cuánto pagó Sofía Ramírez', { exact: true });
-    await expect(mio).toHaveValue('300.01');
+    await conservaImporteAlPegar(mio, '300.01');
     await expect(luis).toHaveValue('300');
     await expect(sofia).toHaveValue('300');
     const listo = page.getByRole('button', { name: /^(Listo|Continuar)$/, exact: true });

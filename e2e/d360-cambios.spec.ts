@@ -173,7 +173,7 @@ test.describe('D366 · los «?» de «¿Cómo dividen?»', () => {
   }
 
   for (const direccion of ['ninguna', 'arriba', 'abajo'] as const) {
-    test(`C232 · al cerrar la ayuda ${direccion === 'ninguna' ? 'restaura el scroll anterior' : 'conserva el desplazamiento manual hacia ' + direccion}`, async ({ page }) => {
+    test(`Al cerrar la ayuda ${direccion === 'ninguna' ? 'restaura el scroll anterior' : 'conserva el desplazamiento manual hacia ' + direccion}`, async ({ page }) => {
       // A 620 px la segunda opción sigue visible tras desplazar hacia abajo.
       await page.setViewportSize({ width: 320, height: direccion === 'abajo' ? 620 : 548 });
       await hastaComoDividen(page);

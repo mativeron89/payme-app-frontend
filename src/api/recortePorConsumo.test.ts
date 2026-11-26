@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from 'vitest';
 import { cajaDelConsumo, negociarRecorte, recorteVigente, separarRecorte } from './recortePorConsumo';
 
@@ -46,4 +47,33 @@ it('detalle de mesas negocia sólo la extensión y conserva el total y las cajas
   expect(agruparPropios(propios!)).toHaveLength(3);
   expect(decodeMisMesas(pagina(301)).mesas[0]?.items).toBeNull();
   expect(separarRecorte({ ...linea, otra: true, ticket_crop: null }).fila).toEqual({ ...linea, otra: true });
+});
+
+it('negocia, decodifica y vence los recortes según el contrato espejado', () => {
+  const ruta = new URL('../../contract-mirror/contract/ticket-image-v1.json', import.meta.url);
+  const { recortes } = JSON.parse(readFileSync(ruta, 'utf8'));
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  expect(negociarRecorte('/visita')).toBe('/visita?' + recortes.negociacion.split(' ')[0]);
+
+  const forma = recortes.forma.ticket_crop;
+  const paginas = /^(\d+)\.\.(\d+),/.exec(forma.page);
+  const precision = /pasos de (0\.\d+)/.exec(recortes.coordenadas);
+  expect(paginas).toBeTruthy();
+  expect(precision).toBeTruthy();
+  const primera = Number(paginas![1]);
+  const ultima = Number(paginas![2]);
+  const paso = Number(precision![1]);
+  const valida = { page: primera, x: paso, y: 0, w: paso, h: 1 };
+  expect(Object.keys(valida).sort()).toEqual(Object.keys(forma).sort());
+  expect(cajaDelConsumo(valida)).toEqual(valida);
+  expect(cajaDelConsumo({ ...valida, page: ultima })).toEqual({ ...valida, page: ultima });
+  for (const fuera of [{ page: primera - 1 }, { page: ultima + 1 }, { x: paso / 2 }]) {
+    expect(cajaDelConsumo({ ...valida, ...fuera })).toBeNull();
+  }
+  const dias = /de más de (\d+) días/.exec(recortes.nulo);
+  expect(dias).toBeTruthy();
+  const inicio = '2026-01-01T00:00:00Z';
+  const limite = Date.parse(inicio) + Number(dias![1]) * 86_400_000;
+  expect(recorteVigente(inicio, limite - 1)).toBe(true);
+  expect(recorteVigente(inicio, limite)).toBe(false);
 });

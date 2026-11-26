@@ -1,3 +1,4 @@
+import { conservaImporteAlPegar } from './_pegarImporte';
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar, relojFueraDeLasFechasDeLosViajes } from './_app';
 
@@ -181,6 +182,11 @@ test.describe('🔴 D278-3 · la pantalla a 375', () => {
       expect(caja.width, nombre).toBeGreaterThanOrEqual(44);
       expect(caja.height, nombre).toBeGreaterThanOrEqual(44);
     }
+    for (const rotulo of ['Servicio', 'Descuento', 'IVA aparte']) {
+      const ajuste = page.getByLabel(rotulo, { exact: true });
+      await ajuste.fill('10');
+      await conservaImporteAlPegar(ajuste, '10');
+    }
     const precio = page.getByLabel('Precio de Ceviche de camarón', { exact: true });
     await precio.fill('1000000');
     await precio.fill('−15');
@@ -211,7 +217,9 @@ test.describe('🔴 D278-3 · un gasto a mano con dos pagadores', () => {
     await page.getByRole('button', { name: 'Corregir gasto', exact: true }).scrollIntoViewIfNeeded();
     await aCorregir(page, 'Corregir gasto');
     await expect(page.getByLabel('Nombre del lugar', { exact: true })).toHaveCount(0);
-    await page.getByLabel('Monto', { exact: true }).fill('950');
+    const monto = page.getByLabel('Monto', { exact: true });
+    await conservaImporteAlPegar(monto, '900');
+    await monto.fill('950');
     const mio = page.getByLabel('Cuánto pagaste tú', { exact: true });
     const luis = page.getByLabel('Cuánto pagó Luis Pérez', { exact: true });
     await mio.fill('4a50');

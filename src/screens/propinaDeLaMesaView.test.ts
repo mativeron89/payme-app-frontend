@@ -169,6 +169,7 @@ describe('sanearOtro deja sólo dígitos y punto', () => {
     expect(sanearOtro('−5', '1')).toBe('1');
     expect(sanearOtro('abc')).toBe('');
     expect(sanearOtro(' 7 ')).toBe('7');
+    expect(sanearOtro('1\u00a0250')).toBe('1250');
   });
 
   it('conserva los puntos que ya estaban y convierte cada coma', () => {

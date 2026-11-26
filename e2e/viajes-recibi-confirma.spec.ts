@@ -11,7 +11,7 @@ interface Instrumento {
   resolver: (() => void) | null;
   restaurar: () => void;
 }
-type Ventana = Window & { __c194: Instrumento };
+type Ventana = Window & { __confirmacionDeTransferencia: Instrumento };
 
 async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
   await page.route('**/*', (route) => {
@@ -34,7 +34,7 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
     const original = api.marcarTransferenciaDeViaje;
     const i: Instrumento = { idsFixture, llamadas: [], demorar: false, fallar: false, resolver: null,
       restaurar: () => { api.marcarTransferenciaDeViaje = original; } };
-    (window as unknown as Ventana).__c194 = i;
+    (window as unknown as Ventana).__confirmacionDeTransferencia = i;
     api.marcarTransferenciaDeViaje = (viaje, transferencia, accion) => {
       i.llamadas.push([viaje, transferencia, accion]);
       const ejecutar = () => i.fallar ? Promise.reject(new Error('fallo inventado C194')) : original(viaje, transferencia, accion);
@@ -50,7 +50,7 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
     const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
     const fixture = await api.getViaje('d1000000-0000-4000-8000-000000000002');
     // La semilla crea UUID nuevos: expectativa exacta tomada ANTES de confirmar.
-    (window as unknown as Ventana).__c194.idsFixture = {
+    (window as unknown as Ventana).__confirmacionDeTransferencia.idsFixture = {
       luis: fixture.transferencias.find((tr) => tr.de === 'd4000000-0000-4000-8000-000000000045')!.id,
       sofia: fixture.transferencias.find((tr) => tr.de === 'd4000000-0000-4000-8000-000000000046')!.id,
     };
@@ -60,8 +60,8 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
 }
 const fila = (page: Page, nombre: string) => page.locator('.vjv-tr-item').filter({ has: page.locator('.vjv-tr-nombre', { hasText: nombre }) });
 const boton = (page: Page, nombre: string) => fila(page, nombre).getByRole('button', { name: 'Recibí', exact: true });
-const idFixture = (page: Page, nombre: 'luis' | 'sofia') => page.evaluate((n) => (window as unknown as Ventana).__c194.idsFixture[n], nombre);
-const llamadas = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__c194.llamadas);
+const idFixture = (page: Page, nombre: 'luis' | 'sofia') => page.evaluate((n) => (window as unknown as Ventana).__confirmacionDeTransferencia.idsFixture[n], nombre);
+const llamadas = (page: Page) => page.evaluate(() => (window as unknown as Ventana).__confirmacionDeTransferencia.llamadas);
 
 async function comprobarHoja(page: Page, nombre: string, monto: string) {
   const hoja = page.getByRole('dialog', { name: `¿Recibiste ${monto} de ${nombre}?`, exact: true });
@@ -75,7 +75,7 @@ async function comprobarHoja(page: Page, nombre: string, monto: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  if (!page.isClosed()) await page.evaluate(() => (window as unknown as Ventana).__c194?.restaurar());
+  if (!page.isClosed()) await page.evaluate(() => (window as unknown as Ventana).__confirmacionDeTransferencia?.restaurar());
 });
 
 test('C194 A1 · desde Pendiente pide confirmación y no marca', async ({ page }) => {
@@ -118,7 +118,7 @@ async function confirmar(page: Page) {
 // A4 y A6 conservan sus aserciones en pruebas independientes (H2).
 test('C194 A4 · doble clic sincrónico confirma una sola vez', async ({ page }) => {
   await preparar(page);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   await boton(page, 'Luis').click();
   await comprobarHoja(page, 'Luis', '$750');
   await page.waitForTimeout(360);
@@ -126,21 +126,21 @@ test('C194 A4 · doble clic sincrónico confirma una sola vez', async ({ page })
   await aceptar.evaluate((el) => { (el as HTMLButtonElement).click(); (el as HTMLButtonElement).click(); });
   await expect(aceptar).toBeDisabled();
   expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.resolver?.(); });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(fila(page, 'Luis')).toContainText('Pagado');
 });
 
 test('C194 A4 · Escape mientras guarda no cierra ni permite cancelar', async ({ page }) => {
   await preparar(page);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   await boton(page, 'Luis').click();
   await confirmar(page);
   await expect(page.getByRole('button', { name: 'Cancelar', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await llamadas(page)).toEqual([[VIAJE, await idFixture(page, 'luis'), 'recibi']]);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.resolver?.(); });
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
@@ -170,7 +170,7 @@ test('C194 A5 · confirmación en inglés con el texto exacto', async ({ page })
 
 test('C194 · un error conserva el aviso y el refresco existentes sin dar por pagado', async ({ page }) => {
   await preparar(page);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = true; });
   await boton(page, 'Luis').click();
   await confirmar(page);
   await expect(page.getByText('No pudimos guardarlo. Prueba de nuevo.', { exact: true })).toBeVisible();
@@ -234,12 +234,12 @@ test('C195 B2 · POST resuelto y GET colgado libera la app a 3,5 s', async ({ pa
 for (const fallo of [false, true]) {
   test(`C195 B3 · foco durante envío y tras ${fallo ? 'error' : 'éxito'} nunca body`, async ({ page }) => {
     await preparar(page);
-    await page.evaluate((fallar) => { Object.assign((window as unknown as Ventana).__c194, { demorar: true, fallar }); }, fallo);
+    await page.evaluate((fallar) => { Object.assign((window as unknown as Ventana).__confirmacionDeTransferencia, { demorar: true, fallar }); }, fallo);
     await boton(page, 'Luis').click();
     await confirmar(page);
     await expect(page.getByRole('dialog')).toBeVisible();
     expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
-    await page.evaluate(() => { (window as unknown as Ventana).__c194.resolver?.(); });
+    await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.resolver?.(); });
     await expect(page.getByRole('dialog')).toHaveCount(0);
     if (fallo) await expect(boton(page, 'Luis')).toBeFocused();
     else await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeFocused();
@@ -250,7 +250,7 @@ for (const fallo of [false, true]) {
 
 test('C195D C1 · error devuelve foco y conserva Recibí en el orden de Tab', async ({ page }) => {
   await preparar(page);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = true; });
   await boton(page, 'Luis').click();
   await confirmar(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -284,7 +284,7 @@ test('C195D C2 · POST exitoso y GET colgado no traban Salir ni Escape', async (
 test('C195D C3 · POST fallido y GET colgado cierran a 1 s con aviso y foco', async ({ page }) => {
   await preparar(page);
   await page.evaluate(async () => {
-    (window as unknown as Ventana).__c194.fallar = true;
+    (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = true;
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
     api.getViaje = () => new Promise(() => {});
@@ -303,7 +303,7 @@ test('C195D C3 · POST fallido y GET colgado cierran a 1 s con aviso y foco', as
 type RefrescoRetenido = Window & { __c195e: { resolverGet: () => Promise<void>; salidas: number } };
 async function retenerRefresco(page: Page, fallar: boolean) {
   await page.evaluate(async (fallo) => {
-    (window as unknown as Ventana).__c194.fallar = fallo;
+    (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = fallo;
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
     const original = api.getViaje;
@@ -328,7 +328,7 @@ test('C195E D1 · GET viejo no libera el segundo Recibí en vuelo ni permite un 
   await boton(page, 'Luis').click();
   await confirmar(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   await boton(page, 'Luis').click();
   await confirmar(page);
   const aceptar = page.getByRole('button', { name: 'Sí, recibí', exact: true });
@@ -376,7 +376,7 @@ test('C195E D3 · GET viejo no libera No me llegó de otra fila ni duplica su PO
   await boton(page, 'Sofía').click();
   await confirmar(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.demorar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.demorar = true; });
   const noLlego = fila(page, 'Luis').getByRole('button', { name: 'No me llegó', exact: true });
   await noLlego.click();
   await page.waitForTimeout(360);
@@ -450,7 +450,7 @@ for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco 
 
 for (const idioma of ['es', 'en'] as const) test(`No me llegó devuelve el foco tras error · ${idioma}`, async ({ page }) => {
   await preparar(page, idioma);
-  await page.evaluate(() => { (window as unknown as Ventana).__c194.fallar = true; });
+  await page.evaluate(() => { (window as unknown as Ventana).__confirmacionDeTransferencia.fallar = true; });
   const origen = fila(page, 'Luis').getByRole('button', { name: idioma === 'es' ? 'No me llegó' : "I didn't get it", exact: true });
   await origen.click();
   await page.waitForTimeout(360);
@@ -468,7 +468,7 @@ test('No me llegó vuelve al botón y permite un segundo intento tras un conflic
     const mock = '/src/api/mock/mockApi.ts';
     const { MockApiError } = await import(mock) as typeof import('../src/api/mock/mockApi');
     api.marcarTransferenciaDeViaje = async (...args) => {
-      (window as unknown as Ventana).__c194.llamadas.push(args);
+      (window as unknown as Ventana).__confirmacionDeTransferencia.llamadas.push(args);
       throw new MockApiError(409, 'viaje_not_waiting_payments');
     };
     api.getViaje = async () => { throw new Error('sin conexión'); };

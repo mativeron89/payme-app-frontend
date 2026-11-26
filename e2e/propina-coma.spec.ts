@@ -1,3 +1,4 @@
+import { conservaImporteAlPegar } from './_pegarImporte';
 import { expect, test } from '@playwright/test';
 import { ingresar, CORTE } from './_app';
 import { abrirTusConsumos } from './_mesa';
@@ -41,6 +42,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
   // pressSequentially, no fill: la coma tiene que pasar POR el onChange,
   // tecla a tecla, como la tipea una persona.
   await input.pressSequentially('12,34');
+  await conservaImporteAlPegar(input, '12.34');
 
   // El input muestra la normalización y el CTA cobra $195 + $12.34.
   await expect(input).toHaveValue('12.34');

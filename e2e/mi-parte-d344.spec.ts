@@ -1,3 +1,4 @@
+import { conservaImporteAlPegar } from './_pegarImporte';
 import { expect, test, type Page } from '@playwright/test';
 import {
   corregirLaMesa,
@@ -303,6 +304,7 @@ for (const lugar of ['compartir', 'configuración'] as const) {
     const campo = propina.getByRole('textbox');
     const fijar = propina.getByRole('button', { name: 'Fijar' });
     await campo.fill('5000');
+    await conservaImporteAlPegar(campo, '5000');
     for (const tecla of ['Escape', 'Enter']) {
       await campo.press('Enter');
       const grupo = propina.getByRole('group', { name: /más de 3 veces/ });

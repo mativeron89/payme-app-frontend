@@ -163,3 +163,21 @@ for (const monto of [18000, 123456, 1234567]) {
     }
   });
 }
+
+test('El importe completo cabe dentro de la visita a 320 px con letra ampliada', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await montar(page, 1, 'mesa', 1234567);
+  await expect(page.locator('.fila-ticket-foto img')).toBeVisible();
+  // Simula una preferencia de texto grande en la fecha y el importe, sin tocar la geometría de la fila.
+  await page.addStyleTag({ content: '.rest-visita-fecha, .rest-visita-monto { font-size: 24px; }' });
+  await page.evaluate(() => document.fonts.ready);
+  const fila = page.locator('.rest-visita-fila');
+  const monto = fila.getByText('$12,345.67', { exact: true });
+  await expect(monto).toBeVisible();
+  const caja = (await fila.boundingBox())!;
+  const texto = (await monto.boundingBox())!;
+  expect(texto.x).toBeGreaterThanOrEqual(caja.x);
+  expect(texto.x + texto.width).toBeLessThanOrEqual(caja.x + caja.width);
+  expect(texto.y).toBeGreaterThanOrEqual(caja.y);
+  expect(texto.y + texto.height).toBeLessThanOrEqual(caja.y + caja.height);
+});
