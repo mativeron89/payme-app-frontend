@@ -74,6 +74,10 @@ beforeEach(() => {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body;
     pedidos.push({ method: init?.method ?? 'GET', url, body });
     if (url.pathname.endsWith('/gastos')) return json({ contract: CONTRATO_VIAJES, ticket, ya_cargado: null }, 201);
+    if (url.pathname.endsWith('/resumen')) return json({ contract: CONTRATO_VIAJES, resumen: {
+      viaje_id: VIAJE, nombre: 'Viaje', fecha_desde: null, fecha_hasta: null, personas: 1, consumiste_cents: 0,
+      pagaste_en_tickets_cents: 0, te_transfirieron_cents: 0, transferiste_cents: 0, por_tipo_de_lugar: [], lugares: [],
+    } });
     // D263 · las rutas de ticket (menos eliminar, que devuelve el viaje).
     if (url.pathname.endsWith('/tickets') && init?.method === 'POST') return json({ contract: CONTRATO_VIAJES, ticket, ya_cargado: null }, 201);
     if (/\/tickets\/[^/]+(\/(seleccion|presentes))?$/.test(url.pathname) && init?.method !== 'DELETE') {
@@ -97,6 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   reiniciarViajesParaTests();
 });
@@ -160,7 +165,8 @@ describe('fachada real · Viajes con App Backend 2.183.0 (`viaje_version=11`, D2
     expect(pedidos[0]!.body).not.toHaveProperty('pagado_por');
   });
 
-  it('🔴 D263 · las rutas de ticket también piden `viaje_version=11`, una sola vez y exacta', async () => {
+  it.each(['0', '1'])('las rutas del ticket negocian la versión de Viajes y los recortes según la bandera %s', async bandera => {
+    vi.stubEnv('VITE_TICKET_CROP_ENABLED', bandera);
     await api.cargarTicketDeViaje(VIAJE, {
       ocr_receipt: 'or1.x.y', idempotency_key: 'ticket-de-prueba-1', forma: 'iguales', tipo_lugar: 'otro', lugar: 'Taxi',
       fecha_ticket: null, hora_ticket: null, items: [{ name: 'Taxi', price_cents: 5000, quantity: 1 }],
@@ -177,6 +183,9 @@ describe('fachada real · Viajes con App Backend 2.183.0 (`viaje_version=11`, D2
       `PATCH /api/viajes/${VIAJE}/tickets/t`,
     ]);
     for (const p of pedidos) expect(p.url.searchParams.getAll('viaje_version'), p.url.pathname).toEqual(['11']);
+    await api.getResumenDeViaje(VIAJE);
+    for (const p of pedidos) expect(p.url.searchParams.getAll('ticket_crop_version'), p.url.pathname)
+      .toEqual(bandera === '1' ? ['1'] : []);
   });
 
   it('🔴 D276-2 · el ticket escaneado lleva `presentes` tal cual (lo que se ve, siempre)', async () => {

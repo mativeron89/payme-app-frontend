@@ -47,3 +47,25 @@ export const PLAZO_FOTO = 90 * 86400000;
 export function recorteVigente(fecha: string, ahora: number): boolean {
   return ahora < Date.parse(fecha) + PLAZO_FOTO;
 }
+
+// Los listados pueden venir en el orden del pago. Las coordenadas del dueño
+// permiten leer las cajas en el orden del papel. Una caja nula conserva su lugar.
+export function renglonesDelRecorte(cajas: readonly unknown[]): (CajaDelTicket | null)[] {
+  const vistas = new Set<string>();
+  const lineas = cajas.map(cajaDelConsumo).filter(c => {
+    if (!c) return true;
+    // AB puede desglosar varias unidades de un mismo renglón del papel.
+    const clave = JSON.stringify(c);
+    if (vistas.has(clave)) return false;
+    vistas.add(clave);
+    return true;
+  });
+  const papel = lineas.filter((c): c is CajaDelTicket => c !== null)
+    .sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
+  let siguiente = 0;
+  return lineas.map(c => c && papel[siguiente++]!);
+}
+
+export function origenDelRecorteEnMesa(code: string, invitado: boolean, ejemplo: boolean) {
+  return invitado || ejemplo ? null : { tipo: 'mesa' as const, code };
+}

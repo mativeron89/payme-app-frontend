@@ -1,8 +1,12 @@
-:is(li, div):has(> button.info-consumo),
+/* Reservar la misma columna en cada fila de la lista que tiene un control. */
+:is(ul, div, section, dl):has(> :is(li, div) > .info-consumo) > :is(li, .hist-detail-row, .qc-renglon),
+dl:has(> .mi-parte-plato > dt > .info-consumo) > .mi-parte-plato {
+  padding-inline-end: 44px;
+}
+:is(li, div):has(> .info-consumo),
 .mi-parte-plato:has(> dt > .info-consumo) {
   min-block-size: 44px;
   position: relative;
-  padding-inline-end: 44px;
 }
 .info-consumo {
   position: absolute;
@@ -14,8 +18,32 @@
   height: 44px;
   padding: 0;
   border: 0;
+  border-radius: 50%;
   background: transparent;
   color: var(--action);
+  -webkit-tap-highlight-color: transparent;
 }
-.info-consumo-fondo { z-index: 1100; }
-.info-consumo-fondo canvas { max-width: 100%; max-height: 70vh; object-fit: contain; align-self: center; }
+.info-consumo:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -3px;
+}
+.ticket-digital-backdrop.info-consumo-fondo {
+  position: fixed;
+  z-index: 12000;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.info-consumo-fondo .ticket-digital-head { flex-shrink: 0; }
+.info-consumo-fondo .ticket-digital-head p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.info-consumo-recortes {
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.info-consumo-recortes figure { margin: 0; }
+.info-consumo-recortes figure + figure { margin-top: 16px; }
+.info-consumo-recortes figcaption { font-weight: 600; margin-bottom: 4px; }
+.info-consumo-recortes canvas { max-width: 100%; max-height: 55dvh; object-fit: contain; }

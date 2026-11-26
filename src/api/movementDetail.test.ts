@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { decodeMovementDetailResponse } from './movementDetail';
 import { mockMovement } from './mock/mockApi';
 import { state } from './mock/store';
@@ -144,4 +144,16 @@ describe('decodeMovementDetailResponse', () => {
     const raw = await mockMovement(knownId!);
     expect(decodeMovementDetailResponse(raw).id).toBe(knownId);
   });
+});
+
+it('con la negociación encendida conserva la caja de una porción en el movimiento', () => {
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  try {
+    const dato = valid();
+    const caja = { page: 1, x: 0, y: 0.1, w: 1, h: 0.1 };
+    const linea = { ...dato.items[0], ticket_crop: caja };
+    expect(decodeMovementDetailResponse({ ...dato, items: [linea] }).items[0]).toMatchObject(linea);
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

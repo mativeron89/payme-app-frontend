@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from 'vitest';
-import { cajaDelConsumo, negociarRecorte, recorteVigente, separarRecorte } from './recortePorConsumo';
+import { cajaDelConsumo, negociarRecorte, origenDelRecorteEnMesa, recorteVigente, renglonesDelRecorte, separarRecorte } from './recortePorConsumo';
 
 import { agruparPropios } from '../screens/agruparIguales';
 import { decodeMisMesas } from './misMesas';
+import { decodeResumenDeViaje } from './viajes';
 
 const caja = { page: 3, x: 0.7, y: 0.1, w: 0.3, h: 0.2 };
 afterEach(() => vi.unstubAllEnvs());
@@ -44,7 +45,9 @@ it('detalle de mesas negocia sólo la extensión y conserva el total y las cajas
     page: { next_cursor: null } });
   const propios = decodeMisMesas(pagina(300)).mesas[0]?.items;
   expect(propios?.map(i => i.ticket_crop)).toEqual([caja, otraCaja, undefined]);
-  expect(agruparPropios(propios!)).toHaveLength(3);
+  const grupos = agruparPropios(propios!);
+  expect(grupos).toHaveLength(1);
+  expect(grupos[0]).toMatchObject({ cantidad: 3, montoCents: 300, renglones: propios });
   expect(decodeMisMesas(pagina(301)).mesas[0]?.items).toBeNull();
   expect(separarRecorte({ ...linea, otra: true, ticket_crop: null }).fila).toEqual({ ...linea, otra: true });
 });
@@ -76,4 +79,30 @@ it('negocia, decodifica y vence los recortes según el contrato espejado', () =>
   const limite = Date.parse(inicio) + Number(dias![1]) * 86_400_000;
   expect(recorteVigente(inicio, limite - 1)).toBe(true);
   expect(recorteVigente(inicio, limite)).toBe(false);
+});
+
+it('el resumen de Viajes conserva la caja del renglón fraccionado', () => {
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  const item = { name: 'Agua', fraction_bps: 5000, amount_cents: 50, ticket_crop: caja };
+  const lugar = { ticket_id: 'ticket', lugar: 'Café', tipo_lugar: 'restaurante', fecha_ticket: null,
+    forma: 'consumo', pagaste_tu: true, mi_monto_cents: 50, asignado_al_cierre_cents: 50, items: [item] };
+  const resumen = { viaje_id: 'viaje', nombre: 'Viaje', personas: 1, fecha_desde: null, fecha_hasta: null,
+    consumiste_cents: 50, pagaste_en_tickets_cents: 50, te_transfirieron_cents: 0, transferiste_cents: 0,
+    por_tipo_de_lugar: [], lugares: [lugar] };
+  expect(decodeResumenDeViaje({ contract: 'payme.app.viajes/v1', resumen }, 'viaje').lugares[0]?.items).toEqual([item]);
+});
+
+it('ordena por página y posición, mantiene el hueco y muestra una vez el renglón desglosado', () => {
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  const arriba = { ...caja, page: 0, y: 0 };
+  const abajo = { ...arriba, y: 0.6 };
+  expect(renglonesDelRecorte([caja, null, abajo, arriba, { ...arriba }])).toEqual([arriba, null, abajo, caja]);
+});
+
+it('una caja válida está disponible sólo con un origen de mesa de la cuenta', () => {
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  expect(cajaDelConsumo(caja)).toEqual(caja);
+  expect(origenDelRecorteEnMesa('PA-12345', false, false)).toEqual({ tipo: 'mesa', code: 'PA-12345' });
+  expect(origenDelRecorteEnMesa('PA-12345', true, false)).toBeNull();
+  expect(origenDelRecorteEnMesa('PA-1224', false, true)).toBeNull();
 });

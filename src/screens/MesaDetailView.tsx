@@ -1,3 +1,4 @@
+import { origenDelRecorteEnMesa } from '../api/recortePorConsumo';
 import { InformacionDelConsumo } from '../components/InformacionDelConsumo';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -512,7 +513,7 @@ function HojaAntesDeCerrar({
 function DesgloseDeMiParte({
   totales,
   mia,
-  code,
+  origen,
   items,
   esConsumo,
   partes,
@@ -523,7 +524,7 @@ function DesgloseDeMiParte({
 }: {
   readonly totales: ShareTotals;
   readonly mia: MyShare;
-  readonly code: string;
+  readonly origen: ReturnType<typeof origenDelRecorteEnMesa>;
   readonly items: readonly MesaItem[];
   readonly esConsumo: boolean;
   readonly partes: number | null;
@@ -559,7 +560,7 @@ function DesgloseDeMiParte({
         {platos.map((plato) => (
           <div key={plato.id} className="mi-parte-plato">
             <dt>{plato.nombre}{plato.porcion && <span className="mi-parte-plato-porcion"> · {plato.porcion}</span>}
-              <InformacionDelConsumo caja={plato.ticket_crop} nombre={plato.nombre} origen={{ tipo: 'mesa', code }} />
+              <InformacionDelConsumo caja={plato.ticket_crop} nombre={plato.nombre} origen={origen} />
             </dt>
             <dd>{plato.montoCents !== null ? formatMXN(plato.montoCents) : (
               <><span aria-hidden="true">—</span><span className="cuadre-ticket-anuncio">{t('Monto no disponible')}</span></>
@@ -851,11 +852,12 @@ export function MesaDetailView({
    * parte guardada después de «Listo» y en partes iguales la del servidor. No en
    * la mesa de ejemplo: la guía no comparte ni copia (D367).
    */
+  const origenDelRecorte = origenDelRecorteEnMesa(mesa.code, isGuest, ejemplo);
   const desgloseDeMiParte = parteDelDueno.tipSetting !== undefined && totales && muestraElDesglose(mia, esConsumo) ? (
     <DesgloseDeMiParte
       totales={totales}
       mia={mia}
-      code={mesa.code}
+      origen={origenDelRecorte}
       items={mesa.items}
       esConsumo={esConsumo}
       partes={partes}
@@ -1425,7 +1427,7 @@ export function MesaDetailView({
             </button>
           );
         })()}
-          {!ejemplo && !isGuest && <InformacionDelConsumo caja={i.ticket_crop} nombre={nombreDePlato(i.name)} origen={{ tipo: 'mesa', code: mesa.code }} />}
+          <InformacionDelConsumo caja={i.ticket_crop} nombre={nombreDePlato(i.name)} origen={origenDelRecorte} />
         </div>)}
       </div>
       {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al

@@ -127,3 +127,15 @@ describe('nombreConCantidad', () => {
     expect(nombreConCantidad(2, 'Agua')).toBe('2 × Agua');
   });
 });
+
+it('D986 · un pago conserva los renglones originales al sumar los iguales, también si uno carece de caja', () => {
+  const caja = { page: 0, x: 0, y: 0.1, w: 0.9, h: 0.1 };
+  const renglones = [
+    movimiento('Agua', 1500, { ticket_crop: caja }),
+    movimiento('Agua', 1500),
+    movimiento('Agua', 1500, { ticket_crop: { ...caja, y: 0.7 } }),
+  ];
+  const grupos = agruparDelPago('pago', renglones);
+  expect(grupos).toHaveLength(1);
+  expect(grupos[0]).toMatchObject({ cantidad: 3, montoCents: 4500, renglones });
+});

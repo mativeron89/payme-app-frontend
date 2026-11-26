@@ -1,3 +1,7 @@
+## 0.284.0 · 2026-11-26
+
+- D986 · Los consumos iguales conservan una fila. Su botón de información abre los recortes de los renglones del grupo. La función sigue apagada por defecto.
+
 ## 0.283.2 · 2026-11-26
 
 - Pruebas de la relectura de invitaciones en Inicio al cambiar de sesión y nombres descriptivos para las pruebas de confirmación de transferencias de viaje.

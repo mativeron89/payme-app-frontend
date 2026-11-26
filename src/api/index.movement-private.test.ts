@@ -48,13 +48,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   storage.values.clear();
   vi.unstubAllGlobals();
 });
 
 describe('fachada real: detalle owner-only no cacheable', () => {
   it('envía no-store y exige los dos tokens privados antes de decodificar', async () => {
+    vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new URL(_url, 'http://localhost').searchParams.getAll('ticket_crop_version')).toEqual(['1']);
       expect((init?.headers as Record<string, string>).Authorization)
         .toBe(`Bearer ${accessFixture}`);
       expect((init?.headers as Record<string, string>).Accept).toBe('application/json');

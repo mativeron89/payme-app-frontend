@@ -23,6 +23,7 @@ export interface RenglonAgrupado<T> {
   readonly key: string;
   /** De ahí salen el nombre, la porción y lo declarado. */
   readonly primero: T;
+  readonly renglones: readonly T[];
   /** La suma de las cantidades. */
   readonly cantidad: number;
   /** La suma de los montos; `null` si alguna línea no tiene monto. */
@@ -52,7 +53,7 @@ function enteroPositivo(n: number): boolean {
 }
 
 export function agruparIguales<T>(items: readonly T[], lectura: LecturaDeRenglon<T>): RenglonAgrupado<T>[] {
-  const salida: { key: string; primero: T; cantidad: number; montoCents: number | null }[] = [];
+  const salida: { key: string; primero: T; renglones: T[]; cantidad: number; montoCents: number | null }[] = [];
   const grupos = new Map<string, number>();
   items.forEach((item, index) => {
     const unitario = lectura.unitario(item);
@@ -68,10 +69,11 @@ export function agruparIguales<T>(items: readonly T[], lectura: LecturaDeRenglon
     const en = clave === null ? undefined : grupos.get(clave);
     if (en === undefined) {
       if (clave !== null) grupos.set(clave, salida.length);
-      salida.push({ key: lectura.key(item, index), primero: item, cantidad, montoCents: monto });
+      salida.push({ key: lectura.key(item, index), primero: item, renglones: [item], cantidad, montoCents: monto });
       return;
     }
     const grupo = salida[en];
+    grupo.renglones.push(item);
     grupo.cantidad += cantidad;
     grupo.montoCents = grupo.montoCents === null || monto === null ? null : grupo.montoCents + monto;
   });
@@ -98,7 +100,6 @@ export function agruparPropios(items: readonly ItemPropioDeMesa[]): RenglonAgrup
     cantidad: (i) => i.quantity,
     monto: (i) => i.amountCents,
     key: (i) => i.itemId,
-    extra: (i) => JSON.stringify(i.ticket_crop),
   });
 }
 
@@ -120,6 +121,6 @@ export function agruparDelPago(
     cantidad: (i) => i.quantity,
     monto: (i) => i.amount_cents,
     key: (_, index) => `${movementId}:${index}`,
-    extra: (i) => JSON.stringify([i.declared_fraction_bps, i.ticket_crop]),
+    extra: (i) => JSON.stringify(i.declared_fraction_bps),
   });
 }

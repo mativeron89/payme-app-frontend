@@ -5,12 +5,13 @@ export async function conRecursoRetenido<T>(
   page: Page,
   patron: Parameters<Page['route']>[0],
   comprobar: () => Promise<T>,
+  alLiberar: (ruta: Route) => Promise<void> = ruta => ruta.continue(),
 ): Promise<T> {
   let liberar!: () => void;
   const permiso = new Promise<void>((resolve) => { liberar = resolve; });
   const pendientes: Promise<void>[] = [];
   const retener = (ruta: Route) => {
-    const respuesta = permiso.then(() => ruta.continue());
+    const respuesta = permiso.then(() => alLiberar(ruta));
     pendientes.push(respuesta);
     return respuesta;
   };

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { conRecursoRetenido } from './_recursoRetenido';
 import { createServer, type ViteDevServer } from 'vite';
 
 // La bandera pertenece al build. Este servidor efímero permite probar la
@@ -9,6 +10,7 @@ let origen: string;
 test.beforeAll(async () => {
   servidor = await createServer({
     envDir: false,
+      cacheDir: `node_modules/.vite-recortes-http-${process.pid}`,
     define: {
       'import.meta.env.VITE_TICKET_CROP_ENABLED': JSON.stringify('1'),
       'import.meta.env.VITE_API_URL': JSON.stringify(''),
@@ -22,8 +24,13 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await servidor?.close(); });
 test.use({ serviceWorkers: 'block' });
 
-for (const idioma of ['es', 'en']) {
-  test('muestra sólo el renglón de la segunda foto y devuelve el foco · ' + idioma, async ({ page }) => {
+const escenarios = ['es', 'en', 'sin foto', 'sin páginas', 'identidad distinta', '403', '404',
+  'sesión antes', 'sesión en vuelo', 'fecha vencida', 'visita completa 320', 'visita completa 375', 'visita completa 390'] as const;
+for (const caso of escenarios) {
+  const idioma = caso === 'en' ? 'en' : 'es';
+  test('recorte del ticket · ' + caso, async ({ page }) => {
+    const ancho = caso.startsWith('visita completa ') ? Number(caso.split(' ').at(-1)) : 0;
+    if (ancho) await page.setViewportSize({ width: ancho, height: 812 });
     const ahora = new Date('2026-11-25T12:00:00Z');
     await page.clock.setFixedTime(ahora);
     await page.addInitScript(lang => {
@@ -44,10 +51,11 @@ for (const idioma of ['es', 'en']) {
       return c.toDataURL('image/webp', 1).split(',')[1]!;
     });
     const esViaje = idioma === 'en';
-    let vencida = false;
+    let vencida = caso === 'fecha vencida';
     let conCaja = true;
     const caja = { page: 1, x: 0.5, y: 0.5, w: 0.5, h: 0.5 };
     const pedidos: string[] = [];
+    let relecturas = 0;
     const versiones: string[][] = [];
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
@@ -55,10 +63,10 @@ for (const idioma of ['es', 'en']) {
       if (!url.pathname.startsWith('/api/')) return route.continue();
       if (url.pathname === '/api/config') return route.fulfill({ json: { features: {
         viajes: { supported: true, enabled: true },
-        ticket_image: { supported: true, enabled: true, mode: 'full_retained', stores_thumb: true, stores_full: true,
+        ticket_image: { supported: true, enabled: caso !== 'sin foto', mode: 'full_retained', stores_thumb: true, stores_full: true,
           full_retention_days: 90, negotiation_param: 'ticket_image_version', negotiation_value: '1',
           accepted_mime_types: ['image/webp'], thumb_max_side_px: 320, full_max_side_px: 1600 },
-        ocr_pages: { supported: true, enabled: true, max_pages: 4, max_total_bytes: 25165824,
+        ocr_pages: { supported: true, enabled: caso !== 'sin páginas', max_pages: 4, max_total_bytes: 25165824,
           negotiation_param: 'pages_version', negotiation_value: '1' },
       } } });
       if (url.pathname === '/api/legal/acceptance') return route.fulfill({ json: { required: false, aviso: null, terminos: null } });
@@ -73,10 +81,12 @@ for (const idioma of ['es', 'en']) {
               { name: 'Agua', quantity: 1, fraction_bps: 10000, amount_cents: 100, ticket_crop: null }] }] }] } });
       }
       if (url.pathname === '/api/mesas/PA-12345' || url.pathname === '/api/viajes/viaje-ficticio/tickets/ticket-ficticio') {
+        relecturas++;
         expect(url.searchParams.getAll('ticket_crop_version')).toEqual(['1']);
         const items = [{ id: 'i', name: 'Sopa', price_cents: 100, quantity: 1, line_cents: 100,
           remaining_bps: 0, my_bps: 10000, my_amount_cents: 100, ticket_crop: conCaja ? caja : null }];
-        if (!esViaje) return route.fulfill({ json: { mesa: { code: 'PA-12345', items } } });
+        if (!esViaje) return route.fulfill({ json: { mesa: { code: caso === 'identidad distinta' ? 'PA-99999' : 'PA-12345',
+          items: ancho ? [...items, { ...items[0], id: 'otro', name: 'Arroz', my_bps: 0, remaining_bps: 10000 }] : items } } });
         return route.fulfill({ json: { contract: 'payme.app.viajes/v1', ticket: {
           id: 'ticket-ficticio', lugar: 'Café de prueba', tipo_lugar: 'restaurante', fecha_ticket: null, hora_ticket: null,
           cargado_en: ahora.toISOString(), forma: 'consumo', monto_cents: 100, pagado_por: 'm', pagaste_tu: true,
@@ -89,6 +99,7 @@ for (const idioma of ['es', 'en']) {
       if (url.pathname.includes('/ticket-image/')) {
         pedidos.push(url.pathname + url.search);
         expect(route.request().headers().authorization).toBe('Bearer a');
+        if (caso === '403' || caso === '404') return route.fulfill({ status: Number(caso), json: { error: 'not_found' } });
         return route.fulfill({ contentType: 'image/webp', headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization' },
           body: Buffer.from(webp, 'base64') });
       }
@@ -100,7 +111,50 @@ for (const idioma of ['es', 'en']) {
     expect(versiones.length).toBeGreaterThan(0);
     expect(versiones.every(v => v.length === 1 && v[0] === '1')).toBe(true);
     const boton = page.getByRole('button', { name: idioma === 'es' ? 'Ver renglón de Sopa en el ticket' : 'View Sopa on the receipt' });
+    await expect(page.getByText('Sopa', { exact: true })).toBeVisible();
+    if (caso === 'sin foto' || caso === 'sin páginas' || caso === 'fecha vencida') {
+      await expect(boton).toHaveCount(0);
+      expect(pedidos).toEqual([]);
+      return;
+    }
+    if (ancho) {
+      const importes = page.locator('.est-consumo-monto');
+      const derecha = await importes.evaluateAll(es => es.map(e => e.getBoundingClientRect().right));
+      expect(derecha).toHaveLength(2);
+      expect(Math.abs(derecha[0]! - derecha[1]!)).toBeLessThanOrEqual(1);
+      await page.getByRole('button', { name: /Ver todo el ticket/ }).click();
+      const segundo = page.locator('.est-consumo').filter({ hasText: 'Arroz' }).getByRole('button');
+      await expect(segundo).toBeVisible();
+      await segundo.click();
+      await expect(page.getByRole('dialog').getByRole('img')).toBeVisible();
+      return;
+    }
     await expect(page.locator('.info-consumo')).toHaveCount(1);
+    const cambiarSesion = () => page.evaluate(() => {
+      const clave = 'payme_app_session';
+      const previa = JSON.parse(localStorage.getItem(clave)!);
+      localStorage.setItem(clave, JSON.stringify({ ...previa, family_id: 'otra-familia' }));
+    });
+    if (caso === 'sesión en vuelo') {
+      const detalle = page.waitForRequest(r => new URL(r.url()).pathname === '/api/mesas/PA-12345');
+      await conRecursoRetenido(page, '**/api/mesas/PA-12345?*', async () => {
+        await boton.click();
+        await detalle;
+        await cambiarSesion();
+      }, ruta => ruta.fallback());
+      await expect(boton).toHaveCount(0);
+      expect(pedidos).toEqual([]);
+      return;
+    }
+    if (caso === 'sesión antes') await cambiarSesion();
+    if (caso === '403' || caso === '404' || caso === 'identidad distinta' || caso === 'sesión antes') {
+      await boton.click();
+      await expect(boton).toHaveCount(0);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      expect(relecturas).toBe(caso === 'sesión antes' ? 0 : 1);
+      expect(pedidos).toHaveLength(caso === '403' || caso === '404' ? 1 : 0);
+      return;
+    }
     expect(pedidos).toEqual([]);
     await boton.click();
     const dialogo = page.getByRole('dialog');

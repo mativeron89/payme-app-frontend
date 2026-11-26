@@ -78,7 +78,7 @@ export function subtituloDeTuMesa(m: TuMesa, locale: string, t: T, zona: string 
 }
 
 export interface FilaElegida {
-  readonly ticket_crop?: import('../api/recortePorConsumo').CajaDelTicket;
+  readonly cajas?: ReadonlyArray<import('../api/misMesas').ItemPropioDeMesa['ticket_crop']>;
   readonly clave: string;
   /** «2 ×», o `null` si es uno. */
   readonly cantidad: string | null;
@@ -97,7 +97,7 @@ export function filasDeLoQueElegiste(m: TuMesa): FilaElegida[] | null {
   if (m.divisionMode !== 'consumo' || m.items === null || m.items.length === 0) return null;
   return agruparPropios(m.items).map((g) => ({
     clave: g.key,
-    ...(g.primero.ticket_crop && { ticket_crop: g.primero.ticket_crop }),
+    ...(g.renglones.some(i => i.ticket_crop) && { cajas: g.renglones.map(i => i.ticket_crop) }),
     cantidad: g.cantidad > 1 ? `${g.cantidad} ×` : null,
     porcion: g.primero.fractionBps < 10000 ? bpsLabel(g.primero.fractionBps) : null,
     nombre: nombreDePlato(g.primero.name),
@@ -157,7 +157,7 @@ export function PantallaDelTicketDeMesa({ mesa, zona, userName, unread, onBell, 
             <ul className={filas.some((f) => f.porcion) ? 'pantalla-ticket-filas pantalla-ticket-filas--con-porcion' : 'pantalla-ticket-filas'}>
               {filas.map((f) => (
                 <li key={f.clave} className="eleccion-fila">
-                  <InformacionDelConsumo caja={f.ticket_crop} nombre={f.nombre} origen={{ tipo: 'mesa', code: mesa.code }} fecha={mesa.createdAt} />
+                  <InformacionDelConsumo cajas={f.cajas} nombre={f.nombre} origen={{ tipo: 'mesa', code: mesa.code }} fecha={mesa.createdAt} />
                   <span className="eleccion-fila-casilla" aria-hidden="true"><Icon name="check" size={18} /></span>
                   {/* D100 · la porción en su columna, antes del nombre (que se alinea), sólo si alguna línea la tiene. */}
                   <span className="eleccion-fila-frac">{f.porcion ?? ''}</span>

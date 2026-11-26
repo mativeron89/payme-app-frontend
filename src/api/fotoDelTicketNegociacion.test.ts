@@ -89,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   reiniciarFotoDelTicketParaTests();
 });
@@ -278,4 +279,12 @@ it('D946 · la mesa negocia el detalle y sólo pide los dos binarios por el tran
     await expect(pedirFotoDelTicket({ tipo: 'mesa', code }, tamano, sesion)).resolves.toBeInstanceOf(Blob);
   }
   expect(registro).toEqual([detalle, thumb, full]);
+});
+
+it('negocia las cajas de Mis mesas sólo al pedir los renglones', async () => {
+  vi.stubEnv('VITE_TICKET_CROP_ENABLED', '1');
+  respuesta = () => json({ mesas: [mesa()], page: { limit: 20, next_cursor: null } });
+  await api.getMyMesas({ detail: 'items' });
+  await api.getMyMesas();
+  expect(pedidos.map(p => p.url.searchParams.getAll('ticket_crop_version'))).toEqual([['1'], []]);
 });
