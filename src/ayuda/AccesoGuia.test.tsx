@@ -18,7 +18,7 @@ beforeEach(() => { estado.enFechasDeViaje = false; estado.aperturaPendiente = fa
 
 const fila = (html: string) => /<button[^>]*class="list-row guia-fila"[^>]*>/.exec(html)![0];
 
-describe('D364 · Q9 · Más → Ayuda → «Tutorial»', () => {
+describe('Fila Tutorial en Más', () => {
   it('con todo sabido, habilitada y sin nota (control)', () => {
     const html = renderToStaticMarkup(<AccesoGuia />);
     expect(fila(html)).not.toContain('disabled');

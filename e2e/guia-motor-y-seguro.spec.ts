@@ -353,7 +353,7 @@ test.describe('revisión de V · el foco', () => {
     await expect(botonTutorial(page)).toBeFocused();
   });
 
-  test('salir desde 2b vuelve a Inicio con el foco en Tutorial; desde Más, Escape lo devuelve a «Tutorial»', async ({ page }) => {
+  test('salir con Escape devuelve el foco al Tutorial de Inicio o de Más', async ({ page }) => {
     await entrar(page);
     await abrirDesdeLaTarjeta(page);
     await hastaLaCamara(page);

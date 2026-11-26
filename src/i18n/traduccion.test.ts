@@ -320,7 +320,7 @@ function huerfanasDe(clavesEN: string[], usados: ReadonlySet<string>): string[] 
  * igual que `T_SIN_LITERAL` arriba.
  */
 const HUERFANAS_CONOCIDAS_SIN_ENVOLVER = [
-  'Ajuste a favor', 'Ajuste en contra', 'Asociadas', 'Cuenta', 'Devolución de mesa',
+  'Ajuste a favor', 'Ajuste en contra', 'Asociadas', 'Devolución de mesa',
   'El cierre sigue en proceso; todavía no está confirmado.',
   'El cierre y cualquier liquidación todavía requieren confirmación.',
   'El faltante, si existió, quedó registrado. Aún no podemos afirmar la entrega al restaurante.',
