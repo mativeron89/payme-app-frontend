@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { conRecursoRetenido } from './_recursoRetenido';
 import type { DetalleViaje } from '../src/api/viajes';
 import { ingresar, irEnLaApp, relojFueraDeLasFechasDeLosViajes } from './_app';
 
@@ -401,18 +402,13 @@ test.describe('🔴 D291 · adenda · el monto se vuelve a medir cuando llega la
         idempotency_key: newIdempotencyKey(),
       });
     }, CANCUN);
-    let demoradas = 0;
-    await page.route(/PlusJakartaSans-variable\.ttf/, async (ruta) => {
-      demoradas += 1;
-      await new Promise((listo) => setTimeout(listo, 2_500));
-      await ruta.continue();
+    await conRecursoRetenido(page, /PlusJakartaSans-variable\.ttf/, async () => {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      const monto = tarjeta(page, 'Cancún 2026').locator('.viaje-burbuja-monto');
+      await expect(monto).toBeVisible();
+      await expect(monto).toHaveText('−$10,565.68');
+      expect(await page.evaluate(() => document.fonts.check('600 26px "Plus Jakarta Sans"'))).toBe(false);
     });
-    await page.reload();
-    const monto = tarjeta(page, 'Cancún 2026').locator('.viaje-burbuja-monto');
-    await expect(monto).toHaveText('\u2212$10,565.68');
-    // La premisa: el monto ya se ve y la fuente todavía no llegó.
-    expect(await page.evaluate(() => document.fonts.check('600 26px "Plus Jakarta Sans"'))).toBe(false);
-    expect(demoradas).toBeGreaterThan(0);
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     expect(await page.evaluate(() => document.fonts.check('600 26px "Plus Jakarta Sans"'))).toBe(true);
     await expect.poll(async () => (await medirMonto(page, 'Cancún 2026')).cabe).toBe(true);

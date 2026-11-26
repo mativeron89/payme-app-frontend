@@ -20,6 +20,7 @@
  * La carga lenta se FUERZA demorando el módulo de entrada del build (lo lee de `index.html`): servido desde la misma
  * máquina, el caso lento no ocurre solo.
  */
+import { conRecursoRetenido } from './_recursoRetenido';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -422,34 +423,36 @@ test.describe('🔴 D292 · la pantalla de carga, al menos 4 segundos en cada ap
 for (const ancho of [375, 390, 430] as const) {
   test(`D475 · a ${ancho}: dos puntas, la palabra centrada, la franja y sin texto`, async ({ page }) => {
     await page.setViewportSize({ width: ancho, height: ancho === 375 ? 667 : ancho === 390 ? 844 : 932 });
-    await demorarLaApp(page, 2_500);
-    await page.goto('/');
-    const palabra = page.locator('#splash .carga__palabra svg');
-    await expect(palabra).toBeVisible();
-    // Terminada la entrada: entera y en su lugar (D491: termina a 1,5 s del primer cuadro).
-    await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 2_500 }).toBe('1');
-    const medida = await page.evaluate(() => {
-      const caja = (sel: string) => {
-        const r = document.querySelector(sel)!.getBoundingClientRect();
-        return { x: r.x, y: r.y, w: r.width, h: r.height };
-      };
-      const puntas = Array.from(document.querySelectorAll<HTMLElement>('#splash .carga__punta')).map((el) => ({
-        clase: el.className,
-        recorte: getComputedStyle(el).clipPath,
-        fondo: getComputedStyle(el).backgroundImage,
-        ...caja(`#splash .${el.className.split(' ')[1]}`),
-      }));
-      return {
-        zona: caja('#splash .carga__zona'),
-        palabra: caja('#splash .carga__palabra'),
-        svg: caja('#splash .carga__palabra svg'),
-        franja: caja('#splash .carga__franja'),
-        franjaFondo: getComputedStyle(document.querySelector('#splash .carga__franja')!).backgroundColor,
-        puntas,
-        paths: Array.from(document.querySelectorAll('#splash .carga__palabra svg path')).map((p) => p.getAttribute('fill')),
-        texto: (document.getElementById('splash')!.textContent ?? '').trim(),
-        tieneText: document.querySelectorAll('#splash text, #splash tspan').length,
-      };
+    const src = await moduloDeEntrada(page);
+    const medida = await conRecursoRetenido(page, (url) => url.pathname === src, async () => {
+      await page.goto('/', { waitUntil: 'commit' });
+      const palabra = page.locator('#splash .carga__palabra svg');
+      await expect(palabra).toBeVisible();
+      // Terminada la entrada: entera y en su lugar (D491: termina a 1,5 s del primer cuadro).
+      await expect.poll(() => palabra.evaluate((el) => getComputedStyle(el).opacity), { timeout: 2_500 }).toBe('1');
+      return page.evaluate(() => {
+        const caja = (sel: string) => {
+          const r = document.querySelector(sel)!.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        };
+        const puntas = Array.from(document.querySelectorAll<HTMLElement>('#splash .carga__punta')).map((el) => ({
+          clase: el.className,
+          recorte: getComputedStyle(el).clipPath,
+          fondo: getComputedStyle(el).backgroundImage,
+          ...caja(`#splash .${el.className.split(' ')[1]}`),
+        }));
+        return {
+          zona: caja('#splash .carga__zona'),
+          palabra: caja('#splash .carga__palabra'),
+          svg: caja('#splash .carga__palabra svg'),
+          franja: caja('#splash .carga__franja'),
+          franjaFondo: getComputedStyle(document.querySelector('#splash .carga__franja')!).backgroundColor,
+          puntas,
+          paths: Array.from(document.querySelectorAll('#splash .carga__palabra svg path')).map((p) => p.getAttribute('fill')),
+          texto: (document.getElementById('splash')!.textContent ?? '').trim(),
+          tieneText: document.querySelectorAll('#splash text, #splash tspan').length,
+        };
+      });
     });
     expect(medida.puntas.map((t) => t.clase)).toEqual(['carga__punta carga__punta--arriba', 'carga__punta carga__punta--abajo']);
     for (const t of medida.puntas) {
@@ -524,13 +527,15 @@ test.describe('🔴 D300 · las imágenes de arranque son la pantalla de carga s
         await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: d.barra, topMax: d.barra } });
         // La app no monta mientras se mide: queda la pantalla de carga sola. `commit`: `goto` esperaría el `load`, que
         // espera al módulo demorado, y la captura saldría con la app montada.
-        await demorarLaApp(page, 6_000);
-        await page.goto('/', { waitUntil: 'commit' });
-        const palabra = page.locator('#splash .carga__palabra');
-        await expect(palabra).toBeVisible();
-        await palabra.evaluate((el) => { (el as HTMLElement).style.visibility = 'hidden'; });
-        expect(await page.locator('#splash .carga__franja').evaluate((el) => el.getBoundingClientRect().height)).toBe(d.barra);
-        const pantalla = leerPng(await page.screenshot());
+        const src = await moduloDeEntrada(page);
+        const pantalla = await conRecursoRetenido(page, (url) => url.pathname === src, async () => {
+          await page.goto('/', { waitUntil: 'commit' });
+          const palabra = page.locator('#splash .carga__palabra');
+          await expect(palabra).toBeVisible();
+          await palabra.evaluate((el) => { (el as HTMLElement).style.visibility = 'hidden'; });
+          expect(await page.locator('#splash .carga__franja').evaluate((el) => el.getBoundingClientRect().height)).toBe(d.barra);
+          return leerPng(await page.screenshot());
+        });
         const imagen = leerPng(await (await page.request.get(hrefDe(d))).body());
         const { distintos, total } = diferencia(pantalla, imagen);
         expect(distintos / total, `${distintos} de ${total} píxeles distintos`).toBeLessThanOrEqual(TOLERANCIA_PIXELES);

@@ -16,22 +16,23 @@ const MUTACIONES = ['updateProfileIdentity', 'putUsername', 'putProfileAvatar', 
 type Mutacion = (typeof MUTACIONES)[number];
 const USUARIO_MOCK = 'a0000000-0000-4000-8000-000000000001';
 
-async function espiar(page: Page, demoraMs = 0): Promise<void> {
-  await page.evaluate(async ({ metodos, demora }) => {
+async function espiar(page: Page, retener: boolean): Promise<void> {
+  await page.evaluate(async ({ metodos, retener }) => {
     const ruta = '/src/api/index.ts';
     const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
-    const w = window as unknown as { __perfil: Record<string, number> };
+    const w = window as unknown as { __perfil: Record<string, number>; __liberarGuardado: () => void };
+    const permiso = retener ? new Promise<void>((resolve) => { w.__liberarGuardado = resolve; }) : null;
     w.__perfil = {};
     for (const m of metodos) {
       const original = api[m]!.bind(api);
       w.__perfil[m] = 0;
       api[m] = async (...a: unknown[]) => {
         w.__perfil[m]! += 1;
-        if (demora) await new Promise((r) => setTimeout(r, demora));
+        if (permiso) await permiso;
         return original(...a);
       };
     }
-  }, { metodos: [...MUTACIONES], demora: demoraMs });
+  }, { metodos: [...MUTACIONES], retener });
 }
 
 const llamadas = (page: Page) => page.evaluate(() => (window as unknown as { __perfil: Record<Mutacion, number> }).__perfil);
@@ -56,11 +57,11 @@ async function capturar(page: Page, nombreCaptura: string): Promise<void> {
 }
 
 /** Configuración con el @ ya leído (el lápiz depende de nombre/foto y del @). */
-async function abrirConfiguracion(page: Page, demoraMs = 0): Promise<void> {
+async function abrirConfiguracion(page: Page, retener = false): Promise<void> {
   await ingresar(page);
   await irEnLaApp(page, '/mas');
   await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
-  await espiar(page, demoraMs);
+  await espiar(page, retener);
 }
 
 async function abrirEditor(page: Page): Promise<void> {
@@ -223,19 +224,20 @@ test.describe('AF-LAPIZ-UNICO · un solo lápiz para foto, nombre y @', () => {
   });
 
   test('doble toque en «Guardar»: guarda una sola vez, y mientras tanto dice «Guardando…»', async ({ page }) => {
-    await abrirConfiguracion(page, 800);
+    await abrirConfiguracion(page, true);
     await abrirEditor(page);
     await nombre(page).fill('Renata');
     await apellido(page).fill('Nueva');
     await guardar(page).dblclick();
     await expect(form(page).getByRole('button', { name: 'Guardando…', exact: true })).toBeDisabled();
+    await page.evaluate(() => (window as unknown as { __liberarGuardado: () => void }).__liberarGuardado());
     await expect(form(page)).toHaveCount(0);
     await expect(encabezado(page).locator('.h2')).toHaveText('Renata Nueva');
     expect((await llamadas(page)).updateProfileIdentity).toBe(1);
   });
 
   test('dos envíos en el mismo instante (antes de que el botón se deshabilite): también guarda una sola vez', async ({ page }) => {
-    await abrirConfiguracion(page, 300);
+    await abrirConfiguracion(page);
     await abrirEditor(page);
     await nombre(page).fill('Renata');
     await apellido(page).fill('Nueva');

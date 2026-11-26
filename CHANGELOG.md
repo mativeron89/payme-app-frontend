@@ -1,6 +1,7 @@
 ## 0.283.2 · 2026-11-26
 
 - Pruebas de la relectura de invitaciones en Inicio al cambiar de sesión y nombres descriptivos para las pruebas de confirmación de transferencias de viaje.
+- Las pruebas retienen la fuente del monto de viaje, el módulo de la pantalla de carga y el guardado del perfil hasta comprobar el estado pendiente.
 
 ## 0.283.1 · 2026-11-26
 
