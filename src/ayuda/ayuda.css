@@ -1,7 +1,5 @@
-.ayuda-acceso--ayuda { margin: 0 0 16px; }
-.ayuda-seccion { margin: 0 0 8px; font-size: 16px; color: var(--text); }
-.guia-fila { width: 100%; border-radius: 16px; background: var(--surface); color: var(--text); }
-.guia-fila span { flex: 1; text-align: left; font-weight: 600; }
+.ayuda-acceso { margin: 12px 0 16px; }
+.guia-fila { color: var(--text); }
 .guia-fila:disabled { cursor: default; color: var(--text-muted); }
 /* Q9 · por qué la fila no se puede tocar, o el aviso de la apertura sin confirmar. */
 .ayuda-nota { margin: 8px 4px 0; font-size: 14px; line-height: 1.5; color: var(--text-muted); }

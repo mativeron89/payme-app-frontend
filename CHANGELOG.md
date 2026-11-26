@@ -1,3 +1,7 @@
+## 0.285.0 · 2026-11-26
+
+- En Más, Soporte abre el correo y Tutorial abre la guía. El acceso para solicitar la baja está en Cuenta. Con Google vinculado, Cuentas conectadas muestra el correo de la cuenta.
+
 ## 0.284.0 · 2026-11-26
 
 - D986 · Los consumos iguales conservan una fila. Su botón de información abre los recortes de los renglones del grupo. La función sigue apagada por defecto.

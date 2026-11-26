@@ -8508,6 +8508,7 @@ h1.pay-title-lbl {
   font: 14px/1.4 var(--font-body);
   color: var(--text-muted);
 }
+.cuentas-conectadas-correo { overflow-wrap: anywhere; }
 .cuentas-conectadas-estado.is-ok {
   color: var(--success);
   font-weight: 600;
@@ -12816,7 +12817,7 @@ h1.pay-title-lbl {
 .share-actions { flex-wrap: wrap; }
 .share-native { flex-basis: 100%; }
 .legal-ayuda .sectlabel { padding: var(--sp-3) var(--sp-4) 0; }
-.legal-ayuda a { color: var(--action); text-decoration: none; }
+.config-card a.list-row { color: var(--action); text-decoration: none; }
 .legal-ayuda-texto {
   flex: 1;
   min-width: 0;

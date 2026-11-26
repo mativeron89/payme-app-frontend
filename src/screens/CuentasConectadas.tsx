@@ -222,6 +222,7 @@ function textoDeError(error: ErrorVinculo, t: (texto: string) => string): string
 export interface CuentasConectadasVistaProps {
   readonly estado: EstadoCuentas;
   readonly password: string;
+  readonly correo?: string;
   readonly googleRef?: RefObject<HTMLDivElement>;
   readonly onPassword?: (value: string) => void;
   readonly onEmpezar?: () => void;
@@ -233,6 +234,7 @@ export interface CuentasConectadasVistaProps {
 export function CuentasConectadasVista({
   estado,
   password,
+  correo,
   googleRef,
   onPassword,
   onEmpezar,
@@ -281,6 +283,7 @@ export function CuentasConectadasVista({
             <div className={vinculada ? 'cuentas-conectadas-estado is-ok' : 'cuentas-conectadas-estado'}>
               {vinculada ? t('Vinculada') : t('No vinculada')}
             </div>
+            {vinculada && correo && <div className="caption cuentas-conectadas-correo">{correo}</div>}
           </div>
           {(estado.fase === 'no_vinculada' || iniciando) && (
             <button
@@ -527,6 +530,7 @@ function CuentasConectadasActiva({ webClientId, session, redirectLink }: {
       <CuentasConectadasVista
         estado={estado}
         password={password}
+        correo={session.user?.email}
         googleRef={googleRef}
         onPassword={setPassword}
         onEmpezar={() => (redirectLink ? iniciarEnLaMismaPestana() : despachar({ tipo: 'empezar' }))}

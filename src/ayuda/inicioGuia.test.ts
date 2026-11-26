@@ -56,7 +56,7 @@ describe('D365 · dentro de las fechas de un viaje', () => {
   });
 });
 
-describe('Q8 · Q9 · Más → Ayuda → «Cómo usar PayMe»', () => {
+describe('Q8 · Q9 · Más → Ayuda → «Tutorial»', () => {
   it('disponible con todo sabido; en fechas de viaje, deshabilitada; con una apertura pendiente, avisa', () => {
     expect(estadoDeLaAyuda({ enFechasDeViaje: false, aperturaPendiente: false, avisoDeFotos: 'resuelto' })).toBe('disponible');
     expect(estadoDeLaAyuda({ enFechasDeViaje: true, aperturaPendiente: false, avisoDeFotos: 'resuelto' })).toBe('en-viaje');

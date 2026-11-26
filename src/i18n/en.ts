@@ -64,7 +64,7 @@ export const EN: Record<string, string> = {
   "No encontramos ese restaurante.": "We couldn't find that restaurant.",
   "No pudimos abrir la mesa. Prueba de nuevo.": "We couldn't open the table. Try again.",
   "Eliminar mi cuenta": "Delete my account",
-  "Escríbenos: soporte@paymemx.com": "Write to us: soporte@paymemx.com",
+  "Soporte": "Support",
   "Términos de uso": "Terms of use",
   "Legal y ayuda": "Legal and help",
   "No se guardó tu selección. Revisa la mesa antes de continuar.": "Your selection wasn’t saved. Check the table before continuing.",
@@ -148,7 +148,6 @@ export const EN: Record<string, string> = {
 
   // D326 · guía voluntaria y ayuda para restaurantes y viajes existentes.
   "Ayuda": "Help",
-  "Cómo usar PayMe": "How to use PayMe",
   // D363 · Q9 · la fila de Ayuda en fechas de un viaje, y con una apertura sin confirmar.
   "Disponible fuera de las fechas de un viaje": "Available outside trip dates",
   "Disponible cuando sepamos si hoy estás de viaje": "Available once we know whether you're traveling today",

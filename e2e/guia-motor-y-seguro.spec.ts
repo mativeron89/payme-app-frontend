@@ -108,7 +108,7 @@ test.describe('revisión de V · el ejemplo arranca con la primera burbuja', () 
     // main sobre 12de695 lo vio en sus tres intentos: el toque físico no llega). Se dispara el click sobre la fila, que
     // es lo que se prueba: su handler, con la guía abierta, no hace nada. El no-op lo fija también el unitario de
     // abrirLaGuia.
-    await page.getByRole('button', { name: 'Cómo usar PayMe' }).dispatchEvent('click');
+    await page.getByRole('button', { name: 'Tutorial' }).dispatchEvent('click');
     await expect(burbuja(page, TEXTO_2A)).toBeVisible();
     expect(await fase(page)).toBe('foto');
     await hastaLaCamara(page);
@@ -203,7 +203,7 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
       // El aviso a la vista es el aviso consultado y pendiente: desde ahí, la tarjeta no está.
       await expect(tarjeta(page)).toHaveCount(0);
       await page.getByRole('button', { name: 'Más', exact: true }).click();
-      const fila = page.getByRole('button', { name: 'Cómo usar PayMe' });
+      const fila = page.getByRole('button', { name: 'Tutorial' });
       await expect(fila).toBeDisabled();
       await expect(page.getByText('Primero responde el aviso «Tu foto entre amigos» en Inicio.', { exact: true })).toBeVisible();
 
@@ -269,7 +269,7 @@ test.describe('V, 2026-10-19 · la prioridad', () => {
     await expect(aviso).toBeVisible();
     // Entrar directo a Más: Inicio no se monta, el aviso queda sin saber y la fila de Ayuda no se traba.
     await page.goto('/mas');
-    const fila = page.getByRole('button', { name: 'Cómo usar PayMe' });
+    const fila = page.getByRole('button', { name: 'Tutorial' });
     await expect(fila).toBeEnabled();
     await fila.click();
     await expect(burbuja(page, TEXTO_2A)).toBeVisible();
@@ -353,7 +353,7 @@ test.describe('revisión de V · el foco', () => {
     await expect(botonTutorial(page)).toBeFocused();
   });
 
-  test('salir desde 2b vuelve a Inicio con el foco en Tutorial; desde Más, Escape lo devuelve a «Cómo usar PayMe»', async ({ page }) => {
+  test('salir desde 2b vuelve a Inicio con el foco en Tutorial; desde Más, Escape lo devuelve a «Tutorial»', async ({ page }) => {
     await entrar(page);
     await abrirDesdeLaTarjeta(page);
     await hastaLaCamara(page);
@@ -364,7 +364,7 @@ test.describe('revisión de V · el foco', () => {
     expect(await fase(page)).toBe('apagado');
 
     await page.getByRole('button', { name: 'Más', exact: true }).click();
-    const fila = page.getByRole('button', { name: 'Cómo usar PayMe' });
+    const fila = page.getByRole('button', { name: 'Tutorial' });
     await fila.click();
     await expect(burbuja(page, TEXTO_2A)).toBeVisible();
     await page.keyboard.press('Escape');

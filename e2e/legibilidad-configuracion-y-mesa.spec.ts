@@ -14,9 +14,9 @@ for (const [idioma, width] of [['es', 320], ['en', 390]] as const) {
     const config = page.locator('.config-screen');
     const nombres = en
       ? ['Email', 'Language', 'Time zone', 'Notifications', 'Blocked people', 'My cards', 'Privacy notice',
-        'Terms of use', 'Write to us: soporte@paymemx.com', 'Delete my account']
+        'Terms of use', 'Support', 'Delete my account']
       : ['Email', 'Idioma', 'Zona horaria', 'Notificaciones', 'Bloqueados', 'Mis tarjetas', 'Aviso de privacidad',
-        'Términos de uso', 'Escríbenos: soporte@paymemx.com', 'Eliminar mi cuenta'];
+        'Términos de uso', 'Soporte', 'Eliminar mi cuenta'];
     const etiquetas = nombres.map(nombre => config.locator('.config-card').getByText(nombre, { exact: true }));
     const idiomas = ['ES', 'EN'].map(nombre => config.getByRole('button', { name: nombre, exact: true }));
     for (const [escala, px] of [['100%', '16px'], ['200%', '32px']] as const) {

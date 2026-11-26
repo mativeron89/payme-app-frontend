@@ -8,7 +8,7 @@ import { estadoDeLaAyuda, useEnFechasDeViaje } from './inicioGuia';
 import './ayuda.css';
 
 /**
- * Más → Ayuda → «Cómo usar PayMe» (1o). D364 · es, con la tarjeta Tutorial de
+ * Más → Ayuda → «Tutorial» (1o). D364 · es, con la tarjeta Tutorial de
  * Inicio, la única entrada a la guía: la oferta «¿Primera vez?…» de Inicio ya
  * no existe.
  *
@@ -37,8 +37,7 @@ export function AccesoGuia() {
       : estado === 'aviso-de-fotos'
         ? t('Primero responde el aviso «Tu foto entre amigos» en Inicio.')
         : estado === 'apertura-pendiente' && avisar ? t('Primero resuelve la mesa que dejaste sin confirmar en Inicio.') : null;
-  return <section className="ayuda-acceso ayuda-acceso--ayuda" aria-label={t('Ayuda')}>
-    <h2 className="ayuda-seccion">{t('Ayuda')}</h2>
+  return <section className="card config-card ayuda-acceso" aria-label={t('Ayuda')}>
     <button
       type="button"
       className="list-row guia-fila"
@@ -49,7 +48,9 @@ export function AccesoGuia() {
         guia.abrir(e.currentTarget);
       }}
     >
-      <Icon name="info" size={18} /><span>{t('Cómo usar PayMe')}</span><Icon name="arrow-right" size={16} />
+      <span aria-hidden="true"><Icon name="info" size={16} /></span>
+      <span className="legal-ayuda-texto">{t('Tutorial')}</span>
+      <span aria-hidden="true"><Icon name="arrow-right" size={16} /></span>
     </button>
     {nota && <p id={idNota} className="ayuda-nota" role={estado === 'apertura-pendiente' ? 'status' : undefined}>{nota}</p>}
   </section>;

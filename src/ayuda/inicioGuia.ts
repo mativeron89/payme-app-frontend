@@ -130,7 +130,7 @@ export function tarjetaVisible(e: EntradaDeLaTarjeta): boolean {
 export type EstadoDeLaAyuda = 'disponible' | 'en-viaje' | 'apertura-pendiente' | 'aviso-de-fotos' | 'sin-saber-viaje' | 'sin-saber';
 
 /**
- * Más → Ayuda → «Cómo usar PayMe». Q9 · dentro de las fechas de un viaje se ve
+ * Más → Ayuda → «Tutorial». Q9 · dentro de las fechas de un viaje se ve
  * deshabilitada (Escanear llevaría al ticket del viaje). Con una apertura sin
  * confirmar se ve, pero el ejemplo no arranca: avisa. Q8 · el «No volver a
  * mostrar» no la apaga: es lo que le queda a quien lo marcó.

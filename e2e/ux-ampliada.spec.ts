@@ -164,18 +164,16 @@ test('M · aviso de bloqueo y botón de quitar en EN', async ({ page }) => {
   await expect(page.locator('.toast')).toContainText('You blocked Juan López');
   await foto(page, 'm-bloqueaste-en');
 });
-test('K21 · Legal y ayuda conserva enlaces vigentes y correo fijo', async ({ page }) => {
+test('Legal y ayuda conserva los enlaces vigentes', async ({ page }) => {
   await ingresar(page); await irEnLaApp(page, '/mas');
   const seccion = page.getByRole('region', { name: 'Legal y ayuda', exact: true });
   await expect(seccion.getByRole('link', { name: 'Aviso de privacidad', exact: true })).toHaveAttribute('href', '/privacy');
   await expect(seccion.getByRole('link', { name: 'Términos de uso', exact: true })).toHaveAttribute('href', '/terminos');
-  await expect(seccion.getByRole('link', { name: 'Escríbenos: soporte@paymemx.com', exact: true })).toHaveAttribute('href', 'mailto:soporte@paymemx.com');
-  await expect(seccion.getByRole('link', { name: 'Eliminar mi cuenta', exact: true })).toHaveAttribute('href', 'mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe');
   await seccion.evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const titulo = seccion.getByRole('heading', { name: 'Legal y ayuda', exact: true });
   await expect(titulo).toHaveCSS('padding-left', '16px');
   await expect(titulo).toBeInViewport({ ratio: 1 });
-  await expect(seccion.locator('.list-row')).toHaveCount(4);
+  await expect(seccion.locator('.list-row')).toHaveCount(2);
   for (const fila of await seccion.locator('.list-row').all()) {
     await expect(fila.locator('svg')).toHaveCount(2);
     await expect(fila).toBeInViewport({ ratio: 1 });

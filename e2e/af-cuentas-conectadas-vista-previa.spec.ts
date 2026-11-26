@@ -171,6 +171,10 @@ for (const [medida, viewport] of [['movil', MOVIL], ['escritorio', ESCRITORIO]] 
 
       await expect(seccion(page).getByText('Vinculada', { exact: true })).toBeVisible();
       await expect(seccion(page).getByRole('button', { name: 'Vincular Google', exact: true })).toHaveCount(0);
+      const correo = await page.getByRole('region', { name: 'Cuenta', exact: true })
+        .locator('.list-row').filter({ has: page.getByText('Email', { exact: true }) }).locator('.caption').innerText();
+      expect(correo).toContain('@');
+      await expect(seccion(page).getByText(correo, { exact: true })).toBeVisible();
       await capturar(page, `cuentas-06-entro-con-google-${medida}.png`);
     });
   });
