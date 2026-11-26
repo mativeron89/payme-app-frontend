@@ -1,3 +1,12 @@
+## Recorte del ticket por consumo · AF 0.283.0
+
+El inventario de App Backend 2.217.0 en `c624586c95bb189453a4e5c3b5511793ade14e1d`
+identifica el contenido de `d9774af3dba6ba99a31683f19a4a546ba5913d7c`.
+Su SHA-256 es `d2b4aec8d97a9b80560bc6e3130958c61b2ff785f196559c88f29d71c9235c56`.
+De sus 173 entradas, se copian 25 contratos y se verifican 148 fuentes por hash.
+Cambió el contrato `ticket-image-v1.json`, que describe la caja de cada consumo, y cambiaron siete fuentes verificadas por hash.
+Los hechos del dueño se regeneraron desde el commit de contenido.
+
 ## Foto por visita de Estadísticas · AF 0.281.0
 
 Contenido vigente: `70f6d194f672c92fd2ad18cd07b4c28679072ead`.

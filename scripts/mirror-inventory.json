@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "70f6d194f672c92fd2ad18cd07b4c28679072ead",
+  "commit": "d9774af3dba6ba99a31683f19a4a546ba5913d7c",
   "total": 173,
   "archivos": [
     {
@@ -145,8 +145,8 @@
     {
       "origen": "contract/ticket-image-v1.json",
       "destino": "contract/ticket-image-v1.json",
-      "sha256": "0b091a3ae7993303c0ceda0451b115fb68edeeca819de9a40ebffbfef936acf9",
-      "bytes": 8247
+      "sha256": "0272c456076b4c8fe363a2da23754a36db1dd8d958ea9cc5e056a8bb26af99a0",
+      "bytes": 9751
     },
     {
       "origen": "contract/viajes-v1.json",
@@ -559,8 +559,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "3fad1812797f23be8642d34355966bdaff084bcfe381ccdd600f735e33491744",
-      "bytes": 68882
+      "sha256": "2b4d397723f3d6c3f42a319d73edfc829c83396a7e16e9270cf91a300f84cd6f",
+      "bytes": 69824
     },
     {
       "origen": "routes/agente.js",
@@ -625,8 +625,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "40dccb95df0c8c2196c3a9dfd57231ae97635dc0efc2469bd319779621c661be",
-      "bytes": 219893
+      "sha256": "e9214cf7aa672d192aaddfc1dde668db110be0bf9ea5fb8d6b4a0bf5832ea88b",
+      "bytes": 220386
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -643,8 +643,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "241aab08ccebd02c2388400a2f40e48e472b8d6df71f2a1a4cf8616138998582",
-      "bytes": 32230
+      "sha256": "25473e8b65810c1aa48c55a012cb0b0f4c1bf5e8ef0bf83461d0bee81e6f4057",
+      "bytes": 32266
     },
     {
       "origen": "routes/payment-methods.js",
@@ -691,8 +691,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "c79aa0cada35de587a7e5c48fbdee091bb72ddfec7d6215fc8e4a9c8cd0192c1",
-      "bytes": 16219
+      "sha256": "7463733d480d056ca20cd52e226f69a6f32863ccc0a1388004f0bda499d1f67e",
+      "bytes": 16593
     },
     {
       "origen": "routes/webhooks.js",
@@ -967,14 +967,14 @@
     {
       "origen": "services/ticketImageConfig.js",
       "destino": "services/ticketImageConfig.js",
-      "sha256": "2a50ed0bb0feb4ebc7281de96ba7d9a4a80db2615617d7bd6f56b8d7bc198c6e",
-      "bytes": 8392
+      "sha256": "5d2d0ed707826e464952fabbb97c620f94339a0054fb60af2b46413f00fdb125",
+      "bytes": 8530
     },
     {
       "origen": "services/ticketImages.js",
       "destino": "services/ticketImages.js",
-      "sha256": "bfe028e4b7bfeff4d7cbaceba4abaf9197087071df9679f79a48cd11de8be056",
-      "bytes": 24114
+      "sha256": "912eaf8a792337a4e97af22b2c60e914d79477bf07f6315554129ba0b392bb42",
+      "bytes": 28501
     },
     {
       "origen": "services/topupProcessor.js",
@@ -985,8 +985,8 @@
     {
       "origen": "services/viajes.js",
       "destino": "services/viajes.js",
-      "sha256": "b2489d71dfd4d908bd0f451852c11995b5e0894e3713ced87739beaab1448b95",
-      "bytes": 155840
+      "sha256": "bec44a77884b3950a6f8e2591e399ce2f0bfcdc8d21e83db7653cea2b4071674",
+      "bytes": 156384
     },
     {
       "origen": "services/viajesCalculo.js",

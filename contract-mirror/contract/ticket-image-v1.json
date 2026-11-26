@@ -57,6 +57,15 @@
       "GET /api/viajes/visitas → visitas[].ticket_image"
     ]
   },
+  "recortes": {
+    "bandera": { "nombre": "TICKET_CROP_ENABLED", "por_defecto": false, "encendido": "true", "valores": ["true", "false"], "esquema": "Sin las tres columnas y sus disparadores activos, la captura y el vínculo conservan las fotos y las lecturas omiten ticket_crop." },
+    "negociacion": "ticket_crop_version=1 como cadena única. Independiente de ticket_image_version. Con la bandera apagada o sin negociación se omite ticket_crop.",
+    "forma": { "ticket_crop": { "page": "0..3, orden definitivo del papel", "x": "izquierda", "y": "arriba", "w": "ancho", "h": "alto" } },
+    "coordenadas": "Fracciones de la foto completa, entre 0 y 1, en pasos de 0.0001. Abrir full?page={page} por la ruta autenticada del ticket correspondiente.",
+    "captura": "El servidor vincula la posición del recibo firmado con los consumos de POST /api/mesas y POST /api/viajes/:id/tickets. Una corrección posterior que cambia el renglón descarta su caja.",
+    "lectura": ["GET /api/mesas/:code", "GET /api/mesas/mine con detalle de ítems", "GET /api/account/stats/restaurants por visita", "GET /api/account/movements/:id", "Viajes: respuestas con ticket.items en el detalle, alta, corrección, elección, presentes y gasto manual", "GET /api/viajes/:id/resumen en lugares[].items"],
+    "nulo": "Carga manual, renglón modificado o sin geometría fiable, foto ausente, vencida, de más de 90 días, o sin acceso vigente. Los listados sin renglones conservan su forma. No se guarda otra imagen."
+  },
   "lectura": {
     "rutas": [
       "GET /api/mesas/:code/ticket-image/thumb | full — mismas puertas que GET /api/mesas/:code (privateMesaVisibility + requireMesaParticipant; contract/mesa-acceso-v1.json)",
