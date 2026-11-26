@@ -191,6 +191,7 @@ for (const lang of ['es', 'en'] as const) {
   });
 
   test(`U8 · quitar el tutorial devuelve el foco y muestra dónde encontrarlo (${lang})`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 812 });
     await ingresar(page, { sinInvitaciones: true, tutorial: 'inicio' });
     if (en) {
       await idioma(page, lang);
@@ -203,7 +204,7 @@ for (const lang of ['es', 'en'] as const) {
     await quitar.press('Enter');
     await expect(quitar).toHaveCount(0);
     await expect.poll(() => page.locator('.toast--sobre-barra').textContent())
-      .toBe(en ? "You'll find it under More › Help" : 'Lo encuentras en Más › Ayuda');
+      .toBe(en ? "You'll find it under More › Tutorial" : 'Lo encuentras en Más › Tutorial');
     await expect(page.locator('.appbar-center')).toBeFocused();
     if (!en) await captura(page, 'inicio-tutorial-quitado');
   });

@@ -928,7 +928,7 @@ export const EN: Record<string, string> = {
   "¿Borrar «{0}»?": "Delete “{0}”?",
   "¿Borrar la foto del viaje?": "Delete the trip photo?",
   "Se borra del viaje y no se puede recuperar.": "It's removed from the trip and can't be recovered.",
-  "Lo encuentras en Más › Ayuda": "You'll find it under More › Help",
+  "Lo encuentras en Más › Tutorial": "You'll find it under More › Tutorial",
   "No pudimos actualizar tu foto.": "We couldn't update your photo.",
   "No pudimos actualizar tu nombre.": "We couldn't update your name.",
   "No pudimos eliminar tu foto.": "We couldn't delete your photo.",

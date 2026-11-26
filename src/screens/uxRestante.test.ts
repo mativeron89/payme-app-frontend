@@ -18,7 +18,7 @@ it.each([
   ['Si sales ahora, lo que marcaste aquí no se guarda.', "If you leave now, what you marked here won't be saved."],
   ['Seguir editando', 'Keep editing'],
   ['Salir sin guardar', 'Leave without saving'],
-  ['Lo encuentras en Más › Ayuda', "You'll find it under More › Help"],
+  ['Lo encuentras en Más › Tutorial', "You'll find it under More › Tutorial"],
   ['¿Borrar tu nota?', 'Delete your note?'],
   ['¿Borrar «{0}»?', 'Delete “{0}”?'],
   ['¿Borrar la foto del viaje?', 'Delete the trip photo?'],
