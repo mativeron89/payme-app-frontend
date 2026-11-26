@@ -245,6 +245,16 @@ async function fotoEntera(page: Page): Promise<void> {
   const boton = page.getByRole('button', { name: 'Usar la foto entera', exact: true });
   if (await boton.count()) await boton.click();
   await expect(boton).toHaveCount(0);
+  // Al desaparecer el aviso crece el hueco de la foto. ResizeObserver puede
+  // ajustar su tamaño después del clic. Antes de tomar coordenadas para un
+  // gesto, la foto entera debe ocupar uno de los dos lados disponibles.
+  await expect.poll(() => page.locator('.recorte').evaluate(host => {
+    const foto = host.querySelector('.recorte-foto')!.getBoundingClientRect();
+    const css = getComputedStyle(host);
+    const ancho = host.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    const alto = host.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
+    return Math.abs(Math.min(ancho - foto.width, alto - foto.height));
+  })).toBeLessThanOrEqual(1);
 }
 
 /** D509 · el marco quedó sobre el ticket de la foto (con el margen chico de la detección). */

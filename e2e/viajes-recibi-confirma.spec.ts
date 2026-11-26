@@ -41,9 +41,12 @@ async function preparar(page: Page, idioma: 'es' | 'en' = 'es') {
       if (!i.demorar) return ejecutar();
       return new Promise((resolve, reject) => { i.resolver = () => { void ejecutar().then(resolve, reject); }; });
     };
-    history.pushState(null, '', `/viaje/${'d1000000-0000-4000-8000-000000000002'}`);
-    dispatchEvent(new PopStateEvent('popstate'));
   });
+  // Termina de instalar el instrumento antes de navegar y desmontar la vista.
+  await page.evaluate((viaje) => {
+    history.pushState(null, '', `/viaje/${viaje}`);
+    dispatchEvent(new PopStateEvent('popstate'));
+  }, VIAJE);
   await expect(page.getByRole('heading', { name: 'Monterrey fin de semana', exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const ruta = '/src/api/index.ts';

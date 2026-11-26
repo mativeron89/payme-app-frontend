@@ -10,7 +10,7 @@ let origen: string;
 test.beforeAll(async () => {
   servidor = await createServer({
     envDir: false,
-      cacheDir: `node_modules/.vite-recortes-http-${process.pid}`,
+    cacheDir: `node_modules/.vite-recortes-http-${process.pid}`,
     define: {
       'import.meta.env.VITE_TICKET_CROP_ENABLED': JSON.stringify('1'),
       'import.meta.env.VITE_API_URL': JSON.stringify(''),
