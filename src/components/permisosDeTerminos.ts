@@ -12,6 +12,12 @@ export interface EleccionDeAlta {
   aviso: LegalTextPair;
 }
 
+/** Una elección es válida sólo para la versión y la huella que vio la persona. */
+export function eleccionParaAviso(eleccion: EleccionDeAlta | null | undefined, vigente: LegalTextPair | null): EleccionDeAlta | null {
+  return eleccion && vigente && eleccion.aviso.version === vigente.version && eleccion.aviso.hash === vigente.hash
+    ? eleccion : null;
+}
+
 export function avisoDeFallo(t: (texto: string) => string) {
   return t('Tus términos quedaron aceptados. Revisa los cambios en Mis permisos.');
 }

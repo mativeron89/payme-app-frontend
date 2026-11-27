@@ -1,3 +1,4 @@
+import { analisisOpcional, prepararCambioDeAviso, elegirAmbosPermisos, confirmarLecturaDelAvisoNuevo, terminarAltaYLeerEventos } from './_avisoDeAlta';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -269,3 +270,33 @@ test('AF-01 · Google en redirect: un segundo 409 con un par nuevo también desm
   await expect(terminos).not.toBeChecked();
   await expect(crearMiCuenta).toBeDisabled();
 });
+
+for (const volverAMarcar of [false, true]) {
+  test('Alta por correo con Aviso nuevo: ' + (volverAMarcar ? 'se elige sólo análisis' : 'se aceptan sólo los términos'), async ({ page }) => {
+    await prepararCambioDeAviso(page);
+    await page.addInitScript(flag => {
+      localStorage.setItem(flag, 'on');
+      localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
+    }, FLAG);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+    await page.getByLabel('Nombre', { exact: true }).fill('Persona');
+    await page.getByLabel('Apellido', { exact: true }).fill('Ejemplo');
+    await page.getByLabel('Email', { exact: true }).fill('correo@example.invalid');
+    await page.getByLabel('Contraseña', { exact: true }).fill('solo-sintetica-1');
+    const mayor = page.getByRole('checkbox', { name: MAYOR });
+    const terminos = page.getByRole('checkbox', { name: TERMINOS });
+    const alta = page.getByRole('button', { name: 'Registrarme', exact: true });
+    await mayor.check();
+    await terminos.check();
+    await elegirAmbosPermisos(page);
+    await alta.click();
+    await confirmarLecturaDelAvisoNuevo(page);
+    await mayor.check();
+    await terminos.check();
+    if (volverAMarcar) await analisisOpcional(page).check();
+    await alta.click();
+    const eventos = await terminarAltaYLeerEventos(page);
+    expect(eventos).toEqual(volverAMarcar ? ['correo:409', 'correo:vigente', 'analisis_interno'] : ['correo:409', 'correo:vigente']);
+  });
+}

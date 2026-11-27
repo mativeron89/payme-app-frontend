@@ -1,3 +1,4 @@
+import { prepararCambioDeAviso, elegirAmbosPermisos, confirmarLecturaDelAvisoNuevo, terminarAltaYLeerEventos } from './_avisoDeAlta';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -228,3 +229,26 @@ test.describe('AF-POPUP-GOOGLE-409 · 3 · el alta en un toque', () => {
     expect(terminosDe(llamadas[1]!)).toEqual(terminosDe(llamadas[0]!));
   });
 });
+
+for (const entrada of ['credencial retenida', 'sin credencial', 'un toque'] as const) {
+  test('Google en ventana con Aviso nuevo: ' + entrada, async ({ page }) => {
+    await prepararCambioDeAviso(page, entrada === 'sin credencial');
+    if (entrada === 'un toque') {
+      await preparar(page, { continueOn: true });
+      await page.goto('/');
+      await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+    } else await pasoConCredencial(page);
+    await marcar(page);
+    await elegirAmbosPermisos(page);
+    if (entrada === 'sin credencial') {
+      await crearMiCuenta(page).click();
+      await expect(page.getByRole('alert')).toContainText('No pudimos completar');
+    }
+    await (entrada === 'credencial retenida' ? crearMiCuenta(page) : google(page)).click();
+    await confirmarLecturaDelAvisoNuevo(page);
+    await marcar(page);
+    await google(page).click();
+    const metodo = entrada === 'un toque' ? 'un toque' : 'registro';
+    expect(await terminarAltaYLeerEventos(page)).toEqual([metodo + ':409', metodo + ':vigente']);
+  });
+}

@@ -1,5 +1,5 @@
 import { CasillasDePermisos, useDisponibilidadPermisos } from '../components/CasillasDePermisos';
-import { finalidades, type Eleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
+import { eleccionParaAviso, finalidades, type Eleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
 import { AvisoSimplificado } from '../components/AvisoSimplificado';
 import { TextoLegal } from '../components/TextoLegal';
 import {
@@ -591,7 +591,7 @@ export function LoginScreen({
   const [aceptaMayor, setAceptaMayor] = useState<string | null>(null);
   const [aceptaTerminos, setAceptaTerminos] = useState<string | null>(null);
   const disponibles = useDisponibilidadPermisos(paquete.status === 'ready');
-  const [eleccion, setEleccion] = useState<Eleccion>({});
+  const [eleccion, setEleccion] = useState<EleccionDeAlta | null>(null);
   const permisosRef = useRef<EleccionDeAlta | null>(null);
   const aceptacionRef = useRef<LegalAcceptanceRequest | null>(null);
   const previousSignup = useRef(signup);
@@ -1388,7 +1388,14 @@ export function LoginScreen({
     setLegal({ status: 'loading' });
     api.getPrivacyNotice()
       .then((response) => {
-        if (alive) setLegal({ status: 'ready', value: response.legal_text });
+        if (!alive) return;
+        const aviso = response.legal_text;
+        setEleccion(anterior => eleccionParaAviso(anterior, aviso));
+        const ctx = contextoAlta.current;
+        if (ctx?.permisos && !eleccionParaAviso(ctx.permisos, aviso)) {
+          contextoAlta.current = { ...ctx, permisos: undefined };
+        }
+        setLegal({ status: 'ready', value: aviso });
       })
       .catch(() => {
         if (alive) setLegal({ status: 'error' });
@@ -1418,7 +1425,7 @@ export function LoginScreen({
 
   // Cambiar de «Entrar» a «Crea tu cuenta» (o al revés) desmarca las casillas.
   useEffect(() => {
-    setEleccion({});
+    setEleccion(null);
     setAceptaMayor(null);
     setAceptaTerminos(null);
   }, [mode]);
@@ -1446,16 +1453,15 @@ export function LoginScreen({
   const parVigente = aceptacionRef.current ? JSON.stringify(aceptacionRef.current) : null;
   const mayorMarcada = casillaVigente(aceptaMayor, parVigente);
   const terminosMarcada = casillaVigente(aceptaTerminos, parVigente);
-  const guardada = contextoAlta.current?.permisos;
-  const previas = guardada && legal.status === 'ready' && guardada.aviso.version === legal.value.version
-    && guardada.aviso.hash === legal.value.hash ? guardada.elecciones : {};
+  const avisoActual = legal.status === 'ready' ? { version: legal.value.version, hash: legal.value.hash } : null;
+  const elegidas = eleccionParaAviso(eleccion ?? contextoAlta.current?.permisos, avisoActual)?.elecciones;
   const elecciones: Eleccion = {};
   for (const f of finalidades) {
-    if (disponibles[f]) elecciones[f] = eleccion[f] ?? previas[f] ?? false;
+    if (disponibles[f]) elecciones[f] = elegidas?.[f] ?? false;
   }
   const pidePermisos = Object.keys(elecciones).length > 0;
-  permisosRef.current = pidePermisos && paqueteVigente && legal.status === 'ready' && mayorMarcada && terminosMarcada
-    ? { elecciones, aviso: { version: legal.value.version, hash: legal.value.hash } } : null;
+  permisosRef.current = pidePermisos && paqueteVigente && avisoActual && mayorMarcada && terminosMarcada
+    ? { elecciones, aviso: avisoActual } : null;
   const aceptacionLista = !paqueteVigente || (mayorMarcada && terminosMarcada);
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
@@ -1663,7 +1669,8 @@ export function LoginScreen({
           <a href={PATH_TERMINOS} target="_blank" rel="noreferrer">{t('Términos de Uso')}</a>.
         </span>
       </label>
-      <CasillasDePermisos elecciones={elecciones} cambiar={setEleccion} ocupado={busy || socialBusy} />
+      <CasillasDePermisos elecciones={elecciones} ocupado={busy || socialBusy}
+        cambiar={nuevas => setEleccion(avisoActual ? { elecciones: nuevas, aviso: avisoActual } : null)} />
       <p className="ingreso-legal">
         {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
         <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.

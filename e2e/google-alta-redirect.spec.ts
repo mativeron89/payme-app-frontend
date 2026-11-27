@@ -1,3 +1,4 @@
+import { prepararCambioDeAviso, elegirAmbosPermisos, confirmarLecturaDelAvisoNuevo, terminarAltaYLeerEventos } from './_avisoDeAlta';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -456,3 +457,20 @@ for (const caso of [
     expect(await estadoAnalisis()).toBe(caso.existente ? 'revoked' : !caso.sinContexto && caso.analisis ? 'granted' : 'never');
   });
 }
+
+test('La redirección con Aviso nuevo descarta ambas elecciones guardadas', async ({ page }) => {
+  await prepararCambioDeAviso(page);
+  await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
+  await irACreaTuCuenta(page, 'redirect');
+  await marcarCasillas(page);
+  await elegirAmbosPermisos(page);
+  const permisos = await page.evaluate(k => JSON.parse(sessionStorage.getItem(k) ?? 'null')?.permisos, CONTEXTO);
+  expect(permisos).toEqual({ aviso: { version: expect.any(String), hash: 'a'.repeat(64) },
+    elecciones: { foto_perfil_no_amigos: true, analisis_interno: true } });
+  await google(page).click();
+  await confirmarLecturaDelAvisoNuevo(page);
+  expect(await page.evaluate(k => sessionStorage.getItem(k), CONTEXTO)).toBeNull();
+  await marcarCasillas(page);
+  await crearMiCuenta(page).click();
+  expect(await terminarAltaYLeerEventos(page)).toEqual(['redirección:409', 'redirección:vigente', 'creada']);
+});

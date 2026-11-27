@@ -323,3 +323,48 @@ test('Google en ventana emergente conserva el retiro de una cuenta existente al 
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   expect(await eventos(page)).toEqual(['existente', 'guardó @']);
 });
+
+test('Cerrar sesión antes del @ descarta las elecciones al entrar con otra cuenta', async ({ page }) => {
+  await altaConCorreo(page);
+  await foto(page).check();
+  await analisis(page).check();
+  await page.getByRole('button', { name: 'Registrarme' }).click();
+  const arroba = page.getByRole('textbox', { name: 'Tu @usuario', exact: true });
+  await expect(arroba).toBeVisible();
+
+  // El mock de ingreso habitual reutiliza el ID de demo. Esta segunda cuenta
+  // tiene identidad propia y se abre con una familia nueva por el flujo de Entrar.
+  const primera = await page.evaluate(async () => {
+    const fachada = '/src/api/index.ts';
+    const almacen = '/src/api/storage.ts';
+    const { api } = await import(/* @vite-ignore */ fachada) as typeof import('../src/api');
+    const { createSession, loadSession, saveSession } = await import(/* @vite-ignore */ almacen) as typeof import('../src/api/storage');
+    const actual = loadSession()!;
+    const segunda = { ...actual.user!, id: crypto.randomUUID(), email: 'segunda@example.invalid', first_name: 'Segunda' };
+    api.login = async email => {
+      if (email !== segunda.email) throw Error('Cuenta simulada desconocida');
+      const sesion = createSession({ user: segunda, access_token: 'mock-segunda', refresh_token: 'mock-segunda-refresh' });
+      saveSession(sesion);
+      return sesion;
+    };
+    return { titular: actual.principal_id, familia: actual.family_id };
+  });
+  await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
+  await ingresar(page, 'segunda@example.invalid');
+  await expect(arroba).toBeVisible();
+  const segunda = await page.evaluate(async () => {
+    const almacen = '/src/api/storage.ts';
+    const { loadSession } = await import(/* @vite-ignore */ almacen) as typeof import('../src/api/storage');
+    const actual = loadSession()!;
+    return { titular: actual.principal_id, familia: actual.family_id };
+  });
+  expect(segunda.titular).not.toBe(primera.titular);
+  expect(segunda.familia).not.toBe(primera.familia);
+  await page.route('**/prueba-guardar-arroba', ruta => ruta.fulfill({ body: 'ok' }));
+  await arroba.fill('segundalocal');
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(arroba).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  expect(await eventos(page)).toEqual(['guardó @']);
+});
