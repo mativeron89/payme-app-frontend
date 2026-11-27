@@ -224,11 +224,6 @@ export function MasScreen() {
               "Mis tarjetas" se queda porque NO es eso: es el único acceso a la
               gestión de tarjetas, superficie card-only ratificada, y la barra no
               tiene posición para ella. */}
-          <a className="list-row" href="mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe">
-            <span aria-hidden="true"><Icon name="trash" size={16} /></span>
-            <span className="legal-ayuda-texto">{t('Eliminar mi cuenta')}</span>
-            <FlechaDeFila />
-          </a>
         </section>
         {/* AF-09 · D-LOGIN-1 «Vincular desde la cuenta». La sección existe SÓLO
             con `social.google.linking` del dueño: hoy, en producción, Google
@@ -246,13 +241,6 @@ export function MasScreen() {
         {/* Configuración › Privacidad. D499 b5 · el permiso de foto vuelve como fila simple (D468 había quitado el
             bloque grande). n420 · debajo, las filas de los permisos opcionales, sólo con su capacidad (hoy apagadas). */}
         {session && <SeccionPrivacidad session={session} />}
-        <section className="card config-card" aria-label={t('Soporte')} style={{ marginBottom: 12 }}>
-          <a className="list-row" href="mailto:soporte@paymemx.com">
-            <span aria-hidden="true"><Icon name="mail" size={16} /></span>
-            <span className="legal-ayuda-texto">{t('Soporte')}</span>
-            <FlechaDeFila />
-          </a>
-        </section>
         <section className="card config-card legal-ayuda" aria-label={t('Legal y ayuda')}>
           <h2 className="sectlabel">{t('Legal y ayuda')}</h2>
           <a className="list-row" href={PATH_PRIVACIDAD}>
@@ -263,6 +251,16 @@ export function MasScreen() {
           <a className="list-row" href={PATH_TERMINOS}>
             <span aria-hidden="true"><Icon name="receipt" size={16} /></span>
             <span className="legal-ayuda-texto">{t('Términos de uso')}</span>
+            <FlechaDeFila />
+          </a>
+          <a className="list-row" href="mailto:soporte@paymemx.com">
+            <span aria-hidden="true"><Icon name="mail" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Soporte')}</span>
+            <FlechaDeFila />
+          </a>
+          <a className="list-row" href="mailto:soporte@paymemx.com?subject=Solicitud%20de%20baja%20de%20cuenta%20PayMe">
+            <span aria-hidden="true"><Icon name="trash" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Eliminar mi cuenta')}</span>
             <FlechaDeFila />
           </a>
         </section>

@@ -1,6 +1,6 @@
 ## 0.285.0 · 2026-11-26
 
-- En Más, Soporte abre el correo y Tutorial abre la guía. El acceso para solicitar la baja está en Cuenta. Con Google vinculado, Cuentas conectadas muestra el correo de la cuenta.
+- En Más, Soporte abre el correo y Tutorial abre la guía. Soporte y «Eliminar mi cuenta» están en «Legal y ayuda». Con Google vinculado, Cuentas conectadas muestra el correo de la cuenta.
 
 ## 0.284.0 · 2026-11-26
 

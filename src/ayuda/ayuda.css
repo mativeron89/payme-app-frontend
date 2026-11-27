@@ -1,8 +1,9 @@
 .ayuda-acceso { margin: 12px 0 16px; }
 .guia-fila { color: var(--text); }
+.guia-fila[aria-describedby] { border-bottom: 0; }
 .guia-fila:disabled { cursor: default; color: var(--text-muted); }
 /* Q9 · por qué la fila no se puede tocar, o el aviso de la apertura sin confirmar. */
-.ayuda-nota { margin: 8px 4px 0; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
+.ayuda-nota { margin: 8px 16px 12px; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
 .guia-cerrar { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; background: transparent; border: 0; border-radius: 12px; color: var(--text); cursor: pointer; }
 .guia-carga { position: fixed; z-index: 180; top: 25%; left: 5%; width: 90%; box-sizing: border-box; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
 .guia-carga button { min-height: 44px; }

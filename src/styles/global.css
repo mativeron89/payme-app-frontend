@@ -12817,7 +12817,7 @@ h1.pay-title-lbl {
 .share-actions { flex-wrap: wrap; }
 .share-native { flex-basis: 100%; }
 .legal-ayuda .sectlabel { padding: var(--sp-3) var(--sp-4) 0; }
-.config-card a.list-row { color: var(--action); text-decoration: none; }
+.legal-ayuda a { color: var(--action); text-decoration: none; }
 .legal-ayuda-texto {
   flex: 1;
   min-width: 0;
