@@ -409,8 +409,8 @@ for (const caso of [
     });
     const foto = page.getByRole('checkbox', { name: 'Mostrar mi foto', exact: true });
     const analisis = page.getByRole('checkbox', { name: 'Análisis interno', exact: true });
-    await expect(foto).toBeChecked();
-    await expect(analisis).toBeChecked();
+    await expect(foto).toBeChecked({ checked: false });
+    await expect(analisis).toBeChecked({ checked: false });
     await foto.setChecked(caso.foto);
     await analisis.setChecked(caso.analisis);
     await marcarCasillas(page);

@@ -273,7 +273,7 @@ export function PuertaLegal({
   const elecciones: Eleccion = {};
   for (const f of finalidades) {
     const previo = estados?.[f];
-    if (previo && (disponibles[f] || previo === 'granted')) elecciones[f] = cambios[f] ?? previo !== 'revoked';
+    if (previo && (disponibles[f] || previo === 'granted')) elecciones[f] = cambios[f] ?? (previo === 'granted');
   }
 
   async function continuar() {

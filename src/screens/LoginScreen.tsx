@@ -1451,7 +1451,7 @@ export function LoginScreen({
     && guardada.aviso.hash === legal.value.hash ? guardada.elecciones : {};
   const elecciones: Eleccion = {};
   for (const f of finalidades) {
-    if (disponibles[f]) elecciones[f] = eleccion[f] ?? previas[f] ?? !hayCodigoAlta();
+    if (disponibles[f]) elecciones[f] = eleccion[f] ?? previas[f] ?? false;
   }
   const pidePermisos = Object.keys(elecciones).length > 0;
   permisosRef.current = pidePermisos && paqueteVigente && legal.status === 'ready' && mayorMarcada && terminosMarcada

@@ -102,12 +102,16 @@ const foto = (p: Page) => p.getByRole('checkbox', { name: 'Mostrar mi foto', exa
 const analisis = (p: Page) => p.getByRole('checkbox', { name: 'Análisis interno', exact: true });
 
 for (const caso of [
-  { foto: 'never', analisis: 'revoked', nombre: 'un permiso nuevo y un retiro previo', escritos: ['otorga foto'] },
-  { foto: 'revoked', analisis: 'never', nombre: 'retirar la marca inicial y elegir el permiso retirado', cambiar: true, escritos: ['otorga foto'] },
-  { foto: 'granted', analisis: 'granted', nombre: 'mantener un permiso y retirar el otro', cambiar: true, escritos: ['retira análisis'] },
+  { foto: 'never', analisis: 'revoked', nombre: 'sin marcar se conservan un permiso nuevo y un retiro previo', captura: true, escritos: [] },
+  { foto: 'never', analisis: 'revoked', nombre: 'marcar foto por primera vez respeta el retiro de análisis', marcarFoto: true, escritos: ['otorga foto'] },
+  { foto: 'revoked', analisis: 'never', nombre: 'volver a marcar la foto retirada deja análisis sin otorgar', marcarFoto: true, escritos: ['otorga foto'] },
+  { foto: 'revoked', analisis: 'never', nombre: 'marcar análisis por primera vez respeta el retiro de foto', marcarAnalisis: true, escritos: ['otorga análisis'] },
+  { foto: 'never', analisis: 'revoked', nombre: 'volver a marcar el análisis retirado deja foto sin otorgar', marcarAnalisis: true, escritos: ['otorga análisis'] },
+  { foto: 'granted', analisis: 'granted', nombre: 'mantener un permiso y retirar el otro', marcarAnalisis: false, escritos: ['retira análisis'] },
+  { foto: 'granted', analisis: 'granted', nombre: 'retirar foto y conservar el análisis otorgado', marcarFoto: false, escritos: ['retira foto'] },
 ] as const) {
   test(caso.nombre, async ({ page }, info) => {
-    const esperarRetiro = caso.foto === 'granted';
+    const esperarRetiro = caso.marcarAnalisis === false;
     await preparar(page, { ...caso, retener: true, esperarRetiro });
     await conRecursoRetenido(page, '**/prueba-estado-permiso', async () => {
       await ingresar(page);
@@ -116,12 +120,11 @@ for (const caso of [
       await expect(foto(page)).toHaveCount(0);
     }, async ruta => { await ruta.fulfill({ body: 'ok' }); });
     await marcarTerminos(page);
-    await expect(foto(page)).toBeChecked({ checked: caso.foto !== 'revoked' });
-    await expect(analisis(page)).toBeChecked({ checked: caso.analisis !== 'revoked' });
-    if ('cambiar' in caso) {
-      await foto(page).check();
-      await analisis(page).uncheck();
-    } else await captura(page, info, 'reaceptacion-320');
+    await expect(foto(page)).toBeChecked({ checked: caso.foto === 'granted' });
+    await expect(analisis(page)).toBeChecked({ checked: caso.analisis === 'granted' });
+    if ('captura' in caso) await captura(page, info, 'reaceptacion-320');
+    if (caso.marcarFoto !== undefined) await foto(page).setChecked(caso.marcarFoto);
+    if (caso.marcarAnalisis !== undefined) await analisis(page).setChecked(caso.marcarAnalisis);
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
     if (esperarRetiro) {
       await conRecursoRetenido(page, '**/prueba-retirar-analisis', async () => {
@@ -145,13 +148,14 @@ async function altaConCorreo(page: Page, arroba = true) {
   await marcarTerminos(page);
 }
 
-for (const elegida of ['foto', 'análisis'] as const) {
-  test('El alta otorga sólo ' + elegida + ' después de confirmar el usuario', async ({ page }, info) => {
+for (const elegida of ['foto', 'análisis', 'ninguna'] as const) {
+  test('Elección de ' + elegida + ' después de confirmar el usuario', async ({ page }, info) => {
     await altaConCorreo(page);
-    await expect(foto(page)).toBeChecked();
-    await expect(analisis(page)).toBeChecked();
-    if (elegida === 'foto') await captura(page, info, 'alta-320');
-    await (elegida === 'foto' ? analisis(page) : foto(page)).uncheck();
+    await expect(foto(page)).toBeChecked({ checked: false });
+    await expect(analisis(page)).toBeChecked({ checked: false });
+    if (elegida === 'ninguna') await captura(page, info, 'alta-320');
+    if (elegida === 'foto') await foto(page).check();
+    if (elegida === 'análisis') await analisis(page).check();
     await page.getByRole('button', { name: 'Registrarme' }).click();
     await page.getByRole('textbox', { name: 'Tu @usuario', exact: true }).fill('ejemplolocal');
     await conRecursoRetenido(page, '**/prueba-guardar-arroba', async () => {
@@ -159,7 +163,8 @@ for (const elegida of ['foto', 'análisis'] as const) {
       await expect(page.getByRole('textbox', { name: 'Tu @usuario', exact: true })).toBeDisabled();
       expect(await eventos(page)).toEqual([]);
     }, async ruta => { await ruta.fulfill({ body: 'ok' }); });
-    await expect.poll(() => eventos(page)).toEqual(['guardó @', 'otorga ' + elegida]);
+    await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+    expect(await eventos(page)).toEqual(elegida === 'ninguna' ? ['guardó @'] : ['guardó @', 'otorga ' + elegida]);
   });
 }
 
@@ -169,8 +174,8 @@ for (const inicial of ['never', 'granted'] as const) {
     await preparar(page, { foto: 'revoked', analisis: inicial, fallo: true });
     await ingresar(page);
     await marcarTerminos(page);
-    await expect(analisis(page)).toBeChecked();
-    if (inicial === 'granted') await analisis(page).uncheck();
+    await expect(analisis(page)).toBeChecked({ checked: inicial === 'granted' });
+    await analisis(page).setChecked(inicial === 'never');
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText(/Tus términos quedaron aceptados/)).toBeVisible();
     expect(await eventos(page)).toEqual(['aceptó', inicial === 'never' ? 'otorga análisis' : 'retira análisis']);
@@ -226,7 +231,7 @@ test('Configuración separa Privacidad de Mis permisos', async ({ page }, info) 
 
 test('Una sesión vencida durante el guardado del usuario descarta la elección', async ({ page }) => {
   await altaConCorreo(page);
-  await expect(foto(page)).toBeChecked();
+  await foto(page).check();
   await page.getByRole('button', { name: 'Registrarme' }).click();
   await page.getByRole('textbox', { name: 'Tu @usuario' }).fill('ejemplolocal');
   await conRecursoRetenido(page, '**/prueba-guardar-arroba', async () => {
@@ -263,8 +268,8 @@ for (const finalidad of ['foto', 'analisis'] as const) {
 
 test('Alta rechazada por correo: elegir @ después de entrar con otra cuenta no otorga permisos', async ({ page }) => {
   await altaConCorreo(page);
-  await expect(foto(page)).toBeChecked();
-  await expect(analisis(page)).toBeChecked();
+  await foto(page).check();
+  await analisis(page).check();
   await page.evaluate(async () => {
     const fachada = '/src/api/index.ts';
     const errores = '/src/api/http.ts';
@@ -285,8 +290,8 @@ test('Alta rechazada por correo: elegir @ después de entrar con otra cuenta no 
 
 test('Alta con @ apagado: aplica la elección al crear la cuenta', async ({ page }) => {
   await altaConCorreo(page, false);
-  await expect(foto(page)).toBeChecked();
-  await analisis(page).uncheck();
+  await foto(page).check();
+  await expect(analisis(page)).toBeChecked({ checked: false });
   await page.getByRole('button', { name: 'Registrarme' }).click();
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   await expect.poll(() => eventos(page)).toEqual(['otorga foto']);
@@ -308,8 +313,8 @@ test('Google en ventana emergente conserva el retiro de una cuenta existente al 
   });
   await page.getByRole('button', { name: 'Crea tu cuenta' }).click();
   await marcarTerminos(page);
-  await expect(foto(page)).toBeChecked();
-  await expect(analisis(page)).toBeChecked();
+  await foto(page).check();
+  await analisis(page).check();
   await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
   await page.getByRole('textbox', { name: 'Tu @usuario', exact: true }).fill('ejemplolocal');
   expect(await eventos(page)).toEqual(['existente']);
