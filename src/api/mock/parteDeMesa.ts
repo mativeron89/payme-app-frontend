@@ -5,7 +5,7 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  * inventario de 2.187.0).
  *
  * 🔴 La app NO calcula «Mi parte»: la muestra tal como la publica el dueño en `GET /api/mesas/:code?share_version=1`
- * (contrato `contract-mirror/contract/mesa-mi-parte-v1.json`, 475258cf…). Esto vive en `mock/` para que el modo de
+ * (contrato `contract-mirror/contract/mesa-mi-parte-v1.json`, 61277e2c…). Esto vive en `mock/` para que el modo de
  * ejemplo responda lo mismo que el dueño; lo que vale es el servidor. No es un cálculo de dinero de producto: sólo existe
  * en mesas sin garantía, que el servidor nunca cobra. Nada fuera de `src/api/mock/` lo importa directo; la cadena que lo
  * usa (`store.ts` → `mockApi.ts`) sale del mock sólo por la rama `IS_MOCK ? mockApi : realApi` de `src/api/index.ts`,
@@ -14,7 +14,7 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  *
  * ## Procedencia
  *
- * `services/parteDeMesa.js` en `c8432e745741188cf88b3a0babb2f0f41856e6e9`, sha256 `447ea41a…5fdd` (medido con
+ * `services/parteDeMesa.js` en `425f3603d6b344058f87704d7c8a7cc39746510f`, sha256 `93a9f0a6…766e` (medido con
  * `git show … | shasum -a 256`, y es el que declara `scripts/mirror-inventory.json`). El espejo no copia ese archivo
  * (D268: sólo `contract/*.json`), así que la prueba de equivalencia son los vectores del dueño
  * (`tests/parte-de-mesa.test.js`, e14ec51c…) y los `ejemplos` del contrato, portados en `parteDeMesa.test.ts`.
@@ -49,11 +49,11 @@ import { splitEqual, tipFromBps } from '../../utils/money';
  *   · Que Σ p + U = P: no se comprueba (el dueño tampoco). La coherencia de la entrada es de quien llama.
  */
 
-// D450 · D466: pin adoptado; parteDeMesa.js, money.js y vectores puros siguen byte-idénticos (sha256 del inventario).
+// AB 2.217.7 aclara el margen de dos centavos en un comentario de parteDeMesa.js.
 export const PROCEDENCIA = {
-  commit: 'd9774af3dba6ba99a31683f19a4a546ba5913d7c',
+  commit: '425f3603d6b344058f87704d7c8a7cc39746510f',
   ruta: 'services/parteDeMesa.js',
-  sha256: '447ea41a867edd808dc7f2e0fcf79571d743b98f3e13a1cc25608fd478c75fdd',
+  sha256: '93a9f0a690ce9f1bbdb43945c68bde64fee7586466aa7ca048e82185ee98766e',
   dinero: { ruta: 'utils/money.js', sha256: '86542329793934a1866a7d101d0c21002f99cf838ca7aef2cf2dcf5a2a432891' },
 } as const;
 

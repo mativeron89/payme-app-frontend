@@ -1,18 +1,21 @@
-## Inventario vigente del espejo · AF 0.283.0
+## Consentimientos de cuenta y Mi parte · AF 0.286.0
 
-Contenido vigente: `d9774af3dba6ba99a31683f19a4a546ba5913d7c`.
+El commit de contenido es `425f3603d6b344058f87704d7c8a7cc39746510f`.
+App Backend 2.217.7 publicó el inventario en `a68d0681ddab9f9109c07c2ee13c321358b3c4d0`.
+La huella del inventario completo es sha256 `140a33746aaaa5d9f6e119d147e4e4f9e3c759f8fe0a29917f2425cb77331713`.
+Sus 174 entradas comprenden **25 archivos espejados** en `contract/` y 149 fuentes verificadas por hash.
+El esquema de consentimientos incluye la consulta y el retiro de análisis interno durante la reaceptación.
+El contrato de Mi parte documenta una diferencia de hasta dos centavos entre la vista previa y el valor guardado.
+Los 43 hechos se regeneraron desde el commit de contenido, a partir de 14 fuentes.
+
+### Refresh anterior · Recorte del ticket por consumo · AF 0.283.0
+
+Commit de contenido: `d9774af3dba6ba99a31683f19a4a546ba5913d7c`.
 El inventario de App Backend 2.217.0 está en `c624586c95bb189453a4e5c3b5511793ade14e1d`.
 Huella del inventario, sha256 `d2b4aec8d97a9b80560bc6e3130958c61b2ff785f196559c88f29d71c9235c56`.
 De sus 173 entradas, se copian 25 contratos y se verifican 148 fuentes por hash.
 Cambió el contrato `ticket-image-v1.json`, que describe la caja de cada consumo, y cambiaron siete fuentes verificadas por hash.
 Los hechos del dueño se regeneraron desde el commit de contenido.
-
-### Copia selectiva de consentimientos de cuenta · AF 0.286.0
-
-Copia selectiva de `contract/account-consents-v1.schema.json` de App Backend 2.217.7,
-commit servido `a68d0681ddab9f9109c07c2ee13c321358b3c4d0`.
-El archivo tiene 18562 bytes y sha256 `764b62e2f9f5c81d163bef98c32fdce0e0fb93daae1522b1b11515973fde364d`.
-El inventario y los hechos derivados continúan en la revisión indicada arriba.
 
 ### Refresh anterior · Foto por visita de Estadísticas · AF 0.281.0
 

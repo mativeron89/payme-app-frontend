@@ -1,14 +1,14 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "d9774af3dba6ba99a31683f19a4a546ba5913d7c",
-  "total": 173,
+  "commit": "425f3603d6b344058f87704d7c8a7cc39746510f",
+  "total": 174,
   "archivos": [
     {
       "origen": "contract/account-consents-v1.schema.json",
       "destino": "contract/account-consents-v1.schema.json",
-      "sha256": "86ac77921f7e4b97a21043f1cfcabfb218ed83ab6e2e7f16f04bd5614cf71cbd",
-      "bytes": 17687
+      "sha256": "764b62e2f9f5c81d163bef98c32fdce0e0fb93daae1522b1b11515973fde364d",
+      "bytes": 18562
     },
     {
       "origen": "contract/agente-e1-v1.schema.json",
@@ -73,8 +73,8 @@
     {
       "origen": "contract/mesa-mi-parte-v1.json",
       "destino": "contract/mesa-mi-parte-v1.json",
-      "sha256": "475258cf7d34b91a874b8a94d4b25107f1c99da236d837ee504d14cf36e9f4bb",
-      "bytes": 19027
+      "sha256": "61277e2ce03dd8554b611fd86633962c0868eca24365ce8ab673196aa19dda3f",
+      "bytes": 19030
     },
     {
       "origen": "contract/mesa-miembros-v1.json",
@@ -517,8 +517,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "bb9cc242e5dd4a56272b6565d69e72d24ed18825c6ec73936a1c26c1e7cf32d2",
-      "bytes": 128335
+      "sha256": "a53e70497ff5b3885129a7217b0d9f823ee7ec4fa3dd86c206c4470dbce9b4cd",
+      "bytes": 128113
     },
     {
       "origen": "legal/README.md",
@@ -553,8 +553,8 @@
     {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "7670a6fe0ea5c42750f845ae5789af380d86fcfa6d37f8071c098fd87270a552",
-      "bytes": 17056
+      "sha256": "757f83f572869fa22c1092ec6b4a2661923edbe15d04d7386c036df7f2e53c0b",
+      "bytes": 17340
     },
     {
       "origen": "routes/account.js",
@@ -589,14 +589,14 @@
     {
       "origen": "routes/consent.js",
       "destino": "routes/consent.js",
-      "sha256": "180698aa539abb28ecba3ae08597bd2f3666cf11f719e96a352a20cc79b88aad",
-      "bytes": 10040
+      "sha256": "5b3f7114e078b02e2e4cc21f98f522ef3c074c079a3703e02b31508cdf5b0840",
+      "bytes": 10314
     },
     {
       "origen": "routes/friends.js",
       "destino": "routes/friends.js",
-      "sha256": "00d554d6c67f049c634fb3c980e1cdf26a8348fb5bd2a4410bd7d02bd74b797b",
-      "bytes": 30360
+      "sha256": "10b5bd548c4c2f7d835ff43416beb953bd20829397a2490e26e8501141feb8d5",
+      "bytes": 30721
     },
     {
       "origen": "routes/groups.js",
@@ -625,8 +625,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "e9214cf7aa672d192aaddfc1dde668db110be0bf9ea5fb8d6b4a0bf5832ea88b",
-      "bytes": 220386
+      "sha256": "8e48e3bb4cb35033bdb1de510e624358d876641a8ac541c9befb90a80104b1b2",
+      "bytes": 220397
     },
     {
       "origen": "routes/notificationPreferences.js",
@@ -649,8 +649,8 @@
     {
       "origen": "routes/payment-methods.js",
       "destino": "routes/payment-methods.js",
-      "sha256": "24fbb430965b037b73329a13b3628fde09fb2eaafe604e66b8374e82f0021672",
-      "bytes": 31864
+      "sha256": "80c64307ce96fbd41d1125b7f0ab333835f87b6e7762ba2f3addff744ae57177",
+      "bytes": 32073
     },
     {
       "origen": "routes/restaurants.js",
@@ -673,8 +673,8 @@
     {
       "origen": "routes/sugerencias.js",
       "destino": "routes/sugerencias.js",
-      "sha256": "daa35fe86acb6c2cae55eba9100106f106a3c26822286ed260bdd97349ac04da",
-      "bytes": 2474
+      "sha256": "573d768714cd0f7e39a7d41a2adb5c6feeba36949d474e7e7f33981bfdea814a",
+      "bytes": 2587
     },
     {
       "origen": "routes/topup.js",
@@ -691,8 +691,8 @@
     {
       "origen": "routes/viajes.js",
       "destino": "routes/viajes.js",
-      "sha256": "7463733d480d056ca20cd52e226f69a6f32863ccc0a1388004f0bda499d1f67e",
-      "bytes": 16593
+      "sha256": "8590dd564077203d150468893719212600418662d30b3379caa903b4410816a7",
+      "bytes": 16756
     },
     {
       "origen": "routes/webhooks.js",
@@ -717,6 +717,12 @@
       "destino": "services/agenteSeguiProbando.js",
       "sha256": "13f83981e38c6fa47b46670f3b4b5cf6972370a99b2a6dd02cb5ed0628145a09",
       "bytes": 13359
+    },
+    {
+      "origen": "services/amistades.js",
+      "destino": "services/amistades.js",
+      "sha256": "9284dda1186b914d260dab88ada70b53a1b9005ac4cf22bc8ed93eaa12794195",
+      "bytes": 735
     },
     {
       "origen": "services/authRecovery.js",
@@ -745,14 +751,14 @@
     {
       "origen": "services/connect.js",
       "destino": "services/connect.js",
-      "sha256": "dddb6648ac312448f8a8e0174769db661283d2ede91d0e477d6b6f5bf91ea028",
-      "bytes": 11895
+      "sha256": "67b28aebe329bf17e234167b5818c7456adb2828f98bc9b7c142e5df5e5e19c7",
+      "bytes": 10312
     },
     {
       "origen": "services/consent.js",
       "destino": "services/consent.js",
-      "sha256": "470ac4f79d65422410ba66ab9b879efb4607f210d7a112c6f447b38a88eeb6d0",
-      "bytes": 24773
+      "sha256": "0853b684a24cb1079af2d14d0f27577b63c039a6c336f62e9aff671d7247c8d9",
+      "bytes": 24987
     },
     {
       "origen": "services/externalIdentities.js",
@@ -805,8 +811,8 @@
     {
       "origen": "services/invitationAuthority.js",
       "destino": "services/invitationAuthority.js",
-      "sha256": "aadd3792c789a8c27097f9ee7e6270ff4867a63cc07338d3a029e3fbb724fa6d",
-      "bytes": 18274
+      "sha256": "c0462ef5ed147afa9462b3ef2147c5467bea44dafccc946bfbcefcfbe89bd453",
+      "bytes": 17954
     },
     {
       "origen": "services/itemClaims.js",
@@ -817,8 +823,8 @@
     {
       "origen": "services/joinRequests.js",
       "destino": "services/joinRequests.js",
-      "sha256": "fdadcbc41198c3eb44af8b963e8ed438a965fc8844daa1fe289bf667d0dd811f",
-      "bytes": 17802
+      "sha256": "07e1c6810af5e92fb827cc45601985d87b86aa207d848aaaeed562982de105f5",
+      "bytes": 17638
     },
     {
       "origen": "services/legalAcceptance.js",
@@ -877,8 +883,8 @@
     {
       "origen": "services/parteDeMesa.js",
       "destino": "services/parteDeMesa.js",
-      "sha256": "447ea41a867edd808dc7f2e0fcf79571d743b98f3e13a1cc25608fd478c75fdd",
-      "bytes": 7765
+      "sha256": "93a9f0a690ce9f1bbdb43945c68bde64fee7586466aa7ca048e82185ee98766e",
+      "bytes": 7863
     },
     {
       "origen": "services/paymentAttemptReconciler.js",
@@ -973,8 +979,8 @@
     {
       "origen": "services/ticketImages.js",
       "destino": "services/ticketImages.js",
-      "sha256": "912eaf8a792337a4e97af22b2c60e914d79477bf07f6315554129ba0b392bb42",
-      "bytes": 28501
+      "sha256": "c6208db16e52189c72bfea0d2c36c096a646b9dbb1a4a6461102c4aef9b425cc",
+      "bytes": 28690
     },
     {
       "origen": "services/topupProcessor.js",
