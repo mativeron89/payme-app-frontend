@@ -196,11 +196,11 @@ describe('n420 · quién llama', () => {
   it('getSugerenciaDividir, sólo desde useSugerenciaDeDividir', () => {
     expect(llamadores('getSugerenciaDividir')).toEqual(['screens/useSugerenciaDeDividir.ts']);
   });
-  it('getConsentimiento sólo desde el hook; la lista, grant y revoke sólo desde la sección de Privacidad', () => {
-    expect(llamadores('getConsentimiento')).toEqual(['screens/useSugerenciaDeDividir.ts']);
+  it('las lecturas y escrituras de permisos sólo existen en las superficies previstas', () => {
+    expect(llamadores('getConsentimiento').sort()).toEqual(['components/permisosDeTerminos.ts', 'screens/MisPermisos.tsx', 'screens/useSugerenciaDeDividir.ts']);
     expect(llamadores('getConsentimientosOpcionales')).toEqual(['components/SeccionPrivacidad.tsx']);
-    expect(llamadores('grantConsentimiento')).toEqual(['components/SeccionPrivacidad.tsx']);
-    expect(llamadores('revokeConsentimiento')).toEqual(['components/SeccionPrivacidad.tsx']);
+    expect(llamadores('grantConsentimiento').sort()).toEqual(['components/SeccionPrivacidad.tsx', 'components/permisosDeTerminos.ts', 'screens/MisPermisos.tsx']);
+    expect(llamadores('revokeConsentimiento').sort()).toEqual(['components/SeccionPrivacidad.tsx', 'components/permisosDeTerminos.ts', 'screens/MisPermisos.tsx']);
   });
   it('🔴 el hook no pide nada sin la capacidad encendida, ni en Viajes ni en el ejemplo', () => {
     const hook = readFileSync(join(RAIZ, 'screens/useSugerenciaDeDividir.ts'), 'utf8');

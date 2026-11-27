@@ -57,9 +57,10 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     const seccion = page.getByRole('region', { name: 'Privacidad', exact: true });
     await expect(seccion).toBeVisible();
     await expect(seccion).toContainText('PayMe te sugiere cómo dividir según las mesas que abriste. Sólo lo ves tú.');
-    await expect(seccion).toContainText('Opcional. PayMe analiza, sin tu nombre, cómo se consume en las mesas. No llega a restaurantes ni a otros usuarios. Puedes apagarlo.');
-    await expect(seccion.getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toHaveCount(2);
+    await expect(seccion).not.toContainText('Análisis interno');
+    await expect(seccion.getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toHaveCount(1);
     for (const nombre of ['Sugerencias para dividir', 'Análisis interno de PayMe']) {
+      if (nombre === 'Análisis interno de PayMe') await page.getByRole('button', { name: 'Mis permisos' }).click();
       await expect(fila(page, nombre)).not.toBeChecked();
       await fila(page, nombre).click();
       await expect(fila(page, nombre)).toBeChecked();
@@ -127,10 +128,12 @@ test.describe('n420 · encendido en el mock (control positivo)', () => {
     await ir(page, '#/mas');
     const seccion = page.getByRole('region', { name: 'Privacy', exact: true });
     await expect(seccion).toContainText('PayMe suggests how to split based on the tables you opened. Only you see it.');
-    await expect(seccion).toContainText('PayMe internal analysis');
-    await expect(seccion.getByRole('link', { name: 'More in the Privacy Notice.' })).toHaveCount(2);
+    await expect(seccion).not.toContainText('PayMe internal analysis');
+    await expect(seccion.getByRole('link', { name: 'More in the Privacy Notice.' })).toHaveCount(1);
     await fila(page, 'Split suggestions').click();
     await expect(fila(page, 'Split suggestions')).toBeChecked();
+    await page.getByRole('button', { name: 'My permissions' }).click();
+    await expect(fila(page, 'PayMe internal analysis')).toBeVisible();
   });
 });
 
@@ -251,6 +254,7 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
     await espiar(page);
     await ir(page, '#/mas');
     for (const nombre of ['Sugerencias para dividir', 'Análisis interno de PayMe']) {
+      if (nombre === 'Análisis interno de PayMe') await page.getByRole('button', { name: 'Mis permisos' }).click();
       await expect(fila(page, nombre)).toBeChecked();
       await expect(fila(page, nombre)).toBeEnabled();
       await fila(page, nombre).click();
@@ -258,13 +262,14 @@ test.describe('O1/O2 · capacidad anunciada y apagada (la forma de producción)'
       // Sigue a la vista, apagada: con la capacidad apagada no se otorga.
       await expect(fila(page, nombre)).toBeDisabled();
     }
-    expect(await pedidos(page)).toMatchObject({ getConsentimientosOpcionales: 1, getConsentimiento: 0, revokeConsentimiento: 2, grantConsentimiento: 0 });
+    expect(await pedidos(page)).toMatchObject({ getConsentimientosOpcionales: 1, getConsentimiento: 1, revokeConsentimiento: 2, grantConsentimiento: 0 });
   });
 
   test('O1 · otorgado sólo uno: sólo esa fila', async ({ page }) => {
     await conCosturas(page, { sugerencias: 'apagado', consentimientos_otorgados: 'analisis_interno' });
     await ingresar(page);
     await ir(page, '#/mas');
+    await page.getByRole('button', { name: 'Mis permisos' }).click();
     await expect(fila(page, 'Análisis interno de PayMe')).toBeChecked();
     await expect(page.getByText('Sugerencias para dividir')).toHaveCount(0);
   });

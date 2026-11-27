@@ -707,16 +707,16 @@ export async function persistGoogleContinueResponse(
   via: 'continue' | 'link',
   origin: StoredSession | null,
   onAccepted?: () => void,
-): Promise<{ readonly created: boolean }> {
+): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }> {
   const { session, created } = decodeGoogleContinueResponse(value, via);
-  await persistSocialSessionResponse(session, origin, onAccepted);
-  return { created };
+  const guardada = await persistSocialSessionResponse(session, origin, onAccepted);
+  return created ? { created, sesionNueva: guardada } : { created };
 }
 
 export async function httpGoogleContinue(
   path: '/auth/google/continue' | '/auth/google/continue/link' | '/auth/google/redirect/signup',
   body: unknown,
-): Promise<{ readonly created: boolean }> {
+): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }> {
   const origin = loadSession();
   const response = await rawRequest<unknown>('POST', path, body);
   // AF-GOOGLE-ALTA-REDIRECT · el canje del alta en la misma pestaña «corre

@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
-import { PrivacidadFotoPanel } from './PrivacidadFotoPanel';
+import { currentSamePrincipalSession } from '../api/profileIdentity';
+import { CasillasDePermisos, useDisponibilidadPermisos } from './CasillasDePermisos';
+import { finalidades, aplicarEleccion, leerEstado, avisoDeFallo, type Eleccion, type Estado, type Finalidad } from './permisosDeTerminos';
+import { useAuth } from '../auth/AuthContext';
+import { MisPermisos } from '../screens/MisPermisos';
 import { AvisoSimplificado } from './AvisoSimplificado';
 import { FOTO_NOTICE } from '../api/fotoPerfilNoAmigos';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,7 +56,7 @@ export function claveDelPar(a: LegalAcceptanceResponse): string {
 /** ¿La relectura de ESTA sesión cambió el par que la puerta cerrada mostraba? */
 export function parCambio(previo: EstadoDeSesion, session: StoredSession, nueva: LegalAcceptanceResponse): boolean {
   return nueva.required
-    && previo.sesion === session
+    && currentSamePrincipalSession(session, previo.sesion) !== null
     && previo.estado.fase === 'cerrada'
     && claveDelPar(previo.estado.aceptacion) !== claveDelPar(nueva);
 }
@@ -89,7 +93,7 @@ export function usePuertaLegal(session: StoredSession | null): {
     }
     // Con la puerta ya cerrada se queda cerrada mientras se reconsulta: que no
     // se asome la pantalla de atrás por un instante.
-    setActual((prev) => (prev.sesion === session && prev.estado.fase === 'cerrada'
+    setActual((prev) => (currentSamePrincipalSession(session, prev.sesion) && prev.estado.fase === 'cerrada'
       ? prev
       : { estado: { fase: 'consultando' }, sesion: session }));
     api.getLegalAcceptance(session)
@@ -127,7 +131,9 @@ export function usePuertaLegal(session: StoredSession | null): {
 }
 
 export function PuertaLegalView({
-  privacidadFoto,
+  accesoPermisos,
+  casillas,
+  leyendo = false,
   fotoOpcional = false,
   aceptaMayor,
   aceptaTerminos,
@@ -138,7 +144,9 @@ export function PuertaLegalView({
   onContinuar,
   onCerrarSesion,
 }: {
-  readonly privacidadFoto?: ReactNode;
+  readonly casillas?: ReactNode;
+  readonly leyendo?: boolean;
+  readonly accesoPermisos?: ReactNode;
   readonly fotoOpcional?: boolean;
   readonly aceptaMayor: boolean;
   readonly aceptaTerminos: boolean;
@@ -170,12 +178,13 @@ export function PuertaLegalView({
             <a href={PATH_TERMINOS} target="_blank" rel="noreferrer">{t('Términos de Uso')}</a>.
           </span>
         </label>
+        {casillas}
         <p className="body-text ingreso-legal">
           {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
           <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
         </p>
         {error && <div className="ingreso-error" role="alert">{error}</div>}
-        <button type="button" className="ingreso-entrar" onClick={onContinuar} disabled={busy || !listo}>
+        <button type="button" className="ingreso-entrar" onClick={onContinuar} disabled={busy || leyendo || !listo}>
           {busy ? t('Un segundo…') : t('Continuar')}
         </button>
         <button type="button" className="login-toggle" onClick={onCerrarSesion} disabled={busy}>
@@ -187,14 +196,14 @@ export function PuertaLegalView({
           <summary>{t('Más información')}</summary>
           <p className="body-text puerta-legal-nota">
             {fotoOpcional
-              ? t('Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.')
+              ? t('Puedes cambiar tu elección en Mis permisos. Tus amigos conservan las reglas del Aviso.')
               : t('Al continuar, si tienes una foto de perfil, se mostrará a tus amigos y a quien organice una mesa en la que participes, como explica el Aviso de Privacidad.')}
           </p>
           <p className="body-text puerta-legal-nota">
             {t('PayMe es sólo para personas de 18 años o más. Si no cumples con este requisito, no puedes seguir usando la app.')}
           </p>
           <AvisoSimplificado />
-          {privacidadFoto}
+          {accesoPermisos}
         </details>
       </section>
     </div>
@@ -232,10 +241,45 @@ export function PuertaLegal({
   // hasta el próximo «Continuar».
   const [avisoDeCambio, setAvisoDeCambio] = useState(documentosCambiaron);
 
-  const continuar = useCallback(async () => {
+  const { anunciar } = useAuth();
+  const disponibles = useDisponibilidadPermisos();
+  const [misPermisos, setMisPermisos] = useState(false);
+  const [estados, setEstados] = useState<Partial<Record<Finalidad, Estado>> | null>(null);
+  const [cambios, setCambios] = useState<Eleccion>({});
+  const lecturaPrevia = useRef(estados);
+  const sesionDeLectura = useRef(session);
+  sesionDeLectura.current = session;
+  useEffect(() => {
+    if (misPermisos) return;
+    const origen = sesionDeLectura.current;
+    let viva = true;
+    setEstados(null);
+    Promise.allSettled(finalidades.map(f => leerEstado(f, origen))).then(resultados => {
+      if (!viva) return;
+      const leidos: Partial<Record<Finalidad, Estado>> = {};
+      resultados.forEach((r, i) => { if (r.status === 'fulfilled') leidos[finalidades[i]!] = r.value; });
+      const previos = lecturaPrevia.current;
+      lecturaPrevia.current = leidos;
+      setCambios(elegidos => {
+        const conservados = { ...elegidos };
+        for (const f of finalidades) if (previos?.[f] !== leidos[f]) delete conservados[f];
+        return conservados;
+      });
+      setEstados(leidos);
+    });
+    return () => { viva = false; };
+  }, [session.family_id, session.principal_id, misPermisos]);
+
+  const elecciones: Eleccion = {};
+  for (const f of finalidades) {
+    const previo = estados?.[f];
+    if (previo && (disponibles[f] || previo === 'granted')) elecciones[f] = cambios[f] ?? previo !== 'revoked';
+  }
+
+  async function continuar() {
     const { aviso, terminos } = aceptacion;
     // El decodificador ya rechaza `required:true` sin pares; esto es el tipo.
-    if (!aviso || !terminos || busy) return;
+    if (!aviso || !terminos || busy || !estados) return;
     setBusy(true);
     setError(null);
     setAvisoDeCambio(false);
@@ -247,8 +291,11 @@ export function PuertaLegal({
         terminos_hash: terminos.hash,
         adult_declaration: true,
       }, session);
-      if (!saved.required) onAceptada();
-      else onReconsultar();
+      if (!saved.required) {
+        const completo = await aplicarEleccion(session, elecciones, estados, aviso);
+        if (!completo) anunciar(avisoDeFallo(t));
+        onAceptada();
+      } else onReconsultar();
     } catch (err) {
       const { status, code } = extractApiError(err);
       if (status === 409 && code === 'legal_version_mismatch') {
@@ -263,12 +310,19 @@ export function PuertaLegal({
     } finally {
       setBusy(false);
     }
-  }, [aceptacion, busy, onAceptada, onReconsultar, session, t]);
+  }
+
+  if (misPermisos) return <MisPermisos session={session} soloRevocar onBack={() => { setEstados(null); setMisPermisos(false); }} />;
 
   return (
     <PuertaLegalView
       fotoOpcional={aceptacion.aviso?.version === FOTO_NOTICE.version && aceptacion.aviso.hash === FOTO_NOTICE.hash}
-      privacidadFoto={<PrivacidadFotoPanel session={session} soloRevocar />}
+      accesoPermisos={<button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setMisPermisos(true)}>{t('Mis permisos')}</button>}
+      leyendo={!estados}
+      casillas={<>
+        <CasillasDePermisos elecciones={elecciones} cambiar={setCambios} ocupado={busy} />
+        {estados && finalidades.some(f => disponibles[f] && !estados[f]) && <p role="status">{t('No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.')}</p>}
+      </>}
       aceptaMayor={aceptaMayor}
       aceptaTerminos={aceptaTerminos}
       busy={busy}

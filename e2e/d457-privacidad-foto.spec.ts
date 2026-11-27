@@ -58,7 +58,7 @@ async function instrumentar(page: Page, opciones: { enabled?: boolean; concedido
   }, { aviso, opciones });
 }
 
-test('D457 · revoca desde PuertaLegal sin aceptar, navegar ni habilitar grant', async ({ page }) => {
+test('Puede retirar la foto desde la puerta antes de aceptar términos', async ({ page }) => {
   await omitirGuiaEnFixture(page);
   await page.goto('/');
   await instrumentar(page, { puerta: true, concedido: true, enabled: false });
@@ -69,11 +69,13 @@ test('D457 · revoca desde PuertaLegal sin aceptar, navegar ni habilitar grant',
   await expect(puerta).toBeVisible();
   // 0.260.2 · el permiso de foto vive en «Más información», a un toque.
   await puerta.getByText('Más información', { exact: true }).click();
-  const control = puerta.getByRole('switch', { name: ETIQUETA, exact: true });
+  await puerta.getByRole('button', { name: 'Mis permisos' }).click();
+  const control = page.getByRole('switch', { name: ETIQUETA, exact: true });
   await expect(control).toBeEnabled();
   await control.click();
-  await expect(control).toHaveAttribute('aria-checked', 'false');
+  await expect(control).not.toBeChecked();
   await expect(control).toBeDisabled();
+  await page.getByRole('button', { name: /Volver|Atrás/ }).first().click();
   await expect(puerta.getByRole('checkbox')).toHaveCount(2);
   for (const box of await puerta.getByRole('checkbox').all()) await expect(box).not.toBeChecked();
   await expect(puerta.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
@@ -101,11 +103,15 @@ for (const vp of [{ nombre: 'Chrome 1280×720', width: 1280, height: 720 }, { no
     // Desplegada (panel de foto y Simplificado abiertos) es más alta que la pantalla:
     // no se corta por arriba y la rueda la desplaza hasta el final.
     await puerta.getByText('Más información', { exact: true }).click();
+    await page.route('**/api/legal/aviso_privacidad_simplificado', r => r.fulfill({ json: {
+      legal_text: { ...aviso, kind: 'aviso_privacidad_simplificado', body: aviso.body },
+    } }));
     await puerta.getByText('Aviso de Privacidad Simplificado', { exact: true }).click();
+    await expect(puerta.locator('details pre')).toBeVisible();
     const abierta = await puerta.boundingBox();
     expect(abierta!.y).toBeGreaterThanOrEqual(0);
     expect(abierta!.height).toBeGreaterThan(vp.height);
-    const control = puerta.getByRole('switch', { name: ETIQUETA, exact: true });
+    const control = puerta.getByRole('button', { name: 'Mis permisos' });
     await page.mouse.move(vp.width / 2, vp.height / 2);
     await page.mouse.wheel(0, 5000);
     await expect(control).toBeInViewport();
@@ -125,21 +131,23 @@ async function aConfiguracion(page: Page, opciones: Parameters<typeof instrument
   await instrumentar(page, opciones);
   await irEnLaApp(page, '/mas');
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await expect(page.getByRole('switch', { name: ETIQUETA })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mis permisos' }).click();
 }
 
-test('🔴 D499 b5 · Configuración › Privacidad: la fila, activar con el Aviso 3.1.0 y revocar', async ({ page }) => {
+test('Mis permisos permite activar la foto con el Aviso 3.1.0 y retirarla', async ({ page }) => {
   await aConfiguracion(page, {});
-  const seccion = page.getByRole('region', { name: 'Privacidad', exact: true });
+  const seccion = page.getByRole('region', { name: 'Mis permisos', exact: true });
   const control = seccion.getByRole('switch', { name: ETIQUETA, exact: true });
   await expect(control).not.toBeChecked();
   await expect(control).toBeEnabled();
-  await expect(seccion.getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toBeVisible();
+  await expect(seccion.locator('.privacidad-fila').first().getByRole('link', { name: 'Más en el Aviso de Privacidad.' })).toBeVisible();
   // D505 · sólo el título: sin la descripción.
   await expect(seccion.getByText('Permite que otros usuarios vean tu foto', { exact: false })).toHaveCount(0);
   await expect(control).not.toHaveAttribute('aria-describedby');
   // Sin el bloque grande de D468: ni el Aviso desplegable, ni «Consultar estado», ni botones Activar/Desactivar.
   await expect(seccion.getByText('Aviso de Privacidad Integral')).toHaveCount(0);
-  await expect(seccion.getByRole('button', { name: 'Consultar estado' })).toHaveCount(0);
+  await expect(seccion.locator('.privacidad-fila').first().getByRole('button', { name: 'Consultar estado' })).toHaveCount(0);
   await expect(seccion.getByRole('button', { name: /^(Activar|Desactivar)$/ })).toHaveCount(0);
   await control.click();
   await expect(control).toBeChecked();
@@ -177,8 +185,9 @@ test('EN · la fila traducida', async ({ page }) => {
   if (await acuse.count()) await acuse.getByRole('button', { name: /^(Got it|Entendido)$/ }).click();
   await instrumentar(page, {});
   await irEnLaApp(page, '/mas');
-  const seccion = page.getByRole('region', { name: 'Privacy', exact: true });
+  await page.getByRole('button', { name: 'My permissions' }).click();
+  const seccion = page.getByRole('region', { name: 'My permissions', exact: true });
   await expect(seccion.getByRole('switch', { name: 'Show my photo to people who are not my friends', exact: true })).toBeVisible();
-  await expect(seccion.getByRole('link', { name: 'More in the Privacy Notice.' })).toBeVisible();
+  await expect(seccion.locator('.privacidad-fila').first().getByRole('link', { name: 'More in the Privacy Notice.' })).toBeVisible();
   await expect(seccion.getByText('Allow other users to see your photo', { exact: false })).toHaveCount(0);
 });

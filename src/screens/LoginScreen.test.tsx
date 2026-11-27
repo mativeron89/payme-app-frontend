@@ -317,7 +317,7 @@ describe('🔴 D268 · S-01 · el alta con Google no escribe el correo a mano', 
   const fuente = readFileSync(new URL('./LoginScreen.tsx', import.meta.url), 'utf8');
 
   it('ningún envío a /google/register lleva `email`: el dueño usa el verificado de Google', () => {
-    const envios = [...fuente.matchAll(/await googleRegister\(\{([\s\S]*?)\}\);/g)].map((m) => m[1]!);
+    const envios = [...fuente.matchAll(/await googleRegister\(\{([\s\S]*?)\}, permisosRef\.current\);/g)].map((m) => m[1]!);
     expect(envios).toHaveLength(2);
     // Se mira el código, no los comentarios: el que explica por qué no va, nombra `email`.
     for (const cuerpo of envios) expect(cuerpo.replace(/\/\/[^\n]*/g, '')).not.toMatch(/\bemail\b/);

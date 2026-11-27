@@ -54,6 +54,11 @@ import { EN_VIAJES_TICKET } from './viajes/ticket';
 import { EN_VIAJES_VIAJE } from './viajes/viaje';
 
 export const EN: Record<string, string> = {
+  "Mis permisos": "My permissions",
+  "Mostrar mi foto": "Show my photo",
+  "Análisis interno": "Internal analysis",
+  "Puedes cambiar tu elección en Mis permisos. Tus amigos conservan las reglas del Aviso.": "You can change your choice in My permissions. The Notice still applies to your friends.",
+  "Tus términos quedaron aceptados. Revisa los cambios en Mis permisos.": "Your terms were accepted. Check your changes in My permissions.",
   "Esta mesa tiene muchas solicitudes pendientes.": "This table has a lot of pending requests.",
   "Pídele a quien la abrió que acepte las que tiene.": "Ask whoever opened it to accept the ones they have.",
   "Tu cuenta ya está lista. Pídele a quien te invitó un link nuevo o abre tu propia mesa.": "Your account is ready. Ask whoever invited you for a new link, or open your own table.",
@@ -110,7 +115,6 @@ export const EN: Record<string, string> = {
   "No pudimos confirmar el estado del permiso. Puedes consultar de nuevo.": "We could not confirm the permission status. You can check again.",
   "No se confirmó el cambio. Consulta el estado antes de volver a intentarlo.": "The change was not confirmed. Check the status before trying again.",
   "No recibimos la confirmación del cambio. El estado mostrado corresponde a una nueva consulta.": "We did not receive confirmation of the change. The status shown comes from a new check.",
-  "Aceptar estos documentos no activa el permiso para mostrar tu foto a personas que no son tus amigos. Puedes elegirlo en Privacidad. Tus amigos conservan las reglas del Aviso.": "Accepting these documents does not turn on permission to show your photo to people who are not your friends. You can choose this in Privacy. The Notice’s rules for your friends still apply.",
   // D444/D449 · resumen y meses completos.
   "Mes completo": "Complete month",
   "Tu consumo registrado": "Your recorded orders",

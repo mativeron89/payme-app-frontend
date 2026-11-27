@@ -1,3 +1,4 @@
+import { aplicarEleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
 import {
   Fragment,
   createContext,
@@ -102,14 +103,15 @@ function initialFacebookCallbackPhase(): FacebookCallbackPhase {
 
 interface AuthState {
   session: StoredSession | null;
+  terminarPermisosDeAlta(session: StoredSession): Promise<boolean>;
   login(email: string, password: string): Promise<void>;
-  register(data: RegisterRequest): Promise<void>;
+  register(data: RegisterRequest, permisos?: EleccionDeAlta | null): Promise<void>;
   googleLogin(idToken: string): Promise<void>;
-  googleRegister(data: GoogleRegisterRequest): Promise<void>;
+  googleRegister(data: GoogleRegisterRequest, permisos?: EleccionDeAlta | null): Promise<void>;
   /** AF-17 · entra o crea en un toque; `created` dice si la cuenta nació ahora. */
-  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  googleContinue(data: GoogleContinueRequest, permisos?: EleccionDeAlta | null): Promise<{ readonly created: boolean }>;
   /** AF-GOOGLE-ALTA-REDIRECT · canje del alta con Google en la misma pestaña. */
-  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }>;
+  googleRedirectSignup(data: GoogleRedirectSignupRequest, permisos?: EleccionDeAlta | null): Promise<{ readonly created: boolean }>;
   /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
   googleContinueLink(data: GoogleContinueLinkRequest): Promise<void>;
   /**
@@ -223,6 +225,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session]);
 
+  // La sesión puede hacerse visible antes de resolver el alta. El @ espera
+  // esa misma respuesta y sólo consume la elección para la familia que nació.
+  type Titular = Pick<StoredSession, 'family_id' | 'principal_id'>;
+  const pendiente = useRef<{ titular: Promise<Titular | null>; permisos: EleccionDeAlta } | null>(null);
+  useEffect(() => subscribeSession(() => {
+    if (!loadSession()) pendiente.current = null;
+  }), []);
+  function guardarEleccion(alta: Promise<StoredSession | undefined>, permisos?: EleccionDeAlta | null) {
+    if (!permisos) return;
+    const titular = alta.then(nueva => nueva ? { family_id: nueva.family_id, principal_id: nueva.principal_id } : null, () => null);
+    pendiente.current = { titular, permisos };
+  }
+  const terminarPermisosDeAlta = useCallback(async (actual: StoredSession) => {
+    const registro = pendiente.current;
+    pendiente.current = null;
+    if (!registro) return true;
+    const titular = await registro.titular;
+    if (titular?.family_id !== actual.family_id || titular.principal_id !== actual.principal_id) return true;
+    const { elecciones, aviso } = registro.permisos;
+    return aplicarEleccion(actual, elecciones, { foto_perfil_no_amigos: 'never', analisis_interno: 'never' }, aviso, aviso);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     try {
       // El estado visible solo puede adoptar lo que quedó confirmado en storage.
@@ -234,9 +258,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (data: RegisterRequest) => {
+  const register = useCallback(async (data: RegisterRequest, permisos?: EleccionDeAlta | null) => {
     try {
-      await api.register(data);
+      const alta = api.register(data);
+      guardarEleccion(alta, permisos);
+      await alta;
       setFacebookCallbackPhase('idle');
     } finally {
       setSession(loadSession());
@@ -252,9 +278,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const googleRegister = useCallback(async (data: GoogleRegisterRequest) => {
+  const googleRegister = useCallback(async (data: GoogleRegisterRequest, permisos?: EleccionDeAlta | null) => {
     try {
-      await api.googleRegister(data);
+      const alta = api.googleRegister(data);
+      guardarEleccion(alta, permisos);
+      await alta;
       setFacebookCallbackPhase('idle');
     } finally {
       setSession(loadSession());
@@ -272,9 +300,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
   }, []);
 
-  const googleContinue = useCallback(async (data: GoogleContinueRequest) => {
+  const googleContinue = useCallback(async (data: GoogleContinueRequest, permisos?: EleccionDeAlta | null) => {
     try {
-      const result = await api.googleContinue(data);
+      const alta = api.googleContinue(data);
+      if (permisos) guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      const result = await alta;
       setFacebookCallbackPhase('idle');
       return result;
     } finally {
@@ -282,9 +312,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest) => {
+  const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest, permisos?: EleccionDeAlta | null) => {
     try {
-      const result = await api.googleRedirectSignup(data);
+      const alta = api.googleRedirectSignup(data);
+      if (permisos) guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      const result = await alta;
       setFacebookCallbackPhase('idle');
       return result;
     } finally {
@@ -370,6 +402,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       facebookCallbackPhase,
       vueltaGoogle,
       descartarVueltaGoogle,
+      terminarPermisosDeAlta,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,
@@ -388,6 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       facebookCallbackPhase,
       vueltaGoogle,
       descartarVueltaGoogle,
+      terminarPermisosDeAlta,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,

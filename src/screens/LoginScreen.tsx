@@ -1,3 +1,5 @@
+import { CasillasDePermisos, useDisponibilidadPermisos } from '../components/CasillasDePermisos';
+import { finalidades, type Eleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
 import { AvisoSimplificado } from '../components/AvisoSimplificado';
 import { TextoLegal } from '../components/TextoLegal';
 import {
@@ -587,6 +589,9 @@ export function LoginScreen({
   // AF-01 · cada casilla guarda el par sobre el que se marcó (`null`: sin marcar).
   const [aceptaMayor, setAceptaMayor] = useState<string | null>(null);
   const [aceptaTerminos, setAceptaTerminos] = useState<string | null>(null);
+  const disponibles = useDisponibilidadPermisos(paquete.status === 'ready');
+  const [eleccion, setEleccion] = useState<Eleccion>({});
+  const permisosRef = useRef<EleccionDeAlta | null>(null);
   const aceptacionRef = useRef<LegalAcceptanceRequest | null>(null);
   const previousSignup = useRef(signup);
   /**
@@ -1089,7 +1094,7 @@ export function LoginScreen({
                     ? { invitation_token: authority.alta.invitationToken }
                     : {}),
                   ...conAceptacion(),
-                });
+                }, permisosRef.current);
                 // Sólo hay algo que soltar si se usó una invitación.
                 if (authority.alta.tipo === 'invitacion') clearSignupInvitation();
               }
@@ -1183,7 +1188,7 @@ export function LoginScreen({
         ...(authority.nombre !== null
           ? { first_name: authority.nombre.firstName, last_name: authority.nombre.lastName }
           : {}),
-      });
+      }, permisosRef.current);
       // La invitación se consume sólo si la cuenta NACIÓ con ella, y recién
       // con la sesión persistida.
       if (created && authority.invitationToken !== null) clearSignupInvitation();
@@ -1412,6 +1417,7 @@ export function LoginScreen({
 
   // Cambiar de «Entrar» a «Crea tu cuenta» (o al revés) desmarca las casillas.
   useEffect(() => {
+    setEleccion({});
     setAceptaMayor(null);
     setAceptaTerminos(null);
   }, [mode]);
@@ -1439,6 +1445,13 @@ export function LoginScreen({
   const parVigente = aceptacionRef.current ? JSON.stringify(aceptacionRef.current) : null;
   const mayorMarcada = casillaVigente(aceptaMayor, parVigente);
   const terminosMarcada = casillaVigente(aceptaTerminos, parVigente);
+  const elecciones: Eleccion = {};
+  for (const f of finalidades) {
+    if (disponibles[f]) elecciones[f] = eleccion[f] ?? !hayCodigoAlta();
+  }
+  permisosRef.current = paqueteVigente && legal.status === 'ready' && mayorMarcada && terminosMarcada
+    ? { elecciones, aviso: legal.value } : null;
+  const pidePermisos = Object.keys(elecciones).length > 0;
   const aceptacionLista = !paqueteVigente || (mayorMarcada && terminosMarcada);
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
@@ -1479,7 +1492,7 @@ export function LoginScreen({
       // D268 · S-02 · sólo si este navegador empezó el alta: con su verifier, o «sin binding».
       const inicio = leerInicioGoogle('crear');
       if (!inicio) throw new Error('google_signup_no_iniciado');
-      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx, ...verifierDe(inicio) }));
+      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx, ...verifierDe(inicio) }, permisosRef.current));
       olvidarCodigoAlta();
       borrarContextoAlta();
       borrarInicioGoogle('crear');
@@ -1580,7 +1593,9 @@ export function LoginScreen({
   useEffect(() => {
     if (hayCodigoAlta()) return;
     const a = googleAuthority;
-    if (a?.purpose === 'continue' && a.redirectAlta && aceptacionLista && !paqueteIncierto) {
+    // Al salir del documento se pierde la elección opcional. En ese caso se
+    // usa la confirmación de regreso, sin guardar permisos ni inferirlos.
+    if (a?.purpose === 'continue' && a.redirectAlta && !pidePermisos && aceptacionLista && !paqueteIncierto) {
       guardarContextoAlta({
         accepted_notice_version: a.noticeVersion,
         ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
@@ -1589,7 +1604,7 @@ export function LoginScreen({
     } else {
       borrarContextoAlta();
     }
-  }, [googleAuthority, aceptacionLista, claveAceptacion, paqueteIncierto]);
+  }, [googleAuthority, aceptacionLista, claveAceptacion, paqueteIncierto, pidePermisos]);
 
   /** «Crear mi cuenta» del paso de la vuelta: el mismo código, lo que hay en pantalla. */
   function onTerminarAlta(e: FormEvent) {
@@ -1640,6 +1655,7 @@ export function LoginScreen({
           <a href={PATH_TERMINOS} target="_blank" rel="noreferrer">{t('Términos de Uso')}</a>.
         </span>
       </label>
+      <CasillasDePermisos elecciones={elecciones} cambiar={setEleccion} ocupado={busy || socialBusy} />
       <p className="ingreso-legal">
         {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
         <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
@@ -1692,7 +1708,7 @@ export function LoginScreen({
         // D268 · S-01 · sin `email`: el dueño usa el verificado de Google.
         ...(autoridad.tipo === 'invitacion' ? { invitation_token: autoridad.token } : {}),
         ...conAceptacion(),
-      });
+      }, permisosRef.current);
       if (autoridad.tipo === 'invitacion') clearSignupInvitation();
     } catch (err) {
       const { code } = extractApiError(err);
@@ -1739,7 +1755,7 @@ export function LoginScreen({
           last_name: lastName,
           ...(autoridad.tipo === 'invitacion' ? { invitation_token: autoridad.token } : {}),
           ...conAceptacion(),
-        });
+        }, permisosRef.current);
         // `register` retorna sólo después de que la sesión quedó persistida.
         // Un 403 opaco conserva el token: puede ser sólo un email mal escrito.
         if (autoridad.tipo === 'invitacion') clearSignupInvitation();

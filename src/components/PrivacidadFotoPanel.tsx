@@ -153,7 +153,10 @@ export function useControlFoto(session: StoredSession, soloRevocar: boolean): {
       const nuevo = permiso.granted
         ? await api.revokeFotoPerfilNoAmigos(s)
         : await api.grantFotoPerfilNoAmigos(aviso!, s);
-      if (vigente()) setEstado((prev) => ({ ...prev, permiso: nuevo, ocupado: false }));
+      if (vigente()) {
+        setEstado((prev) => ({ ...prev, permiso: nuevo, ocupado: false }));
+        if (!soloRevocar && !nuevo.granted) setIntento(n => n + 1);
+      }
     } catch {
       // Un POST ambiguo no se repite. Una única consulta concilia lo que el servidor confirmó.
       if (!vigente()) return;

@@ -379,3 +379,31 @@ test('«Entrar» (fase 1): su botón no lleva el state de alta, sino `entrar:<ch
   await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
   await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
 });
+
+test('El alta con Google confirma en la pestaña de regreso y otorga análisis después del usuario', async ({ page }) => {
+  await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
+  await page.addInitScript(() => localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido'));
+  await irACreaTuCuenta(page, 'redirect');
+  const analisis = page.getByRole('checkbox', { name: 'Análisis interno', exact: true });
+  await expect(analisis).toBeChecked();
+  await analisis.uncheck();
+  await marcarCasillas(page);
+  await google(page).click();
+  await expect(crearMiCuenta(page)).toBeVisible();
+  await expect(analisis).not.toBeChecked();
+  await marcarCasillas(page);
+  await analisis.check();
+  await crearMiCuenta(page).click();
+  const arroba = page.getByRole('textbox', { name: 'Tu @usuario', exact: true });
+  await expect(arroba).toBeVisible();
+  const concedido = () => page.evaluate(async () => {
+    const ruta = '/src/api/mock/mockSugerencias.ts';
+    const { permisoOtorgadoEnMock } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/mockSugerencias');
+    return permisoOtorgadoEnMock('analisis_interno');
+  });
+  expect(await concedido()).toBe(false);
+  await arroba.fill('ana.nueva');
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(adentro(page)).toBeVisible();
+  expect(await concedido()).toBe(true);
+});

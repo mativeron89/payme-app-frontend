@@ -1,3 +1,10 @@
+## Consentimientos de cuenta · AF 0.286.0
+
+Copia selectiva de `contract/account-consents-v1.schema.json` de App Backend 2.217.7,
+commit servido `a68d0681ddab9f9109c07c2ee13c321358b3c4d0`.
+El archivo tiene 18562 bytes y sha256 `764b62e2f9f5c81d163bef98c32fdce0e0fb93daae1522b1b11515973fde364d`.
+El inventario y los hechos derivados continúan en la revisión indicada abajo.
+
 ## Recorte del ticket por consumo · AF 0.283.0
 
 Contenido vigente: `d9774af3dba6ba99a31683f19a4a546ba5913d7c`.
