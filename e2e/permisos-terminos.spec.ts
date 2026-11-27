@@ -40,7 +40,12 @@ async function preparar(page: Page, opciones: Opcion) {
       if (o.retener) await fetch('/prueba-estado-permiso');
       return analisis();
     };
-    api.revokeConsentimiento = async () => { eventos.push('retira análisis'); o.analisis = 'revoked'; return analisis(); };
+    api.revokeConsentimiento = async () => {
+      eventos.push('retira análisis');
+      if (o.fallo) throw Error('rechazado');
+      o.analisis = 'revoked';
+      return analisis();
+    };
     api.revokeFotoPerfilNoAmigos = async () => { eventos.push('retira foto'); o.foto = 'revoked'; return foto(); };
     api.grantFotoPerfilNoAmigos = async aviso => {
       if (aviso.hash !== texto.hash || aviso.version !== texto.version) throw Error('par incorrecto');
@@ -142,15 +147,47 @@ for (const elegida of ['foto', 'análisis'] as const) {
   });
 }
 
-test('Al fallar el permiso los términos siguen aceptados y aparece el aviso', async ({ page }) => {
-  await preparar(page, { foto: 'revoked', analisis: 'never', fallo: true });
+for (const inicial of ['never', 'granted'] as const) {
+  const operacion = inicial === 'never' ? 'otorgar' : 'retirar';
+  test('Al fallar al ' + operacion + ' se conservan los términos y el estado anterior', async ({ page }) => {
+    await preparar(page, { foto: 'revoked', analisis: inicial, fallo: true });
+    await ingresar(page);
+    await marcarTerminos(page);
+    await expect(analisis(page)).toBeChecked();
+    if (inicial === 'granted') await analisis(page).uncheck();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByText(/Tus términos quedaron aceptados/)).toBeVisible();
+    expect(await eventos(page)).toEqual(['aceptó', inicial === 'never' ? 'otorga análisis' : 'retira análisis']);
+    await expect(page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' })).toHaveCount(0);
+    await page.evaluate(() => { location.hash = '/mas'; });
+    await page.getByRole('button', { name: 'Mis permisos' }).click();
+    const control = page.getByRole('switch', { name: /Análisis interno/ });
+    await expect(control).toBeEnabled();
+    await expect(control).toBeChecked({ checked: inicial === 'granted' });
+  });
+}
+
+test('Retirar análisis desde la puerta sigue siendo posible sin abrir el Aviso', async ({ page }) => {
+  await preparar(page, { foto: 'revoked', analisis: 'granted' });
   await ingresar(page);
-  await marcarTerminos(page);
   await expect(analisis(page)).toBeChecked();
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    api.getPrivacyNotice = async () => { throw Error('Aviso no disponible'); };
+  });
+  await page.getByText('Más información', { exact: true }).click();
+  await page.getByRole('button', { name: 'Mis permisos' }).click();
+  const control = page.getByRole('switch', { name: /Análisis interno/ });
+  await expect(control).toBeChecked();
+  await control.click();
+  await expect(control).not.toBeChecked();
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await expect(analisis(page)).not.toBeChecked();
+  await marcarTerminos(page);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByText(/Tus términos quedaron aceptados/)).toBeVisible();
-  expect(await eventos(page)).toEqual(['aceptó', 'otorga análisis']);
   await expect(page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' })).toHaveCount(0);
+  expect(await eventos(page)).toEqual(['retira análisis', 'aceptó']);
 });
 
 test('Configuración separa Privacidad de Mis permisos', async ({ page }, info) => {
