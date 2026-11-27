@@ -1,4 +1,4 @@
-import { prepararCambioDeAviso, elegirAmbosPermisos, confirmarLecturaDelAvisoNuevo, terminarAltaYLeerEventos } from './_avisoDeAlta';
+import { prepararCambioDeAviso, elegirAmbosPermisos, fotoOpcional, analisisOpcional, confirmarLecturaDelAvisoNuevo, terminarAltaYLeerEventos } from './_avisoDeAlta';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -381,6 +381,19 @@ test('«Entrar» (fase 1): su botón no lleva el state de alta, sino `entrar:<ch
   await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
 });
 
+async function prepararAltaConPermisos(page: Page, sinContexto = false) {
+  await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
+  await page.addInitScript(({ sinContexto, contexto }) => {
+    localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido');
+    if (sinContexto && location.hash.startsWith('#google_signup=')) sessionStorage.removeItem(contexto);
+  }, { sinContexto, contexto: CONTEXTO });
+  // Cargar el mismo doble antes de React tanto al salir como en el documento nuevo.
+  await page.route('**/src/main.tsx', async ruta => {
+    const respuesta = await ruta.fetch();
+    await ruta.fulfill({ response: respuesta, body: "import '/e2e/_permisosGoogleMock.ts';\n" + await respuesta.text() });
+  });
+}
+
 for (const caso of [
   { nombre: 'marcadas', foto: true, analisis: true },
   { nombre: 'desmarcadas', foto: false, analisis: false },
@@ -391,16 +404,7 @@ for (const caso of [
   { nombre: 'cuenta existente con análisis retirado', foto: true, analisis: true, existente: true },
 ]) {
   test('Google conserva la elección en la redirección: ' + caso.nombre, async ({ page }) => {
-    await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
-    await page.addInitScript(({ sinContexto, contexto }) => {
-      localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido');
-      if (sinContexto && location.hash.startsWith('#google_signup=')) sessionStorage.removeItem(contexto);
-    }, { sinContexto: caso.sinContexto, contexto: CONTEXTO });
-    // Cargar el mismo doble antes de React tanto al salir como en el documento nuevo.
-    await page.route('**/src/main.tsx', async ruta => {
-      const respuesta = await ruta.fetch();
-      await ruta.fulfill({ response: respuesta, body: "import '/e2e/_permisosGoogleMock.ts';\n" + await respuesta.text() });
-    });
+    await prepararAltaConPermisos(page, caso.sinContexto);
     await irACreaTuCuenta(page, 'redirect');
     if (caso.reintento) await page.evaluate(() => sessionStorage.setItem('e2e.c308.no-disponible', '1'));
     if (caso.existente) await page.evaluate(() => {
@@ -474,3 +478,39 @@ test('La redirección con Aviso nuevo descarta ambas elecciones guardadas', asyn
   await crearMiCuenta(page).click();
   expect(await terminarAltaYLeerEventos(page)).toEqual(['redirección:409', 'redirección:vigente', 'creada']);
 });
+
+for (const retirar of ['foto', 'análisis'] as const) {
+  for (const recorrido of ['reintentar', 'cambiar de modo'] as const) {
+    test(`Elección al completar el alta: desmarcar ${retirar} y ${recorrido}`, async ({ page }) => {
+      await prepararAltaConPermisos(page);
+      await irACreaTuCuenta(page, 'redirect');
+      await elegirAmbosPermisos(page);
+      await marcarCasillas(page);
+      await page.evaluate(() => sessionStorage.setItem('e2e.c308.no-disponible', '1'));
+      await google(page).click();
+
+      await expect(crearMiCuenta(page)).toBeVisible();
+      const foto = fotoOpcional(page);
+      const analisis = analisisOpcional(page);
+      await expect(foto).toBeChecked();
+      await expect(analisis).toBeChecked();
+      await (retirar === 'foto' ? foto : analisis).uncheck();
+
+      const cambiaModo = recorrido === 'cambiar de modo';
+      if (cambiaModo) {
+        await page.getByRole('button', { name: 'Ya tengo cuenta → entrar', exact: true }).click();
+        await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+      }
+      const mantieneFoto = !cambiaModo && retirar === 'análisis';
+      const mantieneAnalisis = !cambiaModo && retirar === 'foto';
+      await expect(foto).toBeChecked({ checked: mantieneFoto });
+      await expect(analisis).toBeChecked({ checked: mantieneAnalisis });
+      await marcarCasillas(page);
+      await crearMiCuenta(page).click();
+      const esperados = ['creada'];
+      if (mantieneFoto) esperados.push('foto_perfil_no_amigos');
+      if (mantieneAnalisis) esperados.push('analisis_interno');
+      expect(await terminarAltaYLeerEventos(page)).toEqual(esperados);
+    });
+  }
+}

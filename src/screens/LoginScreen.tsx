@@ -2335,6 +2335,10 @@ export function LoginScreen({
               type="button"
               className="login-toggle"
               onClick={() => {
+                // El cambio manual descarta la elección que volvió de Google.
+                // El paso automático a registro durante un reintento sí la conserva.
+                const ctx = contextoAlta.current;
+                if (ctx?.permisos) contextoAlta.current = { ...ctx, permisos: undefined };
                 setMode(mode === 'login' ? 'register' : 'login');
                 setError(null);
                 setRecoveryAccepted(false);
