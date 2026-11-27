@@ -189,6 +189,18 @@ describe('el contexto del alta en sessionStorage (wire §3)', () => {
     expect(leerContextoAlta()).toBeNull();
   });
 
+  it('conserva sólo elecciones booleanas ligadas al par aceptado', () => {
+    const aviso = { version: ACEPTACION.aviso_version, hash: ACEPTACION.aviso_hash };
+    const elecciones = { analisis_interno: false, foto_perfil_no_amigos: true };
+    const ctx = { accepted_notice_version: aviso.version, legal_acceptance: ACEPTACION, permisos: { aviso, elecciones } };
+    expect(decodeContextoAlta(ctx)).toEqual(ctx);
+    for (const permisos of [
+      { aviso: { ...aviso, hash: 'b'.repeat(64) }, elecciones },
+      { aviso, elecciones: { analisis_interno: 'false' } },
+      { aviso, elecciones: { otra: true } },
+    ]) expect(decodeContextoAlta({ ...ctx, permisos })).toBeNull();
+  });
+
   it('sin sessionStorage (bloqueado) no rompe: no hay contexto y al volver se piden las casillas', () => {
     vi.stubGlobal('window', { get sessionStorage() { throw new Error('SecurityError'); } });
     expect(() => guardarContextoAlta({ accepted_notice_version: '2.5.5' })).not.toThrow();

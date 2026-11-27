@@ -1,3 +1,4 @@
+import type { Eleccion, EleccionDeAlta } from '../components/permisosDeTerminos';
 import type { LegalAcceptanceRequest } from './types';
 import { navegarComoEl303 } from './googleRedirect';
 import { mockGoogleRedirectSignupLoginUri } from './mock/mockApi';
@@ -46,6 +47,7 @@ export const CLAVE_CONTEXTO_ALTA = 'payme.app.google_alta_contexto.v1';
 
 /** Lo que hoy viaja a `/google/continue` salvo el `id_token`. Nunca el código. */
 export interface ContextoAlta {
+  readonly permisos?: EleccionDeAlta;
   readonly accepted_notice_version: string;
   readonly legal_acceptance?: LegalAcceptanceRequest;
   readonly invitation_token?: string;
@@ -87,10 +89,11 @@ function decodeAceptacion(value: unknown): LegalAcceptanceRequest | null {
  */
 export function decodeContextoAlta(value: unknown): ContextoAlta | null {
   if (!plainObject(value)) return null;
-  const permitidas = new Set(['accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name']);
+  const permitidas = new Set(['accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name', 'permisos']);
   if (Object.keys(value).some((k) => !permitidas.has(k))) return null;
   if (typeof value.accepted_notice_version !== 'string' || !VERSION.test(value.accepted_notice_version)) return null;
   const ctx: {
+    permisos?: EleccionDeAlta;
     accepted_notice_version: string;
     legal_acceptance?: LegalAcceptanceRequest;
     invitation_token?: string;
@@ -101,6 +104,20 @@ export function decodeContextoAlta(value: unknown): ContextoAlta | null {
     const aceptacion = decodeAceptacion(value.legal_acceptance);
     if (!aceptacion) return null;
     ctx.legal_acceptance = aceptacion;
+  }
+  if (value.permisos !== undefined) {
+    const p = value.permisos;
+    const legal = ctx.legal_acceptance;
+    if (!legal || !plainObject(p) || Object.keys(p).length !== 2
+        || !plainObject(p.aviso) || Object.keys(p.aviso).length !== 2
+        || p.aviso.version !== legal.aviso_version || p.aviso.hash !== legal.aviso_hash
+        || ctx.accepted_notice_version !== legal.aviso_version || !plainObject(p.elecciones)) return null;
+    const elecciones: Eleccion = {};
+    for (const [finalidad, marcada] of Object.entries(p.elecciones)) {
+      if ((finalidad !== 'foto_perfil_no_amigos' && finalidad !== 'analisis_interno') || typeof marcada !== 'boolean') return null;
+      elecciones[finalidad] = marcada;
+    }
+    ctx.permisos = { elecciones, aviso: { version: legal.aviso_version, hash: legal.aviso_hash } };
   }
   if (value.invitation_token !== undefined) {
     if (!texto(value.invitation_token, 200)) return null;

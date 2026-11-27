@@ -380,30 +380,79 @@ test('«Entrar» (fase 1): su botón no lleva el state de alta, sino `entrar:<ch
   await expect(google(page)).toHaveAttribute('data-state', /^entrar:[A-Za-z0-9_-]{43}$/);
 });
 
-test('El alta con Google confirma en la pestaña de regreso y otorga análisis después del usuario', async ({ page }) => {
-  await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
-  await page.addInitScript(() => localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido'));
-  await irACreaTuCuenta(page, 'redirect');
-  const analisis = page.getByRole('checkbox', { name: 'Análisis interno', exact: true });
-  await expect(analisis).toBeChecked();
-  await analisis.uncheck();
-  await marcarCasillas(page);
-  await google(page).click();
-  await expect(crearMiCuenta(page)).toBeVisible();
-  await expect(analisis).not.toBeChecked();
-  await marcarCasillas(page);
-  await analisis.check();
-  await crearMiCuenta(page).click();
-  const arroba = page.getByRole('textbox', { name: 'Tu @usuario', exact: true });
-  await expect(arroba).toBeVisible();
-  const concedido = () => page.evaluate(async () => {
-    const ruta = '/src/api/mock/mockSugerencias.ts';
-    const { permisoOtorgadoEnMock } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api/mock/mockSugerencias');
-    return permisoOtorgadoEnMock('analisis_interno');
+for (const caso of [
+  { nombre: 'marcadas', foto: true, analisis: true },
+  { nombre: 'desmarcadas', foto: false, analisis: false },
+  { nombre: 'sólo foto', foto: true, analisis: false },
+  { nombre: 'sólo análisis', foto: false, analisis: true },
+  { nombre: 'reintento con la misma elección', foto: false, analisis: true, reintento: true },
+  { nombre: 'sin contexto', foto: true, analisis: true, sinContexto: true },
+  { nombre: 'cuenta existente con análisis retirado', foto: true, analisis: true, existente: true },
+]) {
+  test('Google conserva la elección en la redirección: ' + caso.nombre, async ({ page }) => {
+    await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
+    await page.addInitScript(({ sinContexto, contexto }) => {
+      localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido');
+      if (sinContexto && location.hash.startsWith('#google_signup=')) sessionStorage.removeItem(contexto);
+    }, { sinContexto: caso.sinContexto, contexto: CONTEXTO });
+    // Cargar el mismo doble antes de React tanto al salir como en el documento nuevo.
+    await page.route('**/src/main.tsx', async ruta => {
+      const respuesta = await ruta.fetch();
+      await ruta.fulfill({ response: respuesta, body: "import '/e2e/_permisosGoogleMock.ts';\n" + await respuesta.text() });
+    });
+    await irACreaTuCuenta(page, 'redirect');
+    if (caso.reintento) await page.evaluate(() => sessionStorage.setItem('e2e.c308.no-disponible', '1'));
+    if (caso.existente) await page.evaluate(() => {
+      localStorage.setItem('payme.app.mock.google_sin_cuenta.v1', 'false');
+      localStorage.setItem('payme.app.mock.consentimientos_otorgados.v1', 'analisis_interno');
+      localStorage.setItem('payme.app.mock.legal_aceptado.v1', JSON.stringify(['a0000000-0000-4000-8000-000000000001']));
+    });
+    const foto = page.getByRole('checkbox', { name: 'Mostrar mi foto', exact: true });
+    const analisis = page.getByRole('checkbox', { name: 'Análisis interno', exact: true });
+    await expect(foto).toBeChecked();
+    await expect(analisis).toBeChecked();
+    await foto.setChecked(caso.foto);
+    await analisis.setChecked(caso.analisis);
+    await marcarCasillas(page);
+    const contexto = await page.evaluate(k => JSON.parse(sessionStorage.getItem(k) ?? 'null'), CONTEXTO);
+    expect(contexto.permisos).toEqual({
+      aviso: { version: contexto.legal_acceptance.aviso_version, hash: contexto.legal_acceptance.aviso_hash },
+      elecciones: { foto_perfil_no_amigos: caso.foto, analisis_interno: caso.analisis },
+    });
+    await google(page).click();
+    if (caso.sinContexto || caso.reintento) {
+      await expect(crearMiCuenta(page)).toBeVisible();
+      await expect(foto).toBeVisible();
+      await expect(foto).toBeChecked({ checked: !caso.sinContexto && caso.foto });
+      await expect(analisis).toBeVisible();
+      await expect(analisis).toBeChecked({ checked: !caso.sinContexto && caso.analisis });
+      expect(await page.evaluate(k => sessionStorage.getItem(k), CONTEXTO)).toBeNull();
+      await marcarCasillas(page);
+      await crearMiCuenta(page).click();
+    }
+    const arroba = page.getByRole('textbox', { name: 'Tu @usuario', exact: true });
+    await expect(arroba).toBeVisible();
+    expect(await page.evaluate(k => sessionStorage.getItem(k), CONTEXTO)).toBeNull();
+    const operaciones = () => page.evaluate(async () => {
+      const ruta = '/e2e/_permisosGoogleMock.ts';
+      return (await import(/* @vite-ignore */ ruta)).operaciones() as string[];
+    });
+    const sesion = caso.existente ? 'existente' : 'creada';
+    expect(await operaciones()).toEqual([sesion]);
+    const estadoAnalisis = () => page.evaluate(async () => {
+      const ruta = '/e2e/_permisosGoogleMock.ts';
+      return (await import(/* @vite-ignore */ ruta)).estadoAnalisis();
+    });
+    if (caso.existente) expect(await estadoAnalisis()).toBe('revoked');
+    await arroba.fill('ana.nueva');
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(adentro(page)).toBeVisible();
+    const esperados = [sesion];
+    if (!caso.existente && !caso.sinContexto) {
+      if (caso.foto) esperados.push('foto_perfil_no_amigos');
+      if (caso.analisis) esperados.push('analisis_interno');
+    }
+    expect((await operaciones()).sort()).toEqual(esperados.sort());
+    expect(await estadoAnalisis()).toBe(caso.existente ? 'revoked' : !caso.sinContexto && caso.analisis ? 'granted' : 'never');
   });
-  expect(await concedido()).toBe(false);
-  await arroba.fill('ana.nueva');
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(adentro(page)).toBeVisible();
-  expect(await concedido()).toBe(true);
-});
+}

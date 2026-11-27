@@ -576,6 +576,7 @@ export function LoginScreen({
   const [altaVuelta, setAltaVuelta] = useState<'nada' | 'canjeando' | 'completar' | 'perfil'>(
     () => (vueltaAltaSnapshot().estado === 'codigo' ? 'canjeando' : 'nada'),
   );
+  const vueltaIniciada = useRef(false);
   const contextoAlta = useRef<ContextoAlta | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -1445,13 +1446,16 @@ export function LoginScreen({
   const parVigente = aceptacionRef.current ? JSON.stringify(aceptacionRef.current) : null;
   const mayorMarcada = casillaVigente(aceptaMayor, parVigente);
   const terminosMarcada = casillaVigente(aceptaTerminos, parVigente);
+  const guardada = contextoAlta.current?.permisos;
+  const previas = guardada && legal.status === 'ready' && guardada.aviso.version === legal.value.version
+    && guardada.aviso.hash === legal.value.hash ? guardada.elecciones : {};
   const elecciones: Eleccion = {};
   for (const f of finalidades) {
-    if (disponibles[f]) elecciones[f] = eleccion[f] ?? !hayCodigoAlta();
+    if (disponibles[f]) elecciones[f] = eleccion[f] ?? previas[f] ?? !hayCodigoAlta();
   }
-  permisosRef.current = paqueteVigente && legal.status === 'ready' && mayorMarcada && terminosMarcada
-    ? { elecciones, aviso: legal.value } : null;
   const pidePermisos = Object.keys(elecciones).length > 0;
+  permisosRef.current = pidePermisos && paqueteVigente && legal.status === 'ready' && mayorMarcada && terminosMarcada
+    ? { elecciones, aviso: { version: legal.value.version, hash: legal.value.hash } } : null;
   const aceptacionLista = !paqueteVigente || (mayorMarcada && terminosMarcada);
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
@@ -1492,7 +1496,8 @@ export function LoginScreen({
       // D268 · S-02 · sólo si este navegador empezó el alta: con su verifier, o «sin binding».
       const inicio = leerInicioGoogle('crear');
       if (!inicio) throw new Error('google_signup_no_iniciado');
-      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx, ...verifierDe(inicio) }, permisosRef.current));
+      const { permisos, ...solicitud } = ctx;
+      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...solicitud, ...verifierDe(inicio) }, permisos));
       olvidarCodigoAlta();
       borrarContextoAlta();
       borrarInicioGoogle('crear');
@@ -1566,7 +1571,8 @@ export function LoginScreen({
   // Va ANTES del efecto que guarda el contexto: ése no borra nada mientras
   // haya un código en memoria.
   useEffect(() => {
-    if (altaVuelta !== 'canjeando' || !hayCodigoAlta()) return;
+    if (vueltaIniciada.current || altaVuelta !== 'canjeando' || !hayCodigoAlta()) return;
+    vueltaIniciada.current = true;
     // D268 · S-02 · sin el registro de inicio, este navegador no empezó el alta: no se canjea.
     if (!leerInicioGoogle('crear')) {
       olvidarCodigoAlta();
@@ -1576,6 +1582,7 @@ export function LoginScreen({
       return;
     }
     const ctx = leerContextoAlta();
+    borrarContextoAlta();
     if (ctx) {
       void canjearAlta(ctx);
       return;
@@ -1589,22 +1596,22 @@ export function LoginScreen({
   // ANTES de salir a Google (wire D102 §3). El botón queda inerte hasta marcar
   // las casillas, así que el contexto existe sólo con ellas marcadas: el toque
   // que sale a Google siempre lo encuentra. Nunca el código.
+  const claveEleccion = JSON.stringify(permisosRef.current);
   const claveAceptacion = JSON.stringify(aceptacionRef.current);
   useEffect(() => {
     if (hayCodigoAlta()) return;
     const a = googleAuthority;
-    // Al salir del documento se pierde la elección opcional. En ese caso se
-    // usa la confirmación de regreso, sin guardar permisos ni inferirlos.
-    if (a?.purpose === 'continue' && a.redirectAlta && !pidePermisos && aceptacionLista && !paqueteIncierto) {
+    if (a?.purpose === 'continue' && a.redirectAlta && aceptacionLista && !paqueteIncierto) {
       guardarContextoAlta({
         accepted_notice_version: a.noticeVersion,
+        ...(permisosRef.current ? { permisos: permisosRef.current } : {}),
         ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
         ...(a.invitationToken !== null ? { invitation_token: a.invitationToken } : {}),
       });
     } else {
       borrarContextoAlta();
     }
-  }, [googleAuthority, aceptacionLista, claveAceptacion, paqueteIncierto, pidePermisos]);
+  }, [googleAuthority, aceptacionLista, claveAceptacion, paqueteIncierto, claveEleccion]);
 
   /** «Crear mi cuenta» del paso de la vuelta: el mismo código, lo que hay en pantalla. */
   function onTerminarAlta(e: FormEvent) {
@@ -1617,6 +1624,7 @@ export function LoginScreen({
       ? { ...base, first_name: firstName.trim(), last_name: lastName.trim() }
       : {
           accepted_notice_version: version,
+          ...(permisosRef.current ? { permisos: permisosRef.current } : {}),
           ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
           ...(invitacion !== undefined ? { invitation_token: invitacion } : {}),
           ...(base?.first_name !== undefined && base.last_name !== undefined

@@ -198,11 +198,16 @@ export function decodeResultadosArroba(value: unknown): ResultadoArroba[] {
  * un 428 `username_required` —que el dueño emite únicamente encendido— se pide
  * otra (`recargarUsernameCapability`).
  */
-let state: UsernameCapability = USERNAME_OFF;
+let state: UsernameCapability | null = null;
 const listeners = new Set<() => void>();
 
-export function usernameSnapshot(): UsernameCapability {
+/** El alta distingue una configuración recibida del valor inicial del documento. */
+export function usernameRecibido(): UsernameCapability | null {
   return state;
+}
+
+export function usernameSnapshot(): UsernameCapability {
+  return state ?? USERNAME_OFF;
 }
 
 export function subscribeUsername(listener: () => void): () => void {
@@ -212,15 +217,16 @@ export function subscribeUsername(listener: () => void): () => void {
 
 export function applyUsernameConfig(config: unknown): UsernameCapability {
   const next = decodeUsernameCapability(config);
-  if (next.enabled !== state.enabled) {
-    state = next;
+  const cambio = next.enabled !== usernameSnapshot().enabled;
+  state = next;
+  if (cambio) {
     for (const listener of [...listeners]) listener();
   }
   return state;
 }
 
 export function resetUsernameForTests(): void {
-  state = USERNAME_OFF;
+  state = null;
   for (const listener of [...listeners]) listener();
 }
 

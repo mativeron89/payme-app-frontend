@@ -3,17 +3,17 @@ import { omitirGuiaEnFixture } from './_app';
 import { conRecursoRetenido } from './_recursoRetenido';
 
 type Estado = 'never' | 'revoked' | 'granted';
-type Opcion = { foto: Estado; analisis: Estado; alta?: boolean; fallo?: boolean; retener?: boolean };
+type Opcion = { foto: Estado; analisis: Estado; alta?: boolean; fallo?: boolean; retener?: boolean; arroba?: boolean; lecturaFallida?: 'foto' | 'analisis'; esperarRetiro?: boolean };
 
 async function preparar(page: Page, opciones: Opcion) {
   await page.setViewportSize({ width: 320, height: 740 });
   await omitirGuiaEnFixture(page);
-  await page.addInitScript(() => {
+  await page.addInitScript(arroba => {
     localStorage.setItem('payme.app.mock.legal_3_0_0.v1', 'on');
     localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
-    localStorage.setItem('payme.app.mock.username.v1', 'true');
+    localStorage.setItem('payme.app.mock.username.v1', String(arroba));
     localStorage.setItem('payme.app.mock.sugerencias.v1', 'encendido');
-  });
+  }, opciones.arroba !== false);
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
   await page.evaluate(async o => {
@@ -26,21 +26,29 @@ async function preparar(page: Page, opciones: Opcion) {
       const c = await config();
       return { ...c, features: { ...c.features, foto_perfil_no_amigos: { supported: true, enabled: true } } };
     };
-    const texto = (await api.getPrivacyNotice()).legal_text;
+    const documento = await api.getPrivacyNotice();
+    const texto = documento.legal_text;
+    // Una lectura para un otorgamiento se resuelve en la misma cola de microtareas.
+    api.getPrivacyNotice = async () => documento;
     const vigente = { version: texto.version, hash: texto.hash };
     const aceptada = () => ({ required: false, aviso: null, terminos: null });
     let requiere = !o.alta;
     api.getLegalAcceptance = async () => requiere ? { required: true, aviso: vigente, terminos: vigente } : aceptada();
-    api.acceptLegal = async () => { requiere = false; eventos.push('aceptó'); return aceptada(); };
+    api.acceptLegal = async () => { requiere = !!o.esperarRetiro; eventos.push('aceptó'); return aceptada(); };
     const foto = () => ({ purpose_key: 'foto_perfil_no_amigos' as const, state: o.foto, granted: o.foto === 'granted',
       since: null, notice_version: null, notice_hash: null });
     const analisis = () => ({ purpose_key: 'analisis_interno' as const, state: o.analisis, granted: o.analisis === 'granted' });
-    api.getFotoPerfilNoAmigos = async () => foto();
+    api.getFotoPerfilNoAmigos = async () => {
+      if (o.lecturaFallida === 'foto') throw Error('lectura de foto');
+      return foto();
+    };
     api.getConsentimiento = async () => {
+      if (o.lecturaFallida === 'analisis') throw Error('lectura de análisis');
       if (o.retener) await fetch('/prueba-estado-permiso');
       return analisis();
     };
     api.revokeConsentimiento = async () => {
+      if (o.esperarRetiro) await fetch('/prueba-retirar-analisis');
       eventos.push('retira análisis');
       if (o.fallo) throw Error('rechazado');
       o.analisis = 'revoked';
@@ -81,8 +89,8 @@ async function marcarTerminos(page: Page) {
   await page.getByRole('checkbox', { name: 'Declaro que tengo 18 años o más.' }).check();
   await page.getByRole('checkbox', { name: /He leído y acepto/ }).check();
 }
-async function ingresar(page: Page) {
-  await page.getByLabel('Email', { exact: true }).fill('persona@example.invalid');
+async function ingresar(page: Page, email = 'persona@example.invalid') {
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-local');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
@@ -99,7 +107,8 @@ for (const caso of [
   { foto: 'granted', analisis: 'granted', nombre: 'mantener un permiso y retirar el otro', cambiar: true, escritos: ['retira análisis'] },
 ] as const) {
   test(caso.nombre, async ({ page }, info) => {
-    await preparar(page, { ...caso, retener: true });
+    const esperarRetiro = caso.foto === 'granted';
+    await preparar(page, { ...caso, retener: true, esperarRetiro });
     await conRecursoRetenido(page, '**/prueba-estado-permiso', async () => {
       await ingresar(page);
       await expect(page.getByRole('dialog', { name: 'Actualizamos nuestros documentos' })).toBeVisible();
@@ -113,14 +122,21 @@ for (const caso of [
       await foto(page).check();
       await analisis(page).uncheck();
     } else await captura(page, info, 'reaceptacion-320');
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
+    if (esperarRetiro) {
+      await conRecursoRetenido(page, '**/prueba-retirar-analisis', async () => {
+        await continuar.click();
+        await expect(foto(page)).toBeDisabled();
+        expect(await eventos(page)).toEqual(['aceptó']);
+      }, ruta => ruta.fulfill({ body: 'ok' }));
+    } else await continuar.click();
     await expect(page.getByRole('heading', { name: 'Actualizamos nuestros documentos' })).toHaveCount(0);
     expect(await eventos(page)).toEqual(['aceptó', ...caso.escritos]);
   });
 }
 
-async function altaConCorreo(page: Page) {
-  await preparar(page, { alta: true, foto: 'never', analisis: 'never' });
+async function altaConCorreo(page: Page, arroba = true) {
+  await preparar(page, { alta: true, arroba, foto: 'never', analisis: 'never' });
   await page.getByRole('button', { name: 'Crea tu cuenta' }).click();
   await page.getByLabel('Nombre', { exact: true }).fill('Persona');
   await page.getByLabel('Apellido', { exact: true }).fill('Ejemplo');
@@ -227,4 +243,78 @@ test('Una sesión vencida durante el guardado del usuario descarta la elección'
   await ingresar(page);
   await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
   expect(await eventos(page)).toEqual(['guardó @']);
+});
+
+for (const finalidad of ['foto', 'analisis'] as const) {
+  for (const previo of ['granted', 'never'] as const) {
+    test(`Lectura fallida de ${finalidad} con estado ${previo}: acepta sin escribir permisos`, async ({ page }) => {
+      await preparar(page, { foto: 'revoked', analisis: 'revoked', [finalidad]: previo, lecturaFallida: finalidad });
+      await ingresar(page);
+      await expect(page.getByText(/No pudimos confirmar el estado del permiso/)).toBeVisible();
+      await expect(finalidad === 'foto' ? foto(page) : analisis(page)).toHaveCount(0);
+      await expect(finalidad === 'foto' ? analisis(page) : foto(page)).not.toBeChecked();
+      await marcarTerminos(page);
+      await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+      expect(await eventos(page)).toEqual(['aceptó']);
+    });
+  }
+}
+
+test('Alta rechazada por correo: elegir @ después de entrar con otra cuenta no otorga permisos', async ({ page }) => {
+  await altaConCorreo(page);
+  await expect(foto(page)).toBeChecked();
+  await expect(analisis(page)).toBeChecked();
+  await page.evaluate(async () => {
+    const fachada = '/src/api/index.ts';
+    const errores = '/src/api/http.ts';
+    const { api } = await import(/* @vite-ignore */ fachada) as typeof import('../src/api');
+    const { HttpError } = await import(/* @vite-ignore */ errores) as typeof import('../src/api/http');
+    api.register = async () => { throw new HttpError(409, { error: 'registration_not_available' }); };
+  });
+  await page.getByRole('button', { name: 'Registrarme' }).click();
+  await expect(page.getByText(/No pudimos crear la cuenta/)).toBeVisible();
+  await page.getByRole('button', { name: /Ya tengo cuenta/ }).click();
+  await ingresar(page, 'otra@example.invalid');
+  await page.getByRole('textbox', { name: 'Tu @usuario', exact: true }).fill('otrapersona');
+  await page.route('**/prueba-guardar-arroba', ruta => ruta.fulfill({ body: 'ok' }));
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  expect(await eventos(page)).toEqual(['guardó @']);
+});
+
+test('Alta con @ apagado: aplica la elección al crear la cuenta', async ({ page }) => {
+  await altaConCorreo(page, false);
+  await expect(foto(page)).toBeChecked();
+  await analisis(page).uncheck();
+  await page.getByRole('button', { name: 'Registrarme' }).click();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  await expect.poll(() => eventos(page)).toEqual(['otorga foto']);
+  await expect(page.getByRole('textbox', { name: 'Tu @usuario' })).toHaveCount(0);
+});
+
+test('Google en ventana emergente conserva el retiro de una cuenta existente al elegir @', async ({ page }) => {
+  await preparar(page, { alta: true, foto: 'never', analisis: 'revoked' });
+  await page.evaluate(async () => {
+    localStorage.setItem('payme.app.mock.google_sin_cuenta.v1', 'false');
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as typeof import('../src/api');
+    const continuar = api.googleContinue.bind(api);
+    api.googleContinue = async solicitud => {
+      const respuesta = await continuar(solicitud);
+      (window as unknown as { eventosPermisos: string[] }).eventosPermisos.push(respuesta.created ? 'creada' : 'existente');
+      return respuesta;
+    };
+  });
+  await page.getByRole('button', { name: 'Crea tu cuenta' }).click();
+  await marcarTerminos(page);
+  await expect(foto(page)).toBeChecked();
+  await expect(analisis(page)).toBeChecked();
+  await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tu @usuario', exact: true }).fill('ejemplolocal');
+  expect(await eventos(page)).toEqual(['existente']);
+  await page.route('**/prueba-guardar-arroba', ruta => ruta.fulfill({ body: 'ok' }));
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Escanear', exact: true })).toBeVisible();
+  expect(await eventos(page)).toEqual(['existente', 'guardó @']);
 });

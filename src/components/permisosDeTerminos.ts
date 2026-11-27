@@ -1,16 +1,15 @@
 import { api } from '../api';
 import { currentSamePrincipalSession } from '../api/profileIdentity';
 import { loadSession, type StoredSession } from '../api/storage';
-import type { LegalTextResponse, LegalTextPair } from '../api/types';
+import type { LegalTextPair } from '../api/types';
 
 export const finalidades = ['foto_perfil_no_amigos', 'analisis_interno'] as const;
 export type Finalidad = typeof finalidades[number];
 export type Estado = 'never' | 'revoked' | 'granted';
 export type Eleccion = Partial<Record<Finalidad, boolean>>;
-export type Aviso = LegalTextResponse['legal_text'];
 export interface EleccionDeAlta {
   elecciones: Eleccion;
-  aviso: Aviso;
+  aviso: LegalTextPair;
 }
 
 export function avisoDeFallo(t: (texto: string) => string) {
@@ -26,7 +25,7 @@ export async function leerEstado(f: Finalidad, session: StoredSession): Promise<
 
 /** Un estado ausente nunca se interpreta como un consentimiento nuevo. */
 export async function aplicarEleccion(session: StoredSession, elecciones: Eleccion,
-  anteriores: Partial<Record<Finalidad, Estado>>, par: LegalTextPair, avisoMostrado?: Aviso): Promise<boolean> {
+  anteriores: Partial<Record<Finalidad, Estado>>, par: LegalTextPair): Promise<boolean> {
   const resultados = await Promise.allSettled(finalidades.map(async (f) => {
     const previo = anteriores[f];
     const marcado = elecciones[f];
@@ -38,7 +37,7 @@ export async function aplicarEleccion(session: StoredSession, elecciones: Elecci
       else await api.revokeFotoPerfilNoAmigos(vigente);
       return;
     }
-    const aviso = avisoMostrado ?? (await api.getPrivacyNotice()).legal_text;
+    const aviso = (await api.getPrivacyNotice()).legal_text;
     if (aviso.version !== par.version || aviso.hash !== par.hash) throw new Error('legal_version_mismatch');
     vigente = currentSamePrincipalSession(session, loadSession());
     if (!vigente) throw new Error('session_expired');

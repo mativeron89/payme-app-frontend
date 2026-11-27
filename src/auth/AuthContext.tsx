@@ -1,4 +1,6 @@
-import { aplicarEleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
+import { usernameRecibido, decodeUsernameCapability } from '../api/username';
+import { useIdioma } from '../i18n/idioma';
+import { avisoDeFallo, aplicarEleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
 import {
   Fragment,
   createContext,
@@ -232,11 +234,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => subscribeSession(() => {
     if (!loadSession()) pendiente.current = null;
   }), []);
-  function guardarEleccion(alta: Promise<StoredSession | undefined>, permisos?: EleccionDeAlta | null) {
-    if (!permisos) return;
-    const titular = alta.then(nueva => nueva ? { family_id: nueva.family_id, principal_id: nueva.principal_id } : null, () => null);
-    pendiente.current = { titular, permisos };
-  }
+  const [anuncio, setAnuncio] = useState<string | null>(null);
+  const anuncioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anunciar = useCallback((mensaje: string) => {
+    setAnuncio(mensaje);
+    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
+    anuncioTimer.current = setTimeout(() => setAnuncio(null), 2400);
+  }, []);
+  useEffect(() => () => {
+    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
+  }, []);
+
   const terminarPermisosDeAlta = useCallback(async (actual: StoredSession) => {
     const registro = pendiente.current;
     pendiente.current = null;
@@ -244,8 +252,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const titular = await registro.titular;
     if (titular?.family_id !== actual.family_id || titular.principal_id !== actual.principal_id) return true;
     const { elecciones, aviso } = registro.permisos;
-    return aplicarEleccion(actual, elecciones, { foto_perfil_no_amigos: 'never', analisis_interno: 'never' }, aviso, aviso);
+    return aplicarEleccion(actual, elecciones, { foto_perfil_no_amigos: 'never', analisis_interno: 'never' }, aviso);
   }, []);
+
+  const { t } = useIdioma();
+  const guardarEleccion = useCallback(async (alta: Promise<StoredSession | undefined>, permisos?: EleccionDeAlta | null) => {
+    if (!permisos) return;
+    const titular = alta.then(nueva => nueva ? { family_id: nueva.family_id, principal_id: nueva.principal_id } : null, () => null);
+    const registro = { titular, permisos };
+    pendiente.current = registro;
+    const nueva = await alta.catch(() => undefined);
+    if (pendiente.current !== registro) return;
+    if (!nueva) {
+      pendiente.current = null;
+      return;
+    }
+    // En un documento recién abierto la capability todavía puede estar cargando.
+    try {
+      const capability = usernameRecibido() ?? decodeUsernameCapability(await api.getConfig());
+      if (pendiente.current !== registro || capability.enabled) return;
+      if (!await terminarPermisosDeAlta(nueva)) anunciar(avisoDeFallo(t));
+    } catch {
+      if (pendiente.current === registro) anunciar(avisoDeFallo(t));
+    }
+  }, [anunciar, t, terminarPermisosDeAlta]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -261,13 +291,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (data: RegisterRequest, permisos?: EleccionDeAlta | null) => {
     try {
       const alta = api.register(data);
-      guardarEleccion(alta, permisos);
+      await guardarEleccion(alta, permisos);
       await alta;
       setFacebookCallbackPhase('idle');
     } finally {
       setSession(loadSession());
     }
-  }, []);
+  }, [guardarEleccion]);
 
   const googleLogin = useCallback(async (idToken: string) => {
     try {
@@ -281,48 +311,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const googleRegister = useCallback(async (data: GoogleRegisterRequest, permisos?: EleccionDeAlta | null) => {
     try {
       const alta = api.googleRegister(data);
-      guardarEleccion(alta, permisos);
+      await guardarEleccion(alta, permisos);
       await alta;
       setFacebookCallbackPhase('idle');
     } finally {
       setSession(loadSession());
     }
-  }, []);
-
-  const [anuncio, setAnuncio] = useState<string | null>(null);
-  const anuncioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const anunciar = useCallback((mensaje: string) => {
-    setAnuncio(mensaje);
-    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
-    anuncioTimer.current = setTimeout(() => setAnuncio(null), 2400);
-  }, []);
-  useEffect(() => () => {
-    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
-  }, []);
+  }, [guardarEleccion]);
 
   const googleContinue = useCallback(async (data: GoogleContinueRequest, permisos?: EleccionDeAlta | null) => {
     try {
       const alta = api.googleContinue(data);
-      if (permisos) guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      if (permisos) await guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
       const result = await alta;
       setFacebookCallbackPhase('idle');
       return result;
     } finally {
       setSession(loadSession());
     }
-  }, []);
+  }, [guardarEleccion]);
 
   const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest, permisos?: EleccionDeAlta | null) => {
     try {
       const alta = api.googleRedirectSignup(data);
-      if (permisos) guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      if (permisos) await guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
       const result = await alta;
       setFacebookCallbackPhase('idle');
       return result;
     } finally {
       setSession(loadSession());
     }
-  }, []);
+  }, [guardarEleccion]);
 
   const googleContinueLink = useCallback(async (data: GoogleContinueLinkRequest) => {
     try {
