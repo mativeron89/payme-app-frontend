@@ -499,6 +499,8 @@ for (const retirar of ['foto', 'análisis'] as const) {
       const cambiaModo = recorrido === 'cambiar de modo';
       if (cambiaModo) {
         await page.getByRole('button', { name: 'Ya tengo cuenta → entrar', exact: true }).click();
+        await expect(foto).toBeChecked({ checked: false });
+        await expect(analisis).toBeChecked({ checked: false });
         await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
       }
       const mantieneFoto = !cambiaModo && retirar === 'análisis';
