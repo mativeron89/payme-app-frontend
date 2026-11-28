@@ -18,7 +18,7 @@ const TEXTOS = {
 afterEach(() => reiniciarSugerenciasParaTests());
 
 describe('n420 · Configuración › Privacidad, las filas de los permisos opcionales', () => {
-  const sinFila = <SeccionPrivacidadView foto={null} sugerencias={null} analisis={null} />;
+  const sinFila = <SeccionPrivacidadView sugerencias={null} recomendaciones={null} />;
   const filas = (sug: boolean, ana: boolean) => {
     // La sección real arma las filas según la capacidad; la foto (`useControlFoto`) se prueba aparte.
     aplicarConfigSugerencias({ features: {
@@ -37,11 +37,11 @@ describe('n420 · Configuración › Privacidad, las filas de los permisos opcio
     expect(html).not.toContain('Análisis interno de PayMe');
   });
 
-  it('🔴 encendidas: «Privacidad» y las dos filas, en ese orden (D426: el análisis debajo)', () => {
+  it('🔴 Privacidad conserva sugerencias y excluye análisis aunque ambos estén disponibles', () => {
     const html = filas(true, true);
     expect(html).toContain('Privacidad');
     expect(html.indexOf('Sugerencias para dividir')).toBeGreaterThan(-1);
-    expect(html.indexOf('Análisis interno de PayMe')).toBeGreaterThan(html.indexOf('Sugerencias para dividir'));
+    expect(html).not.toContain('Análisis interno de PayMe');
   });
 
   it('una encendida y la otra no: sólo esa fila', () => {
@@ -157,11 +157,11 @@ describe('D499 b5 · la fila simple del permiso de foto', () => {
     expect(error).not.toContain('checked');
   });
 
-  it('va primera en la sección, antes de las filas opcionales', () => {
+  it('Privacidad mantiene las otras finalidades sin ofrecer el permiso de foto', () => {
     const html = renderToStaticMarkup(<SeccionPrivacidadView
-      foto={{ estado: estadoFoto({ permiso: permiso(false) }), onCambiar: () => undefined, onConsultar: () => undefined }}
-      sugerencias={<p>Sugerencias para dividir</p>} analisis={null} />);
-    expect(html.indexOf('Mostrar mi foto')).toBeLessThan(html.indexOf('Sugerencias para dividir'));
+      sugerencias={<p>Sugerencias para dividir</p>} recomendaciones={<p>Recomendaciones</p>} />);
+    expect(html).not.toContain('Mostrar mi foto');
+    expect(html.indexOf('Sugerencias para dividir')).toBeLessThan(html.indexOf('Recomendaciones'));
   });
 
   it('EN · la fila traducida', () => {

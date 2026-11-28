@@ -1,3 +1,4 @@
+import { MisPermisos } from './MisPermisos';
 import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
 import { Bloqueados } from './Bloqueados';
 import { SeccionPrivacidad } from '../components/SeccionPrivacidad';
@@ -88,6 +89,9 @@ export function MasScreen() {
     }
   }, [blockedOpen]);
   // La ruta mantiene Configuración en el historial para el gesto de atrás.
+  if (route.page === 'mas' && route.param === 'mis-permisos' && session) {
+    return <MisPermisos key={session.family_id} session={session} onBack={() => goBack('mas')} />;
+  }
   if (blockedOpen && session) return <Bloqueados key={`${session.principal_id}:${session.family_id}`}
     onBack={() => goBack('mas')} />;
 
@@ -238,8 +242,6 @@ export function MasScreen() {
             redirectLink={social.googleRedirectLink.enabled}
           />
         )}
-        {/* Configuración › Privacidad. D499 b5 · el permiso de foto vuelve como fila simple (D468 había quitado el
-            bloque grande). n420 · debajo, las filas de los permisos opcionales, sólo con su capacidad (hoy apagadas). */}
         {session && <SeccionPrivacidad session={session} />}
         <section className="card config-card legal-ayuda" aria-label={t('Legal y ayuda')}>
           <h2 className="sectlabel">{t('Legal y ayuda')}</h2>
@@ -253,6 +255,11 @@ export function MasScreen() {
             <span className="legal-ayuda-texto">{t('Términos de uso')}</span>
             <FlechaDeFila />
           </a>
+          {session && <button type="button" className="list-row" onClick={() => navigate('mas', 'mis-permisos')}>
+            <span aria-hidden="true"><Icon name="lock" size={16} /></span>
+            <span className="legal-ayuda-texto">{t('Mis permisos')}</span>
+            <FlechaDeFila />
+          </button>}
           <a className="list-row" href="mailto:soporte@paymemx.com">
             <span aria-hidden="true"><Icon name="mail" size={16} /></span>
             <span className="legal-ayuda-texto">{t('Soporte')}</span>

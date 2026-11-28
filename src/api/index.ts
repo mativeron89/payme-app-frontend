@@ -451,9 +451,9 @@ export interface Api {
    * Sólo con `features.google_continue.supported`; sin ella, `googleLogin` y
    * `googleRegister` como en 0.167.0.
    */
-  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }>;
   /** AF-GOOGLE-ALTA-REDIRECT · canje del alta en la misma pestaña (wire D102 §5). */
-  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }>;
+  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }>;
   /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
   googleContinueLink(data: GoogleContinueLinkRequest): Promise<{ readonly created: boolean }>;
   /**

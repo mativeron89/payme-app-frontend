@@ -121,12 +121,12 @@ describe('AF-01 · el gesto queda atado al par versión+hash', () => {
 it('D457 conserva dos casillas vacías y un acceso acotado a privacidad con el par nuevo', () => {
   const html = renderToStaticMarkup(<IdiomaProvider><PuertaLegalView
     fotoOpcional aceptaMayor={false} aceptaTerminos={false} busy={false} error={null}
-    privacidadFoto={<button type="button">Consultar permiso de foto</button>}
+    accesoPermisos={<button type="button">Consultar permiso de foto</button>}
     onAceptaMayor={() => undefined} onAceptaTerminos={() => undefined}
     onContinuar={() => undefined} onCerrarSesion={() => undefined} /></IdiomaProvider>);
   expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(2);
   expect(html).not.toContain('checked=""');
-  expect(html).toContain('Aceptar estos documentos no activa el permiso');
+  expect(html).toContain('Puedes cambiar tu elección en Mis permisos');
   expect(html).toContain('Consultar permiso de foto');
   expect(html).toContain('Aviso de Privacidad Simplificado');
   const anterior = { required: true, aviso: { version: '3.0.0', hash: 'a'.repeat(64) }, terminos: { version: '1.0.0', hash: 'b'.repeat(64) } };

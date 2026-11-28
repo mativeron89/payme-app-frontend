@@ -733,7 +733,7 @@ const CLAVES_CANJE_ALTA = new Set(['code', 'verifier', 'accepted_notice_version'
  * `id_token` (wire §5). Terminal ⇒ la fila se borra; 422, 409 de versión legal,
  * 429 y 503 la dejan viva hasta 5 intentos, y después se quema (401).
  */
-export async function mockGoogleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }> {
+export async function mockGoogleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }> {
   if (!data || typeof data !== 'object' || Object.keys(data).some((k) => !CLAVES_CANJE_ALTA.has(k))
       || typeof data.code !== 'string' || data.code.length < 20 || data.code.length > 200
       || typeof data.accepted_notice_version !== 'string'
@@ -1362,7 +1362,7 @@ export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<S
  * que el mock puede modelar. El orden de las ramas sigue al dueño: la
  * credencial se consume ANTES de cualquier rechazo posterior a la verificación.
  */
-export async function mockGoogleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }> {
+export async function mockGoogleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean; readonly sesionNueva?: StoredSession }> {
   if (!validSocialCredential(data.id_token)
       || !/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/.test(data.accepted_notice_version)) {
     throw new MockApiError(400, 'validation_error');

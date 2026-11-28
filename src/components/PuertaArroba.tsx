@@ -1,3 +1,5 @@
+import { useAuth } from '../auth/AuthContext';
+import { avisoDeFallo } from './permisosDeTerminos';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
@@ -233,6 +235,7 @@ export function PuertaArroba({
   readonly onCerrarSesion: () => void;
 }) {
   const { t } = useIdioma();
+  const { terminarPermisosDeAlta, anunciar } = useAuth();
   const [valor, setValor] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,13 +257,16 @@ export function PuertaArroba({
     setError(null);
     try {
       const estado = await api.putUsername(normalizarUsername(valor), session);
-      if (!estado.required) onElegido();
+      if (!estado.required && estado.username) {
+        if (!await terminarPermisosDeAlta(session)) anunciar(avisoDeFallo(t));
+        onElegido();
+      }
     } catch (err) {
       setError(mensajeAlGuardar(err, t));
     } finally {
       setBusy(false);
     }
-  }, [busy, onElegido, session, t, valor]);
+  }, [anunciar, busy, onElegido, session, t, terminarPermisosDeAlta, valor]);
 
   return (
     <PuertaArrobaView

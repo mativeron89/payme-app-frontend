@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { eleccionParaAviso } from '../components/permisosDeTerminos';
 import { casillaVigente } from './LoginScreen';
 
 /**
@@ -25,5 +26,27 @@ describe('AF-01 · casillaVigente', () => {
   it('sin par vigente (textos recargando o sin paquete): no cuenta', () => {
     expect(casillaVigente(A, null)).toBe(false);
     expect(casillaVigente(null, null)).toBe(false);
+  });
+});
+
+describe('elección opcional en el alta', () => {
+  const aviso = { version: '3.1.0', hash: 'a'.repeat(64) };
+  const eleccion = { aviso, elecciones: { foto_perfil_no_amigos: false, analisis_interno: true } };
+
+  it('conserva la elección mixta si versión y hash coinciden', () => {
+    expect(eleccionParaAviso(eleccion, { ...aviso })).toEqual(eleccion);
+  });
+
+  it.each([
+    ['cambia sólo la versión', { ...aviso, version: '3.1.1' }],
+    ['cambia sólo el hash', { ...aviso, hash: 'b'.repeat(64) }],
+    ['se está leyendo el Aviso', null],
+  ] as const)('%s: la elección anterior carece de vigencia', (_, actual) => {
+    expect(eleccionParaAviso(eleccion, actual)).toBeNull();
+  });
+
+  it('publicar otro par descarta el gesto anterior aunque luego vuelva el primero', () => {
+    const descartada = eleccionParaAviso(eleccion, { ...aviso, version: '3.2.0' });
+    expect(eleccionParaAviso(descartada, aviso)).toBeNull();
   });
 });

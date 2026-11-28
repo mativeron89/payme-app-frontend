@@ -1,3 +1,6 @@
+import { usernameRecibido, decodeUsernameCapability } from '../api/username';
+import { useIdioma } from '../i18n/idioma';
+import { avisoDeFallo, aplicarEleccion, type EleccionDeAlta } from '../components/permisosDeTerminos';
 import {
   Fragment,
   createContext,
@@ -102,14 +105,15 @@ function initialFacebookCallbackPhase(): FacebookCallbackPhase {
 
 interface AuthState {
   session: StoredSession | null;
+  terminarPermisosDeAlta(session: StoredSession): Promise<boolean>;
   login(email: string, password: string): Promise<void>;
-  register(data: RegisterRequest): Promise<void>;
+  register(data: RegisterRequest, permisos?: EleccionDeAlta | null): Promise<void>;
   googleLogin(idToken: string): Promise<void>;
-  googleRegister(data: GoogleRegisterRequest): Promise<void>;
+  googleRegister(data: GoogleRegisterRequest, permisos?: EleccionDeAlta | null): Promise<void>;
   /** AF-17 · entra o crea en un toque; `created` dice si la cuenta nació ahora. */
-  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  googleContinue(data: GoogleContinueRequest, permisos?: EleccionDeAlta | null): Promise<{ readonly created: boolean }>;
   /** AF-GOOGLE-ALTA-REDIRECT · canje del alta con Google en la misma pestaña. */
-  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }>;
+  googleRedirectSignup(data: GoogleRedirectSignupRequest, permisos?: EleccionDeAlta | null): Promise<{ readonly created: boolean }>;
   /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
   googleContinueLink(data: GoogleContinueLinkRequest): Promise<void>;
   /**
@@ -223,44 +227,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    try {
-      // El estado visible solo puede adoptar lo que quedó confirmado en storage.
-      // Esto cubre tanto el adaptador real (que devuelve la sesión) como mock.
-      await api.login(email, password);
-      setFacebookCallbackPhase('idle');
-    } finally {
-      setSession(loadSession());
-    }
-  }, []);
-
-  const register = useCallback(async (data: RegisterRequest) => {
-    try {
-      await api.register(data);
-      setFacebookCallbackPhase('idle');
-    } finally {
-      setSession(loadSession());
-    }
-  }, []);
-
-  const googleLogin = useCallback(async (idToken: string) => {
-    try {
-      await api.googleLogin(idToken);
-      setFacebookCallbackPhase('idle');
-    } finally {
-      setSession(loadSession());
-    }
-  }, []);
-
-  const googleRegister = useCallback(async (data: GoogleRegisterRequest) => {
-    try {
-      await api.googleRegister(data);
-      setFacebookCallbackPhase('idle');
-    } finally {
-      setSession(loadSession());
-    }
-  }, []);
-
+  // La sesión puede hacerse visible antes de resolver el alta. El @ espera
+  // esa misma respuesta y sólo consume la elección para la familia que nació.
+  type Titular = Pick<StoredSession, 'family_id' | 'principal_id'>;
+  const pendiente = useRef<{ titular: Promise<Titular | null>; permisos: EleccionDeAlta } | null>(null);
+  useEffect(() => subscribeSession(() => {
+    if (!loadSession()) pendiente.current = null;
+  }), []);
   const [anuncio, setAnuncio] = useState<string | null>(null);
   const anuncioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anunciar = useCallback((mensaje: string) => {
@@ -272,25 +245,103 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
   }, []);
 
-  const googleContinue = useCallback(async (data: GoogleContinueRequest) => {
+  const terminarPermisosDeAlta = useCallback(async (actual: StoredSession) => {
+    const registro = pendiente.current;
+    pendiente.current = null;
+    if (!registro) return true;
+    const titular = await registro.titular;
+    if (titular?.family_id !== actual.family_id || titular.principal_id !== actual.principal_id) return true;
+    const { elecciones, aviso } = registro.permisos;
+    return aplicarEleccion(actual, elecciones, { foto_perfil_no_amigos: 'never', analisis_interno: 'never' }, aviso);
+  }, []);
+
+  const { t } = useIdioma();
+  const guardarEleccion = useCallback(async (alta: Promise<StoredSession | undefined>, permisos?: EleccionDeAlta | null) => {
+    if (!permisos) return;
+    const titular = alta.then(nueva => nueva ? { family_id: nueva.family_id, principal_id: nueva.principal_id } : null, () => null);
+    const registro = { titular, permisos };
+    pendiente.current = registro;
+    const nueva = await alta.catch(() => undefined);
+    if (pendiente.current !== registro) return;
+    if (!nueva) {
+      pendiente.current = null;
+      return;
+    }
+    // En un documento recién abierto la capability todavía puede estar cargando.
     try {
-      const result = await api.googleContinue(data);
+      const capability = usernameRecibido() ?? decodeUsernameCapability(await api.getConfig());
+      if (pendiente.current !== registro || capability.enabled) return;
+      if (!await terminarPermisosDeAlta(nueva)) anunciar(avisoDeFallo(t));
+    } catch {
+      if (pendiente.current === registro) anunciar(avisoDeFallo(t));
+    }
+  }, [anunciar, t, terminarPermisosDeAlta]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      // El estado visible solo puede adoptar lo que quedó confirmado en storage.
+      // Esto cubre tanto el adaptador real (que devuelve la sesión) como mock.
+      await api.login(email, password);
       setFacebookCallbackPhase('idle');
-      return result;
     } finally {
       setSession(loadSession());
     }
   }, []);
 
-  const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest) => {
+  const register = useCallback(async (data: RegisterRequest, permisos?: EleccionDeAlta | null) => {
     try {
-      const result = await api.googleRedirectSignup(data);
+      const alta = api.register(data);
+      await guardarEleccion(alta, permisos);
+      await alta;
+      setFacebookCallbackPhase('idle');
+    } finally {
+      setSession(loadSession());
+    }
+  }, [guardarEleccion]);
+
+  const googleLogin = useCallback(async (idToken: string) => {
+    try {
+      await api.googleLogin(idToken);
+      setFacebookCallbackPhase('idle');
+    } finally {
+      setSession(loadSession());
+    }
+  }, []);
+
+  const googleRegister = useCallback(async (data: GoogleRegisterRequest, permisos?: EleccionDeAlta | null) => {
+    try {
+      const alta = api.googleRegister(data);
+      await guardarEleccion(alta, permisos);
+      await alta;
+      setFacebookCallbackPhase('idle');
+    } finally {
+      setSession(loadSession());
+    }
+  }, [guardarEleccion]);
+
+  const googleContinue = useCallback(async (data: GoogleContinueRequest, permisos?: EleccionDeAlta | null) => {
+    try {
+      const alta = api.googleContinue(data);
+      if (permisos) await guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      const result = await alta;
       setFacebookCallbackPhase('idle');
       return result;
     } finally {
       setSession(loadSession());
     }
-  }, []);
+  }, [guardarEleccion]);
+
+  const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest, permisos?: EleccionDeAlta | null) => {
+    try {
+      const alta = api.googleRedirectSignup(data);
+      if (permisos) await guardarEleccion(alta.then(r => r.created ? r.sesionNueva : undefined), permisos);
+      const result = await alta;
+      setFacebookCallbackPhase('idle');
+      return result;
+    } finally {
+      setSession(loadSession());
+    }
+  }, [guardarEleccion]);
 
   const googleContinueLink = useCallback(async (data: GoogleContinueLinkRequest) => {
     try {
@@ -370,6 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       facebookCallbackPhase,
       vueltaGoogle,
       descartarVueltaGoogle,
+      terminarPermisosDeAlta,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,
@@ -388,6 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       facebookCallbackPhase,
       vueltaGoogle,
       descartarVueltaGoogle,
+      terminarPermisosDeAlta,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,

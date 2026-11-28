@@ -176,12 +176,16 @@ test('Legal y ayuda conserva los enlaces vigentes', async ({ page }) => {
   const titulo = seccion.getByRole('heading', { name: 'Legal y ayuda', exact: true });
   await expect(titulo).toHaveCSS('padding-left', '16px');
   await expect(titulo).toBeInViewport({ ratio: 1 });
-  await expect(seccion.locator('.list-row')).toHaveCount(4);
+  const permisos = seccion.getByRole('button', { name: 'Mis permisos', exact: true });
+  await expect(permisos).toBeVisible();
+  await expect(seccion.locator('.list-row')).toHaveCount(5);
   for (const fila of await seccion.locator('.list-row').all()) {
     await expect(fila.locator('svg')).toHaveCount(2);
     await expect(fila).toBeInViewport({ ratio: 1 });
   }
   await foto(page, '21-legal-y-ayuda');
+  await permisos.click();
+  await expect(page.getByRole('heading', { name: 'Mis permisos', exact: true })).toBeVisible();
 });
 for (const [status, code] of [[403, 'invitation_link_not_valid'], [409, 'join_request_not_allowed'], [410, 'mesa_not_joinable'], [409, 'join_requests_full']] as const) {
   test(`K23 · link ${status} ${code}: texto y sin reintento`, async ({ page }) => {
